@@ -83,7 +83,11 @@ export type PaintingGenerateJobDependencies = {
   activities?: PaintingActivityDriver;
   ai: PaintingAi;
   paintings: {
-    replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting>;
+    replaceOutputs(
+      id: string,
+      outputFileIds: readonly FileEntryId[],
+      signal: AbortSignal,
+    ): Promise<Painting>;
   };
   storage: PaintingFileStorage;
   translate?: (key: string) => string;
@@ -148,6 +152,7 @@ export function createPaintingGenerateJobHandler(
         let outputRefsCommitted = false;
         try {
           for (const [index, image] of result.images.entries()) {
+            throwIfAborted(ctx.signal);
             createdOutputs.push(
               await storage.createInternalEntry({
                 data: image.base64,
@@ -162,9 +167,11 @@ export function createPaintingGenerateJobHandler(
               }),
             );
           }
+          throwIfAborted(ctx.signal);
           const painting = await paintings.replaceOutputs(
             paintingId,
             createdOutputs.map((entry) => entry.id),
+            ctx.signal,
           );
           outputRefsCommitted = true;
           throwIfAborted(ctx.signal);

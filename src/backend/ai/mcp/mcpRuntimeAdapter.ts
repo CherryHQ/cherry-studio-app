@@ -31,6 +31,8 @@ export type McpExecutableToolDescriptor = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
+  /** Trusted bundled policy; remote annotations do not decide retry safety. */
+  effect?: 'read' | 'write';
   /**
    * The endpoint this catalog was discovered against. Execution is pinned to
    * it: editing the server row must fail the frozen tool as unavailable, never
@@ -63,6 +65,7 @@ type McpRuntimeToolErrorCode =
   | 'mcp_tool_input_invalid'
   | 'mcp_tool_result_invalid'
   | 'mcp_tool_timeout'
+  | 'mcp_tool_write_outcome_unknown'
   | 'mcp_tool_unavailable';
 
 /** Stable, secret-free failure surface consumed by the Runtime adapter. */
@@ -170,6 +173,7 @@ export function createMcpRuntimeTools(
     providerNames.add(providerName);
 
     const { inputSchema, inputValidator } = compileMcpInputSchema(descriptor.inputSchema);
+    const effect = descriptor.effect;
     const endpointUrl = descriptor.endpointUrl;
     const generation = descriptor.generation;
 
@@ -180,6 +184,7 @@ export function createMcpRuntimeTools(
       execute: (call) =>
         executeMcpRuntimeTool({
           call,
+          effect,
           endpointUrl,
           generation,
           inputValidator,
@@ -196,6 +201,7 @@ export function createMcpRuntimeTools(
 
 async function executeMcpRuntimeTool(input: {
   call: RuntimeToolCall;
+  effect: McpExecutableToolDescriptor['effect'];
   endpointUrl: string | null;
   generation: number;
   inputValidator: z.ZodType;
@@ -226,10 +232,10 @@ async function executeMcpRuntimeTool(input: {
       bound.signal,
     );
     if (bound.didTimeout()) {
-      throw timeoutError();
+      throw input.effect === 'write' ? unknownWriteError() : timeoutError();
     }
     if (call.signal.aborted) {
-      throw cancelledError();
+      throw input.effect === 'write' ? unknownWriteError() : cancelledError();
     }
 
     const value = projectMcpResult(remoteResult);
@@ -245,14 +251,20 @@ async function executeMcpRuntimeTool(input: {
     return { artifacts: [], value };
   } catch (error) {
     endMcpTrace(trace, error, call.signal, bound?.didTimeout());
+    // Preserve classified failures, including rejections before transmission.
+    if (error instanceof McpRuntimeToolError) {
+      throw error;
+    }
+    // The SDK may fail while reading the body, or this boundary may time out
+    // before invoke() settles. Neither proves a remote write was rolled back.
+    if (input.effect === 'write') {
+      throw unknownWriteError();
+    }
     if (bound?.didTimeout()) {
       throw timeoutError();
     }
     if (call.signal.aborted) {
       throw cancelledError();
-    }
-    if (error instanceof McpRuntimeToolError) {
-      throw error;
     }
     throw new McpRuntimeToolError('mcp_tool_call_failed', 'The MCP tool call failed.', true);
   } finally {
@@ -387,6 +399,14 @@ function cancelledError(): McpRuntimeToolError {
 
 function timeoutError(): McpRuntimeToolError {
   return new McpRuntimeToolError('mcp_tool_timeout', 'The MCP tool call timed out.', true);
+}
+
+function unknownWriteError(): McpRuntimeToolError {
+  return new McpRuntimeToolError(
+    'mcp_tool_write_outcome_unknown',
+    'The write outcome could not be confirmed. Check the service before retrying.',
+    false,
+  );
 }
 
 export type BoundedSignal = {

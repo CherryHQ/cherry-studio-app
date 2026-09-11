@@ -82,6 +82,7 @@ describe('Agent Runtime MCP tool resolution', () => {
 
   test('fails closed per unavailable catalog without mutating durable bindings', async () => {
     const createRuntimeTools = jest.fn(() => []);
+    const onUnavailable = jest.fn();
     const resolver = createAgentRuntimeToolResolver({
       bindings: {
         list: async () => ({ items: [binding(SERVER_A), binding(SERVER_B)] }),
@@ -96,11 +97,13 @@ describe('Agent Runtime MCP tool resolution', () => {
       }),
     });
 
-    await resolver.resolve(AGENT_ID);
+    await resolver.resolve(AGENT_ID, onUnavailable);
 
     expect(createRuntimeTools).toHaveBeenCalledWith([
       { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'ask' },
     ]);
+    expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining(SERVER_A));
+    expect(JSON.stringify(onUnavailable.mock.calls)).not.toContain('private endpoint');
   });
 
   test('does not resolve MCP Runtime state when the Agent has no enabled MCP binding', async () => {
@@ -157,5 +160,45 @@ describe('Agent Runtime MCP tool resolution', () => {
     isConnected = false;
     await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
     expect(secondTurn.pluginGuides[0].content).toContain('## Modify an existing document');
+  });
+
+  test('keeps permitted Feishu business guides when hosted discovery fails', async () => {
+    const warning = 'Feishu document tools and people lookup could not be loaded (timeout).';
+    const onUnavailable = jest.fn();
+    const resolver = createAgentRuntimeToolResolver({
+      bindings: {
+        list: async () => ({ items: [binding(SERVER_A)] }),
+        resolveMcpTool: async (_agentId, { rawToolName }) => ({
+          enabled: true,
+          approval: rawToolName === 'base_update_record' ? 'deny' : 'ask',
+        }),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools: (selections) => selections as unknown as RuntimeTool[],
+        listExecutableToolDescriptors: async (_serverId, report) => {
+          report?.(warning);
+          return [
+            'wiki_get_node',
+            'base_list_fields',
+            'base_search_records',
+            'base_update_record',
+            'task_list',
+            'calendar_get_primary',
+          ].map((name) => ({ ...descriptor(SERVER_A, name), pluginId: 'feishu' }));
+        },
+      }),
+    });
+
+    const { tools, pluginGuides } = await resolver.resolve(AGENT_ID, onUnavailable);
+    expect(tools).toHaveLength(5);
+    expect(onUnavailable.mock.calls).toEqual([[warning]]);
+    expect(pluginGuides).toHaveLength(1);
+    const content = pluginGuides[0].content;
+    expect(content).toContain('## Query Base records');
+    expect(content).toContain('## List my tasks');
+    expect(content).toContain('## Find my primary calendar');
+    expect(content).not.toContain('## Update a Base record');
+    expect(content).not.toContain('fetch-doc');
+    expect(content).not.toContain('search-user');
   });
 });

@@ -97,6 +97,7 @@ export type TurnPlan = {
   sessionTurnIds: readonly string[];
   tools: readonly RuntimeTool[];
   pluginGuides: readonly PluginGuideSnapshot[];
+  toolDiscoveryWarnings: readonly string[];
   /** The user message parts to reserve, projected from the canonical input. */
   userParts: AgentMessagePart[];
   /** Source captured at admission; the Host binds the reserved message before execution. */
@@ -264,6 +265,7 @@ async function prepareResolvedTurn(
   let systemTools: readonly RuntimeTool[] = [];
   let configuredTools: readonly RuntimeTool[] = [];
   let pluginGuides: TurnPlan['pluginGuides'] = [];
+  const toolDiscoveryWarnings: string[] = [];
   if (runtime.descriptor.capabilities.tools) {
     try {
       systemTools = await raceAbort(
@@ -281,7 +283,12 @@ async function prepareResolvedTurn(
       logger.warn('Failed to resolve system capabilities; continuing without them', error as Error);
     }
     try {
-      const configured = await raceAbort(dependencies.runtimeTools.resolve(agent.id), signal);
+      const configured = await raceAbort(
+        dependencies.runtimeTools.resolve(agent.id, (warning) => {
+          if (!signal.aborted) toolDiscoveryWarnings.push(warning);
+        }),
+        signal,
+      );
       configuredTools = configured.tools;
       pluginGuides = configured.pluginGuides;
     } catch {
@@ -369,6 +376,7 @@ async function prepareResolvedTurn(
     sessionTitle: session.title,
     sessionTurnIds: storedTurnContext.sessionTurnIds,
     tools,
+    toolDiscoveryWarnings,
     userParts,
     pluginGuides,
     usageAttribution,

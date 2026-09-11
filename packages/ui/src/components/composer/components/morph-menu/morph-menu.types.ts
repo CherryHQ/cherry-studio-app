@@ -22,7 +22,7 @@ export type MorphMenuItemProps = {
   /** Rendered before the label; size it via className on the icon itself. */
   icon?: ReactNode;
   label: string;
-  /** Runs once after the menu's native dismissal, so it can open another surface safely. */
+  /** Runs once after the menu overlay is removed, so it can open another surface safely. */
   onPress: () => void;
   /** Announced to assistive tech. What it looks like selected is the caller's, via `icon` and `trailing`. */
   selected?: boolean;

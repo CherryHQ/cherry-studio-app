@@ -31,12 +31,15 @@ describe('editFileTool', () => {
       new_string: 'Cherry',
     });
 
-    expect(files.createTextEntry).toHaveBeenCalledWith({
-      data: 'Hello Cherry\n',
-      mediaType: 'text/markdown',
-      name: 'notes v2.md',
-      provenance: 'generated',
-    });
+    expect(files.createTextEntry).toHaveBeenCalledWith(
+      {
+        data: 'Hello Cherry\n',
+        mediaType: 'text/markdown',
+        name: 'notes v2.md',
+        provenance: 'generated',
+      },
+      expect.any(AbortSignal),
+    );
     expect(files.rewriteTextEntry).not.toHaveBeenCalled();
     expect(output).toEqual({
       value: {
@@ -68,7 +71,10 @@ describe('editFileTool', () => {
       new_string: 'Cherry',
     });
 
-    expect(files.rewriteTextEntry).toHaveBeenCalledWith({ data: 'Hello Cherry\n', id: SOURCE_ID });
+    expect(files.rewriteTextEntry).toHaveBeenCalledWith(
+      { data: 'Hello Cherry\n', id: SOURCE_ID },
+      expect.any(AbortSignal),
+    );
     expect(files.createTextEntry).not.toHaveBeenCalled();
     expect(output).toEqual({
       value: {
@@ -124,14 +130,22 @@ describe('editFileTool', () => {
 
     // The second edit reads what the first wrote, in the order the model listed
     // them, so neither replacement is dropped.
-    expect(files.rewriteTextEntry).toHaveBeenNthCalledWith(1, {
-      data: 'ALPHA\nbeta\n',
-      id: SOURCE_ID,
-    });
-    expect(files.rewriteTextEntry).toHaveBeenNthCalledWith(2, {
-      data: 'ALPHA\nBETA\n',
-      id: SOURCE_ID,
-    });
+    expect(files.rewriteTextEntry).toHaveBeenNthCalledWith(
+      1,
+      {
+        data: 'ALPHA\nbeta\n',
+        id: SOURCE_ID,
+      },
+      expect.any(AbortSignal),
+    );
+    expect(files.rewriteTextEntry).toHaveBeenNthCalledWith(
+      2,
+      {
+        data: 'ALPHA\nBETA\n',
+        id: SOURCE_ID,
+      },
+      expect.any(AbortSignal),
+    );
     expect(outputs.map((output) => (output.value as { status: string }).status)).toEqual([
       'edited',
       'edited',
@@ -156,10 +170,13 @@ describe('editFileTool', () => {
     ]);
 
     expect(files.createTextEntry).toHaveBeenCalledTimes(1);
-    expect(files.rewriteTextEntry).toHaveBeenLastCalledWith({
-      data: 'ALPHA\nBETA\nGAMMA\n',
-      id: EDITED_ID,
-    });
+    expect(files.rewriteTextEntry).toHaveBeenLastCalledWith(
+      {
+        data: 'ALPHA\nBETA\nGAMMA\n',
+        id: EDITED_ID,
+      },
+      expect.any(AbortSignal),
+    );
   });
 
   test('continues its own version when the same historical source is edited again', async () => {
@@ -178,7 +195,10 @@ describe('editFileTool', () => {
     });
 
     expect(files.createTextEntry).toHaveBeenCalledTimes(1);
-    expect(files.rewriteTextEntry).toHaveBeenCalledWith({ data: 'ALPHA\nBETA\n', id: EDITED_ID });
+    expect(files.rewriteTextEntry).toHaveBeenCalledWith(
+      { data: 'ALPHA\nBETA\n', id: EDITED_ID },
+      expect.any(AbortSignal),
+    );
     expect(first.artifacts).toHaveLength(1);
     expect(second.artifacts).toHaveLength(0);
     expect(second.value).toMatchObject({ fileEntryId: EDITED_ID, filename: 'notes v2.md' });
@@ -203,6 +223,7 @@ describe('editFileTool', () => {
 
     expect(files.createTextEntry).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'notes v3.md' }),
+      expect.any(AbortSignal),
     );
   });
 
@@ -240,7 +261,10 @@ describe('editFileTool', () => {
       replace_all: true,
     });
 
-    expect(files.createTextEntry).toHaveBeenCalledWith(expect.objectContaining({ data: 'bb' }));
+    expect(files.createTextEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ data: 'bb' }),
+      expect.any(AbortSignal),
+    );
     expect(output.value).toMatchObject({ status: 'edited', replacements: 2 });
   });
 
@@ -254,6 +278,7 @@ describe('editFileTool', () => {
 
     expect(files.createTextEntry).toHaveBeenCalledWith(
       expect.objectContaining({ data: 'keep keep' }),
+      expect.any(AbortSignal),
     );
   });
 
@@ -376,6 +401,7 @@ describe('editFileTool', () => {
 
     expect(files.createTextEntry).toHaveBeenCalledWith(
       expect.objectContaining({ data: '\ufeffa\r\nc\r\n' }),
+      expect.any(AbortSignal),
     );
   });
 

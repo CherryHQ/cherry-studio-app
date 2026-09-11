@@ -2,7 +2,8 @@
 
 > Reviewed 2026-09-10 against official documentation and source. Feishu uses personal-account
 > cloud MCP through the extensible bundled plugin registry. Browser application setup, manual
-> entry of an existing application, user device authorization and token renewal are implemented.
+> entry of an existing application, user device authorization, token renewal and curated in-app
+> Base, task and calendar operations are implemented.
 > See [Feishu Browser Authorization](./built-in-mcp-design.md#feishu-browser-authorization) for
 > current behavior. Live-account/device acceptance remains pending. GitHub and Amap were already implemented.
 
@@ -36,10 +37,11 @@ MCP Token personal hosting will be phased out, and newly created links have seve
 The developer endpoint is a separate supported route with user-token authentication.
 [Personal service notice](https://open.feishu.cn/document/mcp_open_tools/end-user-call-remote-mcp-server)
 
-The connector admits six official document tools: `fetch-doc`, `list-docs`,
-`get-comments`, `create-doc`, `update-doc`, and `add-comments`. It discovers their schemas from the
-service and passes `X-Lark-MCP-UAT` plus `X-Lark-MCP-Allowed-Tools`. Personal search is excluded.
-Authorization requires every scope listed for the selected tools in the official guide. Connection
+The connector admits nine hosted tools: `fetch-doc`, `list-docs`, `get-comments`, `create-doc`,
+`update-doc`, `add-comments`, `search-doc`, `search-user` and `get-user`. It discovers their schemas
+from the service and passes `X-Lark-MCP-UAT` plus `X-Lark-MCP-Allowed-Tools`. Attachment transfer,
+including `fetch-file`, is outside the Feishu plugin's product scope.
+Each tool is exposed only when its declared scopes are present in the actual grant. Connection
 setup checks account identity, granted scopes and tool discovery; document access remains subject
 to the user's permissions. [Developer tools and permissions](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server)
 
@@ -48,6 +50,12 @@ App ID and App Secret, then authorizes their personal account. Cherry stores the
 user grant in local native secure storage and renews user tokens on demand. Concurrent callers
 share renewal, while failed writes are never replayed. Application credentials identify the OAuth
 client; they do not create a separate application-identity connection.
+
+Nineteen curated wiki, Base, task and calendar operations use official OpenAPI routes through the
+same plugin client and user grant. Domain declarations generate schemas, policy and required scopes;
+one Feishu-owned executor handles HTTP, cancellation and errors. Existing grants retain their
+permitted tools; reauthorization adds permissions. Hosted discovery failures preserve local tools
+and report their limitation to the Agent. The full delivered scope and limits are in [Feishu Business Tools](./built-in-mcp-design.md#feishu-business-tools).
 
 Implementation ownership:
 
@@ -84,16 +92,16 @@ vendor CLI source. API permissions and platform terms still apply.
 [Go dependencies](https://github.com/larksuite/cli/blob/main/go.mod),
 [MIT license](https://github.com/larksuite/cli/blob/main/LICENSE)
 
-The JavaScript implementation covers personal-account authorization and the hosted document tools
-described above. For broader CLI coverage, port command semantics in small slices:
+The TypeScript implementation covers personal-account authorization, hosted document tools and a
+curated business slice. Broader CLI coverage remains incremental:
 
 | CLI responsibility | Mobile implementation | Status |
 | --- | --- | --- |
 | Cloud document calls | User-token injection through the existing MCP runtime | Implemented; live acceptance pending |
 | Personal-agent application registration | Browser verification plus bounded, cancellable polling; keep issued credentials backend-owned; an existing application may be entered instead | Implemented; live acceptance pending |
 | User authorization and renewal | Device authorization, expiry/scopes and refresh-token replacement in local native secure storage; SQLite references and account/grant isolation; no sync | Implemented; live acceptance pending |
-| Curated Base, Calendar and Tasks shortcuts | Typed inputs and dedicated OpenAPI functions exposed through the existing tool approval pipeline | Planned |
-| Pagination and structured command output | Bounded pages, cancellation and normalized results in the owning adapter | Planned |
+| Curated Base, Calendar and Tasks shortcuts | Domain declarations and one Feishu executor through the existing tool approval pipeline | Implemented; live acceptance pending |
+| Pagination and structured command output | Bounded pages, preserved continuation tokens, cancellation and size-capped text results | Implemented for curated operations |
 | CLI skills | App-owned instruction resources with attribution, adapted to tool names available in the turn | Separate instruction-resource work |
 | Shell, Cobra command parser, OS keychain/files, terminal prompts, installation and daemon/event loops | Do not bundle; replace only when a mobile use case requires a corresponding app capability | Outside the initial port |
 
@@ -108,18 +116,18 @@ alone. Reviewed source revision: `4fddd6bc3763f2105a2e31f0a992f19554aa350f`.
 ## Next Work And Evidence
 
 1. User-owned acceptance of Feishu personal authorization against an authorized document and
-   knowledge space, including application setup, user consent, token renewal, the six admitted
-   operations and disconnect behavior.
+   knowledge space, Base, task and calendar, including expanded consent, token renewal, admitted
+   operations, notifications, pagination and disconnect behavior.
 2. Obtain Canva callback approval and Gmail preview/OAuth project configuration. Implement their
    user authorization flows before adding them as connectable catalog entries.
-3. Port selected Feishu Base, Calendar and Tasks workflows. Their
-   implementation should share authorization ownership with cloud document calls.
+3. Select further Feishu business operations only from concrete mobile workflows.
 4. Assess Yuque's curated API slice using its official server as protocol/workflow evidence.
 
 Regression cases cover open identifiers, synthetic plugin registration, shared field rules,
 unknown-plugin refusal/disconnect, Feishu input/storage contracts, migration preservation under foreign
 keys, grant revocation during credential resolution, user-token expiry/cancellation, redirect rejection,
 write non-replay, existing-application authorization, native credential storage, caller-independent
-renewal and observer-driven polling/completion. The updated suites have not been run after the
-authorization and persistence changes. No current type-check, build, cloud acceptance or device
+renewal and observer-driven polling/completion. New cases cover composite discovery, Base requests,
+task patch masks, calendar time constraints, OpenAPI failure redaction and client-close cancellation.
+The updated suites have not been run. No current type-check, build, cloud acceptance or device
 acceptance result is claimed.

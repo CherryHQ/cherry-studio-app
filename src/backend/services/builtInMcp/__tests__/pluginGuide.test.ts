@@ -16,9 +16,18 @@ test.each<PluginGuideDefinition>([
   { ...GUIDE, sections: [{ requiredTools: [], content: '   ' }] },
   { ...GUIDE, sections: [{ requiredTools: ['missing'], content: 'Wrong tool.' }] },
   { ...GUIDE, sections: [{ requiredTools: ['read', 'read'], content: 'Repeated tool.' }] },
-  { ...GUIDE, sections: Array.from({ length: 17 }, () => GUIDE.sections[0]) },
+  { ...GUIDE, sections: Array.from({ length: 33 }, () => GUIDE.sections[0]) },
 ])('rejects invalid guide definitions (%#)', (guide) => {
   expect(() => validatePluginGuide(guide, TOOLS)).toThrow();
+});
+
+test('accepts 32 independently gated sections within the content budget', () => {
+  expect(() =>
+    validatePluginGuide(
+      { ...GUIDE, sections: Array.from({ length: 32 }, () => GUIDE.sections[1]) },
+      TOOLS,
+    ),
+  ).not.toThrow();
 });
 
 test('limits the combined UTF-8 content, including section separators', () => {

@@ -169,6 +169,21 @@ describe('Pi model resolver', () => {
     expect(resolution.model.maxTokens).toBe(32_000);
   });
 
+  test.each([{ id: 'perplexity' }, { id: 'copied-perplexity', presetProviderId: 'perplexity' }])(
+    'preserves the Perplexity API root for $id',
+    async (identity) => {
+      const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+      mockGetProviderById.mockResolvedValue({
+        ...makeProvider(endpoint, 'https://api.perplexity.ai/', 'openai-compatible'),
+        ...identity,
+      });
+      mockGetModelById.mockResolvedValue(makeModel(endpoint));
+
+      const resolution = await resolve(resolver);
+      expect(resolution.model.baseUrl).toBe('https://api.perplexity.ai');
+    },
+  );
+
   test('uses endpoint usage declarations and preserves the materialized effort vocabulary', async () => {
     const provider = makeProvider(
       ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,

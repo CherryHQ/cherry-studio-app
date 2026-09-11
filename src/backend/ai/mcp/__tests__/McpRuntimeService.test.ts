@@ -15,6 +15,8 @@ jest.mock('@/backend/services/builtInMcp', () => ({
   ).PluginAuthorizationManager,
   isBuiltInMcpToolAllowed: jest.requireActual('@/backend/services/builtInMcp/pluginRegistry')
     .isBuiltInMcpToolAllowed,
+  getBuiltInMcpToolEffect: jest.requireActual('@/backend/services/builtInMcp/pluginRegistry')
+    .getBuiltInMcpToolEffect,
   createBuiltInMcpClient: (pluginId: string, authorizationId: string, signal: AbortSignal) =>
     mockSdkInitContract({ pluginId, authorizationId, initializationOptions: { signal } }),
 }));
@@ -217,6 +219,54 @@ describe('getServerInfo', () => {
 });
 
 describe('listTools', () => {
+  it('keeps valid tools when one remote parameter schema is unsupported and reports the omission', async () => {
+    const client = makeClient([
+      ...makeRawTools(['calendar_get_primary']),
+      {
+        name: 'broken',
+        inputSchema: { type: 'object', properties: { value: { $ref: '#/missing' } } },
+      },
+    ]);
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const onUnavailable = jest.fn();
+    const tools = await service.listExecutableToolDescriptors(server.id, onUnavailable);
+    expect(tools.map((tool) => tool.rawToolName)).toEqual(['calendar_get_primary']);
+    expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining('broken'));
+  });
+
+  it('propagates partial plugin discovery failures alongside the successfully loaded tools', async () => {
+    const warning = 'Feishu document tools could not be loaded (network).';
+    const client = {
+      ...makeClient(makeRawTools(['calendar_get_primary'])),
+      discoveryWarnings: [warning],
+    };
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server: McpServer = {
+      ...makeServer(),
+      origin: 'builtin',
+      endpointUrl: null,
+      headers: undefined,
+      builtinId: 'feishu',
+      authorizationId: 'grant-1',
+      name: '飞书',
+    };
+    const { service } = makeService([server]);
+    const onUnavailable = jest.fn();
+    const tools = await service.listExecutableToolDescriptors(server.id, onUnavailable);
+    expect(tools).toEqual([
+      expect.objectContaining({
+        pluginId: 'feishu',
+        effect: 'read',
+        rawToolName: 'calendar_get_primary',
+      }),
+    ]);
+    expect(onUnavailable).toHaveBeenCalledWith(warning);
+    await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+      [server.id]: { state: 'error', lastError: warning, toolCount: 1 },
+    });
+  });
   it('retains connection failures even when tool preparation never admits a conversation turn', async () => {
     const { traces, records } = createTraceRecorder();
     const failure = Object.assign(new Error('private endpoint and credential'), {
@@ -596,33 +646,121 @@ function retainedSnapshotCount(service: McpRuntimeService): number {
 }
 
 describe('built-in plugin identities', () => {
-  it('preserves a non-retryable unknown write outcome through the runtime boundary', async () => {
-    const client = makeClient(makeRawTools(['issue_write']));
-    client.callTool.mockRejectedValue(
-      new PluginError('unknown-write', 'Check GitHub before retrying.'),
-    );
-    mockCreateMCPClient.mockResolvedValue(client);
-    const server: McpServer = {
-      ...makeServer(),
-      origin: 'builtin',
-      endpointUrl: null,
-      headers: undefined,
-      builtinId: 'github',
-      authorizationId: 'grant-1',
-    };
-    const { service } = makeService([server]);
-    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
-    const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
-    await expect(
-      tool!.execute({ input: {}, signal: new AbortController().signal, toolCallId: 'write' }),
-    ).rejects.toMatchObject({
-      code: 'mcp_tool_call_failed',
-      message: 'Check GitHub before retrying.',
-      retryable: false,
-    });
-    expect(client.callTool).toHaveBeenCalledTimes(1);
-    service.invalidateServer(server.id);
-  });
+  it.each([
+    ['unknown-write', 'mcp_tool_write_outcome_unknown', false],
+    ['authorization', 'mcp_tool_call_failed', false],
+    ['access', 'mcp_tool_call_failed', false],
+    ['storage', 'mcp_tool_call_failed', false],
+    ['quota', 'mcp_tool_call_failed', true],
+    ['network', 'mcp_tool_call_failed', true],
+  ] as const)(
+    'preserves classified %s failures through the write boundary',
+    async (reason, code, retryable) => {
+      const client = makeClient(makeRawTools(['issue_write']));
+      client.callTool.mockRejectedValue(new PluginError(reason, 'Safe plugin failure.'));
+      mockCreateMCPClient.mockResolvedValue(client);
+      const server: McpServer = {
+        ...makeServer(),
+        origin: 'builtin',
+        endpointUrl: null,
+        headers: undefined,
+        builtinId: 'github',
+        authorizationId: 'grant-1',
+      };
+      const { service } = makeService([server]);
+      const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+      const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
+      await expect(
+        tool!.execute({ input: {}, signal: new AbortController().signal, toolCallId: 'write' }),
+      ).rejects.toMatchObject({
+        code,
+        message: 'Safe plugin failure.',
+        retryable,
+      });
+      expect(client.callTool).toHaveBeenCalledTimes(1);
+      service.invalidateServer(server.id);
+    },
+  );
+
+  it.each([
+    ['github', 'issue_write', 'mcp_tool_write_outcome_unknown', false],
+    ['feishu', 'create-doc', 'mcp_tool_write_outcome_unknown', false],
+    ['github', 'get_me', 'mcp_tool_call_failed', true],
+  ] as const)(
+    'classifies %s/%s when the HTTP SDK cannot read a successful response body',
+    async (builtinId, toolName, code, retryable) => {
+      const sdk = jest.requireActual<typeof import('@ai-sdk/mcp')>('@ai-sdk/mcp');
+      let calls = 0;
+      mockCreateMCPClient.mockImplementation(() =>
+        sdk.createMCPClient({
+          maxRetries: 0,
+          transport: {
+            type: 'http',
+            url: 'https://official.example/mcp',
+            fetch: async (_url, init) => {
+              if (init?.method === 'GET') return new Response(null, { status: 405 });
+              if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+              const request = JSON.parse(String(init?.body));
+              if (request.id === undefined) return new Response(null, { status: 202 });
+              if (request.method === 'tools/call') {
+                calls += 1;
+                return new Response(
+                  new ReadableStream({
+                    start(controller) {
+                      controller.error(new Error('private transport details'));
+                    },
+                  }),
+                  { headers: { 'content-type': 'application/json' } },
+                );
+              }
+              const result =
+                request.method === 'initialize'
+                  ? {
+                      protocolVersion: request.params.protocolVersion,
+                      serverInfo: { name: 'fixture', version: '1' },
+                      capabilities: { tools: {} },
+                    }
+                  : {
+                      tools: makeRawTools([toolName]).map((tool) => ({
+                        ...tool,
+                        // Remote hints cannot downgrade the bundled write policy.
+                        annotations: { readOnlyHint: true },
+                      })),
+                    };
+              return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }), {
+                headers: { 'content-type': 'application/json' },
+              });
+            },
+          },
+        }),
+      );
+      const server: McpServer = {
+        ...makeServer(),
+        origin: 'builtin',
+        endpointUrl: null,
+        headers: undefined,
+        builtinId,
+        authorizationId: 'grant-1',
+      };
+      const { service } = makeService([server]);
+      try {
+        const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+        const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
+        const error = await tool!
+          .execute({
+            input: {},
+            signal: new AbortController().signal,
+            toolCallId: 'body-failure',
+          })
+          .catch((failure: unknown) => failure);
+        expect(error).toMatchObject({ code, retryable, stack: undefined });
+        expect(JSON.stringify(error)).not.toContain('private transport details');
+        expect(calls).toBe(1);
+      } finally {
+        service.invalidateServer(server.id);
+      }
+    },
+  );
 
   it.each([
     ['github', 'GitHub', 'get_me'],

@@ -1650,11 +1650,15 @@ describe('MobileAgentHost', () => {
         content: 'A bundled workflow for this turn.',
       },
     ];
+    const discoveryWarning = 'Some configured tools could not be loaded.';
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
-      resolveRuntimeTools: async () => ({
-        tools: configuredTools.slice(),
-        pluginGuides: pluginGuides.slice(),
-      }),
+      resolveRuntimeTools: async (_agentId, onUnavailable) => {
+        if (pluginGuides.length > 0) onUnavailable?.(discoveryWarning);
+        return {
+          tools: configuredTools.slice(),
+          pluginGuides: pluginGuides.slice(),
+        };
+      },
     });
     const session = await createStoredSession();
     const events: AgentEvent[] = [];
@@ -1671,6 +1675,7 @@ describe('MobileAgentHost', () => {
 
     expect(requests[0]?.tools).toEqual([tool]);
     expect(requests[0]?.instructions).toContain('A bundled workflow for this turn.');
+    expect(requests[0]?.instructions).toContain(discoveryWarning);
     expect(requests[0]?.instructions.match(/Bundled plugin: example/g)).toHaveLength(1);
     const transcript = await store.listMessages(session.id);
     expect(JSON.stringify(transcript)).not.toContain('A bundled workflow for this turn.');
@@ -1701,6 +1706,7 @@ describe('MobileAgentHost', () => {
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the next turn without guides');
     expect(requests).toHaveLength(2);
     expect(requests[1]?.instructions).not.toContain('## Plugin Guides');
+    expect(requests[1]?.instructions).not.toContain('## Tool Availability');
     expect(JSON.stringify(requests[1]?.history)).not.toContain('A bundled workflow for this turn.');
   });
 

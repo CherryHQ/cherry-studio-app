@@ -89,14 +89,17 @@ export const fileContent = {
    * Text entries are not inherently generated — a composer that saves pasted
    * text would land here too — so the caller states the origin.
    */
-  createTextEntry: async (input: {
-    data: string;
-    mediaType: string;
-    name: string;
-    provenance: FileEntryProvenance;
-  }) => {
+  createTextEntry: async (
+    input: {
+      data: string;
+      mediaType: string;
+      name: string;
+      provenance: FileEntryProvenance;
+    },
+    signal?: AbortSignal,
+  ) => {
     const validated = createTextEntryInputSchema.parse(input);
-    return createInternalEntry(fileEntryService, { ...validated, source: 'text' });
+    return createInternalEntry(fileEntryService, { ...validated, source: 'text' }, signal);
   },
   prepareAttachments: async (input: PrepareFileAttachmentsInput): Promise<PreparedFile[]> => {
     const signal = input.signal ?? new AbortController().signal;
@@ -152,11 +155,12 @@ export const fileContent = {
    * Replace a draft text entry's bytes in place. Only a turn's own artifact is
    * a draft; the caller (the edit tool) proves that through its turn ledger.
    */
-  rewriteTextEntry: (input: { data: string; id: FileEntryId }) =>
-    rewriteInternalTextEntry(fileEntryService, {
-      data: input.data,
-      id: FileEntryIdSchema.parse(input.id),
-    }),
+  rewriteTextEntry: (input: { data: string; id: FileEntryId }, signal?: AbortSignal) =>
+    rewriteInternalTextEntry(
+      fileEntryService,
+      { data: input.data, id: FileEntryIdSchema.parse(input.id) },
+      signal,
+    ),
   generatePreviewUri: generateFilePreviewUri,
   getUri: (id: FileEntryId) => getFileUri(fileEntryService, FileEntryIdSchema.parse(id)),
   resolveUris: async (entries: readonly FileEntry[]) => entries.map(resolveCachedFilePreviewUris),

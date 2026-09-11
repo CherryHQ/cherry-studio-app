@@ -18,7 +18,7 @@ export type PluginGuideSnapshot = {
 };
 
 const MAX_GUIDE_BYTES = 8_192;
-const MAX_GUIDE_SECTIONS = 16;
+const MAX_GUIDE_SECTIONS = 32;
 
 /** Validate authoring limits and require every prerequisite to belong to this plugin. */
 export function validatePluginGuide(

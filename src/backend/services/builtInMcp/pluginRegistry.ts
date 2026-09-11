@@ -36,7 +36,10 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
         if (method.applicationFields) validateFields(id, method.applicationFields);
       }
     }
-    if (plugin.tools[plugin.validation.tool] !== 'read')
+    if (
+      (plugin.validation.tool !== undefined && plugin.tools[plugin.validation.tool] !== 'read') ||
+      (plugin.validation.args && !plugin.validation.tool)
+    )
       throw new Error(`Plugin setup must use an admitted read tool: ${id}`);
     if (plugin.guide) validatePluginGuide(plugin.guide, plugin.tools);
     plugins.set(id, plugin);
@@ -166,6 +169,13 @@ export function requirePluginAuthMethod(plugin: PluginDefinition, id: string) {
 }
 
 export function isBuiltInMcpToolAllowed(pluginId: PluginId, name: string): boolean {
+  return getBuiltInMcpToolEffect(pluginId, name) !== undefined;
+}
+
+export function getBuiltInMcpToolEffect(
+  pluginId: PluginId,
+  name: string,
+): 'read' | 'write' | undefined {
   const plugin = getPluginDefinition(pluginId);
-  return plugin !== undefined && Object.hasOwn(plugin.tools, name);
+  return plugin && Object.hasOwn(plugin.tools, name) ? plugin.tools[name] : undefined;
 }

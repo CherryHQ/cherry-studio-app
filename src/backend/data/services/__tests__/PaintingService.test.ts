@@ -130,6 +130,49 @@ describe('PaintingService integration', () => {
     expect(readPaintingFiles(sqlite, 'painting-pending')).toEqual({ input: [], output: [] });
   });
 
+  it('rejects an expired attempt after the receipt has been reused', async () => {
+    insertPainting(sqlite, 'painting-retry', 'a0', 1);
+    insertFile(sqlite, 'stale-output', 1);
+    await service.resetForRetryTx(database, 'painting-retry', {
+      inputFileIds: [],
+      modelId: 'model-2',
+      prompt: 'new prompt',
+      providerId: 'provider',
+    });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      service.replaceOutputs('painting-retry', ['stale-output' as FileEntryId], controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(service.getById('painting-retry')).resolves.toMatchObject({
+      prompt: 'new prompt',
+      files: { input: [], output: [] },
+    });
+  });
+
+  it('rolls back output references when cancellation arrives during the database update', async () => {
+    insertPainting(sqlite, 'painting-pending', 'a0', 1);
+    insertFile(sqlite, 'late-output', 1);
+    const controller = new AbortController();
+    const update = database.update.bind(database);
+    const spy = jest.spyOn(database, 'update').mockImplementationOnce((...args) => {
+      controller.abort();
+      return update(...args);
+    });
+    try {
+      await expect(
+        service.replaceOutputs(
+          'painting-pending',
+          ['late-output' as FileEntryId],
+          controller.signal,
+        ),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(readPaintingFiles(sqlite, 'painting-pending')).toEqual({ input: [], output: [] });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('keeps a receipt pointing at a file entry that was deleted', async () => {
     insertPainting(sqlite, 'painting-orphaned', 'a0', 1, {
       input: ['kept-input'],

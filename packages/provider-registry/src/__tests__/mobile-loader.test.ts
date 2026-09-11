@@ -201,6 +201,7 @@ describe('MobileRegistryLoader', () => {
 
     for (const providerId of [
       'claude-code',
+      'lmstudio',
       'azure-openai',
       'vertexai',
       'aws-bedrock',

@@ -14,7 +14,6 @@ import type {
   RuntimeDocumentAttachmentPart,
   RuntimeExecutionRequest,
   RuntimeJsonValue,
-  RuntimeMessage,
   RuntimeMessagePart,
   RuntimeTextAttachmentPart,
 } from '../types';
@@ -77,13 +76,7 @@ export function toPiConversation(
         });
         continue;
       }
-      appendAssistantHistory(
-        historyTurn.messages,
-        message.parts,
-        providerNamesByCallId,
-        model,
-        message.usage,
-      );
+      appendAssistantHistory(historyTurn.messages, message.parts, providerNamesByCallId, model);
     }
     historyTurns.push(historyTurn);
   }
@@ -215,14 +208,12 @@ function appendAssistantHistory(
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
   model: PiModel<PiApi>,
-  usage: RuntimeExecutionRequest['history'][number]['messages'][number]['usage'],
 ): void {
   let content: AssistantMessage['content'] = [];
-  let lastAssistant: AssistantMessage | undefined;
   const flushAssistant = () => {
     if (content.length === 0) return;
     const stopReason = content.some((part) => part.type === 'toolCall') ? 'toolUse' : 'stop';
-    lastAssistant = {
+    history.push({
       api: model.api,
       content,
       model: model.id,
@@ -230,9 +221,10 @@ function appendAssistantHistory(
       role: 'assistant',
       stopReason,
       timestamp: Date.now(),
+      // Persisted message usage sums multiple requests, not this context's size.
+      // Leave it unknown so Pi estimates the reconstructed history by content.
       usage: EMPTY_PI_USAGE,
-    };
-    history.push(lastAssistant);
+    });
     content = [];
   };
 
@@ -276,26 +268,8 @@ function appendAssistantHistory(
   }
 
   flushAssistant();
-
-  if (usage && lastAssistant) lastAssistant.usage = toPiUsage(usage);
 }
 
 function piToolName(part: Extract<RuntimeMessagePart, { type: 'tool-call' }>): string {
   return part.toolRef.source === 'mcp' ? PI_TOOL_CALL_TOOL_NAME : part.providerName;
-}
-
-function toPiUsage(usage: NonNullable<RuntimeMessage['usage']>): PiUsage {
-  const input = usage.noCacheTokens ?? usage.inputTokens ?? 0;
-  const cacheRead = usage.cacheReadTokens ?? 0;
-  const cacheWrite = usage.cacheWriteTokens ?? 0;
-  const output = usage.outputTokens ?? 0;
-  return {
-    input,
-    output,
-    cacheRead,
-    cacheWrite,
-    ...(usage.reasoningTokens !== undefined ? { reasoning: usage.reasoningTokens } : {}),
-    totalTokens: usage.totalTokens ?? input + cacheRead + cacheWrite + output,
-    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
-  };
 }

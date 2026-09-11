@@ -73,6 +73,7 @@ function createStore() {
 describe('DesktopConnectionRuntime', () => {
   let runtime: DesktopConnectionRuntime;
   let store: ReturnType<typeof createStore>;
+  let ensureModelRegistryReady: jest.Mock<Promise<void>, []>;
 
   beforeEach(async () => {
     jest.resetAllMocks();
@@ -87,13 +88,76 @@ describe('DesktopConnectionRuntime', () => {
     });
     store = createStore();
     runtime = new DesktopConnectionRuntime();
-    runtime.configure(store);
+    ensureModelRegistryReady = jest.fn(async () => undefined);
+    runtime.configure(store, ensureModelRegistryReady);
     await runtime._doInit();
   });
 
   afterEach(async () => {
     await runtime._doStop();
     await runtime._doDestroy();
+  });
+
+  it('waits for the shared registry download before importing and allows a failed download to retry', async () => {
+    jest
+      .mocked(fetchSnapshot)
+      .mockResolvedValue({ baseUrl, payload: { version: 1, providers: [] } });
+    const input = { selections: [{ mode: 'provider-models' as const, providerId: 'openai' }] };
+    ensureModelRegistryReady.mockRejectedValueOnce(new Error('registry unavailable'));
+    await expect(runtime.import(id, input, signal())).rejects.toThrow('registry unavailable');
+    expect(store.import).not.toHaveBeenCalled();
+
+    const entered = deferred<void>();
+    const ready = deferred<void>();
+    ensureModelRegistryReady.mockImplementationOnce(async () => {
+      entered.resolve();
+      await ready.promise;
+    });
+    const request = runtime.import(id, input, signal());
+    await entered.promise;
+    expect(store.import).not.toHaveBeenCalled();
+    ready.resolve();
+    await request;
+    expect(store.import).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not import if cancelled while the shared registry download is in progress', async () => {
+    jest
+      .mocked(fetchSnapshot)
+      .mockResolvedValue({ baseUrl, payload: { version: 1, providers: [] } });
+    const entered = deferred<void>();
+    const ready = deferred<void>();
+    ensureModelRegistryReady.mockImplementationOnce(async () => {
+      entered.resolve();
+      await ready.promise;
+    });
+    const controller = new AbortController();
+    const request = runtime.import(
+      id,
+      {
+        selections: [{ mode: 'provider-models', providerId: 'openai' }],
+      },
+      controller.signal,
+    );
+    const assertion = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    await entered.promise;
+    controller.abort();
+    ready.resolve();
+    await assertion;
+    expect(store.import).not.toHaveBeenCalled();
+  });
+
+  it('imports provider configuration without requiring the model catalog', async () => {
+    jest
+      .mocked(fetchSnapshot)
+      .mockResolvedValue({ baseUrl, payload: { version: 1, providers: [] } });
+    await runtime.import(
+      id,
+      { selections: [{ mode: 'provider', providerId: 'openai' }] },
+      signal(),
+    );
+    expect(ensureModelRegistryReady).not.toHaveBeenCalled();
+    expect(store.import).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a connection visible when secure deletion fails so removal can be retried', async () => {

@@ -326,7 +326,10 @@ describe('createSystemCapabilitySource', () => {
       toolCallId: 'call-3',
     });
 
-    expect(rewriteTextEntry).toHaveBeenCalledWith({ data: 'new', id: draftId });
+    expect(rewriteTextEntry).toHaveBeenCalledWith(
+      { data: 'new', id: draftId },
+      expect.any(AbortSignal),
+    );
     expect(createTextEntry).not.toHaveBeenCalled();
     expect(grantFile).not.toHaveBeenCalled();
     expect(result.artifacts).toEqual([]);
@@ -431,8 +434,9 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
           scenario.paintingModel ? scenario.paintingModel.uniqueModelId : null,
         ),
       },
-      providerRegistry: {
-        getImageGenerationSupport: () => scenario.paintingModel?.support ?? null,
+      models: {
+        getById: async () =>
+          scenario.paintingModel ? { imageGeneration: scenario.paintingModel.support } : null,
       },
     } as unknown as SystemCapabilitySourceDependencies['painting'],
     preference: {

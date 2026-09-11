@@ -1,7 +1,11 @@
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
 import type { PluginAuthorizationDefinition, PluginDefinition } from '../pluginDefinition';
-import { createPluginRegistry, resolveBuiltInPluginGuides } from '../pluginRegistry';
+import {
+  createPluginRegistry,
+  getPluginDefinition,
+  resolveBuiltInPluginGuides,
+} from '../pluginRegistry';
 
 function credentialMethod(id = 'future_credentials_v2'): PluginAuthorizationDefinition {
   return {
@@ -117,6 +121,12 @@ it('rejects duplicate plugins, duplicate methods and setup checks that invoke a 
     expect(() =>
       createPluginRegistry([{ ...plugin, validation: { ...plugin.validation, tool } }]),
     ).toThrow('read tool');
+  expect(() =>
+    createPluginRegistry([{ ...plugin, validation: { accountLabel: () => 'Account', args: {} } }]),
+  ).toThrow('read tool');
+  expect(() =>
+    createPluginRegistry([{ ...plugin, validation: { accountLabel: () => 'Account' } }]),
+  ).not.toThrow();
 });
 
 it('rejects unsafe, repeated and malformed credential fields before exposing any form', () => {
@@ -252,4 +262,68 @@ it('omits a guide when none of its workflows have their required tools', () => {
   expect(
     registry.resolveGuides([{ pluginId: 'future', serverId: 'connection', rawToolName: 'read' }]),
   ).toEqual([]);
+});
+
+it('covers the expanded Feishu catalog while keeping write workflows out of a read-only selection', () => {
+  const feishu = getPluginDefinition('feishu')!;
+  const selections = Object.entries(feishu.tools).map(([rawToolName, effect]) => ({
+    pluginId: 'feishu',
+    serverId: 'feishu-connection',
+    rawToolName,
+    effect,
+  }));
+  const [readOnly] = resolveBuiltInPluginGuides(
+    selections.filter(({ effect }) => effect === 'read'),
+  );
+  const [complete] = resolveBuiltInPluginGuides(selections);
+  expect(complete.revision).toBe(2);
+  for (const heading of [
+    'Search documents',
+    'Find people',
+    'Resolve a wiki link',
+    'Query Base records',
+    'List my tasks',
+    'Read a calendar window',
+    'Check availability',
+  ]) {
+    expect(readOnly.content).toContain(`## ${heading}`);
+    expect(complete.content).toContain(`## ${heading}`);
+  }
+  for (const heading of [
+    'Create a Base record',
+    'Update a Base record',
+    'Create a task',
+    'Update or complete a task',
+    'Add task members',
+    'Create an event',
+    'Update an event',
+    'Invite event attendees',
+  ]) {
+    expect(readOnly.content).not.toContain(`## ${heading}`);
+    expect(complete.content).toContain(`## ${heading}`);
+  }
+});
+
+it('withholds Feishu mutation workflows until their read prerequisites are available', () => {
+  const selection = (rawToolName: string) => ({
+    pluginId: 'feishu',
+    serverId: 'feishu-connection',
+    rawToolName,
+  });
+  const writes = [
+    'base_create_record',
+    'base_update_record',
+    'task_update',
+    'calendar_update_event',
+  ];
+  const [writeOnly] = resolveBuiltInPluginGuides(writes.map(selection));
+  const [readable] = resolveBuiltInPluginGuides(
+    [...writes, 'base_list_fields', 'base_search_records', 'task_get', 'calendar_get_event'].map(
+      selection,
+    ),
+  );
+  for (const name of writes) {
+    expect(writeOnly.content).not.toContain(name);
+    expect(readable.content).toContain(name);
+  }
 });

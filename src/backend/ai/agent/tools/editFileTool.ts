@@ -46,15 +46,21 @@ export const editFileInputSchema = z.strictObject({
 });
 
 export type EditFileFiles = {
-  createTextEntry(input: {
-    data: string;
-    mediaType: string;
-    name: string;
-    provenance: FileEntryProvenance;
-  }): Promise<FileEntry>;
+  createTextEntry(
+    input: {
+      data: string;
+      mediaType: string;
+      name: string;
+      provenance: FileEntryProvenance;
+    },
+    signal: AbortSignal,
+  ): Promise<FileEntry>;
   readAsBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
   resolveAvailable(ids: readonly FileEntryId[]): Promise<ReadonlyMap<string, ManagedFileFact>>;
-  rewriteTextEntry(input: { data: string; id: FileEntryId }): Promise<FileEntry>;
+  rewriteTextEntry(
+    input: { data: string; id: FileEntryId },
+    signal: AbortSignal,
+  ): Promise<FileEntry>;
 };
 
 /**
@@ -143,7 +149,7 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
 
     signal.throwIfAborted();
     if (rewritable) {
-      const entry = await files.rewriteTextEntry({ data, id: sourceFileEntryId });
+      const entry = await files.rewriteTextEntry({ data, id: sourceFileEntryId }, signal);
       return {
         value: {
           status: 'edited',
@@ -160,12 +166,15 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
       };
     }
 
-    const entry = await files.createTextEntry({
-      data,
-      mediaType: source.mediaType,
-      name: nextVersionFilename(source.name, takenNames(scope)),
-      provenance: 'generated',
-    });
+    const entry = await files.createTextEntry(
+      {
+        data,
+        mediaType: source.mediaType,
+        name: nextVersionFilename(source.name, takenNames(scope)),
+        provenance: 'generated',
+      },
+      signal,
+    );
     versions.set(requestedId, entry.id);
 
     return {

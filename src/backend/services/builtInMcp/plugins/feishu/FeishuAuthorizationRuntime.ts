@@ -1,6 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 
 import { PluginError, type PluginAuthorizationState } from '@/shared/contracts/plugins';
+import type { PluginConnectionStatus } from '@/shared/data/types/plugin';
 
 import type {
   PluginAuthorizationRuntime,
@@ -13,7 +14,8 @@ import {
   type FeishuApplication,
   type FeishuUserCredential,
 } from './feishuCredentials';
-import { feishuOauth, missingFeishuDocumentScopes } from './feishuOauth';
+import { feishuOauth } from './feishuOauth';
+import { getFeishuToolPolicy } from './feishuTools';
 
 type AuthorizationState = {
   application?: FeishuApplication;
@@ -197,15 +199,7 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
     throw new PluginError('authorization', 'Feishu user authorization is no longer available.');
   }
 
-  private assertGrantedScopes(credential: FeishuUserCredential, reduced: boolean) {
-    const missing = missingFeishuDocumentScopes(credential.tokens);
-    if (missing.length)
-      throw new PluginError(
-        'access',
-        reduced
-          ? `Feishu document permissions were reduced (${missing.join(', ')}). Reauthorize.`
-          : `Approve the missing Feishu document permissions before connecting: ${missing.join(', ')}.`,
-      );
+  private assertRenewableCredential(credential: FeishuUserCredential) {
     if (!credential.tokens.refreshToken)
       throw new PluginError(
         'access',
@@ -215,7 +209,7 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
 
   private async refresh(credential: FeishuUserCredential, signal: AbortSignal) {
     signal.throwIfAborted();
-    this.assertGrantedScopes(credential, false);
+    this.assertRenewableCredential(credential);
     if (credential.tokens.expiresAt > Date.now() + 60_000) return credential;
     if (credential.tokens.refreshExpiresAt <= Date.now())
       throw new PluginError(
@@ -264,7 +258,7 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
             'authorization',
             'Feishu authorization was replaced or disconnected.',
           );
-        this.assertGrantedScopes(credential, true);
+        this.assertRenewableCredential(credential);
       }
       signal.throwIfAborted();
       return JSON.parse(JSON.stringify(credential)) as PluginCredential;
@@ -283,6 +277,22 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
     return AbortSignal.any([this.lifetime.signal, this.attempt.signal]);
   }
 
+  async describeConnection(authorizationId: string): Promise<PluginConnectionStatus> {
+    // Listing connections never refreshes credentials or contacts Feishu.
+    const grant = await this.store.getGrant(authorizationId);
+    const parsed = FeishuUserCredentialSchema.safeParse(grant?.credential);
+    if (!parsed.success) return { status: 'needs-reauthorization', reason: 'authorization' };
+    const { tokens } = parsed.data;
+    if (
+      !tokens.refreshToken ||
+      (tokens.expiresAt <= Date.now() && tokens.refreshExpiresAt <= Date.now())
+    )
+      return { status: 'needs-reauthorization', reason: 'authorization' };
+    if (Object.keys(getFeishuToolPolicy(tokens.scope)).length === 0)
+      return { status: 'needs-reauthorization', reason: 'access' };
+    return { status: 'connected' };
+  }
+
   prepare(attemptId: string, signal = this.attemptSignal) {
     return this.serialize(async () => {
       signal.throwIfAborted();
@@ -291,7 +301,7 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
       const credential = await this.refresh(pending.credential, signal);
       if (credential !== pending.credential) {
         pending.credential = credential;
-        this.assertGrantedScopes(credential, true);
+        this.assertRenewableCredential(credential);
       }
       const accountLabel = await feishuOauth.getAccountLabel(credential.tokens.accessToken, signal);
       signal.throwIfAborted();

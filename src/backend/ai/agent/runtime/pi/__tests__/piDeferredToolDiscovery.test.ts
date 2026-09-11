@@ -59,6 +59,25 @@ function execute(tool: PiAgentTool, input: RuntimeJsonValue, toolCallId = 'call-
 }
 
 describe('createPiDeferredToolDiscoveryTools', () => {
+  test.each(['飞书日历', '日历', '飞书calendar'])(
+    'finds the Feishu calendar with a continuous Chinese or mixed query: %s',
+    async (query) => {
+      const search = createPiDeferredToolDiscoveryTools(
+        [
+          mcpTool(
+            'mcp_calendar_get_primary_1',
+            '飞书 (feishu): 飞书日历、日程。Get the primary calendar.',
+          ),
+          mcpTool('mcp_search_repositories_1', 'GitHub (github): Search repositories.'),
+        ],
+        async () => ({ value: null, artifacts: [] }),
+        runMetaTool,
+      ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME)!;
+      const result = (await execute(search, { query })).details as RuntimeToolResult;
+      expect(JSON.stringify(result.value)).toContain('mcp_calendar_get_primary_1');
+      expect(JSON.stringify(result.value)).not.toContain('mcp_search_repositories_1');
+    },
+  );
   test('searches names and descriptions and returns TypeScript call signatures', async () => {
     const searchIssues = mcpTool('mcp_server_1_search_issues', 'Find repository issues');
     const listFiles = mcpTool('mcp_server_1_list_files', 'List files');

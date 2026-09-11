@@ -56,6 +56,7 @@ changing the Agent's configured behavior.
 ## Bundled Plugin Guides
 
 GitHub, Amap and Feishu bundle workflow guides as TypeScript data with template-string content.
+Feishu guidance includes document search, people lookup, wiki links, Base records, tasks and calendars.
 The Host selects sections from the current Agent's executable plugin tools for each turn, with
 source/revision attribution and no saved prompt or transcript mutation. The plugin detail page
 provides a read-only full-guide preview.

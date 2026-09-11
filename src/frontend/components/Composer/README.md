@@ -116,6 +116,13 @@ walk to verify it.
   stays at its resting bottom position after the replacement closes; the next
   real field focus reconnects keyboard tracking. Success and cancellation use
   the same path.
+- The ＋ menu opens in a keyboard-preserving overlay, without changing the field's
+  expanded/resting state or starting a keyboard transition. Cancelling only closes
+  the menu. Its measured trigger remains mounted and its screen position is followed
+  on the UI thread until dismissal completes, so opening during keyboard motion
+  does not leave a detached menu. Available height follows that position; long
+  menus scroll above the trigger. Viewport changes dismiss the menu, and media
+  actions wait for overlay removal before starting the replacement protocol.
 - Transient attachments render their own progress tile while they are imported
   into managed storage. Any importing attachment disables send; text editing,
   removal, and tools remain available. The send boundary rechecks readiness and
