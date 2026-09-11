@@ -8,7 +8,7 @@ import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff
 type PaintingTemplateId = keyof typeof englishTemplates;
 
 export type PaintingTemplate = Readonly<{
-  id: PaintingTemplateId;
+  id: string;
   preview: ImageProps['source'];
   prompt: string;
   title: string;
@@ -44,7 +44,12 @@ const previews = {
 
 const variablePattern = /\$\{([^{}\r\n]+)\}/g;
 
-export function getPaintingTemplates(language: string): PaintingTemplate[] {
+/** Async resource boundary: replace the local read here when templates move to HTTP. */
+export async function getPaintingTemplates(
+  language: string,
+  signal?: AbortSignal,
+): Promise<PaintingTemplate[]> {
+  signal?.throwIfAborted();
   const isChinese = language.toLowerCase() === 'zh-cn';
   const translations = isChinese ? chineseTemplates : englishTemplates;
 

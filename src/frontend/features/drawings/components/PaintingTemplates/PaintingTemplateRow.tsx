@@ -1,4 +1,5 @@
-import { Image, Section } from '@cherrystudio/ui/components';
+import { ContentState, Image, Section } from '@cherrystudio/ui/components';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -16,12 +17,47 @@ type PaintingTemplateRowProps = {
 
 export function PaintingTemplateRow({ onUseTemplate }: PaintingTemplateRowProps) {
   const { t, i18n } = useTranslation();
-  const templates = getPaintingTemplates(i18n.resolvedLanguage ?? i18n.language);
+  const language = i18n.resolvedLanguage ?? i18n.language;
+  const {
+    data: templates,
+    isPending,
+    refetch,
+  } = useQuery({
+    queryKey: ['painting-templates', language],
+    queryFn: ({ signal }) => getPaintingTemplates(language, signal),
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (!templates) {
+    return (
+      <View className="px-4 py-6">
+        {isPending ? (
+          <ContentState.Loading title={t('painting.templates.loading')} />
+        ) : (
+          <ContentState.Error
+            title={t('painting.templates.loadFailed')}
+            primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
+          />
+        )}
+      </View>
+    );
+  }
+
+  return <PaintingTemplateRowContent onUseTemplate={onUseTemplate} templates={templates} />;
+}
+
+function PaintingTemplateRowContent({
+  onUseTemplate,
+  templates,
+}: PaintingTemplateRowProps & { templates: PaintingTemplate[] }) {
+  const { t } = useTranslation();
   const [templateOrder] = useState(() =>
     shufflePaintingTemplates(templates).map((template) => template.id),
   );
+  const ranks = new Map(templateOrder.map((id, index) => [id, index]));
   const orderedTemplates = [...templates].sort(
-    (left, right) => templateOrder.indexOf(left.id) - templateOrder.indexOf(right.id),
+    (left, right) => (ranks.get(left.id) ?? Infinity) - (ranks.get(right.id) ?? Infinity),
   );
   const [selectedTemplate, setSelectedTemplate] = useState<PaintingTemplate | null>(null);
 
