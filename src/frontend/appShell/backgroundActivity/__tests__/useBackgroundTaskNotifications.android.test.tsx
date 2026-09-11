@@ -136,5 +136,19 @@ function setAppState(state: AppStateStatus) {
 }
 
 function notice(id: string, url: string, owner = BACKGROUND_NOTIFICATION_OWNER): Notification {
-  return { request: { identifier: id, content: { data: { owner, url } } } } as Notification;
+  return {
+    date: 0,
+    request: {
+      identifier: id,
+      trigger: null,
+      content: {
+        title: null,
+        subtitle: null,
+        body: null,
+        categoryIdentifier: null,
+        sound: null,
+        data: { owner, url },
+      },
+    },
+  };
 }

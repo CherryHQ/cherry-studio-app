@@ -90,6 +90,20 @@ test('ignores unrelated notifications and consumes invalid owned destinations wi
 function response(url: string, owner = BACKGROUND_NOTIFICATION_OWNER): NotificationResponse {
   return {
     actionIdentifier: 'default',
-    notification: { request: { identifier: 'notice', content: { data: { owner, url } } } },
-  } as NotificationResponse;
+    notification: {
+      date: 0,
+      request: {
+        identifier: 'notice',
+        trigger: null,
+        content: {
+          title: null,
+          subtitle: null,
+          body: null,
+          categoryIdentifier: null,
+          sound: null,
+          data: { owner, url },
+        },
+      },
+    },
+  };
 }
