@@ -1,5 +1,6 @@
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -22,6 +23,7 @@ import {
 
 import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '..';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
+import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
 
@@ -152,7 +154,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         maxInputTokens: model.maxInputTokens,
         model: piModel,
         redactionValues: collectRedactionValues(selectedApiKey.value, headers),
-        streamFn,
+        streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(streamFn) : streamFn,
         supportsTools: preflight.supportsTools,
         usageContext,
       };

@@ -35,6 +35,8 @@ export * from './custom/transportUtils';
 export * from './custom/wire/buildImageRequest';
 export * from './custom/wire/wireProfile';
 export * from './custom/zhipuProvider';
+export { createDeepseekDsmlParser, DeepseekDsmlError } from './deepseek-dsml';
+export type { DeepseekDsmlCall, DeepseekDsmlPart } from './deepseek-dsml';
 export * from './diagnostics';
 export * from './endpoint';
 export * from './extensions';
