@@ -1,10 +1,9 @@
-import type { MCPClient } from '@ai-sdk/mcp';
-
 import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError } from '@/shared/contracts/plugins';
 import type { PluginId } from '@/shared/data/types/plugin';
 
 import type { PluginAuthorizationManager } from '../authorization/PluginAuthorizationManager';
+import type { PluginClient } from '../pluginDefinition';
 import { requirePluginDefinition } from '../pluginRegistry';
 
 /** Bind a client to a registered plugin and one durable grant, checked before every request. */
@@ -15,7 +14,7 @@ export async function createBuiltInMcpClient(
   authorizations: Pick<PluginAuthorizationManager, 'get'> & {
     credentials: Pick<PluginAuthorizationManager['credentials'], 'getCredentialGrant'>;
   },
-): Promise<MCPClient> {
+): Promise<PluginClient> {
   const plugin = requirePluginDefinition(pluginId);
   const initial = await pluginAuthorizationService
     .getAuthorizedGrant(pluginId, authorizationId)

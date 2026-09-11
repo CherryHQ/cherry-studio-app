@@ -1,4 +1,4 @@
-import type { ListToolsResult, MCPClient } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@ai-sdk/mcp';
 import { createMCPClient } from '@ai-sdk/mcp';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -10,6 +10,7 @@ import {
   getBuiltInMcpToolEffect,
   PluginAuthorizationManager,
   isBuiltInMcpToolAllowed,
+  type PluginClient,
 } from '@/backend/services/builtInMcp';
 import type {
   McpConnectionConfig,
@@ -57,7 +58,12 @@ type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'sta
   connectionConfig: McpRuntimeConnectionConfig;
 };
 
-type McpToolCallingClient = MCPClient & {
+type McpRuntimeClient = Pick<
+  PluginClient,
+  'serverInfo' | 'listTools' | 'close' | 'discoveryWarnings'
+>;
+
+type McpToolCallingClient = McpRuntimeClient & {
   callTool(input: {
     args: Record<string, unknown>;
     name: string;
@@ -69,9 +75,9 @@ type ServerRuntimeState = {
   /** Cancels every in-flight request of the current generation; replaced on
    * reset so later work runs under a fresh signal. */
   abort: AbortController;
-  client?: MCPClient;
+  client?: McpRuntimeClient;
   connectionConfig: McpRuntimeConnectionConfig;
-  connectionPromise?: Promise<MCPClient>;
+  connectionPromise?: Promise<McpRuntimeClient>;
   discoveredToolNames: Set<string>;
   generation: number;
   runtimeError?: string;
@@ -93,7 +99,7 @@ function unavailableToolError(): McpRuntimeToolError {
 }
 
 async function listAllTools(
-  client: MCPClient,
+  client: McpRuntimeClient,
   signal: AbortSignal,
 ): Promise<ListToolsResult['tools']> {
   const definitions: ListToolsResult['tools'] = [];
@@ -141,7 +147,7 @@ function createMcpClient(
   config: McpRuntimeConnectionConfig,
   signal: AbortSignal,
   pluginAuthorizations: PluginAuthorizationManager,
-): Promise<MCPClient> {
+): Promise<McpRuntimeClient> {
   if (config.origin === 'builtin') {
     return createBuiltInMcpClient(
       config.builtinId,
@@ -167,7 +173,7 @@ function isRunnableMcpServer(server: McpServer): boolean {
   return server.origin === 'builtin' || /^https?:\/\//i.test(server.endpointUrl ?? '');
 }
 
-function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClient {
+function isMcpToolCallingClient(client: McpRuntimeClient): client is McpToolCallingClient {
   return typeof (client as { callTool?: unknown }).callTool === 'function';
 }
 
@@ -235,8 +241,13 @@ export class McpRuntimeService extends BaseService implements McpModule {
   }
 
   /** Raw, JSON-safe definitions used by the Host-facing Runtime projection. */
-  async listExecutableToolDescriptors(serverId: string): Promise<McpExecutableToolDescriptor[]> {
+  async listExecutableToolDescriptors(
+    serverId: string,
+    onUnavailable?: (warning: string) => void,
+  ): Promise<McpExecutableToolDescriptor[]> {
     const server = await mcpServerService.getById(serverId);
+    const sourceName =
+      server.origin === 'builtin' ? `${server.name} (${server.builtinId})` : server.name;
     if (!server.isEnabled || !isRunnableMcpServer(server)) {
       throw new McpRuntimeToolError(
         'mcp_tool_unavailable',
@@ -249,6 +260,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
     try {
       definitions = await this.fetchToolsWithRetry(server, this.getRuntimeState(server));
     } catch (error) {
+      const reason = error instanceof PluginError ? error.reason : 'unavailable';
+      onUnavailable?.(
+        `${sourceName}: tool discovery failed (${reason}). Check authorization and the service connection.`,
+      );
       if (error instanceof McpRuntimeToolError) {
         throw error;
       }
@@ -263,24 +278,38 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (!state) {
       throw unavailableToolError();
     }
-    const sourceName =
-      server.origin === 'builtin' ? `${server.name} (${server.builtinId})` : server.name;
+    for (const warning of state.client?.discoveryWarnings ?? []) onUnavailable?.(warning);
+    if (definitions.length === 0)
+      onUnavailable?.(`${sourceName}: the service returned no available tools.`);
     return definitions
       .filter((tool) => !disabledTools.has(tool.name))
-      .map((tool) => ({
-        description: tool.description ? `${sourceName}: ${tool.description}` : sourceName,
-        displayName: tool.title ?? tool.annotations?.title ?? tool.name,
-        // Pin the catalog to both its endpoint and live connection generation;
-        // edits, invalidation, or reconnects cannot retarget a frozen tool.
-        endpointUrl: server.endpointUrl,
-        ...(server.origin === 'builtin'
-          ? { effect: getBuiltInMcpToolEffect(server.builtinId, tool.name) }
-          : {}),
-        generation: state.generation,
-        inputSchema: prepareMcpInputSchema(tool.inputSchema),
-        rawToolName: tool.name,
-        serverId: server.id,
-      }));
+      .flatMap((tool) => {
+        let inputSchema: RuntimeJsonValue;
+        try {
+          inputSchema = prepareMcpInputSchema(tool.inputSchema);
+        } catch {
+          onUnavailable?.(
+            `${sourceName}: tool ${tool.name} has an unsupported parameter schema and was not loaded.`,
+          );
+          return [];
+        }
+        return [
+          {
+            description: tool.description ? `${sourceName}: ${tool.description}` : sourceName,
+            displayName: tool.title ?? tool.annotations?.title ?? tool.name,
+            // Pin the catalog to both its endpoint and live connection generation;
+            // edits, invalidation, or reconnects cannot retarget a frozen tool.
+            endpointUrl: server.endpointUrl,
+            ...(server.origin === 'builtin'
+              ? { effect: getBuiltInMcpToolEffect(server.builtinId, tool.name) }
+              : {}),
+            generation: state.generation,
+            inputSchema,
+            rawToolName: tool.name,
+            serverId: server.id,
+          },
+        ];
+      });
   }
 
   /** Adapt an already selected catalog without reading Agent bindings or injecting the Host. */
@@ -400,7 +429,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state: ServerRuntimeState,
     signal: AbortSignal,
     didTimeout?: () => boolean,
-  ): Promise<MCPClient> {
+  ): Promise<McpRuntimeClient> {
     if (!this.isCurrentState(state)) {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated`);
     }
@@ -417,7 +446,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       'mcp.server.id': state.serverId,
       'mcp.connection.generation': generation,
     });
-    const initPromise: Promise<MCPClient> = createMcpClient(
+    const initPromise: Promise<McpRuntimeClient> = createMcpClient(
       state.connectionConfig,
       signal,
       this.pluginAuthorizations,
@@ -445,20 +474,20 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return initPromise;
   }
 
-  private closeQuietly(client: MCPClient): void {
+  private closeQuietly(client: McpRuntimeClient): void {
     client.close().catch(() => undefined);
   }
 
   private async withTemporaryClient<TValue>(
     config: McpConnectionConfig,
     label: string,
-    operation: (client: MCPClient) => Promise<TValue> | TValue,
+    operation: (client: McpRuntimeClient) => Promise<TValue> | TValue,
   ): Promise<TValue> {
     const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS);
     const trace = this.traces?.startTrace('mcp.connect', undefined, {
       'mcp.connection.temporary': true,
     });
-    let client: MCPClient | undefined;
+    let client: McpRuntimeClient | undefined;
     try {
       client = await createMcpClient(config, bound.signal, this.pluginAuthorizations);
       trace?.end('ok');
@@ -673,7 +702,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     trace?.end('ok', { 'mcp.tools_count': rawTools.length });
 
     const client = state.client;
-    state.runtimeError = undefined;
+    state.runtimeError = client?.discoveryWarnings?.join(' ') || undefined;
     state.discoveredToolNames = new Set(rawTools.map((tool) => tool.name));
     this.runtimeSnapshots.set(server.id, {
       connectionConfig: state.connectionConfig,

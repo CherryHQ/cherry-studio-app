@@ -82,6 +82,7 @@ describe('Agent Runtime MCP tool resolution', () => {
 
   test('fails closed per unavailable catalog without mutating durable bindings', async () => {
     const createRuntimeTools = jest.fn(() => []);
+    const onUnavailable = jest.fn();
     const resolver = createAgentRuntimeToolResolver({
       bindings: {
         list: async () => ({ items: [binding(SERVER_A), binding(SERVER_B)] }),
@@ -96,11 +97,13 @@ describe('Agent Runtime MCP tool resolution', () => {
       }),
     });
 
-    await resolver.resolve(AGENT_ID);
+    await resolver.resolve(AGENT_ID, onUnavailable);
 
     expect(createRuntimeTools).toHaveBeenCalledWith([
       { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'ask' },
     ]);
+    expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining(SERVER_A));
+    expect(JSON.stringify(onUnavailable.mock.calls)).not.toContain('private endpoint');
   });
 
   test('does not resolve MCP Runtime state when the Agent has no enabled MCP binding', async () => {

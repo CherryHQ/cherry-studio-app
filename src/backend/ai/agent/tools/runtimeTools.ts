@@ -14,23 +14,26 @@ type AgentToolBindingResolver = {
 
 type McpRuntimeToolCapability = {
   createRuntimeTools(selections: readonly McpRuntimeToolSelection[]): RuntimeTool[];
-  listExecutableToolDescriptors(serverId: string): Promise<McpExecutableToolDescriptor[]>;
+  listExecutableToolDescriptors(
+    serverId: string,
+    onUnavailable?: (warning: string) => void,
+  ): Promise<McpExecutableToolDescriptor[]>;
 };
 
 export type AgentRuntimeToolResolver = {
-  resolve(agentId: string): Promise<RuntimeTool[]>;
+  resolve(agentId: string, onUnavailable?: (warning: string) => void): Promise<RuntimeTool[]>;
 };
 
 /**
  * Resolve the current persisted MCP policy into one immutable Runtime catalog.
- * Discovery failures remove that server from this turn without changing its bindings.
+ * Discovery failures report unavailable capabilities without changing durable bindings.
  */
 export function createAgentRuntimeToolResolver(input: {
   bindings: AgentToolBindingResolver;
   getMcpRuntime(): McpRuntimeToolCapability;
 }): AgentRuntimeToolResolver {
   return {
-    async resolve(agentId) {
+    async resolve(agentId, onUnavailable) {
       const { items } = await input.bindings.list(agentId);
       const serverIds = [
         ...new Set(
@@ -46,11 +49,21 @@ export function createAgentRuntimeToolResolver(input: {
       const mcpRuntime = input.getMcpRuntime();
       const catalogs = await Promise.all(
         serverIds.map(async (serverId) => {
+          let reported = false;
           try {
-            return await mcpRuntime.listExecutableToolDescriptors(serverId);
+            return await mcpRuntime.listExecutableToolDescriptors(serverId, (warning) => {
+              reported = true;
+              onUnavailable?.(warning);
+            });
           } catch {
-            // Disabled, deleted, unreachable, and otherwise undiscoverable servers
-            // fail closed for this snapshot while their durable bindings remain intact.
+            if (!reported) {
+              const name =
+                items.find((binding) => binding.source === 'mcp' && binding.serverId === serverId)
+                  ?.displayNameSnapshot ?? serverId;
+              onUnavailable?.(
+                `${name}: configured tools could not be loaded. Check the service connection and authorization.`,
+              );
+            }
             return [];
           }
         }),

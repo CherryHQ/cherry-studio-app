@@ -6,3 +6,4 @@ export {
   isBuiltInMcpToolAllowed,
 } from './pluginRegistry';
 export { PluginAuthorizationManager } from './authorization/PluginAuthorizationManager';
+export type { PluginClient } from './pluginDefinition';

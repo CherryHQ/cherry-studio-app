@@ -796,6 +796,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           agentInstructions: plan.agent.instructions,
           appLanguage: this.ports.appLanguage(),
           tools: plan.tools,
+          toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
         }),
         model: plan.agent.model,
         history: toRuntimeHistory(plan.history, runtimeAttachments),

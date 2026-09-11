@@ -35,7 +35,10 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
         if (method.applicationFields) validateFields(id, method.applicationFields);
       }
     }
-    if (plugin.tools[plugin.validation.tool] !== 'read')
+    if (
+      (plugin.validation.tool !== undefined && plugin.tools[plugin.validation.tool] !== 'read') ||
+      (plugin.validation.args && !plugin.validation.tool)
+    )
       throw new Error(`Plugin setup must use an admitted read tool: ${id}`);
     plugins.set(id, plugin);
   }
