@@ -250,7 +250,7 @@ export async function resolveProviderAiSdkConfig(
       match: (p, id) =>
         id === 'openai-compatible' &&
         isImageGenerationModel(model) &&
-        (['modelscope', 'ppio', 'silicon', 'doubao', 'ovms'].some((providerId) =>
+        (['modelscope', 'ppio', 'silicon', 'doubao', 'ovms', 'tokenhub'].some((providerId) =>
           isPreset(p, providerId),
         ) ||
           (isPreset(p, 'dmxapi') && dmxapiUsesCustomTransport(model.apiModelId ?? model.id))),
@@ -262,6 +262,7 @@ export async function resolveProviderAiSdkConfig(
           | 'silicon'
           | 'doubao'
           | 'ovms'
+          | 'tokenhub'
           | 'dmxapi',
         endpoint: builderContext.endpoint,
         providerSettings: {

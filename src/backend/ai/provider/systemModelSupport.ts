@@ -1,4 +1,5 @@
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
+import { isImageTransportDescriptorSupported } from '@cherrystudio/ai-runtime/image';
 import { getAiSdkProviderId } from '@cherrystudio/ai-runtime/provider';
 
 import type { Model } from '@/shared/data/types/model';
@@ -50,5 +51,16 @@ export function createSystemModelSupport(language: LanguageServingSupport): Syst
 
 function isImageGenerationSupported(provider: Provider, model: Model): boolean {
   const extension = extensionRegistry.get(getAiSdkProviderId(provider, model));
-  return extension?.config.supportsImageGeneration === true;
+  if (extension?.config.supportsImageGeneration !== true) return false;
+  const providerId = provider.presetProviderId ?? provider.id;
+  const modes = Object.values(model.imageGeneration?.modes ?? {});
+  if (modes.length === 0) return isImageTransportDescriptorSupported(providerId, undefined);
+  return modes.some((definition) =>
+    isImageTransportDescriptorSupported(
+      providerId,
+      definition?.vendorTransport
+        ? { ...definition.vendorTransport, id: model.apiModelId ?? model.modelId }
+        : undefined,
+    ),
+  );
 }
