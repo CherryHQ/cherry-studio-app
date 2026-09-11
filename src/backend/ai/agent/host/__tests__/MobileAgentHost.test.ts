@@ -31,6 +31,7 @@ import {
 } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
+import type { AgentRuntimeToolResolver } from '../../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
@@ -134,7 +135,7 @@ type HostOverrides = {
   traces?: TraceRecorder;
   agents?: AgentDefinitionSource;
   appLanguage?: () => 'en-US' | 'zh-CN';
-  resolveRuntimeTools?: () => Promise<RuntimeTool[]>;
+  resolveRuntimeTools?: AgentRuntimeToolResolver['resolve'];
 };
 
 function createHost(
@@ -155,7 +156,7 @@ function createHost(
       inferenceModel: resolveInferenceModel,
       naming: () => naming,
       runtimeTools: {
-        resolve: overrides.resolveRuntimeTools ?? (async () => []),
+        resolve: overrides.resolveRuntimeTools ?? (async () => ({ tools: [], pluginGuides: [] })),
       },
       usage,
       tools,
@@ -1627,7 +1628,7 @@ describe('MobileAgentHost', () => {
     await expect(store.listMessages(session.id)).resolves.toEqual([]);
   });
 
-  test('freezes configured tools into Runtime input and the persisted inference snapshot', async () => {
+  test('freezes tools and plugin guides per turn without retaining guides in chat history', async () => {
     const requests: RuntimeExecutionRequest[] = [];
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
       requests.push(controller.request);
@@ -1643,8 +1644,23 @@ describe('MobileAgentHost', () => {
       ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
     };
     let configuredTools = [tool];
+    let pluginGuides = [
+      {
+        pluginId: 'example',
+        serverId: 'server-1',
+        revision: 1,
+        content: 'A bundled workflow for this turn.',
+      },
+    ];
+    const discoveryWarning = 'Some configured tools could not be loaded.';
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
-      resolveRuntimeTools: async () => configuredTools.slice(),
+      resolveRuntimeTools: async (_agentId, onUnavailable) => {
+        if (pluginGuides.length > 0) onUnavailable?.(discoveryWarning);
+        return {
+          tools: configuredTools.slice(),
+          pluginGuides: pluginGuides.slice(),
+        };
+      },
     });
     const session = await createStoredSession();
     const events: AgentEvent[] = [];
@@ -1656,10 +1672,15 @@ describe('MobileAgentHost', () => {
       sessionId: session.id,
     });
     configuredTools = [];
+    pluginGuides = [];
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the tool snapshot turn');
 
     expect(requests[0]?.tools).toEqual([tool]);
+    expect(requests[0]?.instructions).toContain('A bundled workflow for this turn.');
+    expect(requests[0]?.instructions).toContain(discoveryWarning);
+    expect(requests[0]?.instructions.match(/Bundled plugin: example/g)).toHaveLength(1);
     const transcript = await store.listMessages(session.id);
+    expect(JSON.stringify(transcript)).not.toContain('A bundled workflow for this turn.');
     expect(transcript[1]?.inferenceSnapshot).toMatchObject({
       status: 'supported',
       snapshot: {
@@ -1673,6 +1694,22 @@ describe('MobileAgentHost', () => {
         ],
       },
     });
+
+    events.length = 0;
+    runtime.script((controller) => {
+      requests.push(controller.request);
+      controller.emit({ type: 'completed' });
+    });
+    await host.submitMessage({
+      ...messageIds(),
+      parts: [{ type: 'text', text: 'Continue without the plugin.' }],
+      sessionId: session.id,
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the next turn without guides');
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.instructions).not.toContain('## Plugin Guides');
+    expect(requests[1]?.instructions).not.toContain('## Tool Availability');
+    expect(JSON.stringify(requests[1]?.history)).not.toContain('A bundled workflow for this turn.');
   });
 
   test('auto approval promotes ask tools without overriding auto or deny policies', async () => {
@@ -1699,7 +1736,7 @@ describe('MobileAgentHost', () => {
     };
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
       agents: autoAgents,
-      resolveRuntimeTools: async () => tools,
+      resolveRuntimeTools: async () => ({ tools, pluginGuides: [] }),
     });
     const session = await createStoredSession();
     const events: AgentEvent[] = [];
@@ -1734,17 +1771,20 @@ describe('MobileAgentHost', () => {
       },
     });
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
-      resolveRuntimeTools: async () => [
-        {
-          approval: 'ask',
-          description: 'Search.',
-          displayName: 'Search',
-          execute: async () => ({ artifacts: [], value: null }),
-          inputSchema: { type: 'object' },
-          providerName: 'mcp_search_abc1234',
-          ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
-        },
-      ],
+      resolveRuntimeTools: async () => ({
+        tools: [
+          {
+            approval: 'ask',
+            description: 'Search.',
+            displayName: 'Search',
+            execute: async () => ({ artifacts: [], value: null }),
+            inputSchema: { type: 'object' },
+            providerName: 'mcp_search_abc1234',
+            ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+          },
+        ],
+        pluginGuides: [],
+      }),
     });
     const session = await createStoredSession();
 

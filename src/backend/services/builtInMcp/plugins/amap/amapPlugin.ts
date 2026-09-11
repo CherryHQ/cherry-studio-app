@@ -2,13 +2,15 @@ import * as z from 'zod';
 
 import { PluginError } from '@/shared/contracts/plugins';
 
-import type { PluginDefinition } from '../pluginDefinition';
-import { createOfficialMcpClient } from '../transport/createOfficialMcpClient';
+import type { PluginDefinition } from '../../pluginDefinition';
+import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
+import { amapGuide } from './guide';
 
 const AmapCredentialSchema = z.object({ version: z.literal(1), key: z.string().min(1).max(4096) });
 
 export const amapPlugin: PluginDefinition = {
   serverName: '高德地图',
+  guide: amapGuide,
   catalog: {
     id: 'amap',
     icon: 'map-pin',

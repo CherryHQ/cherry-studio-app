@@ -1,6 +1,7 @@
 # Agent Skills
 
-> Status: design. Skill persistence, loading, and Agent-to-Skill bindings are not implemented.
+> Status: design for general Skills. Skill persistence, importing, and Agent-to-Skill bindings are not
+> implemented. Bundled plugin guides are implemented separately as described below.
 
 Cherry Mobile Skills are application-owned instruction resources designed for the mobile Agent
 surface. Agent configuration selects which Skills are enabled. For each Session turn, the Host
@@ -52,16 +53,19 @@ changing the Agent's configured behavior.
 - Mobile does not execute Skill scripts, hooks, binaries, archives, or supporting files.
 - Disabled, deleted, invalid, or unsupported Skills are not projected into Agent execution.
 
-## Deferred Design
+## Bundled Plugin Guides
 
-The next plugin-specific slice is tracked in
-[Plugin Instruction Resources](./built-in-mcp-roadmap.md#plugin-instruction-resources).
-It will first bundle plain-text guides with built-in plugins and prepare them through the Host;
-it does not imply a general Skill manager, importer, or executable extension system.
+GitHub, Amap and Feishu bundle workflow guides as TypeScript data with template-string content.
+Feishu guidance includes document search, people lookup, wiki links, Base records, tasks and calendars.
+The Host selects sections from the current Agent's executable plugin tools for each turn, with
+source/revision attribution and no saved prompt or transcript mutation. The plugin detail page
+provides a read-only full-guide preview.
+The [plugin module contract](../../../src/backend/services/builtInMcp/README.md#plugin-guides)
+defines the data contract, validation, prerequisite filtering, ordering, size limits and updates.
 
-The physical schema, revision model, instruction loading strategy, prompt projection, history
-behavior, ordering, size limits, and import/export contract land with implementation. Those details
-must not be inferred from this direction document.
+This slice follows the instruction-only boundary above and uses globally connected plugins; it does
+not implement general Skill selection, persistence, an importer, or an executable extension system.
+Those contracts remain deferred and must not be inferred from the bundled guide format.
 
 ## Acceptance
 
@@ -69,4 +73,4 @@ must not be inferred from this direction document.
 - Skill selection never falls back to the global catalog or another Agent's configuration.
 - Skills cannot add tools, permissions, credentials, MCP access, or managed-file grants.
 - Desktop Skill data is retained without claiming desktop Runtime compatibility.
-- Loading and persistence details remain open until an implementation can prove them.
+- General Skill loading and persistence remain open beyond the implemented bundled guide subset.

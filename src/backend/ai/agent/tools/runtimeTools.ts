@@ -1,4 +1,8 @@
 import type { McpExecutableToolDescriptor, McpRuntimeToolSelection } from '@/backend/ai/mcp';
+import {
+  resolveBuiltInPluginGuides,
+  type PluginGuideSnapshot,
+} from '@/backend/services/builtInMcp';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import { clampMcpToolApproval } from '@/shared/utils/agentToolApproval';
@@ -22,11 +26,17 @@ type McpRuntimeToolCapability = {
 };
 
 export type AgentRuntimeToolResolver = {
-  resolve(agentId: string, onUnavailable?: (warning: string) => void): Promise<RuntimeTool[]>;
+  resolve(
+    agentId: string,
+    onUnavailable?: (warning: string) => void,
+  ): Promise<{
+    tools: RuntimeTool[];
+    pluginGuides: readonly PluginGuideSnapshot[];
+  }>;
 };
 
 /**
- * Combine Agent-bound remote MCP tools with globally connected plugins.
+ * Combine Agent-bound remote MCP tools with globally connected plugins and their guide snapshots.
  * Plugin availability follows the connection, independent of Agent bindings and message mentions.
  * Discovery failures report unavailable capabilities without changing durable bindings.
  */
@@ -51,7 +61,7 @@ export function createAgentRuntimeToolResolver(input: {
           server.isEnabled && (server.origin === 'builtin' || boundServerIds.has(server.id)),
       );
       if (servers.length === 0) {
-        return [];
+        return { tools: [], pluginGuides: [] };
       }
       const pluginIds = new Set(
         servers.filter((server) => server.origin === 'builtin').map((server) => server.id),
@@ -112,7 +122,10 @@ export function createAgentRuntimeToolResolver(input: {
         },
       );
 
-      return mcpRuntime.createRuntimeTools(selections);
+      return {
+        tools: mcpRuntime.createRuntimeTools(selections),
+        pluginGuides: resolveBuiltInPluginGuides(selections.map(({ descriptor }) => descriptor)),
+      };
     },
   };
 }

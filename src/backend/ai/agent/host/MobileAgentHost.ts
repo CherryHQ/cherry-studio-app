@@ -802,6 +802,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           agentInstructions: plan.agent.instructions,
           appLanguage: this.ports.appLanguage(),
           tools: plan.tools,
+          pluginGuides: plan.pluginGuides,
           toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
         }),
         model: plan.agent.model,

@@ -243,11 +243,25 @@ describe('listTools', () => {
       discoveryWarnings: [warning],
     };
     mockCreateMCPClient.mockResolvedValue(client);
-    const server = makeServer();
+    const server: McpServer = {
+      ...makeServer(),
+      origin: 'builtin',
+      endpointUrl: null,
+      headers: undefined,
+      builtinId: 'feishu',
+      authorizationId: 'grant-1',
+      name: '飞书',
+    };
     const { service } = makeService([server]);
     const onUnavailable = jest.fn();
     const tools = await service.listExecutableToolDescriptors(server.id, onUnavailable);
-    expect(tools.map((tool) => tool.rawToolName)).toEqual(['calendar_get_primary']);
+    expect(tools).toEqual([
+      expect.objectContaining({
+        pluginId: 'feishu',
+        effect: 'read',
+        rawToolName: 'calendar_get_primary',
+      }),
+    ]);
     expect(onUnavailable).toHaveBeenCalledWith(warning);
     await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
       [server.id]: { state: 'error', lastError: warning, toolCount: 1 },
@@ -771,6 +785,7 @@ describe('built-in plugin identities', () => {
 
       expect(descriptors).toEqual([
         expect.objectContaining({
+          pluginId: builtinId,
           description: `${name} (${builtinId}): desc ${toolName}`,
           rawToolName: toolName,
           serverId: server.id,

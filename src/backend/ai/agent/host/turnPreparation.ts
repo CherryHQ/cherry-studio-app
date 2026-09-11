@@ -9,6 +9,7 @@
  */
 
 import type { AiUsageAttribution, AiUsageAttributionResolver } from '@/backend/ai/AiService';
+import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import {
   AgentProtocolError,
   type AgentErrorView,
@@ -95,6 +96,7 @@ export type TurnPlan = {
   sessionTitle: string;
   sessionTurnIds: readonly string[];
   tools: readonly RuntimeTool[];
+  pluginGuides: readonly PluginGuideSnapshot[];
   toolDiscoveryWarnings: readonly string[];
   /** The user message parts to reserve, projected from the canonical input. */
   userParts: AgentMessagePart[];
@@ -262,6 +264,7 @@ async function prepareResolvedTurn(
   // resolution remains optional; configured MCP binding resolution fails closed.
   let systemTools: readonly RuntimeTool[] = [];
   let configuredTools: readonly RuntimeTool[] = [];
+  let pluginGuides: TurnPlan['pluginGuides'] = [];
   const toolDiscoveryWarnings: string[] = [];
   if (runtime.descriptor.capabilities.tools) {
     try {
@@ -280,12 +283,14 @@ async function prepareResolvedTurn(
       logger.warn('Failed to resolve system capabilities; continuing without them', error as Error);
     }
     try {
-      configuredTools = await raceAbort(
+      const configured = await raceAbort(
         dependencies.runtimeTools.resolve(agent.id, (warning) => {
           if (!signal.aborted) toolDiscoveryWarnings.push(warning);
         }),
         signal,
       );
+      configuredTools = configured.tools;
+      pluginGuides = configured.pluginGuides;
     } catch {
       signal.throwIfAborted();
       fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
@@ -372,6 +377,7 @@ async function prepareResolvedTurn(
     tools,
     toolDiscoveryWarnings,
     userParts,
+    pluginGuides,
     usageAttribution,
   };
 }

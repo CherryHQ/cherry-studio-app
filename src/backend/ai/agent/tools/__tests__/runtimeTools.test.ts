@@ -156,7 +156,7 @@ describe('Agent Runtime MCP tool resolution', () => {
       getMcpRuntime,
     });
 
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([]);
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
     expect(getMcpRuntime).not.toHaveBeenCalled();
   });
 
@@ -195,7 +195,10 @@ describe('Agent Runtime MCP tool resolution', () => {
       }),
     });
 
-    const expected = pluginDescriptors.map((descriptor) => ({ descriptor, approval: 'ask' }));
+    const expected = {
+      tools: pluginDescriptors.map((descriptor) => ({ descriptor, approval: 'ask' })),
+      pluginGuides: [],
+    };
     await expect(resolver.resolve(AGENT_ID, onUnavailable)).resolves.toEqual(expected);
     await expect(resolver.resolve(AGENT_ID)).resolves.toEqual(expected);
     await expect(resolver.resolve('another-agent')).resolves.toEqual(expected);
@@ -213,7 +216,7 @@ describe('Agent Runtime MCP tool resolution', () => {
       },
       getMcpRuntime,
     });
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([]);
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
     expect(getMcpRuntime).not.toHaveBeenCalled();
   });
 
@@ -238,7 +241,8 @@ describe('Agent Runtime MCP tool resolution', () => {
             : [descriptor(id, 'lookup'), descriptor(id, 'delete')],
       }),
     });
-    const tools = await resolver.resolve(AGENT_ID);
+    const { tools, pluginGuides } = await resolver.resolve(AGENT_ID);
+    expect(pluginGuides).toEqual([]);
     expect(tools).toEqual([
       { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'ask' },
       { descriptor: { ...descriptor(SERVER_A, 'search'), endpointUrl: null }, approval: 'ask' },
@@ -257,16 +261,106 @@ describe('Agent Runtime MCP tool resolution', () => {
         ],
       }),
     });
-    const first = await resolver.resolve(AGENT_ID);
+    const { tools: first } = await resolver.resolve(AGENT_ID);
     expect(first).toHaveLength(1);
     connected = [];
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([]);
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
     connected = [pluginServer(SERVER_B)];
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([
-      { descriptor: { ...descriptor(SERVER_B, 'search'), endpointUrl: null }, approval: 'ask' },
-    ]);
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [
+        { descriptor: { ...descriptor(SERVER_B, 'search'), endpointUrl: null }, approval: 'ask' },
+      ],
+      pluginGuides: [],
+    });
     expect(first).toEqual([
       { descriptor: { ...descriptor(SERVER_A, 'search'), endpointUrl: null }, approval: 'ask' },
     ]);
+  });
+
+  test('shares plugin guides across Agents and refreshes them from executable tools and the current connection', async () => {
+    let canWrite = false;
+    let isConnected = true;
+    const resolver = createAgentRuntimeToolResolver({
+      bindings: {
+        list: async () => ({ items: [] }),
+        resolveMcpTool: jest.fn(),
+      },
+      servers: {
+        list: async () => ({
+          items: [{ ...pluginServer(SERVER_A), builtinId: 'feishu', name: 'Feishu' }],
+        }),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools: (selections) => selections as unknown as RuntimeTool[],
+        listExecutableToolDescriptors: async () => {
+          if (!isConnected) throw new Error('Disconnected');
+          const names = canWrite ? ['fetch-doc', 'update-doc'] : ['fetch-doc'];
+          return names.map((name) => ({
+            ...descriptor(SERVER_A, name),
+            endpointUrl: null,
+            pluginId: 'feishu',
+          }));
+        },
+      }),
+    });
+
+    const firstTurn = await resolver.resolve(AGENT_ID);
+    expect(firstTurn.pluginGuides).toHaveLength(1);
+    expect(firstTurn.pluginGuides[0].content).toContain('## Read a document');
+    expect(firstTurn.pluginGuides[0].content).not.toContain('update-doc');
+    await expect(resolver.resolve('another-agent')).resolves.toEqual(firstTurn);
+
+    canWrite = true;
+    const secondTurn = await resolver.resolve(AGENT_ID);
+    expect(secondTurn.pluginGuides[0].content).toContain('## Modify an existing document');
+    expect(firstTurn.pluginGuides[0].content).not.toContain('update-doc');
+
+    isConnected = false;
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    expect(secondTurn.pluginGuides[0].content).toContain('## Modify an existing document');
+  });
+
+  test('keeps permitted Feishu business guides when hosted discovery fails', async () => {
+    const warning = 'Feishu document tools and people lookup could not be loaded (timeout).';
+    const onUnavailable = jest.fn();
+    const resolver = createAgentRuntimeToolResolver({
+      bindings: {
+        list: async () => ({ items: [] }),
+        resolveMcpTool: jest.fn(),
+      },
+      servers: {
+        list: async () => ({
+          items: [{ ...pluginServer(SERVER_A), builtinId: 'feishu', name: 'Feishu' }],
+        }),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools: (selections) => selections as unknown as RuntimeTool[],
+        listExecutableToolDescriptors: async (_serverId, report) => {
+          report?.(warning);
+          return [
+            'wiki_get_node',
+            'base_list_fields',
+            'base_search_records',
+            'task_list',
+            'calendar_get_primary',
+          ].map((name) => ({
+            ...descriptor(SERVER_A, name),
+            endpointUrl: null,
+            pluginId: 'feishu',
+          }));
+        },
+      }),
+    });
+
+    const { tools, pluginGuides } = await resolver.resolve(AGENT_ID, onUnavailable);
+    expect(tools).toHaveLength(5);
+    expect(onUnavailable.mock.calls).toEqual([[warning]]);
+    expect(pluginGuides).toHaveLength(1);
+    const content = pluginGuides[0].content;
+    expect(content).toContain('## Query Base records');
+    expect(content).toContain('## Resolve a wiki link');
+    expect(content).not.toContain('## Update a Base record');
+    expect(content).not.toContain('fetch-doc');
+    expect(content).not.toContain('search-user');
   });
 });

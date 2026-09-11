@@ -10,7 +10,7 @@ export const PI_TOOL_CALL_TOOL_NAME = 'tool_call';
 
 export const PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT = `## MCP Tool Discovery
 
-MCP tools are available through a searchable catalog. Use \`${PI_TOOL_SEARCH_TOOL_NAME}\` only for tool discovery, not for web search or general research. For requests about a named cloud service, search this catalog for service-specific tools. Device capabilities do not establish cloud-service access. Before claiming a connected service is unavailable, search this catalog. An empty keyword result does not mean the catalog is empty: search by service name or omit the query to browse. Use it to discover relevant tools and their TypeScript signatures, and narrow the query when a result reports \`truncated: true\`. Use \`${PI_TOOL_DESCRIBE_TOOL_NAME}\` when you need the bounded signature for one exact tool name. Inspect each tool with search or describe in the current turn before calling it, even if its name or signature appears in conversation history. Use \`${PI_TOOL_CALL_TOOL_NAME}\` with an exact discovered name and params matching that signature. If \`${PI_TOOL_CALL_TOOL_NAME}\` returns a signature, read it and retry with corrected params. Never guess tool names or parameters.`;
+MCP tools are available through a searchable catalog. Use \`${PI_TOOL_SEARCH_TOOL_NAME}\` only for tool discovery, not for web search or general research. For requests about a named cloud service, search this catalog for service-specific tools. Device capabilities do not establish cloud-service access. Before claiming a connected service is unavailable, search this catalog. An empty keyword result does not mean the catalog is empty: search by service name or omit the query to browse. Use it to discover relevant tools and their TypeScript signatures, and narrow the query when a result reports \`truncated: true\`. For a service overview, start with one service-name search instead of parallel searches for subdomains. A service-name search browses its matching tools, subject to result limits. When \`returned\` equals \`matched\` and the result is not truncated, all matches for that query have been returned; use those results instead of searching the same service by subdomain just to confirm coverage. When \`returned\` equals \`catalogTotal\`, the result is the entire catalog and no further search can discover more tools in this turn. Do not repeat or rephrase a successful search within the same turn. Words listed in \`unmatchedTerms\` have no lexical matches in tool names or descriptions; they do not prove that a capability is unavailable. Do not retry them with synonyms just to reconfirm an already covered catalog. Use \`${PI_TOOL_DESCRIBE_TOOL_NAME}\` when you need the bounded signature for one exact tool name. Inspect each tool with search or describe in the current turn before calling it, even if its name or signature appears in conversation history. Use \`${PI_TOOL_CALL_TOOL_NAME}\` with an exact discovered name and params matching that signature. If \`${PI_TOOL_CALL_TOOL_NAME}\` returns a signature, read it and retry with corrected params. Never guess tool names or parameters.`;
 
 const SEARCH_RESULT_LIMIT = 20;
 const SEARCH_RESULT_CHARACTER_LIMIT = 32_000;
@@ -21,6 +21,8 @@ const DISPATCH_ACTIVITY_NAME_CHARACTER_LIMIT = 256;
 const TOOL_SCHEMA_RENDER_CHARACTER_LIMIT = 32_000;
 const TOOL_CORRECTION_DECLARATION_CHARACTER_LIMIT = 3_000;
 const TOOL_CORRECTION_MESSAGE_CHARACTER_LIMIT = 1_000;
+const UNMATCHED_TERM_LIMIT = 8;
+const UNMATCHED_TERM_CHARACTER_LIMIT = 64;
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
 const MAX_NESTING_DEPTH = 5;
@@ -30,7 +32,8 @@ const SEARCH_INPUT_SCHEMA = {
   properties: {
     query: {
       type: 'string',
-      description: 'BM25 query matched against MCP tool names and descriptions. Omit to browse.',
+      description:
+        'Query matched against MCP tool names and descriptions. Returns tools matching the most distinct query terms, ranked by BM25. Omit to browse.',
     },
   },
   additionalProperties: false,
@@ -99,7 +102,7 @@ export function createPiDeferredToolDiscoveryTools(
     name: PI_TOOL_SEARCH_TOOL_NAME,
     label: 'Search tools',
     description:
-      'Search the available MCP tool catalog. Returns matching names, descriptions, and TypeScript signatures for use with tool_call. Narrow the query when the result is truncated.',
+      'Search the available MCP tool catalog. Returns names, descriptions, TypeScript signatures, and catalogTotal/matched/returned coverage counts for use with tool_call. For a service overview, search its name once before considering narrower queries. Narrow the query when the result is truncated.',
     parameters: SEARCH_INPUT_SCHEMA as never,
     async execute(toolCallId, params, signal) {
       const input = (isRecord(params) ? params : {}) as RuntimeJsonValue;
@@ -109,16 +112,17 @@ export function createPiDeferredToolDiscoveryTools(
         { displayName: 'Search tools', input, providerName: PI_TOOL_SEARCH_TOOL_NAME },
         (modelOutputCharacterLimit) => {
           const query = isRecord(params) && typeof params.query === 'string' ? params.query : '';
-          const searchResult = boundedSearchResult(
-            rankTools([...catalog.values()], query),
-            modelOutputCharacterLimit,
-          );
+          const ranked = rankTools([...catalog.values()], query);
+          const searchResult = boundedSearchResult(ranked, catalog.size, modelOutputCharacterLimit);
           for (const match of searchResult.matches) inspectedNames.add(match.name);
 
           return {
             modelOutput: searchResult.output,
             activityOutput: {
               value: {
+                catalogTotal: catalog.size,
+                matched: ranked.matches.length,
+                returned: searchResult.matches.length,
                 matchedNamespaces:
                   searchResult.matches.length > 0
                     ? [
@@ -353,9 +357,17 @@ function createToolInputValidator(tool: RuntimeTool): z.ZodType | null {
   }
 }
 
-function rankTools(tools: readonly RuntimeTool[], query: string): RuntimeTool[] {
-  const terms = tokenize(query);
-  if (terms.length === 0) return [...tools];
+type RankedTools = { matches: RuntimeTool[]; unmatchedTerms: string[] };
+
+/**
+ * Rank by how many distinct query terms a tool matches, then by BM25 within
+ * that tier, and keep only the top tier. A term shared by every tool, such as
+ * a service name that prefixes each description, cannot separate tiers, so a
+ * service-name query browses that service while a domain word narrows it.
+ */
+function rankTools(tools: readonly RuntimeTool[], query: string): RankedTools {
+  const terms = [...new Set(tokenize(query))];
+  if (terms.length === 0) return { matches: [...tools], unmatchedTerms: [] };
 
   const documents = tools.map((tool) => tokenize(`${tool.providerName} ${tool.description}`));
   const averageLength =
@@ -367,30 +379,45 @@ function rankTools(tools: readonly RuntimeTool[], query: string): RuntimeTool[] 
     }
   }
 
-  return tools
-    .map((tool, index) => {
-      const document = documents[index] ?? [];
-      const score = terms.reduce((total, term) => {
-        const frequency = document.filter((token) => token === term).length;
-        if (frequency === 0) return total;
-        const containingDocuments = documentFrequency.get(term) ?? 0;
-        const idf = Math.log(
-          1 + (documents.length - containingDocuments + 0.5) / (containingDocuments + 0.5),
-        );
-        return (
-          total +
-          (idf * frequency * (BM25_K1 + 1)) /
-            (frequency + BM25_K1 * (1 - BM25_B + BM25_B * (document.length / averageLength)))
-        );
-      }, 0);
-      return { tool, score };
-    })
-    .filter(({ score }) => score > 0)
-    .sort(
-      (left, right) =>
-        right.score - left.score || left.tool.providerName.localeCompare(right.tool.providerName),
-    )
-    .map(({ tool }) => tool);
+  const scored = tools.flatMap((tool, index) => {
+    const document = documents[index] ?? [];
+    let hits = 0;
+    let score = 0;
+    for (const term of terms) {
+      const frequency = document.filter((token) => token === term).length;
+      if (frequency === 0) continue;
+      const containingDocuments = documentFrequency.get(term) ?? 0;
+      const idf = Math.log(
+        1 + (documents.length - containingDocuments + 0.5) / (containingDocuments + 0.5),
+      );
+      hits += 1;
+      score +=
+        (idf * frequency * (BM25_K1 + 1)) /
+        (frequency + BM25_K1 * (1 - BM25_B + BM25_B * (document.length / averageLength)));
+    }
+    return hits > 0 ? [{ tool, hits, score }] : [];
+  });
+  const topHits = scored.reduce((best, entry) => Math.max(best, entry.hits), 0);
+
+  return {
+    matches: scored
+      .filter((entry) => entry.hits === topHits)
+      .sort(
+        (left, right) =>
+          right.score - left.score || left.tool.providerName.localeCompare(right.tool.providerName),
+      )
+      .map(({ tool }) => tool),
+    unmatchedTerms: unmatchedQueryWords(query, documentFrequency),
+  };
+}
+
+/** Whole query words whose tokens matched no tool; Chinese character pairs are never reported alone. */
+function unmatchedQueryWords(query: string, documentFrequency: ReadonlyMap<string, number>) {
+  const words = [...new Set(query.match(/[\p{L}\p{N}]+/gu) ?? [])];
+  return words
+    .filter((word) => tokenize(word).every((token) => !documentFrequency.has(token)))
+    .slice(0, UNMATCHED_TERM_LIMIT)
+    .map((word) => boundedText(word, UNMATCHED_TERM_CHARACTER_LIMIT));
 }
 
 function tokenize(value: string): string[] {
@@ -496,10 +523,23 @@ function isJsonWithinCharacterLimit(value: RuntimeJsonValue, characterLimit: num
 
 type SearchMatch = { name: string; description: string; declaration: string };
 
+type SearchCoverage = {
+  catalogTotal: number;
+  matched: number;
+  unmatchedTerms: readonly string[];
+};
+
 function boundedSearchResult(
-  tools: readonly RuntimeTool[],
+  ranked: RankedTools,
+  catalogTotal: number,
   requestedCharacterLimit: number,
 ): { matches: SearchMatch[]; output: RuntimeToolResult; truncated: boolean } {
+  const tools = ranked.matches;
+  const coverage: SearchCoverage = {
+    catalogTotal,
+    matched: tools.length,
+    unmatchedTerms: ranked.unmatchedTerms,
+  };
   const characterLimit = Math.max(
     0,
     Math.min(SEARCH_RESULT_CHARACTER_LIMIT, Math.floor(requestedCharacterLimit)),
@@ -516,7 +556,7 @@ function boundedSearchResult(
       ),
       declaration: toolToTypeScript(tool, Math.max(1, Math.floor(characterLimit / 2))),
     };
-    const candidate = createSearchOutput([...matches, match], true);
+    const candidate = createSearchOutput(coverage, [...matches, match], true);
     if (JSON.stringify(candidate).length > characterLimit) {
       truncated = true;
       continue;
@@ -524,21 +564,32 @@ function boundedSearchResult(
     matches.push(match);
   }
 
-  let output = createSearchOutput(matches, truncated);
+  let output = createSearchOutput(coverage, matches, truncated);
   while (matches.length > 0 && JSON.stringify(output).length > characterLimit) {
     matches.pop();
     truncated = true;
-    output = createSearchOutput(matches, truncated);
+    output = createSearchOutput(coverage, matches, truncated);
   }
   return { matches, output, truncated };
 }
 
+/**
+ * Coverage counts lead the payload so a budget-bounded result still tells the
+ * model whether the whole catalog is already in hand.
+ */
 function createSearchOutput(
+  coverage: SearchCoverage,
   matches: readonly SearchMatch[],
   truncated: boolean,
 ): RuntimeToolResult {
   return {
     value: {
+      catalogTotal: coverage.catalogTotal,
+      matched: coverage.matched,
+      returned: matches.length,
+      ...(coverage.unmatchedTerms.length > 0
+        ? { unmatchedTerms: [...coverage.unmatchedTerms] }
+        : {}),
       matchedNamespaces: matches.length > 0 ? [{ namespace: 'mcp', tools: [...matches] }] : [],
       ...(truncated ? { truncated: true } : {}),
     },
