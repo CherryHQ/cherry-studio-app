@@ -22,7 +22,7 @@ function remoteServer(id: string): McpServer {
   };
 }
 
-function pluginServer(id: string, isEnabled = true): McpServer {
+function pluginServer(id: string, isEnabled = true): Extract<McpServer, { origin: 'builtin' }> {
   return {
     ...remoteServer(id),
     name: 'GitHub',
@@ -35,7 +35,15 @@ function pluginServer(id: string, isEnabled = true): McpServer {
   };
 }
 
-const remoteServers = { getById: async (id: string) => remoteServer(id) };
+const remoteServers = {
+  list: async () => ({
+    items: [
+      remoteServer(SERVER_A),
+      remoteServer(SERVER_B),
+      remoteServer('00000000-0000-4000-8000-000000000005'),
+    ],
+  }),
+};
 
 function binding(
   serverId: string,
@@ -128,16 +136,16 @@ describe('Agent Runtime MCP tool resolution', () => {
       }),
     });
 
-    await resolver.resolve(AGENT_ID, [], onUnavailable);
+    await resolver.resolve(AGENT_ID, onUnavailable);
 
     expect(createRuntimeTools).toHaveBeenCalledWith([
       { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'ask' },
     ]);
-    expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining(SERVER_A));
+    expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining('Remote tools'));
     expect(JSON.stringify(onUnavailable.mock.calls)).not.toContain('private endpoint');
   });
 
-  test('does not resolve MCP Runtime state when the Agent has no enabled MCP binding', async () => {
+  test('skips discovery without connected plugins or enabled remote bindings', async () => {
     const getMcpRuntime = jest.fn();
     const resolver = createAgentRuntimeToolResolver({
       servers: remoteServers,
@@ -152,67 +160,64 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(getMcpRuntime).not.toHaveBeenCalled();
   });
 
-  test('legacy Agent bindings cannot enable plugins without a message selection', async () => {
-    const getMcpRuntime = jest.fn();
-    const resolver = createAgentRuntimeToolResolver({
-      bindings: {
-        list: async () => ({ items: [binding(SERVER_A)] }),
-        resolveMcpTool: jest.fn(),
-      },
-      servers: { getById: async (id) => pluginServer(id) },
-      getMcpRuntime,
-    });
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([]);
-    expect(getMcpRuntime).not.toHaveBeenCalled();
-  });
-
-  test('explicit plugin selection needs no Agent binding and is limited to that message', async () => {
-    const selectedDescriptor = { ...descriptor(SERVER_A, 'search'), endpointUrl: null };
+  test('all connected plugins are available across Agents and turns without message selection', async () => {
+    const pluginDescriptors = [SERVER_A, SERVER_B].map((id) => ({
+      ...descriptor(id, 'search'),
+      endpointUrl: null,
+    }));
     const onUnavailable = jest.fn();
     const createRuntimeTools = jest.fn(
       (selections: readonly McpRuntimeToolSelection[]) => selections as unknown as RuntimeTool[],
     );
     const resolveMcpTool = jest.fn();
     const resolver = createAgentRuntimeToolResolver({
-      bindings: { list: async () => ({ items: [] }), resolveMcpTool },
-      servers: { getById: async (id) => pluginServer(id) },
+      bindings: {
+        list: async (agentId) => ({
+          items:
+            agentId === AGENT_ID ? [] : [binding(SERVER_A, { enabled: false, approval: 'deny' })],
+        }),
+        resolveMcpTool,
+      },
+      servers: {
+        list: async () => ({
+          items: [
+            pluginServer(SERVER_A),
+            { ...pluginServer(SERVER_B), builtinId: 'feishu', name: 'Feishu' },
+          ],
+        }),
+      },
       getMcpRuntime: () => ({
         createRuntimeTools,
-        listExecutableToolDescriptors: async (_serverId, reportUnavailable) => {
+        listExecutableToolDescriptors: async (serverId, reportUnavailable) => {
           reportUnavailable?.('Some plugin tools are unavailable.');
-          return [selectedDescriptor];
+          return pluginDescriptors.filter((tool) => tool.serverId === serverId);
         },
       }),
     });
 
-    await expect(resolver.resolve(AGENT_ID, [SERVER_A, SERVER_A], onUnavailable)).resolves.toEqual([
-      { descriptor: selectedDescriptor, approval: 'ask' },
-    ]);
+    const expected = pluginDescriptors.map((descriptor) => ({ descriptor, approval: 'ask' }));
+    await expect(resolver.resolve(AGENT_ID, onUnavailable)).resolves.toEqual(expected);
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual(expected);
+    await expect(resolver.resolve('another-agent')).resolves.toEqual(expected);
     expect(resolveMcpTool).not.toHaveBeenCalled();
     expect(onUnavailable).toHaveBeenCalledWith('Some plugin tools are unavailable.');
-    await expect(resolver.resolve(AGENT_ID, [], onUnavailable)).resolves.toEqual([]);
-    expect(onUnavailable).toHaveBeenCalledTimes(1);
-    expect(createRuntimeTools).toHaveBeenCalledTimes(1);
   });
 
-  test('plugin selections cannot enable remote, disabled, or disconnected servers', async () => {
+  test('ignores unbound remote servers, disabled plugins, and deleted bound servers', async () => {
     const missingId = '00000000-0000-4000-8000-000000000007';
     const getMcpRuntime = jest.fn();
     const resolver = createAgentRuntimeToolResolver({
-      bindings: { list: async () => ({ items: [] }), resolveMcpTool: jest.fn() },
+      bindings: { list: async () => ({ items: [binding(missingId)] }), resolveMcpTool: jest.fn() },
       servers: {
-        getById: async (id) => {
-          if (id === missingId) throw new Error('Connection deleted');
-          return id === SERVER_A ? remoteServer(id) : pluginServer(id, false);
-        },
+        list: async () => ({ items: [remoteServer(SERVER_A), pluginServer(SERVER_B, false)] }),
       },
       getMcpRuntime,
     });
-    await expect(resolver.resolve(AGENT_ID, [SERVER_A, SERVER_B, missingId])).resolves.toEqual([]);
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([]);
     expect(getMcpRuntime).not.toHaveBeenCalled();
   });
 
-  test('selected plugins coexist with remote MCP bindings and retain remote per-tool denials', async () => {
+  test('connected plugins coexist with remote MCP bindings and retain remote per-tool denials', async () => {
     const createRuntimeTools = jest.fn(
       (selections: readonly McpRuntimeToolSelection[]) => selections as unknown as RuntimeTool[],
     );
@@ -224,7 +229,7 @@ describe('Agent Runtime MCP tool resolution', () => {
           enabled: true,
         }),
       },
-      servers: { getById: async (id) => (id === SERVER_A ? pluginServer(id) : remoteServer(id)) },
+      servers: { list: async () => ({ items: [remoteServer(SERVER_B), pluginServer(SERVER_A)] }) },
       getMcpRuntime: () => ({
         createRuntimeTools,
         listExecutableToolDescriptors: async (id) =>
@@ -233,9 +238,34 @@ describe('Agent Runtime MCP tool resolution', () => {
             : [descriptor(id, 'lookup'), descriptor(id, 'delete')],
       }),
     });
-    const tools = await resolver.resolve(AGENT_ID, [SERVER_A, SERVER_B]);
+    const tools = await resolver.resolve(AGENT_ID);
     expect(tools).toEqual([
       { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'ask' },
+      { descriptor: { ...descriptor(SERVER_A, 'search'), endpointUrl: null }, approval: 'ask' },
+    ]);
+  });
+
+  test('refreshes plugin availability after disconnect and reconnect', async () => {
+    let connected: McpServer[] = [pluginServer(SERVER_A)];
+    const resolver = createAgentRuntimeToolResolver({
+      bindings: { list: async () => ({ items: [] }), resolveMcpTool: jest.fn() },
+      servers: { list: async () => ({ items: connected }) },
+      getMcpRuntime: () => ({
+        createRuntimeTools: (selections) => selections as unknown as RuntimeTool[],
+        listExecutableToolDescriptors: async (id) => [
+          { ...descriptor(id, 'search'), endpointUrl: null },
+        ],
+      }),
+    });
+    const first = await resolver.resolve(AGENT_ID);
+    expect(first).toHaveLength(1);
+    connected = [];
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([]);
+    connected = [pluginServer(SERVER_B)];
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([
+      { descriptor: { ...descriptor(SERVER_B, 'search'), endpointUrl: null }, approval: 'ask' },
+    ]);
+    expect(first).toEqual([
       { descriptor: { ...descriptor(SERVER_A, 'search'), endpointUrl: null }, approval: 'ask' },
     ]);
   });

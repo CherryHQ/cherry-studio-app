@@ -256,7 +256,7 @@ async function prepareResolvedTurn(
     availableFiles,
   );
 
-  // Freeze system capabilities, configured MCP tools, and selected plugins so
+  // Freeze system capabilities, configured MCP tools, and connected plugins so
   // mid-turn changes cannot alter the active catalog. The catalog closes over
   // this turn's resource ledger, never a global file surface. System capability
   // resolution remains optional; configured MCP binding resolution fails closed.
@@ -281,7 +281,7 @@ async function prepareResolvedTurn(
     }
     try {
       configuredTools = await raceAbort(
-        dependencies.runtimeTools.resolve(agent.id, parsed.pluginServerIds, (warning) => {
+        dependencies.runtimeTools.resolve(agent.id, (warning) => {
           if (!signal.aborted) toolDiscoveryWarnings.push(warning);
         }),
         signal,

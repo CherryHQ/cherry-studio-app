@@ -269,11 +269,7 @@ describe('turn preparation', () => {
     expect(() =>
       plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
     ).toThrow('already bound');
-    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(
-      AGENT_ID,
-      undefined,
-      expect.any(Function),
-    );
+    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID, expect.any(Function));
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
 
@@ -352,13 +348,10 @@ describe('turn preparation', () => {
   });
 
   test.each(['existing', 'initial'] as const)(
-    '%s messages freeze only their selected plugins into the tool snapshot',
+    '%s messages preserve explicit plugin intent without restricting the tool snapshot',
     async (kind) => {
       const harness = createHarness();
-      const serverId = '00000000-0000-4000-8000-000000000001';
       harness.getSystemTools.mockResolvedValue([]);
-      harness.dependencies.runtimeTools.resolve = async (_agentId, pluginServerIds) =>
-        pluginServerIds?.includes(serverId) ? [harness.configuredTool] : [];
       const prepare = (input: AgentSubmitMessageInput) =>
         kind === 'initial'
           ? prepareInitialTurn(
@@ -378,13 +371,12 @@ describe('turn preparation', () => {
       const selected = await prepare({
         ...textInput(),
         parts: [{ type: 'text', text: '飞书 查找文档', pluginReferences }],
-        pluginServerIds: [serverId],
       });
       const unselected = await prepare(textInput());
       expect(selected.tools).toEqual([harness.configuredTool]);
       expect(selected.inferenceSnapshot.tools).toHaveLength(1);
-      expect(unselected.tools).toEqual([]);
-      expect(unselected.inferenceSnapshot.tools).toEqual([]);
+      expect(unselected.tools).toEqual(selected.tools);
+      expect(unselected.inferenceSnapshot.tools).toEqual(selected.inferenceSnapshot.tools);
       expect(selected.agent).toEqual(AGENT);
       expect(selected.userParts).toEqual([
         { id: 'input-0', type: 'text', text: '飞书 查找文档', pluginReferences, state: 'done' },
@@ -424,12 +416,10 @@ describe('turn preparation', () => {
 
   test('retains discovery failures for the current turn while keeping other capabilities usable', async () => {
     const harness = createHarness();
-    harness.resolveRuntimeTools.mockImplementationOnce(
-      async (_agentId, _pluginServerIds, onUnavailable) => {
-        onUnavailable?.('Feishu document tools could not be loaded (network).');
-        return [];
-      },
-    );
+    harness.resolveRuntimeTools.mockImplementationOnce(async (_agentId, onUnavailable) => {
+      onUnavailable?.('Feishu document tools could not be loaded (network).');
+      return [];
+    });
     const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
     expect(plan.tools).toHaveLength(1);
     expect(plan.toolDiscoveryWarnings).toEqual([
@@ -498,11 +488,7 @@ function createHarness() {
     async (_input: Parameters<SystemCapabilitySource['getTools']>[0]) => [systemTool],
   );
   const resolveRuntimeTools = jest.fn(
-    async (
-      _agentId: string,
-      _pluginServerIds?: readonly string[],
-      _onUnavailable?: (warning: string) => void,
-    ) => [configuredTool],
+    async (_agentId: string, _onUnavailable?: (warning: string) => void) => [configuredTool],
   );
   const resolveInferenceModel = jest.fn(
     async (model: RuntimeModel): Promise<AgentInferenceModelSnapshot> => ({

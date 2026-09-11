@@ -14,15 +14,18 @@
 
 ## Plugins
 
-The chat drawer's **Plugins** page manages connected accounts and authorization. To use a plugin,
-choose **+ > Plugins** in the composer. The add menu closes before a compact plugin list appears
-above the input, keeping the keyboard and draft available. The list has no title, search field, or
+The chat drawer's **Plugins** page manages connected accounts and authorization. Connecting a plugin
+makes its permitted tools available to every Agent without further configuration. To explicitly
+request a plugin for one message, choose **+ > Plugins** in the composer. The add menu closes before
+a compact plugin list appears above the input, keeping the keyboard and draft available. The list
+has no title, search field, or
 close button; selecting an item, tapping outside, or going back dismisses it. Selecting a connected
 plugin inserts a named reference at the editor's current selection. Only currently connected,
 usable plugins appear; when none are connected, the add menu omits its Plugins entry. Account
 connection and reauthorization remain on the Plugins page.
-There is no `@` trigger. Removing the reference cancels that message's selection. A successful send
-clears the references with the draft; a failed send restores them with the text.
+There is no `@` trigger. Removing the reference cancels that message's explicit request, without
+disabling the plugin. A successful send clears the references with the draft; a failed send restores
+them with the text.
 
 References follow the desktop composer's inline icon and primary-colored name, with no chip fill.
 The input's patched native link style replaces its leading object character with a text attachment;
@@ -31,10 +34,11 @@ through pending display and persistence. Message rows reuse the same artwork fro
 without consulting the current connection or locale. Existing plain-text messages remain readable.
 This native input change requires an updated development client.
 
-The composer extracts `pluginServerIds` from its internal references and sends readable names in
-the text. The Host validates the connection identities and freezes only explicitly selected
-plugins into that turn's tool catalog. Connecting an account and legacy Agent bindings never
-activate a plugin. Remote MCP servers retain their existing Agent binding policy and settings.
+The composer sends readable names and `pluginReferences` in the user text part. The Host preserves
+these references as explicit plugin-use intent in model input and replayed user history, without
+changing the stored text. Each turn loads all enabled plugin connections into its frozen tool catalog,
+including turns with no references. References never grant or restrict tool access; legacy Agent
+plugin bindings do not control availability. Remote MCP servers retain their Agent binding policy.
 Plugin references and popover interactions still require device acceptance on both platforms.
 
 | Integration | Implemented authorization | Implemented tools |
@@ -61,7 +65,7 @@ OpenAPI routes through the app's HTTP service, with a Bearer user token and no r
 | GitHub profile, repository search, file reads, PR listing | `get_me`, `search_repositories`, `get_file_contents`, `list_pull_requests` | Upstream schemas and result shapes |
 | GitHub issue/PR search | `search_issues`, `search_pull_requests` | Separate tools |
 | GitHub issue/PR detail | `issue_read`, `pull_request_read` | Upstream `method` selects the read operation |
-| GitHub issue creation | `issue_write` | Supports creation and updates; follows explicit message selection and tool approval |
+| GitHub issue creation | `issue_write` | Supports creation and updates; follows tool approval |
 | GitHub comments and PR creation | `add_issue_comment`, `create_pull_request` | Existing-branch PR workflow retained |
 | Amap place and nearby search | `maps_text_search`, `maps_around_search` | Former pagination inputs are not guaranteed |
 | Amap address/coordinate conversion | `maps_geo`, `maps_regeocode` | Upstream schemas and result shapes |
@@ -77,7 +81,8 @@ tool is unavailable, not an invitation to fall back to the deleted local impleme
 Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings while retaining
 credentials, server UUIDs, old per-tool selections, approval settings, disabled tools and history.
 Old per-tool identities are not retargeted automatically. Custom MCP servers are unchanged. The
-plugin detail page explains the cloud destination; users select plugins explicitly in each message.
+plugin detail page explains that connected plugins are available globally and composer selection
+expresses an explicit request for one message.
 
 The merged sequence preserves v0.2's `0020_desktop-connection`, followed by
 `0021_plugin-authorizations`. Migration `0023_reconcile-desktop-connection` also creates the desktop
@@ -123,8 +128,8 @@ There is no legacy credential import, startup migration, orphan scan or persiste
 `PluginAuthorizationService` commits each grant and its MCP reference together. Updating
 authorization preserves the server UUID but allocates a new grant identity; disconnecting disables
 existing Agent bindings, deletes the server and grant, and invalidates active calls. Reconnecting
-after disconnect requires a new composer selection. Credentials stay out of frontend query caches
-and tool arguments.
+after disconnect restores global availability for subsequent turns. Credentials stay out of frontend
+query caches and tool arguments.
 
 Catalog metadata comes from `GET /plugin-catalog`; connection metadata comes from
 `GET /plugin-connections` on the Data API. The `PluginsModule` owns connect/disconnect and the
@@ -251,7 +256,7 @@ The hosted client initializes lazily. Its complete paginated discovery has a sep
 deadline; failure preserves permitted local tools and reports a safe discovery warning. The combined
 tool catalog is returned as one page. `feishuOpenApi` owns HTTP dispatch, safe error mapping, grant
 rechecks and cancellation. The shared plugin client also exposes optional discovery warnings; no
-in-process MCP server or general URL/request tool is introduced. Existing Agent binding, approval and result
+in-process MCP server or general URL/request tool is introduced. Existing approval and result
 handling own both routes, and client close cancels pending local calls.
 
 Each turn retains partial discovery warnings alongside its permitted tools. The Host supplies these
@@ -350,9 +355,10 @@ can later host an in-process adapter without adding provider switches to storage
 
 ## Scope
 
-Cherry Mobile plans six integrations in its Plugins directory. A user connects an account, selects
-the plugin for a message, and then uses its tools through ordinary conversation. The application owns
-authorization and tool orchestration on the device; official MCP services execute their business
+Cherry Mobile plans six integrations in its Plugins directory. A user connects an account and uses
+its tools through ordinary conversation with any Agent. Composer references explicitly request a
+plugin for a message without changing availability. The application owns authorization and tool
+orchestration on the device; official MCP services execute their business
 tools remotely. Expiring GitHub and Feishu user grants renew on demand; other OAuth providers remain
 later slices. No Cherry-operated authorization proxy, command-line program, local HTTP listener,
 or desktop process is required by this design.
@@ -402,7 +408,9 @@ flowchart TD
   Workflow --> Server["mcp_server: connected integration instance"]
   Catalog --> Picker["Composer + > Plugins: explicit message selection"]
   Server --> Picker
-  Picker --> Host["MobileAgentHost: frozen tool catalog"]
+  Server --> Host["MobileAgentHost: globally connected plugin tool catalog"]
+  Picker --> Intent["User message: explicit plugin-use intent"]
+  Intent --> Pi
   Host --> Pi["Pi: search, describe and call tools"]
   Pi --> Approval["Existing approval and execution boundary"]
   Approval --> MCP["McpRuntimeService"]
@@ -420,14 +428,14 @@ There are three durable facts with different owners:
 
 1. A bundled definition describes an integration, its endpoint and admitted tools. Definitions ship in
    code and are not copied into a database catalog.
-2. An authorization records a particular account/grant and its credentials. It does not enable
-   tools or assign them to Agents.
-3. An MCP server instance connects a definition to an authorization. The selected message's
-   `pluginServerIds` decide which connected plugins may enter a turn; these are not Agent bindings.
+2. An authorization records a particular account/grant and its credentials and permitted scopes.
+3. An enabled MCP server instance connects a definition to an authorization and makes its permitted
+   tools available globally. Plugin availability does not require Agent bindings or message references.
 
-Connecting an account and selecting an integration for a message are separate actions. The Host
-ignores legacy Agent plugin bindings and accepts plugin selections only for enabled built-in
-connections. Supplying a remote server as a plugin never bypasses its Agent binding policy.
+Connecting an account enables the plugin for all Agents. Selecting an integration in the composer
+expresses the user's explicit intent for that message; all connected plugins remain available.
+The Host ignores legacy Agent plugin bindings. Remote servers still require Agent bindings, and
+message references cannot enable disconnected plugins or bypass remote server policy.
 
 Every plugin tool keeps the existing identity `{ source: 'mcp', serverId, rawToolName }`, so it
 inherits current aliasing, discovery, approval, audit and history behavior. The `builtin`

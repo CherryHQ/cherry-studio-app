@@ -27,8 +27,6 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
-  /** Plugins explicitly selected in this message; never inherited from Agent bindings. */
-  pluginServerIds: z.array(z.uuidv4()).optional(),
 });
 export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
 export const AgentStartSessionInputSchema = z.strictObject({
@@ -42,8 +40,6 @@ export const AgentStartSessionInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
-  /** Plugins explicitly selected in this message; never inherited from Agent bindings. */
-  pluginServerIds: z.array(z.uuidv4()).optional(),
 });
 export type AgentStartSessionInput = z.infer<typeof AgentStartSessionInputSchema>;
 export const AgentForkSessionInputSchema = z.strictObject({

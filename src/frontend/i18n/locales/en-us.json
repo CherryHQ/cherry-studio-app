@@ -1335,7 +1335,7 @@
   "plugins.unavailable": "Unavailable in this app version",
   "plugins.unavailableDescription": "This app version does not include this plugin. Its connection is preserved. Update the app to use it, or disconnect it from the menu beside the account.",
   "plugins.privacy": "Authorization and privacy",
-  "plugins.privacyDescription": "Choose a plugin from the plus menu in the chat composer to use it for that message. Results are processed by the selected model, and actions follow the existing tool approval settings. Connecting an account does not automatically enable the plugin in chats.",
+  "plugins.privacyDescription": "Connected plugins are available to all Agents without additional setup. The model can use their tools as needed, and you can explicitly request a plugin for a message from the composer's plus menu. Results are processed by the selected model, and actions follow the existing tool approval settings.",
   "plugins.website": "Website",
   "plugins.privacyPolicy": "Privacy policy",
   "plugins.reconnect": "Update authorization",

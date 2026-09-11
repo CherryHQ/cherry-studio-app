@@ -109,9 +109,12 @@ persisting rejection, and never triggers request replay.
 A grant change cannot retarget a tool from an already frozen turn catalog. Disconnect disables
 existing Agent bindings and revokes the server/grant before best-effort native cleanup.
 
-Every plugin tool keeps `source: 'mcp'`. Agent binding, disabled tools, approval, deferred discovery,
+Every plugin tool keeps `source: 'mcp'`. Disabled tools, approval, deferred discovery,
 transcript results, and runtime result limits remain owned by the existing agent/MCP pipeline.
-Connecting a plugin does not grant all Agents access. Upstream credentials never grant tool approval.
+Connecting a plugin makes its permitted tools available to all Agents on each subsequent turn.
+Composer references express explicit message intent; legacy Agent plugin bindings do not control
+availability. Remote MCP servers retain Agent binding policy. Upstream credentials never grant
+tool approval.
 Executable catalog descriptions include the saved server name and builtin id so deferred discovery
 can find tools by platform names such as `GitHub`, `github`, `高德地图`, and `amap`. Chinese domain
 descriptions and character-pair matching also support `飞书日历`. Partial discovery failures reach

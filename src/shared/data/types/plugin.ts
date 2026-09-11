@@ -5,7 +5,7 @@ import { BuiltInMcpIdSchema } from './mcpServer';
 export const PluginIdSchema = BuiltInMcpIdSchema;
 export type PluginId = z.infer<typeof PluginIdSchema>;
 
-/** Display snapshot in plain message text; never grants tool access. Offsets use UTF-16. */
+/** Explicit plugin mention and display snapshot; never grants tool access. Offsets use UTF-16. */
 export const PluginTextReferenceSchema = z.strictObject({
   type: z.literal('plugin'),
   pluginId: PluginIdSchema,

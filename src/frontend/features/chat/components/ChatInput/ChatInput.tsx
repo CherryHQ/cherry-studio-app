@@ -229,11 +229,10 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
   const handleSendPress = useCallback(
     ({ attachments, text }: ComposerSendPayload) => {
       setIsPluginPickerOpen(false);
-      const { pluginServerIds, pluginReferences, text: prompt } = readPluginMentions(text);
+      const { pluginReferences, text: prompt } = readPluginMentions(text);
       const parts = toAgentInputParts({ attachments, text: prompt }, pluginReferences);
       return sendMessage({
         parts,
-        pluginServerIds,
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
         ...(reasoningEfforts.length > 0
           ? {

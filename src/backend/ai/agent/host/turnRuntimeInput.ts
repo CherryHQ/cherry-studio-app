@@ -11,6 +11,7 @@ import {
   type AgentInputPart,
   type AgentMessageView,
 } from '@/shared/contracts/agent';
+import type { PluginTextReference } from '@/shared/data/types/plugin';
 
 import type { TurnResourceLedger } from '../resources/managedFileResolver';
 import type {
@@ -38,7 +39,7 @@ export function toRuntimeInputParts(
       }
       return [attachment];
     }
-    return [{ type: 'text', text: part.text }];
+    return [{ type: 'text', text: runtimeUserText(part) }];
   });
 }
 
@@ -57,6 +58,11 @@ export function toRuntimeHistory(
     for (const part of message.parts) {
       switch (part.type) {
         case 'text':
+          parts.push({
+            type: 'text',
+            text: message.role === 'user' ? runtimeUserText(part) : part.text,
+          });
+          break;
         case 'reasoning':
           parts.push({ type: part.type, text: part.text });
           break;
@@ -119,4 +125,11 @@ export function toRuntimeHistory(
     }
   }
   return history;
+}
+
+/** Preserve message-scoped plugin intent as user content, without changing the stored text. */
+function runtimeUserText(part: { text: string; pluginReferences?: PluginTextReference[] }): string {
+  if (!part.pluginReferences?.length) return part.text;
+  const pluginIds = [...new Set(part.pluginReferences.map((reference) => reference.pluginId))];
+  return `${part.text}\n\nFor this message, use the plugins explicitly selected in the composer: ${JSON.stringify(pluginIds)}. Other connected plugins remain available if needed.`;
 }

@@ -170,7 +170,7 @@ export function getAgentMcpToolBindingStatus(input: {
 }
 
 export function isRunnableMcpServer(server: Pick<McpServer, 'endpointUrl' | 'origin'>): boolean {
-  // Plugins are selected from the composer, outside Agent MCP settings.
+  // Connected plugins are available globally, outside Agent MCP settings.
   return server.origin !== 'builtin' && /^https?:\/\//i.test(server.endpointUrl ?? '');
 }
 

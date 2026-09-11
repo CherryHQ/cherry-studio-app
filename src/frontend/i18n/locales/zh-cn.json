@@ -1332,7 +1332,7 @@
   "plugins.unavailable": "当前版本暂不支持此插件",
   "plugins.unavailableDescription": "当前版本不包含此插件，已有连接仍会保留。你可以更新应用后继续使用，也可以在账号旁的更多菜单中断开连接。",
   "plugins.privacy": "授权与隐私",
-  "plugins.privacyDescription": "在聊天输入框的加号菜单中选择插件后，插件才会用于这条消息。结果由所选模型处理，操作遵循现有的工具审批设置。连接账号不会自动在对话中启用插件。",
+  "plugins.privacyDescription": "连接后，插件默认对所有智能体可用，无需单独配置。模型会根据对话需要调用已连接插件的工具；你也可以在输入框的加号菜单中明确指定本条消息使用的插件。结果由所选模型处理，操作遵循现有的工具审批设置。",
   "plugins.website": "官方网站",
   "plugins.privacyPolicy": "隐私政策",
   "plugins.reconnect": "更新授权",
