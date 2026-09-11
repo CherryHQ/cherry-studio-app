@@ -66,6 +66,9 @@ title between equal action columns; `headerAction` stays on the right. The close
 same dismissal path as the downward gesture, scrim, Android back, and accessibility escape action.
 When showing a second level, `backAction` takes precedence over `closeAction`.
 
+`dismissKeyboardOnClose` defaults to `true`. Set it to `false` while a sheet preserves an editor
+behind it; model selection enables it only while its own search field has focus.
+
 Set `dismissible={false}` when a workflow must remain visible until it reaches an explicit outcome.
 The closed detent then becomes programmatic-only: drag, scrim, Android back, and accessibility
 escape cannot reach it, while changing `open` to `false` still performs the controlled close.

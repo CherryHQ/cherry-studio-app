@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BackHandler, Dimensions, StyleSheet, Text } from 'react-native';
+import { BackHandler, Dimensions, Keyboard, StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '..';
@@ -112,6 +112,39 @@ describe('BottomSheet', () => {
     expect(mockBottomSheetProps.index).toBe(0);
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  test.each([false, true])(
+    'closes normally with dismissKeyboardOnClose=%s',
+    (dismissKeyboardOnClose) => {
+      const dismiss = jest.spyOn(Keyboard, 'dismiss');
+      const onClose = jest.fn();
+      try {
+        act(() => {
+          renderer = create(
+            <BottomSheet
+              dismissKeyboardOnClose={dismissKeyboardOnClose}
+              onClose={onClose}
+              open
+              size="large"
+              title="Models"
+            >
+              <Text>Content</Text>
+            </BottomSheet>,
+          );
+        });
+        expect(dismiss).not.toHaveBeenCalled();
+        act(() => mockHardwareBackPress?.());
+        expect(mockBottomSheetProps.index).toBe(0);
+        expect(onClose).not.toHaveBeenCalled();
+        act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
+        expect(onClose).toHaveBeenCalledTimes(1);
+        if (dismissKeyboardOnClose) expect(dismiss).toHaveBeenCalled();
+        else expect(dismiss).not.toHaveBeenCalled();
+      } finally {
+        dismiss.mockRestore();
+      }
+    },
+  );
 
   test('keeps the closed detent of a non-dismissible sheet programmatic-only', () => {
     const onClose = jest.fn();

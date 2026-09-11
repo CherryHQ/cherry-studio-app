@@ -33,10 +33,12 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   the surface expanded. Closing an overlay by its backdrop only closes that overlay. The original
   layout and motion remain in place; the [interaction contract](../../../../../../docs/references/chat/input-interaction.md)
   limits this change to keyboard and selection side effects.
-- Native media pickers and model/settings Sheets replace the live input context: the shared
+- Native media pickers and settings Sheets replace the live input context: the shared
   composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
   It reconnects keyboard tracking only when the field receives focus again. Menu and effort
-  overlays preserve the existing keyboard context instead.
+  overlays and the model picker preserve the existing keyboard context instead. Opening, browsing,
+  selecting, and cancelling models do not request focus or keyboard dismissal. Explicitly tapping
+  model search transfers focus to its search field.
 - Picking a model updates the current Agent's `modelId`. Submission also snapshots the visible
   model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
   persisted serially and coalesced to the latest visible selection.

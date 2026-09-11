@@ -45,6 +45,7 @@ export function ModelPickerDrawer({
 
   return (
     <BottomSheet
+      dismissKeyboardOnClose={isSearchFocused}
       onClose={onClose}
       open={open}
       size={isSearchExpanded ? 'full' : 'large'}
@@ -56,6 +57,7 @@ export function ModelPickerDrawer({
           deferredSearchText={deferredSearchText}
           emptyText={emptyText}
           isModelVisible={isModelVisible}
+          isSearchFocused={isSearchFocused}
           modelType={modelType}
           onAddProvider={onAddProvider}
           onSelect={onSelect}
@@ -75,6 +77,7 @@ function ModelPickerDrawerContent({
   deferredSearchText,
   emptyText,
   isModelVisible,
+  isSearchFocused,
   modelType,
   onAddProvider,
   onSelect,
@@ -96,6 +99,7 @@ function ModelPickerDrawerContent({
   | 'selectedModelId'
 > & {
   deferredSearchText: string;
+  isSearchFocused: boolean;
   onSearchFocusChange: (isFocused: boolean) => void;
   onSearchTextChange: (value: string) => void;
   searchText: string;
@@ -148,6 +152,7 @@ function ModelPickerDrawerContent({
           }
           isLoading={isLoading}
           isOpen={open}
+          isSearchFocused={isSearchFocused}
           listItems={listItems}
           loadingText={t('settings.provider.models.loading')}
           onSelect={onSelect}

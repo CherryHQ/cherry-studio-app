@@ -48,6 +48,8 @@ type BottomSheetBaseProps = {
   children: ReactNode;
   closeAction?: { accessibilityLabel: string };
   dismissible?: boolean;
+  /** Preserve another surface's focused editor when this sheet does not own input. */
+  dismissKeyboardOnClose?: boolean;
   footer?: ReactNode;
   headerAction?: ReactNode;
   onClose: () => void;
@@ -90,6 +92,7 @@ export function BottomSheet(props: BottomSheetProps) {
     children,
     closeAction,
     dismissible = true,
+    dismissKeyboardOnClose = true,
     footer,
     headerAction,
     onClose,
@@ -134,9 +137,9 @@ export function BottomSheet(props: BottomSheetProps) {
       return;
     }
 
-    Keyboard.dismiss();
+    if (dismissKeyboardOnClose) Keyboard.dismiss();
     setIndex(CLOSED_INDEX);
-  }, [dismissible]);
+  }, [dismissible, dismissKeyboardOnClose]);
 
   const handleHardwareBackPress = useCallback(() => {
     if (backAction) {
@@ -168,10 +171,10 @@ export function BottomSheet(props: BottomSheetProps) {
       }
 
       hasNotifiedCloseRef.current = true;
-      Keyboard.dismiss();
+      if (dismissKeyboardOnClose) Keyboard.dismiss();
       onClose();
     },
-    [dismissible, onClose, open],
+    [dismissible, dismissKeyboardOnClose, onClose, open],
   );
 
   return (
