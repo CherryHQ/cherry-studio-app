@@ -63,6 +63,7 @@ function message(
 }
 
 function sourceOf(result: AssistantMessage) {
+  if (result.stopReason === 'pending') throw new Error('Expected a completed assistant message.');
   const source = new AssistantMessageEventStream();
   source.push({ type: 'start', partial: result });
   result.content.forEach((block, contentIndex) => {
