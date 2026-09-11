@@ -59,8 +59,9 @@ network reads. Update `revision` with content changes for attribution; it has no
 role. This is bundled instruction data, not an importer or an executable Skill system.
 
 The MCP descriptor carries the bundled plugin id from the stored server record. The Agent tool
-resolver uses only descriptors admitted by the current Agent's bindings and effective tool policy to
-select guides through the existing registry. Remote names and descriptions cannot identify a plugin.
+resolver selects guides from each connected plugin's executable descriptors after grant and disabled-tool
+filtering. Plugin tools and guides are available across Agents without bindings or composer mentions.
+Remote names and descriptions cannot identify a plugin.
 Each connection produces at most one frozen guide snapshot with `pluginId`, `serverId`, `revision`
 and selected text. Connections are ordered by plugin id and server id; sections retain authored order.
 Tools from different connections cannot collectively satisfy a workflow's prerequisites.
@@ -81,7 +82,7 @@ counted in the existing live context budget; it is not silently truncated. Runti
 request and Agent instructions take precedence over guide workflows. Raw names are discovery hints;
 the model must still inspect each tool's current signature before calling its exact catalog alias.
 
-Changes to bindings, disabled tools, connection availability or bundled revisions affect the next
+Changes to grants, disabled tools, connection availability or bundled revisions affect the next
 prepared turn; existing execution-time revocation checks remain immediate. The plugin catalog also
 projects a detached full guide preview by joining all sections. The detail page lazily renders that
 read-only preview when expanded, using the shared Markdown renderer without native text selection.
@@ -170,9 +171,12 @@ persisting rejection, and never triggers request replay.
 A grant change cannot retarget a tool from an already frozen turn catalog. Disconnect disables
 existing Agent bindings and revokes the server/grant before best-effort native cleanup.
 
-Every plugin tool keeps `source: 'mcp'`. Agent binding, disabled tools, approval, deferred discovery,
+Every plugin tool keeps `source: 'mcp'`. Disabled tools, approval, deferred discovery,
 transcript results, and runtime result limits remain owned by the existing agent/MCP pipeline.
-Connecting a plugin does not grant all Agents access. Upstream credentials never grant tool approval.
+Connecting a plugin makes its permitted tools available to all Agents on each subsequent turn.
+Composer references express explicit message intent; legacy Agent plugin bindings do not control
+availability. Remote MCP servers retain Agent binding policy. Upstream credentials never grant
+tool approval.
 Executable catalog descriptions include the saved server name and builtin id so deferred discovery
 can find tools by platform names such as `GitHub`, `github`, `高德地图`, and `amap`. Chinese domain
 descriptions and character-pair matching also support `飞书日历`. Partial discovery failures reach

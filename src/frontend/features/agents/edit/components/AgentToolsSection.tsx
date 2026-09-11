@@ -47,9 +47,11 @@ export function AgentToolsSection({
     () =>
       bindings.filter(
         (binding): binding is McpToolBindingDraft =>
-          binding.source === 'mcp' && binding.rawToolName !== undefined,
+          binding.source === 'mcp' &&
+          binding.rawToolName !== undefined &&
+          !servers.some((server) => server.id === binding.serverId && server.origin === 'builtin'),
       ),
-    [bindings],
+    [bindings, servers],
   );
   const serversById = useMemo(
     () => new Map(servers.map((server) => [server.id, server])),

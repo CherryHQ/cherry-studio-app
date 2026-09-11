@@ -13,27 +13,30 @@ export function PluginIcon({
   size = 'default',
 }: {
   icon?: string;
-  size?: 'default' | 'large';
+  size?: 'small' | 'default' | 'large';
 }) {
   const Icon =
     icon && Object.hasOwn(ICONS, icon) ? ICONS[icon as keyof typeof ICONS] : FileTextIcon;
+  const iconSize = size === 'small' ? 'size-5' : size === 'large' ? 'size-9' : 'size-7';
   return (
     <View
       className={
-        size === 'large'
-          ? 'size-12 items-center justify-center'
-          : 'size-10 items-center justify-center'
+        size === 'small'
+          ? 'size-6 items-center justify-center'
+          : size === 'large'
+            ? 'size-12 items-center justify-center'
+            : 'size-10 items-center justify-center'
       }
     >
       {icon === 'feishu' ? (
         <Image
           accessibilityIgnoresInvertColors
-          className={size === 'large' ? 'size-9' : 'size-7'}
+          className={iconSize}
           contentFit="contain"
           source={FEISHU_ICON}
         />
       ) : (
-        <Icon className={size === 'large' ? 'size-9 text-foreground' : 'size-7 text-foreground'} />
+        <Icon className={`${iconSize} text-foreground`} />
       )}
     </View>
   );

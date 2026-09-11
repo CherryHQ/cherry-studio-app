@@ -43,9 +43,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   current Agent composer and is snapshotted into each submission; it never updates Agent
   configuration. Switching models projects that pick to the closest supported stop. `default`
   bypasses the Agent effort for that turn; `auto` remains a separate provider-controlled mode.
-- The composer menu offers media only. Web search and create-image were removed from it, so the
-  composer no longer requests any turn-local capability; tool availability comes from Agent
-  configuration alone.
+- The composer menu offers media and connected plugins. Selecting a plugin inserts an inline
+  reference that expresses the user's intent for that message. Connected plugins remain available
+  to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
 - The menu's File row opens the full-height library picker. Its Recent list shares cursor pages
   and batched previews with the library screen. Selection stays local until Add is pressed; the
   action appears only for newly selected, available attachments. Already attached files are marked

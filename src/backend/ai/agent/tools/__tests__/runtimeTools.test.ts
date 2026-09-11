@@ -1,5 +1,6 @@
 import type { McpExecutableToolDescriptor, McpRuntimeToolSelection } from '@/backend/ai/mcp';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import type { RuntimeTool } from '../../runtime';
 import { createAgentRuntimeToolResolver } from '../runtimeTools';
@@ -7,6 +8,42 @@ import { createAgentRuntimeToolResolver } from '../runtimeTools';
 const AGENT_ID = 'agent-1';
 const SERVER_A = '00000000-0000-4000-8000-000000000001';
 const SERVER_B = '00000000-0000-4000-8000-000000000002';
+
+function remoteServer(id: string): McpServer {
+  return {
+    id,
+    name: 'Remote tools',
+    origin: 'remote',
+    endpointUrl: `https://${id}.example/mcp`,
+    isEnabled: true,
+    disabledTools: [],
+    createdAt: '2026-08-26T00:00:00.000Z',
+    updatedAt: '2026-08-26T00:00:00.000Z',
+  };
+}
+
+function pluginServer(id: string, isEnabled = true): Extract<McpServer, { origin: 'builtin' }> {
+  return {
+    ...remoteServer(id),
+    name: 'GitHub',
+    origin: 'builtin',
+    builtinId: 'github',
+    authorizationId: SERVER_B,
+    endpointUrl: null,
+    headers: undefined,
+    isEnabled,
+  };
+}
+
+const remoteServers = {
+  list: async () => ({
+    items: [
+      remoteServer(SERVER_A),
+      remoteServer(SERVER_B),
+      remoteServer('00000000-0000-4000-8000-000000000005'),
+    ],
+  }),
+};
 
 function binding(
   serverId: string,
@@ -56,6 +93,7 @@ describe('Agent Runtime MCP tool resolution', () => {
           : { approval: 'auto' as const, enabled: true },
     );
     const resolver = createAgentRuntimeToolResolver({
+      servers: remoteServers,
       bindings: {
         list: async () => ({
           items: [
@@ -84,6 +122,7 @@ describe('Agent Runtime MCP tool resolution', () => {
     const createRuntimeTools = jest.fn(() => []);
     const onUnavailable = jest.fn();
     const resolver = createAgentRuntimeToolResolver({
+      servers: remoteServers,
       bindings: {
         list: async () => ({ items: [binding(SERVER_A), binding(SERVER_B)] }),
         resolveMcpTool: async () => ({ approval: 'ask', enabled: true }),
@@ -102,13 +141,14 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(createRuntimeTools).toHaveBeenCalledWith([
       { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'ask' },
     ]);
-    expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining(SERVER_A));
+    expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining('Remote tools'));
     expect(JSON.stringify(onUnavailable.mock.calls)).not.toContain('private endpoint');
   });
 
-  test('does not resolve MCP Runtime state when the Agent has no enabled MCP binding', async () => {
+  test('skips discovery without connected plugins or enabled remote bindings', async () => {
     const getMcpRuntime = jest.fn();
     const resolver = createAgentRuntimeToolResolver({
+      servers: remoteServers,
       bindings: {
         list: async () => ({ items: [binding(SERVER_A, { enabled: false })] }),
         resolveMcpTool: jest.fn(),
@@ -120,23 +160,144 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(getMcpRuntime).not.toHaveBeenCalled();
   });
 
-  test('keeps guides isolated by Agent, effective tool policy and the current connection snapshot', async () => {
+  test('all connected plugins are available across Agents and turns without message selection', async () => {
+    const pluginDescriptors = [SERVER_A, SERVER_B].map((id) => ({
+      ...descriptor(id, 'search'),
+      endpointUrl: null,
+    }));
+    const onUnavailable = jest.fn();
+    const createRuntimeTools = jest.fn(
+      (selections: readonly McpRuntimeToolSelection[]) => selections as unknown as RuntimeTool[],
+    );
+    const resolveMcpTool = jest.fn();
+    const resolver = createAgentRuntimeToolResolver({
+      bindings: {
+        list: async (agentId) => ({
+          items:
+            agentId === AGENT_ID ? [] : [binding(SERVER_A, { enabled: false, approval: 'deny' })],
+        }),
+        resolveMcpTool,
+      },
+      servers: {
+        list: async () => ({
+          items: [
+            pluginServer(SERVER_A),
+            { ...pluginServer(SERVER_B), builtinId: 'feishu', name: 'Feishu' },
+          ],
+        }),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools,
+        listExecutableToolDescriptors: async (serverId, reportUnavailable) => {
+          reportUnavailable?.('Some plugin tools are unavailable.');
+          return pluginDescriptors.filter((tool) => tool.serverId === serverId);
+        },
+      }),
+    });
+
+    const expected = {
+      tools: pluginDescriptors.map((descriptor) => ({ descriptor, approval: 'ask' })),
+      pluginGuides: [],
+    };
+    await expect(resolver.resolve(AGENT_ID, onUnavailable)).resolves.toEqual(expected);
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual(expected);
+    await expect(resolver.resolve('another-agent')).resolves.toEqual(expected);
+    expect(resolveMcpTool).not.toHaveBeenCalled();
+    expect(onUnavailable).toHaveBeenCalledWith('Some plugin tools are unavailable.');
+  });
+
+  test('ignores unbound remote servers, disabled plugins, and deleted bound servers', async () => {
+    const missingId = '00000000-0000-4000-8000-000000000007';
+    const getMcpRuntime = jest.fn();
+    const resolver = createAgentRuntimeToolResolver({
+      bindings: { list: async () => ({ items: [binding(missingId)] }), resolveMcpTool: jest.fn() },
+      servers: {
+        list: async () => ({ items: [remoteServer(SERVER_A), pluginServer(SERVER_B, false)] }),
+      },
+      getMcpRuntime,
+    });
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    expect(getMcpRuntime).not.toHaveBeenCalled();
+  });
+
+  test('connected plugins coexist with remote MCP bindings and retain remote per-tool denials', async () => {
+    const createRuntimeTools = jest.fn(
+      (selections: readonly McpRuntimeToolSelection[]) => selections as unknown as RuntimeTool[],
+    );
+    const resolver = createAgentRuntimeToolResolver({
+      bindings: {
+        list: async () => ({ items: [binding(SERVER_B)] }),
+        resolveMcpTool: async (_agentId, input) => ({
+          approval: input.rawToolName === 'delete' ? 'deny' : 'ask',
+          enabled: true,
+        }),
+      },
+      servers: { list: async () => ({ items: [remoteServer(SERVER_B), pluginServer(SERVER_A)] }) },
+      getMcpRuntime: () => ({
+        createRuntimeTools,
+        listExecutableToolDescriptors: async (id) =>
+          id === SERVER_A
+            ? [{ ...descriptor(id, 'search'), endpointUrl: null }]
+            : [descriptor(id, 'lookup'), descriptor(id, 'delete')],
+      }),
+    });
+    const { tools, pluginGuides } = await resolver.resolve(AGENT_ID);
+    expect(pluginGuides).toEqual([]);
+    expect(tools).toEqual([
+      { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'ask' },
+      { descriptor: { ...descriptor(SERVER_A, 'search'), endpointUrl: null }, approval: 'ask' },
+    ]);
+  });
+
+  test('refreshes plugin availability after disconnect and reconnect', async () => {
+    let connected: McpServer[] = [pluginServer(SERVER_A)];
+    const resolver = createAgentRuntimeToolResolver({
+      bindings: { list: async () => ({ items: [] }), resolveMcpTool: jest.fn() },
+      servers: { list: async () => ({ items: connected }) },
+      getMcpRuntime: () => ({
+        createRuntimeTools: (selections) => selections as unknown as RuntimeTool[],
+        listExecutableToolDescriptors: async (id) => [
+          { ...descriptor(id, 'search'), endpointUrl: null },
+        ],
+      }),
+    });
+    const { tools: first } = await resolver.resolve(AGENT_ID);
+    expect(first).toHaveLength(1);
+    connected = [];
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    connected = [pluginServer(SERVER_B)];
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [
+        { descriptor: { ...descriptor(SERVER_B, 'search'), endpointUrl: null }, approval: 'ask' },
+      ],
+      pluginGuides: [],
+    });
+    expect(first).toEqual([
+      { descriptor: { ...descriptor(SERVER_A, 'search'), endpointUrl: null }, approval: 'ask' },
+    ]);
+  });
+
+  test('shares plugin guides across Agents and refreshes them from executable tools and the current connection', async () => {
     let canWrite = false;
     let isConnected = true;
     const resolver = createAgentRuntimeToolResolver({
       bindings: {
-        list: async (agentId) => ({ items: agentId === AGENT_ID ? [binding(SERVER_A)] : [] }),
-        resolveMcpTool: async (_agentId, { rawToolName }) => ({
-          enabled: true,
-          approval: rawToolName === 'update-doc' && !canWrite ? 'deny' : 'ask',
+        list: async () => ({ items: [] }),
+        resolveMcpTool: jest.fn(),
+      },
+      servers: {
+        list: async () => ({
+          items: [{ ...pluginServer(SERVER_A), builtinId: 'feishu', name: 'Feishu' }],
         }),
       },
       getMcpRuntime: () => ({
         createRuntimeTools: (selections) => selections as unknown as RuntimeTool[],
         listExecutableToolDescriptors: async () => {
           if (!isConnected) throw new Error('Disconnected');
-          return ['fetch-doc', 'update-doc'].map((name) => ({
+          const names = canWrite ? ['fetch-doc', 'update-doc'] : ['fetch-doc'];
+          return names.map((name) => ({
             ...descriptor(SERVER_A, name),
+            endpointUrl: null,
             pluginId: 'feishu',
           }));
         },
@@ -147,10 +308,7 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(firstTurn.pluginGuides).toHaveLength(1);
     expect(firstTurn.pluginGuides[0].content).toContain('## Read a document');
     expect(firstTurn.pluginGuides[0].content).not.toContain('update-doc');
-    await expect(resolver.resolve('another-agent')).resolves.toEqual({
-      tools: [],
-      pluginGuides: [],
-    });
+    await expect(resolver.resolve('another-agent')).resolves.toEqual(firstTurn);
 
     canWrite = true;
     const secondTurn = await resolver.resolve(AGENT_ID);
@@ -167,10 +325,12 @@ describe('Agent Runtime MCP tool resolution', () => {
     const onUnavailable = jest.fn();
     const resolver = createAgentRuntimeToolResolver({
       bindings: {
-        list: async () => ({ items: [binding(SERVER_A)] }),
-        resolveMcpTool: async (_agentId, { rawToolName }) => ({
-          enabled: true,
-          approval: rawToolName === 'base_update_record' ? 'deny' : 'ask',
+        list: async () => ({ items: [] }),
+        resolveMcpTool: jest.fn(),
+      },
+      servers: {
+        list: async () => ({
+          items: [{ ...pluginServer(SERVER_A), builtinId: 'feishu', name: 'Feishu' }],
         }),
       },
       getMcpRuntime: () => ({
@@ -181,10 +341,13 @@ describe('Agent Runtime MCP tool resolution', () => {
             'wiki_get_node',
             'base_list_fields',
             'base_search_records',
-            'base_update_record',
             'task_list',
             'calendar_get_primary',
-          ].map((name) => ({ ...descriptor(SERVER_A, name), pluginId: 'feishu' }));
+          ].map((name) => ({
+            ...descriptor(SERVER_A, name),
+            endpointUrl: null,
+            pluginId: 'feishu',
+          }));
         },
       }),
     });

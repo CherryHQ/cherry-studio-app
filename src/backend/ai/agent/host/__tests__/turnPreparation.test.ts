@@ -347,6 +347,43 @@ describe('turn preparation', () => {
     expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
   });
 
+  test.each(['existing', 'initial'] as const)(
+    '%s messages preserve explicit plugin intent without restricting the tool snapshot',
+    async (kind) => {
+      const harness = createHarness();
+      harness.getSystemTools.mockResolvedValue([]);
+      const prepare = (input: AgentSubmitMessageInput) =>
+        kind === 'initial'
+          ? prepareInitialTurn(
+              harness.dependencies,
+              {
+                ...input,
+                agentId: AGENT_ID,
+                executionTarget: { kind: 'local' },
+              },
+              new AbortController().signal,
+            )
+          : prepareTurn(harness.dependencies, input, new AbortController().signal);
+
+      const pluginReferences = [
+        { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
+      ];
+      const selected = await prepare({
+        ...textInput(),
+        parts: [{ type: 'text', text: '飞书 查找文档', pluginReferences }],
+      });
+      const unselected = await prepare(textInput());
+      expect(selected.tools).toEqual([harness.configuredTool]);
+      expect(selected.inferenceSnapshot.tools).toHaveLength(1);
+      expect(unselected.tools).toEqual(selected.tools);
+      expect(unselected.inferenceSnapshot.tools).toEqual(selected.inferenceSnapshot.tools);
+      expect(selected.agent).toEqual(AGENT);
+      expect(selected.userParts).toEqual([
+        { id: 'input-0', type: 'text', text: '飞书 查找文档', pluginReferences, state: 'done' },
+      ]);
+    },
+  );
+
   test('stops at session admission when the session does not exist', async () => {
     const harness = createHarness();
     harness.getSession.mockResolvedValueOnce(null);

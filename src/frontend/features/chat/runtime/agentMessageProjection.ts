@@ -142,6 +142,12 @@ function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'tool' }>['o
 function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   switch (part.type) {
     case 'text':
+      return part.pluginReferences?.length
+        ? withCherryMeta(
+            { type: 'text', text: part.text, state: part.state },
+            { references: part.pluginReferences },
+          )
+        : { type: 'text', text: part.text, state: part.state };
     case 'reasoning':
       return { type: part.type, text: part.text, state: part.state } as CherryMessagePart;
     case 'file':

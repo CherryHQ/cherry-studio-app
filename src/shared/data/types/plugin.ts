@@ -5,6 +5,15 @@ import { BuiltInMcpIdSchema } from './mcpServer';
 export const PluginIdSchema = BuiltInMcpIdSchema;
 export type PluginId = z.infer<typeof PluginIdSchema>;
 
+/** Explicit plugin mention and display snapshot; never grants tool access. Offsets use UTF-16. */
+export const PluginTextReferenceSchema = z.strictObject({
+  type: z.literal('plugin'),
+  pluginId: PluginIdSchema,
+  label: z.string().min(1),
+  offset: z.number().int().nonnegative(),
+});
+export type PluginTextReference = z.infer<typeof PluginTextReferenceSchema>;
+
 /** Validation rules for one credential input; its label and error copy live in locale files. */
 export type PluginCredentialField = {
   readonly id: string;

@@ -6,7 +6,7 @@ The system catalog ships device calendar and reminders, health, location, web se
 image generation, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
 `{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and the Agent's capability-group deny-list, then combines it with
-the Agent's persisted executable MCP bindings. Capability groups (web, image, calendar, reminders,
+globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
 health, location) are enabled per Agent in the editor; the three file tools belong to every turn. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
@@ -22,7 +22,7 @@ side effect, credential, system permission, managed file, and provider-specific 
 ```text
 Mobile Agent Host
     ├─ resolves the shared system capability catalog
-    ├─ resolves Agent-specific MCP bindings
+    ├─ resolves globally connected plugins and Agent-specific remote MCP bindings
     ├─ creates a Host-owned turn resource ledger
     └─ builds an immutable RuntimeTool[] snapshot
             ↓
@@ -45,7 +45,7 @@ implementations behind those adapters; they never become a second conversation R
 
 The application owns two different representations:
 
-- A durable **tool binding** says which MCP source an Agent may use and its approval policy.
+- A durable **tool binding** says which remote MCP source an Agent may use and its approval policy.
 - A turn-local **Runtime tool** contains the provider-safe name, description, JSON Schema, approval
   mode, and execution callback Pi can use for one immutable turn.
 
@@ -108,7 +108,10 @@ only effective `ask` tools to `auto`; existing `auto` and hard `deny` policies r
 This preference lives on the Mobile Agent rather than on an execution target and applies from the
 next turn.
 
-For MCP, omitting `rawToolName` defines the server default and enables discovery subject to the
+Connected plugins are system-wide: permitted tools and their bundled guides are available to every
+Agent, independent of legacy plugin bindings or composer mentions. A mention adds message intent.
+
+For remote MCP, omitting `rawToolName` defines the server default and enables discovery subject to the
 server-level disabled-tool list; a specific `(serverId, rawToolName)` binding overrides that
 default. There is at most one MCP server default per `(agentId, serverId)` and one specific binding
 per `(agentId, serverId, rawToolName)`. A deleted server or tool leaves a disabled/dangling binding
@@ -137,7 +140,8 @@ Before admitting a turn, the Host resolves tools in this order:
 1. Create the turn resource ledger from controlled current-input and transcript managed-file facts.
 2. Read the Agent's capability-group deny-list from its definition.
 3. Project only system capabilities implemented and available on the current mobile platform.
-4. Read the current Agent's enabled MCP bindings and resolve their executable descriptors.
+4. Resolve executable descriptors for globally connected plugins and the current Agent's enabled
+   remote MCP bindings, then select plugin guide sections whose tool prerequisites are available.
 5. Apply system permission state, model tool-calling support, and application policy.
 6. Apply the Agent approval preference to the combined system and MCP catalog (`ask → auto` only in
    automatic mode; `deny` remains denied).

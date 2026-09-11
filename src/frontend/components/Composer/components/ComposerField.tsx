@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { getPluginMentionLinkStyles } from '@/frontend/utils/pluginIcons';
 
 import {
   useComposerActions,
@@ -27,7 +28,7 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
   const { activateInput } = useComposerPresentationActions();
-  const linkColor = useThemeColor('link');
+  const linkColor = useThemeColor('primary');
 
   const handlePaste = useCallback(
     (payload: PasteEventPayload) => {
@@ -44,7 +45,10 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
   const markdownStyle = useMemo(() => {
     const mentionStyle = { color: linkColor, underline: false };
 
-    return { link: mentionStyle, linkVariants: { '^tool:': mentionStyle } };
+    return {
+      link: mentionStyle,
+      linkVariants: getPluginMentionLinkStyles(linkColor),
+    };
   }, [linkColor]);
 
   const handleFocus = useCallback<NonNullable<ComposerInputProps['onFocus']>>(() => {

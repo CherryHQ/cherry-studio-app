@@ -63,7 +63,7 @@ provides a read-only full-guide preview.
 The [plugin module contract](../../../src/backend/services/builtInMcp/README.md#plugin-guides)
 defines the data contract, validation, prerequisite filtering, ordering, size limits and updates.
 
-This slice follows the instruction-only boundary above and uses existing plugin bindings; it does
+This slice follows the instruction-only boundary above and uses globally connected plugins; it does
 not implement general Skill selection, persistence, an importer, or an executable extension system.
 Those contracts remain deferred and must not be inferred from the bundled guide format.
 

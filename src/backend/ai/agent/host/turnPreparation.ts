@@ -258,7 +258,7 @@ async function prepareResolvedTurn(
     availableFiles,
   );
 
-  // Freeze system capabilities and configured MCP tools for the turn so
+  // Freeze system capabilities, configured MCP tools, and connected plugins so
   // mid-turn changes cannot alter the active catalog. The catalog closes over
   // this turn's resource ledger, never a global file surface. System capability
   // resolution remains optional; configured MCP binding resolution fails closed.
@@ -344,8 +344,7 @@ async function prepareResolvedTurn(
   );
 
   const userParts: AgentMessagePart[] = parts.map((part, index) => {
-    if (part.type === 'text')
-      return { id: `input-${index}`, type: 'text', text: part.text, state: 'done' };
+    if (part.type === 'text') return { ...part, id: `input-${index}`, state: 'done' };
     const content = runtimeContentAttachments.get(part.fileEntryId);
     return {
       id: `input-${index}`,

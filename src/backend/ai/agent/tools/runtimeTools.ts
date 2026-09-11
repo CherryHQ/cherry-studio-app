@@ -4,6 +4,7 @@ import {
   type PluginGuideSnapshot,
 } from '@/backend/services/builtInMcp';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 import { clampMcpToolApproval } from '@/shared/utils/agentToolApproval';
 
 import type { RuntimeTool } from '../runtime';
@@ -35,30 +36,40 @@ export type AgentRuntimeToolResolver = {
 };
 
 /**
- * Resolve the current MCP policy into executable tools and their bundled instruction snapshot.
+ * Combine Agent-bound remote MCP tools with globally connected plugins and their guide snapshots.
+ * Plugin availability follows the connection, independent of Agent bindings and message mentions.
  * Discovery failures report unavailable capabilities without changing durable bindings.
  */
 export function createAgentRuntimeToolResolver(input: {
   bindings: AgentToolBindingResolver;
+  servers: { list(): Promise<{ items: McpServer[] }> };
   getMcpRuntime(): McpRuntimeToolCapability;
 }): AgentRuntimeToolResolver {
   return {
     async resolve(agentId, onUnavailable) {
-      const { items } = await input.bindings.list(agentId);
-      const serverIds = [
-        ...new Set(
-          items.flatMap((binding) =>
-            binding.source === 'mcp' && binding.enabled ? [binding.serverId] : [],
-          ),
+      const [{ items }, { items: connectedServers }] = await Promise.all([
+        input.bindings.list(agentId),
+        input.servers.list(),
+      ]);
+      const boundServerIds = new Set(
+        items.flatMap((binding) =>
+          binding.source === 'mcp' && binding.enabled ? [binding.serverId] : [],
         ),
-      ];
-      if (serverIds.length === 0) {
+      );
+      const servers = connectedServers.filter(
+        (server) =>
+          server.isEnabled && (server.origin === 'builtin' || boundServerIds.has(server.id)),
+      );
+      if (servers.length === 0) {
         return { tools: [], pluginGuides: [] };
       }
+      const pluginIds = new Set(
+        servers.filter((server) => server.origin === 'builtin').map((server) => server.id),
+      );
 
       const mcpRuntime = input.getMcpRuntime();
       const catalogs = await Promise.all(
-        serverIds.map(async (serverId) => {
+        servers.map(async ({ id: serverId, name }) => {
           let reported = false;
           try {
             return await mcpRuntime.listExecutableToolDescriptors(serverId, (warning) => {
@@ -67,9 +78,6 @@ export function createAgentRuntimeToolResolver(input: {
             });
           } catch {
             if (!reported) {
-              const name =
-                items.find((binding) => binding.source === 'mcp' && binding.serverId === serverId)
-                  ?.displayNameSnapshot ?? serverId;
               onUnavailable?.(
                 `${name}: configured tools could not be loaded. Check the service connection and authorization.`,
               );
@@ -82,11 +90,13 @@ export function createAgentRuntimeToolResolver(input: {
       const resolutions = await Promise.all(
         descriptors.map(async (descriptor) => ({
           descriptor,
-          resolved: await input.bindings.resolveMcpTool(agentId, {
-            isToolAvailable: true,
-            rawToolName: descriptor.rawToolName,
-            serverId: descriptor.serverId,
-          }),
+          resolved: pluginIds.has(descriptor.serverId)
+            ? { approval: 'ask' as const, enabled: true }
+            : await input.bindings.resolveMcpTool(agentId, {
+                isToolAvailable: true,
+                rawToolName: descriptor.rawToolName,
+                serverId: descriptor.serverId,
+              }),
         })),
       );
       const selections: McpRuntimeToolSelection[] = resolutions.flatMap(

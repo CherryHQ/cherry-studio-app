@@ -1348,7 +1348,7 @@
   "plugins.unavailable": "Unavailable in this app version",
   "plugins.unavailableDescription": "This app version does not include this plugin. Its connection is preserved. Update the app to use it, or disconnect it from the menu beside the account.",
   "plugins.privacy": "Authorization and privacy",
-  "plugins.privacyDescription": "Plugins connect directly to the provider's official cloud MCP service; no self-hosting is required. Results are processed by the selected model, and actions follow the existing tool approval settings. After upgrading from local tools, review and re-enable the plugin in Agent tool settings.",
+  "plugins.privacyDescription": "Connected plugins are available to all Agents without additional setup. The model can use their tools as needed, and you can explicitly request a plugin for a message from the composer's plus menu. Results are processed by the selected model, and actions follow the existing tool approval settings.",
   "plugins.website": "Website",
   "plugins.privacyPolicy": "Privacy policy",
   "plugins.reconnect": "Update authorization",
