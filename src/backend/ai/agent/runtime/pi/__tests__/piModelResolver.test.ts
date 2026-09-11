@@ -3,6 +3,8 @@ import {
   MODEL_CAPABILITY,
   type EndpointType,
 } from '@cherrystudio/provider-registry';
+import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import type { Model } from '@/shared/data/types/model';
@@ -148,6 +150,52 @@ describe('Pi model resolver', () => {
       }),
     );
   });
+
+  test.each(CASES)(
+    'normalizes DeepSeek responses on the configured $api route',
+    async (testCase) => {
+      mockGetProviderById.mockResolvedValue(
+        makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily),
+      );
+      mockGetModelById.mockResolvedValue(
+        makeModel(testCase.endpointType, { name: 'DeepSeek V4.1 Flash' }),
+      );
+      const resolution = await resolve(resolver, {});
+      const source = new AssistantMessageEventStream();
+      const response: AssistantMessage = {
+        role: 'assistant',
+        api: testCase.api,
+        provider: 'test-provider',
+        model: resolution.model.id,
+        timestamp: 1,
+        stopReason: 'stop',
+        content: [
+          {
+            type: 'text',
+            text: '<｜DSML｜tool_calls><｜DSML｜invoke name="lookup"></｜DSML｜invoke></｜DSML｜tool_calls>',
+          },
+        ],
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      source.push({ type: 'done', reason: 'stop', message: response });
+      mockBoundStreamFn.mockReturnValueOnce(source);
+      const stream = await resolution.streamFn(resolution.model, { messages: [] });
+      expect(await stream.result()).toMatchObject({
+        stopReason: 'toolUse',
+        content: [
+          { type: 'text', text: '' },
+          expect.objectContaining({ type: 'toolCall', name: 'lookup', arguments: {} }),
+        ],
+      });
+    },
+  );
 
   test('keeps the independent input cap separate from the default output reservation', async () => {
     const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;

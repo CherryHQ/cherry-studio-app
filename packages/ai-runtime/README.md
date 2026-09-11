@@ -8,6 +8,11 @@ Despite the package name, this is not Cherry Mobile's Agent Runtime. Pi is the s
 conversation engine and lives in `src/backend/ai/agent/runtime/pi/`. What is here serves the AI SDK
 path behind `AiService`, plus the connection facts Pi and the AI SDK share.
 
+The platform-neutral DeepSeek DSML decoder is also shared through `provider`. It recognizes wire
+markup and returns text or tool-call data; Pi and the AI SDK separately own event projection,
+terminal errors, and tool execution. Malformed or incomplete markup produces an explicit error
+instead of being published as ordinary model output.
+
 ## Why this is a package
 
 The code originated as a port from Cherry Studio desktop, and an earlier plan was to dissolve it
