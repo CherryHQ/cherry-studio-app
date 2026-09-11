@@ -46,8 +46,10 @@ export function getMetaToolStatusText(
     if (toolName === 'tool_search') {
       const namespaces = parseToolSearchNamespaces(part.output);
       const toolCount = namespaces.reduce((count, group) => count + group.tools.length, 0);
-      return toolCount === 0
-        ? t('chat.metaToolSearch.noResults')
+      if (toolCount === 0) return t('chat.metaToolSearch.noResults');
+      const catalogTotal = isRecord(part.output) ? part.output.catalogTotal : undefined;
+      return catalogTotal === toolCount
+        ? t('chat.metaToolSearch.completeCount', { count: toolCount })
         : t('chat.metaToolSearch.resultCount', { count: toolCount });
     }
 
