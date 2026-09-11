@@ -20,7 +20,7 @@ const firstOutputUri = Image.resolveAssetSource(
   require('../../../assets/paintings/templates/cherry-twilight.png'),
 ).uri;
 const secondOutputUri = Image.resolveAssetSource(
-  require('../../../assets/paintings/templates/cyber-rabbit-character.webp'),
+  require('../../../assets/paintings/templates/anime-companion.webp'),
 ).uri;
 
 const baseState = {
