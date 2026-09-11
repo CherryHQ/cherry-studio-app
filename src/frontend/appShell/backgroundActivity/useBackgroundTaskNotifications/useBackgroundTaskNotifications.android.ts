@@ -11,7 +11,6 @@ import { AppState } from 'react-native';
 
 import {
   type BackgroundTaskLink,
-  createBackgroundTaskUrl,
   isSameBackgroundTask,
   parseBackgroundTaskUrl,
 } from '@/shared/backgroundActivity/taskLink';
@@ -27,12 +26,16 @@ export function useBackgroundTaskNotifications(
   enabled = true,
 ): void {
   const scheme = resolveScheme({});
-  const url = task ? createBackgroundTaskUrl(scheme, task) : undefined;
+  const taskKind = task?.kind;
+  const taskId = task?.kind === 'chat' ? task.sessionId : task?.paintingId;
 
   useFocusEffect(
     useCallback(() => {
-      const target = parseBackgroundTaskUrl(url, scheme);
-      if (!enabled || !target) return;
+      if (!enabled || !taskKind || !taskId) return;
+      const target: BackgroundTaskLink =
+        taskKind === 'chat'
+          ? { kind: taskKind, sessionId: taskId }
+          : { kind: taskKind, paintingId: taskId };
       let releaseVisibility: (() => void) | undefined;
       let focused = true;
 
@@ -72,6 +75,6 @@ export function useBackgroundTaskNotifications(
         appState.remove();
         presented.remove();
       };
-    }, [enabled, scheme, url]),
+    }, [enabled, scheme, taskId, taskKind]),
   );
 }

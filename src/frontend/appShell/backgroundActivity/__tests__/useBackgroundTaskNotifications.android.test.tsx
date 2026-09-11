@@ -11,7 +11,6 @@ import { useBackgroundTaskNotifications } from '../useBackgroundTaskNotification
 let mockFocused = true;
 const mockPresented = jest.fn<Promise<Notification[]>, []>();
 const mockDismiss = jest.fn(async (_id: string) => {});
-const mockNotificationListeners = new Set<(notification: Notification) => void>();
 const mockPresentationListeners = new Set<(notification: Notification) => void>();
 const appStateListeners = new Set<(state: AppStateStatus) => void>();
 const task = { kind: 'chat', sessionId: 's' } as const;
@@ -21,10 +20,6 @@ jest.mock('expo-linking', () => ({ resolveScheme: () => 'cherrystudio' }));
 jest.mock('expo-notifications', () => ({
   getPresentedNotificationsAsync: () => mockPresented(),
   dismissNotificationAsync: (id: string) => mockDismiss(id),
-  addNotificationReceivedListener: (listener: (notification: Notification) => void) => {
-    mockNotificationListeners.add(listener);
-    return { remove: () => mockNotificationListeners.delete(listener) };
-  },
   addNotificationPresentedListener: (listener: (notification: Notification) => void) => {
     mockPresentationListeners.add(listener);
     return { remove: () => mockPresentationListeners.delete(listener) };
@@ -95,7 +90,6 @@ test('acknowledges only a foreground focused page and releases subscriptions on 
   await act(async () => renderer?.update(<Probe />));
   expect(isBackgroundTaskVisible(task)).toBe(false);
   expect(appStateListeners.size).toBe(0);
-  expect(mockNotificationListeners.size).toBe(0);
   expect(mockPresentationListeners.size).toBe(0);
 });
 

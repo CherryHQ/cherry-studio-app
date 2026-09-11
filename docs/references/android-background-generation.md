@@ -51,8 +51,7 @@ post-presentation event so task acknowledgement can follow asynchronous native d
   to interrupt its current leases. Expected stops and events from an older service generation do
   not interrupt newer work. New foreground tasks can start protection after cancellation drains.
 - Each chat turn sends at most one terminal notification. Late title projection does not repost a
-  notice the user has dismissed. Foreground completion stays silent even if the app backgrounds
-  while its title is still being generated.
+  notice the user has dismissed.
 - Expo retains cold notification responses. App Shell uses `useLastNotificationResponse`, waits for
   navigation to mount, consumes each response, and navigates only when its task is not already
   visible. Opened notifications are dismissed. The task URL contract
@@ -61,10 +60,8 @@ post-presentation event so task acknowledgement can follow asynchronous native d
   identity; painting links open the composer/task page, which can show generating, failed, and
   completed results without a selected image. Old chat links with `agentId` and old painting paths
   remain readable. The image viewer redirects old task links lacking `fileEntryId` to the task page.
-  The painting task route uses `paintingId` as its navigation identity. Edit and resize routes use
-  their unique draft handoff token instead, even when they reference the same source painting.
-  Admission clears the route's handoff token and sets the newly created task id without remounting
-  the composer. An unsubmitted edit does not acknowledge the source painting's notifications.
+  Task and draft route identities follow [Navigation And Insets](./navigation-and-insets.md).
+  An unsubmitted edit does not acknowledge the source painting's notifications.
   No backend navigation callback or custom pending-link registry is needed.
 - iOS keeps its existing audio/Live Activity implementation. Shared session completion and job
   handoff changes apply to both platforms. The background-actions native module is
