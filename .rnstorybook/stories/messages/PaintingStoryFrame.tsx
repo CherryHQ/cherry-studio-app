@@ -17,10 +17,10 @@ export type PaintingExample = {
 };
 
 const firstOutputUri = Image.resolveAssetSource(
-  require('../../../assets/paintings/templates/cherry-twilight.png'),
+  require('@/assets/paintings/templates/cherry-twilight.png'),
 ).uri;
 const secondOutputUri = Image.resolveAssetSource(
-  require('../../../assets/paintings/templates/anime-companion.webp'),
+  require('@/assets/paintings/templates/anime-companion.webp'),
 ).uri;
 
 const baseState = {

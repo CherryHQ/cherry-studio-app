@@ -1,6 +1,7 @@
-import catalog from '../../../../../../../assets/paintings/templates/catalog.json';
-import english from '../../../../../../../assets/paintings/templates/locales/en-us.json';
-import chinese from '../../../../../../../assets/paintings/templates/locales/zh-cn.json';
+import catalog from '@/assets/paintings/templates/catalog.json';
+import english from '@/assets/paintings/templates/locales/en-us.json';
+import chinese from '@/assets/paintings/templates/locales/zh-cn.json';
+
 import {
   getPaintingTemplates,
   type PaintingTemplate,
