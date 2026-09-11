@@ -16,12 +16,13 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
-import { useBackgroundActivityNavigation } from '@/frontend/appShell/backgroundActivity/useBackgroundActivityNavigation';
+import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import {
   getRootHeaderStyle,
   getTransparentHeaderStyle,
   NavigationThemeProvider,
+  paintingRouteId,
   paintingViewerHeaderShown,
 } from '@/frontend/appShell/navigation';
 import { configureObserve, configureSentry } from '@/frontend/appShell/observability';
@@ -58,6 +59,7 @@ function RootLayout() {
                           <AppAlertProvider>
                             <BottomSheetProvider>
                               <RouteHeaderProvider rootAction="back">
+                                <BackgroundActivityBridge />
                                 <RootStack />
                               </RouteHeaderProvider>
                             </BottomSheetProvider>
@@ -105,7 +107,6 @@ function BootstrapStartupCoordinator({ children }: PropsWithChildren) {
 }
 
 function RootStack() {
-  useBackgroundActivityNavigation();
   const [backgroundColor, foregroundColor, constantBlack, constantWhite] = useThemeColor([
     'background',
     'foreground',
@@ -142,6 +143,8 @@ function RootStack() {
           stack only needs to push the page without adding another header. */}
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen
+        // Task notifications reuse their task; each edit/resize starts a separate draft.
+        getId={({ params }) => paintingRouteId(params)}
         name="paintings/index"
         options={{
           contentStyle: { backgroundColor },

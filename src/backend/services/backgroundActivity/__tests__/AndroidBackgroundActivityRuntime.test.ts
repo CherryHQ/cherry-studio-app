@@ -11,6 +11,8 @@ jest.mock('react-native-background-actions', () => ({
   __esModule: true,
   default: {
     isRunning: jest.fn(),
+    on: jest.fn(),
+    off: jest.fn(),
     start: jest.fn(),
     stop: jest.fn(),
     updateNotification: jest.fn(),
@@ -29,15 +31,19 @@ jest.mock('expo-notifications', () => ({
 
 const native = jest.mocked(background);
 const notices = jest.mocked(notifications);
+const foregroundAttention = jest.fn();
+const environment = { translate: (key: string) => key, onForegroundAttention: foregroundAttention };
 let running: boolean;
 let runtime: AndroidBackgroundActivityRuntime;
 const listeners = new Set<(state: AppStateStatus) => void>();
+const serviceStoppedListeners = new Set<() => void>();
 
 beforeEach(async () => {
   jest.clearAllMocks();
   jest.useFakeTimers();
   running = false;
   listeners.clear();
+  serviceStoppedListeners.clear();
   Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
   setAppState('active');
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
@@ -46,6 +52,14 @@ beforeEach(async () => {
   });
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   native.isRunning.mockImplementation(() => running);
+  native.on.mockImplementation((_event, listener) => {
+    serviceStoppedListeners.add(listener);
+    return background;
+  });
+  native.off.mockImplementation((_event, listener) => {
+    if (listener) serviceStoppedListeners.delete(listener);
+    return background;
+  });
   native.start.mockImplementation(async () => {
     running = true;
   });
@@ -57,7 +71,7 @@ beforeEach(async () => {
   notices.requestPermissionsAsync.mockResolvedValue({
     granted: false,
   } as notifications.NotificationPermissionsStatus);
-  runtime = new AndroidBackgroundActivityRuntime({ translate: (key) => key });
+  runtime = new AndroidBackgroundActivityRuntime(environment);
   await runtime._doInit();
 });
 
@@ -187,7 +201,7 @@ test('cleans abandoned approval notifications while retaining completed and unre
     notice('completed', { owner: BACKGROUND_NOTIFICATION_OWNER, terminal: true }),
     notice('unrelated', {}),
   ]);
-  runtime = new AndroidBackgroundActivityRuntime({ translate: (key) => key });
+  runtime = new AndroidBackgroundActivityRuntime(environment);
   await runtime._doInit();
   expect(notices.dismissNotificationAsync).toHaveBeenCalledWith('approval');
   expect(notices.dismissNotificationAsync).not.toHaveBeenCalledWith('completed');
@@ -263,6 +277,145 @@ test('returning to the foreground resets the Android background budget', async (
   jest.advanceTimersByTime(100 * 60_000);
   await flush();
   expect(interrupted).not.toHaveBeenCalled();
+});
+
+test('unexpected native destruction interrupts every protected task without restarting in background', async () => {
+  const chatInterrupted = jest.fn();
+  const paintingInterrupted = jest.fn();
+  runtime.acquire('chat', chatInterrupted);
+  runtime.acquire('painting', paintingInterrupted);
+  await flush();
+  setAppState('background');
+  running = false;
+  for (const listener of serviceStoppedListeners) listener();
+  await flush();
+  expect(chatInterrupted).toHaveBeenCalledWith(expect.any(Error));
+  expect(paintingInterrupted).toHaveBeenCalledWith(expect.any(Error));
+  expect(native.start).toHaveBeenCalledTimes(1);
+  setAppState('active');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(1);
+  runtime.acquire('new-task');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(2);
+});
+
+test('a new foreground task survives cancellation draining after native service loss', async () => {
+  let finishCancellation!: () => void;
+  const cancellation = new Promise<void>((resolve) => {
+    finishCancellation = resolve;
+  });
+  const oldLease = runtime.acquire('old-task', () => cancellation);
+  await flush();
+  setAppState('background');
+  running = false;
+  for (const listener of serviceStoppedListeners) listener();
+  await flush();
+  setAppState('active');
+  runtime.acquire('new-task');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(1);
+  finishCancellation();
+  await flush();
+  oldLease.release();
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(2);
+  expect(running).toBe(true);
+  await runtime._doStop();
+  expect(serviceStoppedListeners.size).toBe(0);
+});
+
+test('foreground approvals and failures use in-app attention while completion stays silent', async () => {
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'), 'cherrystudio:///?sessionId=s');
+  await surface.update(props('awaiting-approval'));
+  expect(foregroundAttention).toHaveBeenLastCalledWith(
+    expect.objectContaining({ phase: 'awaiting-approval', url: 'cherrystudio:///?sessionId=s' }),
+  );
+  await surface.update(props('responding'));
+  await surface.update(props('failed'));
+  await surface.end('default', { ...props('failed'), title: 'Late title' });
+  expect(foregroundAttention).toHaveBeenCalledTimes(2);
+  expect(foregroundAttention).toHaveBeenLastCalledWith(
+    expect.objectContaining({ phase: 'failed' }),
+  );
+  const completed = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  await completed.end('default', props('completed'));
+  expect(foregroundAttention).toHaveBeenCalledTimes(2);
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('a queued foreground completion is not announced after the app backgrounds', async () => {
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  const delivery = surface.update(props('completed'));
+  setAppState('background');
+  await delivery;
+  await surface.end('default', props('completed'));
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test.each(['awaiting-approval', 'failed'] as const)(
+  'a queued foreground %s still notifies when delivered in the background',
+  async (phase) => {
+    const surface = runtime
+      .createPresenter<BackgroundReplyActivityProps>()
+      .start(props('responding'));
+    const delivery = surface.update(props(phase), { phaseStartedInBackground: false });
+    setAppState('background');
+    await delivery;
+    expect(foregroundAttention).not.toHaveBeenCalled();
+    expect(notices.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.objectContaining({ body: phase }) }),
+    );
+    if (phase === 'failed') {
+      await surface.end('default', props(phase), { phaseStartedInBackground: false });
+      expect(notices.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+    }
+  },
+);
+
+test('returning before queued background delivery suppresses the system alert', async () => {
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  setAppState('background');
+  const delivery = surface.end('default', props('completed'));
+  setAppState('active');
+  await delivery;
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('honors foreground phase entry even when the manager invokes delivery from the background', async () => {
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  setAppState('background');
+  await surface.end('default', props('completed'), { phaseStartedInBackground: false });
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('an aggregate restores the app and becomes task-specific again when one task remains', async () => {
+  const first = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'), 'cherrystudio:///?sessionId=first');
+  runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'), 'cherrystudio:///?sessionId=second');
+  runtime.acquire('tasks');
+  await flush();
+  expect(native.updateNotification).toHaveBeenLastCalledWith(
+    expect.objectContaining({ linkingURI: undefined }),
+  );
+  await first.end('immediate', props('cancelled'));
+  expect(native.updateNotification).toHaveBeenLastCalledWith(
+    expect.objectContaining({ linkingURI: 'cherrystudio:///?sessionId=second' }),
+  );
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
 });
 
 function props(phase: BackgroundReplyActivityProps['phase']): BackgroundReplyActivityProps {

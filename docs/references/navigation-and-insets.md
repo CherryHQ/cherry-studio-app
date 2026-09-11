@@ -90,6 +90,12 @@ and other entity-owned state reset through a keyed component boundary. Data from
 identity must not be used as placeholder data. Cached data for the same identity may render while it
 refreshes in the background when that product surface permits stale-while-revalidate behavior.
 
+The `/paintings` route distinguishes an existing task from a new editing draft. A task is identified
+by `paintingId`; an edit or resize is identified by its unique `handoff` token, with `paintingId`
+only selecting the source painting/model. When generation is admitted, the route clears `handoff`
+and adopts the new task's `paintingId` without remounting its composer. Task notification navigation
+can then reuse that page, while another edit always owns a fresh draft.
+
 ## Chat Identity Contract
 
 The chat route has two complete identities:

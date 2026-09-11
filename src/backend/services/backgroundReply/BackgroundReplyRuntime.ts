@@ -442,7 +442,6 @@ function normalizeTurnInput(input: BackgroundReplyTurnInput): {
     actorName: input.agentName,
     conversationTitle: input.sessionTitle,
     deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), {
-      agentId: input.agentId,
       kind: 'chat',
       sessionId: input.sessionId,
     }),

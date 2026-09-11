@@ -7,8 +7,17 @@ import type {
 // strictFunctionTypes, so a Presenter<FeatureProps> stays assignable to the
 // type-erased Presenter the manager stores (same trick as JobHandler).
 export type BackgroundActivityHandle<Props extends BackgroundActivityBaseProps> = {
-  end(policy: BackgroundActivityEndPolicy, props: Props): Promise<void>;
-  update(props: Props): Promise<void>;
+  end(
+    policy: BackgroundActivityEndPolicy,
+    props: Props,
+    context?: BackgroundActivityDeliveryContext,
+  ): Promise<void>;
+  update(props: Props, context?: BackgroundActivityDeliveryContext): Promise<void>;
+};
+
+export type BackgroundActivityDeliveryContext = {
+  /** Captured before the manager's queue/throttle, preserved through same-phase title updates. */
+  phaseStartedInBackground: boolean;
 };
 
 /**

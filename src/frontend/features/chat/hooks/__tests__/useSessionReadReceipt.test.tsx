@@ -18,6 +18,9 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('expo-router/drawer', () => ({ useDrawerStatus: () => mockDrawerStatus }));
+jest.mock('@/frontend/appShell/backgroundActivity', () => ({
+  useBackgroundTaskNotifications: jest.fn(),
+}));
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentSessionStatus: () => ({ markSeen: mockMarkSeen }),
 }));

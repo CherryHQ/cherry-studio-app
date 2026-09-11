@@ -3,6 +3,7 @@ import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
+import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePainting, useResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import { consumePaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
@@ -17,7 +18,7 @@ export function PaintingScreen() {
   // `RootParamList` is empty here (no generated route types), so the default
   // `setParams` signature takes `undefined`; name the params this screen owns.
   const navigation = useNavigation<{
-    setParams(params: { paintingId: string | undefined }): void;
+    setParams(params: { handoff: undefined; paintingId: string | undefined }): void;
   }>();
   const params = useLocalSearchParams<{
     handoff?: string | string[];
@@ -42,8 +43,15 @@ export function PaintingScreen() {
     openedPaintingId !== undefined &&
     paintingId === openedPaintingId &&
     (paintingQuery.isLoading || filesQuery.isLoading);
+  useBackgroundTaskNotifications(
+    paintingId ? { kind: 'painting', paintingId } : undefined,
+    !handoffToken && Boolean(painting) && !isLoading,
+  );
   const handleReceipt = useCallback(
-    (receiptId: string | undefined) => navigation.setParams({ paintingId: receiptId }),
+    // Admission changes the draft's route identity to its own task. Keep its
+    // mounted composer state, but stop identifying it with the source painting.
+    (receiptId: string | undefined) =>
+      navigation.setParams({ handoff: undefined, paintingId: receiptId }),
     [navigation],
   );
   const initialAttachments = handoff?.attachments ?? [];

@@ -255,7 +255,7 @@ describe('createPaintingGenerateJobHandler', () => {
 
         expect(startSession).toHaveBeenCalledWith(
           expect.objectContaining({
-            deepLinkUrl: `${scheme}://paintings/painting-1`,
+            deepLinkUrl: `${scheme}://paintings?paintingId=painting-1`,
             keepAlive: false,
             props: expect.objectContaining({
               attribution: 'GPT Image 2',
