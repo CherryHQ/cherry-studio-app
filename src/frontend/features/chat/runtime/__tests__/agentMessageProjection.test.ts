@@ -46,12 +46,14 @@ describe('agentMessageProjection', () => {
       }),
     );
     expect(persisted?.data.parts).toEqual(pending.data.parts);
-    expect(pending.data.parts[0]).toEqual({
-      type: 'text',
-      text: input.text,
-      state: 'done',
-      providerMetadata: { cherry: { references: pluginReferences } },
-    });
+    expect(pending.data.parts).toEqual([
+      {
+        type: 'text',
+        text: input.text,
+        state: 'done',
+        providerMetadata: { cherry: { references: pluginReferences } },
+      },
+    ]);
   });
   test('preserves the original tool failure code for localized correction hints', () => {
     const item = toAgentMessageListItem(
