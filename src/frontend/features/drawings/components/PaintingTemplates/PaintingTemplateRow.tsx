@@ -20,7 +20,7 @@ export function PaintingTemplateRow({ onPaintingCreated }: PaintingTemplateRowPr
   const [templateOrder] = useState(() =>
     shufflePaintingTemplates(templates).map((template) => template.id),
   );
-  const orderedTemplates = templates.toSorted(
+  const orderedTemplates = [...templates].sort(
     (left, right) => templateOrder.indexOf(left.id) - templateOrder.indexOf(right.id),
   );
   const [selectedTemplate, setSelectedTemplate] = useState<PaintingTemplate | null>(null);
