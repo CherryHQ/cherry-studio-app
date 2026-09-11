@@ -12,6 +12,7 @@ import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/model
 import type { PluginCatalogReader } from '@/backend/data/api/handlers/pluginCatalog';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
@@ -21,6 +22,10 @@ import {
 } from '@/backend/services/agents/createAgentAvatars';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import {
+  createDocumentExportDependencies,
+  type DocumentExportRuntime,
+} from '@/backend/services/documentExport';
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
@@ -57,12 +62,16 @@ export function createBackend(
   services: BackendServices,
   infrastructure: {
     dbService: DbService;
+    documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  // Capture this host's database; late work never resolves a replacement host.
+  const exportFiles = new FileEntryService(dbService);
+  infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
   infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService), () =>
     infrastructure.providerRegistryUpdater.ensureReady(),
   );
@@ -186,6 +195,7 @@ export function createBackend(
     backend: {
       agent: services.agent,
       desktopConnections: infrastructure.desktopConnections,
+      documentExport: infrastructure.documentExport,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         delete: services.fileContent.delete,

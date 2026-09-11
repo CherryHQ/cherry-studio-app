@@ -12,7 +12,7 @@ this page and system opening; this page owns reading, rendering, copying, and sh
 - `FileHtmlBody` loads strings through `react-native-webview`, with local file access and cookie
   sharing disabled, and no app message bridge. Web links leave through `openExternalUrl`; other
   navigations are blocked. Load/process failures show the source, and the user can switch manually.
-- `shareFile` copies into an OS-managed cache directory using the display filename. The copy
+- The shared `frontend/utils/shareFile.ts` helper copies into an OS-managed cache directory using the display filename. The copy
   survives closing the share sheet because Android recipients may read it later.
 
 Whole-text copying is explicit. Native partial selection is disabled on this scroll surface until

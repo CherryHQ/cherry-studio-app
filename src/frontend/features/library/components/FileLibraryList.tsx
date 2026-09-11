@@ -54,9 +54,10 @@ type FileLibraryListExtraData = {
   viewMode: FileLibraryViewMode;
 };
 
-const filterOrder: readonly FileLibraryFilter[] = ['all', 'image', 'document'];
+const filterOrder: readonly FileLibraryFilter[] = ['all', 'image', 'document', 'sharing'];
 const filterLabelKeys: Record<FileLibraryFilter, string> = {
   all: 'library.filter.all',
+  sharing: 'library.filter.sharing',
   document: 'library.filter.documents',
   image: 'library.filter.images',
 };

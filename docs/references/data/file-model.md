@@ -51,16 +51,17 @@ here. Terms follow [Domain Language](../domain-language.md).
   (`rewriteInternalTextEntry`), which records the new `size` and bumps it; a future metadata update
   (library rename) will be the second.
 - `provenance` is stable source identity: `imported` for a file brought in from a picker, camera,
-  paste, or painting input; `generated` for a file written or produced for the user by Cherry;
-  `unknown` when nothing proves either. Reattaching a generated file as an input does not change its
-  origin. It is written exactly once, by whoever creates the bytes, and never derived from an owner
-  at read time — owners are deleted, and the library still has to answer.
+  paste, or painting input; `generated` for ordinary files written or produced for the user by
+  Cherry; `document-export` for new files produced by document export; `unknown` when the origin
+  cannot be proven. Reattaching or sharing an existing file does not change its origin. It is
+  written exactly once, by whoever creates the bytes, and never derived from an owner at read
+  time — owners are deleted, and the library still has to answer.
 
   `unknown` is a real state, not a gap waiting to be filled. Rows that predate the column, and rows
   that will arrive from a peer with no provenance concept of its own, have no proven origin;
-  recording them as `imported` would state something the data does not support. The library shows a
-  badge only for `generated` and stays silent otherwise, so the three states cost one label rather
-  than three.
+  recording them as `imported` would state something the data does not support. The library's
+  Sharing tab selects `document-export`; exported images/documents remain in their media-type tabs.
+  This value extends the existing text column without a database migration or changes to old rows.
 - `deletedAt` is reserved for the future library trash. It is `NULL` for every production row today;
   attachment admission and direct preview reads already treat a marked row as unavailable, while
   cleanup still must not infer ownership from it.
@@ -229,10 +230,10 @@ logos are similarly external (`{documentDirectory}/provider-avatars/`, resolved 
 
 ## Extension points
 
-**File library.** The library page is a query over `file_entry`; it needs no new table. A tile badges
-its `provenance` only when the origin is `generated`. Filtering by origin is deliberately not shipped
-yet: most historical rows are `unknown`, so the filter would sort noise until enough labelled rows
-exist. Its future trash uses
+**File library.** The library page is a query over `file_entry`; it needs no new table. The Sharing
+tab selects `provenance: 'document-export'` without reclassifying historical rows. See
+[Document Export](../document-export.md).
+General imported/generated provenance filters remain unshipped. Its future trash uses
 the reserved `deletedAt`: delete sets it, restore clears it, emptying the trash hard-deletes rows and
 bytes, and other surfaces then show the unavailable placeholder. There is no retention timer —
 trashed files persist until the user empties the trash. Deleting is deliberately unguarded: no

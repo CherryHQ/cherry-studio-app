@@ -1,5 +1,6 @@
 import { useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
+import { router } from 'expo-router';
 import {
   createContext,
   type PropsWithChildren,
@@ -28,6 +29,7 @@ type AssistantMessageActionsState = {
 };
 
 type AssistantMessageActions = {
+  shareAssistantMessage: (input: { messageId: string }) => void;
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
   /** Copies the transcript up to this message into a new chat and opens it. */
   forkFromAssistantMessage: (input: { messageId: string }) => void;
@@ -119,13 +121,20 @@ export function AssistantMessageActionsProvider({
     [forkSession, sessionId, sourceTitle, t, toast],
   );
 
+  const shareAssistantMessage = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      if (sessionId) router.push({ pathname: '/chat-share', params: { sessionId, messageId } });
+    },
+    [sessionId],
+  );
+
   const stateValue = useMemo(
     () => ({ copiedMessageId, isAssistantToolbarEnabled }),
     [copiedMessageId, isAssistantToolbarEnabled],
   );
   const actionsValue = useMemo(
-    () => ({ copyAssistantMessage, forkFromAssistantMessage }),
-    [copyAssistantMessage, forkFromAssistantMessage],
+    () => ({ copyAssistantMessage, forkFromAssistantMessage, shareAssistantMessage }),
+    [copyAssistantMessage, forkFromAssistantMessage, shareAssistantMessage],
   );
 
   useEffect(() => {

@@ -7,10 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { HeaderChrome, useRouteHeaderLeadingAction } from '@/frontend/appShell/header';
 import { useSaveImageToPhotos } from '@/frontend/components/ArtifactPreview';
 import { fileEntryPreviewKind, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
+import { shareFile } from '@/frontend/utils/shareFile';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-
-import { shareFile } from '../utils/shareFile';
 
 const logger = loggerService.withContext('FileViewer');
 const EMPTY_ITEMS: readonly MenuItem[] = [];

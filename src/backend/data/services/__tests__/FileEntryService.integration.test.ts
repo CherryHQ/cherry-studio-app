@@ -64,6 +64,22 @@ describe('FileEntryService integration', () => {
     });
   });
 
+  it('preserves an export source through creation, listing and reads', async () => {
+    const entry = await service.create({
+      id: id(99),
+      filename: 'conversation.html',
+      mediaType: 'text/html',
+      size: 12,
+      provenance: 'document-export',
+    });
+    expect(entry.provenance).toBe('document-export');
+    expect((await service.getById(entry.id)).provenance).toBe('document-export');
+    expect((await service.listByCursor()).items).toEqual([entry]);
+    expect(testDatabase.sqlite.prepare('SELECT provenance FROM file_entry').get()).toEqual({
+      provenance: 'document-export',
+    });
+  });
+
   it('rejects an unsafe filename without writing a row', async () => {
     await expect(
       createImported({

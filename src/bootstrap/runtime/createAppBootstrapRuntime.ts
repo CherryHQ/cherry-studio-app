@@ -18,6 +18,7 @@ import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgr
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -72,6 +73,7 @@ export function createAppBootstrapRuntime(
   const desktopConnections = host.container.get<DesktopConnectionRuntime>(
     'DesktopConnectionRuntime',
   );
+  const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
@@ -91,6 +93,7 @@ export function createAppBootstrapRuntime(
   });
   const { backend, dataApiDependencies } = createBackend(services, {
     dbService,
+    documentExport,
     desktopConnections,
     languageServing,
     providerRegistryUpdater,

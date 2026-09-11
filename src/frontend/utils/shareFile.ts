@@ -8,7 +8,7 @@ export async function shareFile({ entry, uri }: ResolvedFile): Promise<void> {
   const directory = new Directory(Paths.cache, 'FileExports', entry.id, String(entry.updatedAt));
   directory.create({ idempotent: true, intermediates: true });
   const exported = new File(directory, entry.filename);
-  await new File(uri).copy(exported, { overwrite: true });
+  if (!exported.exists) await new File(uri).copy(exported, { overwrite: true });
 
   // Android's promise settles when a recipient is chosen, before it necessarily
   // reads the file. Keep the copy in the OS-managed cache after the sheet closes.

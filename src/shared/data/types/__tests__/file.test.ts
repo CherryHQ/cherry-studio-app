@@ -25,6 +25,9 @@ describe('File contract', () => {
       updatedAt: 2,
     };
     expect(FileEntrySchema.parse(entry)).toEqual(entry);
+    for (const provenance of ['imported', 'document-export', 'unknown']) {
+      expect(FileEntrySchema.parse({ ...entry, provenance })).toEqual({ ...entry, provenance });
+    }
     expect(FileEntrySchema.safeParse({ ...entry, ext: 'pdf' }).success).toBe(false);
     expect(FileEntrySchema.safeParse({ ...entry, filename: 'a/b.pdf' }).success).toBe(false);
     expect(FileEntrySchema.safeParse({ ...entry, provenance: 'remote' }).success).toBe(false);
