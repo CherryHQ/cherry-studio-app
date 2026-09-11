@@ -1,5 +1,5 @@
 diff --git a/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt b/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt
-index 2e51957f7f60aee86b86c068fda34f1174d61185..64b25dfa0b237ac131ee8365536c83c68d31bcef 100644
+index 2e51957f7..64b25dfa0 100644
 --- a/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt
 +++ b/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt
 @@ -72,6 +72,13 @@ object NotificationManager {
@@ -17,7 +17,7 @@ index 2e51957f7f60aee86b86c068fda34f1174d61185..64b25dfa0b237ac131ee8365536c83c6
     * Used by [expo.modules.notifications.service.delegates.ExpoSchedulingDelegate] to notify of new notification responses.
     * Calls [NotificationListener.onNotificationResponseReceived] on all registered [listeners].
 diff --git a/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt b/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt
-index af020ccaa28c2ecefce5c5c7a4830cd4d953347d..8a0bd5ae8f9fe119c6c2c7e5458d736ebe56cc1f 100644
+index af020ccaa..8a0bd5ae8 100644
 --- a/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt
 +++ b/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt
 @@ -22,6 +22,7 @@ open class NotificationsEmitter : Module(), NotificationListener {
@@ -40,7 +40,7 @@ index af020ccaa28c2ecefce5c5c7a4830cd4d953347d..8a0bd5ae8f9fe119c6c2c7e5458d736e
     * Callback called when [NotificationManager] gets notified of a new notification response.
     * Emits a [NEW_RESPONSE_EVENT_NAME] event.
 diff --git a/android/src/main/java/expo/modules/notifications/notifications/interfaces/NotificationListener.kt b/android/src/main/java/expo/modules/notifications/notifications/interfaces/NotificationListener.kt
-index 10392b94027261af3e6827a09bddeea4492b2d0b..e036c646ad70a1b85474f00d46449a2363adc37f 100644
+index 10392b940..e036c646a 100644
 --- a/android/src/main/java/expo/modules/notifications/notifications/interfaces/NotificationListener.kt
 +++ b/android/src/main/java/expo/modules/notifications/notifications/interfaces/NotificationListener.kt
 @@ -12,6 +12,9 @@ interface NotificationListener {
@@ -54,7 +54,7 @@ index 10392b94027261af3e6827a09bddeea4492b2d0b..e036c646ad70a1b85474f00d46449a23
     * Callback called when new notification response is received.
     * @return Whether the notification response has been handled
 diff --git a/android/src/main/java/expo/modules/notifications/service/delegates/ExpoPresentationDelegate.kt b/android/src/main/java/expo/modules/notifications/service/delegates/ExpoPresentationDelegate.kt
-index 38f6fbaf0c595009031fff8659dcd2def12e5205..88be89da9f0ce44a8e9f11c7852c8a61ab489a0f 100644
+index 38f6fbaf0..88be89da9 100644
 --- a/android/src/main/java/expo/modules/notifications/service/delegates/ExpoPresentationDelegate.kt
 +++ b/android/src/main/java/expo/modules/notifications/service/delegates/ExpoPresentationDelegate.kt
 @@ -24,6 +24,7 @@ import expo.modules.notifications.service.interfaces.PresentationDelegate
@@ -78,7 +78,7 @@ index 38f6fbaf0c595009031fff8659dcd2def12e5205..88be89da9f0ce44a8e9f11c7852c8a61
    }
  
 diff --git a/build/NotificationsEmitter.d.ts b/build/NotificationsEmitter.d.ts
-index d1325837c89dbbbb93941e83315b4212cf8de0c3..f86620f3943562a49442b325f7cdcea46bd3e144 100644
+index d1325837c..273a01947 100644
 --- a/build/NotificationsEmitter.d.ts
 +++ b/build/NotificationsEmitter.d.ts
 @@ -26,6 +26,12 @@ export declare const DEFAULT_ACTION_IDENTIFIER = "expo.modules.notifications.act
@@ -95,7 +95,7 @@ index d1325837c89dbbbb93941e83315b4212cf8de0c3..f86620f3943562a49442b325f7cdcea4
   * Listeners registered by this method will be called whenever some notifications have been dropped by the server.
   * Applicable only to Firebase Cloud Messaging which we use as a notifications service on Android. It corresponds to `onDeletedMessages()` callback.
 diff --git a/build/NotificationsEmitter.js b/build/NotificationsEmitter.js
-index 3496828885611f40ec60e0136e8f99ca379771d4..ce3908b63fe5872cab1133032f4f79a437012fb0 100644
+index 349682888..3954970dc 100644
 --- a/build/NotificationsEmitter.js
 +++ b/build/NotificationsEmitter.js
 @@ -4,6 +4,7 @@ import { mapNotification, mapNotificationResponse } from './utils/mapNotificatio
@@ -124,7 +124,7 @@ index 3496828885611f40ec60e0136e8f99ca379771d4..ce3908b63fe5872cab1133032f4f79a4
   * Listeners registered by this method will be called whenever some notifications have been dropped by the server.
   * Applicable only to Firebase Cloud Messaging which we use as a notifications service on Android. It corresponds to `onDeletedMessages()` callback.
 diff --git a/src/NotificationsEmitter.ts b/src/NotificationsEmitter.ts
-index 99bc0e235d49688721e0b80e8bdfd98156c6207b..ab4b2da2fdd0bea296c0ae0220ae59d92304f0dd 100644
+index 99bc0e235..ab4b2da2f 100644
 --- a/src/NotificationsEmitter.ts
 +++ b/src/NotificationsEmitter.ts
 @@ -8,6 +8,7 @@ import { mapNotification, mapNotificationResponse } from './utils/mapNotificatio

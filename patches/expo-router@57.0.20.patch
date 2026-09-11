@@ -1,5 +1,5 @@
 diff --git a/build/native-tabs/utils/optionsIconConverter.android.js b/build/native-tabs/utils/optionsIconConverter.android.js
-index 10a8e182794b682210ef288a3c9be7f9649e5fa8..7c3eb85f0220a34c90b0c6321aa030cd34ec1c97 100644
+index 10a8e1827..260d76c00 100644
 --- a/build/native-tabs/utils/optionsIconConverter.android.js
 +++ b/build/native-tabs/utils/optionsIconConverter.android.js
 @@ -2,7 +2,6 @@

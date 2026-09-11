@@ -8,7 +8,7 @@ The app owns task counting, content, cancellation, and route selection. A scoped
 [`react-native-background-actions` patch](../../patches/react-native-background-actions@4.1.0.patch)
 adds native visibility handling to the library's existing service. The library still owns Headless
 JS and wake locks; the app adds no service or notification receiver. An
-[`expo-notifications` patch](../../patches/expo-notifications@57.0.5.patch) exposes Android's
+[`expo-notifications` patch](../../patches/expo-notifications@57.0.17.patch) exposes Android's
 post-presentation event so task acknowledgement can follow asynchronous native delivery.
 
 ## Ownership And Behavior

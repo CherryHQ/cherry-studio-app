@@ -98,3 +98,20 @@ removing a plugin from app config does not clean its hooks out of an existing na
 
 Successful compilation alone does not verify production Sentry event delivery or source-map
 matching; those require a separate runtime check.
+
+## Expo 57 Dependency Baseline
+
+The project uses Expo 57.0.21 and React Native 0.86.3, which includes Hermes V1
+250829098.0.17. This contains the upstream fixes for the Worklets/Reanimated memory regression
+and slow development startup. See the [Expo SDK 57 release notes](https://expo.dev/changelog/sdk-57#known-regressions).
+Existing development clients must be rebuilt to receive the engine update.
+
+Keep the version-specific patches for Expo Router, Calendar, Notifications, Reanimated, Metro,
+and Metro Runtime when updating dependencies. The upgraded patched direct dependencies use exact
+versions so an unrelated install cannot select a newer unpatched release. Metro 0.84.5 is selected by Expo's
+Metro dependency; its patches support the existing Worklets Bundle Mode integration.
+
+`react-native-streamdown` requires Bundle Mode and the `remend` import forwarding configured in
+Babel. Keep those settings when updating Hermes. Worklets 0.10.2 remains within Reanimated 4.5's
+supported 0.10.x range; removing the experimental mode requires a separate change to streaming
+Markdown processing.
