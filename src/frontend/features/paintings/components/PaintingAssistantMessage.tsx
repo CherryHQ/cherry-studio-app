@@ -14,7 +14,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { ArtifactImage, ArtifactPreviewLink } from '@/frontend/components/ArtifactPreview';
+import { ArtifactPreviewLink } from '@/frontend/components/ArtifactPreview';
+import { PreviewImage } from '@/frontend/components/FileEntryPreview';
 import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 
 import type {
@@ -164,7 +165,7 @@ export function PaintingAssistantMessage({
         pointerEvents={isResultInteractive ? 'auto' : 'none'}
         testID={`painting-output-${output.fileEntryId}`}
       >
-        <ArtifactImage
+        <PreviewImage
           key={output.uri}
           label={paintingOutputAccessibilityLabel(t, {
             count: visibleOutputs.length,

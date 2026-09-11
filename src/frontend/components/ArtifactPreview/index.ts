@@ -1,4 +1,3 @@
-export { ArtifactImage } from './components/ArtifactImage';
 export { ArtifactImageViewer } from './components/ArtifactImageViewer/ArtifactImageViewer';
 export { useSaveImageToPhotos } from './hooks/useSaveImageToPhotos';
 export {

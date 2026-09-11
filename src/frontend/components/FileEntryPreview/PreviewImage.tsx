@@ -3,8 +3,8 @@ import { type ComponentProps, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-/** Inline preview; the surrounding artifact link opens the recoverable viewer. */
-export function ArtifactImage({
+/** CherryUI image that degrades to its label when the preview fails; callers own any viewer link. */
+export function PreviewImage({
   label,
   onError,
   ...props

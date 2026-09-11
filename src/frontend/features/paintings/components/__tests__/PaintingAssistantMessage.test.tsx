@@ -82,10 +82,12 @@ jest.mock('react-native-worklets', () => ({
 }));
 
 jest.mock('@/frontend/components/ArtifactPreview', () => ({
-  ArtifactImage: jest.requireActual(
-    '@/frontend/components/ArtifactPreview/components/ArtifactImage',
-  ).ArtifactImage,
   ArtifactPreviewLink: ({ children }: { children: ReactNode }) => children,
+}));
+
+jest.mock('@/frontend/components/FileEntryPreview', () => ({
+  PreviewImage: jest.requireActual('@/frontend/components/FileEntryPreview/PreviewImage')
+    .PreviewImage,
 }));
 
 describe('PaintingAssistantMessage', () => {

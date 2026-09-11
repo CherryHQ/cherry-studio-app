@@ -3,11 +3,11 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
-import { ArtifactImage } from '@/frontend/components/ArtifactPreview';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { ResolvedFile } from '@/shared/contracts/file';
 
 import { useOpenFileEntry } from './hooks/useOpenFileEntry';
+import { PreviewImage } from './PreviewImage';
 
 /** A generated image is the deliverable, so its whole surface is visible in chat. */
 export function FileEntryImage({ entry, uri }: ResolvedFile) {
@@ -29,7 +29,7 @@ export function FileEntryImage({ entry, uri }: ResolvedFile) {
       onPress={() => openFileEntry({ entry, uri })}
     >
       <View className="w-full overflow-hidden rounded-xl bg-secondary" style={{ aspectRatio }}>
-        <ArtifactImage
+        <PreviewImage
           key={preview.data?.previewUri ?? uri}
           label={entry.filename}
           accessible={false}
