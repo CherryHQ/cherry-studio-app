@@ -13,6 +13,52 @@ function supportWith(
 }
 
 describe('createSystemModelSupport', () => {
+  it.each([
+    ['dashscope', 'qwen-image-3.0', '/api/v1/services/aigc/multimodal-generation/generation'],
+    ['ppio', 'seedream-4-0', '/v3/seedream-4.0'],
+    ['tokenhub', 'hy-image-v3', '/v1/wand/hunyuan-image/v3-generation'],
+  ])(
+    'admits %s catalog routes only when the required descriptor is available',
+    (presetProviderId, modelId, endpoint) => {
+      const { isModelSupportedBySystem } = supportWith(jest.fn().mockReturnValue(false));
+      const provider = createProvider({ id: 'provider-copy', presetProviderId });
+      const model = createModel({
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        apiModelId: modelId,
+        imageGeneration: { modes: { generate: { supports: {}, vendorTransport: { endpoint } } } },
+      });
+      expect(isModelSupportedBySystem(provider, model)).toBe(true);
+      expect(isModelSupportedBySystem(provider, { ...model, imageGeneration: undefined })).toBe(
+        false,
+      );
+    },
+  );
+
+  it.each([
+    ['dashscope', 'future-image', '/api/v1/services/aigc/multimodal-generation/generation'],
+    ['dashscope', 'qwen-image-3.0', '/api/v1/services/aigc/future-image/generation'],
+    ['ppio', 'seedream-4-0', '/v3/new-image-protocol'],
+    ['tokenhub', 'hy-image-v3', '/v1/api/image/submit'],
+    ['tokenhub', 'hy-image-v3', '/v1/wand/hunyuan-image/future-generation'],
+  ])(
+    'does not offer unimplemented %s image routes as supported models',
+    (presetProviderId, modelId, endpoint) => {
+      const { isModelSupportedBySystem } = supportWith(jest.fn().mockReturnValue(false));
+      expect(
+        isModelSupportedBySystem(
+          createProvider({ presetProviderId }),
+          createModel({
+            capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+            apiModelId: modelId,
+            imageGeneration: {
+              modes: { generate: { supports: {}, vendorTransport: { endpoint } } },
+            },
+          }),
+        ),
+      ).toBe(false);
+    },
+  );
+
   it('delegates text models to the bound language serving support', () => {
     const supportsLanguageModel = jest.fn().mockReturnValue(true);
     const { isModelSupportedBySystem } = supportWith(supportsLanguageModel);

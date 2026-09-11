@@ -1,4 +1,4 @@
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -7,6 +7,33 @@ import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../providerConfig';
 
 describe('providerToAiSdkConfig', () => {
+  it('selects the TokenHub image adapter for a copied preset without changing its chat adapter', async () => {
+    const provider = createProvider({
+      id: 'tokenhub-copy',
+      presetProviderId: 'tokenhub',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'https://tokenhub.tencentmaas.com/v1',
+        },
+      },
+    });
+    const image = {
+      ...createModel(provider.id, 'hy-image-v3'),
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+    };
+    const config = await providerToAiSdkConfig(provider, image, createRuntime());
+    expect(config.providerId).toBe('tokenhub');
+    expect(config.providerSettings.baseURL).toBe('https://tokenhub.tencentmaas.com/v1');
+    const chatConfig = await providerToAiSdkConfig(
+      provider,
+      createModel(provider.id, 'hy4-preview'),
+      createRuntime(),
+    );
+    expect(chatConfig.providerId).toBe('openai-compatible');
+  });
+
   it('leaves generic OpenAI-compatible providers on the default fetch', async () => {
     const provider = createProvider({
       id: 'custom-openai',
