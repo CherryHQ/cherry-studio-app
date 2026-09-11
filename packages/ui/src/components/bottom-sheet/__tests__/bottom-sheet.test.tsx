@@ -296,7 +296,7 @@ describe('BottomSheet', () => {
     expect(mockBottomSheetProps.index).toBe(2);
   });
 
-  test('uses a caller-provided fixed height on an inset rounded card', () => {
+  test('uses a caller-provided fixed height on a full-width sheet with only top corners rounded', () => {
     act(() => {
       renderer = create(
         <BottomSheet height={420} onClose={jest.fn()} open testID="fixed-height" title="Approval">
@@ -308,14 +308,15 @@ describe('BottomSheet', () => {
     const card = renderer?.root
       .findAllByProps({ testID: 'fixed-height' })
       .find((node) => typeof node.type === 'string');
-    expect(mockBottomSheetProps.detents).toEqual([0, 424]);
-    expect(StyleSheet.flatten(card?.props.style)).toMatchObject({
-      borderBottomLeftRadius: 28,
-      borderBottomRightRadius: 28,
+    const cardStyle = StyleSheet.flatten(card?.props.style);
+    expect(mockBottomSheetProps.detents).toEqual([0, 420]);
+    expect(cardStyle).toMatchObject({
       borderTopLeftRadius: 32,
       borderTopRightRadius: 32,
       height: 420,
-      width: Dimensions.get('window').width - 8,
+      width: Dimensions.get('window').width,
     });
+    expect(cardStyle.borderBottomLeftRadius ?? cardStyle.borderRadius ?? 0).toBe(0);
+    expect(cardStyle.borderBottomRightRadius ?? cardStyle.borderRadius ?? 0).toBe(0);
   });
 });
