@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
-import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { useBackendModule } from '@/frontend/data';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { PluginDisconnectResult } from '@/shared/contracts/plugins';
@@ -202,10 +201,27 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
             {t('plugins.connect')}
           </Button>
         )}
-        {entry?.guide ? <PluginGuide content={entry.guide.content} /> : null}
         {entry ? (
           <View className="gap-3">
-            <Text className="text-base font-medium text-foreground">{t('plugins.privacy')}</Text>
+            <Text accessibilityRole="header" className="text-base font-medium text-foreground">
+              {t('plugins.examples.title')}
+            </Text>
+            <View className="gap-2">
+              <Text className="text-sm text-foreground">
+                {t(`plugins.catalog.${pluginId}.examples.first`)}
+              </Text>
+              <Text className="text-sm text-foreground">
+                {t(`plugins.catalog.${pluginId}.examples.second`)}
+              </Text>
+            </View>
+            <Text className="text-sm text-muted-foreground">{t('plugins.usage')}</Text>
+          </View>
+        ) : null}
+        {entry ? (
+          <View className="gap-3">
+            <Text accessibilityRole="header" className="text-base font-medium text-foreground">
+              {t('plugins.privacy')}
+            </Text>
             <Text className="text-sm text-muted-foreground">
               {t(`plugins.catalog.${pluginId}.access`)}
             </Text>
@@ -234,26 +250,5 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
         ) : null}
       </ScrollView>
     </>
-  );
-}
-
-function PluginGuide({ content }: { content: string }) {
-  const { t } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <View className="gap-3">
-      <Text className="text-base font-medium text-foreground">{t('plugins.guide.title')}</Text>
-      <Text className="text-sm text-muted-foreground">{t('plugins.guide.description')}</Text>
-      <Button
-        variant="outline"
-        accessibilityState={{ expanded: isExpanded }}
-        onPress={() => setIsExpanded((expanded) => !expanded)}
-        testID="plugin-guide-toggle"
-      >
-        {t(isExpanded ? 'plugins.guide.hide' : 'plugins.guide.show')}
-      </Button>
-      {isExpanded ? <MarkdownText markdown={content} selectable={false} /> : null}
-    </View>
   );
 }

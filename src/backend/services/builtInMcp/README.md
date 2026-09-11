@@ -33,7 +33,7 @@ GitHub, Amap and Feishu each own a plain TypeScript guide module at `plugins/<id
 their plugin definition. `PluginDefinition.guide` references its exported
 data directly. Each guide contains a positive integer `revision` and ordered `sections`; each section
 has a `content` string and a `requiredTools` array of raw MCP names. Template strings can retain
-Markdown formatting for the existing preview renderer. For example:
+Markdown formatting in the Agent instructions. For example:
 
 ```ts
 export const feishuGuide = {
@@ -84,9 +84,10 @@ the model must still inspect each tool's current signature before calling its ex
 
 Changes to grants, disabled tools, connection availability or bundled revisions affect the next
 prepared turn; existing execution-time revocation checks remain immediate. The plugin catalog also
-projects a detached full guide preview by joining all sections. The detail page lazily renders that
-read-only preview when expanded, using the shared Markdown renderer without native text selection.
-Previewing a guide does not enable the plugin or any Agent tool.
+projects a detached full guide by joining all sections. Guides are consumed by the Agent and are
+not displayed on the plugin detail page. Detail pages show two localized prompt examples and a
+short usage hint between connection controls and authorization/privacy information. Locale files
+own this user-facing copy independently of Agent guide content.
 
 ## Workflow And Lifetime
 

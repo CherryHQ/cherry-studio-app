@@ -58,8 +58,8 @@ changing the Agent's configured behavior.
 GitHub, Amap and Feishu bundle workflow guides as TypeScript data with template-string content.
 Feishu guidance includes document search, people lookup, wiki links, Base records, tasks and calendars.
 The Host selects sections from the current Agent's executable plugin tools for each turn, with
-source/revision attribution and no saved prompt or transcript mutation. The plugin detail page
-provides a read-only full-guide preview.
+source/revision attribution and no saved prompt or transcript mutation. Guides are consumed by the
+Agent and are not displayed on the plugin detail page.
 The [plugin module contract](../../../src/backend/services/builtInMcp/README.md#plugin-guides)
 defines the data contract, validation, prerequisite filtering, ordering, size limits and updates.
 
