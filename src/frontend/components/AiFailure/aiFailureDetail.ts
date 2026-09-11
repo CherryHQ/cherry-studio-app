@@ -1,15 +1,21 @@
-import type { CherryMessagePart } from '@/shared/data/types/message';
+export type AiFailureData = {
+  code?: string;
+  message?: string | null;
+  reasonCode?: unknown;
+  source?: unknown;
+  context?: unknown;
+  name?: unknown;
+  retryable?: boolean;
+};
 
-type ErrorPartData = Extract<CherryMessagePart, { type: 'data-error' }>['data'];
-
-export type ErrorPartFact = {
+export type AiFailureFact = {
   /** Translation key for the row label; the renderer owns the copy. */
   labelKey: string;
   value: string | number;
 };
 
-export type ErrorPartDetail = {
-  facts: readonly ErrorPartFact[];
+export type AiFailureDetail = {
+  facts: readonly AiFailureFact[];
   message?: string;
   responseBody?: string;
 };
@@ -18,7 +24,7 @@ export type ErrorPartDetail = {
  * Diagnostic detail for the error sheet, read from the persisted failure
  * snapshot. Only facts that exist become rows, in a fixed reading order.
  */
-export function readErrorPartDetail(data: ErrorPartData): ErrorPartDetail {
+export function readAiFailureDetail(data: AiFailureData): AiFailureDetail {
   const source = readRecord(data.source);
   const context = readRecord(data.context);
   const layer = readText(source?.layer);
@@ -26,7 +32,7 @@ export function readErrorPartDetail(data: ErrorPartData): ErrorPartDetail {
   const message = readText(data.message);
   const responseBody = readText(context?.responseBody);
 
-  const facts: ErrorPartFact[] = [];
+  const facts: AiFailureFact[] = [];
   const addFact = (labelKey: string, value: string | number | undefined) => {
     if (value !== undefined) facts.push({ labelKey, value });
   };

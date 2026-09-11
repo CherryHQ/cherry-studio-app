@@ -8,6 +8,7 @@ import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { createTestRuntime, type TestRuntime } from '@/backend/services/jobs/__tests__/_helpers';
 import { jobHandlerEntry } from '@/backend/services/jobs/JobHandlerRegistry';
 import type { JobContext } from '@/backend/services/jobs/types';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
 import { type FileEntry, type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
@@ -142,6 +143,24 @@ describe('createPaintingGenerateJobHandler', () => {
       [outputFileId],
       expect.any(AbortSignal),
     );
+  });
+
+  it('preserves safe provider diagnostics in the job failure envelope', async () => {
+    const dependencies = createDependencies();
+    const failure = {
+      version: 1 as const,
+      reasonCode: 'network' as const,
+      source: { layer: 'provider' as const, name: 'TypeError' },
+      context: { providerId: 'openai', modelId: 'image-1' },
+    };
+    jest
+      .mocked(dependencies.ai.generateImage)
+      .mockRejectedValue(new AiRequestError({ message: 'fetch failed', retryable: true, failure }));
+    const handler = createPaintingGenerateJobHandler(dependencies);
+    await expect(handler.execute(createContext())).rejects.toMatchObject({
+      error: { message: 'fetch failed', retryable: true, params: { failure } },
+    });
+    expect(dependencies.storage.createInternalEntry).not.toHaveBeenCalled();
   });
 
   it('fails when the provider returns no image', async () => {

@@ -2,9 +2,10 @@
 
 `/files/[fileEntryId]` is the shared page for managed images, Markdown, text, and HTML.
 The route carries identity only. `FileEntryPreview` owns classification and the choice between
-this page and system opening; this page owns reading, rendering, copying, and sharing.
+this page and system opening, and shares file export actions with the painting viewer.
+This page owns reading, rendering, and copying.
 
-- `FileImageViewer` reuses `ArtifactImageViewer` and its zoom interaction. The header offers
+- `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. The header offers
   sharing, saving to Photos, and system opening.
 - `FileTextViewer` reads at most 1 MiB plus one truncation-detection byte. Truncated HTML stays
   in source view. Copy uses the displayed source text and explicitly says when it is partial;

@@ -7,6 +7,7 @@ import type {
   BackgroundActivitySession,
   BackgroundActivitySessionInput,
 } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
+import { JobExecutionError } from '@/backend/services/jobs/JobExecutionError';
 import type { JobHandlerFor } from '@/backend/services/jobs/types';
 import type {
   PaintingActivityPhase,
@@ -14,6 +15,8 @@ import type {
 } from '@/shared/backgroundActivity/painting';
 import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import type { PaintingGenerationResult } from '@/shared/contracts';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { JOB_ERROR_CODES } from '@/shared/data/api/schemas/jobs';
 import { type FileEntry, type FileEntryId, readableFilename } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
@@ -215,6 +218,14 @@ export function createPaintingGenerateJobHandler(
         await session?.finish(
           paintingActivityProps(translate, phase, modelName, prompt, startedAtEpochMs),
         );
+        if (error instanceof AiRequestError) {
+          throw new JobExecutionError({
+            code: JOB_ERROR_CODES.HANDLER_THREW,
+            message: error.message,
+            retryable: error.detail.retryable,
+            params: { failure: error.detail.failure },
+          });
+        }
         throw error;
       }
     },

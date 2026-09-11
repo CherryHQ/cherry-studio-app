@@ -65,6 +65,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 - `ComposerDock` — connects that input-context state to CherryUI's
   `Composer.Dock`. Chat keeps it in normal parent flow; floating surfaces can pair it with
   CherryUI's `useComposerDockLayout` measurement and content-inset primitive.
+- `ComposerDismissArea` — ends editing on a completed, unhandled background press. Scrolling and
+  child controls can cancel the press. Nested message lists use `keyboardShouldPersistTaps="always"`
+  so this boundary owns dismissal for both chat and painting.
 - `utils/composerAttachments` is deep-imported on purpose (see `index.ts`).
 
 ## What is deliberately *not* pluggable

@@ -35,6 +35,9 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/frontend/components/Composer', () => ({
+  ComposerDismissArea: jest.requireActual(
+    '@/frontend/components/Composer/components/ComposerDismissArea',
+  ).ComposerDismissArea,
   ComposerDock: ({ children, ...props }: { children?: React.ReactNode }) => {
     dockProps = props;
     return children;
@@ -45,6 +48,10 @@ jest.mock('@/frontend/components/Composer', () => ({
     mockComposerProviderInstance = instance;
     return children;
   },
+}));
+
+jest.mock('@/frontend/components/Composer/context/ComposerProvider', () => ({
+  useComposerPresentationActions: () => ({ dismissInput: mockDismissInput }),
 }));
 
 jest.mock('expo-router', () => ({
@@ -98,10 +105,6 @@ jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest
 
 jest.mock('../components/ChatInput', () => ({
   ChatInput: (props: Record<string, unknown>) => {
-    const { useImperativeHandle } = jest.requireActual<typeof import('react')>('react');
-    useImperativeHandle(props.ref as React.Ref<{ dismiss: () => void }>, () => ({
-      dismiss: mockDismissInput,
-    }));
     chatInputProps = props;
     return null;
   },

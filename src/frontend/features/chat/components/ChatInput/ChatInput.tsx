@@ -1,6 +1,6 @@
 import { Composer } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
 import Animated, {
@@ -21,7 +21,6 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
-  useComposerPresentationActions,
   useComposerPresentationState,
   useComposerState,
 } from '@/frontend/components/Composer';
@@ -52,13 +51,7 @@ type ChatInputProps = {
   agentId?: string;
   controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
-  ref?: Ref<ChatInputHandle>;
   sessionId?: string;
-};
-
-export type ChatInputHandle = {
-  /** Ends editing from the chat's outside-touch boundary, even without a keyboard. */
-  dismiss: () => void;
 };
 
 const logger = loggerService.withContext('ChatInput');
@@ -72,13 +65,7 @@ const activeTransitionMotion = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
-export function ChatInput({
-  agentId,
-  controls,
-  dismissKeyboardOnSend,
-  ref,
-  sessionId,
-}: ChatInputProps) {
+export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
   const { t } = useTranslation();
   const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
   const { agent } = useAgentApiById(agentId);
@@ -136,8 +123,6 @@ export function ChatInput({
     maxHeight: Math.max(restingInputHeight, (inputTextStyle.fontSize ?? 16) * fontScale * 2),
   };
   const { isEditing } = useComposerPresentationState();
-  const { dismissInput } = useComposerPresentationActions();
-  useImperativeHandle(ref, () => ({ dismiss: dismissInput }), [dismissInput]);
   const { attachments, draft } = useComposerState();
   const isInputActive = isEditing || draft.length > 0 || attachments.length > 0;
   const naturalFieldHeight = useRef(restingInputHeight);

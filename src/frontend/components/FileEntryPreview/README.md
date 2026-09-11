@@ -16,6 +16,8 @@ logging, and the single opening policy shared by the composer, messages, and fil
 - `useResolvedFile`: entry and local-byte resolution for cards and the viewer, with explicit retry.
 - `useOpenFileEntry`: `openFileEntry` routes supported kinds to `/files/[fileEntryId]` and hands
   `document` to the platform. `openFileEntryWithSystem` is the viewer's explicit escape hatch.
+- `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by
+  the attachment image and painting outputs so neither renders a broken frame.
 
 Opening failures report a toast. Thumbnail failures are logged and keep the existing fallback.
 The image thumbnail query uses the same resolved-entry shape and query key as the file library.
