@@ -76,7 +76,8 @@ export async function renderHtml(
         for (const token of parser.parse(block.source, {})) {
           for (const child of token.children ?? []) {
             const url = child.type === 'image' ? child.attrGet('src') : null;
-            if (url && safeExportUrl(url)) sources.set(url, { kind: 'remote-image', url });
+            if (typeof url === 'string' && safeExportUrl(url))
+              sources.set(url, { kind: 'remote-image', url });
           }
         }
       }
@@ -97,8 +98,10 @@ export async function renderHtml(
       ? `<img src="${data}" alt="${escapeHtml(alt)}">`
       : `<p class="image-placeholder">[${escapeHtml(alt || 'Image')}]</p>`;
   };
-  parser.renderer.rules.image = (tokens, index) =>
-    image(tokens[index].attrGet('src') ?? '', tokens[index].content);
+  parser.renderer.rules.image = (tokens, index) => {
+    const source = tokens[index].attrGet('src');
+    return image(typeof source === 'string' ? source : '', tokens[index].content);
+  };
   const renderBlocks = (blocks: readonly ExportBlock[]): string =>
     blocks
       .map((block) => {

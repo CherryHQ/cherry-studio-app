@@ -104,7 +104,8 @@ export function createDocumentExportSession(
         content = { format: 'markdown', issues: [] };
       } else {
         progress('resolving-assets');
-        const { renderHtml } = await import('./renderHtml');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
+        const { renderHtml } = require('./renderHtml') as typeof import('./renderHtml');
         signal.throwIfAborted();
         const result = await renderHtml(
           document,

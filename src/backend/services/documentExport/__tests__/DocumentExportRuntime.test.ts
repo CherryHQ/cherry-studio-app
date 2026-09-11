@@ -3,10 +3,16 @@ import { AppState } from 'react-native';
 import { createDocumentExportSession } from '../createDocumentExportSession';
 import { DocumentExportRuntime } from '../DocumentExportRuntime';
 
-jest.mock('react-native', () => ({
-  AppState: { currentState: 'active', addEventListener: jest.fn() },
-}));
 jest.mock('../createDocumentExportSession', () => ({ createDocumentExportSession: jest.fn() }));
+
+beforeEach(() => {
+  Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
+  jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 test('backgrounding cancels active work and returning to the foreground permits an explicit retry', async () => {
   let change!: (state: string) => void;
