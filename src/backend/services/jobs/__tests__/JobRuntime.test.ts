@@ -319,6 +319,41 @@ describe('JobRuntime', () => {
     expect(leases[1]?.release).toHaveBeenCalledTimes(1);
   });
 
+  it('hands execution protection to an immediate retry of the same job', async () => {
+    const gate = makeGate();
+    const leases: { release: jest.Mock }[] = [];
+    const acquire = jest.fn(() => {
+      const lease = { release: jest.fn() };
+      leases.push(lease);
+      return lease;
+    });
+    let executions = 0;
+    const handler: JobHandler = {
+      executionClass: 'user-continued',
+      recovery: 'abandon',
+      defaultRetryPolicy: { backoff: 'none', baseDelayMs: 0, maxDelayMs: 0, maxAttempts: 2 },
+      async execute() {
+        if (++executions === 1) throw new Error('Retry immediately');
+        await gate.promise;
+      },
+    };
+    const { runtime } = await setup([['internal.immediate-retry', handler]], {
+      keepAlive: { acquire },
+    });
+    try {
+      const handle = await enqueueTest(runtime, 'internal.immediate-retry', {});
+      await waitFor(() => executions === 2);
+      expect(acquire).toHaveBeenCalledTimes(2);
+      expect(leases[0]!.release).toHaveBeenCalledTimes(1);
+      expect(leases[1]!.release).not.toHaveBeenCalled();
+      gate.release();
+      await expect(handle.finished).resolves.toMatchObject({ status: 'completed', attempt: 1 });
+      await waitFor(() => leases[1]!.release.mock.calls.length === 1);
+    } finally {
+      gate.release();
+    }
+  });
+
   it('fails terminally once attempts are exhausted', async () => {
     let clock = 1_000_000;
     const { jobService, runtime } = await setup([['internal.flaky', makeFlakyHandler(99)]], {
@@ -567,7 +602,7 @@ describe('JobRuntime', () => {
 
     const handle = await enqueueTest(runtime, 'internal.uc', {});
     await waitFor(() => acquire.mock.calls.length === 1);
-    expect(acquire).toHaveBeenCalledWith('job.internal.uc');
+    expect(acquire).toHaveBeenCalledWith('job.internal.uc', expect.any(Function));
     expect(leases[0]?.release).not.toHaveBeenCalled();
 
     gate.release();
@@ -577,6 +612,65 @@ describe('JobRuntime', () => {
     // microtask later in the execute pipeline's finally.
     await waitFor(() => (leases[0]?.release.mock.calls.length ?? 0) === 1);
     expect(leases[0]?.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps execution protected while claiming a queued user-continued successor', async () => {
+    const firstGate = makeGate();
+    const secondGate = makeGate();
+    const claimStarted = makeGate();
+    const claimAllowed = makeGate();
+    const leases: { release: jest.Mock }[] = [];
+    const acquire = jest.fn(() => {
+      const lease = { release: jest.fn() };
+      leases.push(lease);
+      return lease;
+    });
+    let executions = 0;
+    const { runtime, jobService } = await setup(
+      [
+        [
+          'internal.serial',
+          {
+            executionClass: 'user-continued',
+            recovery: 'abandon',
+            async execute() {
+              const gate = executions++ === 0 ? firstGate : secondGate;
+              await gate.promise;
+            },
+          },
+        ],
+      ],
+      { keepAlive: { acquire } },
+    );
+    try {
+      const first = await enqueueTest(runtime, 'internal.serial', {});
+      await waitFor(() => executions === 1);
+      const second = await enqueueTest(runtime, 'internal.serial', {});
+      await runtime.pump({ reason: 'manual' });
+      const countRunning = jobService.countRunningGlobalTx.bind(jobService);
+      jest.spyOn(jobService, 'countRunningGlobalTx').mockImplementationOnce(async (tx) => {
+        claimStarted.release();
+        await claimAllowed.promise;
+        return countRunning(tx);
+      });
+      firstGate.release();
+      await first.finished;
+      await claimStarted.promise;
+      expect(leases[0]!.release).not.toHaveBeenCalled();
+      claimAllowed.release();
+      await waitFor(() => executions === 2 && leases[0]!.release.mock.calls.length === 1);
+      expect(acquire.mock.invocationCallOrder[1]).toBeLessThan(
+        leases[0]!.release.mock.invocationCallOrder[0]!,
+      );
+      expect(leases[1]!.release).not.toHaveBeenCalled();
+      secondGate.release();
+      await second.finished;
+      await waitFor(() => leases[1]!.release.mock.calls.length === 1);
+    } finally {
+      firstGate.release();
+      secondGate.release();
+      claimAllowed.release();
+    }
   });
 
   it('releases the keep-alive lease when a user-continued handler fails', async () => {

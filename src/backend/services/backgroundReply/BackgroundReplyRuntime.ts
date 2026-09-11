@@ -1,6 +1,5 @@
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import { resolveScheme } from 'expo-linking';
-import { Platform } from 'react-native';
 
 import {
   type Activatable,
@@ -21,6 +20,7 @@ import type {
   BackgroundReplyContent,
   BackgroundReplyPhase,
 } from '@/shared/backgroundActivity/chatReply';
+import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type {
@@ -53,6 +53,7 @@ type TurnRecord = {
   generation: number;
   key: string;
   latestMessage?: BackgroundReplyMessage;
+  onInterrupt?: (reason: Error) => void | Promise<void>;
   session?: ChatActivitySession;
   startedAtEpochMs: number;
   updateTimer?: ReturnType<typeof setTimeout>;
@@ -78,8 +79,9 @@ type EnvironmentPort = {
  * Chat's domain adapter over the background-activity mechanism: it owns the
  * per-session turn state machine, derives presentable content from chat
  * messages, and maps generating phases onto the session's keepAlive bit.
- * Throttling, AppState handling, orphan sweeps, and keep-alive audio all live
- * behind the injected session manager.
+ * Throttling, AppState handling, orphan sweeps, and platform keep-alive all live
+ * behind the injected session manager. Platform availability is a presenter
+ * and lease-source concern; this runtime never branches on it.
  */
 @Injectable('BackgroundReplyRuntime')
 @ServicePhase(Phase.PostReady)
@@ -103,17 +105,13 @@ export class BackgroundReplyRuntime
   }
 
   protected onInit(): void {
-    if (Platform.OS !== 'ios') return;
-
     this.registerDisposable(
       this.preference.subscribeChange(PREFERENCE_KEY)(() => this.handlePreferenceChange()),
     );
   }
 
   protected async onReady(): Promise<void> {
-    if (Platform.OS === 'ios' && this.preference.readCached(PREFERENCE_KEY)) {
-      await this.activate();
-    }
+    if (this.preference.readCached(PREFERENCE_KEY)) await this.activate();
   }
 
   onActivate(): void {
@@ -141,7 +139,7 @@ export class BackgroundReplyRuntime
   }
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
-    if (Platform.OS !== 'ios' || !this.isActivated || this.disposed) return noOpTurn;
+    if (!this.isActivated || this.disposed) return noOpTurn;
 
     const normalized = normalizeTurnInput(input);
     const existing = this.turns.get(normalized.key);
@@ -157,6 +155,7 @@ export class BackgroundReplyRuntime
       deepLinkUrl: normalized.deepLinkUrl,
       generation,
       key: normalized.key,
+      onInterrupt: input.onInterrupt,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
       ...(existing?.session ? { session: existing.session } : {}),
     };
@@ -338,8 +337,9 @@ export class BackgroundReplyRuntime
     // A continuation that supersedes this generation inherits the live session.
     await this.enqueue(async () => {
       if (!this.isRecordCurrent(record)) return;
-      record.session?.finish(this.toActivityProps(record));
+      const session = record.session;
       record.session = undefined;
+      await session?.finish(this.toActivityProps(record));
       if (this.turns.get(key) === record) this.turns.delete(key);
     });
   }
@@ -381,6 +381,7 @@ export class BackgroundReplyRuntime
     record.session = this.activities.startSession({
       deepLinkUrl: record.deepLinkUrl,
       keepAlive,
+      onInterrupt: (reason) => this.turns.get(record.key)?.onInterrupt?.(reason),
       presenter: this.environment.assistantPresenter,
       props: this.toActivityProps(record),
       tag: SESSION_TAG,
@@ -440,7 +441,11 @@ function normalizeTurnInput(input: BackgroundReplyTurnInput): {
   return {
     actorName: input.agentName,
     conversationTitle: input.sessionTitle,
-    deepLinkUrl: `${resolveScheme({})}:///?agentId=${encodeURIComponent(input.agentId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), {
+      agentId: input.agentId,
+      kind: 'chat',
+      sessionId: input.sessionId,
+    }),
     key: input.sessionId,
   };
 }

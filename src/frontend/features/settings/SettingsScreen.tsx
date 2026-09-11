@@ -96,7 +96,7 @@ export default function SettingsScreen() {
           </Section>
           <DocumentParserSetting />
           <Section>
-            {Platform.OS === 'ios' ? (
+            {Platform.OS === 'ios' || Platform.OS === 'android' ? (
               <Section.Item
                 label={t('settings.items.notifications')}
                 leading={<BellIcon className="size-4 text-foreground" />}

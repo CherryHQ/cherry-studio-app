@@ -13,7 +13,7 @@ durable, but it does not make JavaScript execution reliable after process death.
 ApplicationHost
     ├─ JobHandlerRegistry       immutable production handler assembly
     ├─ JobRuntime               claim, dispatch, retry, cancel, recovery, and GC
-    └─ KeepAliveCoordinator     current iOS lease for user-continued work
+    └─ KeepAliveCoordinator     platform execution lease for user-continued work
              │
              v
         JobService              serialized SQLite reads and writes
@@ -62,7 +62,7 @@ The current execution classes are:
 | Class | Current behavior |
 | --- | --- |
 | `foreground-only` | Dispatched by the in-process pump without a background keep-alive lease |
-| `user-continued` | Dispatched with a `KeepAliveCoordinator` lease; currently implemented by silent background audio on iOS and a no-op elsewhere |
+| `user-continued` | Dispatched with a `KeepAliveCoordinator` lease: silent background audio on iOS, the `dataSync` foreground service on Android, and a no-op elsewhere |
 | `bounded-background` | Defined but not dispatched; no background-task adapter is installed |
 | `system-transfer` | Defined but not dispatched; no system-transfer adapter is installed |
 
@@ -144,11 +144,13 @@ and may be retried explicitly.
 ## Current Boundaries
 
 - The ledger survives process death; an in-memory `JobHandle.finished` promise does not.
-- `user-continued` is best effort and currently depends on an iOS background-audio mechanism. It is
-  not an exact scheduler or a guarantee after force quit. Silent-audio keep-alive is also an App
-  Store review risk, so replacing it with OS continuation APIs remains a release concern.
-- No Expo background task, iOS Continued Processing, Android foreground service, system-transfer
-  adapter, schedule runtime, or server executor is installed.
+- `user-continued` is best effort. iOS depends on silent background audio; Android depends on the
+  `dataSync` foreground service in
+  [Android Background Generation](./android-background-generation.md). Neither is an exact
+  scheduler or a guarantee after force quit. Silent-audio keep-alive is also an App Store review
+  risk, so replacing it with OS continuation APIs remains a release concern.
+- No Expo background task, iOS Continued Processing, system-transfer adapter, schedule runtime, or
+  server executor is installed.
 - Progress callbacks have no shared consumer; current UI observes ledger state and domain output.
 - Terminal rows are garbage-collected after the retention limits in `JobRuntime`; domain receipts
   remain authoritative for product history.

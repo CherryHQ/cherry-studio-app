@@ -37,6 +37,7 @@ export type BackgroundReplyTurnInput = {
   agentName: string;
   sessionId: string;
   sessionTitle: string;
+  onInterrupt?: (reason: Error) => void | Promise<void>;
 };
 
 export type BackgroundReplyLifecycle = {
