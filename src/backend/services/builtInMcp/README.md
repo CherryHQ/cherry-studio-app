@@ -85,7 +85,9 @@ the model must still inspect each tool's current signature before calling its ex
 Changes to grants, disabled tools, connection availability or bundled revisions affect the next
 prepared turn; existing execution-time revocation checks remain immediate. The plugin catalog also
 projects a detached full guide by joining all sections. Guides are consumed by the Agent and are
-not displayed on the plugin detail page.
+not displayed on the plugin detail page. Detail pages show two localized prompt examples and a
+short usage hint between connection controls and authorization/privacy information. Locale files
+own this user-facing copy independently of Agent guide content.
 
 ## Workflow And Lifetime
 

@@ -203,7 +203,25 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
         )}
         {entry ? (
           <View className="gap-3">
-            <Text className="text-base font-medium text-foreground">{t('plugins.privacy')}</Text>
+            <Text accessibilityRole="header" className="text-base font-medium text-foreground">
+              {t('plugins.examples.title')}
+            </Text>
+            <View className="gap-2">
+              <Text className="text-sm text-foreground">
+                {t(`plugins.catalog.${pluginId}.examples.first`)}
+              </Text>
+              <Text className="text-sm text-foreground">
+                {t(`plugins.catalog.${pluginId}.examples.second`)}
+              </Text>
+            </View>
+            <Text className="text-sm text-muted-foreground">{t('plugins.usage')}</Text>
+          </View>
+        ) : null}
+        {entry ? (
+          <View className="gap-3">
+            <Text accessibilityRole="header" className="text-base font-medium text-foreground">
+              {t('plugins.privacy')}
+            </Text>
             <Text className="text-sm text-muted-foreground">
               {t(`plugins.catalog.${pluginId}.access`)}
             </Text>
