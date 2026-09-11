@@ -10,7 +10,7 @@ export const PI_TOOL_CALL_TOOL_NAME = 'tool_call';
 
 export const PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT = `## MCP Tool Discovery
 
-MCP tools are available through a searchable catalog. Use \`${PI_TOOL_SEARCH_TOOL_NAME}\` only for tool discovery, not for web search or general research. Use it to discover relevant tools and their TypeScript signatures, and narrow the query when a result reports \`truncated: true\`. Use \`${PI_TOOL_DESCRIBE_TOOL_NAME}\` when you need the bounded signature for one exact tool name. Inspect each tool with search or describe in the current turn before calling it, even if its name or signature appears in conversation history. Use \`${PI_TOOL_CALL_TOOL_NAME}\` with an exact discovered name and params matching that signature. If \`${PI_TOOL_CALL_TOOL_NAME}\` returns a signature, read it and retry with corrected params. Never guess tool names or parameters.`;
+MCP tools are available through a searchable catalog. Use \`${PI_TOOL_SEARCH_TOOL_NAME}\` only for tool discovery, not for web search or general research. For requests about a named cloud service, search this catalog for service-specific tools. Device capabilities do not establish cloud-service access. Before claiming a connected service is unavailable, search this catalog. An empty keyword result does not mean the catalog is empty: search by service name or omit the query to browse. Use it to discover relevant tools and their TypeScript signatures, and narrow the query when a result reports \`truncated: true\`. Use \`${PI_TOOL_DESCRIBE_TOOL_NAME}\` when you need the bounded signature for one exact tool name. Inspect each tool with search or describe in the current turn before calling it, even if its name or signature appears in conversation history. Use \`${PI_TOOL_CALL_TOOL_NAME}\` with an exact discovered name and params matching that signature. If \`${PI_TOOL_CALL_TOOL_NAME}\` returns a signature, read it and retry with corrected params. Never guess tool names or parameters.`;
 
 const SEARCH_RESULT_LIMIT = 20;
 const SEARCH_RESULT_CHARACTER_LIMIT = 32_000;
@@ -395,6 +395,17 @@ function rankTools(tools: readonly RuntimeTool[], query: string): RuntimeTool[] 
 
 function tokenize(value: string): string[] {
   return (value.match(/[\p{L}\p{N}]+/gu) ?? []).flatMap((word) => {
+    // Keep full Chinese names and adjacent character pairs so 飞书日历 can match 飞书 and 日历.
+    // Split Han runs from Latin words as well, without changing English/camel-case matching.
+    if (/\p{Script=Han}/u.test(word)) {
+      return (word.match(/\p{Script=Han}+|[^\p{Script=Han}]+/gu) ?? []).flatMap((part) => {
+        if (!/\p{Script=Han}/u.test(part)) return tokenize(part);
+        const characters = [...part];
+        return characters.length > 2
+          ? [part, ...characters.slice(1).map((next, index) => characters[index] + next)]
+          : [part];
+      });
+    }
     const parts = word
       .replace(/([\p{Lu}]+)([\p{Lu}][\p{Ll}])/gu, '$1 $2')
       .replace(/([\p{Ll}\d])([\p{Lu}])/gu, '$1 $2')

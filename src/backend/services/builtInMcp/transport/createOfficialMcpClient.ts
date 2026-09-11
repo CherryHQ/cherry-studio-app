@@ -3,7 +3,7 @@ import { fetch as expoFetch } from 'expo/fetch';
 
 import { PluginError } from '@/shared/contracts/plugins';
 
-import type { PluginClientContext } from '../pluginDefinition';
+import type { PluginClient, PluginClientContext } from '../pluginDefinition';
 
 const CONNECTION_TIMEOUT_MS = 15_000;
 type HttpTransportConfig = Extract<MCPClientConfig['transport'], { type: 'http' | 'sse' }>;
@@ -13,10 +13,10 @@ type OfficialMcpConnection = {
 };
 
 /** Shared fixed-endpoint HTTP mechanics; platform authorization belongs to the plugin. */
-export function createOfficialMcpClient(
+export async function createOfficialMcpClient(
   context: PluginClientContext,
   connection: OfficialMcpConnection,
-): Promise<MCPClient> {
+): Promise<PluginClient> {
   const endpoint = new URL(connection.url);
   const fetch: NonNullable<HttpTransportConfig['fetch']> = async (input, init) => {
     let isWrite = false;
@@ -104,13 +104,20 @@ export function createOfficialMcpClient(
       throw new PluginError('network', 'Could not reach the official MCP service.');
     }
   };
-  return createMCPClient({
+  const client = await createMCPClient({
     clientName: 'Cherry Studio',
     initializationOptions: { signal: context.signal },
     maxRetries: 0,
     // No authProvider: a 401 must not replay a possibly committed write.
     transport: { type: 'http', url: connection.url, fetch, redirect: 'error' },
   });
+  // The pinned SDK implements callTool, but omits it from its public interface.
+  // Keep that dependency at the transport boundary instead of exposing the full SDK.
+  if (typeof (client as MCPClient & Partial<PluginClient>).callTool !== 'function') {
+    await client.close();
+    throw new PluginError('unavailable', 'The MCP client cannot invoke plugin tools.');
+  }
+  return client as MCPClient & PluginClient;
 }
 
 function unknownWriteError(pluginId: string): PluginError {

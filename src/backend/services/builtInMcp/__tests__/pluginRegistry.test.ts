@@ -95,6 +95,12 @@ it('rejects duplicate plugins, duplicate methods and setup checks that invoke a 
     expect(() =>
       createPluginRegistry([{ ...plugin, validation: { ...plugin.validation, tool } }]),
     ).toThrow('read tool');
+  expect(() =>
+    createPluginRegistry([{ ...plugin, validation: { accountLabel: () => 'Account', args: {} } }]),
+  ).toThrow('read tool');
+  expect(() =>
+    createPluginRegistry([{ ...plugin, validation: { accountLabel: () => 'Account' } }]),
+  ).not.toThrow();
 });
 
 it('rejects unsafe, repeated and malformed credential fields before exposing any form', () => {

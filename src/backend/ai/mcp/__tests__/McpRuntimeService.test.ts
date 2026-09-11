@@ -217,6 +217,40 @@ describe('getServerInfo', () => {
 });
 
 describe('listTools', () => {
+  it('keeps valid tools when one remote parameter schema is unsupported and reports the omission', async () => {
+    const client = makeClient([
+      ...makeRawTools(['calendar_get_primary']),
+      {
+        name: 'broken',
+        inputSchema: { type: 'object', properties: { value: { $ref: '#/missing' } } },
+      },
+    ]);
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const onUnavailable = jest.fn();
+    const tools = await service.listExecutableToolDescriptors(server.id, onUnavailable);
+    expect(tools.map((tool) => tool.rawToolName)).toEqual(['calendar_get_primary']);
+    expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining('broken'));
+  });
+
+  it('propagates partial plugin discovery failures alongside the successfully loaded tools', async () => {
+    const warning = 'Feishu document tools could not be loaded (network).';
+    const client = {
+      ...makeClient(makeRawTools(['calendar_get_primary'])),
+      discoveryWarnings: [warning],
+    };
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const onUnavailable = jest.fn();
+    const tools = await service.listExecutableToolDescriptors(server.id, onUnavailable);
+    expect(tools.map((tool) => tool.rawToolName)).toEqual(['calendar_get_primary']);
+    expect(onUnavailable).toHaveBeenCalledWith(warning);
+    await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+      [server.id]: { state: 'error', lastError: warning, toolCount: 1 },
+    });
+  });
   it('retains connection failures even when tool preparation never admits a conversation turn', async () => {
     const { traces, records } = createTraceRecorder();
     const failure = Object.assign(new Error('private endpoint and credential'), {
