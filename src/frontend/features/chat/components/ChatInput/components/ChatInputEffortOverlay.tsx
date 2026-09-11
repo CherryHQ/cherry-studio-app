@@ -2,7 +2,7 @@ import { Portal, TextAnimation } from '@cherrystudio/ui/components';
 import { easing } from '@cherrystudio/ui/motion';
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { OverKeyboardView, useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, {
@@ -103,11 +103,6 @@ export function ChatInputEffortOverlay({
       }),
     );
   }, [layout, progress, reducedMotion]);
-
-  const handleBackdropPress = useCallback(() => {
-    close();
-    Keyboard.dismiss();
-  }, [close]);
 
   const open = useCallback(
     (gaugeFrame: ChatInputEffortFrame) => {
@@ -243,7 +238,7 @@ export function ChatInputEffortOverlay({
       <Pressable
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        onPress={handleBackdropPress}
+        onPress={close}
         style={{
           height: viewportHeight,
           left: 0,
