@@ -246,6 +246,7 @@ describe('usePaintingGeneration', () => {
       await api?.generate({ ...request, paramValues: { aspectRatio: '3:4' } });
     });
 
+    await waitForCondition(() => api?.status === 'idle');
     expect(api?.aspectRatio).toBeCloseTo(3 / 4);
     expect(api?.status).toBe('idle');
   });
