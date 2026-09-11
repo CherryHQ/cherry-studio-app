@@ -14,9 +14,11 @@
 ## Plugins
 
 The chat drawer's **Plugins** page manages connected accounts and authorization. To use a plugin,
-choose **+ > Plugins** in the composer. The add menu closes before a searchable popover appears
-above the input, keeping the keyboard and draft available. Selecting a connected plugin inserts a
-named reference at the editor's current selection; an unconnected plugin opens authorization.
+choose **+ > Plugins** in the composer. The add menu closes before a compact plugin list appears
+above the input, keeping the keyboard and draft available. The list has no title, search field, or
+close button; selecting an item, tapping outside, or going back dismisses it. Selecting a connected
+plugin inserts a named reference at the editor's current selection; an unconnected plugin opens
+authorization.
 There is no `@` trigger. Removing the reference cancels that message's selection. A successful send
 clears the references with the draft; a failed send restores them with the text.
 

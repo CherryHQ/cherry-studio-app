@@ -1,12 +1,10 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import XIcon from '@cherrystudio/app-icons/icons/x';
-import { Button, Composer, ContentState, SearchField, useToast } from '@cherrystudio/ui/components';
+import { Button, Composer, ContentState, useToast } from '@cherrystudio/ui/components';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, type TextInput, View } from 'react-native';
-import { KeyboardController, KeyboardEvents } from 'react-native-keyboard-controller';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import {
   useComposerMeta,
@@ -41,24 +39,16 @@ export function ChatInputPluginPopover({
   const catalog = usePluginCatalog();
   const connections = usePluginConnections();
   const { inputRef } = useComposerMeta();
-  const { resumeKeyboardTracking, runInputReplacement } = useComposerPresentationActions();
+  const { runInputReplacement } = useComposerPresentationActions();
   const { draft } = useComposerState();
-  const [search, setSearch] = useState('');
-  const searchRef = useRef<TextInput>(null);
-  const closeButtonRef = useRef<View>(null);
+  const initialFocusRef = useRef<View>(null);
   const afterClose = useRef<(() => void) | null>(null);
   const selectionAccepted = useRef(false);
-  const hasShownKeyboard = useRef(false);
   const routeGeneration = useRef(0);
   const [shouldRestoreFocus, setShouldRestoreFocus] = useState(true);
   useEffect(() => {
     if (!open) return;
     selectionAccepted.current = false;
-    hasShownKeyboard.current = KeyboardController.isVisible();
-    const listener = KeyboardEvents.addListener('keyboardWillShow', () => {
-      hasShownKeyboard.current = true;
-    });
-    return () => listener.remove();
   }, [open]);
   useFocusEffect(
     useCallback(
@@ -71,33 +61,14 @@ export function ChatInputPluginPopover({
       [onClose],
     ),
   );
-  const query = search.trim().toLocaleLowerCase();
   const selectedIds = new Set(readPluginMentions(draft).pluginServerIds);
-  const entries = (catalog.data ?? []).filter((entry) =>
-    [t(`plugins.catalog.${entry.id}.name`), t(`plugins.catalog.${entry.id}.summary`)].some((text) =>
-      text.toLocaleLowerCase().includes(query),
-    ),
-  );
-
-  function dismiss() {
-    setSearch('');
-    onClose();
-  }
+  const entries = catalog.data ?? [];
 
   function close(reason: 'outside' | 'anchor' | 'back' = 'outside') {
     // A touch on the composer owns its next focus/action, including during exit.
     setShouldRestoreFocus(reason !== 'anchor');
     afterClose.current = null;
-    if (
-      reason !== 'anchor' &&
-      searchRef.current?.isFocused() &&
-      (KeyboardController.isVisible() || !hasShownKeyboard.current)
-    ) {
-      // Transfer native focus while the search field still exists, preserving
-      // the keyboard. Accessibility focus returns separately after dismissal.
-      inputRef.current?.focus();
-    }
-    dismiss();
+    onClose();
   }
 
   function finishClose() {
@@ -128,7 +99,7 @@ export function ChatInputPluginPopover({
           toast.show({ label: t('chat.plugins.openFailed'), variant: 'danger' });
         });
       };
-      dismiss();
+      onClose();
       return;
     }
     setShouldRestoreFocus(true);
@@ -140,93 +111,74 @@ export function ChatInputPluginPopover({
       inputRef.current?.insertText(' ');
     }
     inputRef.current?.focus();
-    dismiss();
+    onClose();
   }
 
   // Keyboard taps stay with the list. A vertical drag cancels its candidate row
   // press; rows only select on release and have no competing long-press action.
   const content = (
     <ScrollView
-      className="shrink"
-      contentContainerClassName="gap-2 p-3"
+      className="grow-0 shrink"
+      contentContainerClassName="gap-0.5 p-2"
       keyboardDismissMode="none"
       keyboardShouldPersistTaps="always"
     >
-      <View className="flex-row items-center gap-2">
-        <Text accessibilityRole="header" className="flex-1 text-base font-semibold text-foreground">
-          {t('plugins.title')}
-        </Text>
-        <Button
-          accessibilityLabel={t('common.close')}
-          icon={<XIcon />}
-          onPress={() => close()}
-          ref={closeButtonRef}
-          size="lg"
-          variant="ghost"
-        />
-      </View>
-      <SearchField
-        accessibilityLabel={t('chat.plugins.search')}
-        clearAccessibilityLabel={t('common.clear')}
-        onChangeText={setSearch}
-        onClear={() => setSearch('')}
-        onFocus={resumeKeyboardTracking}
-        placeholder={t('chat.plugins.search')}
-        ref={searchRef}
-        testID="chat-plugin-search"
-        value={search}
-      />
-      <View>
-        {catalog.isLoading || connections.isLoading ? (
-          <ContentState.Loading title={t('plugins.loading')} />
-        ) : catalog.isError || connections.isError ? (
-          <ContentState.Error
-            title={t('plugins.loadFailed')}
-            primaryAction={{
-              children: t('common.retry'),
-              onPress: () => void Promise.all([catalog.refetch(), connections.refetch()]),
-            }}
-          />
-        ) : entries.length === 0 ? (
+      {catalog.isLoading || connections.isLoading ? (
+        <View accessible accessibilityLabel={t('plugins.loading')} focusable ref={initialFocusRef}>
+          <ContentState.Loading layout="row" title={t('plugins.loading')} />
+        </View>
+      ) : catalog.isError || connections.isError ? (
+        <View className="items-center gap-2 p-2">
+          <ContentState.Error title={t('plugins.loadFailed')} />
+          <Button
+            onPress={() => void Promise.all([catalog.refetch(), connections.refetch()])}
+            ref={initialFocusRef}
+          >
+            {t('common.retry')}
+          </Button>
+        </View>
+      ) : entries.length === 0 ? (
+        <View
+          accessible
+          accessibilityLabel={t('chat.plugins.empty')}
+          focusable
+          ref={initialFocusRef}
+        >
           <ContentState.Empty title={t('chat.plugins.empty')} />
-        ) : (
-          entries.map((entry) => {
-            const connection = connections.data?.find((item) => item.pluginId === entry.id);
-            const isConnected =
-              Boolean(connection) &&
-              (!connection?.authorization || connection.authorization.status === 'connected');
-            const isSelected = Boolean(connection && selectedIds.has(connection.serverId));
-            const name = t(`plugins.catalog.${entry.id}.name`);
-            const description = isConnected
-              ? t(`plugins.catalog.${entry.id}.summary`)
-              : connection
-                ? t('plugins.reconnect')
-                : t('chat.plugins.connectToUse');
-            return (
-              <Pressable
-                accessibilityLabel={`${name}, ${description}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isSelected }}
-                className="min-h-16 flex-row items-center gap-3 rounded-xl px-1 py-3 active:bg-secondary-active"
-                key={entry.id}
-                onPress={() => select(entry)}
-                testID={`chat-plugin-${entry.id}`}
-              >
-                <PluginIcon icon={entry.icon} />
-                <View className="min-w-0 flex-1 gap-1">
-                  <Text className="text-base font-medium text-foreground">{name}</Text>
-                  <Text className="text-sm text-muted-foreground">{description}</Text>
-                </View>
-                {isSelected ? (
-                  <CheckIcon className="size-5 text-primary" />
-                ) : (
-                  <ChevronRightIcon className="size-5 text-muted-foreground" />
-                )}
-              </Pressable>
-            );
-          })
-        )}
-      </View>
+        </View>
+      ) : (
+        entries.map((entry, index) => {
+          const connection = connections.data?.find((item) => item.pluginId === entry.id);
+          const isConnected =
+            Boolean(connection) &&
+            (!connection?.authorization || connection.authorization.status === 'connected');
+          const isSelected = Boolean(connection && selectedIds.has(connection.serverId));
+          const name = t(`plugins.catalog.${entry.id}.name`);
+          return (
+            <Pressable
+              accessibilityHint={
+                isConnected ? undefined : t(connection ? 'plugins.reconnect' : 'plugins.connect')
+              }
+              accessibilityLabel={name}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected }}
+              className="min-h-12 flex-row items-center gap-3 rounded-xl px-3 py-2 active:bg-secondary-active"
+              key={entry.id}
+              onPress={() => select(entry)}
+              ref={index === 0 ? initialFocusRef : undefined}
+              testID={`chat-plugin-${entry.id}`}
+            >
+              <PluginIcon icon={entry.icon} size="small" />
+              <Text className="min-w-0 flex-1 text-base text-foreground">{name}</Text>
+              {isSelected ? (
+                <CheckIcon className="size-5 text-primary" />
+              ) : (
+                <ChevronRightIcon className="size-5 text-muted-foreground" />
+              )}
+            </Pressable>
+          );
+        })
+      )}
     </ScrollView>
   );
 
@@ -234,7 +186,9 @@ export function ChatInputPluginPopover({
     <Composer.Popover
       accessibilityLabel={t('plugins.title')}
       content={content}
-      initialFocusRef={closeButtonRef}
+      initialFocusRef={initialFocusRef}
+      maxHeight={320}
+      maxWidth={280}
       onClose={close}
       onClosed={finishClose}
       open={open}

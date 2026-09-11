@@ -37,6 +37,8 @@ type ComposerPopoverProps = {
   children: ReactNode;
   content: ReactNode;
   initialFocusRef: RefObject<View | null>;
+  maxHeight?: number;
+  maxWidth?: number;
   onClose: (reason: 'outside' | 'anchor' | 'back') => void;
   onClosed?: () => void;
   open: boolean;
@@ -56,6 +58,8 @@ export function ComposerPopover({
   children,
   content,
   initialFocusRef,
+  maxHeight,
+  maxWidth,
   onClose,
   onClosed,
   open,
@@ -107,6 +111,8 @@ export function ComposerPopover({
           anchorRef={anchorRef}
           frame={frame}
           initialFocusRef={initialFocusRef}
+          maxHeight={maxHeight}
+          maxWidth={maxWidth}
           onClose={onClose}
           open={open}
           progress={progress}
@@ -125,6 +131,8 @@ function ComposerPopoverPanel({
   children,
   frame,
   initialFocusRef,
+  maxHeight,
+  maxWidth,
   onClose,
   open,
   progress,
@@ -215,6 +223,8 @@ function ComposerPopoverPanel({
 
   const placementStyle = useAnimatedStyle(() => layout.get().panel);
   const panelStyle = useAnimatedStyle(() => ({
+    maxHeight: Math.min(layout.get().panel.height, maxHeight ?? Number.POSITIVE_INFINITY),
+    maxWidth,
     transform: [{ translateY: 8 * (1 - progress.get()) }],
   }));
   // Keep opacity below the material boundary: alpha on a GlassView ancestor
@@ -247,7 +257,7 @@ function ComposerPopoverPanel({
           <Animated.View
             accessibilityElementsHidden={!open}
             accessibilityLabel={accessibilityLabel}
-            className="max-h-full"
+            className="w-full self-start"
             importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
             onAccessibilityEscape={() => onClose('back')}
             onLayout={({ nativeEvent: { layout: bounds } }) => {

@@ -628,7 +628,8 @@ Panel radius comes from `rounded-4xl`; padding and row gaps belong to the panel,
 content scrolls. `useComposerMenu().close(afterClose)` can defer a composed action until dismissal.
 
 `Composer.Popover` wraps the input surface and presents caller-owned `content` above it. It follows
-the anchor while the keyboard or composer height changes and shares the menu's material, radius,
+the anchor while the keyboard or composer height changes. `maxWidth` and `maxHeight` constrain a
+compact list while its content determines the natural height. It shares the menu's material, radius,
 interruptible lifecycle, and reduced-motion behavior. Outside taps include both side gutters and
 the bottom safe area; touching the composer closes the picker while preserving that touch's action.
 The entire picker content must scroll. When even a compact composer leaves too little room, the
@@ -640,7 +641,7 @@ Mount `Portal.AccessibilityBoundary` around app content below the provider that 
 host. The popover hides background accessibility through its exit, focuses `initialFocusRef` after
 layout, then restores `returnFocusRef` and calls `onClosed` after dismissal. Omit `returnFocusRef`
 when continuing into another surface. `onClose` distinguishes outside, composer, and Back/Escape
-actions so touching the composer can cancel a pending focus restoration. Selection, search,
+actions so touching the composer can cancel a pending focus restoration. Selection,
 connection state, translations, and post-dismissal actions remain in the feature. Resolve route
 and business contexts before passing content, because the portal host does not inherit them.
 No editor mention trigger is installed by this component.

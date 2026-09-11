@@ -14,7 +14,6 @@ export function SearchField({
   onFocus,
   onSubmitEditing,
   placeholder,
-  ref,
   style,
   testID,
   value,
@@ -44,7 +43,6 @@ export function SearchField({
           onFocus={onFocus}
           onSubmitEditing={onSubmitEditing}
           placeholder={placeholder}
-          ref={ref}
           returnKeyType="search"
           style={styles.input}
           testID={testID}
