@@ -6,7 +6,6 @@ import { BottomSheet } from '..';
 
 let mockBottomSheetProps: Record<string, unknown> = {};
 let mockHardwareBackPress: (() => boolean | null | undefined) | undefined;
-let mockScreenCornerRadius = 0;
 
 jest.mock('@cherrystudio/app-icons/icons/arrow-left', () => {
   const { View } = jest.requireActual('react-native');
@@ -33,10 +32,6 @@ jest.mock('@swmansion/react-native-bottom-sheet', () => {
   };
 });
 
-jest.mock('expo-screen-corner-radius', () => ({
-  getCornerRadiusSync: () => mockScreenCornerRadius,
-}));
-
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
 }));
@@ -52,7 +47,6 @@ describe('BottomSheet', () => {
   beforeEach(() => {
     mockBottomSheetProps = {};
     mockHardwareBackPress = undefined;
-    mockScreenCornerRadius = 0;
     backHandlerSpy = jest
       .spyOn(BackHandler, 'addEventListener')
       .mockImplementation((_event, handler) => {
@@ -322,28 +316,6 @@ describe('BottomSheet', () => {
       borderTopRightRadius: 32,
       height: 420,
       width: Dimensions.get('window').width - 8,
-    });
-  });
-
-  test('keeps the bottom corners concentric with a rounded display', () => {
-    mockScreenCornerRadius = 62;
-
-    act(() => {
-      renderer = create(
-        <BottomSheet onClose={jest.fn()} open size="medium" testID="rounded" title="Options">
-          <Text>Content</Text>
-        </BottomSheet>,
-      );
-    });
-
-    const card = renderer?.root
-      .findAllByProps({ testID: 'rounded' })
-      .find((node) => typeof node.type === 'string');
-    expect(StyleSheet.flatten(card?.props.style)).toMatchObject({
-      borderBottomLeftRadius: 58,
-      borderBottomRightRadius: 58,
-      borderTopLeftRadius: 32,
-      borderTopRightRadius: 32,
     });
   });
 });

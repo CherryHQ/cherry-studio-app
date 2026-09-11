@@ -6,7 +6,6 @@ import {
   ModalBottomSheet,
   programmatic,
 } from '@swmansion/react-native-bottom-sheet';
-import { getCornerRadiusSync } from 'expo-screen-corner-radius';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -99,7 +98,6 @@ export function BottomSheet(props: BottomSheetProps) {
   } = props;
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const screenCornerRadius = getCornerRadiusSync() ?? 0;
   const scrimStyle = useResolveClassNames('bg-scrim');
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
@@ -111,7 +109,6 @@ export function BottomSheet(props: BottomSheetProps) {
   );
   const cardWidth = Math.max(0, windowWidth - OUTER_INSET * 2);
   const detentHeight = cardHeight + OUTER_INSET;
-  const bottomCornerRadius = Math.max(BOTTOM_CORNER_RADIUS, screenCornerRadius - OUTER_INSET);
   const hasFooter = footer != null;
   const isCloseActionVisible = Boolean(closeAction && !backAction);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
@@ -192,8 +189,6 @@ export function BottomSheet(props: BottomSheetProps) {
           style={[
             styles.card,
             {
-              borderBottomLeftRadius: bottomCornerRadius,
-              borderBottomRightRadius: bottomCornerRadius,
               height: cardHeight,
               width: cardWidth,
             },
@@ -297,6 +292,8 @@ const styles = StyleSheet.create({
   },
   card: {
     borderCurve: 'continuous',
+    borderBottomLeftRadius: BOTTOM_CORNER_RADIUS,
+    borderBottomRightRadius: BOTTOM_CORNER_RADIUS,
     borderTopLeftRadius: TOP_CORNER_RADIUS,
     borderTopRightRadius: TOP_CORNER_RADIUS,
   },
