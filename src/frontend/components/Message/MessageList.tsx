@@ -3,7 +3,7 @@ import { KeyboardAwareLegendList } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, Platform, View } from 'react-native';
+import { type LayoutChangeEvent, View } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import {
   runOnJS,
@@ -37,6 +37,7 @@ export function MessageList({
   initialScrollTarget,
   hasNewerMessages = false,
   keyboardOffset,
+  keyboardShouldPersistTaps = 'handled',
   messages,
   onLoadOlder,
   onLoadNewer,
@@ -177,10 +178,10 @@ export function MessageList({
               extraData={extraData}
               getItemType={getMessageRowType}
               keyExtractor={messageKeyExtractor}
-              keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
+              keyboardDismissMode="none"
               keyboardLiftBehavior={isFollowing ? 'persistent' : 'never'}
               keyboardOffset={keyboardOffset}
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps={keyboardShouldPersistTaps}
               ListHeaderComponent={listHeader}
               {...(!dataKey ? { initialScrollAtEnd: true } : {})}
               maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}

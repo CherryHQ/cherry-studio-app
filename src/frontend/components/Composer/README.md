@@ -40,7 +40,7 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   - `canSend` — omit for "there is text or there is an attachment". Pass a
     boolean when the screen has its own conditions, as painting does.
   - `getSendErrorLabel` — a message for a failure the caller recognises.
-  - `dismissKeyboardOnSend` — for screens whose list dismisses it already.
+  - `dismissKeyboardOnSend` — defaults to dismissal; chat disables it, including in its list.
 - `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
   shared editing state. It forwards `style`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
@@ -103,8 +103,8 @@ walk to verify it.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
   field-ref contexts, plus the input-presentation transition. Its contexts are
   split so dispatch-only components and the dock skip keystroke re-renders.
-- `hooks/useComposerPresentation.ts`: the shared editing and keyboard lifecycle. Replacement
-  handoffs suppress keyboard-hide dismissal synchronously before native blur can emit events.
+- `hooks/useComposerPresentation.ts`: the shared editing state and keyboard handoff.
+  Native keyboard-hide notifications do not dispatch composer blur or end editing.
 - `components/ComposerDock.tsx`: pins or reconnects CherryUI's keyboard-tracking
   dock according to the current input context.
 - `utils/composerAttachments.ts`: attachment drafts and the message parts they
@@ -120,9 +120,8 @@ walk to verify it.
   stays at its resting bottom position after the replacement closes; the next
   real field focus reconnects keyboard tracking. Success and cancellation use
   the same path. Keyboard events from a replacement's own search field cannot end composer editing.
-- Editing ends on explicit outside dismissal or when the user hides the composer's visible
-  keyboard. A native blur alone does not collapse the surface. An outside dismissal works even
-  when a picker already hid the keyboard; it does not clear draft text or attachments.
+- Only an explicit composer dismissal ends editing. Native blur and keyboard-hide notifications
+  do not collapse the surface. Dismissal does not clear draft text or attachments.
 - The ＋ menu opens in a keyboard-preserving overlay, without changing the field's
   expanded/resting state or starting a keyboard transition. Cancelling only closes
   the menu. Its measured trigger remains mounted and its screen position is followed

@@ -68,12 +68,12 @@ describe('useComposerPresentation', () => {
     expect(mockBlur).not.toHaveBeenCalled();
   });
 
-  test('ends editing when the user hides a visible keyboard', () => {
+  test('preserves the current composer state when a keyboard hide notification arrives', () => {
     act(() => presentation.actions.activateInput());
     act(() => handleKeyboardWillHide?.());
 
-    expect(presentation.state.isEditing).toBe(false);
-    expect(mockBlur).toHaveBeenCalledTimes(1);
+    expect(presentation.state.isEditing).toBe(true);
+    expect(mockBlur).not.toHaveBeenCalled();
   });
 
   test.each(['selected', 'cancelled', 'failed'] as const)(
@@ -124,7 +124,7 @@ describe('useComposerPresentation', () => {
     expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
   });
 
-  test('reconnects keyboard dismissal only when the composer field regains focus', async () => {
+  test('reconnects keyboard tracking when the composer field regains focus', async () => {
     act(() => presentation.actions.activateInput());
     await act(async () => {
       const replacement = presentation.actions.runInputReplacement(() => undefined);
@@ -136,14 +136,7 @@ describe('useComposerPresentation', () => {
     expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: true });
 
     act(() => handleKeyboardWillHide?.());
-    expect(presentation.state.isEditing).toBe(false);
-  });
-
-  test('removes the keyboard listener on unmount', () => {
-    act(() => renderer?.unmount());
-    renderer = undefined;
-
-    expect(mockRemove).toHaveBeenCalledTimes(1);
+    expect(presentation.state.isEditing).toBe(true);
   });
 });
 

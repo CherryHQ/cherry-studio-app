@@ -69,7 +69,6 @@ export function ChatInputPluginPopover({
       );
       inputRef.current?.insertText(' ');
     }
-    inputRef.current?.focus();
     onClose();
   }
 

@@ -97,12 +97,7 @@ export function ComposerPopover({
 
   return (
     <>
-      <Animated.View
-        collapsable={false}
-        onLayout={measureAnchor}
-        onTouchStart={isVisible ? () => onClose('anchor') : undefined}
-        ref={anchorRef}
-      >
+      <Animated.View collapsable={false} onLayout={measureAnchor} ref={anchorRef}>
         {children}
       </Animated.View>
       {isVisible ? (

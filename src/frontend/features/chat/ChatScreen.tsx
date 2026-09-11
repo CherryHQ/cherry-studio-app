@@ -7,7 +7,7 @@ import { BlurTargetView } from 'expo-blur';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MainHeader } from '@/frontend/appShell/header';
@@ -101,14 +101,12 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       !messageWindow.error ? (
         <SessionReadReceipt sessionId={sessionId} />
       ) : null}
-      {/* Dismiss after the outside touch ends so the keyboard cannot move a
-          message action before release. The composer is outside this boundary. */}
-      <View
+      <Pressable
+        accessible={false}
         className="flex-1"
-        onTouchEnd={() => {
-          inputRef.current?.dismiss();
-          Keyboard.dismiss();
-        }}
+        disabled={!hasComposer}
+        onPress={() => inputRef.current?.dismiss()}
+        testID="chat-background"
       >
         {sessionId && session.error ? (
           <View className="flex-1 justify-center px-8 py-16">
@@ -140,7 +138,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
         ) : (
           <ChatEmptyState contentBottomInset={contentBottomInset} />
         )}
-      </View>
+      </Pressable>
       {hasComposer ? (
         <ComposerSessionProvider key={composerSession.key}>
           <ComposerDock layoutMode="flow">

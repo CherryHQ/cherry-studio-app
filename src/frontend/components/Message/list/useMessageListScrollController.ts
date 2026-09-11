@@ -2,7 +2,7 @@ import type { LegendListRef } from '@legendapp/list/react-native';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { KeyboardController, useGenericKeyboardHandler } from 'react-native-keyboard-controller';
+import { useGenericKeyboardHandler } from 'react-native-keyboard-controller';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
 import { cacheService } from '@/frontend/data/CacheService';
@@ -115,32 +115,18 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   }, [follow, isKeyboardTransitioning]);
 
   const scrollToLiveEdge = useCallback(
-    async (reason: FollowingReason, options: { animated: boolean; closeKeyboard: boolean }) => {
-      const generation = restoreGenerationRef.current;
+    async (reason: FollowingReason, options: { animated: boolean }) => {
       follow.enterFollowing(reason);
       clearStoredAnchor();
       liveEdgeScrollCountRef.current += 1;
 
       try {
-        if (options.closeKeyboard) {
-          // Make the submitted row visible before keyboard dismissal changes the viewport.
-          await inputsRef.current.listRef.current?.scrollToEnd({ animated: false });
-          if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
-            return;
-          }
-          // Keep keyboard geometry updates active so dismissal clears its bottom
-          // inset before we resolve the list's new live edge.
-          await KeyboardController.dismiss();
-          if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
-            return;
-          }
-        }
         const current = inputsRef.current;
         if (current.onReturnToLatest) {
           current.onReturnToLatest();
         } else {
           await current.listRef.current?.scrollToEnd({
-            animated: options.animated && !options.closeKeyboard,
+            animated: options.animated,
           });
         }
       } catch (error) {
@@ -260,10 +246,10 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
       const generation = restoreGenerationRef.current;
       sendFrameRef.current = requestAnimationFrame(() => {
         sendFrameRef.current = null;
-        if (generation !== restoreGenerationRef.current) {
+        if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
           return;
         }
-        void scrollToLiveEdge('local-send', { animated: true, closeKeyboard: true });
+        void scrollToLiveEdge('local-send', { animated: true });
       });
     },
     [cancelScheduledStick, clearStoredAnchor, follow, scrollToLiveEdge],
@@ -355,7 +341,6 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
       }
       restore = scrollToLiveEdge(pendingMessageId ? 'local-send' : 'restored-bottom', {
         animated: Boolean(pendingMessageId),
-        closeKeyboard: Boolean(enteringMessageId),
       });
     }
 
@@ -482,7 +467,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   );
 
   const handleScrollToEnd = useCallback(() => {
-    void scrollToLiveEdge('scroll-to-bottom', { animated: true, closeKeyboard: false });
+    void scrollToLiveEdge('scroll-to-bottom', { animated: true });
   }, [scrollToLiveEdge]);
 
   useEffect(() => {

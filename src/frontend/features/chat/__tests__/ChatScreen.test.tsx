@@ -16,6 +16,7 @@ let mockSessionData: { agentId: string; id: string } | undefined;
 let mockSessionError: Error | undefined;
 let mockSessionIsLoading: boolean;
 const mockSessionRefetch = jest.fn();
+const mockDismissInput = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
   composerContentGap: 8,
@@ -97,6 +98,10 @@ jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest
 
 jest.mock('../components/ChatInput', () => ({
   ChatInput: (props: Record<string, unknown>) => {
+    const { useImperativeHandle } = jest.requireActual<typeof import('react')>('react');
+    useImperativeHandle(props.ref as React.Ref<{ dismiss: () => void }>, () => ({
+      dismiss: mockDismissInput,
+    }));
     chatInputProps = props;
     return null;
   },
@@ -122,6 +127,7 @@ describe('ChatScreen composer dock wiring', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    mockDismissInput.mockClear();
     chatControlsInput = undefined;
     chatInputProps = undefined;
     chatWorkspaceProps = undefined;
@@ -163,6 +169,44 @@ describe('ChatScreen composer dock wiring', () => {
       onPendingSendDisplayed: mockChatControls.completePendingSend,
     });
   });
+
+  it.each(['session', 'draft'] as const)(
+    'dismisses the %s composer on a completed background press, but yields to cancelled gestures',
+    (target) => {
+      if (target === 'draft') {
+        mockRouteParams = { agentId: 'agent-1' };
+        mockSessionData = undefined;
+      }
+      act(() => {
+        renderer = create(<ChatScreen />);
+      });
+      const background = renderer!.root.find(
+        (node) => typeof node.type === 'string' && node.props.testID === 'chat-background',
+      );
+      const nativeTarget = {
+        measure: (callback: (...bounds: number[]) => void) => callback(0, 0, 400, 800, 0, 0),
+      };
+      const event = {
+        currentTarget: nativeTarget,
+        nativeEvent: { pageX: 100, pageY: 100 },
+        persist: jest.fn(),
+        target: nativeTarget,
+      };
+
+      act(() => background.props.onResponderGrant(event));
+      expect(mockDismissInput).not.toHaveBeenCalled();
+      // A native scroll/selection recognizer can cancel this candidate press.
+      expect(background.props.onResponderTerminationRequest()).toBe(true);
+      act(() => background.props.onResponderTerminate(event));
+      expect(mockDismissInput).not.toHaveBeenCalled();
+
+      act(() => {
+        background.props.onResponderGrant(event);
+        background.props.onResponderRelease(event);
+      });
+      expect(mockDismissInput).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('keys the chat controls by the composer identity', () => {
     act(() => {
