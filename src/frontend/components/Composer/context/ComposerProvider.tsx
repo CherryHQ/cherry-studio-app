@@ -10,8 +10,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { KeyboardController } from 'react-native-keyboard-controller';
 
+import { useComposerPresentation } from '../hooks/useComposerPresentation';
 import {
   appendComposerAttachments,
   type ComposerAttachmentDraft,
@@ -59,25 +59,10 @@ type ComposerMetaContextValue = {
   inputRef: RefObject<ComposerInputHandle | null>;
 };
 
-type ComposerPresentationStateContextValue = {
-  /**
-   * Whether the dock follows live keyboard coordinates. Replacement surfaces
-   * turn this off before the keyboard starts moving, then the field turns it
-   * back on only when it actually receives focus again.
-   */
-  isKeyboardTrackingEnabled: boolean;
-};
-
-type ComposerPresentationActionsContextValue = {
-  resumeKeyboardTracking: () => void;
-  /**
-   * Runs a surface that replaces the live input context, such as a model
-   * sheet or a native picker. The dock is pinned first, then the field is
-   * blurred, the keyboard is dismissed, and one frame is left for those
-   * changes to commit before the replacement is presented.
-   */
-  runInputReplacement: <TValue>(present: () => Promise<TValue> | TValue) => Promise<TValue>;
-};
+type ComposerPresentationStateContextValue = ReturnType<typeof useComposerPresentation>['state'];
+type ComposerPresentationActionsContextValue = ReturnType<
+  typeof useComposerPresentation
+>['actions'];
 
 const ComposerStateContext = createContext<ComposerStateContextValue | null>(null);
 const ComposerActionsContext = createContext<ComposerActionsContextValue | null>(null);
@@ -107,7 +92,7 @@ export function ComposerProvider({
 }: ComposerProviderProps) {
   const inputRef = useRef<ComposerInputHandle | null>(null);
   const [draft, setDraft] = useState(initialDraft);
-  const [isKeyboardTrackingEnabled, setIsKeyboardTrackingEnabled] = useState(true);
+  const presentation = useComposerPresentation(inputRef);
   const [localAttachments, setLocalAttachments] = useState<ComposerAttachmentDraft[]>(() => [
     ...initialAttachments,
   ]);
@@ -145,47 +130,12 @@ export function ComposerProvider({
 
   const metaValue = useMemo(() => ({ inputRef }), []);
 
-  const resumeKeyboardTracking = useCallback(() => {
-    setIsKeyboardTrackingEnabled(true);
-  }, []);
-
-  const runInputReplacement = useCallback(
-    async <TValue,>(present: () => Promise<TValue> | TValue): Promise<TValue> => {
-      // Decouple the dock before asking the keyboard to move. On Android an
-      // external Activity can otherwise restore a stale animated keyboard
-      // coordinate and leave the composer translated away from its hit area.
-      setIsKeyboardTrackingEnabled(false);
-      inputRef.current?.blur();
-
-      try {
-        await KeyboardController.dismiss();
-      } finally {
-        // A picker can be launched while the menu's closing press is still
-        // committing. Leave one frame for the closed UI to become inert before
-        // Android hands control to another Activity.
-        await waitForNextFrame();
-      }
-
-      return present();
-    },
-    [],
-  );
-
-  const presentationStateValue = useMemo(
-    () => ({ isKeyboardTrackingEnabled }),
-    [isKeyboardTrackingEnabled],
-  );
-  const presentationActionsValue = useMemo(
-    () => ({ resumeKeyboardTracking, runInputReplacement }),
-    [resumeKeyboardTracking, runInputReplacement],
-  );
-
   return (
     <ComposerStateContext value={stateValue}>
       <ComposerActionsContext value={actionsValue}>
         <ComposerMetaContext value={metaValue}>
-          <ComposerPresentationStateContext value={presentationStateValue}>
-            <ComposerPresentationActionsContext value={presentationActionsValue}>
+          <ComposerPresentationStateContext value={presentation.state}>
+            <ComposerPresentationActionsContext value={presentation.actions}>
               {children}
             </ComposerPresentationActionsContext>
           </ComposerPresentationStateContext>
@@ -243,10 +193,4 @@ export function useComposerPresentationActions() {
   }
 
   return context;
-}
-
-function waitForNextFrame() {
-  return new Promise<void>((resolve) => {
-    requestAnimationFrame(() => resolve());
-  });
 }

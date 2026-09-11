@@ -19,14 +19,20 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
 - While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
-- When empty and unfocused, the composer is one row with the ＋ menu and send action always
-  reachable. Focus, draft text, or attachments keep it expanded into two rows: the field takes the
+- When empty and outside an editing interaction, the composer is one row with the ＋ menu and send
+  action always reachable. Editing, draft text, or attachments keep it expanded into two rows: the field takes the
   full width, the action row moves below it, and
   the model pill and reasoning-effort gauge slide and scale in without animating their glass
   opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
   it down.
+- Editing belongs to the whole composer. Focusing the field starts it; opening or closing the ＋
+  menu, model picker, file picker, or effort slider preserves it, including with an empty draft.
+  A native field blur does not end editing. Touching chat content ends editing even if a picker
+  already hid the keyboard; `ChatInput` exposes only a `dismiss` ref action for that outside boundary.
+  Hiding the composer's visible keyboard also ends editing. Draft text and attachments still keep
+  the surface expanded. Closing an overlay by its backdrop only closes that overlay.
 - Native media pickers and model/settings Sheets replace the live input context: the shared
-  composer pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
+  composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
   It reconnects keyboard tracking only when the field receives focus again. Menu and effort
   overlays preserve the existing keyboard context instead.
 - Picking a model updates the current Agent's `modelId`. Submission also snapshots the visible
