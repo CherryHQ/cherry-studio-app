@@ -15,7 +15,10 @@ import type {
   BackgroundActivitySession,
   BackgroundActivitySessionInput,
 } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
-import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type {
+  KeepAliveLease,
+  KeepAliveSource,
+} from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type {
   BackgroundReplyActivityProps,
   BackgroundReplyContent,
@@ -100,6 +103,7 @@ export class BackgroundReplyRuntime
   private disposed = false;
   private generation = 0;
   private operationTail: Promise<void> = Promise.resolve();
+  private readonly preparationLeases = new Set<KeepAliveLease>();
   private turns = new Map<string, TurnRecord>();
 
   constructor(
@@ -138,6 +142,8 @@ export class BackgroundReplyRuntime
   }
 
   private cancelSessions(): void {
+    for (const lease of this.preparationLeases) lease.release();
+    this.preparationLeases.clear();
     for (const record of this.turns.values()) {
       this.clearUpdateTimer(record);
       record.session?.cancel();
@@ -145,9 +151,15 @@ export class BackgroundReplyRuntime
     }
   }
 
-  acquirePreparation = (onInterrupt: (reason: Error) => void) => {
+  acquirePreparation = (onInterrupt: (reason: Error) => void): KeepAliveLease => {
     if (!this.isActivated || this.disposed) return { release() {} };
-    return this.keepAlive.acquire('chat.preparation', onInterrupt);
+    const lease = this.keepAlive.acquire('chat.preparation', onInterrupt);
+    this.preparationLeases.add(lease);
+    return {
+      release: () => {
+        if (this.preparationLeases.delete(lease)) lease.release();
+      },
+    };
   };
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
@@ -241,13 +253,8 @@ export class BackgroundReplyRuntime
     if (this.disposed) return;
     this.disposed = true;
 
-    const records = [...this.turns.values()];
+    this.cancelSessions();
     this.turns.clear();
-    for (const record of records) {
-      this.clearUpdateTimer(record);
-      record.session?.cancel();
-      record.session = undefined;
-    }
     await this.operationTail;
   }
 

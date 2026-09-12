@@ -96,6 +96,43 @@ test('a rejected service start interrupts unprotected work and still requests no
   expect(running).toBe(true);
 });
 
+test('a failed restart interrupts tasks admitted while earlier cancellation drains', async () => {
+  const firstFailure = new Error('Initial admission failed');
+  const restartFailure = new Error('Recovery admission failed');
+  native.start.mockRejectedValueOnce(firstFailure).mockRejectedValueOnce(restartFailure);
+  const surface = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('preparing'));
+  let finishCancellation!: () => void;
+  const cancellation = new Promise<void>((resolve) => {
+    finishCancellation = resolve;
+  });
+  const oldInterrupted = jest.fn(async () => {
+    await cancellation;
+    await surface.end('immediate', props('cancelled'));
+  });
+  runtime.acquire('old-task', oldInterrupted);
+  await flush();
+  expect(oldInterrupted).toHaveBeenCalledWith(firstFailure);
+
+  const newInterrupted = jest.fn();
+  runtime.acquire('new-task', newInterrupted);
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(1);
+  expect(newInterrupted).not.toHaveBeenCalled();
+
+  finishCancellation();
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(2);
+  expect(oldInterrupted).toHaveBeenCalledTimes(1);
+  expect(newInterrupted).toHaveBeenCalledTimes(1);
+  expect(newInterrupted).toHaveBeenCalledWith(restartFailure);
+  expect(running).toBe(false);
+
+  runtime.acquire('later-task');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(3);
+  expect(running).toBe(true);
+});
+
 test('returning while the service runs requests permission skipped during startup', async () => {
   native.start.mockImplementationOnce(async () => {
     running = true;

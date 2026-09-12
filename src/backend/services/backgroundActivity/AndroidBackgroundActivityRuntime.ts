@@ -217,12 +217,6 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     if (this.disposed) return;
     void this.enqueue(() => this.reconcile()).catch((error: unknown) => {
       logger.warn('Background service update failed', error as Error);
-      if (!this.background?.isRunning()) {
-        void this.interruptLeases(error instanceof Error ? error : new Error(String(error))).catch(
-          (interruptionError: unknown) =>
-            logger.warn('Background service interruption failed', { error: interruptionError }),
-        );
-      }
     });
   }
 
@@ -252,6 +246,15 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
       }
       await background.updateNotification(content);
       this.armDeadline();
+    } catch (error) {
+      if (!background.isRunning()) {
+        // Cancellation may enqueue surface cleanup, so never await it inside this queue.
+        void this.interruptLeases(error instanceof Error ? error : new Error(String(error))).catch(
+          (interruptionError: unknown) =>
+            logger.warn('Background service interruption failed', { error: interruptionError }),
+        );
+      }
+      throw error;
     } finally {
       // Request after admission, including a failed attempt or a return while running.
       // The permission sheet must not race admission or depend on its success.

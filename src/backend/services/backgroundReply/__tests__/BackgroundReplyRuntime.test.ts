@@ -71,6 +71,37 @@ describe('BackgroundReplyRuntime', () => {
     },
   );
 
+  test.each(['disabled', 'stopped'] as const)(
+    'releases pending preparation leases once when background reply is %s',
+    async (transition) => {
+      const runtime = await createRuntime();
+      const interrupt = jest.fn();
+      const completed = runtime.acquirePreparation(interrupt);
+      const pending = [
+        runtime.acquirePreparation(interrupt),
+        runtime.acquirePreparation(interrupt),
+      ];
+      completed.release();
+      completed.release();
+      expect(preparationRelease).toHaveBeenCalledTimes(1);
+
+      if (transition === 'disabled') {
+        enabled = false;
+        preferenceListener?.();
+        await flushOperations();
+      } else {
+        await runtime._doStop();
+      }
+      expect(preparationRelease).toHaveBeenCalledTimes(3);
+      expect(interrupt).not.toHaveBeenCalled();
+
+      for (const lease of pending) lease.release();
+      completed.release();
+      await runtime._doStop();
+      expect(preparationRelease).toHaveBeenCalledTimes(3);
+    },
+  );
+
   test.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
     'opens chat activities with the current app scheme %s',
     async (scheme) => {
