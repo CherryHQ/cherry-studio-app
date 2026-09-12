@@ -5,6 +5,15 @@
   "engines": {
     "node": "24.x"
   },
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-notifications"
+        ]
+      }
+    }
+  },
   "scripts": {
     "packages:build": "pnpm --filter @cherrystudio/ai-sdk-provider build && pnpm --filter @cherrystudio/ai-core build",
     "eas-build-post-install": "pnpm packages:build",

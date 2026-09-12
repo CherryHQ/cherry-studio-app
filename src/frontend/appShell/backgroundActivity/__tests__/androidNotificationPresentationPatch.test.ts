@@ -5,6 +5,11 @@ const root = dirname(require.resolve('expo-notifications/package.json'));
 const source = (path: string) => readFileSync(join(root, path), 'utf8');
 const androidRoot = 'android/src/main/java/expo/modules/notifications';
 
+test('Android builds the patched notification sources instead of the bundled unpatched AAR', () => {
+  const config = JSON.parse(readFileSync(join(__dirname, '../../../../../package.json'), 'utf8'));
+  expect(config.expo.autolinking.android.buildFromSource).toContain('expo-notifications');
+});
+
 // Installed-package guards protect the native/JS event seam; device delivery
 // still needs acceptance in a development client containing this patch.
 test('presentation emits its own event after notify, even when background receipt skips JS', () => {
