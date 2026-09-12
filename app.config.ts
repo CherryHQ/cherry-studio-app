@@ -24,6 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     scheme: `cherrystudio${suffix.replace('.', '-')}`,
     ios: {
       ...config.ios,
+      buildNumber: process.env.EAS_BUILD_IOS_BUILD_NUMBER ?? config.ios?.buildNumber,
       bundleIdentifier,
       entitlements: {
         ...config.ios?.entitlements,
