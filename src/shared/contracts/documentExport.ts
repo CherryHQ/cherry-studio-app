@@ -47,8 +47,7 @@ export type ExportImageFrame = {
   logoDataUrl: string;
   brandName: string;
   label: string;
-  caption: string;
-  source: string;
+  timestamp: string;
 };
 export type ExportPresentation = {
   width: number;

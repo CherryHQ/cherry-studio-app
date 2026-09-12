@@ -1467,7 +1467,6 @@
   "documentExport.issues": "有 {{count}} 处图片或公式无法排版，已保留占位或公式原文。",
   "documentExport.share": "分享",
   "documentExport.shareImage": "分享图片",
-  "documentExport.messageCount": "{{count}} 条消息",
   "documentExport.conversation": "对话记录",
   "documentExport.document": "文档分享",
   "documentExport.deliveryFailed": "保存或分享失败，请重试。",

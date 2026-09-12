@@ -79,15 +79,7 @@ function DocumentExportRoute({ requestId }: { requestId?: string }) {
         >
           {t('documentExport.title')}
         </Text>
-        <View className="min-w-11 items-end">
-          {request?.session.document.sections.some((section) => section.presentation) ? (
-            <Text className="text-muted-foreground text-xs">
-              {t('documentExport.messageCount', {
-                count: request.session.document.sections.length,
-              })}
-            </Text>
-          ) : null}
-        </View>
+        <View className="size-11" />
       </View>
       {request ? (
         <DocumentExportBody
@@ -180,6 +172,9 @@ function DocumentExportBody({
   // Freeze both snapshots' image presentation at opening, just like the base presentation.
   // Changes outside this layer must not replace the artifact while it is being delivered.
   const [imagePresentations] = useState(() => {
+    const date = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    const timestamp = `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
     const frameDocument = (document: ExportDocument) => {
       const isConversation = document.sections.some((section) => section.presentation);
       return {
@@ -189,9 +184,7 @@ function DocumentExportBody({
           background: paper,
           foreground: ink,
           label: t(isConversation ? 'documentExport.conversation' : 'documentExport.document'),
-          caption: isConversation
-            ? t('documentExport.messageCount', { count: document.sections.length })
-            : t('documentExport.document'),
+          timestamp,
         },
       };
     };

@@ -1470,8 +1470,6 @@
   "documentExport.issues": "{{count}} images or formulas could not be rendered. Placeholders or original formula text are included.",
   "documentExport.share": "Share",
   "documentExport.shareImage": "Share image",
-  "documentExport.messageCount_one": "{{count}} message",
-  "documentExport.messageCount_other": "{{count}} messages",
   "documentExport.conversation": "Conversation",
   "documentExport.document": "Document",
   "documentExport.deliveryFailed": "Could not save or share. Please try again.",

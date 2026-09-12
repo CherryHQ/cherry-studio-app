@@ -15,10 +15,11 @@ selected format.
 HTML and WebP receive resolved semantic colors and the accessibility typography scale. HTML keeps
 the source's bubble/message hints. For images, the frontend supplies an optional `imageFrame`
 presentation: straight white margins, dark content, numbered message headings and a compact Cherry
-signature. Its 52-point baseline footer grows only when text needs more room. Branding uses a cropped
-copy of the original Cherry logo embedded as PNG bytes, plus the brand name, source domain and
-localized message count. The backend lays out this frame inside the captured document; it acquires
-no chat or frontend dependency. The preview displays that exact artifact with outer canvas space;
+signature. Its 44-point baseline footer grows only when text needs more room. The brand name sits
+on the left; a cropped original Cherry logo embedded as PNG bytes, a fine divider and the local
+export time sit on the right. The timestamp uses `YYYY.MM.DD HH:mm` and is frozen when the layer
+opens, including across format and thinking-option changes. The backend lays out this frame inside
+the captured document; it acquires no chat or frontend dependency. The preview displays that exact artifact with outer canvas space;
 long images remain vertically scrollable. Ordinary documents retain their headings.
 
 Process/reasoning hints also preserve the two disclosure levels in HTML. Both start collapsed;

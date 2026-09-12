@@ -87,8 +87,8 @@ page freezes those values at opening so a system theme or orientation transition
 file during delivery. Programmatic input presentation is validated and copied by the HTML renderer.
 
 Image presentation may also supply an `imageFrame` with resolved paper/ink colors, an embedded PNG
-logo, brand name and localized labels. These are presentation data, independent of the source
-document. The renderer copies and validates them, escapes labels, and includes the complete frame
+logo, brand name, localized label and timestamp. These are presentation data, independent of the source
+document. The renderer copies and validates them, escapes text, and includes the complete frame
 inside the measured and captured `main` element. The frontend supplies this treatment only for the
 image target; Markdown and HTML retain their existing document representations.
 
@@ -241,8 +241,10 @@ silently dropping content. Cancelling preparation or unmounting/backgrounding st
 Returning from the preview keeps the selection editable. The preview is an independent fullscreen
 modal with a local dark theme and its own close action, rather than the ordinary route header.
 WebP is the default; a compact menu switches to Markdown or HTML on demand. Images include straight
-white margins, dark conversation content and a compact Cherry logo/name/source signature. The
-baseline signature area is 52 logical points and can grow for larger or wrapped text. The displayed
+white margins, dark conversation content and a compact signature: the Cherry Studio name on the left,
+with the Cherry logo, a fine vertical divider and local export time on the right. The timestamp uses
+`YYYY.MM.DD HH:mm` and is frozen at opening across both document snapshots and format changes.
+The baseline signature area is 44 logical points and can grow for larger or wrapped text. The displayed
 preview uses the generated file, including all branding; long images scroll vertically.
 
 Visible thinking content is omitted by default. When present, the source supplies two immutable

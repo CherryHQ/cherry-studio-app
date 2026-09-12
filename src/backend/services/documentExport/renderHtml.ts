@@ -155,7 +155,7 @@ export async function renderHtml(
   const { base, sm, lg, xl } = typography;
   const title = document.title && !isConversation ? `<h1>${escapeHtml(document.title)}</h1>` : '';
   const content = imageFrame
-    ? `<article class="print-content"><header class="print-caption"><span>${escapeHtml(imageFrame.label)}</span><span class="print-index">01—${String(document.sections.length).padStart(2, '0')}</span></header>${title}${body}</article><footer class="print-signature"><div class="print-brand"><img class="print-logo" src="${imageFrame.logoDataUrl}" alt=""><strong>${escapeHtml(imageFrame.brandName)}</strong></div><div class="print-source"><span>${escapeHtml(imageFrame.caption)}</span><span>${escapeHtml(imageFrame.source)}</span></div></footer>`
+    ? `<article class="print-content"><header class="print-caption"><span>${escapeHtml(imageFrame.label)}</span><span class="print-index">01—${String(document.sections.length).padStart(2, '0')}</span></header>${title}${body}</article><footer class="print-signature"><strong class="print-brand">${escapeHtml(imageFrame.brandName)}</strong><div class="print-metadata"><img class="print-logo" src="${imageFrame.logoDataUrl}" alt=""><span class="print-divider" aria-hidden="true"></span><time class="print-timestamp">${escapeHtml(imageFrame.timestamp)}</time></div></footer>`
     : `${title}${body}`;
   // Match the native message rows and CherryUI Markdown rhythm. The page supplies the
   // same resolved color tokens and accessibility type scale used by those components.
@@ -218,10 +218,12 @@ ${
 .print-heading{display:flex;align-items:baseline;gap:12px;margin-bottom:16px;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;color:${colors.muted}}
 .print-index{font-family:"SFMono-Regular",Consolas,monospace;font-size:${Math.max(12, sm.fontSize - 1)}px;white-space:nowrap}
 .print-content img,.print-content pre,.print-content table,.print-content .attachment{border-radius:0}
-.print-signature{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;min-height:52px;padding:8px 0;color:${imageFrame.foreground}}
-.print-brand{display:flex;align-items:center;gap:8px;min-width:0;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
-img.print-logo{width:24px;height:24px;flex-shrink:0;object-fit:contain;border-radius:0;margin:0}
-.print-source{display:flex;flex-direction:column;align-items:flex-end;margin-left:auto;max-width:100%;font-size:${Math.max(12, sm.fontSize - 1)}px;line-height:${sm.lineHeight - 2}px;opacity:.65}`
+.print-signature{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;min-height:44px;padding:8px 0;color:${imageFrame.foreground}}
+.print-brand{min-width:0;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;letter-spacing:.02em;text-transform:uppercase}
+.print-metadata{display:flex;align-items:center;gap:8px;margin-left:auto;max-width:100%}
+img.print-logo{width:20px;height:20px;flex-shrink:0;object-fit:contain;border-radius:0;margin:0}
+.print-divider{width:1px;height:16px;flex-shrink:0;background:currentColor;opacity:.2}
+.print-timestamp{font-family:"SFMono-Regular",Consolas,monospace;font-size:${Math.max(12, sm.fontSize - 1)}px;line-height:${sm.lineHeight - 2}px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}`
     : ''
 }
 </style></head><body><main${imageFrame ? ' class="image-print"' : ''}>${content}</main></body></html>`;
@@ -252,7 +254,7 @@ function validatePresentation(value: ExportPresentation) {
     }) ||
     colors.some((color) => !/^(#[a-f\d]{3,8}|rgba?\([\d\s.,%]+\))$/i.test(color)) ||
     (frame &&
-      ([frame.brandName, frame.label, frame.caption, frame.source].some(
+      ([frame.brandName, frame.label, frame.timestamp].some(
         (text) => typeof text !== 'string' || text.length > 256,
       ) ||
         typeof frame.logoDataUrl !== 'string' ||
