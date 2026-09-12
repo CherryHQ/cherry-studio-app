@@ -12,6 +12,7 @@ import { validatePluginGuide, type PluginGuideSnapshot } from './pluginGuide';
 import { amapPlugin } from './plugins/amap';
 import { feishuPlugin } from './plugins/feishu';
 import { githubPlugin } from './plugins/github';
+import { slackPlugin } from './plugins/slack';
 
 /** Registration is a bundled-code decision; there is no runtime installation or code loading. */
 export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
@@ -145,7 +146,7 @@ function validateFields(id: string, fields: readonly PluginCredentialField[]) {
   createPluginCredentialsSchema(fields);
 }
 
-const registry = createPluginRegistry([githubPlugin, amapPlugin, feishuPlugin]);
+const registry = createPluginRegistry([githubPlugin, amapPlugin, feishuPlugin, slackPlugin]);
 
 export const getPluginDefinition = registry.get;
 export const getBuiltInPluginCatalog = registry.listCatalog;

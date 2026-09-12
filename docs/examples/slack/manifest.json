@@ -1,0 +1,33 @@
+{
+  "display_information": {
+    "name": "Cherry personal reader",
+    "description": "Read Slack in your own Cherry Studio app"
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "cherrystudio://plugins/slack/callback",
+      "cherrystudio-dev://plugins/slack/callback",
+      "cherrystudio-preview://plugins/slack/callback"
+    ],
+    "scopes": {
+      "user": [
+        "search:read",
+        "channels:read",
+        "channels:history",
+        "groups:read",
+        "groups:history",
+        "im:read",
+        "im:history",
+        "mpim:read",
+        "mpim:history",
+        "users:read"
+      ]
+    },
+    "pkce_enabled": true
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": true
+  }
+}
