@@ -1489,6 +1489,7 @@
   "documentExport.progress.writing": "Generating the file…",
   "chat.share.title": "Share conversation",
   "chat.share.selectMessages": "Select messages to share",
+  "chat.share.confirmSelection": "Confirm",
   "chat.share.selectMessage": "Select message from {{role}}",
   "chat.share.selectionLimit": "Select up to {{count}} messages at a time.",
   "chat.share.tooLarge": "The selected content exceeds the export capacity. Select fewer messages and try again.",

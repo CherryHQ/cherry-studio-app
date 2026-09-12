@@ -1485,6 +1485,7 @@
   "documentExport.progress.writing": "正在生成文件…",
   "chat.share.title": "分享对话",
   "chat.share.selectMessages": "请选择要分享的消息",
+  "chat.share.confirmSelection": "确认",
   "chat.share.selectMessage": "选择{{role}}的消息",
   "chat.share.selectionLimit": "一次最多选择 {{count}} 条消息。",
   "chat.share.tooLarge": "所选内容超出导出容量，请减少选择的消息后重试。",

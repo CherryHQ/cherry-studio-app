@@ -34,4 +34,7 @@ saved entry; cancelling the sheet retains the file.
 The capture WebView is a controlled, navigation-free surface, mounted below an opaque loading view
 and separate from the authored-HTML file viewer. It releases late native files and limits physical
 pixels before allocation. The image frame and logo are part of those bounds. WebP output is
-one bounded image; larger content offers HTML. Native acceptance is still pending.
+one bounded image; larger content offers HTML. The encoder is imported synchronously so Worklets
+Bundle Mode can resolve it on the first capture after launch. iOS simulator acceptance covers local
+text-message selection, WebP generation, branded preview, scrolling and returning to edit selection.
+Android and the remaining capture edge cases are unverified.

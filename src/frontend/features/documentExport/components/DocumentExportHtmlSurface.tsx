@@ -4,6 +4,9 @@ import { WebView } from 'react-native-webview';
 
 import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/documentExport';
 
+// Bundle Mode needs the encoder worklet in the initial bundle, not an async chunk.
+import { captureWebp } from '../utils/captureWebp';
+
 type CaptureInput = Parameters<CaptureExportHtml>[0];
 type CaptureResult = Awaited<ReturnType<CaptureExportHtml>>;
 type CaptureRequest = {
@@ -83,8 +86,6 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
     if (request.nativeStarted || request.settled || !wrapper.current || !request.height) return;
     request.nativeStarted = true;
     try {
-      const { captureWebp } = await import('../utils/captureWebp');
-      if (request.settled) return;
       const result = await captureWebp(wrapper, input.signal);
       request.finish(undefined, {
         ...result,

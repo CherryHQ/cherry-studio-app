@@ -39,7 +39,7 @@ export function ChatShareComposer({ children }: PropsWithChildren) {
             onPress={confirmSelection}
             testID="chat-share-confirm"
           >
-            {t('common.confirm')}
+            {t('chat.share.confirmSelection')}
           </Button>
         </View>
       ) : null}

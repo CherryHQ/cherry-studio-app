@@ -2,8 +2,9 @@
 
 Document export is implemented as an application capability. Chat supplies the first document
 adapter; the conversion service has no Agent, conversation, message-list, or navigation dependency.
-Native capture and device acceptance remain unverified until an authorized development build and
-acceptance run. No build or application test was run during implementation.
+An authorized iOS simulator development build verifies local text-message selection, WebP capture,
+the branded fullscreen preview and returning to edit selection. Android and the broader capture
+matrix remain unverified.
 
 ## Ownership
 
@@ -176,7 +177,7 @@ Messages from the WebView must match the active request and expected dimensions.
 capture lease prevents another physical capture from reusing a closing surface. Abort/timeout has
 an immediate logical result; a late native file is released instead of being published. Native work
 keeps its lease until its actual promise settles. These controls do not establish that off-screen
-WebView rendering works on all devices; that requires the pending iOS/Android acceptance run.
+WebView rendering works on all devices; only the local iOS text-message scenario has been verified.
 
 ## Lifetime And File Library
 
@@ -273,8 +274,15 @@ Formatting and lint passed for the changed files. Full formatting also passed. F
 reported seven unresolved imports because the workspace lacked the existing `ai-core` build output;
 after copying existing package artifacts with identical source/configuration and rerunning ESLint
 without its stale cache, lint completed with only existing repository warnings. Automated tests and
-type checks have not been run. iOS simulator capture acceptance is pending a compatible development
-client; an installed physical-device package cannot satisfy that prerequisite.
+type checks have not been run. A local EAS `development-simulator` Debug build completed, and the
+isolated iPhone 17 Pro simulator running iOS 26.5 verified a fresh installation with four local
+illustrative messages, without imported history, credentials or model calls. The selected messages
+generated a 1206 × 2040 WebP containing the Cherry signature. The preview scrolls, closing preserves
+all four selections, and editing the selection to two messages generates another preview. Runtime
+verification caught and fixed the missing confirmation translation and an asynchronous encoder
+import that prevented Worklets Bundle Mode from resolving the encoder after launch. Formatting and
+lint passed again after these fixes; automated tests, type checks, Android and delivery to a recipient
+remain unverified.
 
 When authorized, acceptance should cover both iOS and Android, light/dark themes, different pixel
 ratios, long text, wide tables/code, inline/display math, multiple images, rejected/failed resources,
