@@ -3,15 +3,20 @@ import type { ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 
-import { useChatShareSelection } from '../../../share';
+import {
+  useChatShareSelectionActions,
+  useChatShareSelectionState,
+  useIsChatMessageSelected,
+} from '../../../share';
 import { ChatMessage } from './ChatMessage';
 
 /** The left control owns selection; message content keeps its usual reading interactions. */
 export function SelectableChatMessage(props: ComponentProps<typeof ChatMessage>) {
   const { t } = useTranslation();
-  const { isSelecting, isSharing, selectedIds, toggleMessage } = useChatShareSelection();
+  const { isSelecting, isSharing } = useChatShareSelectionState();
+  const { toggleMessage } = useChatShareSelectionActions();
   const { message } = props;
-  const isSelected = selectedIds.has(message.id);
+  const isSelected = useIsChatMessageSelected(message.id);
   const isDisabled = isSharing || message.status === 'pending';
   return (
     <View className="flex-row items-start gap-2">

@@ -1,2 +1,7 @@
 export { ChatShareComposer } from './ChatShareComposer';
-export { ChatShareSelectionProvider, useChatShareSelection } from './ChatShareSelectionProvider';
+export {
+  ChatShareSelectionProvider,
+  useChatShareSelectionActions,
+  useChatShareSelectionState,
+  useIsChatMessageSelected,
+} from './ChatShareSelectionProvider';

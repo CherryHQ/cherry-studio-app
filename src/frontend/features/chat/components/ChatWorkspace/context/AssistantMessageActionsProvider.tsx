@@ -16,7 +16,7 @@ import { useAgentSession } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatFork } from '../../../runtime';
-import { useChatShareSelection } from '../../../share';
+import { useChatShareSelectionActions, useChatShareSelectionState } from '../../../share';
 
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
 /** Matches the Session title column, which the fork input also caps at 255. */
@@ -53,7 +53,8 @@ export function AssistantMessageActionsProvider({
   const { t } = useTranslation();
   const { toast } = useToast();
   const forkSession = useAgentChatFork();
-  const { startSelection: shareAssistantMessage, isSelecting } = useChatShareSelection();
+  const { startSelection: shareAssistantMessage } = useChatShareSelectionActions();
+  const { isSelecting } = useChatShareSelectionState();
   // Already in cache: the chat screen resolves this same Session to render.
   const sourceTitle = useAgentSession(sessionId).data?.title?.trim();
   const [copiedMessageId, setCopiedMessageId] = useState<string>();

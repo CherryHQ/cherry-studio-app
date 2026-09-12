@@ -128,28 +128,13 @@ test('selecting an answer does not implicitly include its same-turn question', a
   ).resolves.toEqual([answer]);
 });
 
-test('finds selected history beyond the visible window without limiting the whole conversation', async () => {
-  const unselected = Array.from({ length: 200 }, (_, index) => ({
-    ...answer,
-    id: `other-${index}`,
-    status: 'streaming' as const,
-  }));
-  const readPage = jest
-    .fn()
-    .mockResolvedValueOnce({ items: unselected, nextCursor: 'older-1' })
-    .mockResolvedValueOnce({ items: [answer], nextCursor: 'older-2' })
-    .mockResolvedValueOnce({
-      items: [question, { ...question, id: 'system', role: 'system' }],
-      nextCursor: 'not-needed',
-    });
+test('resolves selected IDs in one bounded read without scanning intervening history', async () => {
+  const readPage = jest.fn(async () => ({ items: [answer, question] }));
   await expect(
-    loadChatExportMessages(['b', 'a'], readPage, new AbortController().signal),
+    loadChatExportMessages(['b', 'a', 'b'], readPage, new AbortController().signal),
   ).resolves.toEqual([question, answer]);
-  expect(readPage.mock.calls.map(([query]) => query.cursor)).toEqual([
-    undefined,
-    'older-1',
-    'older-2',
-  ]);
+  expect(readPage).toHaveBeenCalledTimes(1);
+  expect(readPage).toHaveBeenCalledWith({ ids: ['b', 'a'] });
 });
 
 test.each(['pending', 'streaming'] as const)(
@@ -203,11 +188,11 @@ test('admits the document selection limit without truncation', async () => {
   expect(() => toChatExportDocument([...messages, answer], options)).toThrow('size-limit');
 });
 
-test('cancellation stops before the next history page or opening the preview', async () => {
+test('cancellation prevents starting the selected-ID read or using its result', async () => {
   const controller = new AbortController();
   const readPage = jest.fn(async () => {
     controller.abort();
-    return { items: [answer], nextCursor: 'older' };
+    return { items: [answer, question] };
   });
   await expect(
     loadChatExportMessages(['a', 'b'], readPage, controller.signal),
@@ -220,12 +205,9 @@ test('cancellation stops before the next history page or opening the preview', a
   expect(readPage).not.toHaveBeenCalled();
 });
 
-test('a failed history page rejects the export instead of returning the loaded subset', async () => {
+test('a failed selected-ID read rejects the export', async () => {
   const failure = new Error('History unavailable');
-  const readPage = jest
-    .fn()
-    .mockResolvedValueOnce({ items: [answer], nextCursor: 'older' })
-    .mockRejectedValueOnce(failure);
+  const readPage = jest.fn().mockRejectedValueOnce(failure);
   await expect(
     loadChatExportMessages(['a', 'b'], readPage, new AbortController().signal),
   ).rejects.toBe(failure);

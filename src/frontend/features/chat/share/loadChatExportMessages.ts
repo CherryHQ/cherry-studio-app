@@ -3,10 +3,9 @@ import {
   DOCUMENT_EXPORT_MAX_SECTIONS,
   DocumentExportError,
 } from '@/shared/contracts/documentExport';
-import {
-  AGENT_SESSION_MESSAGES_MAX_LIMIT,
-  type AgentSessionMessagePage,
-  type ListAgentSessionMessagesQueryParams,
+import type {
+  AgentSessionMessagePage,
+  ListAgentSessionMessagesQueryParams,
 } from '@/shared/data/api/schemas/agentSessionMessages';
 
 import { isChatMessageExportable } from './toChatExportDocument';
@@ -29,21 +28,16 @@ export async function loadChatExportMessages(
   if (!remaining.size) throw new ChatExportError('empty');
   if (remaining.size > DOCUMENT_EXPORT_MAX_SECTIONS) throw new DocumentExportError('size-limit');
   const messages: AgentMessageView[] = [];
-  let cursor: string | undefined;
-  do {
-    signal.throwIfAborted();
-    const page = await readPage({ cursor, limit: AGENT_SESSION_MESSAGES_MAX_LIMIT });
-    signal.throwIfAborted();
-    for (const message of page.items) {
-      if (!remaining.has(message.id)) continue;
-      if (message.role === 'system') throw new ChatExportError('missing');
-      if (!isChatMessageExportable(message)) throw new ChatExportError('unsettled');
-      messages.push(message);
-      remaining.delete(message.id);
-    }
-    cursor = page.nextCursor;
-  } while (cursor && remaining.size);
+  const page = await readPage({ ids: [...remaining] });
+  signal.throwIfAborted();
+  for (const message of page.items) {
+    if (!remaining.has(message.id)) continue;
+    if (message.role === 'system') throw new ChatExportError('missing');
+    if (!isChatMessageExportable(message)) throw new ChatExportError('unsettled');
+    messages.push(message);
+    remaining.delete(message.id);
+  }
   if (remaining.size) throw new ChatExportError('missing');
-  // Pages and their items are newest-first. Selection order never changes reading order.
+  // The endpoint returns newest-first. Selection order never changes reading order.
   return messages.toReversed();
 }

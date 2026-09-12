@@ -11,11 +11,8 @@ const mockForkSession = jest.fn(async (_input: unknown) => undefined);
 const mockCopyAssistantMessageText = jest.mocked(copyAssistantMessageText);
 
 jest.mock('../../../../share', () => ({
-  useChatShareSelection: () => ({
-    startSelection: jest.fn(),
-    isSelecting: false,
-    selectedIds: new Set(),
-  }),
+  useChatShareSelectionActions: () => ({ startSelection: jest.fn() }),
+  useChatShareSelectionState: () => ({ isSelecting: false, isSharing: false }),
 }));
 
 jest.mock('expo-clipboard', () => ({

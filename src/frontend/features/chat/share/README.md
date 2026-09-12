@@ -11,7 +11,11 @@ controls show cancel, selected count and confirm; the managed composer stays mou
 Cancel or Android Back exits selection, and leaving the Session resets it. No preview opens before
 confirmation. At most 128 messages can be selected; an empty selection cannot be confirmed.
 
-Confirmation reads only the selected persisted messages through cursor pagination and restores
+Selection IDs live in one provider-owned store. Rows subscribe to their own selected boolean, and
+the bottom controls subscribe to the count. Mode and action contexts stay stable across individual
+toggles, so selecting a message does not rerender unrelated rows or message-action consumers.
+
+Confirmation reads only the selected persisted messages through a single bounded ID query and restores
 chronological order, regardless of click order. It does not implicitly include same-turn questions
 or other unselected messages. The conversation may exceed 128 messages; only the selection and
 export content budgets are bounded. Missing or unfinished selected content and failed reads reject

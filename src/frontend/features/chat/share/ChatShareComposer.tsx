@@ -4,14 +4,19 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useChatShareSelection } from './ChatShareSelectionProvider';
+import {
+  useChatShareSelectionActions,
+  useChatShareSelectionCount,
+  useChatShareSelectionState,
+} from './ChatShareSelectionProvider';
 
 /** Keeps the managed composer mounted while selection controls occupy its place. */
 export function ChatShareComposer({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
-  const { isSelecting, isSharing, selectedIds, cancelSelection, confirmSelection } =
-    useChatShareSelection();
+  const { isSelecting, isSharing } = useChatShareSelectionState();
+  const { cancelSelection, confirmSelection } = useChatShareSelectionActions();
+  const selectedCount = useChatShareSelectionCount();
 
   return (
     <>
@@ -29,12 +34,12 @@ export function ChatShareComposer({ children }: PropsWithChildren) {
             className="min-w-0 flex-1 text-center text-muted-foreground text-sm"
             accessibilityLiveRegion="polite"
           >
-            {selectedIds.size
-              ? t('common.selection.count', { count: selectedIds.size })
+            {selectedCount
+              ? t('common.selection.count', { count: selectedCount })
               : t('chat.share.selectMessages')}
           </Text>
           <Button
-            disabled={!selectedIds.size || isSharing}
+            disabled={!selectedCount || isSharing}
             loading={isSharing}
             onPress={confirmSelection}
             testID="chat-share-confirm"

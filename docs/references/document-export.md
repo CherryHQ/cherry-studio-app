@@ -232,7 +232,7 @@ Cancel or Android Back exits selection; leaving the Session resets it. Confirmat
 an empty selection and while preparation is pending. No export preview opens before confirmation.
 There is no sidebar sharing action, separate message-selection route, or timestamp option.
 
-Confirmation resolves exactly the selected persisted messages, stops pagination when all are found,
+Confirmation resolves exactly the selected persisted messages in one bounded ID query,
 and supplies them in chronological order to `/document-export`. Same-turn questions are included
 only when selected. Unselected pending messages do not block export. A conversation can contain more
 than 128 messages; the existing section limit applies only to the selection. Missing/unfinished
