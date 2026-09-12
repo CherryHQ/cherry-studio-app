@@ -140,8 +140,8 @@ Unused boot-receiver permission is blocked. Before Play distribution, complete i
 
 Assessment date: 2026-09-10. The priority is a small application adapter over maintained open-source
 execution and Expo capabilities, with no application-owned Java/Kotlin service lifecycle.
-Expo Notifications is pinned to `57.0.5`, the version range recommended by the current Expo SDK's
-`bundledNativeModules.json`, keeping existing Expo module resolutions unchanged.
+Expo Notifications is pinned to `57.0.17`, within the `~57.0.17` range recommended by Expo 57.0.21's
+`bundledNativeModules.json` and matching the version-specific native patch.
 
 | Option | Decision |
 | --- | --- |
