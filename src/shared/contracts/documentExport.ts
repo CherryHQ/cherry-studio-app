@@ -2,6 +2,8 @@ import type { FileEntryId } from '@/shared/data/types/file';
 
 import type { ResolvedFile } from './file';
 
+export const DOCUMENT_EXPORT_MAX_SECTIONS = 128;
+
 export type ExportBlock =
   | { kind: 'text'; text: string }
   | { kind: 'markdown'; source: string }
@@ -38,6 +40,15 @@ export type DocumentExportInput =
   | { kind: 'markdown'; source: string; title?: string };
 
 export type ExportFormat = 'markdown' | 'html' | 'image';
+/** Optional print treatment supplied by the frontend; content and branding remain separate. */
+export type ExportImageFrame = {
+  background: string;
+  foreground: string;
+  logoDataUrl: string;
+  brandName: string;
+  label: string;
+  timestamp: string;
+};
 export type ExportPresentation = {
   width: number;
   typography: Record<'base' | 'sm' | 'lg' | 'xl', { fontSize: number; lineHeight: number }>;
@@ -55,6 +66,7 @@ export type ExportPresentation = {
     inlineCode: string;
     inlineCodeForeground: string;
   };
+  imageFrame?: ExportImageFrame;
 };
 export type DocumentExportIssue = { code: 'image-unavailable' | 'formula-fallback'; label: string };
 export type ExportFile = { uri: string; filename: string; mediaType: string };

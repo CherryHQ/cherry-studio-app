@@ -1,20 +1,23 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
+import ShareIcon from '@cherrystudio/app-icons/icons/share';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import {
   ActionMenu,
   Button,
   ContentState,
   Image,
-  SelectionIndicator,
+  Switch,
   useToast,
 } from '@cherrystudio/ui/components';
 import { resolveTypographyScale } from '@cherrystudio/ui/utils';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import { ScopedTheme } from 'uniwind';
 
 import {
   claimDocumentExportRequest,
@@ -22,7 +25,6 @@ import {
   scheduleDocumentExportFinish,
   type DocumentExportOption,
 } from '@/frontend/appShell/documentExport';
-import { RouteHeader } from '@/frontend/appShell/header';
 import { shareFile } from '@/frontend/components/FileEntryPreview';
 import { usePreference } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -30,21 +32,28 @@ import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type {
   DocumentExportArtifact,
   DocumentExportSession,
+  ExportDocument,
   ExportFormat,
 } from '@/shared/contracts/documentExport';
 
 import { useDocumentExportHtmlCapture } from './components/DocumentExportHtmlSurface';
 import { DocumentExportTextPreview } from './components/DocumentExportTextPreview';
 import { useDocumentExportPreview } from './hooks/useDocumentExportPreview';
+import { IMAGE_FRAME_BRAND } from './utils/imageFrameBrand';
 
 export function DocumentExportScreen() {
   const params = useLocalSearchParams<{ requestId?: string | string[] }>();
   const id = getSingleRouteParam(params.requestId);
-  return <DocumentExportRoute key={id} requestId={id} />;
+  return (
+    <ScopedTheme theme="dark">
+      <DocumentExportRoute key={id} requestId={id} />
+    </ScopedTheme>
+  );
 }
 
 function DocumentExportRoute({ requestId }: { requestId?: string }) {
   const { t } = useTranslation();
+  const { top, left, right } = useSafeAreaInsets();
   const [request] = useState(() => getDocumentExportRequest(requestId));
   useEffect(() => {
     if (!request) return;
@@ -52,9 +61,26 @@ function DocumentExportRoute({ requestId }: { requestId?: string }) {
     return () => scheduleDocumentExportFinish(request.id);
   }, [request]);
   return (
-    <View className="flex-1 bg-background">
-      <Stack.Screen options={{ headerTransparent: false }} />
-      <RouteHeader title={t('documentExport.title')} />
+    <View
+      className="flex-1 bg-background"
+      style={{ paddingTop: top, paddingLeft: left, paddingRight: right }}
+    >
+      <View className="flex-row items-center gap-3 px-6 py-3">
+        <Button
+          accessibilityLabel={t('common.close')}
+          icon={<XIcon />}
+          onPress={closeExport}
+          shape="pill"
+          variant="secondary"
+        />
+        <Text
+          accessibilityRole="header"
+          className="min-w-0 flex-1 text-center text-foreground text-sm"
+        >
+          {t('documentExport.title')}
+        </Text>
+        <View className="size-11" />
+      </View>
       {request ? (
         <DocumentExportBody
           initialFormat={request.initialFormat}
@@ -81,7 +107,7 @@ function DocumentExportBody({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { bottom } = useSafeAreaInsets();
+  const { bottom, left, right } = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const [selection, setSelection] = useState({
     format: initialFormat,
@@ -104,6 +130,8 @@ function DocumentExportBody({
     codeBlock,
     inlineCode,
     inlineCodeForeground,
+    paper,
+    ink,
   ] = useThemeColor([
     'background',
     'foreground',
@@ -117,6 +145,8 @@ function DocumentExportBody({
     'code-block',
     'inline-code',
     'inline-code-foreground',
+    'constant-white',
+    'constant-black',
   ]);
   const [presentation] = useState(() => {
     const { base, sm, lg, xl } = resolveTypographyScale(fontStep);
@@ -139,11 +169,39 @@ function DocumentExportBody({
       },
     };
   });
+  // Freeze both snapshots' image presentation at opening, just like the base presentation.
+  // Changes outside this layer must not replace the artifact while it is being delivered.
+  const [imagePresentations] = useState(() => {
+    const date = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    const timestamp = `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    const frameDocument = (document: ExportDocument) => {
+      const isConversation = document.sections.some((section) => section.presentation);
+      return {
+        ...presentation,
+        imageFrame: {
+          ...IMAGE_FRAME_BRAND,
+          background: paper,
+          foreground: ink,
+          label: t(isConversation ? 'documentExport.conversation' : 'documentExport.document'),
+          timestamp,
+        },
+      };
+    };
+    return {
+      checked: frameDocument(checkedSession.document),
+      unchecked: option ? frameDocument(option.uncheckedSession.document) : undefined,
+    };
+  });
+  const imagePresentation =
+    !isOptionChecked && imagePresentations.unchecked
+      ? imagePresentations.unchecked
+      : imagePresentations.checked;
   const { capture, surface } = useDocumentExportHtmlCapture();
   const { state, getArtifact, retry } = useDocumentExportPreview(
     session,
     format,
-    presentation,
+    format === 'image' ? imagePresentation : presentation,
     capture,
     revision,
   );
@@ -186,77 +244,91 @@ function DocumentExportBody({
   };
 
   return (
-    <View className="flex-1">
-      <View className="flex-row items-center justify-between gap-3 px-4 py-2">
-        <View className="min-w-0 flex-1">
-          {option ? (
-            <Pressable
-              accessibilityLabel={option.label}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: isOptionChecked, disabled: isSharing }}
-              className="min-h-11 flex-row items-center gap-2 active:opacity-60 disabled:opacity-40"
-              disabled={isSharing}
-              onPress={() => {
-                if (!sharing.current)
-                  setSelection((current) => ({
-                    ...current,
-                    isOptionChecked: !current.isOptionChecked,
-                    revision: current.revision + 1,
-                  }));
-              }}
-            >
-              <SelectionIndicator selected={isOptionChecked} />
-              <Text className="flex-shrink text-foreground text-sm">{option.label}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <ExportFormatMenu disabled={isSharing} format={format} onSelect={selectFormat} />
-      </View>
+    <View className="min-h-0 flex-1">
       {state.status === 'markdown' ? (
-        <ScrollView className="flex-1" contentContainerClassName="px-4 pt-3 pb-6">
+        <ScrollView className="flex-1" contentContainerClassName="px-6 py-4">
           <DocumentExportTextPreview key={revision} document={session.document} />
         </ScrollView>
       ) : artifact ? (
         <ArtifactPreview
           key={artifact.id}
           artifact={artifact}
-          width={Math.min(presentation.width, windowWidth)}
+          width={Math.min(presentation.width, Math.max(1, windowWidth - left - right - 48))}
         />
       ) : (
-        <ScrollView
-          className="flex-1"
-          contentContainerClassName="items-center gap-4 px-4 py-6"
-          removeClippedSubviews={false}
-        >
-          {state.status === 'error' ? (
-            <ContentState.Error
-              description={t(`documentExport.errors.${state.code}`)}
-              primaryAction={{ children: t('common.retry'), onPress: retry }}
-              secondaryAction={
-                state.code === 'size-limit' && format === 'image'
-                  ? { children: t('documentExport.useHtml'), onPress: () => selectFormat('html') }
-                  : undefined
-              }
-              title={t('documentExport.failed')}
-            />
-          ) : (
-            <ContentState.Loading
-              title={t(
-                `documentExport.progress.${state.status === 'loading' ? state.progress : 'rendering'}`,
-              )}
-            />
-          )}
-          {surface}
-        </ScrollView>
+        <View className="flex-1 overflow-hidden">
+          {/* Keep capture laid out and mounted beneath the opaque loading surface. Its
+              wrapper is captured independently; controls never enter the exported bitmap. */}
+          <ScrollView
+            accessibilityElementsHidden
+            className="absolute inset-0"
+            importantForAccessibility="no-hide-descendants"
+            pointerEvents="none"
+            removeClippedSubviews={false}
+          >
+            {surface}
+          </ScrollView>
+          <ScrollView
+            className="flex-1 bg-background"
+            contentContainerClassName="flex-grow items-center justify-center p-6"
+          >
+            {state.status === 'error' ? (
+              <ContentState.Error
+                description={t(`documentExport.errors.${state.code}`)}
+                primaryAction={{ children: t('common.retry'), onPress: retry }}
+                secondaryAction={
+                  state.code === 'size-limit' && format === 'image'
+                    ? { children: t('documentExport.useHtml'), onPress: () => selectFormat('html') }
+                    : undefined
+                }
+                title={t('documentExport.failed')}
+              />
+            ) : (
+              <ContentState.Loading
+                title={t(
+                  `documentExport.progress.${state.status === 'loading' ? state.progress : 'rendering'}`,
+                )}
+              />
+            )}
+          </ScrollView>
+        </View>
       )}
-      <View className="gap-3 px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
+      <View className="gap-3 px-6 pt-2" style={{ paddingBottom: Math.max(bottom, 12) }}>
         {artifact && artifact.issues.length > 0 ? (
           <Text className="text-muted-foreground text-sm">
             {t('documentExport.issues', { count: artifact.issues.length })}
           </Text>
         ) : null}
-        <Button disabled={!isReady || isSharing} loading={isSharing} onPress={() => void share()}>
-          {t('documentExport.share')}
+        <View className="min-h-11 flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2 border-border border-t pt-2">
+          <ExportFormatMenu disabled={isSharing} format={format} onSelect={selectFormat} />
+          {option ? (
+            <View className="min-h-11 flex-row items-center gap-3">
+              <Text className="text-muted-foreground text-sm">{option.label}</Text>
+              <Switch
+                accessibilityLabel={option.label}
+                disabled={isSharing}
+                onValueChange={(value) => {
+                  if (!sharing.current)
+                    setSelection((current) => ({
+                      ...current,
+                      isOptionChecked: value,
+                      revision: current.revision + 1,
+                    }));
+                }}
+                size="sm"
+                value={isOptionChecked}
+              />
+            </View>
+          ) : null}
+        </View>
+        <Button
+          disabled={!isReady || isSharing}
+          icon={<ShareIcon />}
+          loading={isSharing}
+          onPress={() => void share()}
+          size="lg"
+        >
+          {t(format === 'image' ? 'documentExport.shareImage' : 'documentExport.share')}
         </Button>
       </View>
     </View>
@@ -321,7 +393,10 @@ function ArtifactPreview({ artifact, width }: { artifact: DocumentExportArtifact
     );
   if (artifact.format !== 'image') return null;
   return (
-    <ScrollView className="flex-1" contentContainerClassName="items-center">
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="flex-grow items-center justify-center py-4"
+    >
       <Image
         accessibilityLabel={t('documentExport.imagePreview')}
         contentFit="contain"
@@ -331,4 +406,9 @@ function ArtifactPreview({ artifact, width }: { artifact: DocumentExportArtifact
       />
     </ScrollView>
   );
+}
+
+function closeExport() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/');
 }

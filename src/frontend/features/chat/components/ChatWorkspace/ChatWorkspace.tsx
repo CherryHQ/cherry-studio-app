@@ -24,8 +24,8 @@ import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalShee
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
-import { ChatMessage } from './components/ChatMessage';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
+import { SelectableChatMessage } from './components/SelectableChatMessage';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
 import {
   shouldWaitForInitialHistoryLayout,
@@ -174,7 +174,7 @@ export function ChatWorkspace({
       }
 
       return (
-        <ChatMessage
+        <SelectableChatMessage
           assistantPresentation={assistantPresentation}
           isMessageActionsEnabled={isAssistantToolbarEnabled}
           message={message}

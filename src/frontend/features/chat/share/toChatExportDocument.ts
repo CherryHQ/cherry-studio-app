@@ -6,7 +6,12 @@ import {
   type AgentMessagePart,
   type AgentMessageView,
 } from '@/shared/contracts/agent';
-import type { ExportBlock, ExportDocument } from '@/shared/contracts/documentExport';
+import {
+  DOCUMENT_EXPORT_MAX_SECTIONS,
+  DocumentExportError,
+  type ExportBlock,
+  type ExportDocument,
+} from '@/shared/contracts/documentExport';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 export type ChatExportOptions = {
@@ -33,11 +38,8 @@ export function toChatExportDocument(
   messages: readonly AgentMessageView[],
   options: ChatExportOptions,
 ): ExportDocument {
-  if (
-    !messages.length ||
-    messages.length > 128 ||
-    messages.some((message) => !isChatMessageExportable(message))
-  )
+  if (messages.length > DOCUMENT_EXPORT_MAX_SECTIONS) throw new DocumentExportError('size-limit');
+  if (!messages.length || messages.some((message) => !isChatMessageExportable(message)))
     throw new Error('Invalid export selection');
   const assets: Record<string, NonNullable<ExportDocument['assets']>[string]> = {};
   const sections = messages.map((message) => {

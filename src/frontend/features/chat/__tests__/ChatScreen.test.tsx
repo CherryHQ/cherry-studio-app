@@ -103,6 +103,11 @@ jest.mock('../runtime', () => ({
 
 jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
 
+jest.mock('../share', () => ({
+  ChatShareSelectionProvider: ({ children }: { children?: React.ReactNode }) => children,
+  ChatShareComposer: ({ children }: { children?: React.ReactNode }) => children,
+}));
+
 jest.mock('../components/ChatInput', () => ({
   ChatInput: (props: Record<string, unknown>) => {
     chatInputProps = props;

@@ -1,6 +1,7 @@
 import * as z from 'zod';
 
 import {
+  DOCUMENT_EXPORT_MAX_SECTIONS,
   DocumentExportError,
   type DocumentExportInput,
   type ExportBlock,
@@ -48,7 +49,7 @@ const documentSchema = z.strictObject({
       }),
     )
     .min(1)
-    .max(128),
+    .max(DOCUMENT_EXPORT_MAX_SECTIONS),
   assets: z
     .record(
       z.string().max(255),

@@ -1,8 +1,26 @@
 # Chat Sharing
 
-The last action in the assistant toolbar opens the generic share preview directly. A bounded
-persisted read supplies the clicked settled answer and its same-turn question, rejecting missing or
-unfinished content. There is no history browser, message selector, or timestamp option.
+The assistant toolbar's share button enters message selection on the current chat list, with the
+clicked answer initially selected. Every user and assistant row gains a left selection control;
+system rows are excluded and pending messages cannot be selected. The ordinary message action
+buttons are hidden while selection is active. Reading, disclosures and history pagination remain
+available, and selected IDs survive rows leaving the visible window.
+
+`ChatShareSelectionProvider` owns selection for the current composer/session identity. Its bottom
+controls show cancel, selected count and confirm; the managed composer stays mounted but hidden.
+Cancel or Android Back exits selection, and leaving the Session resets it. No preview opens before
+confirmation. At most 128 messages can be selected; an empty selection cannot be confirmed.
+
+Selection IDs live in one provider-owned store. Rows subscribe to their own selected boolean, and
+the bottom controls subscribe to the count. Mode and action contexts stay stable across individual
+toggles, so selecting a message does not rerender unrelated rows or message-action consumers.
+
+Confirmation reads only the selected persisted messages through a single bounded ID query and restores
+chronological order, regardless of click order. It does not implicitly include same-turn questions
+or other unselected messages. The conversation may exceed 128 messages; only the selection and
+export content budgets are bounded. Missing or unfinished selected content and failed reads reject
+the export rather than returning a partial selection. Cancellation, unmount and backgrounding stop
+pending reads. Returning from the export preview retains the selection for further edits.
 
 The source adapter supplies two immutable document snapshots when thinking content exists: omitted
 by default, and included when the preview checkbox is checked. Thinking covers the visible reasoning,

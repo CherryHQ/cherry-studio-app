@@ -139,6 +139,15 @@ function RootStack() {
         }}
       />
       <Stack.Screen name="files/[fileEntryId]" options={{ headerTransparent: false }} />
+      <Stack.Screen
+        name="document-export"
+        options={{
+          contentStyle: { backgroundColor: constantBlack },
+          headerShown: false,
+          presentation: 'fullScreenModal',
+          statusBarStyle: 'light',
+        }}
+      />
       {/* Settings owns a nested stack and draws its headers there, so the root
           stack only needs to push the page without adding another header. */}
       <Stack.Screen name="settings" options={{ headerShown: false }} />

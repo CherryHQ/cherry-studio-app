@@ -36,7 +36,9 @@ let mockAgentChatSession: {
 };
 
 jest.mock('../../../share', () => ({
-  useShareChatMessage: () => ({ shareAssistantMessage: jest.fn(), sharingMessageId: undefined }),
+  useChatShareSelectionActions: () => ({ startSelection: jest.fn(), toggleMessage: jest.fn() }),
+  useChatShareSelectionState: () => ({ isSelecting: false, isSharing: false }),
+  useIsChatMessageSelected: () => false,
 }));
 
 jest.mock('expo-clipboard', () => ({
