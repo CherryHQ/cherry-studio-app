@@ -2,7 +2,7 @@
 
 > Updated: 2026-08-16
 >
-> Runtime baseline: Expo `57.0.6`, `expo-splash-screen` `57.0.4`, iOS 17.0+, Android API 26+
+> Dependency baseline updated 2026-09-11: Expo `57.0.21`, `expo-splash-screen` `57.0.8`, iOS 17.0+, Android API 26+
 
 ## Current Contract
 
