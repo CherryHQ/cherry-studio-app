@@ -1,0 +1,56 @@
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
+
+import type {
+  DocumentParserMode,
+  FileAttachmentContent,
+  FileAttachmentReport,
+  FileAttachmentTarget,
+} from './fileAttachment';
+
+export type ResolvedFile = {
+  entry: FileEntry;
+  uri: string;
+};
+
+export type ResolvedFileUris = {
+  /** Small image thumbnail when available; the original URI for other file kinds. */
+  previewUri: string | undefined;
+  /** Original managed file URI used when opening the file. */
+  uri: string | undefined;
+};
+
+export type CreateInternalEntryInput = {
+  /** Authoritative media type from the picker; extension inference is the fallback. */
+  mediaType?: string;
+  name?: string;
+  uri: string;
+};
+
+export type PrepareFileAttachmentsInput = {
+  fileEntryIds: readonly FileEntryId[];
+  target: FileAttachmentTarget;
+  documentParserMode?: DocumentParserMode;
+  signal?: AbortSignal;
+};
+
+export type PreparedFile = ResolvedFile & {
+  report: FileAttachmentReport;
+  content?: FileAttachmentContent;
+};
+
+export interface FileModule {
+  /** Subscribe to committed managed-file creates, rewrites, deletions, and discards. */
+  subscribeChanges(listener: (entryId: FileEntryId) => void): () => void;
+  /** Copies the transient source URI into managed storage and creates the entry. */
+  createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
+  /** Validates managed references and parses supported content only when the caller submits. */
+  prepareAttachments(input: PrepareFileAttachmentsInput): Promise<PreparedFile[]>;
+  /** Hard-delete: removes the entry row and its bytes. */
+  delete(id: FileEntryId): Promise<boolean>;
+  /** Generates or reads one image preview without re-reading its database row. */
+  generatePreviewUri(entry: FileEntry): Promise<string | undefined>;
+  /** Mobile URI equivalent of Cherry Desktop's getUrl. */
+  getUri(id: FileEntryId): Promise<string | undefined>;
+  /** Resolves a database page without re-reading entries one by one. */
+  resolveUris(entries: readonly FileEntry[]): Promise<ResolvedFileUris[]>;
+}

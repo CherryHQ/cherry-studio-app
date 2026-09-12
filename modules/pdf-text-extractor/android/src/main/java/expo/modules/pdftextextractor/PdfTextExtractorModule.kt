@@ -5,7 +5,6 @@ import android.net.Uri
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
-import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -18,32 +17,27 @@ class ExtractOptions : Record {
     val maxPages: Int? = null
 }
 
-class InvalidFilePathException : CodedException(
+class InvalidFilePathException(cause: Throwable? = null) : CodedException(
     "INVALID_FILE_PATH",
     "Invalid file path provided",
-    null
+    cause
 )
 
-class FileNotFoundException : CodedException(
+class FileNotFoundException(cause: Throwable? = null) : CodedException(
     "FILE_NOT_FOUND",
     "PDF file not found at the specified path",
-    null
+    cause
 )
 
-class FailedToLoadDocumentException : CodedException(
+class FailedToLoadDocumentException(cause: Throwable? = null) : CodedException(
     "FAILED_TO_LOAD_DOCUMENT",
     "Failed to load PDF document. The file may be corrupted or password-protected",
-    null
-)
-
-class FailedToGetPageCountException : CodedException(
-    "FAILED_TO_GET_PAGE_COUNT",
-    "Failed to get PDF page count. The file may be corrupted or inaccessible",
-    null
+    cause
 )
 
 class PdfTextExtractorModule : Module() {
     private val defaultMaxPages = 100
+    @Volatile
     private var isInitialized = false
 
     private val context: Context
@@ -56,26 +50,12 @@ class PdfTextExtractorModule : Module() {
             initializePdfBox()
         }
 
-        AsyncFunction("extractText") { filePath: String, options: ExtractOptions?, promise: Promise ->
-            try {
-                val result = extractTextFromPDF(filePath, options)
-                promise.resolve(result)
-            } catch (e: CodedException) {
-                promise.reject(e)
-            } catch (e: Exception) {
-                promise.reject(FailedToLoadDocumentException())
-            }
+        AsyncFunction("extractText") { filePath: String, options: ExtractOptions? ->
+            extractTextFromPDF(filePath, options)
         }
 
-        AsyncFunction("getPageCount") { filePath: String, promise: Promise ->
-            try {
-                val result = getPageCount(filePath)
-                promise.resolve(result)
-            } catch (e: CodedException) {
-                promise.reject(e)
-            } catch (e: Exception) {
-                promise.reject(FailedToGetPageCountException())
-            }
+        AsyncFunction("getPageCount") { filePath: String ->
+            getPageCount(filePath)
         }
     }
 
@@ -94,7 +74,7 @@ class PdfTextExtractorModule : Module() {
             val document: PDDocument = try {
                 PDDocument.load(file)
             } catch (e: Exception) {
-                throw FailedToLoadDocumentException()
+                throw FailedToLoadDocumentException(e)
             }
 
             return document.use { doc ->
@@ -103,6 +83,15 @@ class PdfTextExtractorModule : Module() {
                 val maxPages = options?.maxPages ?: defaultMaxPages
                 val endPage = minOf(maxPages, totalPages)
                 val isTruncated = endPage < totalPages
+                if (totalPages == 0) {
+                    return mapOf(
+                        "text" to "",
+                        "totalPages" to 0,
+                        "extractedPages" to 0,
+                        "isTruncated" to false,
+                        "extractionError" to false
+                    )
+                }
 
                 val stripper = PDFTextStripper().apply {
                     startPage = 1
@@ -127,7 +116,6 @@ class PdfTextExtractorModule : Module() {
                 )
             }
         } finally {
-            // 清理临时文件
             if (isTempFile && file.exists()) {
                 file.delete()
             }
@@ -135,18 +123,20 @@ class PdfTextExtractorModule : Module() {
     }
 
     private fun getPageCount(filePath: String): Int {
-        val isTempFile = filePath.startsWith("content://")
-        val file = parseFilePath(filePath)
-
         return try {
-            PDDocument.load(file).use { doc ->
-                doc.numberOfPages
+            val isTempFile = filePath.startsWith("content://")
+            val file = parseFilePath(filePath)
+            try {
+                PDDocument.load(file).use { doc ->
+                    doc.numberOfPages
+                }
+            } finally {
+                if (isTempFile && file.exists()) {
+                    file.delete()
+                }
             }
-        } finally {
-            // 清理临时文件
-            if (isTempFile && file.exists()) {
-                file.delete()
-            }
+        } catch (e: Exception) {
+            0
         }
     }
 
@@ -171,15 +161,21 @@ class PdfTextExtractorModule : Module() {
     }
 
     private fun copyContentUriToTempFile(uri: Uri): File {
-        val inputStream = context.contentResolver.openInputStream(uri)
-            ?: throw InvalidFilePathException()
-
         val tempFile = File.createTempFile("pdf_temp_", ".pdf", context.cacheDir)
 
-        inputStream.use { input ->
-            tempFile.outputStream().use { output ->
-                input.copyTo(output)
+        try {
+            val inputStream = context.contentResolver.openInputStream(uri)
+                ?: throw InvalidFilePathException()
+            inputStream.use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
             }
+        } catch (e: Exception) {
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
+            throw e
         }
 
         return tempFile

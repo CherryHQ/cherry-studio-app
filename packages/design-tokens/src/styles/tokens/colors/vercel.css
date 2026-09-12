@@ -1,0 +1,142 @@
+/**
+ * Vercel Brand Guidelines (Geist) palette.
+ *
+ * The literal source of truth for every colour the mobile app is designed
+ * against. The public contract (`shadcn.css`, `product.css`) must reference
+ * these names rather than repeating raw `oklch()` values, so a ramp step has
+ * exactly one edit point.
+ *
+ * These are providers, not the public API: they are never exposed as Tailwind
+ * utilities, and components consume the unprefixed semantic contract instead.
+ *
+ * Upstream defines each step with CSS `light-dark()`. React Native has no such
+ * function, and this project switches themes by redeclaring variables, so each
+ * step is split into the `:root` (light) and `.dark` blocks below. Percentage
+ * lightness from upstream is written as a decimal to match the rest of the
+ * package.
+ *
+ * ⚠️ The gray ramps are NOT monotonic, by upstream design — `gray-400` and
+ * `gray-alpha-400` are dedicated hover-border steps that sit lighter/fainter
+ * than 300. Never map a tiered role (borders, elevation) onto consecutive step
+ * numbers; pick steps by the measured values below.
+ *
+ *   gray        light  .961 .940 .925 .937↑ .836 .732 .650 .590 .420 .205
+ *   gray        dark   .218 .239 .281 .301  .390 .623 .650 .590 .706 .946
+ *   gray-alpha  light  .050 .081 .100 .080↓ .210 .240 .440 .510 .700 .910
+ *   gray-alpha  dark   .070 .090 .130 .140  .240 .510 .540 .470↓ .610 .920
+ *
+ * Note that `gray-700` and `gray-800` hold the same value in both themes:
+ * upstream uses them as theme-invariant mid greys.
+ */
+
+:root {
+  /* Page and surface bases */
+  --background-100: oklch(1 0 0);
+  --background-200: oklch(0.984 0 0);
+
+  /* Neutral ramp */
+  --gray-100: oklch(0.961 0 0);
+  --gray-200: oklch(0.94 0 0);
+  --gray-300: oklch(0.925 0 0);
+  --gray-400: oklch(0.937 0 0);
+  --gray-500: oklch(0.836 0 0);
+  --gray-600: oklch(0.732 0 0);
+  --gray-700: oklch(0.65 0 0);
+  --gray-800: oklch(0.59 0 0);
+  --gray-900: oklch(0.42 0 0);
+  --gray-1000: oklch(0.205 0 0);
+
+  /* Neutral ramp, as overlays that keep the surface beneath visible */
+  --gray-alpha-100: oklch(0 0 0 / 0.05);
+  --gray-alpha-200: oklch(0 0 0 / 0.081);
+  --gray-alpha-300: oklch(0 0 0 / 0.1);
+  --gray-alpha-400: oklch(0 0 0 / 0.08);
+  --gray-alpha-500: oklch(0 0 0 / 0.21);
+  --gray-alpha-600: oklch(0 0 0 / 0.24);
+  --gray-alpha-700: oklch(0 0 0 / 0.44);
+  --gray-alpha-800: oklch(0 0 0 / 0.51);
+  --gray-alpha-900: oklch(0 0 0 / 0.7);
+  --gray-alpha-1000: oklch(0 0 0 / 0.91);
+
+  /* Chromatic ramps. Upstream ships five steps per hue: 100 tint, 400 border,
+   * 700 solid, 900 emphasis, 1000 text-on-tint. */
+  --blue-100: oklch(0.9732 0.0141 251.56);
+  --blue-400: oklch(0.9158 0.0473 245.116);
+  --blue-700: oklch(0.5761 0.2508 258.23);
+  --blue-900: oklch(0.5318 0.2399 256.99);
+  --blue-1000: oklch(0.2667 0.1099 254.34);
+
+  --green-100: oklch(0.9759 0.0289 145.42);
+  --green-400: oklch(0.9149 0.0976 146.24);
+  --green-700: oklch(0.6458 0.1746 147.27);
+  --green-900: oklch(0.5175 0.1453 147.65);
+  --green-1000: oklch(0.2915 0.1197 147.38);
+
+  --amber-100: oklch(0.9748 0.0331 85.79);
+  --amber-400: oklch(0.9102 0.1322 88.25);
+  --amber-700: oklch(0.8187 0.1969 76.46);
+  --amber-900: oklch(0.5279 0.1496 54.65);
+  --amber-1000: oklch(0.3083 0.099 45.48);
+
+  --red-100: oklch(0.965 0.0223 13.09);
+  --red-400: oklch(0.9151 0.0471 19.8);
+  --red-700: oklch(0.6256 0.2524 23.03);
+  --red-900: oklch(0.5499 0.232 25.29);
+  --red-1000: oklch(0.248 0.1041 18.86);
+}
+
+/* Dark Mode */
+.dark {
+  /* Page and surface bases */
+  --background-100: oklch(0 0 0);
+  --background-200: oklch(0.027 0 0);
+
+  /* Neutral ramp */
+  --gray-100: oklch(0.218 0 0);
+  --gray-200: oklch(0.239 0 0);
+  --gray-300: oklch(0.281 0 0);
+  --gray-400: oklch(0.301 0 0);
+  --gray-500: oklch(0.39 0 0);
+  --gray-600: oklch(0.623 0 0);
+  --gray-700: oklch(0.65 0 0);
+  --gray-800: oklch(0.59 0 0);
+  --gray-900: oklch(0.706 0 0);
+  --gray-1000: oklch(0.946 0 0);
+
+  /* Neutral ramp, as overlays that keep the surface beneath visible */
+  --gray-alpha-100: oklch(1 0 0 / 0.07);
+  --gray-alpha-200: oklch(1 0 0 / 0.09);
+  --gray-alpha-300: oklch(1 0 0 / 0.13);
+  --gray-alpha-400: oklch(1 0 0 / 0.14);
+  --gray-alpha-500: oklch(1 0 0 / 0.24);
+  --gray-alpha-600: oklch(1 0 0 / 0.51);
+  --gray-alpha-700: oklch(1 0 0 / 0.54);
+  --gray-alpha-800: oklch(1 0 0 / 0.47);
+  --gray-alpha-900: oklch(1 0 0 / 0.61);
+  --gray-alpha-1000: oklch(1 0 0 / 0.92);
+
+  /* Chromatic ramps */
+  --blue-100: oklch(0.2217 0.069 259.89);
+  --blue-400: oklch(0.341 0.121 254.74);
+  --blue-700: oklch(0.5761 0.2321 258.23);
+  --blue-900: oklch(0.717 0.1648 250.794);
+  --blue-1000: oklch(0.9675 0.0179 242.423);
+
+  --green-100: oklch(0.2309 0.0716 149.68);
+  --green-400: oklch(0.3439 0.1039 147.78);
+  --green-700: oklch(0.6458 0.199 147.27);
+  --green-900: oklch(0.731 0.2158 148.29);
+  --green-1000: oklch(0.9676 0.056 154.18);
+
+  --amber-100: oklch(0.2246 0.0538 76.04);
+  --amber-400: oklch(0.3553 0.0903 66.297);
+  --amber-700: oklch(0.8187 0.1969 76.46);
+  --amber-900: oklch(0.7721 0.1991 64.28);
+  --amber-1000: oklch(0.967 0.0418 84.59);
+
+  --red-100: oklch(0.221 0.0657 15.11);
+  --red-400: oklch(0.3527 0.1273 21.23);
+  --red-700: oklch(0.6256 0.2234 23.03);
+  --red-900: oklch(0.6996 0.2136 22.03);
+  --red-1000: oklch(0.956 0.0293 6.61);
+}

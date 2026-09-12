@@ -1,0 +1,38 @@
+/**
+ * CherryStudio Design Tokens
+ *
+ * - Properly separated Light/Dark Mode
+ *
+ * File structure:
+ * - colors/vercel.css: Vercel Brand Guidelines palette, the design source of truth
+ * - radius.css: The hairline radii that are not multiples of --radius
+ * - typography.css: One font weight (the rest of the type scale is runtime-owned)
+ *
+ * Nothing here carries a prefix any more. Every variable used to be `--cs-*`,
+ * which marked it internal and distinguished it from the unprefixed public
+ * contract. That distinction is now carried by shape rather than by spelling:
+ * the palette is ramp names with step numbers (`--gray-100`), the contract is
+ * role names (`--background`). What actually enforces the line is `check.ts`,
+ * which asserts that every `--color-*` the adapter emits is a contract name —
+ * a palette step cannot become a utility even by accident.
+ *
+ * There is no semantic layer here any more either. `colors/providers.css` and
+ * `colors/status-legacy.css` held one provider per public token — every one of
+ * them with exactly one consumer, so they split "which step does this role use"
+ * across two files and made you jump to read the answer. The public contract
+ * now names a palette step directly.
+ *
+ * Spacing has no file. VBG's 4/8/12/16/20/24/32/40/48/64 ladder is already
+ * Tailwind's default scale, so the size tokens that used to live here restated
+ * it — sixteen of them, with no consumer.
+ *
+ * Colours have no static file either. `colors/primitive.css` held a
+ * Tailwind-shaped 23 × 11 palette of theme-independent steps, of which exactly
+ * three were still referenced by the time VBG landed; those three are now
+ * literals at their single point of use. Every remaining colour flips with the
+ * theme, so all of them live in the two blocks of colors/vercel.css.
+ */
+
+@import './colors/vercel.css';
+@import './radius.css';
+@import './typography.css';

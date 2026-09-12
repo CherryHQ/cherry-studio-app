@@ -1,0 +1,24 @@
+{
+  "$comment": "React Doctor 项目配置。规则关闭均为团队既定决策：react-compiler-no-manual-memoization —— 本仓库有意保留手动 memoization 以维持 LegendList prop 身份契约（compiler 覆盖不到的 bail-out 场景仍需稳定身份）；only-export-components —— provider 文件同时导出组件与配套 hooks 是本仓库的 compound+provider 标准模式（见 vercel-composition-patterns）。ignore.overrides：*.android.tsx 由 Metro 平台后缀解析消费（静态分析不可见）；@babel/generator 是 react-native-worklets babel 插件的运行时依赖（移除后 92 个 jest suite 全挂，已实测）；babel-plugins/** 由 babel.config.js 的 plugins 数组加载。",
+  "rules": {
+    "react-doctor/react-compiler-no-manual-memoization": "off",
+    "react-doctor/only-export-components": "off"
+  },
+  "ignore": {
+    "files": ["**/png-icons/**", "**/icons-png/**", "babel-plugins/**"],
+    "overrides": [
+      {
+        "files": ["src/backend/ai/provider/cherryai.ts"],
+        "rules": ["react-doctor/no-secrets-in-client-code", "react-doctor/public-env-secret-name"]
+      },
+      {
+        "files": ["**/*.android.tsx"],
+        "rules": ["deslop/unused-export"]
+      },
+      {
+        "files": ["package.json"],
+        "rules": ["deslop/unused-dev-dependency"]
+      }
+    ]
+  }
+}

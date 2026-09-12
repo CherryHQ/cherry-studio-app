@@ -1,0 +1,1 @@
+export { ChatRouteResolver } from './ChatRouteResolver';

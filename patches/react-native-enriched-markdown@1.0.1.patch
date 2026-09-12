@@ -1,0 +1,851 @@
+diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdownTextInput.mm
+index 9a9987e0d61c907787cff3d6a6f6cea81155f536..299e21b9750c78a30ec56e8fae651b40840cdfe3 100644
+--- a/ios/input/EnrichedMarkdownTextInput.mm
++++ b/ios/input/EnrichedMarkdownTextInput.mm
+@@ -1575,5 +1575,6 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
+ - (void)handleTextChanged
+ {
+   if (_editSession.isComposing) {
++    [self updatePlaceholderVisibility];
+     return;
+   }
+diff --git a/ios/renderer/ListItemRenderer.m b/ios/renderer/ListItemRenderer.m
+index 204fc185..c8800496 100644
+--- a/ios/renderer/ListItemRenderer.m
++++ b/ios/renderer/ListItemRenderer.m
+@@ -176,4 +176,10 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
++  // Cover the whole grapheme cluster: anchoring on a single UTF-16 code unit
++  // splits multi-unit graphemes (emoji surrogate pairs, ZWJ sequences) across
++  // two attribute runs, which drops the glyph and hides the marker for every
++  // item but the last.
++  const NSRange anchorRange = [string rangeOfComposedCharacterSequenceAtIndex:anchorLocation];
++
+   NSArray *existingMarkers = [output attribute:ListItemMarkerStartAttribute atIndex:anchorLocation effectiveRange:NULL];
+   NSArray *markers =
+       [existingMarkers isKindOfClass:[NSArray class]] ? [existingMarkers arrayByAddingObject:marker] : @[ marker ];
+-  [output addAttribute:ListItemMarkerStartAttribute value:markers range:NSMakeRange(anchorLocation, 1)];
++  [output addAttribute:ListItemMarkerStartAttribute value:markers range:anchorRange];
+diff --git a/ios/utils/ListMarkerDrawer.m b/ios/utils/ListMarkerDrawer.m
+index 315ec083..93548a1d 100644
+--- a/ios/utils/ListMarkerDrawer.m
++++ b/ios/utils/ListMarkerDrawer.m
+@@ -9 +9,3 @@
+ extern NSString *const ListItemMarkerStartAttribute;
++
++static NSString *const kAppleColorEmojiFontName = @"AppleColorEmoji";
+@@ -58,3 +60,25 @@ - (void)drawMarkersForGlyphRange:(NSRange)glyphsToShow
+                                  CGPoint glyphLoc = [layoutManager locationForGlyphAtIndex:glyphRange.location];
+                                  CGFloat baselineY = origin.y + rect.origin.y + glyphLoc.y;
+-                                 UIFont *font = attrs[NSFontAttributeName] ?: [self defaultFont];
++
++                                 // When the anchor character is an emoji, NSFontAttributeName
++                                 // returns AppleColorEmoji whose metrics (xHeight, capHeight)
++                                 // differ widely from the text font and would misplace the
++                                 // marker. Look past the first composed character sequence
++                                 // to find the actual text font used on the line.
++                                 UIFont *font = attrs[NSFontAttributeName];
++                                 if (charRange.length > 1) {
++                                   NSRange firstGrapheme =
++                                       [storage.string rangeOfComposedCharacterSequenceAtIndex:charRange.location];
++                                   NSUInteger afterFirst = NSMaxRange(firstGrapheme);
++                                   if (afterFirst < NSMaxRange(charRange)) {
++                                     UIFont *textFont = [storage attribute:NSFontAttributeName
++                                                                   atIndex:afterFirst
++                                                            effectiveRange:NULL];
++                                     if (textFont) {
++                                       font = textFont;
++                                     }
++                                   }
++                                 }
++                                 if (!font || [font.fontName isEqualToString:kAppleColorEmojiFontName]) {
++                                   font = [self defaultFont];
++                                 }
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
+--- a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
+@@ -67,6 +67,7 @@
+   private val scrollView =
+     HorizontalScrollView(context).apply {
+       isHorizontalScrollBarEnabled = true
++      isScrollbarFadingEnabled = false
+       overScrollMode = View.OVER_SCROLL_NEVER
+       importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+       addView(
+@@ -207,10 +208,7 @@
+         val cellBg =
+           CellBackgroundView(context).apply {
+             configure(rowBg, tableStyle.borderColor, tableStyle.borderWidth)
+-            setOnLongClickListener { view ->
+-              showContextMenu(view)
+-              true
+-            }
++            // Tables scroll; whole-message copy belongs to the message actions.
+             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+           }
+ 
+@@ -288,10 +286,6 @@
+             Layout.Alignment.ALIGN_OPPOSITE -> Gravity.END
+             else -> Gravity.START
+           }
+-        setOnLongClickListener { view ->
+-          showContextMenu(view)
+-          true
+-        }
+       }
+     val horizontalPadding = tableStyle.cellPaddingHorizontal
+     val verticalPadding = tableStyle.cellPaddingVertical
+diff --git a/ios/views/ENRMTableIOSGridView.m b/ios/views/ENRMTableIOSGridView.m
+--- a/ios/views/ENRMTableIOSGridView.m
++++ b/ios/views/ENRMTableIOSGridView.m
+@@ -3,6 +3,9 @@
+ #if !TARGET_OS_OSX
+ 
+ @implementation ENRMTableIOSRowData
++@end
++
++@interface ENRMTableIOSGridView () <UIGestureRecognizerDelegate>
+ @end
+ 
+ @implementation ENRMTableIOSGridView {
+@@ -25,10 +28,12 @@
+     self.accessibilityElementsHidden = YES;
+ 
+     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
++    tap.delegate = self;
+     [self addGestureRecognizer:tap];
+ 
+     UILongPressGestureRecognizer *longPress =
+         [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
++    longPress.delegate = self;
+     [self addGestureRecognizer:longPress];
+   }
+   return self;
+@@ -188,6 +193,12 @@
+ 
+ #pragma mark - Gesture handlers
+ 
++- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
++{
++  // Plain cells have no press action and must leave scrolling eligible.
++  return [self linkURLAtPoint:[touch locationInView:self]] != nil;
++}
++
+ - (void)handleLinkGesture:(UIGestureRecognizer *)recognizer block:(ENRMTableIOSLinkBlock)block
+ {
+   CGPoint point = [recognizer locationInView:self];
+diff --git a/ios/views/TableContainerView.m b/ios/views/TableContainerView.m
+--- a/ios/views/TableContainerView.m
++++ b/ios/views/TableContainerView.m
+@@ -290,8 +290,7 @@
+   };
+   _gridContainer = iosGridView;
+   [_scrollView addSubview:_gridContainer];
+-  UIContextMenuInteraction *contextMenu = [[UIContextMenuInteraction alloc] initWithDelegate:self];
+-  [_gridContainer addInteraction:contextMenu];
++  // Tables are scroll surfaces; whole-message copy belongs to the message actions.
+ #endif
+ }
+ 
+@@ -623,11 +622,17 @@
+ - (void)layoutSubviews
+ {
+   [super layoutSubviews];
++#if !TARGET_OS_OSX
++  BOOL scrollGeometryChanged = !CGSizeEqualToSize(_scrollView.bounds.size, self.bounds.size) ||
++                               _scrollView.contentSize.width != _totalTableWidth;
++#endif
+   _scrollView.frame = self.bounds;
+ #if !TARGET_OS_OSX
+   CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
+   CGFloat containerWidth = self.bounds.size.width;
+-  BOOL tableOverflows = (overhang > 0 && _totalTableWidth > containerWidth);
++  // Overflow must scroll even when no horizontal overhang is configured. Keeping
++  // it in this branch also preserves the reader's offset across layout updates.
++  BOOL tableOverflows = (_totalTableWidth > containerWidth);
+ 
+   if (tableOverflows) {
+     UIEdgeInsets inset = UIEdgeInsetsMake(0, overhang, 0, overhang);
+@@ -645,6 +650,10 @@
+     _scrollView.contentSize = CGSizeMake(MAX(_totalTableWidth, containerWidth), _totalTableHeight);
+     _scrollView.scrollEnabled = (_totalTableWidth > containerWidth);
+     _gridContainer.frame = CGRectMake(overhang + alignOffset, 0, _totalTableWidth, _totalTableHeight);
++  }
++  _scrollView.showsHorizontalScrollIndicator = tableOverflows;
++  if (tableOverflows && scrollGeometryChanged) {
++    [_scrollView flashScrollIndicators];
+   }
+ #else
+   CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
+index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42469161eb 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
+@@ -17,10 +17,12 @@ import android.text.StaticLayout
+ import android.text.TextPaint
+ import android.text.TextUtils
+ import android.util.TypedValue
++import android.view.MotionEvent
+ import android.view.View
+ import android.widget.FrameLayout
+ import android.widget.HorizontalScrollView
+ import android.widget.ImageView
++import android.widget.ScrollView
+ import androidx.appcompat.widget.AppCompatImageButton
+ import androidx.appcompat.widget.AppCompatTextView
+ import com.swmansion.enriched.markdown.parser.MarkdownASTNode
+@@ -35,8 +37,8 @@ import kotlin.math.ceil
+ 
+ /**
+  * Block segment view for fenced code blocks (see splitASTIntoSegments):
+- * a fixed header bar (language name, copy button) above a horizontally
+- * scrolling, non-wrapping code pane. Syntax coloring comes from the
++ * a fixed header bar (language name, copy button) above a height-capped,
++ * two-axis scrolling, non-wrapping code pane. Syntax coloring comes from the
+  * CodeBlockHighlighter seam and falls back to plain text. The box visuals
+  * must stay in sync with the commonmark flavor's CodeBlockSpan.
+  *
+@@ -55,6 +57,7 @@ class CodeBlockContainerView(
+   private val inset = contentInset(codeBlockStyle)
+   private val borderW = borderPx(codeBlockStyle)
+   private val headerH = headerHeight(codeBlockStyle)
++  private val maxHeight = maxHeightPx(context)
+ 
+   override val segmentMarginTop: Int get() = codeBlockStyle.marginTop.toInt()
+   override val segmentMarginBottom: Int get() = codeBlockStyle.marginBottom.toInt()
+@@ -114,6 +117,29 @@ class CodeBlockContainerView(
+       addView(textView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+     }
+ 
++  private val verticalScrollView =
++    object : ScrollView(context) {
++      override fun dispatchTouchEvent(event: MotionEvent): Boolean {
++        // Let this native pane arbitrate drags before the outer message list.
++        // The platform scroll views retain touch slop and cancel text long presses.
++        if (event.actionMasked == MotionEvent.ACTION_DOWN &&
++          (canScrollVertically(-1) || canScrollVertically(1))
++        ) {
++          parent?.requestDisallowInterceptTouchEvent(true)
++        }
++        val handled = super.dispatchTouchEvent(event)
++        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
++          parent?.requestDisallowInterceptTouchEvent(false)
++        }
++        return handled
++      }
++    }.apply {
++      isVerticalScrollBarEnabled = true
++      isNestedScrollingEnabled = true
++      overScrollMode = View.OVER_SCROLL_NEVER
++      addView(scrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
++    }
++
+   private val languageView =
+     AppCompatTextView(context).apply {
+       includeFontPadding = false
+@@ -155,7 +181,7 @@ class CodeBlockContainerView(
+       }
+     isLongClickable = true
+     setOnLongClickListener { view -> showContextMenu(view) }
+-    addView(scrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
++    addView(verticalScrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+     addView(languageView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+     addView(copyButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+   }
+@@ -187,9 +213,9 @@ class CodeBlockContainerView(
+     heightSpec: Int,
+   ) {
+     val measuredWidth = MeasureSpec.getSize(widthSpec)
+-    scrollView.measure(
++    verticalScrollView.measure(
+       MeasureSpec.makeMeasureSpec((measuredWidth - borderW * 2).coerceAtLeast(0), MeasureSpec.EXACTLY),
+-      MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
++      MeasureSpec.makeMeasureSpec((maxHeight - headerH).coerceAtLeast(0), MeasureSpec.AT_MOST),
+     )
+     copyButton.measure(
+       MeasureSpec.makeMeasureSpec(headerH, MeasureSpec.EXACTLY),
+@@ -200,7 +226,7 @@ class CodeBlockContainerView(
+       MeasureSpec.makeMeasureSpec(labelMaxWidth, MeasureSpec.AT_MOST),
+       MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+     )
+-    setMeasuredDimension(measuredWidth, headerH + scrollView.measuredHeight)
++    setMeasuredDimension(measuredWidth, (headerH + verticalScrollView.measuredHeight).coerceAtMost(maxHeight))
+   }
+ 
+   override fun onLayout(
+@@ -230,7 +256,7 @@ class CodeBlockContainerView(
+       buttonTop + copyButton.measuredHeight,
+     )
+ 
+-    scrollView.layout(borderW, headerH, width - borderW, bottom - top - borderW)
++    verticalScrollView.layout(borderW, headerH, width - borderW, bottom - top - borderW)
+   }
+ 
+   // Divider between the header and the code, centered in the gap the code
+@@ -305,6 +331,12 @@ class CodeBlockContainerView(
+   }
+ 
+   companion object {
++    // Keep this budget in sync with iOS and Cherry Mobile's file-output viewport.
++    private const val MAX_HEIGHT_DP = 192f
++
++    private fun maxHeightPx(context: Context): Int =
++      (MAX_HEIGHT_DP * context.resources.displayMetrics.density).toInt()
++
+     private const val HEADER_LABEL_SCALE = 0.85f
+ 
+     // Drawable box for the copy glyph, as a multiple of the code font size.
+@@ -366,7 +398,7 @@ class CodeBlockContainerView(
+       val inset = contentInset(style)
+       val headerH = headerHeight(style)
+       val text = buildCodeText(CodeBlockNode.extractCode(node), style)
+-      if (text.isEmpty()) return headerH + inset * 2f
++      if (text.isEmpty()) return (headerH + inset * 2f).coerceAtMost(maxHeightPx(context).toFloat())
+       val paint = createCodePaint(style, context)
+       val contentWidth = ceil(Layout.getDesiredWidth(text, paint)).toInt().coerceAtLeast(1)
+       val layout =
+@@ -377,7 +409,7 @@ class CodeBlockContainerView(
+           .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
+           .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
+           .build()
+-      return layout.height.toFloat() + inset * 2 + headerH
++      return (layout.height.toFloat() + inset * 2 + headerH).coerceAtMost(maxHeightPx(context).toFloat())
+     }
+   }
+ }
+diff --git a/ios/views/ENRMCodeBlockContainerView.m b/ios/views/ENRMCodeBlockContainerView.m
+index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..4bde9011cd8ff93c614b6401a5468691db008eb9 100644
+--- a/ios/views/ENRMCodeBlockContainerView.m
++++ b/ios/views/ENRMCodeBlockContainerView.m
+@@ -8,8 +8,8 @@
+ #endif
+ 
+ // Block segment view for fenced code blocks (see SegmentRenderer.m):
+-// a fixed header bar (language name, copy button) above a horizontally
+-// scrolling, non-wrapping code pane. The container's drawRect: draws
++// a fixed header bar (language name, copy button) above a height-capped,
++// two-axis scrolling, non-wrapping code pane. The container's drawRect: draws
+ // background, border, label, and divider; only the copy button and the
+ // scroll view are subviews. Syntax coloring comes from the
+ // ENRMCodeBlockHighlighter seam and falls back to plain text. The box
+@@ -26,6 +26,9 @@
+ static const CGFloat kENRMHeaderIconScale = 0.72;
+ static const CGFloat kENRMHeaderSecondaryAlpha = 0.6;
+ static const CGFloat kENRMHeaderDividerAlpha = 0.2;
++// Cherry Mobile keeps each code block within the same 192-point viewport
++// budget as file output, while preserving the complete scrollable content.
++static const CGFloat kENRMCodeBlockMaxHeight = 192;
+ 
+ // Height geometry and code-run construction shared by the instance layout path
+ // and the view-free measureHeightForCodeBlockNode:, so the two cannot drift.
+@@ -243,13 +246,15 @@ - (instancetype)initWithConfig:(StyleConfig *)config
+ - (void)setupScrollView
+ {
+   _scrollView = [[RCTUIScrollView alloc] init];
+-  _scrollView.showsVerticalScrollIndicator = NO;
++  _scrollView.showsVerticalScrollIndicator = YES;
+   _scrollView.showsHorizontalScrollIndicator = YES;
+   _codeContentView = [[ENRMCodeBlockContentView alloc] initWithFrame:CGRectZero];
+   BOOL darkBackground = ENRMColorIsDark([_config codeBlockBackgroundColor]);
+ #if !TARGET_OS_OSX
+   _scrollView.bounces = YES;
+   _scrollView.alwaysBounceHorizontal = NO;
++  _scrollView.alwaysBounceVertical = NO;
++  _scrollView.directionalLockEnabled = YES;
+   _scrollView.backgroundColor = [UIColor clearColor];
+   _scrollView.isAccessibilityElement = NO;
+   _scrollView.accessibilityElementsHidden = YES;
+@@ -281,11 +286,12 @@ - (void)layoutScrollArea
+ 
+   CGFloat horizontalPad = MAX(inset - borderW, 0);
+   CGFloat contentWidth = MAX(_codeSize.width + horizontalPad * 2, frame.size.width);
++  CGFloat contentHeight = MAX(_codeSize.height + inset * 2 - borderW, frame.size.height);
+   _codeContentView.textOrigin = CGPointMake(horizontalPad, inset);
+-  _codeContentView.frame = CGRectMake(0, 0, contentWidth, frame.size.height);
++  _codeContentView.frame = CGRectMake(0, 0, contentWidth, contentHeight);
+ #if !TARGET_OS_OSX
+-  _scrollView.contentSize = CGSizeMake(contentWidth, frame.size.height);
+-  _scrollView.scrollEnabled = contentWidth > frame.size.width;
++  _scrollView.contentSize = CGSizeMake(contentWidth, contentHeight);
++  _scrollView.scrollEnabled = contentWidth > frame.size.width || contentHeight > frame.size.height;
+ #endif
+ }
+ 
+@@ -406,7 +412,7 @@ - (CGFloat)contentInset
+ - (CGFloat)measureHeight:(CGFloat)maxWidth
+ {
+   CGFloat inset = [self contentInset];
+-  return _codeSize.height + inset * 2 + [self headerHeight];
++  return MIN(_codeSize.height + inset * 2 + [self headerHeight], kENRMCodeBlockMaxHeight);
+ }
+ 
+ + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleConfig *)config
+@@ -414,7 +420,7 @@ + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleCo
+   CGFloat inset = ENRMCodeBlockContentInset(config);
+   CGFloat headerH = inset + ENRMCodeBlockHeaderLabelLineHeight(ENRMCodeBlockHeaderFont(config));
+   NSAttributedString *code = ENRMCodeBlockPlainAttributedCode(ENRMCodeBlockExtractCode(node), config);
+-  return ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH;
++  return MIN(ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH, kENRMCodeBlockMaxHeight);
+ }
+ 
+ - (void)drawRect:(CGRect)rect
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
+index 8e3fc760ea1b6ff2c5ccc0911b0801b87da84aec..c2ce8ce4ea42211d67b0bd0088b91ba1ae433476 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
+@@ -11,6 +11,7 @@ import com.swmansion.enriched.markdown.input.spans.InputListItemSpacingSpan
+ import com.swmansion.enriched.markdown.input.styles.BlockHandler
+ import com.swmansion.enriched.markdown.input.styles.BoldStyleHandler
+ import com.swmansion.enriched.markdown.input.styles.HeadingBlockHandler
++import com.swmansion.enriched.markdown.input.styles.InputLinkIconSpan
+ import com.swmansion.enriched.markdown.input.styles.ItalicStyleHandler
+ import com.swmansion.enriched.markdown.input.styles.LinkStyleHandler
+ import com.swmansion.enriched.markdown.input.styles.OrderedListBlockHandler
+@@ -95,7 +96,10 @@ class InputFormatter(
+       val handler = handlers[range.type] ?: continue
+       val spans = handler.createSpans(range, currentStyle)
+       for (span in spans) {
+-        desired.add(SpanDescriptor(range.start, range.end, span::class.java, range.url))
++        // An icon replaces only the object character; never replace the shaped link label.
++        if (span is InputLinkIconSpan && spannable[range.start] != '\uFFFC') continue
++        val end = if (span is InputLinkIconSpan) range.start + 1 else range.end
++        desired.add(SpanDescriptor(range.start, end, span::class.java, range.url))
+       }
+     }
+ 
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
+index a961e675a0b0e4358675f9de6d8c75e83dd34bae..e785ba8fa23fe2ba663a74a614845b426fc5d410 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
+@@ -45,7 +45,17 @@ data class InputLinkVariantStyle(
+   val color: Int,
+   val underline: Boolean,
+   val backgroundColor: Int,
++  val icon: String = "",
++  val iconTint: Boolean = false,
+ ) {
++  val iconBitmap: android.graphics.Bitmap? =
++    try {
++      val data = android.util.Base64.decode(icon, android.util.Base64.DEFAULT)
++      android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size)
++    } catch (_: IllegalArgumentException) {
++      null
++    }
++
+   val compiledRegex: Regex? =
+     try {
+       Regex(pattern)
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt
+index 8b90a875c766338d7ab036812ae7295c1c752368..7842c2e74feed029a144e4583e58a02ce5d4e6c5 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt
+@@ -1,13 +1,21 @@
+ package com.swmansion.enriched.markdown.input.styles
+ 
++import android.graphics.Bitmap
++import android.graphics.Canvas
++import android.graphics.Paint
++import android.graphics.PorterDuff
++import android.graphics.PorterDuffColorFilter
++import android.graphics.RectF
+ import android.text.style.BackgroundColorSpan
+ import android.text.style.CharacterStyle
+ import android.text.style.ForegroundColorSpan
++import android.text.style.ReplacementSpan
+ import android.text.style.UnderlineSpan
+ import com.swmansion.enriched.markdown.input.formatting.MarkdownSpan
+ import com.swmansion.enriched.markdown.input.model.FormattingRange
+ import com.swmansion.enriched.markdown.input.model.InputFormatterStyle
+ import com.swmansion.enriched.markdown.input.model.StyleType
++import kotlin.math.ceil
+ 
+ private class MarkdownLinkColorSpan(
+   color: Int,
+@@ -34,6 +42,7 @@ class LinkStyleHandler : StyleHandler {
+     if (linkStyle.backgroundColor != 0) {
+       spans.add(MarkdownLinkBackgroundColorSpan(linkStyle.backgroundColor))
+     }
++    linkStyle.icon?.let { spans.add(InputLinkIconSpan(it, if (linkStyle.iconTint) linkStyle.color else null)) }
+     return spans
+   }
+ 
+@@ -42,6 +51,7 @@ class LinkStyleHandler : StyleHandler {
+       MarkdownLinkColorSpan::class.java,
+       MarkdownLinkUnderlineSpan::class.java,
+       MarkdownLinkBackgroundColorSpan::class.java,
++      InputLinkIconSpan::class.java,
+     )
+ 
+   private fun resolveLinkStyle(
+@@ -59,6 +69,8 @@ class LinkStyleHandler : StyleHandler {
+       color = variant?.color ?: style.linkColor,
+       underline = variant?.underline ?: style.linkUnderline,
+       backgroundColor = variant?.backgroundColor ?: style.linkBackgroundColor,
++      icon = variant?.iconBitmap,
++      iconTint = variant?.iconTint ?: false,
+     )
+   }
+ 
+@@ -66,6 +78,8 @@ class LinkStyleHandler : StyleHandler {
+     val color: Int,
+     val underline: Boolean,
+     val backgroundColor: Int,
++    val icon: Bitmap?,
++    val iconTint: Boolean,
+   )
+ }
+ 
+@@ -73,3 +87,29 @@ private class MarkdownLinkBackgroundColorSpan(
+   color: Int,
+ ) : BackgroundColorSpan(color),
+   MarkdownSpan
++
++/** Occupies only the leading object character; the label keeps native text shaping and wrapping. */
++class InputLinkIconSpan(
++  private val bitmap: Bitmap,
++  color: Int?,
++) : ReplacementSpan(), MarkdownSpan {
++  private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
++    alpha = 204
++    colorFilter = color?.let { PorterDuffColorFilter(it, PorterDuff.Mode.SRC_IN) }
++  }
++
++  override fun getSize(paint: Paint, text: CharSequence, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int {
++    if (fm != null) {
++      paint.getFontMetricsInt(fm)
++      fm.ascent = minOf(fm.ascent, -ceil(paint.textSize - paint.fontMetrics.descent).toInt())
++      fm.top = minOf(fm.top, fm.ascent)
++    }
++    return ceil(paint.textSize).toInt()
++  }
++
++  override fun draw(canvas: Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
++    val size = paint.textSize
++    val iconBottom = y + paint.fontMetrics.descent
++    canvas.drawBitmap(bitmap, null, RectF(x, iconBottom - size, x + size, iconBottom), imagePaint)
++  }
++}
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt b/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt
+index 9ff71ede7eb3ec58eb6e0547d553839e1acbb977..f77b0e60dd5d22cf81f4bd176cb7e663a2888f61 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt
+@@ -64,6 +64,8 @@ object MarkdownStyleParser {
+         color = variant.getInt("color"),
+         underline = variant.getBoolean("underline"),
+         backgroundColor = variant.getInt("backgroundColor"),
++        icon = if (variant.hasKey("icon")) variant.getString("icon") ?: "" else "",
++        iconTint = variant.hasKey("iconTint") && variant.getBoolean("iconTint"),
+       )
+     }
+   }
+diff --git a/ios/input/ENRMInputFormatter.mm b/ios/input/ENRMInputFormatter.mm
+index 851d9902478af68906739d03a93fff94afc07000..79d858eaa2d27d72a15bf020703b20dc8ea12f3d 100644
+--- a/ios/input/ENRMInputFormatter.mm
++++ b/ios/input/ENRMInputFormatter.mm
+@@ -92,6 +92,8 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
+   [textStorage removeAttribute:NSUnderlineStyleAttributeName range:scopeRange];
+   [textStorage removeAttribute:NSStrikethroughStyleAttributeName range:scopeRange];
+   [textStorage removeAttribute:NSBackgroundColorAttributeName range:scopeRange];
++  // Attachments are derived from link ranges, so deletion and undo cannot leave stale icons.
++  [textStorage removeAttribute:NSAttachmentAttributeName range:scopeRange];
+ 
+   UIFontDescriptorSymbolicTraits *traitMap =
+       (UIFontDescriptorSymbolicTraits *)calloc(scopeLength, sizeof(UIFontDescriptorSymbolicTraits));
+diff --git a/ios/input/ENRMInputFormatterStyle.h b/ios/input/ENRMInputFormatterStyle.h
+index c09a3cbcc24ce3900b9e62848f9759b2f234fa53..ab98c62a7ee5151365678e6282e40bcdb6516526 100644
+--- a/ios/input/ENRMInputFormatterStyle.h
++++ b/ios/input/ENRMInputFormatterStyle.h
+@@ -8,6 +8,7 @@ NS_ASSUME_NONNULL_BEGIN
+ @interface ENRMInputLinkVariantStyle : NSObject
+ 
+ @property (nonatomic, copy) NSString *pattern;
++@property (nonatomic, strong, nullable) RCTUIImage *icon;
+ @property (nonatomic, strong) RCTUIColor *color;
+ @property (nonatomic, assign) BOOL underline;
+ @property (nonatomic, strong, nullable) RCTUIColor *backgroundColor;
+diff --git a/ios/input/InputStylePropsUtils.h b/ios/input/InputStylePropsUtils.h
+index 1d28946d1ec4e46fc0d502d35adec208645674ed..14d1c258ed9f16ca9f81af754b4429aa00e998c6 100644
+--- a/ios/input/InputStylePropsUtils.h
++++ b/ios/input/InputStylePropsUtils.h
+@@ -133,7 +133,8 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
+         const auto &newVariant = newProps.markdownStyle.linkVariants[i];
+         const auto &oldVariant = oldProps.markdownStyle.linkVariants[i];
+         if (newVariant.pattern != oldVariant.pattern || newVariant.color != oldVariant.color ||
+-            newVariant.underline != oldVariant.underline || newVariant.backgroundColor != oldVariant.backgroundColor) {
++            newVariant.underline != oldVariant.underline || newVariant.backgroundColor != oldVariant.backgroundColor ||
++            newVariant.icon != oldVariant.icon || newVariant.iconTint != oldVariant.iconTint) {
+           linkVariantsChanged = YES;
+           break;
+         }
+@@ -147,6 +148,21 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
+         variant.pattern = [[NSString alloc] initWithUTF8String:entry.pattern.c_str()];
+         variant.color = RCTUIColorFromSharedColor(entry.color);
+         variant.underline = entry.underline;
++        NSString *iconBase64 = [[NSString alloc] initWithUTF8String:entry.icon.c_str()];
++        NSData *iconData = [[NSData alloc] initWithBase64EncodedString:iconBase64 options:0];
++        RCTUIImage *icon = iconData ? [[RCTUIImage alloc] initWithData:iconData] : nil;
++#if !TARGET_OS_OSX
++        if (icon && entry.iconTint) {
++          icon = [icon imageWithTintColor:variant.color renderingMode:UIImageRenderingModeAlwaysOriginal];
++        }
++        if (icon) {
++          RCTUIGraphicsImageRenderer *renderer = ImageRendererForSize(icon.size);
++          icon = [renderer imageWithActions:^(RCTUIGraphicsImageRendererContext *context) {
++            [icon drawAtPoint:CGPointZero blendMode:kCGBlendModeNormal alpha:0.8];
++          }];
++        }
++#endif
++        variant.icon = icon;
+         RCTUIColor *backgroundColor = RCTUIColorFromSharedColor(entry.backgroundColor);
+         variant.backgroundColor = CGColorGetAlpha(backgroundColor.CGColor) > 0 ? backgroundColor : nil;
+         variant.regex = [NSRegularExpression regularExpressionWithPattern:variant.pattern options:0 error:nil];
+diff --git a/ios/input/styles/ENRMLinkStyleHandler.mm b/ios/input/styles/ENRMLinkStyleHandler.mm
+index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83364e40d7 100644
+--- a/ios/input/styles/ENRMLinkStyleHandler.mm
++++ b/ios/input/styles/ENRMLinkStyleHandler.mm
+@@ -38,6 +38,18 @@ - (void)applyNonFontAttributesToTextStorage:(NSTextStorage *)storage
+   BOOL linkUnderline = variant ? variant.underline : style.linkUnderline;
+   RCTUIColor *backgroundColor = variant ? variant.backgroundColor : style.linkBackgroundColor;
+ 
++#if !TARGET_OS_OSX
++  NSUInteger iconIndex = formattingRange.range.location;
++  if (variant.icon && NSLocationInRange(iconIndex, range) &&
++      [storage.string characterAtIndex:iconIndex] == 0xFFFC) {
++    NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
++    attachment.image = variant.icon;
++    CGFloat size = style.baseFont.pointSize;
++    attachment.bounds = CGRectMake(0, style.baseFont.descender, size, size);
++    [storage addAttribute:NSAttachmentAttributeName value:attachment range:NSMakeRange(iconIndex, 1)];
++  }
++#endif
++
+   if (linkColor != nil) {
+     [storage addAttribute:NSForegroundColorAttributeName value:linkColor range:range];
+   }
+diff --git a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts b/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
+index dc228d579a8e7c55a1c07156e3f0e3357c019d67..3981e6222db948f0413cddbe917674adf49e11c6 100644
+--- a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
++++ b/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
+@@ -29,6 +29,8 @@ interface MarkdownTextInputStyleInternal {
+   linkVariants: ReadonlyArray<
+     Readonly<{
+       pattern: string;
++      icon: string;
++      iconTint: boolean;
+       color: ColorValue;
+       underline: boolean;
+       backgroundColor: ColorValue;
+diff --git a/lib/module/normalizeMarkdownTextInputStyle.js b/lib/module/normalizeMarkdownTextInputStyle.js
+index 90562c8e94c588b1d3384e9fbc003603fe5b1fd5..f630f772ea272a0595e3f6d1d4ea92160774285c 100644
+--- a/lib/module/normalizeMarkdownTextInputStyle.js
++++ b/lib/module/normalizeMarkdownTextInputStyle.js
+@@ -81,6 +81,8 @@ export const normalizeMarkdownTextInputStyle = style => {
+     link: linkBase,
+     linkVariants: normalizeLinkVariantEntries(style.linkVariants).map(([pattern, override]) => ({
+       pattern,
++      icon: override.icon ?? '',
++      iconTint: override.iconTint ?? false,
+       color: normalizeColor(override.color) ?? linkBase.color,
+       underline: override.underline ?? linkBase.underline,
+       backgroundColor: normalizeColor(override.backgroundColor) ?? defaultInternal.link.backgroundColor
+diff --git a/lib/typescript/src/EnrichedMarkdownTextInput.d.ts b/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
+index f0d547318578065dadd950139ac0a8e054125741..b5afc902238c7fea024029353d3abdcb1fb5d6f8 100644
+--- a/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
++++ b/lib/typescript/src/EnrichedMarkdownTextInput.d.ts
+@@ -3,6 +3,10 @@ export type { OnKeyPressEvent, OnLinkDetected, OnStartMentionEvent, OnChangeMent
+ import type { HostInstance, NativeSyntheticEvent, ViewProps, ViewStyle, TextStyle, ColorValue } from 'react-native';
+ import type { RefObject } from 'react';
+ export interface LinkStyle {
++  /** Base64 PNG for a leading U+FFFC text attachment in a link variant. */
++  icon?: string;
++  /** Tint monochrome artwork with the variant's text color. */
++  iconTint?: boolean;
+     color?: string;
+     underline?: boolean;
+     backgroundColor?: string;
+diff --git a/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts b/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
+index 03fd4520a97e4cda0628066718ff87551f380a9e..a87eed03a516116caf0f38864d04c62e5997ef03 100644
+--- a/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
++++ b/lib/typescript/src/EnrichedMarkdownTextInputNativeComponent.d.ts
+@@ -19,6 +19,8 @@ interface MarkdownTextInputStyleInternal {
+     };
+     linkVariants: ReadonlyArray<Readonly<{
+         pattern: string;
++        icon: string;
++        iconTint: boolean;
+         color: ColorValue;
+         underline: boolean;
+         backgroundColor: ColorValue;
+diff --git a/lib/typescript/src/linkVariantUtils.d.ts b/lib/typescript/src/linkVariantUtils.d.ts
+index 17139662039594be8780398f8dd5de4e774478f9..6c2da03e81d1463ad9422995f8919ec42c2c1016 100644
+--- a/lib/typescript/src/linkVariantUtils.d.ts
++++ b/lib/typescript/src/linkVariantUtils.d.ts
+@@ -1,5 +1,4 @@
+ import type { LinkVariantStyle } from './types/MarkdownStyle';
+-type LinkVariantEntry = [pattern: string, style: LinkVariantStyle];
+-export declare function normalizeLinkVariantEntries(linkVariants?: Record<string, LinkVariantStyle>): LinkVariantEntry[];
++export declare function normalizeLinkVariantEntries<T extends LinkVariantStyle>(linkVariants?: Record<string, T>): [pattern: string, style: T][];
+ export {};
+ //# sourceMappingURL=linkVariantUtils.d.ts.map
+\ No newline at end of file
+diff --git a/lib/typescript/src/normalizeMarkdownTextInputStyle.d.ts b/lib/typescript/src/normalizeMarkdownTextInputStyle.d.ts
+index a306bfd89955bdff4c997cfa84bdacdba84567c8..61cb620034a9ca54708d3a54ed9f5c3b1f216815 100644
+--- a/lib/typescript/src/normalizeMarkdownTextInputStyle.d.ts
++++ b/lib/typescript/src/normalizeMarkdownTextInputStyle.d.ts
+@@ -2,6 +2,8 @@ import { type ColorValue } from 'react-native';
+ import type { MarkdownTextInputStyle } from './EnrichedMarkdownTextInput';
+ interface LinkVariantEntryInternal {
+     pattern: string;
++    icon: string;
++    iconTint: boolean;
+     color: ColorValue;
+     underline: boolean;
+     backgroundColor: ColorValue;
+diff --git a/src/EnrichedMarkdownTextInput.tsx b/src/EnrichedMarkdownTextInput.tsx
+index eb4acdf5b7d6b4f9cb4b27e3ce9b444ed1a8e929..32d8315a77c997b401a3a05490fe356d1a1365cd 100644
+--- a/src/EnrichedMarkdownTextInput.tsx
++++ b/src/EnrichedMarkdownTextInput.tsx
+@@ -48,6 +48,10 @@ import type { RefObject } from 'react';
+ type NativeRef = HostInstance;
+ 
+ export interface LinkStyle {
++  /** Base64 PNG for a leading U+FFFC text attachment in a link variant. */
++  icon?: string;
++  /** Tint monochrome artwork with the variant's text color. */
++  iconTint?: boolean;
+   color?: string;
+   underline?: boolean;
+   backgroundColor?: string;
+diff --git a/src/EnrichedMarkdownTextInputNativeComponent.ts b/src/EnrichedMarkdownTextInputNativeComponent.ts
+index dc228d579a8e7c55a1c07156e3f0e3357c019d67..3981e6222db948f0413cddbe917674adf49e11c6 100644
+--- a/src/EnrichedMarkdownTextInputNativeComponent.ts
++++ b/src/EnrichedMarkdownTextInputNativeComponent.ts
+@@ -29,6 +29,8 @@ interface MarkdownTextInputStyleInternal {
+   linkVariants: ReadonlyArray<
+     Readonly<{
+       pattern: string;
++      icon: string;
++      iconTint: boolean;
+       color: ColorValue;
+       underline: boolean;
+       backgroundColor: ColorValue;
+diff --git a/src/linkVariantUtils.ts b/src/linkVariantUtils.ts
+index fe705dbe7dbbf4b7144d7c90b3e9d3ee0690b119..74655b0f862ba5bace1ebc86890dd428911f0aca 100644
+--- a/src/linkVariantUtils.ts
++++ b/src/linkVariantUtils.ts
+@@ -1,7 +1,5 @@
+ import type { LinkVariantStyle } from './types/MarkdownStyle';
+ 
+-type LinkVariantEntry = [pattern: string, style: LinkVariantStyle];
+-
+ // Lookbehind assertions (?<=...) and (?<!...) are not supported by
+ // NSRegularExpression on iOS. Warn early so the issue surfaces in JS tests
+ // before it silently misfires on device.
+@@ -17,9 +15,9 @@ function warnAboutUnsafePattern(pattern: string): void {
+   }
+ }
+ 
+-export function normalizeLinkVariantEntries(
+-  linkVariants?: Record<string, LinkVariantStyle>
+-): LinkVariantEntry[] {
++export function normalizeLinkVariantEntries<T extends LinkVariantStyle>(
++  linkVariants?: Record<string, T>
++): [pattern: string, style: T][] {
+   return Object.entries(linkVariants ?? {})
+     .sort(([a], [b]) => b.length - a.length)
+     .filter(([pattern]) => {
+diff --git a/src/normalizeMarkdownTextInputStyle.ts b/src/normalizeMarkdownTextInputStyle.ts
+index 240cd3e5d736d370160dc1907c0760f18d5ed478..b5b6edcceb083c4345e3a717f1173541ee641b21 100644
+--- a/src/normalizeMarkdownTextInputStyle.ts
++++ b/src/normalizeMarkdownTextInputStyle.ts
+@@ -13,6 +13,8 @@ import {
+ } from './headingDefaults';
+ 
+ interface LinkVariantEntryInternal {
++  icon: string;
++  iconTint: boolean;
+   pattern: string;
+   color: ColorValue;
+   underline: boolean;
+@@ -147,6 +149,8 @@ export const normalizeMarkdownTextInputStyle = (
+     linkVariants: normalizeLinkVariantEntries(style.linkVariants).map(
+       ([pattern, override]) => ({
+         pattern,
++        icon: override.icon ?? '',
++        iconTint: override.iconTint ?? false,
+         color: normalizeColor(override.color) ?? linkBase.color,
+         underline: override.underline ?? linkBase.underline,
+         backgroundColor:
+diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
+index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
+--- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
++++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
+@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+ 
+ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   std::string pattern{};
++  std::string icon{};
++  bool iconTint{false};
+   SharedColor color{};
+   bool underline{false};
+   SharedColor backgroundColor{};
+@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
+     result["pattern"] = pattern;
++    result["icon"] = icon;
++    result["iconTint"] = iconTint;
+     result["color"] = ::facebook::react::toDynamic(color);
+     result["underline"] = underline;
+     result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
+@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_pattern != map.end()) {
+     fromRawValue(context, tmp_pattern->second, result.pattern);
+   }
++  auto tmp_icon = map.find("icon");
++  if (tmp_icon != map.end()) {
++    fromRawValue(context, tmp_icon->second, result.icon);
++  }
++  auto tmp_iconTint = map.find("iconTint");
++  if (tmp_iconTint != map.end()) {
++    fromRawValue(context, tmp_iconTint->second, result.iconTint);
++  }
+   auto tmp_color = map.find("color");
+   if (tmp_color != map.end()) {
+     fromRawValue(context, tmp_color->second, result.color);
+diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
+index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
+--- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
++++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
+@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+ 
+ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   std::string pattern{};
++  std::string icon{};
++  bool iconTint{false};
+   SharedColor color{};
+   bool underline{false};
+   SharedColor backgroundColor{};
+@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
+     result["pattern"] = pattern;
++    result["icon"] = icon;
++    result["iconTint"] = iconTint;
+     result["color"] = ::facebook::react::toDynamic(color);
+     result["underline"] = underline;
+     result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
+@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_pattern != map.end()) {
+     fromRawValue(context, tmp_pattern->second, result.pattern);
+   }
++  auto tmp_icon = map.find("icon");
++  if (tmp_icon != map.end()) {
++    fromRawValue(context, tmp_icon->second, result.icon);
++  }
++  auto tmp_iconTint = map.find("iconTint");
++  if (tmp_iconTint != map.end()) {
++    fromRawValue(context, tmp_iconTint->second, result.iconTint);
++  }
+   auto tmp_color = map.find("color");
+   if (tmp_color != map.end()) {
+     fromRawValue(context, tmp_color->second, result.color);

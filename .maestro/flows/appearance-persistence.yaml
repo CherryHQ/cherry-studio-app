@@ -1,0 +1,72 @@
+appId: ${APP_ID}
+name: Appearance selection persists after restart
+---
+- clearState
+- openLink:
+    link: ${DEV_CLIENT_URL}
+- runFlow:
+    when:
+      visible: "Open|打开"
+    commands:
+      - tapOn: "Open|打开"
+- extendedWaitUntil:
+    visible:
+      id: onboarding-welcome
+    timeout: 30000
+- tapOn:
+    id: onboarding-skip
+- extendedWaitUntil:
+    visible:
+      id: chat-composer
+    timeout: 30000
+- tapOn:
+    id: main-header-open-sidebar
+- extendedWaitUntil:
+    visible:
+      id: sidebar-settings
+    timeout: 10000
+- tapOn:
+    id: sidebar-settings
+- extendedWaitUntil:
+    visible:
+      id: settings-appearance
+    timeout: 10000
+- tapOn:
+    id: settings-appearance
+- extendedWaitUntil:
+    visible:
+      id: theme-preview-dark
+    timeout: 10000
+- tapOn:
+    id: theme-preview-dark
+- assertVisible:
+    id: theme-preview-dark
+    checked: true
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: chat-composer
+    timeout: 30000
+- tapOn:
+    id: main-header-open-sidebar
+- extendedWaitUntil:
+    visible:
+      id: sidebar-settings
+    timeout: 10000
+- tapOn:
+    id: sidebar-settings
+- extendedWaitUntil:
+    visible:
+      id: settings-appearance
+    timeout: 10000
+- tapOn:
+    id: settings-appearance
+- extendedWaitUntil:
+    visible:
+      id: theme-preview-dark
+      checked: true
+    timeout: 10000
+- assertVisible:
+    id: theme-preview-dark
+    checked: true

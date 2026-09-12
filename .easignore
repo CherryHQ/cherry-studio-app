@@ -1,0 +1,54 @@
+# Keep this file aligned with .gitignore. EAS uses .easignore instead of
+# .gitignore when this file exists.
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+.agent-device/
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env*.local
+.local/
+
+# TypeScript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+.zed/*
+.idea/*
+
+# eslint
+.eslintcache
+
+# Conductor and local build artifacts
+.context/

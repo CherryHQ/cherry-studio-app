@@ -1,12 +1,40 @@
-const { getDefaultConfig } = require('expo/metro-config')
-const { withUniwindConfig } = require('uniwind/metro')
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
+const path = require('path');
+const { getBundleModeMetroConfig } = require('react-native-worklets/bundleMode');
+const { withStorybook } = require('@storybook/react-native/withStorybook');
+const { withUniwindConfig } = require('uniwind/metro');
 
-const config = getDefaultConfig(__dirname)
+let config = getSentryExpoConfig(__dirname);
 
-config.resolver.sourceExts.push('sql')
+config.resolver.sourceExts.push('sql');
+config.watchFolders.push(path.resolve(__dirname, 'packages'));
 
-// 添加对 @cherrystudio/ai-core 的支持
-config.resolver.resolverMainFields = ['react-native', 'browser', 'main']
-config.resolver.platforms = ['ios', 'android', 'native', 'web']
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // pkce-challenge 5.x omits a native export; select the same browser entry as legacy resolution.
+  if (moduleName === 'pkce-challenge' && (platform === 'android' || platform === 'ios')) {
+    return context.resolveRequest(
+      { ...context, unstable_conditionNames: [...context.unstable_conditionNames, 'browser'] },
+      moduleName,
+      platform,
+    );
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
 
-module.exports = withUniwindConfig(config, { cssEntryFile: './global.css' })
+// Add .worklets directory to watch folders
+const workletsDir = path.resolve(__dirname, 'node_modules/react-native-worklets/.worklets');
+config.watchFolders.push(workletsDir);
+
+// Apply Bundle Mode config
+config = getBundleModeMetroConfig(config);
+// Same flag `index.ts` branches on, so the bundle never carries Storybook when
+// the entry did not select it. Defaults to enabled, which would ship the addons
+// into the app bundle.
+config = withStorybook(config, {
+  enabled: process.env.EXPO_PUBLIC_STORYBOOK_ENABLED === 'true',
+});
+
+module.exports = withUniwindConfig(config, {
+  cssEntryFile: './src/frontend/styles/global.css',
+  dtsFile: './src/types/uniwind-types.d.ts',
+});

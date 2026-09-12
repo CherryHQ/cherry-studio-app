@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.0.0)'
+        description: 'Release tag (e.g. v0.0.1)'
         required: true
-        default: 'v1.0.0'
+        default: 'v0.0.1'
   push:
     tags:
       - 'v*.*.*'
@@ -23,15 +23,15 @@ jobs:
 
       # Step 2: Setup Node.js
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20.x
+          node-version: 24.19.0
 
       # Step 3: Install pnpm
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.26.2
+          version: 12.2.1
 
       # Step 4: Setup Expo and EAS
       - name: Setup Expo and EAS
@@ -55,11 +55,11 @@ jobs:
             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
-      # Step 7: Update package.json version (DISABLED - using manual version from package.json)
+      # Step 7: Update package.json version (DISABLED - app version is configured in app.json)
       # - name: Update package.json version
       #   run: |
       #     VERSION="${{ steps.version.outputs.tag }}"
-      #     # Remove 'v' prefix if present (e.g., v1.0.0 -> 1.0.0)
+      #     # Remove 'v' prefix if present (e.g., v0.0.1 -> 0.0.1)
       #     VERSION_NUMBER="${VERSION#v}"
       #     echo "Updating package.json version to $VERSION_NUMBER"
       #
@@ -74,7 +74,7 @@ jobs:
       #     echo "✅ package.json updated to version $VERSION_NUMBER"
       #     cat package.json | grep '"version"'
 
-      # Step 8: Set APP_VERSION environment variable (DISABLED - using manual version from package.json)
+      # Step 8: Set APP_VERSION environment variable (DISABLED - app version is configured in app.json)
       # - name: Export APP_VERSION for EAS Build
       #   run: |
       #     VERSION="${{ steps.version.outputs.tag }}"
@@ -86,7 +86,7 @@ jobs:
       - name: Build and Submit iOS on EAS
         id: build_ios
         run: |
-          echo "Building and submitting iOS (version from package.json)..."
+          echo "Building and submitting iOS (version from app.json)..."
           eas build --platform ios --profile production --auto-submit --non-interactive --no-wait --json > ios_build.json
           BUILD_ID=$(cat ios_build.json | jq -r '.[0].id')
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT

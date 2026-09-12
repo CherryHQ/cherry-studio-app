@@ -1,0 +1,400 @@
+import * as z from 'zod';
+
+import providersRegistry from '../data/providers.json';
+import type { ModelConfig } from './schemas/model';
+import { ModelListSchema } from './schemas/model';
+import type { ProviderConfig } from './schemas/provider';
+import { ProviderListSchema } from './schemas/provider';
+import type { ProviderModelOverride } from './schemas/provider-models';
+import { ProviderModelListSchema } from './schemas/provider-models';
+import { colonVariantTagToHyphen, extractParameterSize, normalizeModelId } from './utils/normalize';
+
+type RegistryBundle = {
+  models: { version: string; models: ModelConfig[] };
+  providerModels: { version: string; overrides: ProviderModelOverride[] };
+  providers: { version: string; providers: ProviderConfig[] };
+};
+
+export type ModelsBundle = RegistryBundle['models'];
+export type ProviderModelsBundle = RegistryBundle['providerModels'];
+type ProvidersBundle = RegistryBundle['providers'];
+
+/** Schema lane shared with the desktop-published remote registry. */
+export const REGISTRY_SCHEMA_VERSION = 1;
+
+/**
+ * Latest Desktop registry semantic line this Mobile runtime fully interprets.
+ *
+ * This is deliberately not the Mobile application version. The remote manifest
+ * is published by Desktop, so its minimum reader version is compared with the
+ * Desktop registry behavior implemented here. Older snapshots remain readable
+ * within the same schema lane.
+ */
+export const REGISTRY_DESKTOP_COMPATIBILITY_VERSION = '2.0.14';
+
+/** Unsigned remote data may describe models, never provider routing or credentials. */
+export const REMOTE_REGISTRY_FILES = ['models.json', 'provider-models.json'] as const;
+export type RemoteRegistryFileName = (typeof REMOTE_REGISTRY_FILES)[number];
+
+export const CatalogManifestSchema = z.object({
+  files: z.record(z.string(), z.string()),
+  minAppVersion: z.string().min(1),
+  revision: z.number().int().nonnegative(),
+  schemaVersion: z.number().int(),
+  sourceAppVersion: z.string().min(1),
+});
+export type CatalogManifest = z.infer<typeof CatalogManifestSchema>;
+
+type VersionParts = readonly [major: number, minor: number, patch: number];
+
+function coerceVersionParts(value: string): VersionParts | null {
+  const match = value.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!match) {
+    return null;
+  }
+
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function compareVersionParts(left: VersionParts, right: VersionParts): number {
+  for (let index = 0; index < left.length; index += 1) {
+    const difference = left[index] - right[index];
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  return 0;
+}
+
+/** Whether this Mobile runtime implements the semantics required by a remote snapshot. */
+export function isCatalogManifestCompatible(
+  manifest: CatalogManifest,
+  runtimeVersion = REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+): boolean {
+  if (manifest.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
+    return false;
+  }
+
+  const runtime = coerceVersionParts(runtimeVersion);
+  const minimum = coerceVersionParts(manifest.minAppVersion);
+  const source = coerceVersionParts(manifest.sourceAppVersion);
+  if (!runtime || !minimum || !source) {
+    return false;
+  }
+
+  // New runtimes still read older snapshots from the same schema lane.
+  return compareVersionParts(runtime, minimum) >= 0 && compareVersionParts(minimum, source) <= 0;
+}
+
+export type MobileRemoteRegistrySnapshot = {
+  models: ModelsBundle;
+  providerModels: ProviderModelsBundle;
+};
+
+/**
+ * OAuth-only presets excluded from runtime reads, including saved providers.
+ * Mobile has no OAuth sign-in. Keep temporary setup or product limitations
+ * in the catalog-only exclusions below so existing
+ * records remain readable. Provider definitions remain bundled in both cases.
+ */
+const MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
+  'copilot',
+  'grok-cli',
+  'openai-codex',
+]);
+
+/** Presets hidden from new-provider setup while Mobile lacks the required support. */
+const MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
+  // Local LM Studio connections are not supported by Mobile yet.
+  'lmstudio',
+  // Requires the external Claude Code CLI runtime.
+  'claude-code',
+  // Require credential fields and adapters that Mobile does not support yet.
+  'azure-openai',
+  'vertexai',
+  'aws-bedrock',
+  // Embedding/rerank catalogs have no consuming Mobile feature yet.
+  'jina',
+  'voyageai',
+]);
+
+let parsedProviders: ProvidersBundle | null = null;
+
+function loadProvidersBundle(): ProvidersBundle {
+  parsedProviders ??= ProviderListSchema.parse(providersRegistry);
+  return parsedProviders;
+}
+
+export class MobileRegistryLoader {
+  private remoteSnapshot: MobileRemoteRegistrySnapshot | null = null;
+  private modelById: Map<string, ModelConfig> | null = null;
+  private modelByNormId: Map<string, ModelConfig> | null = null;
+  private modelBySizedNorm: Map<string, ModelConfig> | null = null;
+  private overrideByKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideByNormKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideBySizedNormKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideByApiKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideByNormApiKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideBySizedNormApiKey: Map<string, ProviderModelOverride> | null = null;
+  private overridesByProvider: Map<string, ProviderModelOverride[]> | null = null;
+  private providerById: Map<string, ProviderConfig> | null = null;
+
+  loadModels(): ModelConfig[] {
+    const models = this.requireSnapshot().models.models;
+    this.buildModelIndex(models);
+    return models;
+  }
+
+  loadProviders(): ProviderConfig[] {
+    const providers = loadProvidersBundle().providers ?? [];
+    this.buildProviderIndex(providers);
+    return providers;
+  }
+
+  loadProviderModels(): ProviderModelOverride[] {
+    const overrides = this.requireSnapshot().providerModels.overrides;
+    this.buildOverrideIndex(overrides);
+    return overrides;
+  }
+
+  isProviderExcluded(providerId: string): boolean {
+    return MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS.has(providerId);
+  }
+
+  getExcludedProviderIds(): readonly string[] {
+    return [...MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS];
+  }
+
+  /** Controls catalog listing and preset import, not reads of saved providers. */
+  isProviderExcludedFromCatalog(providerId: string): boolean {
+    return (
+      this.isProviderExcluded(providerId) ||
+      MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS.has(providerId)
+    );
+  }
+
+  getModelsVersion(): string | undefined {
+    return this.remoteSnapshot?.models.version;
+  }
+
+  getProvidersVersion(): string {
+    return loadProvidersBundle().version;
+  }
+
+  getProviderModelsVersion(): string | undefined {
+    return this.remoteSnapshot?.providerModels.version;
+  }
+
+  isReady(): boolean {
+    return this.remoteSnapshot !== null;
+  }
+
+  assertReady(): void {
+    this.requireSnapshot();
+  }
+
+  private requireSnapshot(): MobileRemoteRegistrySnapshot {
+    if (!this.remoteSnapshot) {
+      throw new Error('Model registry has not been downloaded yet');
+    }
+    return this.remoteSnapshot;
+  }
+
+  parseRemoteSnapshot(input: {
+    models: unknown;
+    providerModels: unknown;
+  }): MobileRemoteRegistrySnapshot {
+    return {
+      models: ModelListSchema.parse(input.models),
+      providerModels: ProviderModelListSchema.parse(input.providerModels),
+    };
+  }
+
+  installRemoteSnapshot(snapshot: MobileRemoteRegistrySnapshot): void {
+    this.remoteSnapshot = snapshot;
+    this.invalidate();
+  }
+
+  clearRemoteSnapshot(): void {
+    this.remoteSnapshot = null;
+    this.invalidate();
+  }
+
+  findModel(modelId: string): ModelConfig | null {
+    this.loadModels();
+    const exact = this.modelById?.get(modelId);
+    if (exact) {
+      return exact;
+    }
+
+    if (colonVariantTagToHyphen(modelId) !== modelId) {
+      return (
+        this.modelBySizedNorm?.get(normalizeModelId(modelId, { keepParameterSize: true })) ?? null
+      );
+    }
+
+    const sizedModelId = normalizeModelId(modelId, { keepParameterSize: true });
+    const sizedHit = this.modelBySizedNorm?.get(sizedModelId);
+    if (sizedHit) {
+      return sizedHit;
+    }
+    if (extractParameterSize(sizedModelId)) {
+      return null;
+    }
+
+    return this.modelByNormId?.get(normalizeModelId(modelId)) ?? null;
+  }
+
+  findProvider(providerId: string): ProviderConfig | null {
+    this.loadProviders();
+    return this.providerById?.get(providerId) ?? null;
+  }
+
+  findOverride(providerId: string, modelId: string): ProviderModelOverride | null {
+    this.loadProviderModels();
+    const key = `${providerId}::${modelId}`;
+    const exact = this.overrideByKey?.get(key) ?? this.overrideByApiKey?.get(key);
+    if (exact) {
+      return exact;
+    }
+
+    const sizedModelId = normalizeModelId(modelId, { keepParameterSize: true });
+    const sizedNormKey = `${providerId}::${sizedModelId}`;
+    const sizedHit =
+      this.overrideBySizedNormKey?.get(sizedNormKey) ??
+      this.overrideBySizedNormApiKey?.get(sizedNormKey);
+    if (sizedHit) {
+      return sizedHit;
+    }
+    if (extractParameterSize(sizedModelId)) {
+      return null;
+    }
+
+    const normKey = `${providerId}::${normalizeModelId(modelId)}`;
+    return this.overrideByNormKey?.get(normKey) ?? this.overrideByNormApiKey?.get(normKey) ?? null;
+  }
+
+  getOverridesForProvider(providerId: string): ProviderModelOverride[] {
+    this.loadProviderModels();
+    return this.overridesByProvider?.get(providerId) ?? [];
+  }
+
+  invalidate(): void {
+    this.modelById = null;
+    this.modelByNormId = null;
+    this.modelBySizedNorm = null;
+    this.overrideByKey = null;
+    this.overrideByNormKey = null;
+    this.overrideBySizedNormKey = null;
+    this.overrideByApiKey = null;
+    this.overrideByNormApiKey = null;
+    this.overrideBySizedNormApiKey = null;
+    this.overridesByProvider = null;
+    this.providerById = null;
+  }
+
+  private buildModelIndex(models: ModelConfig[]): void {
+    if (this.modelById && this.modelByNormId && this.modelBySizedNorm) {
+      return;
+    }
+
+    this.modelById = new Map();
+    this.modelByNormId = new Map();
+    this.modelBySizedNorm = new Map();
+
+    for (const model of models) {
+      this.modelById.set(model.id, model);
+      const normalizedId = normalizeModelId(model.id);
+      if (!this.modelByNormId.has(normalizedId)) {
+        this.modelByNormId.set(normalizedId, model);
+      }
+
+      const sizedNormalizedId = normalizeModelId(model.id, { keepParameterSize: true });
+      if (!this.modelBySizedNorm.has(sizedNormalizedId)) {
+        this.modelBySizedNorm.set(sizedNormalizedId, model);
+      }
+    }
+  }
+
+  private buildProviderIndex(providers: ProviderConfig[]): void {
+    if (this.providerById) {
+      return;
+    }
+
+    this.providerById = new Map(providers.map((provider) => [provider.id, provider]));
+  }
+
+  private buildOverrideIndex(overrides: ProviderModelOverride[]): void {
+    if (
+      this.overrideByKey &&
+      this.overrideByNormKey &&
+      this.overrideBySizedNormKey &&
+      this.overrideByApiKey &&
+      this.overrideByNormApiKey &&
+      this.overrideBySizedNormApiKey &&
+      this.overridesByProvider
+    ) {
+      return;
+    }
+
+    this.overrideByKey = new Map();
+    this.overrideByNormKey = new Map();
+    this.overrideBySizedNormKey = new Map();
+    this.overrideByApiKey = new Map();
+    this.overrideByNormApiKey = new Map();
+    this.overrideBySizedNormApiKey = new Map();
+    this.overridesByProvider = new Map();
+
+    for (const override of overrides) {
+      const key = `${override.providerId}::${override.modelId}`;
+      if (!this.overrideByKey.has(key) || override.apiModelId === override.modelId) {
+        this.overrideByKey.set(key, override);
+      }
+
+      const normalizedKey = `${override.providerId}::${normalizeModelId(override.modelId)}`;
+      if (!this.overrideByNormKey.has(normalizedKey)) {
+        this.overrideByNormKey.set(normalizedKey, override);
+      }
+
+      const sizedNormalizedKey = `${override.providerId}::${normalizeModelId(override.modelId, {
+        keepParameterSize: true,
+      })}`;
+      if (
+        !this.overrideBySizedNormKey.has(sizedNormalizedKey) ||
+        override.apiModelId === override.modelId
+      ) {
+        this.overrideBySizedNormKey.set(sizedNormalizedKey, override);
+      }
+
+      if (override.apiModelId) {
+        const apiKey = `${override.providerId}::${override.apiModelId}`;
+        this.overrideByApiKey.set(apiKey, override);
+
+        const normalizedApiKey = `${override.providerId}::${normalizeModelId(override.apiModelId)}`;
+        if (!this.overrideByNormApiKey.has(normalizedApiKey)) {
+          this.overrideByNormApiKey.set(normalizedApiKey, override);
+        }
+
+        const sizedNormalizedApiKey = `${override.providerId}::${normalizeModelId(
+          override.apiModelId,
+          { keepParameterSize: true },
+        )}`;
+        if (!this.overrideBySizedNormApiKey.has(sizedNormalizedApiKey)) {
+          this.overrideBySizedNormApiKey.set(sizedNormalizedApiKey, override);
+        }
+      }
+
+      const providerOverrides = this.overridesByProvider.get(override.providerId) ?? [];
+      providerOverrides.push(override);
+      this.overridesByProvider.set(override.providerId, providerOverrides);
+    }
+  }
+}
+
+let sharedLoader: MobileRegistryLoader | null = null;
+
+export function getMobileRegistryLoader(): MobileRegistryLoader {
+  sharedLoader ??= new MobileRegistryLoader();
+  return sharedLoader;
+}

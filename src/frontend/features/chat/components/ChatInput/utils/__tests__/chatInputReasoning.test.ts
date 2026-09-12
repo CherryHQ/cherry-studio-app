@@ -1,0 +1,106 @@
+import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
+
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+
+import {
+  CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+  chatInputReasoningEffortOptions,
+  getChatInputReasoningEffortOption,
+  getChatInputReasoningEffortSnapshot,
+  getChatInputReasoningEffortsForModel,
+  resolveAvailableChatInputReasoningEffort,
+} from '../chatInputReasoning';
+
+describe('chat input reasoning', () => {
+  test('includes the supported local reasoning options in display order', () => {
+    expect(chatInputReasoningEffortOptions.map((option) => option.value)).toEqual([
+      'default',
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'auto',
+    ]);
+  });
+
+  test('finds reasoning effort options by value', () => {
+    expect(getChatInputReasoningEffortOption('high')?.labelKey).toBe('chat.reasoning.high');
+    expect(getChatInputReasoningEffortOption('unknown')).toBeUndefined();
+  });
+
+  test('returns no reasoning efforts without a selected reasoning model', () => {
+    expect(getChatInputReasoningEffortsForModel(null)).toEqual([]);
+    expect(getChatInputReasoningEffortsForModel(createModel())).toEqual([]);
+  });
+
+  test('maps model-supported reasoning efforts into input options', () => {
+    const model = createModel({
+      reasoning: {
+        selectableEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
+      },
+    });
+
+    expect(getChatInputReasoningEffortsForModel(model)).toEqual([
+      CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+      REASONING_EFFORT.LOW,
+      REASONING_EFFORT.HIGH,
+    ]);
+  });
+
+  test('keeps xhigh and max as distinct model-supported request values', () => {
+    const model = createModel({
+      reasoning: {
+        selectableEfforts: [REASONING_EFFORT.XHIGH, REASONING_EFFORT.MAX],
+      },
+    });
+
+    expect(getChatInputReasoningEffortsForModel(model)).toEqual([
+      CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+      REASONING_EFFORT.XHIGH,
+      REASONING_EFFORT.MAX,
+    ]);
+    expect(getChatInputReasoningEffortSnapshot('xhigh', true)).toBe('xhigh');
+    expect(getChatInputReasoningEffortOption('xhigh')?.labelKey).toBe('chat.reasoning.xhigh');
+  });
+
+  test('projects a previous model selection onto the next model without adding unsupported levels', () => {
+    expect(resolveAvailableChatInputReasoningEffort('max', ['default', 'low', 'xhigh'])).toBe(
+      'xhigh',
+    );
+    expect(resolveAvailableChatInputReasoningEffort('none', ['default', 'low', 'high'])).toBe(
+      'low',
+    );
+    expect(
+      getChatInputReasoningEffortsForModel(createModel({ reasoning: { selectableEfforts: [] } })),
+    ).toEqual([]);
+  });
+
+  test('snapshots the model default until the user selects a request override', () => {
+    expect(getChatInputReasoningEffortSnapshot('high', false)).toBe('default');
+    expect(getChatInputReasoningEffortSnapshot('high', false, ['default', 'low', 'high'])).toBe(
+      'default',
+    );
+    expect(getChatInputReasoningEffortSnapshot('high', true)).toBe('high');
+    expect(getChatInputReasoningEffortSnapshot('low', true, ['default', 'low', 'high'])).toBe(
+      'low',
+    );
+  });
+});
+
+function createModel(patch: Partial<Model> = {}): Model {
+  return {
+    capabilities: [],
+    id: 'provider::model' as UniqueModelId,
+    isDeprecated: false,
+    isEnabled: true,
+    isHidden: false,
+    modelId: 'model',
+    name: 'Model',
+    providerId: 'provider',
+    supportsStreaming: true,
+    ...patch,
+  };
+}

@@ -1,0 +1,49 @@
+diff --git a/dist/agent-loop.js b/dist/agent-loop.js
+index 569149f9328920cda8c637ef4cdd0b11cac1a9eb..fcae4320867278fcc60d77131ee3905300c290f7 100644
+--- a/dist/agent-loop.js
++++ b/dist/agent-loop.js
+@@ -2,7 +2,8 @@
+  * Agent loop that works with AgentMessage throughout.
+  * Transforms to Message[] only at the LLM call boundary.
+  */
+-import { EventStream, validateToolArguments, } from "@earendil-works/pi-ai";
++import { EventStream } from "@earendil-works/pi-ai/utils/event-stream";
++import { validateToolArguments } from "@earendil-works/pi-ai/utils/validation";
+ import { getDefaultStreamFn } from "./stream-fn.js";
+ /**
+  * Start an agent loop with a new prompt message.
+diff --git a/dist/harness/compaction/compaction.js b/dist/harness/compaction/compaction.js
+index 7966fac79400a3c5f2d249f7fba68ad26aa8dfa7..547eab15df5dc78b8ba6945777041013d0e99c7a 100644
+--- a/dist/harness/compaction/compaction.js
++++ b/dist/harness/compaction/compaction.js
+@@ -1,4 +1,6 @@
+-import { contentText, retryAssistantCall, uuidv7, } from "@earendil-works/pi-ai";
++import { retryAssistantCall } from "@earendil-works/pi-ai/utils/retry";
++import { contentText } from "@earendil-works/pi-ai/utils/text";
++import { uuidv7 } from "@earendil-works/pi-ai/utils/uuid";
+ import { convertToLlm, createBranchSummaryMessage, createCompactionSummaryMessage } from "../messages.js";
+ import { buildSessionContext } from "../session/context.js";
+ import { CompactionError, err, ok } from "../types.js";
+diff --git a/dist/harness/compaction/utils.js b/dist/harness/compaction/utils.js
+index f7c6a26ac39539cfb578d79c79c071bfd9fbdcd9..ff3b9e43de53b3a584d8f68003cfb2e22da11941 100644
+--- a/dist/harness/compaction/utils.js
++++ b/dist/harness/compaction/utils.js
+@@ -1,4 +1,4 @@
+-import { contentText } from "@earendil-works/pi-ai";
++import { contentText } from "@earendil-works/pi-ai/utils/text";
+ /** Create an empty file-operation accumulator. */
+ export function createFileOps() {
+     return {
+diff --git a/package.json b/package.json
+index f204dcfe70457f58769ce2e55112a9cf5baec80d..4998f0599d4e9db73cb98cdf990a6219f4c49fdf 100644
+--- a/package.json
++++ b/package.json
+@@ -13,0 +14,8 @@
++		"./agent": {
++			"types": "./dist/agent.d.ts",
++			"import": "./dist/agent.js"
++		},
++		"./compaction": {
++			"types": "./dist/harness/compaction/compaction.d.ts",
++			"import": "./dist/harness/compaction/compaction.js"
++		},

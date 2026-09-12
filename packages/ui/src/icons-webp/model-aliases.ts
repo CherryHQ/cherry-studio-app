@@ -1,0 +1,17 @@
+export const MODEL_ID_ALIASES: Record<string, string> = {
+  gpt51CodexMini: 'gpt-5-1-codex-mini',
+  gpt51Codex: 'gpt-5-1-codex',
+  gpt51Chat: 'gpt-5-1-chat',
+  gpt51: 'gpt-5-1',
+  gpt52Pro: 'gpt-5-2-pro',
+  gpt52: 'gpt-5-2',
+  gpt5Mini: 'gpt-5-mini',
+  gpt5Nano: 'gpt-5-nano',
+  gpt5Chat: 'gpt-5-chat',
+  gpt5Codex: 'gpt-5-codex',
+  gpt5: 'gpt-5',
+  gptImage15: 'gpt-image-1-5',
+  gptImage1: 'gpt-image-1',
+  gptOss120b: 'gpt-oss-120b',
+  gptOss20b: 'gpt-oss-20b',
+};

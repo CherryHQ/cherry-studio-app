@@ -1,0 +1,222 @@
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
+import { splitImageParamValues } from '../imageOptions';
+import { buildImageProviderOptions, mergeImageProviderOptions } from '../imageProviderOptions';
+
+function provider(id: string, presetProviderId?: string): Provider {
+  return {
+    apiFeatures: {
+      arrayContent: true,
+      serviceTier: true,
+      streamOptions: true,
+      verbosity: false,
+      reportsActualCost: false,
+    },
+    apiKeys: [],
+    authType: 'api-key',
+    id,
+    isEnabled: true,
+    name: id,
+    presetProviderId,
+    settings: {},
+  };
+}
+
+function build(
+  aiSdkProviderId: string,
+  paramValues: Record<string, unknown>,
+  currentProvider = provider(aiSdkProviderId),
+) {
+  const { vendorBag } = splitImageParamValues(paramValues);
+  return buildImageProviderOptions({
+    aiSdkProviderId,
+    modelId: 'test-image',
+    paramValues,
+    provider: currentProvider,
+    vendorBag,
+  });
+}
+
+describe('image provider option routing', () => {
+  it('delivers CherryIN chat-variant image options to the key its image wrapper reads', () => {
+    expect(
+      build(
+        'cherryin-chat',
+        {
+          imageResolution: '4K',
+          personGeneration: 'ALLOW_ADULT',
+        },
+        provider('custom-cherryin', 'cherryin'),
+      ),
+    ).toEqual({
+      cherryin: { imageResolution: '4K', personGeneration: 'ALLOW_ADULT' },
+    });
+  });
+
+  it.each(['dashscope', 'modelscope', 'ppio', 'tokenhub'])(
+    'preserves canonical parameters for %s transports',
+    (providerId) => {
+      expect(
+        build(
+          providerId,
+          {
+            negativePrompt: 'blur',
+            numInferenceSteps: 25,
+            guidanceScale: 7,
+            promptEnhancement: false,
+            sequentialImageGeneration: 'auto',
+          },
+          provider(`copy-${providerId}`, providerId),
+        ),
+      ).toEqual({
+        [providerId]: {
+          negativePrompt: 'blur',
+          numInferenceSteps: 25,
+          guidanceScale: 7,
+          promptEnhancement: false,
+          sequentialImageGeneration: 'auto',
+        },
+      });
+    },
+  );
+
+  it('keeps DMXAPI custom-image fields canonical while retaining native Gemini delivery', () => {
+    const paramValues = { negativePrompt: 'blur', imageResolution: '2K' };
+    const { vendorBag } = splitImageParamValues(paramValues);
+    expect(
+      buildImageProviderOptions({
+        aiSdkProviderId: 'dmxapi',
+        modelId: 'wan2.2-t2i',
+        paramValues,
+        provider: provider('custom-dmxapi', 'dmxapi'),
+        vendorBag,
+      }),
+    ).toEqual({ dmxapi: { negativePrompt: 'blur', imageResolution: '2K' } });
+    expect(
+      buildImageProviderOptions({
+        aiSdkProviderId: 'dmxapi',
+        modelId: 'gemini-2.5-flash-image',
+        paramValues,
+        provider: provider('custom-dmxapi', 'dmxapi'),
+        vendorBag,
+      }),
+    ).toMatchObject({ google: { imageConfig: { imageSize: '2K' } } });
+  });
+
+  it('routes OpenRouter image fields and only sends compression for JPEG or WebP', () => {
+    expect(
+      build('openrouter', {
+        background: 'transparent',
+        outputCompression: 80,
+        outputFormat: 'webp',
+        quality: 'high',
+        resolution: '2K',
+      }),
+    ).toEqual({
+      openrouter: {
+        background: 'transparent',
+        output_compression: 80,
+        output_format: 'webp',
+        quality: 'high',
+        resolution: '2K',
+      },
+    });
+    expect(build('openrouter', { outputCompression: 0, quality: 'high' })).toEqual({
+      openrouter: { quality: 'high' },
+    });
+  });
+
+  it('deep-merges Google imageConfig contributions', () => {
+    expect(
+      build('google', {
+        aspectRatio: 'ASPECT_16_9',
+        imageResolution: '2K',
+        personGeneration: 'ALLOW_ADULT',
+      }),
+    ).toEqual({
+      google: {
+        imageConfig: { aspectRatio: '16:9', imageSize: '2K' },
+        personGeneration: 'allow_adult',
+      },
+    });
+  });
+
+  it('dual-keys OpenAI-family options and excludes native seed from its body', () => {
+    expect(
+      build('openai', {
+        background: 'transparent',
+        quality: 'high',
+        seed: 7,
+        style: 'vivid',
+      }),
+    ).toEqual({
+      openai: { background: 'transparent', quality: 'high', style: 'vivid' },
+    });
+  });
+
+  it('uses diffusion passthrough for unregistered providers', () => {
+    expect(
+      build(
+        'openai-compatible',
+        { cfg: 7.5, negativePrompt: 'blur', numInferenceSteps: 25, seed: 4 },
+        provider('custom-provider'),
+      ),
+    ).toEqual({
+      'custom-provider': {
+        cfg: 7.5,
+        negative_prompt: 'blur',
+        num_inference_steps: 25,
+        seed: 4,
+      },
+    });
+  });
+
+  it('uses the shared MiniMax and Doubao wire registrations', () => {
+    expect(
+      build(
+        'minimax',
+        { addWatermark: true, outputFormat: 'png', promptEnhancement: true },
+        provider('custom-minimax', 'minimax'),
+      ),
+    ).toEqual({
+      minimax: {
+        aigc_watermark: true,
+        prompt_optimizer: true,
+        response_format: 'png',
+      },
+    });
+
+    expect(
+      build(
+        'doubao',
+        { addWatermark: false, imageResolution: '2K' },
+        provider('custom-doubao', 'doubao'),
+      ),
+    ).toEqual({
+      bytedance: { size: '2K', watermark: false },
+    });
+  });
+
+  it('deep-merges image options into existing provider options', () => {
+    expect(
+      mergeImageProviderOptions(
+        {
+          google: {
+            imageConfig: { outputMimeType: 'image/webp' },
+            safetySetting: 'strict',
+          },
+        },
+        {
+          google: {
+            imageConfig: { aspectRatio: '16:9' },
+          },
+        },
+      ),
+    ).toEqual({
+      google: {
+        imageConfig: { aspectRatio: '16:9', outputMimeType: 'image/webp' },
+        safetySetting: 'strict',
+      },
+    });
+  });
+});

@@ -5,8 +5,11 @@
   },
   "build": {
     "development": {
+      "environment": "development",
       "developmentClient": true,
       "distribution": "internal",
+      "node": "24.19.0",
+      "pnpm": "12.2.1",
       "env": {
         "PROFILE": "development"
       },
@@ -16,19 +19,33 @@
         "gradleCommand": ":app:assembleDebug -PreactNativeArchitectures=arm64-v8a"
       }
     },
+    "development-simulator": {
+      "extends": "development",
+      "ios": {
+        "simulator": true,
+        "buildConfiguration": "Debug"
+      }
+    },
     "preview": {
+      "environment": "preview",
       "distribution": "internal",
+      "node": "24.19.0",
+      "pnpm": "12.2.1",
       "env": {
         "PROFILE": "preview"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
       },
       "ios": {}
     },
     "production": {
+      "environment": "production",
       "autoIncrement": true,
       "channel": "production",
+      "node": "24.19.0",
+      "pnpm": "12.2.1",
       "env": {
         "PROFILE": "production"
       },
@@ -37,12 +54,21 @@
         "withoutCredentials": "true",
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
       }
+    },
+    "development-simulator": {
+      "extends": "development",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "GYM_XCARGS": "ARCHS=arm64"
+      }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "6754246754"
+        "ascAppId": "6809783714"
       }
     }
   }

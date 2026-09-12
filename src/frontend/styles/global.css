@@ -1,0 +1,173 @@
+/* Light and dark theme variants intentionally redefine the same design tokens. */
+
+@import 'tailwindcss';
+@import 'uniwind';
+
+@import 'heroui-native/styles';
+@import '@cherrystudio/design-tokens/native.css';
+
+@source "..";
+@source "../../../packages/app-icons/src";
+@source "../../../packages/ui/src";
+@source "../../../packages/ui/stories";
+@source "../../../node_modules/heroui-native/lib";
+
+@theme static {
+  /* Tailwind 默认的 --font-mono 是一整条 CSS 字体栈，而 RN 的 fontFamily 只接受
+   * 单个已注册的字体名，所以必须覆盖。字体本体由 app.json 的 expo-font 插件在
+   * 构建期嵌入原生工程（改完要 prebuild + 重新编译，Metro reload 不生效）。
+   * CherryUI MarkdownText 通过这个变量读取原生字体名。 */
+  --font-mono: GeistMono-Regular;
+
+  /* 这一段是字号阶梯的「无障碍档位 0」快照。运行时由 applyFontSizeStep 用
+   * createTypographyCSSVariables(step) 覆盖，但覆盖发生在 app bootstrap 里——
+   * 首帧、以及不跑 bootstrap 的宿主（Storybook）看到的就是这里的值。所以它必须
+   * 与 @cherrystudio/ui/utils 的字号阶梯起始档逐项相等，样式契约测试会断言这一点。 */
+  --ui-text-xs: 13px;
+  --ui-text-xs--line-height: 18px;
+  --ui-text-sm: 14px;
+  --ui-text-sm--line-height: 20px;
+  --ui-text-base: 16px;
+  --ui-text-base--line-height: 24px;
+  --ui-text-lg: 18px;
+  --ui-text-lg--line-height: 28px;
+  --ui-text-xl: 20px;
+  --ui-text-xl--line-height: 26px;
+  --ui-emoji-xl--line-height: 28px;
+  --ui-text-2xl: 24px;
+  --ui-text-2xl--line-height: 32px;
+  --ui-emoji-2xl--line-height: 32px;
+  --ui-text-3xl: 32px;
+  --ui-text-3xl--line-height: 40px;
+  --ui-emoji-3xl--line-height: 44px;
+  --ui-text-4xl: 40px;
+  --ui-text-4xl--line-height: 48px;
+  --ui-text-5xl: 48px;
+  --ui-text-5xl--line-height: 56px;
+  --ui-text-6xl: 60px;
+  --ui-text-6xl--line-height: 60px;
+  --ui-emoji-6xl--line-height: 80px;
+  --ui-text-7xl: 72px;
+  --ui-text-7xl--line-height: 72px;
+  --ui-text-8xl: 96px;
+  --ui-text-8xl--line-height: 96px;
+  --ui-text-9xl: 128px;
+  --ui-text-9xl--line-height: 128px;
+
+  /* HeroUI 1.x calls its brand role `accent` and its secondary text role `muted`. */
+  --color-accent: var(--primary);
+  --color-accent-foreground: var(--primary-foreground);
+  --color-accent-hover: color-mix(in oklab, var(--primary) 90%, var(--primary-foreground) 10%);
+  --color-accent-soft: color-mix(in oklab, var(--primary) 15%, transparent);
+  --color-accent-soft-foreground: color-mix(in oklab, var(--primary) 80%, var(--foreground) 20%);
+  --color-accent-soft-hover: color-mix(in oklab, var(--primary) 20%, transparent);
+  --color-muted: var(--muted-foreground);
+}
+
+@utility text-emoji-xl {
+  font-size: var(--ui-text-xl);
+  line-height: var(--ui-emoji-xl--line-height);
+}
+
+@utility text-emoji-2xl {
+  font-size: var(--ui-text-2xl);
+  line-height: var(--ui-emoji-2xl--line-height);
+}
+
+@utility text-emoji-3xl {
+  font-size: var(--ui-text-3xl);
+  line-height: var(--ui-emoji-3xl--line-height);
+}
+
+@utility text-emoji-6xl {
+  font-size: var(--ui-text-6xl);
+  line-height: var(--ui-emoji-6xl--line-height);
+}
+
+@theme inline static {
+  --text-xs: var(--ui-text-xs);
+  --text-xs--line-height: var(--ui-text-xs--line-height);
+  --text-sm: var(--ui-text-sm);
+  --text-sm--line-height: var(--ui-text-sm--line-height);
+  --text-base: var(--ui-text-base);
+  --text-base--line-height: var(--ui-text-base--line-height);
+  --text-lg: var(--ui-text-lg);
+  --text-lg--line-height: var(--ui-text-lg--line-height);
+  --text-xl: var(--ui-text-xl);
+  --text-xl--line-height: var(--ui-text-xl--line-height);
+  --text-2xl: var(--ui-text-2xl);
+  --text-2xl--line-height: var(--ui-text-2xl--line-height);
+  --text-3xl: var(--ui-text-3xl);
+  --text-3xl--line-height: var(--ui-text-3xl--line-height);
+  --text-4xl: var(--ui-text-4xl);
+  --text-4xl--line-height: var(--ui-text-4xl--line-height);
+  --text-5xl: var(--ui-text-5xl);
+  --text-5xl--line-height: var(--ui-text-5xl--line-height);
+  --text-6xl: var(--ui-text-6xl);
+  --text-6xl--line-height: var(--ui-text-6xl--line-height);
+  --text-7xl: var(--ui-text-7xl);
+  --text-7xl--line-height: var(--ui-text-7xl--line-height);
+  --text-8xl: var(--ui-text-8xl);
+  --text-8xl--line-height: var(--ui-text-8xl--line-height);
+  --text-9xl: var(--ui-text-9xl);
+  --text-9xl--line-height: var(--ui-text-9xl--line-height);
+}
+
+/* HeroUI's structural roles remain host-owned; brand and content roles use the shared contract. */
+@layer theme {
+  :root {
+    @variant light {
+      --surface: var(--card);
+      --surface-foreground: var(--card-foreground);
+      --surface-secondary: var(--muted);
+      --surface-secondary-foreground: var(--muted-foreground);
+      --surface-tertiary: var(--accent);
+      --surface-tertiary-foreground: var(--accent-foreground);
+      --overlay: var(--popover);
+      --overlay-foreground: var(--popover-foreground);
+      --backdrop: var(--scrim);
+      --default: var(--secondary);
+      --default-foreground: var(--secondary-foreground);
+      --field-background: var(--card);
+      --field-foreground: var(--foreground);
+      --field-placeholder: var(--muted-foreground);
+      --field-border: var(--input);
+      --segment: var(--card);
+      --segment-foreground: var(--card-foreground);
+      --danger: var(--error);
+      --danger-foreground: var(--constant-white);
+      /* 黑色：success/warning 的实色底在两个主题里都够亮，压黑字。 */
+      --success-foreground: oklch(0 0 0);
+      --warning-foreground: oklch(0 0 0);
+      --separator: var(--border-strong);
+      --focus: var(--ring);
+    }
+
+    @variant dark {
+      --surface: var(--card);
+      --surface-foreground: var(--card-foreground);
+      --surface-secondary: var(--muted);
+      --surface-secondary-foreground: var(--muted-foreground);
+      --surface-tertiary: var(--accent);
+      --surface-tertiary-foreground: var(--accent-foreground);
+      --overlay: var(--popover);
+      --overlay-foreground: var(--popover-foreground);
+      --backdrop: var(--scrim);
+      --default: var(--secondary);
+      --default-foreground: var(--secondary-foreground);
+      --field-background: var(--card);
+      --field-foreground: var(--foreground);
+      --field-placeholder: var(--muted-foreground);
+      --field-border: var(--input);
+      --segment: var(--secondary);
+      --segment-foreground: var(--secondary-foreground);
+      --danger: var(--error);
+      --danger-foreground: var(--constant-white);
+      /* 黑色：success/warning 的实色底在两个主题里都够亮，压黑字。 */
+      --success-foreground: oklch(0 0 0);
+      --warning-foreground: oklch(0 0 0);
+      --separator: var(--border-strong);
+      --focus: var(--ring);
+    }
+  }
+}

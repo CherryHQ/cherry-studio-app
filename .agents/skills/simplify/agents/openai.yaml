@@ -1,0 +1,4 @@
+interface:
+  display_name: "Simplify"
+  short_description: "Make every change tight, clear, and minimal"
+  default_prompt: "Use $simplify to make this change as tight, clear, performant, and minimal as possible without changing behavior."

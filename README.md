@@ -1,133 +1,83 @@
-# 🍒 Welcome to Cherry Studio App
+# Cherry Studio Mobile
 
-English | [中文](./README-zh.md)
+Cherry Mobile is the Expo and React Native client for Cherry Studio. It keeps Cherry's chat and
+provider model compatible with Desktop while using mobile-native data, navigation, rendering, and
+resource ownership.
 
-🍒 Cherry Studio App —— The official mobile version of Cherry Studio, bringing powerful LLMs (Large Language Models) interaction to your iOS and Android devices.
+## Requirements
 
-🌟 **Support the Project:** [Sponsor](https://github.com/CherryHQ/cherry-studio/blob/main/docs/zh/guides/sponsor.md) | Give the repo a Star!
+- Node.js 24, matching pull request CI
+- `pnpm@12.2.1`
+- Xcode for iOS development or Android Studio for Android development
 
-## ✨ Key Features
-
-- **Multi-LLM Provider Support**: (Gradually integrating) OpenAI, Gemini, Anthropic, and more.
-- **AI Assistants & Conversations**: Access preset assistants and engage in smooth multi-model conversations.
-- **Mobile Optimized**: Designed specifically for iOS/Android with light/dark theme support.
-- **Core Tools**: Conversation management, history search, data migration.
-
-## 🛠️ Tech Stack
-
-- **Framework**: Expo React Native
-- **Package Manager**: Pnpm
-- **UI**: Tamagui
-- **Routing**: React Navigation
-- **State Management**: Redux Toolkit
-
-## 🚀 Development
-
-> Related development documentation is in the docs folder
-
-1. **Clone the repository**
-
-   ```bash
-    git clone https://github.com/CherryHQ/cherry-studio-app.git
-   ```
-
-2. **Enter the directory**
-
-   ```bash
-    cd cherry-studio-app
-   ```
-
-3. **Install dependencies**
-
-   ```bash
-    pnpm install
-   ```
-
-4. **Generate database**
+## Install
 
 ```bash
-npx drizzle-kit generate
+pnpm install
 ```
 
-5. **Build the MCP Streamable Http**
+## Run
+
+The app uses an Expo development client because it includes custom native modules. Build and install
+the client for the target platform:
 
 ```bash
-cd packages/react-native-streamable-http
-npm install
-npm run build
+pnpm ios
+pnpm android
 ```
 
-6. **Start the application**
-
-iOS:
+After the development client is installed, start Metro with:
 
 ```bash
-npx expo prebuild -p ios
-
-cd ios # Add self-signed certificate
-
-npx expo run:ios -d
+pnpm dev
 ```
 
-Android:
+Rebuild the development client after native dependency or native configuration changes. Use
+`pnpm dev:clear` when the Metro cache must be reset.
 
-```bash
-npx expo prebuild -p android
+To create installation packages with EAS on your machine, use `pnpm build:local --platform android`
+or `pnpm build:local --platform ios`. Both default to the development client and load `.env` and
+`.env.local` into the build process. See [Local EAS Builds](docs/guides/local-builds.md) for native
+tool requirements, Sentry credentials, build profiles, and artifact output options.
+Development and preview packages do not report to Sentry or upload build-time debug artifacts;
+Sentry credentials are only needed for production monitoring.
 
-cd android # Add Android SDK path to local.properties
+### App variants
 
-npx expo run:android -d
-```
+`app.json` holds the production defaults. `app.config.ts` selects the app identity using `PROFILE`,
+which the three EAS build profiles already set. An unset `PROFILE` defaults to production; unknown
+values are rejected.
 
-### Android SDK Setup
+| EAS profile | App name | iOS / Android ID suffix | URL scheme |
+| --- | --- | --- | --- |
+| `development` | Cherry Studio Dev | `.dev` | `cherrystudio-dev` |
+| `preview` | Cherry Studio Preview | `.preview` | `cherrystudio-preview` |
+| `production` | Cherry Studio | none | `cherrystudio` |
 
-#### For windows users:
+The base IDs are `com.cherryai.cherrystudio-app` (iOS) and
+`com.cherryai.cherrystudio_app` (Android). Widget identifiers and iOS App Groups follow the selected
+variant. Each variant has independent app data; existing installations retain their previous identity
+and their data is not automatically migrated to apps using the new IDs.
 
-```
-sdk.dir=C:\\Users\\UserName\\AppData\\Local\\Android\\sdk
-```
+The `dev`, `start`, Storybook, `ios`, and `android` scripts select `PROFILE=development`. The `prebuild`
+script also defaults to development, while preserving an explicitly set `PROFILE` (for example,
+`PROFILE=preview pnpm prebuild --clean`). For preview or production, use direct Expo commands with the
+same explicit `PROFILE` when building or starting Metro. When switching variants with existing generated
+`ios` or `android` directories, regenerate them with `PROFILE=<profile> pnpm exec expo prebuild --clean`
+before building; this replaces generated native projects, including any manual native edits.
 
-or (for newer versions of Android Studio / IntelliJ IDEA):
+These identity changes require new native builds. Each iOS variant needs
+matching Apple app identifiers, widget identifiers, App Groups, and provisioning profiles. The EAS
+project ID stays unchanged. Before production submission, check that `submit.production.ios.ascAppId`
+in `eas.json` points to an App Store Connect app matching the new production bundle identifier.
 
-```
-sdk.dir=C\:\\Users\\USERNAME\\AppData\\Local\\Android\\sdk
-```
+## Validate
 
-Where USERNAME your PC user name. Also, make sure the folder is sdk or Sdk.
+Use the focused development loop and pre-PR gates in
+[Testing And CI](docs/guides/testing-and-ci.md). Pull request CI runs the complete repository test
+suite after a draft is marked ready for review.
 
-Example:
+## Documentation
 
-```
-sdk.dir=C:\\Users\\USERNAME\\AppData\\Local\\Android\\sdk
-```
-
-or:
-
-```
-sdk.dir=C\:\\Users\\USERNAME\\AppData\\Local\\Android\\Sdk
-```
-
-#### For Mac users:
-
-```
-sdk.dir = /Users/USERNAME/Library/Android/sdk
-```
-
-Where USERNAME is your OSX username.
-
-You can also use environment variables in your path, for example:
-
-```bash
-export ANDROID_HOME=/Users/$(whoami)/Library/Android/sdk
-export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/tools"
-```
-
-#### For Linux (Ubuntu) users:
-
-```
-sdk.dir = /home/USERNAME/Android/Sdk
-```
-
-Where USERNAME is your Linux username.
-
-> Please use physical devices or simulators for development, do not use Expo Go
+Start with the [project documentation index](docs/README.md) for architecture, conventions, and
+task-oriented guides.

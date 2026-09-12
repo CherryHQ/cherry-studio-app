@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.healthaccess'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.healthaccess'
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // Match the data-reading library; no second Health Connect version.
+  implementation 'androidx.health.connect:connect-client:1.1.0-alpha12'
+}

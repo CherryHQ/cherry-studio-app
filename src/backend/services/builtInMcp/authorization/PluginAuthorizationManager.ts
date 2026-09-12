@@ -1,0 +1,168 @@
+import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
+import { PluginError } from '@/shared/contracts/plugins';
+import type { PluginConnectionStatus } from '@/shared/data/types/plugin';
+
+import type { PluginDefinition } from '../pluginDefinition';
+import { getPluginDefinition, requirePluginAuthMethod } from '../pluginRegistry';
+import { createAuthorizationObserver } from './createAuthorizationObserver';
+import type { PluginAuthorizationStore, PluginAuthorizationRuntime } from './pluginAuthorization';
+import { PluginCredentialStore } from './PluginCredentialStore';
+
+type Entry = {
+  runtime: PluginAuthorizationRuntime;
+  interaction: 'polling' | 'callback';
+  observer?: ReturnType<typeof createAuthorizationObserver>;
+};
+
+type CreateAuthorizationStore = (
+  plugin: PluginDefinition,
+  method: string,
+) => PluginAuthorizationStore;
+
+/** Owns method runtimes and observers for one McpRuntimeService generation. */
+export class PluginAuthorizationManager {
+  readonly credentials = new PluginCredentialStore();
+  private readonly entries = new Map<string, Map<string, Entry>>();
+  private stopped = false;
+  private readonly createStore: CreateAuthorizationStore;
+
+  constructor(
+    private readonly lookup: (id: string) => PluginDefinition | undefined = getPluginDefinition,
+    createStore?: CreateAuthorizationStore,
+  ) {
+    // Keep the this-capturing arrow out of parameter defaults for Hermes compatibility.
+    this.createStore =
+      createStore ??
+      ((plugin, method) =>
+        this.credentials.authorizationStore(plugin.catalog.id, method, plugin.serverName));
+  }
+
+  get(pluginId: string, methodId: string) {
+    return this.entry(pluginId, methodId).runtime;
+  }
+
+  private entry(pluginId: string, methodId: string): Entry {
+    if (this.stopped) throw new PluginError('cancelled', 'Plugin authorization stopped.');
+    const plugin = this.lookup(pluginId);
+    if (!plugin) throw new PluginError('unavailable', 'This plugin is unavailable.');
+    const method = requirePluginAuthMethod(plugin, methodId);
+    if (method.kind !== 'interactive')
+      throw new PluginError(
+        'unavailable',
+        'Interactive authorization is unavailable for this method.',
+      );
+    let methods = this.entries.get(pluginId);
+    if (!methods) {
+      methods = new Map();
+      this.entries.set(pluginId, methods);
+    }
+    let entry = methods.get(methodId);
+    if (!entry) {
+      const runtime = method.createRuntime(this.createStore(plugin, methodId));
+      if (method.interaction === 'polling' ? !runtime.poll : !runtime.receiveCallback)
+        throw new PluginError('unavailable', 'The authorization interaction is unavailable.');
+      entry = { runtime, interaction: method.interaction };
+      methods.set(methodId, entry);
+    }
+    return entry;
+  }
+
+  observer(
+    pluginId: string,
+    methodId: string,
+    complete: (attemptId: string) => ReturnType<PluginAuthorizationRuntime['commit']>,
+  ) {
+    const entry = this.entry(pluginId, methodId);
+    entry.observer ??= createAuthorizationObserver({
+      getState: () => entry.runtime.getState(),
+      poll:
+        entry.interaction === 'polling' && entry.runtime.poll
+          ? (attemptId) => entry.runtime.poll!(attemptId)
+          : undefined,
+      complete,
+    });
+    return entry.observer;
+  }
+
+  async listConnections() {
+    const connections = await pluginAuthorizationService.listConnections();
+    return Promise.all(
+      connections.map(async (connection) => {
+        let authorization: PluginConnectionStatus;
+        try {
+          const grant = await pluginAuthorizationService.getCurrentGrant(connection.pluginId);
+          const method = this.lookup(connection.pluginId)?.authMethods.find(
+            (item) => item.id === grant?.authMethod,
+          );
+          if (!grant || !method)
+            authorization = { status: 'needs-reauthorization', reason: 'unavailable' };
+          else if (
+            method.kind === 'interactive' &&
+            this.get(connection.pluginId, method.id).describeConnection
+          )
+            authorization = await this.get(connection.pluginId, method.id).describeConnection!(
+              grant.id,
+            );
+          else {
+            const current = await this.credentials
+              .authorizationStore(
+                connection.pluginId,
+                method.id,
+                this.lookup(connection.pluginId)!.serverName,
+              )
+              .getGrant(grant.id);
+            authorization = current
+              ? { status: 'connected' }
+              : { status: 'needs-reauthorization', reason: 'authorization' };
+          }
+        } catch (error) {
+          const reason = error instanceof PluginError ? error.reason : 'storage';
+          authorization = {
+            status: reason === 'authorization' ? 'needs-reauthorization' : 'unavailable',
+            reason,
+          };
+        }
+        return { ...connection, authorization };
+      }),
+    );
+  }
+
+  async currentRuntime(pluginId: string) {
+    const grant = await pluginAuthorizationService.getCurrentGrant(pluginId);
+    const method = this.lookup(pluginId)?.authMethods.find((item) => item.id === grant?.authMethod);
+    return grant && method?.kind === 'interactive'
+      ? { grant, runtime: this.get(pluginId, method.id) }
+      : undefined;
+  }
+
+  private runtimes(pluginId: string, exceptMethod?: string) {
+    return (
+      this.lookup(pluginId)?.authMethods.flatMap((method) =>
+        method.kind === 'interactive' && method.id !== exceptMethod
+          ? [this.get(pluginId, method.id)]
+          : [],
+      ) ?? []
+    );
+  }
+
+  interrupt(pluginId: string, exceptMethod?: string) {
+    for (const runtime of this.runtimes(pluginId, exceptMethod)) runtime.interrupt();
+  }
+
+  invalidateGrant(pluginId: string) {
+    for (const runtime of this.runtimes(pluginId)) runtime.invalidateGrant();
+  }
+
+  async cancelAttempts(pluginId: string, exceptMethod?: string) {
+    await Promise.all(this.runtimes(pluginId, exceptMethod).map((runtime) => runtime.cancel()));
+  }
+
+  async stop() {
+    this.stopped = true;
+    const entries = [...this.entries.values()].flatMap((methods) => [...methods.values()]);
+    for (const entry of entries) entry.observer?.stop();
+    const stopping = entries.map((entry) => entry.runtime.stop());
+    await Promise.all([...stopping, this.credentials.stop()]);
+    this.entries.clear();
+  }
+}

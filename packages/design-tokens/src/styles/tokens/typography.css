@@ -1,0 +1,25 @@
+/**
+ * Typography
+ * 排版系统 - 只剩一档字重
+ *
+ * ⚠️ 已 fork：本包不再从 Cherry Studio 桌面端镜像任何东西。取值改用 Vercel Brand
+ * Guidelines（Geist）的排版刻度，token 名字也随之归移动端自有 ——
+ * `pnpm design:sync` 现在只同步图标。
+ *
+ * 这里曾经还有 31 个字号/行高/段落间距/字体族 token，全部零消费者，已删。
+ * 真正的来源分别是：
+ * - 字号 / 行高：`@cherrystudio/ui/utils` 的字号阶梯
+ *   （运行时按无障碍档位平移，写进 `--ui-text-*`）；
+ * - 正文字体族：不设，各平台走系统字体；
+ * - 等宽字体族：`src/frontend/styles/global.css` 的 `--font-mono`（Geist Mono）。
+ *
+ * 三档字重里也只剩这一档。`--font-weight-regular`(400) 对应的 `font-regular`
+ * 全仓零使用；`--font-weight-medium`(500) 与 Tailwind 的默认值逐字相同，声明它
+ * 等于没声明。只有 bold 是真的在改写默认值 —— Tailwind 默认 700，而 VBG 最重的
+ * 一档就是 600 semibold。副作用是 `font-bold` 与 `font-semibold` 现在同重，这是
+ * VBG 刻度本身的结果，不是笔误。
+ */
+
+:root {
+  --font-weight-bold: 600;
+}

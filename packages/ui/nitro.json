@@ -1,0 +1,24 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["cherrystudio", "ui"],
+  "ios": {
+    "iosModuleName": "CherryStudioUI"
+  },
+  "android": {
+    "androidNamespace": ["cherrystudio", "ui"],
+    "androidCxxLibName": "CherryStudioUI"
+  },
+  "autolinking": {
+    "CherryMenuView": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridCherryMenuView"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridCherryMenuView"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}

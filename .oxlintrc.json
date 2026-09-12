@@ -1,0 +1,54 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "import", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "ignorePatterns": [
+    ".agents/**",
+    ".context/**",
+    ".expo/**",
+    ".rnstorybook/storybook.requires.ts",
+    ".vscode/**",
+    "android/**",
+    "ios/**",
+    "assets/**",
+    "patches/**",
+    "dist/**",
+    "web-build/**",
+    "packages/ai-core/**",
+    "packages/ai-sdk-provider/**",
+    "packages/lucide-uniwind/src/index.ts",
+    "packages/lucide-uniwind/src/icons/**",
+    "packages/design-tokens/scripts/theme-contract.ts",
+    "packages/design-tokens/src/styles/**",
+    "packages/ui/src/icons-webp/**",
+    "packages/ui/src/icons/desktop-routing.ts",
+    "src/types/uniwind-types.d.ts"
+  ],
+  "rules": {
+    "react-in-jsx-scope": "off",
+    "eslint/no-await-in-loop": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "oxc/no-map-spread": "off",
+    "eslint/no-underscore-dangle": "off",
+    "eslint/no-shadow": "off",
+    "import/no-unassigned-import": "off",
+    "react-hooks/exhaustive-deps": "off",
+    "unicorn/no-useless-spread": "off",
+    "unicorn/no-new-array": "off",
+    "eslint/no-control-regex": "off",
+    "unicorn/no-useless-fallback-in-spread": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "eslint/no-unsafe-optional-chaining": "off"
+      }
+    }
+  ]
+}

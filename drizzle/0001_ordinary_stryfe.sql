@@ -1,1 +1,0 @@
-ALTER TABLE `assistants` DROP COLUMN `isStar`;

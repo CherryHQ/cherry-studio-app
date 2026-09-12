@@ -1,1 +1,0 @@
-ALTER TABLE `assistants` ADD `mcp_servers` text;

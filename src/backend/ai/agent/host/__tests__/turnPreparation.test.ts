@@ -1,0 +1,589 @@
+import { parseAnydocDocument } from '@/backend/services/file/anydocParser';
+import type {
+  AgentMessageView,
+  AgentSessionView,
+  AgentSubmitMessageInput,
+} from '@/shared/contracts/agent';
+import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
+import { FileEntryIdSchema, type FileEntryId } from '@/shared/data/types/file';
+import { createUniqueModelId } from '@/shared/data/types/model';
+
+import type { ManagedFileFact, ManagedFileResolver } from '../../resources/managedFileResolver';
+import { FakeRuntime, type RuntimeModel, type RuntimeTool } from '../../runtime';
+import type {
+  StoredRuntimeContextCheckpoint,
+  StoredRuntimeTurnContext,
+} from '../../sessionStore/AgentSessionStore';
+import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
+import { createReadFileTool } from '../../tools/readFileTool';
+import type { AgentDefinition } from '../agentDefinitions';
+import type { AgentInferenceModelSnapshot } from '../inferenceSnapshot';
+import {
+  prepareInitialTurn,
+  prepareTurn,
+  type TurnPreparationDependencies,
+} from '../turnPreparation';
+import { toRuntimeHistory } from '../turnRuntimeInput';
+
+const AGENT_ID = 'agent-1';
+const SESSION_ID = 'session-1';
+const FILE_ENTRY_ID = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001');
+const NOW = '2026-01-01T00:00:00.000Z';
+
+const BASE_MODEL: RuntimeModel = { providerId: 'provider-1', modelId: 'model-1' };
+const OVERRIDE_MODEL: RuntimeModel = { providerId: 'provider-2', modelId: 'model-2' };
+
+const SESSION: AgentSessionView = {
+  id: SESSION_ID,
+  agentId: AGENT_ID,
+  executionTarget: { kind: 'local' },
+  title: '',
+  titleIsManual: false,
+  forkBoundaryMessageId: null,
+  forkedFromSessionId: null,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const AGENT: AgentDefinition = {
+  id: AGENT_ID,
+  name: 'Planner Agent',
+  instructions: 'Plan carefully.',
+  model: BASE_MODEL,
+  options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
+  toolApprovalMode: 'auto',
+  disabledCapabilities: ['health'],
+};
+
+const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
+  anchorFound: true,
+  hasMessages: false,
+  history: [],
+  referencedFileEntryIds: [],
+  sessionTurnIds: [],
+};
+
+jest.mock('@/backend/services/file/anydocParser', () => ({
+  ANYDOC_PARSER_VERSION: '0.4.1',
+  parseAnydocDocument: jest.fn(),
+}));
+
+describe('turn preparation', () => {
+  test.each(['existing', 'initial'] as const)(
+    'freezes the parser before %s preparation yields and shares it with read_file',
+    async (kind) => {
+      const harness = createHarness();
+      let mode: DocumentParserMode = 'anydoc';
+      harness.dependencies.documentParserMode = () => mode;
+      const mediaType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const document = fact(FILE_ENTRY_ID, 'report.docx', mediaType, 3);
+      harness.files.resolveAvailable = async () => new Map([[FILE_ENTRY_ID, document]]);
+      harness.files.readDocumentText = async () => ({ text: 'built-in result', truncated: false });
+      const ir = { unknownFutureField: { text: '原始结果🍒' } };
+      jest
+        .mocked(parseAnydocDocument)
+        .mockResolvedValue({ status: 'ok', ir, assets: [], warnings: ['unchanged'] });
+      harness.getAgent.mockImplementationOnce(async () => {
+        mode = 'builtin';
+        return AGENT;
+      });
+      harness.getSystemTools.mockImplementation(async (input) => [
+        createReadFileTool(harness.files, input.resources, input.documentParserMode),
+      ]);
+      const parts = [{ type: 'file' as const, fileEntryId: FILE_ENTRY_ID, mediaType }];
+      const plan =
+        kind === 'initial'
+          ? await prepareInitialTurn(
+              harness.dependencies,
+              {
+                agentId: AGENT_ID,
+                executionTarget: { kind: 'local' },
+                sessionId: SESSION_ID,
+                userMessageId: 'user-1',
+                assistantMessageId: 'assistant-1',
+                parts,
+              },
+              new AbortController().signal,
+            )
+          : await prepareTurn(
+              harness.dependencies,
+              {
+                sessionId: SESSION_ID,
+                userMessageId: 'user-1',
+                assistantMessageId: 'assistant-1',
+                parts,
+              },
+              new AbortController().signal,
+            );
+      expect(mode).toBe('builtin');
+      expect(plan.documentParserMode).toBe('anydoc');
+      expect(plan.runtimeContentAttachments.get(FILE_ENTRY_ID)).toMatchObject({
+        type: 'document-attachment',
+        document: { result: { ir } },
+      });
+      expect(plan.userParts[0]).toMatchObject({
+        attachmentReport: { mode: 'document-ir', parser: 'anydoc', delivery: 'complete' },
+      });
+      expect(JSON.stringify(plan.userParts)).not.toContain('原始结果');
+      const read = await plan.tools[0]!.execute({
+        input: { file_entry_id: FILE_ENTRY_ID },
+        signal: new AbortController().signal,
+        toolCallId: 'read-1',
+      });
+      expect(read.value).toMatchObject({
+        parser: 'anydoc',
+        format: 'json-fragment',
+        text: JSON.stringify(ir),
+      });
+
+      const history = [{ ...textMessage('old-input', 'old-turn'), parts: plan.userParts }];
+      const originalHistory = JSON.parse(JSON.stringify(history));
+      harness.loadRuntimeTurnContext.mockResolvedValue({
+        anchorFound: true,
+        hasMessages: true,
+        history,
+        referencedFileEntryIds: [FILE_ENTRY_ID],
+        sessionTurnIds: ['old-turn'],
+      });
+      const next = await prepareTurn(
+        harness.dependencies,
+        textInput(),
+        new AbortController().signal,
+      );
+      expect(next.documentParserMode).toBe('builtin');
+      expect(next.runtimeContentAttachments.get(FILE_ENTRY_ID)).toMatchObject({
+        type: 'text-attachment',
+        text: 'built-in result',
+      });
+      expect(
+        toRuntimeHistory(next.history, next.runtimeContentAttachments)[0]?.messages[0]?.parts,
+      ).toEqual([
+        expect.objectContaining({
+          type: 'text-attachment',
+          text: 'built-in result',
+          attachmentReport: expect.objectContaining({ parser: 'builtin' }),
+        }),
+      ]);
+      expect(history).toEqual(originalHistory);
+      expect(history[0]?.parts[0]).toMatchObject({ attachmentReport: { parser: 'anydoc' } });
+      expect(
+        (
+          await next.tools[0]!.execute({
+            input: { file_entry_id: FILE_ENTRY_ID },
+            signal: new AbortController().signal,
+            toolCallId: 'read-2',
+          })
+        ).value,
+      ).toMatchObject({ parser: 'builtin', text: 'built-in result' });
+    },
+  );
+  test('prepares a Draft first turn without reading a durable Session', async () => {
+    const harness = createHarness();
+
+    const plan = await prepareInitialTurn(
+      harness.dependencies,
+      {
+        agentId: AGENT_ID,
+        sessionId: SESSION_ID,
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        executionTarget: { kind: 'local' },
+        parts: [{ text: 'Hello.', type: 'text' }],
+      },
+      new AbortController().signal,
+    );
+
+    expect(plan.hasMessages).toBe(false);
+    expect(plan.history).toEqual([]);
+    expect(plan.sessionTurnIds).toEqual([]);
+    expect(harness.getSession).not.toHaveBeenCalled();
+    expect(harness.getLatestContextCheckpoint).not.toHaveBeenCalled();
+    expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
+  });
+
+  test.each(['default', 'none', 'auto', 'xhigh', 'max'] as const)(
+    'preserves the explicit %s reasoning selection over the agent default',
+    async (reasoningEffort) => {
+      const harness = createHarness();
+      const plan = await prepareTurn(
+        harness.dependencies,
+        {
+          ...textInput(),
+          reasoningEffort,
+        },
+        new AbortController().signal,
+      );
+      expect(plan.agent.options.reasoningEffort).toBe(reasoningEffort);
+      expect(AGENT.options.reasoningEffort).toBe('low');
+    },
+  );
+
+  test('builds a canonical turn plan from frozen model, tool, and attachment facts', async () => {
+    const harness = createHarness();
+    const input: AgentSubmitMessageInput = {
+      sessionId: SESSION_ID,
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [
+        { type: 'text', text: 'Review this file.' },
+        {
+          type: 'file',
+          fileEntryId: FILE_ENTRY_ID,
+          mediaType: 'text/plain',
+        },
+      ],
+      modelId: createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId),
+      reasoningEffort: 'default',
+    };
+
+    const plan = await prepareTurn(harness.dependencies, input, new AbortController().signal);
+
+    expect(harness.routeExecutionTarget).toHaveBeenCalledWith(SESSION.executionTarget);
+    expect(harness.getSystemTools).toHaveBeenCalledWith({
+      disabledCapabilities: AGENT.disabledCapabilities,
+      model: OVERRIDE_MODEL,
+      resources: plan.resources,
+      documentParserMode: 'anydoc',
+      resolveUsageAttribution: plan.usageAttribution.resolve,
+    });
+    // Tools read the attribution when they run; the Host binds the message after reservation.
+    expect(plan.usageAttribution.resolve()).toEqual({
+      source: { type: 'agent', id: AGENT_ID, name: AGENT.name, icon: null },
+      messageRef: null,
+    });
+    const messageRef = { kind: 'agent-session' as const, id: 'assistant-1' };
+    plan.usageAttribution.bindMessage(messageRef);
+    messageRef.id = 'changed-after-binding';
+    const resolvedAttribution = plan.usageAttribution.resolve();
+    expect(resolvedAttribution.messageRef).toEqual({
+      kind: 'agent-session',
+      id: 'assistant-1',
+    });
+    // Failed writes need not throw in Expo's non-strict test transform.
+    expect(Reflect.set(resolvedAttribution.source!, 'name', 'Changed by a tool')).toBe(false);
+    expect(Reflect.set(resolvedAttribution.messageRef!, 'id', 'changed-by-a-tool')).toBe(false);
+    expect(plan.usageAttribution.resolve()).toEqual({
+      source: { type: 'agent', id: AGENT_ID, name: AGENT.name, icon: null },
+      messageRef: { kind: 'agent-session', id: 'assistant-1' },
+    });
+    expect(() =>
+      plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
+    ).toThrow('already bound');
+    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID, expect.any(Function));
+    expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
+    expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
+
+    expect(plan.agent).toEqual({
+      ...AGENT,
+      model: OVERRIDE_MODEL,
+      options: { maxOutputTokens: 512, reasoningEffort: 'default', temperature: 0.2 },
+    });
+    expect(plan.inputParts).toEqual([
+      { type: 'text', text: 'Review this file.' },
+      {
+        type: 'file',
+        fileEntryId: FILE_ENTRY_ID,
+        mediaType: 'text/plain',
+        name: 'notes.txt',
+      },
+    ]);
+    expect(plan.userParts).toEqual([
+      { id: 'input-0', type: 'text', text: 'Review this file.', state: 'done' },
+      {
+        id: 'input-1',
+        type: 'file',
+        fileEntryId: FILE_ENTRY_ID,
+        mediaType: 'text/plain',
+        name: 'notes.txt',
+        purpose: 'input-attachment',
+        attachmentReport: {
+          mode: 'text',
+          sourceTruncated: false,
+          requestTruncated: false,
+          includedCharacters: expect.any(Number),
+        },
+      },
+    ]);
+    expect(plan.runtimeContentAttachments.get(FILE_ENTRY_ID)).toEqual({
+      attachmentReport: {
+        mode: 'text',
+        sourceTruncated: false,
+        requestTruncated: false,
+        includedCharacters: expect.any(Number),
+      },
+      fileEntryId: FILE_ENTRY_ID,
+      type: 'text-attachment',
+      mediaType: 'text/plain',
+      name: 'notes.txt',
+      text: 'trusted only as user input',
+      truncated: false,
+      trust: 'untrusted-user-content',
+    });
+    expect(plan.tools.map((tool) => tool.approval)).toEqual(['auto', 'deny']);
+    expect(harness.systemTool.approval).toBe('ask');
+    expect(harness.configuredTool.approval).toBe('deny');
+    expect(plan.inferenceSnapshot).toMatchObject({
+      version: 1,
+      model: {
+        uniqueModelId: createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId),
+      },
+      parameters: { maxOutputTokens: 512, temperature: 0.2 },
+      tools: [{ approval: 'auto' }, { approval: 'deny' }],
+    });
+    expect(plan.hasMessages).toBe(false);
+    expect(plan.runtimeContextCheckpoint).toBeNull();
+    expect(plan.sessionTurnIds).toEqual([]);
+  });
+
+  test('keeps an auto-ineligible ask unchanged under the auto approval mode', async () => {
+    const harness = createHarness();
+    harness.getSystemTools.mockResolvedValueOnce([
+      { ...harness.systemTool, autoApprovalEligible: false },
+    ]);
+
+    const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+
+    // The Agent runs in auto mode, but a consent-bearing ask must survive it.
+    expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
+  });
+
+  test.each(['existing', 'initial'] as const)(
+    '%s messages preserve explicit plugin intent without restricting the tool snapshot',
+    async (kind) => {
+      const harness = createHarness();
+      harness.getSystemTools.mockResolvedValue([]);
+      const prepare = (input: AgentSubmitMessageInput) =>
+        kind === 'initial'
+          ? prepareInitialTurn(
+              harness.dependencies,
+              {
+                ...input,
+                agentId: AGENT_ID,
+                executionTarget: { kind: 'local' },
+              },
+              new AbortController().signal,
+            )
+          : prepareTurn(harness.dependencies, input, new AbortController().signal);
+
+      const pluginReferences = [
+        { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
+      ];
+      const selected = await prepare({
+        ...textInput(),
+        parts: [{ type: 'text', text: '飞书 查找文档', pluginReferences }],
+      });
+      const unselected = await prepare(textInput());
+      expect(selected.tools).toEqual([harness.configuredTool]);
+      expect(selected.inferenceSnapshot.tools).toHaveLength(1);
+      expect(unselected.tools).toEqual(selected.tools);
+      expect(unselected.inferenceSnapshot.tools).toEqual(selected.inferenceSnapshot.tools);
+      expect(selected.agent).toEqual(AGENT);
+      expect(selected.userParts).toEqual([
+        { id: 'input-0', type: 'text', text: '飞书 查找文档', pluginReferences, state: 'done' },
+      ]);
+    },
+  );
+
+  test('stops at session admission when the session does not exist', async () => {
+    const harness = createHarness();
+    harness.getSession.mockResolvedValueOnce(null);
+
+    await expect(
+      prepareTurn(harness.dependencies, textInput(), new AbortController().signal),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
+
+    expect(harness.getAgent).not.toHaveBeenCalled();
+    expect(harness.routeExecutionTarget).not.toHaveBeenCalled();
+    expect(harness.getLatestContextCheckpoint).not.toHaveBeenCalled();
+  });
+
+  test('fails closed when configured tool bindings cannot be resolved', async () => {
+    const harness = createHarness();
+    harness.resolveRuntimeTools.mockRejectedValueOnce(new Error('private MCP failure'));
+
+    await expect(
+      prepareTurn(harness.dependencies, textInput(), new AbortController().signal),
+    ).rejects.toMatchObject({
+      view: {
+        code: 'EXECUTION_UNAVAILABLE',
+        message: 'The configured Agent tools are unavailable.',
+      },
+    });
+
+    expect(harness.resolveInferenceModel).not.toHaveBeenCalled();
+    expect(harness.preflightModel).not.toHaveBeenCalled();
+  });
+
+  test('retains discovery failures for the current turn while keeping other capabilities usable', async () => {
+    const harness = createHarness();
+    harness.resolveRuntimeTools.mockImplementationOnce(async (_agentId, onUnavailable) => {
+      onUnavailable?.('Feishu document tools could not be loaded (network).');
+      return { tools: [], pluginGuides: [] };
+    });
+    const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+    expect(plan.tools).toHaveLength(1);
+    expect(plan.toolDiscoveryWarnings).toEqual([
+      'Feishu document tools could not be loaded (network).',
+    ]);
+    const next = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+    expect(next.toolDiscoveryWarnings).toEqual([]);
+  });
+
+  test('replays full history when a valid checkpoint anchor is no longer present', async () => {
+    const harness = createHarness();
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: 'turn-anchor',
+      payload: { summary: 'Earlier context.' },
+    };
+    const history = [textMessage('message-after-anchor', 'turn-later')];
+    harness.getLatestContextCheckpoint.mockResolvedValueOnce({
+      assistantMessageId: 'assistant-anchor',
+      checkpoint,
+    });
+    harness.loadRuntimeTurnContext.mockResolvedValueOnce({
+      anchorFound: false,
+      hasMessages: true,
+      history,
+      referencedFileEntryIds: [],
+      sessionTurnIds: ['turn-later'],
+    });
+
+    const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+
+    expect(harness.loadRuntimeTurnContext).toHaveBeenCalledWith(SESSION_ID, 'turn-anchor');
+    expect(plan.runtimeContextCheckpoint).toBeNull();
+    expect(plan.history).toEqual(history);
+    expect(plan.hasMessages).toBe(true);
+    expect(plan.sessionTurnIds).toEqual(['turn-later']);
+  });
+});
+
+function createHarness() {
+  const textFact = fact(FILE_ENTRY_ID, 'notes.txt', 'text/plain', 26);
+  const getSession = jest.fn(
+    async (_sessionId: string): Promise<AgentSessionView | null> => SESSION,
+  );
+  const getAgent = jest.fn(async (_agentId: string): Promise<AgentDefinition | null> => AGENT);
+  const getLatestContextCheckpoint = jest.fn(
+    async (_sessionId: string): Promise<StoredRuntimeContextCheckpoint | null> => null,
+  );
+  const loadRuntimeTurnContext = jest.fn(
+    async (_sessionId: string, _anchorTurnId: string | null): Promise<StoredRuntimeTurnContext> =>
+      EMPTY_CONTEXT,
+  );
+  const resolveAvailable = jest.fn(async (fileEntryIds: readonly FileEntryId[]) =>
+    fileEntryIds.includes(FILE_ENTRY_ID) ? new Map([[FILE_ENTRY_ID, textFact]]) : new Map(),
+  );
+  const readAsBytes = jest.fn(async () => new TextEncoder().encode('trusted only as user input'));
+  const files: ManagedFileResolver = {
+    resolveAvailable,
+    readAsBytes,
+    readDocumentText: jest.fn(async () => undefined),
+    readAsDataUrl: jest.fn(async () => undefined),
+  };
+  const systemTool = tool('system_tool', 'ask');
+  const configuredTool = tool('configured_tool', 'deny');
+  const getSystemTools = jest.fn(
+    async (_input: Parameters<SystemCapabilitySource['getTools']>[0]) => [systemTool],
+  );
+  const resolveRuntimeTools = jest.fn(
+    async (_agentId: string, _onUnavailable?: (warning: string) => void) => ({
+      tools: [configuredTool],
+      pluginGuides: [],
+    }),
+  );
+  const resolveInferenceModel = jest.fn(
+    async (model: RuntimeModel): Promise<AgentInferenceModelSnapshot> => ({
+      uniqueModelId: createUniqueModelId(model.providerId, model.modelId),
+      providerId: model.providerId,
+      modelId: model.modelId,
+      apiModelId: `${model.modelId}-api`,
+      name: 'Selected Model',
+    }),
+  );
+  const runtime = new FakeRuntime({
+    modelPreflight: {
+      contextWindow: 128_000,
+      inputModalities: ['text', 'image'],
+      maxInputTokens: 120_000,
+      maxOutputTokens: 8_000,
+      supportsTools: true,
+    },
+  });
+  const preflightModel = jest.spyOn(runtime, 'preflightModel');
+  const routeExecutionTarget = jest.fn(() => runtime);
+  const dependencies: TurnPreparationDependencies = {
+    agents: { getAgent },
+    documentParserMode: () => 'anydoc',
+    files,
+    inferenceModel: resolveInferenceModel,
+    routeExecutionTarget,
+    runtimeTools: { resolve: resolveRuntimeTools },
+    store: { getLatestContextCheckpoint, getSession, loadRuntimeTurnContext },
+    systemCapabilities: { getTools: getSystemTools },
+  };
+
+  return {
+    configuredTool,
+    dependencies,
+    files,
+    getAgent,
+    getLatestContextCheckpoint,
+    getSession,
+    getSystemTools,
+    loadRuntimeTurnContext,
+    preflightModel,
+    resolveInferenceModel,
+    resolveRuntimeTools,
+    routeExecutionTarget,
+    systemTool,
+  };
+}
+
+function textInput(): AgentSubmitMessageInput {
+  return {
+    sessionId: SESSION_ID,
+    userMessageId: 'user-1',
+    assistantMessageId: 'assistant-1',
+    parts: [{ type: 'text', text: 'Continue.' }],
+  };
+}
+
+function fact(
+  fileEntryId: FileEntryId,
+  name: string,
+  mediaType: string,
+  size: number,
+): ManagedFileFact {
+  return { fileEntryId, mediaType, name, size };
+}
+
+function tool(providerName: string, approval: RuntimeTool['approval']): RuntimeTool {
+  return {
+    ref: { source: 'builtin', capabilityId: providerName },
+    providerName,
+    displayName: providerName,
+    description: `${providerName} description`,
+    inputSchema: { type: 'object' },
+    approval,
+    execute: async () => ({ value: null, artifacts: [] }),
+  };
+}
+
+function textMessage(id: string, turnId: string): AgentMessageView {
+  return {
+    id,
+    sessionId: SESSION_ID,
+    turnId,
+    role: 'user',
+    status: 'success',
+    parts: [{ id: `${id}-part`, type: 'text', text: 'Later message.', state: 'done' }],
+    usage: null,
+    stats: null,
+    modelId: null,
+    inferenceSnapshot: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}

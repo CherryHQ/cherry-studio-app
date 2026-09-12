@@ -1,0 +1,157 @@
+diff --git a/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt b/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt
+index 2e51957f7..64b25dfa0 100644
+--- a/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt
++++ b/android/src/main/java/expo/modules/notifications/notifications/NotificationManager.kt
+@@ -72,6 +72,13 @@ object NotificationManager {
+     }
+   }
+ 
++  /** Presentation is a separate event: background delivery may skip onNotificationReceived. */
++  fun onNotificationPresented(notification: Notification) {
++    for (listener in listeners) {
++      listener.onNotificationPresented(notification)
++    }
++  }
++
+   /**
+    * Used by [expo.modules.notifications.service.delegates.ExpoSchedulingDelegate] to notify of new notification responses.
+    * Calls [NotificationListener.onNotificationResponseReceived] on all registered [listeners].
+diff --git a/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt b/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt
+index af020ccaa..8a0bd5ae8 100644
+--- a/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt
++++ b/android/src/main/java/expo/modules/notifications/notifications/emitting/NotificationsEmitter.kt
+@@ -22,6 +22,7 @@ open class NotificationsEmitter : Module(), NotificationListener {
+ 
+     Events(
+       "onDidReceiveNotification",
++      "onDidPresentNotification",
+       "onNotificationsDeleted",
+       "onDidReceiveNotificationResponse"
+     )
+@@ -57,6 +58,10 @@ open class NotificationsEmitter : Module(), NotificationListener {
+     sendEvent(NEW_MESSAGE_EVENT_NAME, bundle)
+   }
+ 
++  override fun onNotificationPresented(notification: Notification) {
++    sendEvent("onDidPresentNotification", NotificationSerializer.toBundle(notification))
++  }
++
+   /**
+    * Callback called when [NotificationManager] gets notified of a new notification response.
+    * Emits a [NEW_RESPONSE_EVENT_NAME] event.
+diff --git a/android/src/main/java/expo/modules/notifications/notifications/interfaces/NotificationListener.kt b/android/src/main/java/expo/modules/notifications/notifications/interfaces/NotificationListener.kt
+index 10392b940..e036c646a 100644
+--- a/android/src/main/java/expo/modules/notifications/notifications/interfaces/NotificationListener.kt
++++ b/android/src/main/java/expo/modules/notifications/notifications/interfaces/NotificationListener.kt
+@@ -12,6 +12,9 @@ interface NotificationListener {
+   /** Callback called when new notification is received while the app is in foreground. */
+   fun onNotificationReceived(notification: Notification) {}
+ 
++  /** Callback after the notification has been posted to the system notification manager. */
++  fun onNotificationPresented(notification: Notification) {}
++
+   /**
+    * Callback called when new notification response is received.
+    * @return Whether the notification response has been handled
+diff --git a/android/src/main/java/expo/modules/notifications/service/delegates/ExpoPresentationDelegate.kt b/android/src/main/java/expo/modules/notifications/service/delegates/ExpoPresentationDelegate.kt
+index 38f6fbaf0..88be89da9 100644
+--- a/android/src/main/java/expo/modules/notifications/service/delegates/ExpoPresentationDelegate.kt
++++ b/android/src/main/java/expo/modules/notifications/service/delegates/ExpoPresentationDelegate.kt
+@@ -24,6 +24,7 @@ import expo.modules.notifications.service.interfaces.PresentationDelegate
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.launch
++import kotlinx.coroutines.withContext
+ import org.json.JSONException
+ import org.json.JSONObject
+ import java.util.Date
+@@ -110,6 +111,11 @@ open class ExpoPresentationDelegate(
+         getNotifyId(notification.notificationRequest),
+         androidNotification
+       )
++      // Publish only after notify(), including deliveries admitted in the background.
++      // A focused screen can now dismiss a post that raced its foreground snapshot.
++      withContext(Dispatchers.Main) {
++        expo.modules.notifications.notifications.NotificationManager.onNotificationPresented(notification)
++      }
+     }
+   }
+ 
+diff --git a/build/NotificationsEmitter.d.ts b/build/NotificationsEmitter.d.ts
+index d1325837c..273a01947 100644
+--- a/build/NotificationsEmitter.d.ts
++++ b/build/NotificationsEmitter.d.ts
+@@ -26,6 +26,12 @@ export declare const DEFAULT_ACTION_IDENTIFIER = "expo.modules.notifications.act
+  * @header listen
+  */
+ export declare function addNotificationReceivedListener(listener: (event: Notification) => void): EventSubscription;
++/**
++ * Called after Android posts a notification, including asynchronous background delivery.
++ * This is distinct from receipt, which can precede presentation or suppress it entirely.
++ * @platform android
++ */
++export declare function addNotificationPresentedListener(listener: (event: Notification) => void): EventSubscription;
+ /**
+  * Listeners registered by this method will be called whenever some notifications have been dropped by the server.
+  * Applicable only to Firebase Cloud Messaging which we use as a notifications service on Android. It corresponds to `onDeletedMessages()` callback.
+diff --git a/build/NotificationsEmitter.js b/build/NotificationsEmitter.js
+index 349682888..3954970dc 100644
+--- a/build/NotificationsEmitter.js
++++ b/build/NotificationsEmitter.js
+@@ -4,6 +4,7 @@ import { mapNotification, mapNotificationResponse } from './utils/mapNotificatio
+ // Web uses SyntheticEventEmitter
+ const emitter = new LegacyEventEmitter(NotificationsEmitterModule);
+ const didReceiveNotificationEventName = 'onDidReceiveNotification';
++const didPresentNotificationEventName = 'onDidPresentNotification';
+ const didDropNotificationsEventName = 'onNotificationsDeleted';
+ const didReceiveNotificationResponseEventName = 'onDidReceiveNotificationResponse';
+ const didClearNotificationResponseEventName = 'onDidClearNotificationResponse';
+@@ -39,6 +40,16 @@ export function addNotificationReceivedListener(listener) {
+         listener(mappedNotification);
+     });
+ }
++/**
++ * Called after Android posts a notification, including asynchronous background delivery.
++ * This is distinct from receipt, which can precede presentation or suppress it entirely.
++ * @platform android
++ */
++export function addNotificationPresentedListener(listener) {
++    return emitter.addListener(didPresentNotificationEventName, (notification) => {
++        listener(mapNotification(notification));
++    });
++}
+ /**
+  * Listeners registered by this method will be called whenever some notifications have been dropped by the server.
+  * Applicable only to Firebase Cloud Messaging which we use as a notifications service on Android. It corresponds to `onDeletedMessages()` callback.
+diff --git a/src/NotificationsEmitter.ts b/src/NotificationsEmitter.ts
+index 99bc0e235..ab4b2da2f 100644
+--- a/src/NotificationsEmitter.ts
++++ b/src/NotificationsEmitter.ts
+@@ -8,6 +8,7 @@ import { mapNotification, mapNotificationResponse } from './utils/mapNotificatio
+ const emitter = new LegacyEventEmitter(NotificationsEmitterModule);
+ 
+ const didReceiveNotificationEventName = 'onDidReceiveNotification';
++const didPresentNotificationEventName = 'onDidPresentNotification';
+ const didDropNotificationsEventName = 'onNotificationsDeleted';
+ const didReceiveNotificationResponseEventName = 'onDidReceiveNotificationResponse';
+ const didClearNotificationResponseEventName = 'onDidClearNotificationResponse';
+@@ -51,6 +52,19 @@ export function addNotificationReceivedListener(
+   );
+ }
+ 
++/**
++ * Called after Android posts a notification, including asynchronous background delivery.
++ * This is distinct from receipt, which can precede presentation or suppress it entirely.
++ * @platform android
++ */
++export function addNotificationPresentedListener(
++  listener: (event: Notification) => void
++): EventSubscription {
++  return emitter.addListener<Notification>(didPresentNotificationEventName, (notification) => {
++    listener(mapNotification(notification));
++  });
++}
++
+ /**
+  * Listeners registered by this method will be called whenever some notifications have been dropped by the server.
+  * Applicable only to Firebase Cloud Messaging which we use as a notifications service on Android. It corresponds to `onDeletedMessages()` callback.

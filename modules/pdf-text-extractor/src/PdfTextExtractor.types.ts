@@ -6,7 +6,7 @@ export interface ExtractOptions {
    * 最大提取页数，默认 100 页
    * 超过此限制的页面将被截断
    */
-  maxPages?: number
+  maxPages?: number;
 }
 
 /**
@@ -16,28 +16,28 @@ export interface ExtractResult {
   /**
    * 提取的文本内容
    */
-  text: string
+  text: string;
 
   /**
    * PDF 总页数
    */
-  totalPages: number
+  totalPages: number;
 
   /**
    * 实际提取的页数
    */
-  extractedPages: number
+  extractedPages: number;
 
   /**
    * 是否因页数限制而截断
    */
-  isTruncated: boolean
+  isTruncated: boolean;
 
   /**
    * 文本提取过程中是否发生错误
    * 当为 true 时，text 可能为空或不完整
    */
-  extractionError?: boolean
+  extractionError: boolean;
 }
 
 /**
@@ -50,12 +50,11 @@ export interface PdfTextExtractorModule {
    * @param options - 提取选项
    * @returns 提取结果
    */
-  extractText(filePath: string, options?: ExtractOptions): Promise<ExtractResult>
-
+  extractText(filePath: string, options?: ExtractOptions): Promise<ExtractResult>;
   /**
    * 获取 PDF 页数（异步方法）
    * @param filePath - PDF 文件路径
    * @returns 页数，失败返回 0
    */
-  getPageCount(filePath: string): Promise<number>
+  getPageCount(filePath: string): Promise<number>;
 }

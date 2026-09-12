@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "paths": {
+      "@cherrystudio/ai-core/core": ["../ai-core/src/core/index.ts"],
+      "@cherrystudio/ai-core/core/*": ["../ai-core/src/core/*"],
+      "@cherrystudio/provider-registry": ["../provider-registry/src/index.ts"],
+      "@cherrystudio/provider-registry/*": ["../provider-registry/src/*"],
+      "@cherrystudio/universal/*": ["../universal/src/*"],
+      "@shared/*": ["../universal/src/*"]
+    },
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["node", "vitest/globals"]
+  },
+  "exclude": ["node_modules"],
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "vitest.config.ts"]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sync Cherry Desktop"
+  short_description: "Sync desktop behavior into Cherry Studio mobile"
+  default_prompt: "Use $sync-cherry-desktop to audit and sync the mobile app against a clean Cherry Studio desktop checkout."
