@@ -40,6 +40,8 @@ describe('BackgroundReplyRuntime', () => {
     return session;
   };
   const mockStartSession = jest.fn(createMockSession);
+  const preparationRelease = jest.fn();
+  const acquire = jest.fn(() => ({ release: preparationRelease }));
 
   beforeEach(() => {
     enabled = true;
@@ -52,6 +54,22 @@ describe('BackgroundReplyRuntime', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
+
+  test.each([true, false])(
+    'preparation follows the background-reply preference: %s',
+    async (value) => {
+      enabled = value;
+      const runtime = await createRuntime();
+      const interrupt = jest.fn();
+      const lease = runtime.acquirePreparation(interrupt);
+      expect(acquire).toHaveBeenCalledTimes(value ? 1 : 0);
+      if (value) expect(acquire).toHaveBeenCalledWith('chat.preparation', interrupt);
+      expect(mockStartSession).not.toHaveBeenCalled();
+      lease.release();
+      expect(preparationRelease).toHaveBeenCalledTimes(value ? 1 : 0);
+      await runtime._doStop();
+    },
+  );
 
   test.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
     'opens chat activities with the current app scheme %s',
@@ -537,6 +555,7 @@ describe('BackgroundReplyRuntime', () => {
         assistantPresenter: undefined as never,
         translate,
       },
+      { acquire },
     );
     await runtime._doInit();
     return runtime;

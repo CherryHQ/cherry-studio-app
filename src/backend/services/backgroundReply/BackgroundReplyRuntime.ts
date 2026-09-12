@@ -15,6 +15,7 @@ import type {
   BackgroundActivitySession,
   BackgroundActivitySessionInput,
 } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
+import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type {
   BackgroundReplyActivityProps,
   BackgroundReplyContent,
@@ -85,7 +86,12 @@ type EnvironmentPort = {
  */
 @Injectable('BackgroundReplyRuntime')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['BackgroundActivityManager', 'PreferenceService', 'BackgroundActivityEnvironment'])
+@DependsOn([
+  'BackgroundActivityManager',
+  'PreferenceService',
+  'BackgroundActivityEnvironment',
+  'KeepAliveCoordinator',
+])
 @AppStatePolicy('background-presentation')
 export class BackgroundReplyRuntime
   extends BaseService
@@ -100,6 +106,7 @@ export class BackgroundReplyRuntime
     private readonly activities: BackgroundActivityPort,
     private readonly preference: PreferencePort,
     private readonly environment: EnvironmentPort,
+    private readonly keepAlive: KeepAliveSource,
   ) {
     super();
   }
@@ -137,6 +144,11 @@ export class BackgroundReplyRuntime
       record.session = undefined;
     }
   }
+
+  acquirePreparation = (onInterrupt: (reason: Error) => void) => {
+    if (!this.isActivated || this.disposed) return { release() {} };
+    return this.keepAlive.acquire('chat.preparation', onInterrupt);
+  };
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
     if (!this.isActivated || this.disposed) return noOpTurn;

@@ -412,6 +412,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.initialAdmissions.add(admission);
     let openedRuntimeSession: AgentRuntimeSession | undefined;
     let isRuntimeSessionInstalled = false;
+    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+      abortController.abort(reason),
+    );
 
     try {
       const plan = await prepareInitialTurn(this.turnPreparation, parsed, signal);
@@ -452,6 +455,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           );
       }
       this.initialAdmissions.delete(admission);
+      preparationLease.release();
       completion.resolve();
     }
   }
@@ -553,6 +557,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       abortController,
       completion: completion.promise,
     });
+    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+      abortController.abort(reason),
+    );
     try {
       // Every gate between admission and the first durable write lives in the
       // preparation stage; a failure there leaves nothing to reconcile.
@@ -583,6 +590,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
     } finally {
       this.admittingSessions.delete(sessionId);
+      preparationLease.release();
       completion.resolve();
     }
   }

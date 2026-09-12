@@ -17,6 +17,10 @@ post-presentation event so task acknowledgement can follow asynchronous native d
   Chat and painting keep acquiring leases through the coordinator and never branch on platform.
   Concurrent chat and painting work share one execution service. It becomes a `dataSync` foreground
   service only while the application is not visible. The last lease stops it.
+- Chat acquires a preference-gated preparation lease before its first asynchronous admission step.
+  The generated turn acquires its session lease before preparation releases, so leaving during
+  model/tool preparation does not defer the first service start until the app is already backgrounded.
+  A failed preparation releases its lease without creating a task surface or starting generation.
 - `react-native-background-actions` uses React Native's `HeadlessJsTaskService`, which owns the
   Headless JS task and a partial wake lock. The lock supports CPU execution with the screen off;
   it does not bypass Android Doze, vendor power management, process death, or user force-stop.
@@ -124,8 +128,12 @@ while JavaScript remains alive. It does not restart paid requests. Whole-process
 requires reconciliation at the next process start.
 See [Android service timeouts](https://developer.android.com/develop/background-work/services/fgs/timeout).
 
-The notification permission is requested in context after a task's service starts. Denial does not
-prevent the foreground service, but Android hides its notification from the ordinary drawer.
+The notification permission is requested in context after a task's service admission attempt, even
+if admission failed. If the app leaves before the prompt, returning while the service runs requests
+it. A native request error permits a later attempt; a user's denial does not cause repeated prompts
+within the runtime. Denial does not prevent the foreground service, but Android hides its notification
+from the ordinary drawer. A rejected service start interrupts its unprotected callers instead of
+leaving them running with a lease that has no native execution protection.
 See [notification permission behavior](https://developer.android.com/develop/ui/compose/notifications/notification-permission).
 
 The app declares `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, `WAKE_LOCK`, and
@@ -163,6 +171,11 @@ These native dependencies, both patches, and config plugins require a rebuilt de
 and EAS Updates cannot add native modules. Use [Local EAS Builds](../guides/local-builds.md) when a
 build is authorized. Compatibility with Cherry's Expo 57 / React Native 0.86 and device behavior
 must be verified in that client; source review and lint do not establish runtime compatibility.
+
+`package.json` opts `expo-notifications` into `expo.autolinking.android.buildFromSource`. Expo's
+bundled precompiled AAR does not contain our native presentation event; patching its Kotlin sources
+alone leaves that event absent from the installed app. Keep this opt-out while the native patch is
+required, and inspect the rebuilt APK as well as the installed source guards.
 
 Regression suites describe concurrent leases, foreground-only admission, permission denial,
 background-budget reset/cancellation, approval cleanup, single completion delivery, and awaiting
