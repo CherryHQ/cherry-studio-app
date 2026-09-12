@@ -2,7 +2,7 @@
 
 > Researched: 2026-08-08
 >
-> Repository baseline: Expo `57.0.6`, `@expo/ui` `57.0.6`
+> Dependency baseline updated 2026-09-11: Expo `57.0.21`, `@expo/ui` `57.0.17`
 
 ## Conclusion
 
@@ -52,7 +52,7 @@ Consequently, there is no supported Expo UI equivalent of a provider that coordi
 
 ## Platform and Version Constraints
 
-- The repository pins `expo` and `@expo/ui` to `57.0.6`. The app targets iOS 17.0+ and Android API 26+.
+- The repository uses Expo `57.0.21` and `@expo/ui` `57.0.17`. The app targets iOS 17.0+ and Android API 26+.
 - Universal `BottomSheet` supports Android, iOS, web, and Expo Go in SDK 57.[^universal-docs]
 - Android Material 3 sheets have only `Hidden`, `PartiallyExpanded`, and `Expanded` states. Expo therefore maps arbitrary Android snap points to partial/full behavior rather than exact heights.[^android-sheet-values]
 - Expo UI `PagerView` supports Android and iOS, not web. iOS 17 provides snapping; its per-frame page callbacks require iOS 18+. Animated `setPage()` on iOS requires `react-native-worklets`; this repository already pins `react-native-worklets` `0.10.2`.[^pager-view]
