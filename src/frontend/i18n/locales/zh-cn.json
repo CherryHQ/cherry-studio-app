@@ -1493,5 +1493,16 @@
   "chat.share.completed": "已完成",
   "chat.share.error": "出错",
   "chat.share.cancelled": "已取消",
-  "chat.share.interrupted": "已中断"
+  "chat.share.interrupted": "已中断",
+  "plugins.catalog.dingtalk.name": "钉钉",
+  "plugins.catalog.dingtalk.summary": "文档、待办与日程办公助手",
+  "plugins.catalog.dingtalk.description": "通过官方云端连接搜索和读写文档、跟进待办、查看与安排日程。",
+  "plugins.catalog.dingtalk.examples.first": "“查一下今天的日程和待办，帮我整理工作安排。”",
+  "plugins.catalog.dingtalk.examples.second": "“把这次讨论整理成文档，再建立相关待办。”",
+  "plugins.catalog.dingtalk.access": "需要在平台授权对应能力；企业管理员可能需要审批。只开放已支持的工具，实际可用范围以授权结果为准。",
+  "plugins.catalog.dingtalk.credentialLink": "查看钉钉云端连接配置指南",
+  "plugins.catalog.dingtalk.authMethods.official_mcp.label": "导入官方 MCP 配置",
+  "plugins.catalog.dingtalk.authMethods.official_mcp.setup": "按指南在平台完成授权，粘贴一个官方连接地址，或包含最多三个服务的 JSON 配置。配置可能包含访问凭证，请仅在此处填写。连接检查只读取工具列表。",
+  "plugins.catalog.dingtalk.fields.configuration.label": "官方 MCP 地址或 JSON 配置",
+  "plugins.catalog.dingtalk.fields.configuration.error": "请输入指南支持的官方云端地址或 JSON 配置。"
 }

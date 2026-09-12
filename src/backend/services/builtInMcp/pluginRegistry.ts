@@ -10,6 +10,7 @@ import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials'
 import type { PluginDefinition } from './pluginDefinition';
 import { validatePluginGuide, type PluginGuideSnapshot } from './pluginGuide';
 import { amapPlugin } from './plugins/amap';
+import { dingtalkPlugin } from './plugins/dingtalk';
 import { feishuPlugin } from './plugins/feishu';
 import { githubPlugin } from './plugins/github';
 
@@ -145,7 +146,7 @@ function validateFields(id: string, fields: readonly PluginCredentialField[]) {
   createPluginCredentialsSchema(fields);
 }
 
-const registry = createPluginRegistry([githubPlugin, amapPlugin, feishuPlugin]);
+const registry = createPluginRegistry([githubPlugin, amapPlugin, feishuPlugin, dingtalkPlugin]);
 
 export const getPluginDefinition = registry.get;
 export const getBuiltInPluginCatalog = registry.listCatalog;
