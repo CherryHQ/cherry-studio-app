@@ -4,6 +4,9 @@ This module owns the Agent Session chat screen, input, live projection, and work
 behavior. Structured message rendering is shared with painting through
 `@/frontend/components/Message`.
 
+Message sharing is owned by `share/`. The assistant toolbar enters selection on the current
+message list; confirming the selected messages opens the existing export preview.
+
 ## Public Interface
 
 - `ChatScreen` is exported from `index.ts`.

@@ -15,7 +15,7 @@ acceptance run. No build or application test was run during implementation.
 | `bootstrap/composition/createBackend.ts` | Connects the runtime to a file-entry store bound to the originating database |
 | `frontend/appShell/documentExport` | Opens the export page and hands off a transient request; URLs contain only its ID |
 | `frontend/features/documentExport` | Format choice, preview, controlled HTML capture and user-triggered delivery |
-| `frontend/features/chat/share` | Current exchange reads, thinking inclusion policy and the chat-to-document adapter |
+| `frontend/features/chat/share` | Message selection and selected history reads, thinking inclusion policy and the chat-to-document adapter |
 | `frontend/features/library` | The existing file stream, with an additional Sharing source filter |
 
 The service follows [Code Organization](./code-organization.md),
@@ -85,6 +85,12 @@ resolved semantic colors, including user bubbles, code surfaces and secondary te
 page freezes those values at opening so a system theme or orientation transition cannot replace a
 file during delivery. Programmatic input presentation is validated and copied by the HTML renderer.
 
+Image presentation may also supply an `imageFrame` with resolved paper/ink colors, an embedded PNG
+logo, brand name and localized labels. These are presentation data, independent of the source
+document. The renderer copies and validates them, escapes labels, and includes the complete frame
+inside the measured and captured `main` element. The frontend supplies this treatment only for the
+image target; Markdown and HTML retain their existing document representations.
+
 An artifact contains one file descriptor plus Markdown text, HTML text, or image dimensions. It also
 contains structured image/formula issues. The returned artifact and file descriptor are frozen.
 The session admits one operation at a time, including saving, and accepts only its current artifact
@@ -95,7 +101,7 @@ again reuses its current file and saved entry while they remain available.
 
 | Content | Markdown | HTML and long image |
 | --- | --- | --- |
-| Plain user text | Escape formatting markers, preserve line breaks | Preserve literal text and whitespace inside a right-aligned bubble |
+| Plain user text | Escape formatting markers, preserve line breaks | Preserve literal text and whitespace; HTML uses a right-aligned bubble, framed images use numbered message rows |
 | Prose, tables, lists, code | Preserve authored Markdown | Render through `markdown-it`; code wraps and tables fit the document width |
 | Math | Preserve source | KaTeX produces MathML with `trust: false` and bounded expansion; unsupported formulas remain visible as source |
 | Managed images | Alt/name placeholder | Embed validated PNG/JPEG bytes or show a placeholder |
@@ -215,16 +221,31 @@ attachment bundles, or multi-image sharing are introduced.
 
 ## Chat Integration
 
-The last action in the assistant message toolbar reads the clicked answer and its same-turn
-question and opens `/document-export` directly. There is no message selection page, history browsing,
-or timestamp option. WebP is the default; a compact menu switches to Markdown or HTML on demand.
+The assistant message toolbar's share button enters selection on the existing message list. The
+clicked answer starts selected, and each user/assistant row displays a left selection control.
+Pending messages cannot be selected; system rows have no selection control. Users can continue
+reading and paginating history while their selected IDs remain stable across row unmounts.
 
-A single bounded around-message read (up to 200 neighbors) resolves the current exchange. It rejects
-missing or unsettled content instead of silently dropping the question. Messages without a turn ID
-can export their standalone answer. The toolbar shows pending feedback and blocks duplicate opens.
+The composer stays mounted but hidden behind bottom controls for cancel, selected count and confirm.
+Cancel or Android Back exits selection; leaving the Session resets it. Confirmation is disabled for
+an empty selection and while preparation is pending. No export preview opens before confirmation.
+There is no sidebar sharing action, separate message-selection route, or timestamp option.
+
+Confirmation resolves exactly the selected persisted messages, stops pagination when all are found,
+and supplies them in chronological order to `/document-export`. Same-turn questions are included
+only when selected. Unselected pending messages do not block export. A conversation can contain more
+than 128 messages; the existing section limit applies only to the selection. Missing/unfinished
+selected messages, failed reads, and exceeded content budgets produce localized feedback without
+silently dropping content. Cancelling preparation or unmounting/backgrounding stops pending reads.
+Returning from the preview keeps the selection editable. The preview is an independent fullscreen
+modal with a local dark theme and its own close action, rather than the ordinary route header.
+WebP is the default; a compact menu switches to Markdown or HTML on demand. Images include straight
+white margins, dark conversation content and a compact Cherry logo/name/source signature. The
+baseline signature area is 52 logical points and can grow for larger or wrapped text. The displayed
+preview uses the generated file, including all branding; long images scroll vertically.
 
 Visible thinking content is omitted by default. When present, the source supplies two immutable
-document snapshots and a checkbox label so the preview can include that content without acquiring chat
+document snapshots and an option label so the preview can include that content through a switch without acquiring chat
 dependencies. Only the selected format is rendered for the selected snapshot.
 
 The adapter follows the chat article's final-answer boundary. Earlier prose and reasoning are
@@ -240,7 +261,7 @@ The generic export page has no live chat subscription and cannot load a conversa
 
 Behavior tests were added for source copying/limits, Markdown and HTML behavior, resource limits,
 asset retry/reuse, temporary/permanent lifetime, stale artifact rejection, asynchronous capture
-copying, late cancellation cleanup, lifecycle admission/teardown, current-exchange reads and file source persistence. Markdown lifetime
+copying, late cancellation cleanup, lifecycle admission/teardown, selected-message reads and file source persistence. Markdown lifetime
 coverage also checks that preview creates no files or asset reads and repeated sharing reuses its file.
 Preview-hook coverage includes lazy conversion, option changes and stale-format rejection; request
 coverage checks disposal of both option snapshots. WebP coverage checks output metadata, per-axis
@@ -248,14 +269,12 @@ limits, direct Android capture, lossless encoder options, temporary-file ownersh
 during capture/encoding. The library filter and existing
 serialization/composition fixtures were updated as well.
 
-Only formatting and lint are permitted for this task. Tests, type checks, builds, and interactive
-UI/device verification were intentionally not run. The native dependency requires an explicitly
-authorized development-client build before capture acceptance.
-
-Changed-file formatting and lint for the simplified sharing flow completed without errors or
-warnings. During the initial implementation, full `pnpm lint` reported seven unresolved imports
-from the existing `@cherrystudio/ai-core` package, whose `dist` output is absent in this workspace,
-alongside existing warnings. No package build was run to resolve that environment prerequisite.
+Formatting and lint passed for the changed files. Full formatting also passed. Full lint initially
+reported seven unresolved imports because the workspace lacked the existing `ai-core` build output;
+after copying existing package artifacts with identical source/configuration and rerunning ESLint
+without its stale cache, lint completed with only existing repository warnings. Automated tests and
+type checks have not been run. iOS simulator capture acceptance is pending a compatible development
+client; an installed physical-device package cannot satisfy that prerequisite.
 
 When authorized, acceptance should cover both iOS and Android, light/dark themes, different pixel
 ratios, long text, wide tables/code, inline/display math, multiple images, rejected/failed resources,

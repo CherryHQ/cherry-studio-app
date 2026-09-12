@@ -34,6 +34,7 @@ import { ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
 import { useAgentChatControls, useAgentChatDraftHandoff } from './runtime';
+import { ChatShareComposer, ChatShareSelectionProvider } from './share';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 
@@ -100,56 +101,60 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
 
   return (
     <ComposerSessionProvider key={composerSession.key}>
-      {!isPreview &&
-      sessionId &&
-      session.data &&
-      !session.error &&
-      !messageWindow.isLoadingInitial &&
-      !messageWindow.error ? (
-        <SessionReadReceipt sessionId={sessionId} />
-      ) : null}
-      <ComposerDismissArea disabled testID="chat-background">
-        {sessionId && session.error ? (
-          <View className="flex-1 justify-center px-8 py-16">
-            <ContentState.Error
-              primaryAction={{
-                children: t('agent.actions.retry'),
-                onPress: () => void session.refetch(),
-              }}
-              prominence="prominent"
-              title={t('navigation.chatsLoadFailed')}
+      <ChatShareSelectionProvider sessionId={sessionId}>
+        {!isPreview &&
+        sessionId &&
+        session.data &&
+        !session.error &&
+        !messageWindow.isLoadingInitial &&
+        !messageWindow.error ? (
+          <SessionReadReceipt sessionId={sessionId} />
+        ) : null}
+        <ComposerDismissArea disabled testID="chat-background">
+          {sessionId && session.error ? (
+            <View className="flex-1 justify-center px-8 py-16">
+              <ContentState.Error
+                primaryAction={{
+                  children: t('agent.actions.retry'),
+                  onPress: () => void session.refetch(),
+                }}
+                prominence="prominent"
+                title={t('navigation.chatsLoadFailed')}
+              />
+            </View>
+          ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
+            <ChatWorkspace
+              pendingSend={controls.pendingSend}
+              enteringUserMessageId={controls.enteringUserMessageId}
+              onPendingSendDisplayed={controls.completePendingSend}
+              assistantAvatar={agent.agent?.avatar}
+              assistantAvatarUri={agent.agent?.avatarUri}
+              assistantName={agent.agent?.name}
+              isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
+              contentBottomInset={contentBottomInset}
+              forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
+              forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
+              keyboardOffset={keyboardOffset}
+              messageWindow={messageWindow}
+              sessionId={sessionId}
             />
-          </View>
-        ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
-          <ChatWorkspace
-            pendingSend={controls.pendingSend}
-            enteringUserMessageId={controls.enteringUserMessageId}
-            onPendingSendDisplayed={controls.completePendingSend}
-            assistantAvatar={agent.agent?.avatar}
-            assistantAvatarUri={agent.agent?.avatarUri}
-            assistantName={agent.agent?.name}
-            isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
-            contentBottomInset={contentBottomInset}
-            forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
-            forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
-            keyboardOffset={keyboardOffset}
-            messageWindow={messageWindow}
-            sessionId={sessionId}
-          />
-        ) : (
-          <ChatEmptyState contentBottomInset={contentBottomInset} />
-        )}
-      </ComposerDismissArea>
-      {hasComposer ? (
-        <ComposerDock layoutMode="flow">
-          <ChatInput
-            agentId={resolvedAgentId}
-            controls={controls}
-            dismissKeyboardOnSend={false}
-            sessionId={sessionId}
-          />
-        </ComposerDock>
-      ) : null}
+          ) : (
+            <ChatEmptyState contentBottomInset={contentBottomInset} />
+          )}
+        </ComposerDismissArea>
+        <ChatShareComposer>
+          {hasComposer ? (
+            <ComposerDock layoutMode="flow">
+              <ChatInput
+                agentId={resolvedAgentId}
+                controls={controls}
+                dismissKeyboardOnSend={false}
+                sessionId={sessionId}
+              />
+            </ComposerDock>
+          ) : null}
+        </ChatShareComposer>
+      </ChatShareSelectionProvider>
     </ComposerSessionProvider>
   );
 }

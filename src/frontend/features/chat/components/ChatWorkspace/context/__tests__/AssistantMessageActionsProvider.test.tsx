@@ -14,7 +14,11 @@ const mockLoggerError = jest.fn();
 let mockSourceTitle: string | undefined;
 
 jest.mock('../../../../share', () => ({
-  useShareChatMessage: () => ({ shareAssistantMessage: jest.fn(), sharingMessageId: undefined }),
+  useChatShareSelection: () => ({
+    startSelection: jest.fn(),
+    isSelecting: false,
+    selectedIds: new Set(),
+  }),
 }));
 
 jest.mock('expo-clipboard', () => ({

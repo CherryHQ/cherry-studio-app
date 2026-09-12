@@ -1,4 +1,5 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
 import { loadChatExportMessages } from '../loadChatExportMessages';
 import {
@@ -101,47 +102,133 @@ test('reasoning after text is still process rather than a final answer', () => {
   expect(toChatExportDocument([unfinishedAnswer], options).sections[0].blocks).toEqual([]);
 });
 
-test('loads only the clicked answer and its same-turn question in reading order', async () => {
-  const unrelated = { ...question, id: 'other-question', turnId: 'other-turn' };
-  const readPage = jest.fn(async () => ({ items: [answer, unrelated, question] }));
-  await expect(
-    loadChatExportMessages('b', readPage, new AbortController().signal),
-  ).resolves.toEqual([question, answer]);
-  expect(readPage).toHaveBeenCalledTimes(1);
-  expect(readPage).toHaveBeenCalledWith({ aroundMessageId: 'b', limit: 200 });
+test('exports only selected messages in reading order, not selection order', async () => {
+  const laterAnswer = { ...answer, id: 'd', turnId: 'second-turn' };
+  const laterQuestion = { ...question, id: 'c', turnId: 'second-turn' };
+  const readPage = jest.fn(async () => ({ items: [laterAnswer, laterQuestion, answer, question] }));
+  const messages = await loadChatExportMessages(
+    ['d', 'a', 'd'],
+    readPage,
+    new AbortController().signal,
+  );
+  expect(messages).toEqual([question, laterAnswer]);
+  expect(toChatExportDocument(messages, options).sections.map((section) => section.id)).toEqual([
+    'a',
+    'd',
+  ]);
 });
 
-test('rejects missing, unsettled or incomplete turns instead of silently exporting a subset', async () => {
-  const signal = new AbortController().signal;
-  await expect(
-    loadChatExportMessages('missing', async () => ({ items: [answer, question] }), signal),
-  ).rejects.toThrow('Message unavailable');
+test('selecting an answer does not implicitly include its same-turn question', async () => {
   await expect(
     loadChatExportMessages(
-      'b',
-      async () => ({ items: [{ ...answer, status: 'streaming' }, question] }),
-      signal,
+      ['b'],
+      async () => ({ items: [answer, question] }),
+      new AbortController().signal,
     ),
-  ).rejects.toThrow('Message is not settled');
-  await expect(
-    loadChatExportMessages('b', async () => ({ items: [answer] }), signal),
-  ).rejects.toThrow('Question unavailable');
-  const standalone = { ...answer, turnId: null };
-  await expect(
-    loadChatExportMessages('b', async () => ({ items: [standalone] }), signal),
-  ).resolves.toEqual([standalone]);
+  ).resolves.toEqual([answer]);
 });
 
-test('cancellation after the persisted read prevents opening a preview', async () => {
+test('finds selected history beyond the visible window without limiting the whole conversation', async () => {
+  const unselected = Array.from({ length: 200 }, (_, index) => ({
+    ...answer,
+    id: `other-${index}`,
+    status: 'streaming' as const,
+  }));
+  const readPage = jest
+    .fn()
+    .mockResolvedValueOnce({ items: unselected, nextCursor: 'older-1' })
+    .mockResolvedValueOnce({ items: [answer], nextCursor: 'older-2' })
+    .mockResolvedValueOnce({
+      items: [question, { ...question, id: 'system', role: 'system' }],
+      nextCursor: 'not-needed',
+    });
+  await expect(
+    loadChatExportMessages(['b', 'a'], readPage, new AbortController().signal),
+  ).resolves.toEqual([question, answer]);
+  expect(readPage.mock.calls.map(([query]) => query.cursor)).toEqual([
+    undefined,
+    'older-1',
+    'older-2',
+  ]);
+});
+
+test.each(['pending', 'streaming'] as const)(
+  'rejects a selected %s message instead of sharing a subset',
+  async (status) => {
+    await expect(
+      loadChatExportMessages(
+        ['a', 'b'],
+        async () => ({ items: [{ ...answer, status }, question] }),
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'unsettled' });
+  },
+);
+
+test('rejects missing or system message selections', async () => {
+  for (const items of [[answer], [answer, { ...question, role: 'system' as const }]]) {
+    await expect(
+      loadChatExportMessages(['a', 'b'], async () => ({ items }), new AbortController().signal),
+    ).rejects.toMatchObject({ code: 'missing' });
+  }
+});
+
+test('rejects empty and oversized selections before loading history', async () => {
+  const readPage = jest.fn();
+  await expect(
+    loadChatExportMessages([], readPage, new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'empty' });
+  await expect(
+    loadChatExportMessages(
+      Array.from({ length: DOCUMENT_EXPORT_MAX_SECTIONS + 1 }, (_, index) => String(index)),
+      readPage,
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ code: 'size-limit' });
+  expect(readPage).not.toHaveBeenCalled();
+});
+
+test('admits the document selection limit without truncation', async () => {
+  const history = Array.from({ length: DOCUMENT_EXPORT_MAX_SECTIONS }, (_, index) => ({
+    ...question,
+    id: `message-${index}`,
+  }));
+  const messages = await loadChatExportMessages(
+    history.map((message) => message.id),
+    async () => ({ items: history }),
+    new AbortController().signal,
+  );
+  expect(messages).toEqual(history.toReversed());
+  expect(toChatExportDocument(messages, options).sections).toHaveLength(history.length);
+  expect(() => toChatExportDocument([...messages, answer], options)).toThrow('size-limit');
+});
+
+test('cancellation stops before the next history page or opening the preview', async () => {
   const controller = new AbortController();
   const readPage = jest.fn(async () => {
     controller.abort();
-    return { items: [answer, question] };
+    return { items: [answer], nextCursor: 'older' };
   });
-  await expect(loadChatExportMessages('b', readPage, controller.signal)).rejects.toMatchObject({
-    name: 'AbortError',
-  });
+  await expect(
+    loadChatExportMessages(['a', 'b'], readPage, controller.signal),
+  ).rejects.toMatchObject({ name: 'AbortError' });
   expect(readPage).toHaveBeenCalledTimes(1);
+  readPage.mockClear();
+  await expect(
+    loadChatExportMessages(['a', 'b'], readPage, controller.signal),
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  expect(readPage).not.toHaveBeenCalled();
+});
+
+test('a failed history page rejects the export instead of returning the loaded subset', async () => {
+  const failure = new Error('History unavailable');
+  const readPage = jest
+    .fn()
+    .mockResolvedValueOnce({ items: [answer], nextCursor: 'older' })
+    .mockRejectedValueOnce(failure);
+  await expect(
+    loadChatExportMessages(['a', 'b'], readPage, new AbortController().signal),
+  ).rejects.toBe(failure);
 });
 
 test('citations become portable links without rewriting fenced, inline or escaped code examples', () => {
