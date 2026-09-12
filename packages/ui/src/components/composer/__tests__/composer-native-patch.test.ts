@@ -13,6 +13,26 @@ describe('react-native-enriched-markdown iOS patch', () => {
     expect(patch).toContain('variant.getString("icon")');
   });
 
+  test.each([
+    'ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h',
+    'android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h',
+  ])('ships inline icon fields and serialization in %s', (headerPath) => {
+    const header = readFileSync(
+      `${process.cwd()}/node_modules/react-native-enriched-markdown/${headerPath}`,
+      'utf8',
+    );
+    const linkVariant = header
+      .split('struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {')[1]
+      ?.split('struct EnrichedMarkdownTextInputMarkdownStyle')[0];
+
+    expect(linkVariant).toContain('std::string icon{};');
+    expect(linkVariant).toContain('bool iconTint{false};');
+    expect(linkVariant).toContain('result["icon"] = icon;');
+    expect(linkVariant).toContain('result["iconTint"] = iconTint;');
+    expect(linkVariant).toContain('fromRawValue(context, tmp_icon->second, result.icon);');
+    expect(linkVariant).toContain('fromRawValue(context, tmp_iconTint->second, result.iconTint);');
+  });
+
   test('limits attachments to the leading object character and clears their old formatting', () => {
     const patch = readFileSync(
       `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
