@@ -24,6 +24,9 @@
       "ios": {
         "simulator": true,
         "buildConfiguration": "Debug"
+      },
+      "env": {
+        "GYM_XCARGS": "ARCHS=arm64"
       }
     },
     "preview": {
@@ -53,15 +56,6 @@
         "buildType": "apk",
         "withoutCredentials": "true",
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
-      }
-    },
-    "development-simulator": {
-      "extends": "development",
-      "ios": {
-        "simulator": true
-      },
-      "env": {
-        "GYM_XCARGS": "ARCHS=arm64"
       }
     }
   },

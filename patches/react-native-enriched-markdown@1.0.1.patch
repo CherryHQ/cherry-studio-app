@@ -775,3 +775,75 @@ index 240cd3e5d736d370160dc1907c0760f18d5ed478..b5b6edcceb083c4345e3a717f1173541
          color: normalizeColor(override.color) ?? linkBase.color,
          underline: override.underline ?? linkBase.underline,
          backgroundColor:
+diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
+--- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
++++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
+@@ -2923,6 +2923,8 @@
+ 
+ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   std::string pattern{};
++  std::string icon{};
++  bool iconTint{false};
+   SharedColor color{};
+   bool underline{false};
+   SharedColor backgroundColor{};
+@@ -2934,6 +2936,8 @@
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
+     result["pattern"] = pattern;
++    result["icon"] = icon;
++    result["iconTint"] = iconTint;
+     result["color"] = ::facebook::react::toDynamic(color);
+     result["underline"] = underline;
+     result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
+@@ -2948,6 +2952,14 @@
+   auto tmp_pattern = map.find("pattern");
+   if (tmp_pattern != map.end()) {
+     fromRawValue(context, tmp_pattern->second, result.pattern);
++  }
++  auto tmp_icon = map.find("icon");
++  if (tmp_icon != map.end()) {
++    fromRawValue(context, tmp_icon->second, result.icon);
++  }
++  auto tmp_iconTint = map.find("iconTint");
++  if (tmp_iconTint != map.end()) {
++    fromRawValue(context, tmp_iconTint->second, result.iconTint);
+   }
+   auto tmp_color = map.find("color");
+   if (tmp_color != map.end()) {
+diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
+--- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
++++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
+@@ -2923,6 +2923,8 @@
+ 
+ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   std::string pattern{};
++  std::string icon{};
++  bool iconTint{false};
+   SharedColor color{};
+   bool underline{false};
+   SharedColor backgroundColor{};
+@@ -2934,6 +2936,8 @@
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
+     result["pattern"] = pattern;
++    result["icon"] = icon;
++    result["iconTint"] = iconTint;
+     result["color"] = ::facebook::react::toDynamic(color);
+     result["underline"] = underline;
+     result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
+@@ -2948,6 +2952,14 @@
+   auto tmp_pattern = map.find("pattern");
+   if (tmp_pattern != map.end()) {
+     fromRawValue(context, tmp_pattern->second, result.pattern);
++  }
++  auto tmp_icon = map.find("icon");
++  if (tmp_icon != map.end()) {
++    fromRawValue(context, tmp_icon->second, result.icon);
++  }
++  auto tmp_iconTint = map.find("iconTint");
++  if (tmp_iconTint != map.end()) {
++    fromRawValue(context, tmp_iconTint->second, result.iconTint);
+   }
+   auto tmp_color = map.find("color");
+   if (tmp_color != map.end()) {
