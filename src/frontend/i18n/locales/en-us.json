@@ -1496,5 +1496,16 @@
   "chat.share.completed": "Completed",
   "chat.share.error": "Failed",
   "chat.share.cancelled": "Cancelled",
-  "chat.share.interrupted": "Interrupted"
+  "chat.share.interrupted": "Interrupted",
+  "plugins.catalog.wecom.name": "WeCom",
+  "plugins.catalog.wecom.summary": "Documents, tasks and calendar in one conversation",
+  "plugins.catalog.wecom.description": "Create and edit documents, track tasks, and manage schedules through official cloud connections.",
+  "plugins.catalog.wecom.examples.first": "“Review my schedule and tasks for today and help plan my work.”",
+  "plugins.catalog.wecom.examples.second": "“Save this discussion as a document and create the related tasks.”",
+  "plugins.catalog.wecom.access": "Authorize each capability in the platform. Organization approval may be required. Only supported, currently authorized tools are exposed.",
+  "plugins.catalog.wecom.credentialLink": "Read the official cloud connection guide",
+  "plugins.catalog.wecom.authMethods.official_mcp.label": "Import official MCP configuration",
+  "plugins.catalog.wecom.authMethods.official_mcp.setup": "Authorize access in the platform, then paste one official connection URL or JSON containing up to three services. The configuration may contain credentials; enter it only here. Setup checks tool discovery only.",
+  "plugins.catalog.wecom.fields.configuration.label": "Official MCP URL or JSON configuration",
+  "plugins.catalog.wecom.fields.configuration.error": "Enter an official cloud URL or JSON configuration supported by the guide."
 }

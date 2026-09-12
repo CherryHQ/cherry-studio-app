@@ -1,0 +1,1 @@
+export { wecomPlugin } from './wecomPlugin';
