@@ -132,7 +132,11 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     act(async () => {
       if (restart) await plugins.authorization.cancel(entry.id, method.id);
       const next = await plugins.authorization.begin(entry.id, method.id);
-      void openConfirmation(next);
+      if (next.status === 'idle' && applicationFields) {
+        setExistingApplication({ fields: {}, invalid: new Set() });
+      } else {
+        void openConfirmation(next);
+      }
       return next;
     });
 

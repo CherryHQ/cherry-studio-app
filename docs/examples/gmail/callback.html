@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Return to Cherry Studio</title>
+  </head>
+  <body>
+    <h1>Return to Cherry Studio</h1>
+    <p id="status">This page only completes a Gmail connection started in Cherry Studio.</p>
+    <a id="return" hidden rel="noreferrer">Continue in Cherry Studio</a>
+    <script>
+      (() => {
+        const source = new URL(location.href);
+        history.replaceState(null, '', location.pathname);
+        const query = source.searchParams;
+        const state = query.get('state');
+        const code = query.get('code');
+        const error = query.get('error');
+        const validState =
+          /^(cherrystudio|cherrystudio-dev|cherrystudio-preview)\.[A-Za-z0-9_-]{43}$/.exec(
+            state || '',
+          );
+        const validCode = query.getAll('code').length === 1 && /^\S{1,4096}$/.test(code || '');
+        const validError =
+          query.getAll('error').length === 1 && /^[a-z_]{1,128}$/.test(error || '');
+        if (
+          source.href.length > 16384 ||
+          source.hash ||
+          query.getAll('state').length !== 1 ||
+          !validState ||
+          !((validCode && !query.has('error')) || (validError && !query.has('code')))
+        ) {
+          document.getElementById('status').textContent =
+            'Invalid or missing callback. Start a new connection in Cherry Studio.';
+          return;
+        }
+        const target = new URL(`${validState[1]}://plugins/gmail/callback`);
+        target.searchParams.set('state', state);
+        target.searchParams.set(code ? 'code' : 'error', code || error);
+        const link = document.getElementById('return');
+        link.href = target.href;
+        link.hidden = false;
+        document.getElementById('status').textContent =
+          'Tap Continue to confirm the account in Cherry Studio. You can then close this page.';
+      })();
+    </script>
+  </body>
+</html>
