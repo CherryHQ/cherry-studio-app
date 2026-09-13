@@ -2,9 +2,9 @@
 
 Document export is implemented as an application capability. Chat supplies the first document
 adapter; the conversion service has no Agent, conversation, message-list, or navigation dependency.
-An authorized iOS simulator development build verifies local text-message selection, WebP capture,
-the branded fullscreen preview and returning to edit selection. Android and the broader capture
-matrix remain unverified.
+Previous iOS simulator acceptance covered the original selection and capture flow. The separate
+summary selector, theme-aware frame and tiled capture described here still require device
+acceptance on iOS and Android.
 
 ## Ownership
 
@@ -83,10 +83,10 @@ try {
 `render` accepts an optional abort signal and semantic progress callback. HTML/image targets require
 explicit presentation values: logical width, the resolved base/sm/lg/xl typography roles, and
 resolved semantic colors, including user bubbles, code surfaces and secondary text. The export
-page freezes those values at opening so a system theme or orientation transition cannot replace a
-file during delivery. Programmatic input presentation is validated and copied by the HTML renderer.
+page freezes width, typography and export time at opening. Theme changes regenerate the preview;
+the active presentation is held while saving or delivering so the current file cannot be replaced. Programmatic input presentation is validated and copied by the HTML renderer.
 
-Image presentation may also supply an `imageFrame` with resolved paper/ink colors, an embedded PNG
+Image presentation may also supply an `imageFrame` with resolved frame/text colors, an embedded PNG
 logo, brand name, localized label and timestamp. These are presentation data, independent of the source
 document. The renderer copies and validates them, escapes text, and includes the complete frame
 inside the measured and captured `main` element. The frontend supplies this treatment only for the
@@ -121,7 +121,7 @@ Markdown is source text rather than a reconstruction of rendered HTML. Authored 
 unchanged; generated metadata and structured blocks are escaped. Managed image/attachment blocks
 do not expose sandbox paths.
 
-Chat HTML and WebP follow the native message hierarchy: 16-point gutters, an 88%-width user column,
+Chat HTML follows the native message hierarchy: 16-point gutters, an 88%-width user column,
 question attachments above the bubble, compact assistant labels, and full-width answers. They omit
 the extra article title and section dividers. The page supplies CherryUI's resolved accessibility
 type scale and the existing chat/code/surface tokens for both light and dark themes. Paragraphs,
@@ -132,19 +132,21 @@ label; the nested reasoning row uses its completed-thinking label. HTML follows 
 initially collapsed levels, process separator, compact nested rows and reasoning rail. WebP captures
 the collapsed summary rather than exposing hidden thinking as plain text.
 
-The parser is `markdown-it` 15.0.1. Capture uses `react-native-view-shot` 5.1.0, matching Expo SDK 57's
-bundled native-module version. Android 10+ captures lossless WebP directly at quality 100 using
-view-shot's historical `webm` option. iOS and older Android capture a temporary PNG, then the
-existing Skia encoder converts it to lossless WebP at quality 100 on a job-owned Worklets runtime.
-This keeps decoding/encoding off the JS and UI threads. Both temporary files are released after
-the session copies the WebP, or after a failed/cancelled operation settles. The callback returns
-WebP bytes; published files use `.webp` and `image/webp`. Math uses the existing KaTeX dependency.
-These choices do not imply full visual parity with the native chat Markdown renderer.
+The parser is `markdown-it` 15.0.1. Capture uses `react-native-view-shot` 5.1.0, matching Expo SDK 57.
+Both platforms capture small temporary PNG tiles. A job-owned Worklets runtime keeps the CPU
+assembly surface alive while each PNG tile is transferred, decoded, drawn, and released before the
+next tile is captured. The final image is then encoded as lossless WebP at quality 100. This keeps
+compressed tile bytes bounded on the JavaScript side; the final surface and encoder still require
+full-output memory.
+This avoids full-height native screenshots and GPU texture-size limits; decoding/assembly/encoding
+stay off the JS and UI threads. Native tile files are released after reading, and the assembled
+file after the session copies it or cancellation settles. Published files use `.webp` and
+`image/webp`. Math uses KaTeX. This does not imply full parity with the native Markdown renderer.
 
 ## Limits And Capture
 
-The initial image format is **one bounded lossless WebP**, with no stitching or multi-page output. A document
-that exceeds the budget offers HTML; Markdown remains available in the format menu.
+The image format is **one bounded lossless WebP**, assembled from small capture tiles. Multi-page
+output is not yet implemented. Content beyond one image offers HTML; Markdown remains available.
 
 | Resource | Limit |
 | --- | --- |
@@ -159,19 +161,25 @@ that exceeds the budget offers HTML; Markdown remains available in the format me
 | Embedded image text | 24 MiB of base64 references per output, including repeated references |
 | Remote read | 15 seconds; redirects rejected; response stream stopped at the byte cap |
 | HTML width / typography | 280–800 logical pixels / 12–40 pixel type, with 12–56 pixel line heights |
-| Capture | At most 8192 logical pixels high, 16383 physical pixels on either axis, and 12 million physical pixels |
-| Capture readiness/native wait | 30-second logical timeout |
+| Capture | At most 16,383 layout points high, 16,383 output pixels on either axis, and 24 million output pixels |
+| Output scale | Prefer 2x; lower toward 1x when required by the image budget |
+| Native capture tile | At most 1,024 output pixels high, regardless of screen density |
+| Capture readiness/native wait | 60-second logical timeout; physical lease held until native work settles |
 | Runtime sessions | At most 4 live or closing sessions; one interactive request |
 
-Physical capture admission uses the device pixel ratio before expanding the native view. The pixel
-budget can therefore produce a lower height limit on high-density devices. Reducing the WebP's
-encoded size is not treated as reducing bitmap memory.
+Admission uses measured layout and output pixels, independent of the device pixel ratio. For a
+402-point document on a 3x phone, the old 12-million-pixel budget rejected content beyond roughly
+3,316 points. The new path admits up to 16,383 points at 1x, preferring 2x where it fits. A 24-million
+pixel RGBA bitmap needs 96 MB before encoder, source images and screenshot buffers; compressed file
+size is not a memory estimate. This budget is a bounded engineering choice, not a measured
+low-memory-device guarantee.
 
-The capture surface waits for image decoding, fonts and stable layout over multiple animation
-frames. It measures the document, checks width/height/pixel limits, expands the mounted wrapper,
-then waits for the resized native layout and a second stable-layout report before capture. The
-wrapper is non-collapsible and its parent disables clipped-subview removal. The preview displays
-the produced WebP, not an HTML approximation.
+The surface waits for fonts, decoded images and stable layout, then chooses output dimensions before
+allocating native surfaces. Each tile preserves the original CSS width and applies a scale and
+vertical translation, so text does not reflow at tile boundaries. It waits for matching native
+layout and browser painting before capture. Tiles share whole-pixel boundaries with no gaps or
+overlap. The wrapper is non-collapsible and disables clipping removal. The preview displays the
+actual final WebP. Cancellation never publishes a partial assembly.
 
 Messages from the WebView must match the active request and expected dimensions. A module-local
 capture lease prevents another physical capture from reusing a closing surface. Abort/timeout has
@@ -222,15 +230,16 @@ attachment bundles, or multi-image sharing are introduced.
 
 ## Chat Integration
 
-The assistant message toolbar's share button enters selection on the existing message list. The
-clicked answer starts selected, and each user/assistant row displays a left selection control.
-Pending messages cannot be selected; system rows have no selection control. Users can continue
-reading and paginating history while their selected IDs remain stable across row unmounts.
+The assistant toolbar opens `/chat-share` with the session and clicked answer IDs. The answer
+starts selected. This independent, paginated list shows user/assistant roles, timestamps and at
+most four lines from a 240-character excerpt. Pending/streaming messages cannot be selected and
+system messages are excluded. Whole-row presses toggle selection. No Markdown renderer, tool
+payload or media view is mounted inside a selection row.
 
-The composer stays mounted but hidden behind bottom controls for cancel, selected count and confirm.
-Cancel or Android Back exits selection; leaving the Session resets it. Confirmation is disabled for
-an empty selection and while preparation is pending. No export preview opens before confirmation.
-There is no sidebar sharing action, separate message-selection route, or timestamp option.
+The original chat list and composer remain mounted with unchanged layout and draft state. Only the
+selected summary row and count subscribe to an individual toggle. Cancel/native Back closes the
+selector. Returning from the export preview retains the selection; changing route identity resets
+it. The selector has no per-row local state and can recycle rows by message ID.
 
 Confirmation resolves exactly the selected persisted messages in one bounded ID query,
 and supplies them in chronological order to `/document-export`. Same-turn questions are included
@@ -239,9 +248,9 @@ than 128 messages; the existing section limit applies only to the selection. Mis
 selected messages, failed reads, and exceeded content budgets produce localized feedback without
 silently dropping content. Cancelling preparation or unmounting/backgrounding stops pending reads.
 Returning from the preview keeps the selection editable. The preview is an independent fullscreen
-modal with a local dark theme and its own close action, rather than the ordinary route header.
+modal using the application theme and its own close action.
 WebP is the default; a compact menu switches to Markdown or HTML on demand. Images include straight
-white margins, dark conversation content and a compact signature: the Cherry Studio name on the left,
+theme-aware margins, conversation content and a compact signature: the Cherry Studio name on the left,
 with the Cherry logo, a fine vertical divider and local export time on the right. The timestamp uses
 `YYYY.MM.DD HH:mm` and is frozen at opening across both document snapshots and format changes.
 The baseline signature area is 44 logical points and can grow for larger or wrapped text. The displayed
@@ -268,23 +277,17 @@ copying, late cancellation cleanup, lifecycle admission/teardown, selected-messa
 coverage also checks that preview creates no files or asset reads and repeated sharing reuses its file.
 Preview-hook coverage includes lazy conversion, option changes and stale-format rejection; request
 coverage checks disposal of both option snapshots. WebP coverage checks output metadata, per-axis
-limits, direct Android capture, lossless encoder options, temporary-file ownership and cancellation
+limits, tiled assembly, lossless encoder options, temporary-file ownership and cancellation
 during capture/encoding. The library filter and existing
 serialization/composition fixtures were updated as well.
 
-Formatting and lint passed for the changed files. Full formatting also passed. Full lint initially
-reported seven unresolved imports because the workspace lacked the existing `ai-core` build output;
-after copying existing package artifacts with identical source/configuration and rerunning ESLint
-without its stale cache, lint completed with only existing repository warnings. Automated tests and
-type checks have not been run. A local EAS `development-simulator` Debug build completed, and the
-isolated iPhone 17 Pro simulator running iOS 26.5 verified a fresh installation with four local
-illustrative messages, without imported history, credentials or model calls. The selected messages
-generated a 1206 × 2040 WebP containing the Cherry signature. The preview scrolls, closing preserves
-all four selections, and editing the selection to two messages generates another preview. Runtime
-verification caught and fixed the missing confirmation translation and an asynchronous encoder
-import that prevented Worklets Bundle Mode from resolving the encoder after launch. Formatting and
-lint passed again after these fixes; automated tests, type checks, Android and delivery to a recipient
-remain unverified.
+The latest changes add regression cases for density-independent budgets, tile coverage and order,
+source-file cleanup, lossless assembly, cancelled native/background work, bounded excerpts and
+selection subscription isolation. Changed-file formatting and lint passed. Tests, type checks,
+builds and device acceptance were not run for these changes.
+
+The earlier implementation was exercised on an iPhone 17 Pro simulator with an iOS development
+client. Those results do not validate the new selector, theme behavior or tiled capture pipeline.
 
 When authorized, acceptance should cover both iOS and Android, light/dark themes, different pixel
 ratios, long text, wide tables/code, inline/display math, multiple images, rejected/failed resources,

@@ -10,7 +10,6 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BackHandler, Keyboard } from 'react-native';
 
 import { toggleSelection } from '@/frontend/components/Selection';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
@@ -18,18 +17,15 @@ import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport'
 import { useShareChat } from './useShareChat';
 
 type ChatShareSelectionState = {
-  isSelecting: boolean;
   isSharing: boolean;
 };
 
 type ChatShareSelectionActions = {
-  startSelection: (input?: { messageId?: string }) => void;
-  cancelSelection: () => void;
   toggleMessage: (messageId: string) => void;
   confirmSelection: () => void;
 };
 
-type SelectedMessageIds = ReadonlySet<string> | undefined;
+type SelectedMessageIds = ReadonlySet<string>;
 type ChatShareSelectionStore = ReturnType<typeof createChatShareSelectionStore>;
 
 const ChatShareSelectionStateContext = createContext<ChatShareSelectionState | null>(null);
@@ -39,31 +35,16 @@ const ChatShareSelectionStoreContext = createContext<ChatShareSelectionStore | n
 export function ChatShareSelectionProvider({
   children,
   sessionId,
-}: PropsWithChildren<{ sessionId?: string }>) {
+  initialMessageId,
+}: PropsWithChildren<{ sessionId: string; initialMessageId?: string }>) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [store] = useState(createChatShareSelectionStore);
+  const [store] = useState(() => createChatShareSelectionStore(initialMessageId));
   const { shareChat, isSharing, cancelShare } = useShareChat(sessionId);
-  const isSelecting = useSelectionSnapshot(store, selectIsSelecting);
-
-  const startSelection = useCallback(
-    ({ messageId }: { messageId?: string } = {}) => {
-      if (!sessionId) return;
-      cancelShare();
-      Keyboard.dismiss();
-      store.setSelectedIds(new Set(messageId ? [messageId] : []));
-    },
-    [cancelShare, sessionId, store],
-  );
-  const cancelSelection = useCallback(() => {
-    cancelShare();
-    store.setSelectedIds(undefined);
-  }, [cancelShare, store]);
-
   const toggleMessage = useCallback(
     (messageId: string) => {
       const selectedIds = store.getSnapshot();
-      if (!selectedIds || isSharing) return;
+      if (isSharing) return;
       if (!selectedIds.has(messageId) && selectedIds.size >= DOCUMENT_EXPORT_MAX_SECTIONS) {
         toast.show({
           label: t('chat.share.selectionLimit', { count: DOCUMENT_EXPORT_MAX_SECTIONS }),
@@ -77,27 +58,15 @@ export function ChatShareSelectionProvider({
   );
   const confirmSelection = useCallback(() => {
     const selectedIds = store.getSnapshot();
-    if (selectedIds?.size && !isSharing) shareChat([...selectedIds]);
+    if (selectedIds.size && !isSharing) shareChat([...selectedIds]);
   }, [isSharing, shareChat, store]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!isSelecting) return;
-      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        cancelSelection();
-        return true;
-      });
-      return () => {
-        subscription.remove();
-        cancelShare();
-      };
-    }, [cancelSelection, cancelShare, isSelecting]),
-  );
+  useFocusEffect(useCallback(() => cancelShare, [cancelShare]));
 
-  const state = useMemo(() => ({ isSelecting, isSharing }), [isSelecting, isSharing]);
+  const state = useMemo(() => ({ isSharing }), [isSharing]);
   const actions = useMemo(
-    () => ({ startSelection, cancelSelection, toggleMessage, confirmSelection }),
-    [cancelSelection, confirmSelection, startSelection, toggleMessage],
+    () => ({ toggleMessage, confirmSelection }),
+    [confirmSelection, toggleMessage],
   );
 
   return (
@@ -128,10 +97,7 @@ export function useChatShareSelectionCount() {
 }
 
 export function useIsChatMessageSelected(messageId: string) {
-  const select = useCallback(
-    (ids: SelectedMessageIds) => ids?.has(messageId) ?? false,
-    [messageId],
-  );
+  const select = useCallback((ids: SelectedMessageIds) => ids.has(messageId), [messageId]);
   return useSelectionSnapshot(useSelectionStore(), select);
 }
 
@@ -150,17 +116,13 @@ function useSelectionSnapshot<T extends boolean | number>(
   return useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
 }
 
-function selectIsSelecting(ids: SelectedMessageIds) {
-  return ids !== undefined;
-}
-
 function selectSelectedCount(ids: SelectedMessageIds) {
-  return ids?.size ?? 0;
+  return ids.size;
 }
 
 /** One canonical selection per provider; no state is mirrored from React effects. */
-function createChatShareSelectionStore() {
-  let selectedIds: SelectedMessageIds;
+function createChatShareSelectionStore(initialMessageId?: string) {
+  let selectedIds: SelectedMessageIds = new Set(initialMessageId ? [initialMessageId] : []);
   const listeners = new Set<() => void>();
   return {
     getSnapshot: () => selectedIds,

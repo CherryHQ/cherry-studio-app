@@ -1,35 +1,35 @@
 # Chat Sharing
 
-The assistant toolbar's share button enters message selection on the current chat list, with the
-clicked answer initially selected. Every user and assistant row gains a left selection control;
-system rows are excluded and pending messages cannot be selected. The ordinary message action
-buttons are hidden while selection is active. Reading, disclosures and history pagination remain
-available, and selected IDs survive rows leaving the visible window.
+The assistant toolbar opens `/chat-share` with the session and clicked message IDs. The separate
+page initially selects that answer and loads a paginated history window around it. User and
+assistant rows show their role, time and up to four lines from a 240-character excerpt, with an
+attachment-name fallback. Pending/streaming messages cannot be selected. Whole-row presses select;
+scrolling retains ordinary native press cancellation. Excerpts do not render Markdown, media,
+tools or reasoning. The exported document still contains the complete selected messages.
 
-`ChatShareSelectionProvider` owns selection for the current composer/session identity. Its bottom
-controls show cancel, selected count and confirm; the managed composer stays mounted but hidden.
-Cancel or Android Back exits selection, and leaving the Session resets it. No preview opens before
-confirmation. At most 128 messages can be selected; an empty selection cannot be confirmed.
+The original chat page stays mounted with its unchanged message widths, measured heights, scroll
+position and composer draft. It no longer subscribes to sharing selection. The selector's rows are
+safe to recycle: each reads its own selected boolean by message ID, while only the bottom controls
+subscribe to the count. Individual toggles leave unrelated rows and action consumers stable.
+These are source-level guarantees; device rendering/scroll performance is not yet measured.
 
-Selection IDs live in one provider-owned store. Rows subscribe to their own selected boolean, and
-the bottom controls subscribe to the count. Mode and action contexts stay stable across individual
-toggles, so selecting a message does not rerender unrelated rows or message-action consumers.
+`ChatShareSelectionProvider` owns IDs for one route identity. Cancel/native Back closes this page;
+returning from the export preview retains the existing selection. At most 128 messages can be
+selected; an empty selection cannot be confirmed. Leaving the page cancels pending export reads.
 
-Confirmation reads only the selected persisted messages through a single bounded ID query and restores
-chronological order, regardless of click order. It does not implicitly include same-turn questions
-or other unselected messages. The conversation may exceed 128 messages; only the selection and
-export content budgets are bounded. Missing or unfinished selected content and failed reads reject
-the export rather than returning a partial selection. Cancellation, unmount and backgrounding stop
-pending reads. Returning from the export preview retains the selection for further edits.
+Confirmation reads only the selected persisted messages through a single bounded ID query and
+restores chronological order, regardless of click order. It does not implicitly include questions
+or unselected messages. The conversation may exceed 128 messages. Missing or unfinished content
+and failed reads reject the export instead of silently sharing a partial selection.
 
 The source adapter supplies two immutable document snapshots when thinking content exists: omitted
-by default, and included when the preview checkbox is checked. Thinking covers the visible reasoning,
+by default, and included when the preview switch is enabled. Thinking covers the visible reasoning,
 intermediate prose and readable tool names. Raw tool payloads and diagnostic metadata never enter
 the document. The export page receives only a source-owned label and documents; it has no chat reads.
 
-The adapter preserves plain user text and supplies bubble/message presentation hints. HTML and WebP
-use the chat hierarchy: right-aligned questions, compact assistant headings and full-width answers,
-with attachments above the question bubble. The conversation title remains the exported filename
+The adapter preserves plain user text and supplies bubble/message presentation hints. HTML uses
+the chat hierarchy: right-aligned questions and full-width answers. Framed WebP uses numbered
+message sections with theme-aware branding. The conversation title remains the exported filename
 and document title without adding an article heading above the exchange.
 
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
@@ -39,4 +39,4 @@ disclosures; HTML and WebP start with the same collapsed process summary.
 
 Rendering, temporary files, permanent storage and system delivery remain in the application export
 capability. Opening the preview renders an image without thinking content by default; changing the
-format or checkbox renders the selected snapshot as needed.
+format or switch renders the selected snapshot as needed.

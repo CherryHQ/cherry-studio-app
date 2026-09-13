@@ -218,10 +218,31 @@ test('capture output is retained until its asynchronous copy completes', async (
   await session.dispose();
 });
 
+test('retains a long image above the old 12-million-pixel budget', async () => {
+  mockFiles.set('file:///native.webp', 'image');
+  const release = jest.fn();
+  const session = createDocumentExportSession(
+    { kind: 'markdown', source: 'Content' },
+    { readManagedImage: jest.fn(), saveFile: jest.fn() },
+    () => {},
+    () => {},
+  );
+  const artifact = await session.render({
+    format: 'image',
+    presentation,
+    capture: async () => ({ uri: 'file:///native.webp', width: 1200, height: 12000, release }),
+  });
+  expect(artifact).toMatchObject({ format: 'image', width: 1200, height: 12000 });
+  expect(mockFiles.get(artifact.file.uri)).toBe('image');
+  expect(release).toHaveBeenCalledTimes(1);
+  await session.dispose();
+});
+
 test.each([
   { width: 360, height: 16384 },
   { width: 16384, height: 360 },
-])('rejects WebP dimensions beyond either axis limit: %j', async (dimensions) => {
+  { width: 2000, height: 12001 },
+])('rejects WebP dimensions beyond the axis or pixel budget: %j', async (dimensions) => {
   const release = jest.fn();
   const session = createDocumentExportSession(
     { kind: 'markdown', source: 'Content' },

@@ -6,6 +6,7 @@ import type {
   DocumentExportSession,
   DocumentExportTarget,
   ExportFormat,
+  ExportPresentation,
 } from '@/shared/contracts/documentExport';
 
 import { useDocumentExportPreview } from '../useDocumentExportPreview';
@@ -54,13 +55,15 @@ function Probe({
   session,
   format,
   revision,
+  currentPresentation = presentation,
 }: {
   ref: Ref<Preview>;
   session: DocumentExportSession;
   format: ExportFormat;
   revision: number;
+  currentPresentation?: ExportPresentation;
 }) {
-  const preview = useDocumentExportPreview(session, format, presentation, capture, revision);
+  const preview = useDocumentExportPreview(session, format, currentPresentation, capture, revision);
   useImperativeHandle(ref, () => preview, [preview]);
   return null;
 }
@@ -162,3 +165,30 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+test('a theme change invalidates the old artifact while the new presentation is rendering', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="html" revision={0} />);
+  });
+  expect(ref.current!.state.status).toBe('ready');
+  const pending = deferred<DocumentExportArtifact>();
+  session.render.mockReturnValueOnce(pending.promise);
+  const dark = {
+    ...presentation,
+    colors: { ...presentation.colors, background: 'black', foreground: 'white' },
+  };
+  await act(async () => {
+    renderer?.update(
+      <Probe ref={ref} session={session} format="html" revision={0} currentPresentation={dark} />,
+    );
+  });
+  expect(ref.current!.state.status).toBe('loading');
+  await expect(ref.current!.getArtifact(new AbortController().signal)).rejects.toMatchObject({
+    code: 'busy',
+  });
+  expect(session.render.mock.calls.at(-1)?.[0]).toEqual({ format: 'html', presentation: dark });
+  await act(async () => pending.resolve({ ...htmlArtifact, id: 'dark' }));
+  expect(ref.current!.state).toMatchObject({ status: 'ready', artifact: { id: 'dark' } });
+});

@@ -17,8 +17,9 @@ const mockToastShow = jest.fn();
 const mockToast = { show: mockToastShow };
 const mockTranslate = (key: string) => key;
 const mockMessageRender = jest.fn();
-const mockModeRender = jest.fn();
+const mockStateRender = jest.fn();
 const mockActionsRender = jest.fn();
+let mockFocusEffect: () => () => void;
 
 jest.mock('../useShareChat', () => ({
   useShareChat: () => ({
@@ -27,44 +28,34 @@ jest.mock('../useShareChat', () => ({
     isSharing: false,
   }),
 }));
-jest.mock('@cherrystudio/ui/components', () => ({
-  useToast: () => ({ toast: mockToast }),
+jest.mock('@cherrystudio/ui/components', () => ({ useToast: () => ({ toast: mockToast }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
+jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => () => void) => {
+    mockFocusEffect = effect;
+  },
 }));
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: mockTranslate }),
-}));
-jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
 jest.mock('@/frontend/components/Selection', () => ({
   toggleSelection: jest.requireActual('@/frontend/components/Selection/selection').toggleSelection,
 }));
 
-type Selection = ReturnType<typeof useChatShareSelectionActions> &
-  ReturnType<typeof useChatShareSelectionState> & { selectedCount: number };
+type Selection = ReturnType<typeof useChatShareSelectionActions> & { selectedCount: number };
 function SelectionProbe({ ref }: { ref: Ref<Selection> }) {
-  const state = useChatShareSelectionState();
   const actions = useChatShareSelectionActions();
   const selectedCount = useChatShareSelectionCount();
-  useImperativeHandle(ref, () => ({ ...state, ...actions, selectedCount }), [
-    state,
-    actions,
-    selectedCount,
-  ]);
+  useImperativeHandle(ref, () => ({ ...actions, selectedCount }), [actions, selectedCount]);
   return null;
 }
-
 function MessageSelectionProbe({ messageId }: { messageId: string }) {
-  const { isSelecting, isSharing } = useChatShareSelectionState();
+  const { isSharing } = useChatShareSelectionState();
   useChatShareSelectionActions();
-  const isSelected = useIsChatMessageSelected(messageId);
-  mockMessageRender(messageId, isSelected, isSelecting, isSharing);
+  mockMessageRender(messageId, useIsChatMessageSelected(messageId), isSharing);
   return null;
 }
-
-function ModeProbe() {
-  mockModeRender(useChatShareSelectionState());
+function StateProbe() {
+  mockStateRender(useChatShareSelectionState());
   return null;
 }
-
 function ActionsProbe() {
   mockActionsRender(useChatShareSelectionActions());
   return null;
@@ -72,16 +63,15 @@ function ActionsProbe() {
 
 let renderer: ReactTestRenderer;
 const selection = createRef<Selection>();
-
 beforeEach(() => {
   jest.clearAllMocks();
   act(() => {
     renderer = create(
-      <ChatShareSelectionProvider sessionId="session">
+      <ChatShareSelectionProvider sessionId="session" initialMessageId="answer">
         <SelectionProbe ref={selection} />
         <MessageSelectionProbe messageId="answer" />
         <MessageSelectionProbe messageId="question" />
-        <ModeProbe />
+        <StateProbe />
         <ActionsProbe />
       </ChatShareSelectionProvider>,
     );
@@ -89,63 +79,46 @@ beforeEach(() => {
 });
 afterEach(() => act(() => renderer.unmount()));
 
-test('the message action enters selection and only confirmation opens sharing', () => {
-  act(() => selection.current!.startSelection({ messageId: 'answer' }));
-  expect(selection.current!.isSelecting).toBe(true);
+test('preselects the clicked answer but opens the export only on confirmation', () => {
   expect(selection.current!.selectedCount).toBe(1);
-  expect(mockMessageRender).toHaveBeenCalledWith('answer', true, true, false);
   expect(mockShareChat).not.toHaveBeenCalled();
-
   act(() => selection.current!.toggleMessage('question'));
-  expect(mockShareChat).not.toHaveBeenCalled();
   act(() => selection.current!.confirmSelection());
   expect(mockShareChat).toHaveBeenCalledWith(['answer', 'question']);
 });
 
-test('deselecting all messages prevents confirmation', () => {
-  act(() => selection.current!.startSelection({ messageId: 'answer' }));
+test('an empty selection cannot be confirmed', () => {
   act(() => selection.current!.toggleMessage('answer'));
   act(() => selection.current!.confirmSelection());
-  expect(selection.current!.isSelecting).toBe(true);
   expect(selection.current!.selectedCount).toBe(0);
   expect(mockShareChat).not.toHaveBeenCalled();
 });
 
-test('cancelling aborts preparation and clears the selection before another entry', () => {
-  act(() => selection.current!.startSelection({ messageId: 'answer' }));
-  mockCancelShare.mockClear();
-  act(() => selection.current!.cancelSelection());
+test('losing focus cancels pending reads but preserves selection on return from preview', () => {
+  act(() => selection.current!.toggleMessage('question'));
+  const blur = mockFocusEffect();
+  act(blur);
   expect(mockCancelShare).toHaveBeenCalledTimes(1);
-  expect(selection.current!.isSelecting).toBe(false);
-  expect(selection.current!.selectedCount).toBe(0);
-  act(() => selection.current!.startSelection({ messageId: 'another-answer' }));
-  expect(selection.current!.selectedCount).toBe(1);
-  expect(mockShareChat).not.toHaveBeenCalled();
-  act(() => selection.current!.confirmSelection());
-  expect(mockShareChat).toHaveBeenCalledWith(['another-answer']);
-});
-
-test('a toggle updates only its message and count, leaving mode and actions consumers stable', () => {
-  act(() => selection.current!.startSelection({ messageId: 'answer' }));
-  mockMessageRender.mockClear();
-  mockModeRender.mockClear();
-  mockActionsRender.mockClear();
-
-  act(() => selection.current!.toggleMessage('question'));
-  expect(mockMessageRender.mock.calls).toEqual([['question', true, true, false]]);
+  mockFocusEffect();
   expect(selection.current!.selectedCount).toBe(2);
-  expect(mockModeRender).not.toHaveBeenCalled();
-  expect(mockActionsRender).not.toHaveBeenCalled();
-
-  mockMessageRender.mockClear();
-  act(() => selection.current!.toggleMessage('question'));
-  expect(mockMessageRender.mock.calls).toEqual([['question', false, true, false]]);
-  expect(selection.current!.selectedCount).toBe(1);
+  act(() => selection.current!.confirmSelection());
+  expect(mockShareChat).toHaveBeenCalledWith(['answer', 'question']);
 });
 
-test('confirmation and the selection limit read all changes made before React renders', () => {
-  act(() => selection.current!.startSelection());
+test('a toggle updates only its row and count, leaving state and actions consumers stable', () => {
+  mockMessageRender.mockClear();
+  mockStateRender.mockClear();
+  mockActionsRender.mockClear();
+  act(() => selection.current!.toggleMessage('question'));
+  expect(mockMessageRender.mock.calls).toEqual([['question', true, false]]);
+  expect(selection.current!.selectedCount).toBe(2);
+  expect(mockStateRender).not.toHaveBeenCalled();
+  expect(mockActionsRender).not.toHaveBeenCalled();
+});
+
+test('confirmation and the selection limit read changes made before React renders', () => {
   act(() => {
+    selection.current!.toggleMessage('answer');
     for (let index = 0; index < DOCUMENT_EXPORT_MAX_SECTIONS; index++) {
       selection.current!.toggleMessage(`message-${index}`);
     }
@@ -159,25 +132,16 @@ test('confirmation and the selection limit read all changes made before React re
   );
 });
 
-test('a row reads its own selection when a virtualized slot changes message identity', () => {
-  act(() => selection.current!.startSelection({ messageId: 'answer' }));
-  mockMessageRender.mockClear();
-  act(() => {
-    renderer.update(
-      <ChatShareSelectionProvider sessionId="session">
-        <SelectionProbe ref={selection} />
-        <MessageSelectionProbe messageId="question" />
-      </ChatShareSelectionProvider>,
-    );
-  });
-  expect(mockMessageRender).toHaveBeenLastCalledWith('question', false, true, false);
-  act(() => {
-    renderer.update(
-      <ChatShareSelectionProvider sessionId="session">
-        <SelectionProbe ref={selection} />
-        <MessageSelectionProbe messageId="answer" />
-      </ChatShareSelectionProvider>,
-    );
-  });
-  expect(mockMessageRender).toHaveBeenLastCalledWith('answer', true, true, false);
+test('a recycled row subscribes to its current message identity', () => {
+  for (const messageId of ['question', 'answer']) {
+    act(() => {
+      renderer.update(
+        <ChatShareSelectionProvider sessionId="session" initialMessageId="answer">
+          <SelectionProbe ref={selection} />
+          <MessageSelectionProbe messageId={messageId} />
+        </ChatShareSelectionProvider>,
+      );
+    });
+    expect(mockMessageRender).toHaveBeenLastCalledWith(messageId, messageId === 'answer', false);
+  }
 });

@@ -12,12 +12,11 @@ import {
 import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import { ScopedTheme } from 'uniwind';
 
 import {
   claimDocumentExportRequest,
@@ -34,6 +33,7 @@ import type {
   DocumentExportSession,
   ExportDocument,
   ExportFormat,
+  ExportPresentation,
 } from '@/shared/contracts/documentExport';
 
 import { useDocumentExportHtmlCapture } from './components/DocumentExportHtmlSurface';
@@ -44,11 +44,7 @@ import { IMAGE_FRAME_BRAND } from './utils/imageFrameBrand';
 export function DocumentExportScreen() {
   const params = useLocalSearchParams<{ requestId?: string | string[] }>();
   const id = getSingleRouteParam(params.requestId);
-  return (
-    <ScopedTheme theme="dark">
-      <DocumentExportRoute key={id} requestId={id} />
-    </ScopedTheme>
-  );
+  return <DocumentExportRoute key={id} requestId={id} />;
 }
 
 function DocumentExportRoute({ requestId }: { requestId?: string }) {
@@ -130,8 +126,6 @@ function DocumentExportBody({
     codeBlock,
     inlineCode,
     inlineCodeForeground,
-    paper,
-    ink,
   ] = useThemeColor([
     'background',
     'foreground',
@@ -145,14 +139,17 @@ function DocumentExportBody({
     'code-block',
     'inline-code',
     'inline-code-foreground',
-    'constant-white',
-    'constant-black',
   ]);
-  const [presentation] = useState(() => {
+  const [layout] = useState(() => {
     const { base, sm, lg, xl } = resolveTypographyScale(fontStep);
     return {
       width: Math.floor(Math.min(600, Math.max(280, windowWidth))),
       typography: { base, sm, lg, xl },
+    };
+  });
+  const presentation = useMemo(
+    () => ({
+      ...layout,
       colors: {
         background,
         foreground,
@@ -167,22 +164,37 @@ function DocumentExportBody({
         inlineCode,
         inlineCodeForeground,
       },
-    };
-  });
-  // Freeze both snapshots' image presentation at opening, just like the base presentation.
-  // Changes outside this layer must not replace the artifact while it is being delivered.
-  const [imagePresentations] = useState(() => {
+    }),
+    [
+      layout,
+      background,
+      foreground,
+      muted,
+      tertiary,
+      border,
+      subtleBorder,
+      link,
+      bubble,
+      secondary,
+      codeBlock,
+      inlineCode,
+      inlineCodeForeground,
+    ],
+  );
+  const [timestamp] = useState(() => {
     const date = new Date();
     const pad = (value: number) => String(value).padStart(2, '0');
-    const timestamp = `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  });
+  const imagePresentations = useMemo(() => {
     const frameDocument = (document: ExportDocument) => {
       const isConversation = document.sections.some((section) => section.presentation);
       return {
         ...presentation,
         imageFrame: {
           ...IMAGE_FRAME_BRAND,
-          background: paper,
-          foreground: ink,
+          background: secondary,
+          foreground,
           label: t(isConversation ? 'documentExport.conversation' : 'documentExport.document'),
           timestamp,
         },
@@ -192,16 +204,20 @@ function DocumentExportBody({
       checked: frameDocument(checkedSession.document),
       unchecked: option ? frameDocument(option.uncheckedSession.document) : undefined,
     };
-  });
+  }, [checkedSession.document, foreground, option, presentation, secondary, t, timestamp]);
   const imagePresentation =
     !isOptionChecked && imagePresentations.unchecked
       ? imagePresentations.unchecked
       : imagePresentations.checked;
+  // Theme changes regenerate previews, but cannot replace a file while the share sheet uses it.
+  const [deliveryPresentation, setDeliveryPresentation] = useState<ExportPresentation>();
+  const previewPresentation =
+    deliveryPresentation ?? (format === 'image' ? imagePresentation : presentation);
   const { capture, surface } = useDocumentExportHtmlCapture();
   const { state, getArtifact, retry } = useDocumentExportPreview(
     session,
     format,
-    format === 'image' ? imagePresentation : presentation,
+    previewPresentation,
     capture,
     revision,
   );
@@ -222,6 +238,7 @@ function DocumentExportBody({
     if (sharing.current || !isReady) return;
     const controller = new AbortController();
     sharing.current = controller;
+    setDeliveryPresentation(previewPresentation);
     setIsSharing(true);
     try {
       const selected = await getArtifact(controller.signal);
@@ -239,7 +256,10 @@ function DocumentExportBody({
         toast.show({ label: t('documentExport.deliveryFailed'), variant: 'danger' });
     } finally {
       sharing.current = undefined;
-      if (!controller.signal.aborted) setIsSharing(false);
+      if (!controller.signal.aborted) {
+        setIsSharing(false);
+        setDeliveryPresentation(undefined);
+      }
     }
   };
 
@@ -274,7 +294,9 @@ function DocumentExportBody({
           >
             {state.status === 'error' ? (
               <ContentState.Error
-                description={t(`documentExport.errors.${state.code}`)}
+                description={t(
+                  `documentExport.errors.${state.code === 'size-limit' && format === 'image' ? 'image-size-limit' : state.code}`,
+                )}
                 primaryAction={{ children: t('common.retry'), onPress: retry }}
                 secondaryAction={
                   state.code === 'size-limit' && format === 'image'

@@ -139,13 +139,13 @@ function RootStack() {
         }}
       />
       <Stack.Screen name="files/[fileEntryId]" options={{ headerTransparent: false }} />
+      <Stack.Screen name="chat-share" options={{ headerShown: false }} />
       <Stack.Screen
         name="document-export"
         options={{
-          contentStyle: { backgroundColor: constantBlack },
+          contentStyle: { backgroundColor },
           headerShown: false,
           presentation: 'fullScreenModal',
-          statusBarStyle: 'light',
         }}
       />
       {/* Settings owns a nested stack and draws its headers there, so the root

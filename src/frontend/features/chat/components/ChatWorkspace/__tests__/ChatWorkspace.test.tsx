@@ -35,12 +35,6 @@ let mockAgentChatSession: {
   status: 'ready';
 };
 
-jest.mock('../../../share', () => ({
-  useChatShareSelectionActions: () => ({ startSelection: jest.fn(), toggleMessage: jest.fn() }),
-  useChatShareSelectionState: () => ({ isSelecting: false, isSharing: false }),
-  useIsChatMessageSelected: () => false,
-}));
-
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));

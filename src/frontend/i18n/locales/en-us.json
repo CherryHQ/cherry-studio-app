@@ -1487,7 +1487,7 @@
   "documentExport.progress.writing": "Generating the file…",
   "chat.share.title": "Share conversation",
   "chat.share.selectMessages": "Select messages to share",
-  "chat.share.confirmSelection": "Confirm",
+  "chat.share.confirmSelection": "Preview share",
   "chat.share.selectMessage": "Select message from {{role}}",
   "chat.share.selectionLimit": "Select up to {{count}} messages at a time.",
   "chat.share.tooLarge": "The selected content exceeds the export capacity. Select fewer messages and try again.",
@@ -1507,5 +1507,8 @@
   "chat.share.completed": "Completed",
   "chat.share.error": "Failed",
   "chat.share.cancelled": "Cancelled",
-  "chat.share.interrupted": "Interrupted"
+  "chat.share.interrupted": "Interrupted",
+  "chat.share.selectionHint": "Each row shows a summary. Sharing includes the full selected messages.",
+  "chat.share.previewWithoutText": "Images, attachments or thinking content",
+  "documentExport.errors.image-size-limit": "This selection exceeds one long image. Select fewer messages, or use HTML to keep all content."
 }

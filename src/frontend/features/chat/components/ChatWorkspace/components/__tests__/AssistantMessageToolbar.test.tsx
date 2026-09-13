@@ -10,11 +10,6 @@ const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockForkSession = jest.fn(async (_input: unknown) => undefined);
 const mockCopyAssistantMessageText = jest.mocked(copyAssistantMessageText);
 
-jest.mock('../../../../share', () => ({
-  useChatShareSelectionActions: () => ({ startSelection: jest.fn() }),
-  useChatShareSelectionState: () => ({ isSelecting: false, isSharing: false }),
-}));
-
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));

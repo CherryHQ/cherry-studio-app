@@ -10,13 +10,10 @@ import {
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockToastShow = jest.fn();
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ router: { push: (route: unknown) => mockPush(route) } }));
 const mockLoggerError = jest.fn();
 let mockSourceTitle: string | undefined;
-
-jest.mock('../../../../share', () => ({
-  useChatShareSelectionActions: () => ({ startSelection: jest.fn() }),
-  useChatShareSelectionState: () => ({ isSelecting: false, isSharing: false }),
-}));
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
@@ -116,6 +113,15 @@ describe('AssistantMessageActionsProvider', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
   }
+
+  test('opens selection at the clicked answer without changing the transcript', () => {
+    renderProvider();
+    act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer' }));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/chat-share',
+      params: { sessionId: 'session-1', messageId: 'answer' },
+    });
+  });
 
   test('shows copied feedback until it expires', async () => {
     renderProvider();

@@ -26,6 +26,7 @@ export function useDocumentExportPreview(
   const [result, setResult] = useState<{
     session: DocumentExportSession;
     format: ExportFormat;
+    presentation: ExportPresentation;
     attempt: number;
     revision: number;
     state: PreviewState;
@@ -36,7 +37,8 @@ export function useDocumentExportPreview(
     if (format === 'markdown') return;
     const controller = new AbortController();
     const publish = (state: PreviewState) => {
-      if (!controller.signal.aborted) setResult({ session, format, attempt, revision, state });
+      if (!controller.signal.aborted)
+        setResult({ session, format, presentation, attempt, revision, state });
     };
     // Abort, then settle the old work before admitting the next render.
     tail.current = tail.current
@@ -71,6 +73,7 @@ export function useDocumentExportPreview(
       ? { status: 'markdown', text: session.markdown }
       : result?.session === session &&
           result.format === format &&
+          result.presentation === presentation &&
           result.attempt === attempt &&
           result.revision === revision
         ? result.state

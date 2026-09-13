@@ -2,6 +2,9 @@ import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import {
+  DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
+  DOCUMENT_EXPORT_IMAGE_MAX_PIXELS,
+  DOCUMENT_EXPORT_WEBP_MAX_DIMENSION,
   DocumentExportError,
   type DocumentExportArtifact,
   type DocumentExportInput,
@@ -121,8 +124,8 @@ export function createDocumentExportSession(
           capture = await target.capture({
             html: result.html,
             width: target.presentation.width,
-            maxHeight: 8192,
-            maxPixels: 12_000_000,
+            maxHeight: DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
+            maxPixels: DOCUMENT_EXPORT_IMAGE_MAX_PIXELS,
             signal,
           });
         }
@@ -139,9 +142,9 @@ export function createDocumentExportSession(
             !Number.isInteger(capture.height) ||
             capture.width < 1 ||
             capture.height < 1 ||
-            capture.width * capture.height > 12_000_000 ||
-            capture.width > 16383 ||
-            capture.height > 16383
+            capture.width * capture.height > DOCUMENT_EXPORT_IMAGE_MAX_PIXELS ||
+            capture.width > DOCUMENT_EXPORT_WEBP_MAX_DIMENSION ||
+            capture.height > DOCUMENT_EXPORT_WEBP_MAX_DIMENSION
           )
             throw new DocumentExportError('size-limit');
           await new File(capture.uri).copy(file);
