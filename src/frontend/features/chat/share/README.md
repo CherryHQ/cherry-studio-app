@@ -1,8 +1,8 @@
 # Chat Sharing
 
-The assistant toolbar opens `/chat-share` with the session and clicked message IDs. The separate
-page initially selects that answer and loads a paginated history window around it. User and
-assistant rows show their role, time and up to four lines from a 240-character excerpt, with an
+The assistant toolbar and user/assistant message context menus open `/chat-share` with the session
+and clicked message IDs. The separate page initially selects that message and loads a paginated
+history window around it. User and assistant rows show their role, time and up to four lines from a 240-character excerpt, with an
 attachment-name fallback. Pending/streaming messages cannot be selected. Whole-row presses select;
 scrolling retains ordinary native press cancellation. Excerpts do not render Markdown, media,
 tools or reasoning. The exported document still contains the complete selected messages.

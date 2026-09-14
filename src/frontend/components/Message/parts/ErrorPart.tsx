@@ -1,4 +1,4 @@
-import { MessagePart } from '@cherrystudio/ui/components';
+import { ContextMenuExclusion, MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
 import { AiFailureMessage } from '@/frontend/components/AiFailure';
@@ -8,11 +8,17 @@ export function ErrorPart({ part }: { part: Extract<CherryMessagePart, { type: '
   const { t } = useTranslation();
   if (part.data.code === 'INTERRUPTED') {
     return (
-      <MessagePart.Error
-        message={t('chat.errorPart.interrupted.message')}
-        title={t('chat.errorPart.interrupted.title')}
-      />
+      <ContextMenuExclusion>
+        <MessagePart.Error
+          message={t('chat.errorPart.interrupted.message')}
+          title={t('chat.errorPart.interrupted.title')}
+        />
+      </ContextMenuExclusion>
     );
   }
-  return <AiFailureMessage data={part.data} />;
+  return (
+    <ContextMenuExclusion>
+      <AiFailureMessage data={part.data} />
+    </ContextMenuExclusion>
+  );
 }

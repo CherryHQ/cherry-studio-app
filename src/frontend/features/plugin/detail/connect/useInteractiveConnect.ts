@@ -13,10 +13,18 @@ import {
   type PluginAuthorizationState,
   type PluginErrorReason,
 } from '@/shared/contracts/plugins';
-import type { PluginCatalogEntry, PluginInteractiveMethod } from '@/shared/data/types/plugin';
+import type {
+  PluginCatalogEntry,
+  PluginConnection,
+  PluginInteractiveMethod,
+} from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
 import { useRefreshPluginConnections } from '../../usePluginConnections';
+import {
+  getInteractiveConnectProgress,
+  type InteractiveConnectOperation,
+} from './interactiveConnectProgress';
 
 /** Owns route observation, browser actions and form state; backend observers poll and complete. */
 export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginInteractiveMethod) {
@@ -27,12 +35,17 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
   const refresh = useRefreshPluginConnections();
   const [observation, setObservation] = useState<PluginAuthorizationObservation | null>(null);
   const [actionError, setActionError] = useState<PluginErrorReason | null>(null);
-  const [isActing, setIsActing] = useState(false);
+  const [operation, setOperation] = useState<InteractiveConnectOperation | null>(null);
+  const acting = useRef(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [connection, setConnection] = useState<PluginConnection | null>(null);
+  const [isForeground, setIsForeground] = useState(false);
   const [existingApplication, setExistingApplication] = useState<{
     fields: Record<string, string>;
     invalid: Set<string>;
   } | null>(() => (method.applicationSetup ? { fields: {}, invalid: new Set() } : null));
-  const finished = useRef(false);
+  const finalization = useRef<Promise<void> | null>(null);
+  const navigated = useRef(false);
   const browserAttempt = useRef<string | null>(null);
   const name = t(`plugins.catalog.${entry.id}.name`);
   const applicationFields = method.applicationFields;
@@ -41,9 +54,15 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     useCallback(() => {
       let detach: (() => void) | null = null;
       const attach = () => {
-        detach ??= plugins.authorization.observe(entry.id, method.id, setObservation);
+        setIsForeground(true);
+        detach ??= plugins.authorization.observe(entry.id, method.id, (next) => {
+          setObservation(next);
+          if (next.connection) setConnection(next.connection);
+          if (!next.busy) setIsChecking(false);
+        });
       };
       const release = () => {
+        setIsForeground(false);
         detach?.();
         detach = null;
       };
@@ -58,24 +77,35 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     }, [plugins, entry.id, method.id]),
   );
 
-  const connection = observation?.connection;
-  const connected = useEffectEvent(async () => {
-    if (Platform.OS === 'ios') {
+  const finalize = useEffectEvent(async () => {
+    if (Platform.OS === 'ios' && method.interaction === 'polling' && browserAttempt.current) {
       try {
         await WebBrowser.dismissBrowser();
       } catch {
         // Browser dismissal must not block completion of the saved connection.
       }
     }
-    await refresh();
+    // The grant is already saved; a cache refresh failure belongs to the destination page.
+    await refresh().catch(() => {});
+  });
+  const returnToDetail = useEffectEvent(() => {
     toast.show({ label: t('plugins.connectSuccess', { name }), variant: 'success' });
     router.dismissTo({ pathname: '/plugins/[pluginId]', params: { pluginId: entry.id } });
   });
   useEffect(() => {
-    if (!connection || finished.current) return;
-    finished.current = true;
-    void connected();
-  }, [connection]);
+    if (!connection || !isForeground || navigated.current) return;
+    let active = true;
+    // A saved connection stays visible even if a background transition detaches the observer.
+    finalization.current ??= finalize();
+    void finalization.current.then(() => {
+      if (!active || navigated.current) return;
+      navigated.current = true;
+      returnToDetail();
+    });
+    return () => {
+      active = false;
+    };
+  }, [connection, isForeground]);
 
   async function openConfirmation(state: PluginAuthorizationState) {
     if (state.status !== 'waiting' && state.status !== 'callback') return;
@@ -89,11 +119,8 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
         );
         if (result.type === 'success') {
           clearInitialURL();
-          await plugins.authorization.receiveCallback(
-            entry.id,
-            method.id,
-            state.attemptId,
-            result.url,
+          await act('receiving', () =>
+            plugins.authorization.receiveCallback(entry.id, method.id, state.attemptId, result.url),
           );
         } else {
           // Closing the browser is an explicit cancellation; the previous grant is untouched.
@@ -114,34 +141,44 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     }
   }
 
-  async function act(action: () => Promise<PluginAuthorizationState | void>) {
-    if (isActing) return;
-    setIsActing(true);
+  async function act(
+    phase: InteractiveConnectOperation,
+    action: () => Promise<PluginAuthorizationState | void>,
+  ) {
+    if (acting.current) return;
+    acting.current = true;
+    setOperation(phase);
     setActionError(null);
     try {
-      return await action();
+      const next = await action();
+      if (next) {
+        // Publish the resulting state with the end of the action, not a frame later via observation.
+        setObservation((previous) => ({ ...previous, state: next, busy: previous?.busy ?? false }));
+      }
+      return next;
     } catch (error) {
       setActionError(error instanceof PluginError ? error.reason : 'request');
       return undefined;
     } finally {
-      setIsActing(false);
+      acting.current = false;
+      setOperation(null);
     }
   }
 
-  const begin = (restart = false) =>
-    act(async () => {
+  const begin = async (restart = false) => {
+    const next = await act('starting', async () => {
       if (restart) await plugins.authorization.cancel(entry.id, method.id);
       const next = await plugins.authorization.begin(entry.id, method.id);
       if (next.status === 'idle' && applicationFields) {
         setExistingApplication((previous) => previous ?? { fields: {}, invalid: new Set() });
-      } else {
-        void openConfirmation(next);
       }
       return next;
     });
+    if (next) void openConfirmation(next);
+  };
 
-  const submitExistingApplication = () =>
-    act(async () => {
+  const submitExistingApplication = async () => {
+    const next = await act('starting', async () => {
       if (!existingApplication || !applicationFields) return;
       const parsed = createPluginCredentialsSchema(applicationFields).safeParse(
         existingApplication.fields,
@@ -157,15 +194,24 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
       // Keep credentials out of route parameters and query caches.
       await plugins.authorization.useApplication(entry.id, method.id, parsed.data);
       setExistingApplication(null);
-      const next = await plugins.authorization.begin(entry.id, method.id);
-      void openConfirmation(next);
+      return plugins.authorization.begin(entry.id, method.id);
     });
+    if (next) void openConfirmation(next);
+  };
 
   const state = observation?.state ?? null;
-  const isBusy = isActing || observation?.busy === true;
   const error = actionError ?? observation?.error ?? null;
+  const progress = getInteractiveConnectProgress({
+    state,
+    connected: connection !== null,
+    operation,
+    checking: isChecking,
+    error,
+  });
+  const isBusy = progress !== null;
   return {
     state,
+    progress,
     isBusy,
     error,
     existingApplication: state?.status === 'idle' ? existingApplication : null,
@@ -173,13 +219,18 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     begin,
     submitExistingApplication,
     openConfirmation,
-    check: () => plugins.authorization.check(entry.id, method.id),
-    cancel: () => act(() => plugins.authorization.cancel(entry.id, method.id)),
+    check: () => {
+      if (isBusy) return;
+      setActionError(null);
+      setIsChecking(true);
+      plugins.authorization.check(entry.id, method.id);
+    },
+    cancel: () => act('cancelling', () => plugins.authorization.cancel(entry.id, method.id)),
     confirm: () =>
       state?.status === 'review' &&
-      act(() => plugins.authorization.confirm(entry.id, method.id, state.attemptId)),
+      act('confirming', () => plugins.authorization.confirm(entry.id, method.id, state.attemptId)),
     resetApplication: () =>
-      act(async () => {
+      act('starting', async () => {
         const next = await plugins.authorization.resetApplication(entry.id, method.id);
         setExistingApplication(method.applicationSetup ? { fields: {}, invalid: new Set() } : null);
         return next;

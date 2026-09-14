@@ -45,9 +45,13 @@ export function MenuContent({
       bottomEdge - visibleHeight,
     ),
   );
+  const preferredLeft =
+    anchor.width === 0 && anchor.height === 0
+      ? anchor.pageX
+      : anchor.pageX + anchor.width - menuWidth;
   const left = Math.max(
     insets.left + 16,
-    Math.min(anchor.pageX + anchor.width - menuWidth, width - insets.right - 16 - menuWidth),
+    Math.min(preferredLeft, width - insets.right - 16 - menuWidth),
   );
 
   const containerStyle = useAnimatedStyle(() => {

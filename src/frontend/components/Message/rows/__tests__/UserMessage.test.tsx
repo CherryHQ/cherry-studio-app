@@ -7,6 +7,11 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import type { MessageListItem } from '../../types';
 import { UserMessage } from '../UserMessage';
 
+jest.mock('@cherrystudio/ui/components', () => ({
+  ContextMenuExclusion: (props: object) =>
+    jest.requireActual('react').createElement(jest.requireActual('react-native').View, props),
+}));
+
 jest.mock('../../parts/FilePart', () => {
   const { createElement } = jest.requireActual('react');
 
