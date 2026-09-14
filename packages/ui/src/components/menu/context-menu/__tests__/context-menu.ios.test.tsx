@@ -11,6 +11,9 @@ type NativeMenuProps = {
   trigger: string;
 };
 
+// Explicitly timed menus are exercised with both adapters in the gesture suite.
+jest.mock('../context-menu-gesture', () => ({ GestureContextMenu: () => null }));
+
 jest.mock('react-native-nitro-modules', () => {
   const React = jest.requireActual('react');
   const { View: NativeView } = jest.requireActual('react-native');

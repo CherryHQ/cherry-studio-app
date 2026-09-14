@@ -476,10 +476,26 @@ const items = [
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
 action, while `false` and `true` create off and on check states. An empty array returns the child
-unchanged. Android `ActionMenu` and `ContextMenu` share the composer add menu's surface, rounded
-rows, expanding panel, and slide/blur/fade motion. Use these shared components for anchored action
+unchanged unless explicit timing is configured, in which case the disabled gesture wrapper stays
+mounted so enabling actions does not remount its content. Android `ActionMenu` and `ContextMenu`
+share the composer add menu's surface, rounded rows, expanding panel, and slide/blur/fade motion.
+Use these shared components for anchored action
 lists throughout the app instead of adding another menu presentation. iOS retains native action
-and context menus.
+and context menus by default. `ContextMenu delayLongPress={1500}` expresses a required hold duration
+in milliseconds. Because `UIContextMenuInteraction` has no public duration setting, explicitly timed
+iOS menus use the same Cherry panel and gesture owner as Android. Other iOS menus retain the native
+interaction.
+
+For gesture-owned menus (Android or an explicit `delayLongPress` on iOS), use
+`ContextMenuExclusion` as the `View` around a region with independent interaction. Its touch start
+disables the enclosing menu recognizer before the hold can commit and guards queued opening work.
+It preserves child touch handlers and does not claim the responder or stop bubbling. Release or
+cancellation rearms the recognizer, while the exclusion remains sticky until the next touch start.
+The default UIKit context menu continues to own its native child arbitration.
+
+The scroll boundary also keeps a drag/momentum cancellation sticky until a fresh touch starts.
+A touch-cancel event alone is not evidence of scrolling: a successful native long press cancels
+React Native touches too, and must still be allowed to open its menu.
 
 Android tap menus own one press target even when their trigger contains a `Button` or `Pressable`.
 The child remains presentation-only; `disabled`, accessibility disabled state, and
@@ -501,27 +517,28 @@ a system picker or navigate; it does not restore old focus over the destination.
 selection sheets, forms, and system media/share interfaces retain their own interaction contracts.
 Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
-Wrap every scroll component containing an Android `ContextMenu` in one
+Wrap every scroll component containing a gesture-owned `ContextMenu` in one
 `ContextMenuScrollBoundary`. The boundary supplies drag, momentum, and touch handlers through its
 render callback without rendering another native view. Pass an existing scroll handler to the
 boundary itself when it needs to be composed with menu arbitration. A touch that only stops
-momentum stays ineligible for a context menu until that touch ends. On iOS the supplied handlers are
-forwarded unchanged because UIKit already owns menu arbitration. On Android, a custom trigger
+momentum stays ineligible for a context menu until that touch ends. Both platforms expose this state;
+default iOS menus continue to rely on UIKit arbitration. A custom trigger for a gesture-owned menu
 component must forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
 target.
 
 `ContextMenu` recognition follows
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md):
-on iOS the system `UIContextMenuInteraction` owns the long press and its coordination with scroll
-ancestors; on Android the long press is a `react-native-gesture-handler` recognizer in the shared
-gesture arena, so committed scrolling and pan gestures cancel it. Its native view is only a system
-configuration bridge with no menu items and never presents a popup. Recognition timing and touch
-slop come from Android
-`ViewConfiguration`, including the user's system long-press timeout. On Android the enabled items
-are also exposed as accessibility custom actions on the trigger child, so the contextual operations
-do not depend on long press; iOS accessibility stays with the system interaction. Verify changed
-gesture boundaries on a device — the arbitration reference is `Status: design` and JavaScript tests
-cannot prove recognizer timing.
+on iOS the default system `UIContextMenuInteraction` owns the long press and its coordination with
+scroll ancestors; on Android and for explicitly timed iOS menus, the long press is a
+`react-native-gesture-handler` recognizer in the shared gesture arena, so committed scrolling and
+pan gestures cancel it. Its native view is only a system
+configuration bridge on Android with no menu items and never presents a popup. Default timing and
+touch slop come from Android `ViewConfiguration`, including the user's system long-press timeout.
+An explicit duration overrides only timing; iOS retains its native recognizer's movement tolerance.
+For gesture-owned menus, the enabled items are also exposed as accessibility custom actions on the
+trigger child, so the contextual operations do not depend on long press; default iOS accessibility
+stays with the system interaction. Verify changed gesture boundaries on a device — the arbitration
+reference is `Status: design` and JavaScript tests cannot prove recognizer timing.
 
 The native implementation is adapted from MIT-licensed Nitro menu projects. See
 [third-party-notices.md](third-party-notices.md) for the complete attribution and license text.

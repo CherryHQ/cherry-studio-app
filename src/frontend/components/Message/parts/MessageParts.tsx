@@ -1,3 +1,4 @@
+import { ContextMenuExclusion } from '@cherrystudio/ui/components';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
@@ -63,18 +64,20 @@ export function MessageParts({
             ))}
           </View>
         ) : (
-          <ProcessGroupPart
-            citationText={citations.textByPartIndex}
-            isTextSelectionEnabled={isTextSelectionEnabled}
-            items={process.map(({ index, part }) => ({
-              index,
-              key: getMessagePartKey(message, part, index),
-              part,
-            }))}
-            message={message}
-            messageParts={parts}
-            renderMode={renderMode}
-          />
+          <ContextMenuExclusion>
+            <ProcessGroupPart
+              citationText={citations.textByPartIndex}
+              isTextSelectionEnabled={isTextSelectionEnabled}
+              items={process.map(({ index, part }) => ({
+                index,
+                key: getMessagePartKey(message, part, index),
+                part,
+              }))}
+              message={message}
+              messageParts={parts}
+              renderMode={renderMode}
+            />
+          </ContextMenuExclusion>
         )
       ) : null}
       {body.map((item) => (

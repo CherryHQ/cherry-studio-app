@@ -261,6 +261,27 @@ column without clipping or horizontal gestures. This is a presentation
 projection only; files remain parts of the same message for model input, persistence, references,
 and stable render identity.
 
+## Message Interaction Ownership
+
+The chat's 1.5-second menu covers ordinary message content and whitespace. Child-owned regions use
+CherryUI's `ContextMenuExclusion`; this disables the ancestor recognizer for that touch without
+changing the child's tap, native selection, or scrolling behavior.
+
+| Region | Interaction owner |
+| --- | --- |
+| User bubble and main answer | Message copy/share menu; main-answer partial selection is disabled when actions are enabled |
+| Process, reasoning, tool summaries and inline file-output panes | Excluded process region; disclosures, detail sheets, selection and inner scrolling retain ownership |
+| User attachments and generated artifacts | Excluded attachment region; file/image preview controls retain ownership |
+| Sources and error feedback | Excluded region; source list, external links, error details and local selection retain ownership |
+| Assistant copy/fork/share toolbar and usage details | Excluded toolbar region |
+| Markdown links, checkboxes and spoilers | Native renderer handles the inline target; native cancellation must prevent a second action on release |
+| Fenced code and Markdown tables | Native renderer owns code copy/menu and nested scrolling; the existing table patch removes the table-wide copy menu |
+| Video/source-document/step-start parts | No rendered touch target |
+
+This inventory is based on source inspection. Native code-menu versus message-menu precedence,
+inline-link long presses, code/table pans, and excluded-control holds still require iOS/Android
+device acceptance; mocked gesture callbacks cannot establish their timing or native cancellation.
+
 ## Organization
 
 - `MessageList.tsx` is the wiring layer. `list/` owns its layout policy, viewport controller, semantic

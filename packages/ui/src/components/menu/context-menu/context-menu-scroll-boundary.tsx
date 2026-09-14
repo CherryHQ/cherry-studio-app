@@ -1,5 +1,5 @@
-// Metro resolves the iOS or Android boundary; tests use the Android implementation.
+// Both platforms expose scroll state to gesture-owned context menus.
 export {
   ContextMenuScrollBoundary,
   useContextMenuInteraction,
-} from './context-menu-scroll-boundary.android';
+} from './context-menu-scroll-boundary-state';

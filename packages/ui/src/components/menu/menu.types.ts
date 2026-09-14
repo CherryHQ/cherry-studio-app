@@ -23,5 +23,7 @@ export type ActionMenuProps = {
 
 export type ContextMenuProps = {
   children: ReactElement;
+  /** Milliseconds to hold before opening. Omit to use the platform's default menu gesture. */
+  delayLongPress?: number;
   items: readonly MenuItem[];
 };
