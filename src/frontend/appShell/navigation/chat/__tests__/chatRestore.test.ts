@@ -1,32 +1,10 @@
 import { resolveChatRestoreState } from '../chatRestore';
 
 describe('shared chat restore target', () => {
-  test('opens the globally latest Session', () => {
-    expect(
-      resolveChatRestoreState({
-        agents: { isLoading: false, items: [{ id: 'agent-3' }] },
-        latestSession: { isLoading: false, session: { id: 'session-2' } },
-      }),
-    ).toEqual({
-      status: 'ready',
-      target: { kind: 'session', sessionId: 'session-2' },
-    });
-  });
-
-  test('waits for the latest Session before using an Agent fallback', () => {
-    expect(
-      resolveChatRestoreState({
-        agents: { isLoading: false, items: [{ id: 'agent-1' }] },
-        latestSession: { isLoading: true },
-      }),
-    ).toEqual({ status: 'loading' });
-  });
-
-  test('uses the first Agent draft when no Session exists', () => {
+  test('opens a draft for the first available Agent', () => {
     expect(
       resolveChatRestoreState({
         agents: { isLoading: false, items: [{ id: 'agent-1' }, { id: 'agent-2' }] },
-        latestSession: { isLoading: false },
       }),
     ).toEqual({
       status: 'ready',
@@ -34,11 +12,28 @@ describe('shared chat restore target', () => {
     });
   });
 
-  test('uses the no-Agent empty state when no Session or Agent exists', () => {
+  test('waits for Agents before choosing a draft or empty state', () => {
+    expect(
+      resolveChatRestoreState({
+        agents: { isLoading: true, items: [] },
+      }),
+    ).toEqual({ status: 'loading' });
+  });
+
+  test('reports Agent loading errors instead of opening a draft', () => {
+    const error = new Error('Agents unavailable');
+
+    expect(
+      resolveChatRestoreState({
+        agents: { error, isLoading: false, items: [{ id: 'agent-1' }] },
+      }),
+    ).toEqual({ error, status: 'error' });
+  });
+
+  test('uses the no-Agent empty state when no Agent exists', () => {
     expect(
       resolveChatRestoreState({
         agents: { isLoading: false, items: [] },
-        latestSession: { isLoading: false },
       }),
     ).toEqual({ status: 'empty' });
   });
