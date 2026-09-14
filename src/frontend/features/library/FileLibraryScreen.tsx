@@ -3,6 +3,7 @@ import { useToast } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import {
@@ -26,6 +27,7 @@ import { fileLibrarySelectionScope, type FileLibraryViewMode } from './utils/con
 function FileLibraryScreenBody() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { left, right } = useSafeAreaInsets();
   const [filter, setFilter] = useState<FileLibraryFilter>('all');
   const [viewMode, setViewMode] = usePreference('ui.library.view_mode');
   const { exitEditing } = useSelectionActions();
@@ -87,7 +89,7 @@ function FileLibraryScreenBody() {
         rightActions={isEditing ? doneActions : rightActions}
         title={t('library.title')}
       />
-      <View className="flex-1">
+      <View className="flex-1" style={{ paddingLeft: left, paddingRight: right }}>
         <FileLibraryList
           filter={filter}
           isDataLoadEnabled

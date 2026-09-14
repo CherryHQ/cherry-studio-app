@@ -37,7 +37,9 @@ export default function DrawerLayout() {
           // The sidebar stops short of the right edge so a dimmed strip of chat
           // stays visible: it tells the user where they came from and closes the
           // drawer on tap.
-          drawerStyle: { width: width - appSidebar.sceneRevealWidth },
+          drawerStyle: {
+            width: Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
+          },
           // The chat surface is stable context; the sidebar is a temporary
           // surface that slides over it as the only moving plane.
           drawerType: 'front',

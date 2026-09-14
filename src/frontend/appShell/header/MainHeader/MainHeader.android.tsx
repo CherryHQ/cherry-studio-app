@@ -23,10 +23,9 @@ export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> 
   const { agentPickerSheet, openAgentPicker } = useMainHeaderAgentPicker(currentAgentId);
   const [leadingActionsWidth, setLeadingActionsWidth] = useState(0);
   const [rightActionsWidth, setRightActionsWidth] = useState(0);
+  const horizontalInset = HEADER_HORIZONTAL_INSET + Math.max(insets.left, insets.right);
   const titleSideInset =
-    HEADER_HORIZONTAL_INSET +
-    Math.max(leadingActionsWidth, rightActionsWidth) +
-    HEADER_TITLE_ACTION_GAP;
+    horizontalInset + Math.max(leadingActionsWidth, rightActionsWidth) + HEADER_TITLE_ACTION_GAP;
 
   return (
     <>
@@ -62,7 +61,7 @@ export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> 
         <View
           className="relative flex-row items-center"
           pointerEvents="box-none"
-          style={{ height: mainHeaderRowHeight, paddingHorizontal: HEADER_HORIZONTAL_INSET }}
+          style={{ height: mainHeaderRowHeight, paddingHorizontal: horizontalInset }}
         >
           {/* The chat route is currently a drawer root, so the route policy
               resolves this leading action to the sidebar button. */}

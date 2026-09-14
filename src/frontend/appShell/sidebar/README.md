@@ -3,6 +3,10 @@
 This App Shell module owns the drawer navigation surface, recent Agent Sessions, and bottom dock.
 It is app-wide navigation infrastructure rather than a route page.
 
+The drawer remains a temporary overlay on every window size, with its width capped at 400 logical
+points and at least 64 points of chat left visible. Tablet support does not change destination or
+back-navigation behavior.
+
 The circular search button beside the sidebar title opens the shared `/search` page for all
 conversations. Before a query is entered, it shows the ten most recently active conversations.
 Title matches use the cursor-paginated `/agent-sessions?q=...` collection and message matches use

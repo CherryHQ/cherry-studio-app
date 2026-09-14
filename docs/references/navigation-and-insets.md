@@ -79,6 +79,23 @@ Before enabling it, verify:
   the frontend observation but does not cancel the Host's active turn.
 - Route files stay thin and re-export exact page boundaries from `src/frontend/features`.
 
+## Window Sizes
+
+The first tablet adaptation keeps the same single-scene navigation and chat-only drawer. The drawer
+leaves at least 64 points of chat visible and is capped at 400 points on wider windows.
+
+The app-shell [page frames](../../src/frontend/appShell/layout/README.md) constrain reading/composer
+content to 800 points and form/management content to 720, inside the horizontal safe area. They
+retain the same mounted page tree during rotation and resizing. Galleries measure their own list
+viewport and grow their column count from two as space permits; image previews and picker grids
+also measure their own region instead of assuming it fills the window.
+
+The iPad device family supports all four orientations and does not require full screen. iPhone
+keeps its existing portrait policy. The Android `withTabletOrientation` config plugin supplies a
+portrait orientation resource for phones and an unspecified orientation in `values-sw600dp`, with
+resizing enabled. These native declarations require a rebuilt development client. Android 16 may
+override orientation restrictions on large displays; layout follows the actual available region.
+
 ## Page Identity And Cached Data
 
 Every route-bound entity or semantic selection defines a complete page identity, such as a
@@ -155,10 +172,12 @@ scrim, card geometry, safe areas, swipe/scrim dismissal, Android back, and acces
 Feature-level picker components pass their content into this shell, while screen callers only pass
 open/close and selection state.
 
-The sheet fills the window width and meets its bottom edge without outer gaps or bottom corner
-radii. Only its exposed top corners use a 32-point radius. The background extends behind the bottom
+The sheet fills the horizontal safe area up to a 720-point maximum and stays centered at the window's
+bottom edge without a bottom gap or bottom corner radii. Only its exposed top corners use a 32-point
+radius. The native host retains the full-window scrim; tapping the transparent space beside the card
+uses the same guarded close action as the scrim above it. The background extends behind the bottom
 system UI, while the shell applies bottom safe-area padding to its content. Its maximum height stays
-12 points below the top safe area.
+12 points below the top safe area. Resizing changes card geometry within the same mounted sheet.
 
 Component sheets use the shared `compact`, `medium`, `large`, and `full` height specs (40%, 60%,
 80%, and 100% of available height). Features choose or dynamically switch the semantic size; they
