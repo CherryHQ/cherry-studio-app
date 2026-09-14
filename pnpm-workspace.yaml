@@ -53,10 +53,10 @@ patchedDependencies:
   '@earendil-works/pi-ai@0.84.2': patches/@earendil-works__pi-ai@0.84.2.patch
   '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
-  metro@0.84.4: patches/metro@0.84.4.patch
-  metro-runtime@0.84.4: patches/metro-runtime@0.84.4.patch
+  metro@0.84.5: patches/metro@0.84.5.patch
+  metro-runtime@0.84.5: patches/metro-runtime@0.84.5.patch
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
-  react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
+  react-native-reanimated@4.5.1: patches/react-native-reanimated@4.5.1.patch
   '@ai-sdk/anthropic@3.0.103': patches/@ai-sdk__anthropic.patch
   '@ai-sdk/google@3.0.113': patches/@ai-sdk__google@3.0.113.patch
   '@ai-sdk/openai@3.0.53': patches/@ai-sdk__openai@3.0.53.patch
@@ -66,12 +66,12 @@ patchedDependencies:
   ai@6.0.185: patches/ai@6.0.185.patch
   react-native-nitro-healthkit@1.0.0: patches/react-native-nitro-healthkit@1.0.0.patch
   react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
-  expo-router@57.0.6: patches/expo-router@57.0.6.patch
+  expo-router@57.0.20: patches/expo-router@57.0.20.patch
   react-native-enriched-markdown@1.0.1: patches/react-native-enriched-markdown@1.0.1.patch
   react-native-drawer-layout@4.2.4: patches/react-native-drawer-layout@4.2.4.patch
-  expo-calendar@57.0.1: patches/expo-calendar@57.0.1.patch
+  expo-calendar@57.0.3: patches/expo-calendar@57.0.3.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch
-  expo-notifications@57.0.5: patches/expo-notifications@57.0.5.patch
+  expo-notifications@57.0.17: patches/expo-notifications@57.0.17.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'

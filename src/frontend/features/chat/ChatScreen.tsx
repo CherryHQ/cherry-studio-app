@@ -145,7 +145,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           <ChatInput
             agentId={resolvedAgentId}
             controls={controls}
-            dismissKeyboardOnSend={false}
+            dismissKeyboardOnSend
             sessionId={sessionId}
           />
         </ComposerDock>

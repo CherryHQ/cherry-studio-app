@@ -112,7 +112,6 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
       name: this.environment.translate('notifications.android.attentionChannel'),
       importance: notifications.AndroidImportance.HIGH,
       lockscreenVisibility: notifications.AndroidNotificationVisibility.PRIVATE,
-      sound: 'default',
     });
     // Never restore a dead process's stream or replay paid work.
     for (const notification of await notifications.getPresentedNotificationsAsync()) {
@@ -229,33 +228,43 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
       return;
     }
     const content = this.runningContent();
-    if (background.isRunning()) {
+    try {
+      if (!background.isRunning()) {
+        // Android 12+: start only from a visible Activity, never from a background retry.
+        if (AppState.currentState !== 'active' || this.backgroundLimitReached) return;
+        await background.start(holdBackgroundExecution, {
+          ...content,
+          // Native visibility changes promote the same service without restarting its task.
+          // The initial strings also name its persistent channel in system settings.
+          taskTitle: this.environment.translate('notifications.android.runningTitle'),
+          taskDesc: this.environment.translate('notifications.android.preparing'),
+          taskName: 'CherryBackgroundGeneration',
+          taskIcon: { name: 'notification_icon', type: 'drawable' },
+          foregroundServiceType: ['dataSync'],
+          progressBar: { max: 1, value: 0, indeterminate: true },
+        });
+      }
       await background.updateNotification(content);
-      return;
-    }
-    // Android 12+: start only from a visible Activity, never from a background retry.
-    if (AppState.currentState !== 'active' || this.backgroundLimitReached) return;
-    await background.start(holdBackgroundExecution, {
-      ...content,
-      // The native service starts without a notification while visible and
-      // promotes itself when the app backgrounds, without restarting its task.
-      // The library also uses these initial strings as the persistent channel
-      // name/description. Keep conversation content out of system settings.
-      taskTitle: this.environment.translate('notifications.android.runningTitle'),
-      taskDesc: this.environment.translate('notifications.android.preparing'),
-      taskName: 'CherryBackgroundGeneration',
-      taskIcon: { name: 'notification_icon', type: 'drawable' },
-      foregroundServiceType: ['dataSync'],
-      progressBar: { max: 1, value: 0, indeterminate: true },
-    });
-    await background.updateNotification(content);
-    this.armDeadline();
-    // Request after starting, so the permission sheet cannot interrupt admission.
-    if (!this.permissionRequested && AppState.currentState === 'active') {
-      this.permissionRequested = true;
-      void this.notifications?.requestPermissionsAsync().catch((error: unknown) => {
-        logger.warn('Notification permission request failed', error as Error);
-      });
+      this.armDeadline();
+    } catch (error) {
+      if (!background.isRunning()) {
+        // Cancellation may enqueue surface cleanup, so never await it inside this queue.
+        void this.interruptLeases(error instanceof Error ? error : new Error(String(error))).catch(
+          (interruptionError: unknown) =>
+            logger.warn('Background service interruption failed', { error: interruptionError }),
+        );
+      }
+      throw error;
+    } finally {
+      // Request after admission, including a failed attempt or a return while running.
+      // The permission sheet must not race admission or depend on its success.
+      if (!this.permissionRequested && AppState.currentState === 'active') {
+        this.permissionRequested = true;
+        void this.notifications?.requestPermissionsAsync().catch((error: unknown) => {
+          this.permissionRequested = false;
+          logger.warn('Notification permission request failed', error as Error);
+        });
+      }
     }
   }
 

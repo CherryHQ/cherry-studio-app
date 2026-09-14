@@ -94,6 +94,9 @@ const backgroundReplyTurn = {
   update: jest.fn(),
 };
 const backgroundReply = {
+  acquirePreparation: jest.fn((_onInterrupt: (reason: Error) => void) => ({
+    release: jest.fn(),
+  })),
   clearSession: jest.fn(),
   startTurn: jest.fn((_input: BackgroundReplyTurnInput) => backgroundReplyTurn),
   updateSessionTitle: jest.fn(),
@@ -257,6 +260,79 @@ describe('MobileAgentHost', () => {
     jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
   });
+
+  test.each(['new', 'existing'] as const)(
+    'protects %s-session preparation before awaiting and hands off before releasing',
+    async (kind) => {
+      const prepared = createDeferred();
+      const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+        controller.emit({ type: 'completed' });
+      });
+      const host = createHost(runtime, noOpNaming, noFiles, noOpTools, async (model) => {
+        await prepared.promise;
+        return inferenceModel(model);
+      });
+      const sessionId = kind === 'new' ? uuidv7() : (await createStoredSession()).id;
+      const input = {
+        sessionId,
+        ...messageIds(),
+        parts: [{ type: 'text' as const, text: 'Background preparation' }],
+      };
+      const submitting =
+        kind === 'new'
+          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
+          : host.submitMessage(input);
+      const lease = backgroundReply.acquirePreparation.mock.results[0]!.value;
+      expect(backgroundReply.acquirePreparation).toHaveBeenCalledTimes(1);
+      expect(lease.release).not.toHaveBeenCalled();
+      expect(backgroundReply.startTurn).not.toHaveBeenCalled();
+
+      prepared.resolve();
+      await submitting;
+      expect(lease.release).toHaveBeenCalledTimes(1);
+      expect(backgroundReply.startTurn.mock.invocationCallOrder[0]).toBeLessThan(
+        lease.release.mock.invocationCallOrder[0],
+      );
+      await host._doStop();
+    },
+  );
+
+  test.each(['new', 'existing'] as const)(
+    'interrupting %s-session preparation releases protection without launching a turn',
+    async (kind) => {
+      const prepared = createDeferred();
+      const host = createHost(
+        new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+        noOpNaming,
+        noFiles,
+        noOpTools,
+        async (model) => {
+          await prepared.promise;
+          return inferenceModel(model);
+        },
+      );
+      const sessionId = kind === 'new' ? uuidv7() : (await createStoredSession()).id;
+      const input = {
+        sessionId,
+        ...messageIds(),
+        parts: [{ type: 'text' as const, text: 'Interrupted preparation' }],
+      };
+      const submitting =
+        kind === 'new'
+          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
+          : host.submitMessage(input);
+      const reason = new Error('Background service admission failed');
+      const rejected = expect(submitting).rejects.toThrow(reason);
+      backgroundReply.acquirePreparation.mock.calls[0]![0](reason);
+      prepared.resolve();
+      await rejected;
+      expect(
+        backgroundReply.acquirePreparation.mock.results[0]!.value.release,
+      ).toHaveBeenCalledTimes(1);
+      expect(backgroundReply.startTurn).not.toHaveBeenCalled();
+      await host._doStop();
+    },
+  );
 
   test('correlates Runtime spans with the durable turn and finishes tracing after persistence', async () => {
     const { traces, records } = createTraceRecorder();

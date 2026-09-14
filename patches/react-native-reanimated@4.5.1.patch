@@ -1,5 +1,5 @@
 diff --git a/lib/module/css/component/AnimatedComponent.js b/lib/module/css/component/AnimatedComponent.js
-index ab60a3a3dada3a7df06fcd8057b4ab12b6d09d94..f64cf65902770824373598b824cf042f9d765946 100644
+index ab60a3a3d..f64cf6590 100644
 --- a/lib/module/css/component/AnimatedComponent.js
 +++ b/lib/module/css/component/AnimatedComponent.js
 @@ -16,6 +16,7 @@ import { jsx as _jsx } from "react/jsx-runtime";
@@ -19,7 +19,7 @@ index ab60a3a3dada3a7df06fcd8057b4ab12b6d09d94..f64cf65902770824373598b824cf042f
      }
      // Case for SVG components on Web
 diff --git a/lib/module/platform-specific/findHostInstance.js b/lib/module/platform-specific/findHostInstance.js
-index 80161753d7e552cfcf80b863dc824e2f0868d06e..67ac860be0c4beb0b72f349d6d256c7f59a61394 100644
+index 80161753d..67ac860be 100644
 --- a/lib/module/platform-specific/findHostInstance.js
 +++ b/lib/module/platform-specific/findHostInstance.js
 @@ -39,10 +39,11 @@ export function findHostInstance(ref) {
@@ -40,7 +40,7 @@ index 80161753d7e552cfcf80b863dc824e2f0868d06e..67ac860be0c4beb0b72f349d6d256c7f
  //# sourceMappingURL=findHostInstance.js.map
 \ No newline at end of file
 diff --git a/src/createAnimatedComponent/commonTypes.ts b/src/createAnimatedComponent/commonTypes.ts
-index d6579be839f76753a64279126ef9aa5c036df8e5..d6f1f33b6b6aca45e79ad1b5c79935487eeb1241 100644
+index d6579be83..d6f1f33b6 100644
 --- a/src/createAnimatedComponent/commonTypes.ts
 +++ b/src/createAnimatedComponent/commonTypes.ts
 @@ -127,6 +127,7 @@ export interface AnimatedComponentRef extends Component {
@@ -52,7 +52,7 @@ index d6579be839f76753a64279126ef9aa5c036df8e5..d6f1f33b6b6aca45e79ad1b5c7993548
  
    /**
 diff --git a/src/css/component/AnimatedComponent.tsx b/src/css/component/AnimatedComponent.tsx
-index ced21bbb798108d3f42141eabbe9dd6250165625..2ebd10ac7232ba8fbf97a7a09f785102e47422a7 100644
+index ced21bbb7..2ebd10ac7 100644
 --- a/src/css/component/AnimatedComponent.tsx
 +++ b/src/css/component/AnimatedComponent.tsx
 @@ -46,6 +46,10 @@ export default class AnimatedComponent<
@@ -75,7 +75,7 @@ index ced21bbb798108d3f42141eabbe9dd6250165625..2ebd10ac7232ba8fbf97a7a09f785102
      }
      // Case for SVG components on Web
 diff --git a/src/platform-specific/findHostInstance.ts b/src/platform-specific/findHostInstance.ts
-index bfea452c56b28023a5a80a4ef58236aa9af507f4..c21198c12121ca96f04cf0b68725ecf3acf8f13d 100644
+index bfea452c5..c21198c12 100644
 --- a/src/platform-specific/findHostInstance.ts
 +++ b/src/platform-specific/findHostInstance.ts
 @@ -57,11 +57,14 @@ export function findHostInstance(
