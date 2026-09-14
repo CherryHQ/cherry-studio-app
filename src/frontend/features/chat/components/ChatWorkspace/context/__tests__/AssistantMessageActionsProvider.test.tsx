@@ -10,12 +10,17 @@ import {
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockToastShow = jest.fn();
+const mockPush = jest.fn();
+let mockFocusEffect: (() => void) | undefined;
+jest.mock('expo-router', () => ({
+  router: { push: (route: unknown) => mockPush(route) },
+  useFocusEffect: (effect: () => void) => {
+    mockFocusEffect = effect;
+    effect();
+  },
+}));
 const mockLoggerError = jest.fn();
 let mockSourceTitle: string | undefined;
-
-jest.mock('../../../../share', () => ({
-  useShareChatMessage: () => ({ shareAssistantMessage: jest.fn(), sharingMessageId: undefined }),
-}));
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
@@ -115,6 +120,33 @@ describe('AssistantMessageActionsProvider', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
   }
+
+  test('opens selection at the clicked answer without changing the transcript', () => {
+    renderProvider();
+    act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer' }));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/chat-share',
+      params: { sessionId: 'session-1', messageId: 'answer' },
+    });
+  });
+
+  test('ignores repeated share taps until the chat regains focus', () => {
+    renderProvider();
+    act(() => {
+      probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-1' });
+      probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-2' });
+    });
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/chat-share',
+      params: { sessionId: 'session-1', messageId: 'answer-1' },
+    });
+
+    act(() => mockFocusEffect?.());
+    act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-3' }));
+    expect(mockPush).toHaveBeenCalledTimes(2);
+  });
 
   test('shows copied feedback until it expires', async () => {
     renderProvider();

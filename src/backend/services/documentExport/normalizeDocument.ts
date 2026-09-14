@@ -1,6 +1,7 @@
 import * as z from 'zod';
 
 import {
+  DOCUMENT_EXPORT_MAX_SECTIONS,
   DocumentExportError,
   type DocumentExportInput,
   type ExportBlock,
@@ -48,7 +49,7 @@ const documentSchema = z.strictObject({
       }),
     )
     .min(1)
-    .max(128),
+    .max(DOCUMENT_EXPORT_MAX_SECTIONS),
   assets: z
     .record(
       z.string().max(255),
@@ -81,8 +82,8 @@ export function normalizeDocument(input: DocumentExportInput): ExportDocument {
       : input.document;
   const result = documentSchema.safeParse(value);
   if (!result.success) throw new DocumentExportError('invalid-input');
-  if (Object.keys(result.data.assets ?? {}).length > 32)
-    throw new DocumentExportError('size-limit');
+  // Image preparation has its own budget. Keep the source available for a text export
+  // even when the selection contains more images than one HTML render can prepare.
   // Zod returns new objects; none of the session's values alias caller-owned data.
   freezeSnapshot(result.data);
   return result.data;
