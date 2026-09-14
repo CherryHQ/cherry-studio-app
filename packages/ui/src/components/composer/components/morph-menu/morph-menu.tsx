@@ -214,6 +214,7 @@ function MorphMenuRoot({
             { minWidth: minPanelWidth, maxWidth: maxPanelWidth },
             panelBoundsStyle,
           ]}
+          elevated={isPresented}
           isOpen={isOpen}
           onLayout={handlePanelLayout}
           progress={progress}

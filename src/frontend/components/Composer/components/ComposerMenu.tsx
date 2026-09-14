@@ -143,7 +143,7 @@ export function ComposerMenu({
       ) : null}
       {children ? (
         <>
-          <View className="my-1 h-px bg-border" />
+          <View className="my-1 h-px bg-border-subtle" />
           {children}
         </>
       ) : null}

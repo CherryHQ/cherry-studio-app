@@ -14,14 +14,35 @@ placement. The virtualized list and message rendering live in `@/frontend/compon
 
 ## Organization
 
-- `components/` contains loading, cover, and the assistant action toolbar composed through
-  `AssistantMessage`. `ChatScreen` mounts the composer session directly because it owns whether the
+- `components/` contains loading, cover, message context menus, and the assistant action toolbar
+  composed through `AssistantMessage`. `ChatScreen` mounts the composer session directly because it owns whether the
   input exists and must keep that session outside its session/empty-state branch.
-- `context/` owns assistant-message action state and actions. Dynamic copied/busy/enabled state is consumed
-  only by toolbar leaves; the virtualized list and expensive message body do not subscribe.
+- `context/` owns message copy/share actions and assistant toolbar state/actions. Dynamic
+  copied/busy/enabled state is consumed only by toolbar leaves; context menus consume only actions,
+  and the virtualized list and expensive message body do not subscribe.
 - `hooks/` owns the cover handoff after the list controller completes initial restoration.
 - `utils/` contains pure helpers with co-located tests, including copyable-text projection.
 
 Fork provenance stays on the Session, not in persisted Messages. When the copied boundary Message
 is present in the paginated window, `ChatWorkspace` inserts a presentation-only system row after it;
 until that boundary loads, the divider remains absent rather than attaching to a page edge.
+
+With message actions enabled, long-pressing a settled user or assistant message opens copy and
+share using the platform's default timing. iOS presents its native context menu; Android positions
+CherryUI's menu at the long-press pointer, adjusted to stay inside the screen's safe area.
+Copy uses the toolbar's existing text projection and clipboard action; content
+without copyable text disables copy. Share opens the existing selector with the pressed message
+selected. Pending messages have no menu actions; their wrapper stays mounted so settling does not
+recreate the streamed body. Android's scroll boundary cancels
+menu recognition during drag and momentum; iOS relies on UIKit arbitration. Main-answer text
+selection stays disabled while message actions are enabled. Process details keep their own
+selection and scrolling inside a `ContextMenuExclusion`, as do source entry points, attachments,
+errors, and the assistant toolbar.
+Holding these regions belongs to the child interaction and does not open the message menu.
+
+`ChatWorkspace` observes the native screen-reader setting once for all rows. When enabled, settled
+user messages show explicit copy/share buttons, including a share action for attachment-only
+messages. Assistant messages keep their existing toolbar. These controls sit outside the message
+content's accessibility nodes; the complete row is never grouped into a single accessible element
+that would hide attachments or inline controls. A late initial status response cannot overwrite a
+newer setting-change event.

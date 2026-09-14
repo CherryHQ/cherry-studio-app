@@ -47,7 +47,8 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
     }
     running = true;
     checkRequested = false;
-    emit({ busy: true, error: undefined });
+    // Passive checks must not briefly erase a failure while the same failed step is re-read.
+    emit({ busy: true });
     try {
       let state = await flow.getState();
       if (
@@ -55,15 +56,18 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
         flow.poll &&
         listeners.size &&
         Date.now() >= state.nextPollAt
-      )
+      ) {
         state = await flow.poll(state.attemptId);
-      emit({ state });
+        emit({ state, error: undefined });
+      } else {
+        emit({ state });
+      }
       if (state.status === 'ready' && listeners.size) {
         if (completion?.attemptId !== state.attemptId) {
           completion = { attemptId: state.attemptId, result: flow.complete(state.attemptId) };
         }
         const connection = await completion.result;
-        emit({ state: await flow.getState(), connection });
+        emit({ state: await flow.getState(), connection, error: undefined });
       } else if (state.status === 'callback') {
         schedule(state.expiresAt - Date.now());
       } else if (state.status === 'waiting') {
@@ -88,12 +92,19 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
         listeners.delete(listener);
         if (listeners.size) return;
         clearTimeout(timer);
-        // Progress and outcome belong to the observing session; current state is re-read next time.
-        observation = { state: observation.state, busy: observation.busy };
+        // Drop a delivered connection so revisiting can reauthorize, but retain failures on resume.
+        observation = {
+          state: observation.state,
+          busy: observation.busy,
+          error: observation.error,
+        };
       };
     },
     check() {
       void check();
+    },
+    clearError() {
+      emit({ error: undefined });
     },
     stop() {
       stopped = true;

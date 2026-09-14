@@ -17,7 +17,7 @@ const ContextMenuInteractionContext = createContext<ContextMenuInteraction>(
 );
 
 /**
- * Gives descendant context menus the scroll owner's drag and momentum state.
+ * Gives Android context menus the scroll owner's drag and momentum state.
  * A touch that begins during momentum remains blocked for its complete touch
  * sequence, even after that touch stops the momentum animation.
  */
@@ -51,6 +51,7 @@ export function ContextMenuScrollBoundary({
   const handleScrollBeginDrag = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       isScrollInteractionActive.current = true;
+      isCurrentTouchBlocked.current = true;
       onScrollBeginDrag?.(event);
     },
     [onScrollBeginDrag],
@@ -72,14 +73,14 @@ export function ContextMenuScrollBoundary({
   const handleTouchEnd = useCallback(
     (event: GestureResponderEvent) => {
       onTouchEnd?.(event);
-      isCurrentTouchBlocked.current = false;
     },
     [onTouchEnd],
   );
   const handleTouchCancel = useCallback(
     (event: GestureResponderEvent) => {
       onTouchCancel?.(event);
-      isCurrentTouchBlocked.current = false;
+      // A successful native long press also cancels RN touches. Only committed
+      // scrolling blocks recognition; preserve that decision until the next start.
     },
     [onTouchCancel],
   );

@@ -1,4 +1,4 @@
-import { MessagePart } from '@cherrystudio/ui/components';
+import { ContextMenuExclusion, MessagePart } from '@cherrystudio/ui/components';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
@@ -27,7 +27,7 @@ export function SourceGroup({ citationNumberBySourceId, parts }: SourceGroupProp
   }
 
   return (
-    <>
+    <ContextMenuExclusion>
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
@@ -56,6 +56,6 @@ export function SourceGroup({ citationNumberBySourceId, parts }: SourceGroupProp
           </View>
         </MessagePart.Detail>
       ) : null}
-    </>
+    </ContextMenuExclusion>
   );
 }
