@@ -1,12 +1,16 @@
 import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
-import GitHubIcon from '@cherrystudio/app-icons/icons/github';
-import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import { Image } from '@cherrystudio/ui/components';
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { View } from 'react-native';
 
-// Reuse the desktop channel artwork without recoloring the brand.
-const FEISHU_ICON = require('@/assets/plugins/feishu.jpeg');
-const ICONS = { github: GitHubIcon, 'map-pin': MapPinIcon, 'file-text': FileTextIcon };
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+
+const ICONS = {
+  amap: { source: require('@/assets/plugins/amap.webp'), tint: false },
+  feishu: { source: require('@/assets/plugins/feishu.jpeg'), tint: false },
+  github: { source: resolveProviderIcon('github')?.light, tint: true },
+  notion: { source: require('@/assets/plugins/notion.webp'), tint: true },
+} as const;
 
 export function PluginIcon({
   icon,
@@ -15,8 +19,9 @@ export function PluginIcon({
   icon?: string;
   size?: 'small' | 'default' | 'large';
 }) {
-  const Icon =
-    icon && Object.hasOwn(ICONS, icon) ? ICONS[icon as keyof typeof ICONS] : FileTextIcon;
+  const foreground = useThemeColor('foreground');
+  const artwork =
+    icon && Object.hasOwn(ICONS, icon) ? ICONS[icon as keyof typeof ICONS] : undefined;
   const iconSize = size === 'small' ? 'size-5' : size === 'large' ? 'size-9' : 'size-7';
   return (
     <View
@@ -28,15 +33,16 @@ export function PluginIcon({
             : 'size-10 items-center justify-center'
       }
     >
-      {icon === 'feishu' ? (
+      {artwork ? (
         <Image
           accessibilityIgnoresInvertColors
           className={iconSize}
           contentFit="contain"
-          source={FEISHU_ICON}
+          source={artwork.source}
+          tintColor={artwork.tint ? foreground : undefined}
         />
       ) : (
-        <Icon className={`${iconSize} text-foreground`} />
+        <FileTextIcon className={`${iconSize} text-foreground`} />
       )}
     </View>
   );
