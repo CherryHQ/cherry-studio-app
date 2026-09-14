@@ -1,0 +1,8 @@
+{
+  "name": "@cherrystudio/file-sharing",
+  "version": "1.0.0",
+  "description": "System sharing of multiple local files for Cherry Studio",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "private": true
+}

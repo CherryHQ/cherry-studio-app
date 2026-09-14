@@ -41,3 +41,7 @@ disclosures; HTML and WebP start with the same collapsed process summary.
 Rendering, temporary files, permanent storage and system delivery remain in the application export
 capability. Opening the preview renders an image without thinking content by default; changing the
 format or switch renders the selected snapshot as needed.
+
+Long selections automatically become multiple ordered images, shared together through one system
+sheet. Selection does not impose a single-image height limit. If image conversion cannot complete,
+the export page prepares a document without asking the user to reduce the selection and retry.

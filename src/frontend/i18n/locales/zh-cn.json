@@ -1480,7 +1480,7 @@
   "documentExport.errors.storage-failed": "无法生成文件，请重试。",
   "documentExport.progress.rendering": "正在整理文档…",
   "documentExport.progress.resolving-assets": "正在准备图片和排版…",
-  "documentExport.progress.capturing": "正在生成长图…",
+  "documentExport.progress.capturing": "正在生成图片，较长内容会自动分成多张…",
   "documentExport.progress.writing": "正在生成文件…",
   "chat.share.title": "分享对话",
   "chat.share.selectMessages": "请选择要分享的消息",
@@ -1505,7 +1505,14 @@
   "chat.share.error": "出错",
   "chat.share.cancelled": "已取消",
   "chat.share.interrupted": "已中断",
-  "chat.share.selectionHint": "每条仅显示摘要，分享时会包含所选消息的完整内容。",
+  "chat.share.selectionHint": "每条仅显示摘要，分享包含完整内容；较长内容会自动分成多张图片。",
   "chat.share.previewWithoutText": "图片、附件或思考内容",
-  "documentExport.errors.image-size-limit": "所选内容超过单张长图容量，请减少消息，或改用 HTML 保留完整内容。"
+  "documentExport.errors.image-size-limit": "所选内容超过单张长图容量，请减少消息，或改用 HTML 保留完整内容。",
+  "documentExport.imageCount": "已自动分成 {{count}} 张图片，内容按顺序保留。",
+  "documentExport.imagePage": "第 {{index}} 张图片，共 {{count}} 张",
+  "documentExport.shareImages": "分享全部 {{count}} 张图片",
+  "documentExport.documentReady": "已为所选内容准备文档，可继续分享。",
+  "documentExport.paused": "预览已暂停",
+  "documentExport.resume": "继续生成",
+  "documentExport.progress.images": "正在生成第 {{current}} 张图片，共 {{total}} 张…"
 }

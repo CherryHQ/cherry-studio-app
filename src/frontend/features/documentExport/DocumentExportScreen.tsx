@@ -10,6 +10,7 @@ import {
   useToast,
 } from '@cherrystudio/ui/components';
 import { resolveTypographyScale } from '@cherrystudio/ui/utils';
+import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { type Href, router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -24,7 +25,7 @@ import {
   scheduleDocumentExportFinish,
   type DocumentExportOption,
 } from '@/frontend/appShell/documentExport';
-import { shareFile } from '@/frontend/components/FileEntryPreview';
+import { shareFiles } from '@/frontend/components/FileEntryPreview';
 import { usePreference } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -33,6 +34,7 @@ import type {
   DocumentExportSession,
   ExportDocument,
   ExportFormat,
+  ExportImage,
   ExportPresentation,
 } from '@/shared/contracts/documentExport';
 
@@ -229,14 +231,31 @@ function DocumentExportBody({
   useEffect(() => () => sharing.current?.abort(), []);
   const isReady = state.status === 'markdown' || state.status === 'ready';
   const artifact = state.status === 'ready' ? state.artifact : undefined;
-  const selectFormat = useCallback((value: ExportFormat) => {
+  const activeFormat = state.status === 'markdown' ? 'markdown' : (artifact?.format ?? format);
+  const imageCount = artifact?.format === 'image' ? artifact.images.length : 0;
+  const selectFormat = useCallback(
+    (value: ExportFormat) => {
+      if (!sharing.current)
+        setSelection((current) =>
+          activeFormat === value
+            ? current
+            : { ...current, format: value, revision: current.revision + 1 },
+        );
+    },
+    [activeFormat],
+  );
+  const previewFallback = useCallback(() => {
     if (!sharing.current)
       setSelection((current) =>
-        current.format === value
+        current.revision !== revision
           ? current
-          : { ...current, format: value, revision: current.revision + 1 },
+          : {
+              ...current,
+              format: activeFormat === 'image' ? 'html' : 'markdown',
+              revision: current.revision + 1,
+            },
       );
-  }, []);
+  }, [activeFormat, revision]);
   const share = async () => {
     if (sharing.current || !isReady) return;
     const controller = new AbortController();
@@ -246,7 +265,7 @@ function DocumentExportBody({
     let sheetClosed = false;
     try {
       const selected = await getArtifact(controller.signal);
-      const file = await session.save(selected, controller.signal);
+      const files = await session.save(selected, controller.signal);
       controller.signal.throwIfAborted();
       if (!(await Sharing.isAvailableAsync())) {
         controller.signal.throwIfAborted();
@@ -254,7 +273,7 @@ function DocumentExportBody({
         return;
       }
       controller.signal.throwIfAborted();
-      await shareFile(file);
+      await shareFiles(files, controller.signal);
       sheetClosed = true;
     } catch {
       if (!controller.signal.aborted)
@@ -281,6 +300,7 @@ function DocumentExportBody({
         <ArtifactPreview
           key={artifact.id}
           artifact={artifact}
+          onError={previewFallback}
           width={Math.min(presentation.width, Math.max(1, windowWidth - left - right - 48))}
         />
       ) : (
@@ -300,37 +320,43 @@ function DocumentExportBody({
             className="flex-1 bg-background"
             contentContainerClassName="flex-grow items-center justify-center p-6"
           >
-            {state.status === 'error' ? (
-              <ContentState.Error
-                description={t(
-                  `documentExport.errors.${state.code === 'size-limit' && format === 'image' ? 'image-size-limit' : state.code}`,
-                )}
-                primaryAction={{ children: t('common.retry'), onPress: retry }}
-                secondaryAction={
-                  state.code === 'size-limit' && format === 'image'
-                    ? { children: t('documentExport.useHtml'), onPress: () => selectFormat('html') }
-                    : undefined
-                }
-                title={t('documentExport.failed')}
+            {state.status === 'paused' ? (
+              <ContentState.Empty
+                primaryAction={{ children: t('documentExport.resume'), onPress: retry }}
+                title={t('documentExport.paused')}
               />
             ) : (
               <ContentState.Loading
-                title={t(
-                  `documentExport.progress.${state.status === 'loading' ? state.progress : 'rendering'}`,
-                )}
+                title={
+                  state.status === 'loading' && typeof state.progress === 'object'
+                    ? t('documentExport.progress.images', state.progress)
+                    : t(
+                        `documentExport.progress.${state.status === 'loading' ? state.progress : 'rendering'}`,
+                      )
+                }
               />
             )}
           </ScrollView>
         </View>
       )}
       <View className="gap-3 px-6 pt-2" style={{ paddingBottom: Math.max(bottom, 12) }}>
+        {imageCount > 1 ? (
+          <Text accessibilityLiveRegion="polite" className="text-muted-foreground text-sm">
+            {t('documentExport.imageCount', { count: imageCount })}
+          </Text>
+        ) : null}
+        {(state.status === 'ready' || state.status === 'markdown') && state.fallback ? (
+          <Text accessibilityLiveRegion="polite" className="text-muted-foreground text-sm">
+            {t('documentExport.documentReady')}
+          </Text>
+        ) : null}
         {artifact && artifact.issues.length > 0 ? (
           <Text className="text-muted-foreground text-sm">
             {t('documentExport.issues', { count: artifact.issues.length })}
           </Text>
         ) : null}
         <View className="min-h-11 flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2 border-border border-t pt-2">
-          <ExportFormatMenu disabled={isSharing} format={format} onSelect={selectFormat} />
+          <ExportFormatMenu disabled={isSharing} format={activeFormat} onSelect={selectFormat} />
           {option ? (
             <View className="min-h-11 flex-row items-center gap-3">
               <Text className="text-muted-foreground text-sm">{option.label}</Text>
@@ -358,7 +384,9 @@ function DocumentExportBody({
           onPress={() => void share()}
           size="lg"
         >
-          {t(format === 'image' ? 'documentExport.shareImage' : 'documentExport.share')}
+          {imageCount > 1
+            ? t('documentExport.shareImages', { count: imageCount })
+            : t(activeFormat === 'image' ? 'documentExport.shareImage' : 'documentExport.share')}
         </Button>
       </View>
     </View>
@@ -398,10 +426,15 @@ function ExportFormatMenu({
   );
 }
 
-function ArtifactPreview({ artifact, width }: { artifact: DocumentExportArtifact; width: number }) {
-  const { t } = useTranslation();
-  const [failed, setFailed] = useState(false);
-  if (failed) return <ContentState.Error title={t('documentExport.previewFailed')} />;
+function ArtifactPreview({
+  artifact,
+  width,
+  onError,
+}: {
+  artifact: DocumentExportArtifact;
+  width: number;
+  onError(): void;
+}) {
   if (artifact.format === 'html')
     return (
       <WebView
@@ -410,9 +443,9 @@ function ArtifactPreview({ artifact, width }: { artifact: DocumentExportArtifact
         allowUniversalAccessFromFileURLs={false}
         incognito
         javaScriptEnabled={false}
-        onError={() => setFailed(true)}
-        onContentProcessDidTerminate={() => setFailed(true)}
-        onRenderProcessGone={() => setFailed(true)}
+        onError={onError}
+        onContentProcessDidTerminate={onError}
+        onRenderProcessGone={onError}
         onShouldStartLoadWithRequest={({ url }) => url === 'about:blank'}
         originWhitelist={['*']}
         sharedCookiesEnabled={false}
@@ -423,18 +456,62 @@ function ArtifactPreview({ artifact, width }: { artifact: DocumentExportArtifact
     );
   if (artifact.format !== 'image') return null;
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerClassName="flex-grow items-center justify-center py-4"
-    >
+    <LegendList
+      data={artifact.images}
+      dataKey={artifact.id}
+      extraData={{ width, onError }}
+      getFixedItemSize={(item) => (width * item.height) / item.width + 32}
+      keyExtractor={imageKey}
+      recycleItems
+      renderItem={renderImage}
+      style={{ flex: 1 }}
+    />
+  );
+}
+
+function imageKey(image: ExportImage) {
+  return image.file.uri;
+}
+
+function renderImage({ item, index, data, extraData }: LegendListRenderItemProps<ExportImage>) {
+  const { width, onError } = extraData as { width: number; onError(): void };
+  return (
+    <ImagePreviewRow
+      image={item}
+      index={index}
+      count={data.length}
+      width={width}
+      onError={onError}
+    />
+  );
+}
+
+function ImagePreviewRow({
+  image,
+  index,
+  count,
+  width,
+  onError,
+}: {
+  image: ExportImage;
+  index: number;
+  count: number;
+  width: number;
+  onError(): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View className="items-center py-4">
       <Image
-        accessibilityLabel={t('documentExport.imagePreview')}
+        accessibilityLabel={t('documentExport.imagePage', { index: index + 1, count })}
+        cachePolicy="disk"
         contentFit="contain"
-        onError={() => setFailed(true)}
-        source={{ uri: artifact.file.uri }}
-        style={{ width, height: (width * artifact.height) / artifact.width }}
+        onError={onError}
+        recyclingKey={image.file.uri}
+        source={{ uri: image.file.uri }}
+        style={{ width, height: (width * image.height) / image.width }}
       />
-    </ScrollView>
+    </View>
   );
 }
 

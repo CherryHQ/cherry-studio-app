@@ -36,18 +36,30 @@ file library and opens the system share sheet. Repeated sharing of the current a
 saved entry; cancelling the sheet retains the file.
 
 The capture WebView is a controlled, navigation-free surface below an opaque loading view. After
-measuring the complete layout, it chooses 2x output where possible, falling back toward 1x for long
-content. Screen density only converts output pixels to native view points; it never multiplies the
-export budget. Logical height is capped at 16,383 points, WebP axes at 16,383 pixels, and final
-allocation at 24 million pixels. Text is never reduced below 1x to force admission.
+measuring the complete layout, short content keeps one image at 2x where possible, down to 1x.
+Longer content is split into ordered images at 2x. Page ends prefer message boundaries; a message
+larger than a page uses measured gaps between text lines. Oversized indivisible content is sliced
+continuously without discarding pixels. Screen density only converts output pixels to native view
+points. Each image retains the 16,383-point height, 16,383-pixel axis and 24-million-pixel allocation
+bounds. One operation admits at most 128 output images.
 
 Capture translates that same layout through tiles of at most 1,024 output pixels high, awaiting
 native layout and browser painting before each screenshot. PNG tiles are captured sequentially, then
-decoded one at a time into a CPU Skia surface and encoded once as lossless WebP on one module-owned
-Worklets runtime. No full-height native view or GPU texture is allocated. The native lease remains
-held through late capture/encoding cleanup. Timeouts also cancel tile preparation. The encoder is
-imported synchronously for Worklets Bundle Mode.
+decoded one at a time into a CPU Skia surface and encoded as lossless WebP on one module-owned
+Worklets runtime. Each image is encoded and its canvas released before the next image starts.
+No full-document native view or GPU texture is allocated. The native lease remains held through
+late cleanup. The 60-second timeout resets on tile progress, allowing long operations to finish
+while cancelling stalled work. The encoder is imported synchronously for Worklets Bundle Mode.
 
-Output remains one image, with HTML offered beyond its capacity. Multi-image delivery is a future
-option, not an implemented format. The current theme, selector and tiled-capture changes have not
-had device acceptance; prior simulator results apply only to the previous capture implementation.
+The preview uses a recycling image list with known row heights and disk-only image caching, shows
+the total image count, and offers one action to share every image. Progress reports the current
+image and total. Output filenames carry ordered numeric suffixes when there is more than one.
+
+Image generation or display failures automatically prepare HTML. Image resource limits and HTML
+failures fall back to the complete in-memory Markdown preview. The menu and Share action describe
+the actual format, accompanied by a document-ready note for conversion fallbacks. Cancellation and
+backgrounding pause work instead of starting another conversion.
+
+Multi-image capture, preview, persistence and native delivery still require device acceptance and a
+development-client rebuild for the new local sharing module. Tests were added but not run. Earlier
+simulator results do not validate this pipeline.

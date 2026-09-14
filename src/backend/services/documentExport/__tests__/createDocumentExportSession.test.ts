@@ -1,3 +1,4 @@
+import type { CaptureExportHtml, ExportFile } from '@/shared/contracts/documentExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { createDocumentExportSession } from '../createDocumentExportSession';
@@ -122,13 +123,14 @@ test('Markdown preview stays in memory and repeated sharing reuses its persisten
   expect(mockDirectories.size).toBe(0);
   expect(readManagedImage).not.toHaveBeenCalled();
   const artifact = await session.render({ format: 'markdown' });
+  if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
   expect(mockFiles.get(artifact.file.uri)).toBe('Content\n');
   expect(saveFile).not.toHaveBeenCalled();
   expect(Object.isFrozen(artifact.file)).toBe(true);
-  await expect(session.save(artifact)).resolves.toEqual(savedFile);
+  await expect(session.save(artifact)).resolves.toEqual([savedFile]);
   const repeated = await session.render({ format: 'markdown' });
   expect(repeated).toBe(artifact);
-  await expect(session.save(repeated)).resolves.toEqual(savedFile);
+  await expect(session.save(repeated)).resolves.toEqual([savedFile]);
   expect(saveFile).toHaveBeenCalledTimes(1);
   await session.dispose();
   expect(mockFiles.has(artifact.file.uri)).toBe(false);
@@ -145,6 +147,7 @@ test('replacing a preview discards its file and rejects stale publication reques
   );
   const first = await session.render({ format: 'markdown' });
   const second = await session.render({ format: 'html', presentation });
+  if (first.format !== 'markdown' || second.format !== 'html') throw new Error('Wrong format');
   expect(mockFiles.has(first.file.uri)).toBe(false);
   expect(mockFiles.get(second.file.uri)).toBe('<main>Content</main>');
   await expect(session.save(first)).rejects.toMatchObject({ code: 'invalid-input' });
@@ -154,7 +157,7 @@ test('replacing a preview discards its file and rejects stale publication reques
 
 test('cancelled capture releases a late native file and never publishes a partial artifact', async () => {
   const started = deferred<void>();
-  const native = deferred<{ uri: string; width: number; height: number; release(): void }>();
+  const native = deferred<Awaited<ReturnType<CaptureExportHtml>>>();
   const onDisposed = jest.fn();
   const session = createDocumentExportSession(
     { kind: 'markdown', source: 'Content' },
@@ -176,7 +179,7 @@ test('cancelled capture releases a late native file and never publishes a partia
   const release = jest.fn(() => {
     mockFiles.delete('file:///native.webp');
   });
-  native.resolve({ uri: 'file:///native.webp', width: 360, height: 900, release });
+  native.resolve({ images: [{ uri: 'file:///native.webp', width: 360, height: 900 }], release });
   await rejected;
   await disposing;
   expect(release).toHaveBeenCalledTimes(1);
@@ -206,14 +209,21 @@ test('capture output is retained until its asynchronous copy completes', async (
   const rendering = session.render({
     format: 'image',
     presentation,
-    capture: async () => ({ uri: 'file:///native.webp', width: 360, height: 900, release }),
+    capture: async () => ({
+      images: [{ uri: 'file:///native.webp', width: 360, height: 900 }],
+      release,
+    }),
   });
   await started.promise;
   expect(release).not.toHaveBeenCalled();
   copying.resolve();
   const artifact = await rendering;
-  expect(artifact.file).toMatchObject({ filename: 'document.webp', mediaType: 'image/webp' });
-  expect(mockFiles.get(artifact.file.uri)).toBe('image');
+  if (artifact.format !== 'image') throw new Error('Expected images');
+  expect(artifact.images[0].file).toMatchObject({
+    filename: 'document.webp',
+    mediaType: 'image/webp',
+  });
+  expect(mockFiles.get(artifact.images[0].file.uri)).toBe('image');
   expect(release).toHaveBeenCalledTimes(1);
   await session.dispose();
 });
@@ -230,10 +240,14 @@ test('retains a long image above the old 12-million-pixel budget', async () => {
   const artifact = await session.render({
     format: 'image',
     presentation,
-    capture: async () => ({ uri: 'file:///native.webp', width: 1200, height: 12000, release }),
+    capture: async () => ({
+      images: [{ uri: 'file:///native.webp', width: 1200, height: 12000 }],
+      release,
+    }),
   });
-  expect(artifact).toMatchObject({ format: 'image', width: 1200, height: 12000 });
-  expect(mockFiles.get(artifact.file.uri)).toBe('image');
+  if (artifact.format !== 'image') throw new Error('Expected images');
+  expect(artifact.images).toMatchObject([{ width: 1200, height: 12000 }]);
+  expect(mockFiles.get(artifact.images[0].file.uri)).toBe('image');
   expect(release).toHaveBeenCalledTimes(1);
   await session.dispose();
 });
@@ -254,9 +268,9 @@ test.each([
     session.render({
       format: 'image',
       presentation,
-      capture: async () => ({ uri: 'file:///native.webp', ...dimensions, release }),
+      capture: async () => ({ images: [{ uri: 'file:///native.webp', ...dimensions }], release }),
     }),
-  ).rejects.toMatchObject({ code: 'size-limit' });
+  ).rejects.toMatchObject({ code: 'image-size-limit' });
   expect(mockCopy).not.toHaveBeenCalled();
   expect(release).toHaveBeenCalledTimes(1);
   expect(mockFiles.size).toBe(0);
@@ -270,3 +284,93 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+test('saving multiple images preserves order and resumes after a partial save without duplicating files', async () => {
+  const images = [1, 2].map((index) => ({
+    uri: `file:///native-${index}.webp`,
+    width: 720,
+    height: 1000,
+  }));
+  images.forEach((image, index) => mockFiles.set(image.uri, `image-${index + 1}`));
+  let didFail = false;
+  const saveFile = jest.fn(async (file: ExportFile) => {
+    if (file.filename.endsWith('002.webp') && !didFail) {
+      didFail = true;
+      throw new Error('Save interrupted');
+    }
+    const uri = `file:///permanent/${file.filename}`;
+    mockFiles.set(uri, mockFiles.get(file.uri)!);
+    return {
+      ...savedFile,
+      uri,
+      entry: FileEntrySchema.parse({
+        ...savedFile.entry,
+        filename: file.filename,
+        mediaType: file.mediaType,
+      }),
+    };
+  });
+  const release = jest.fn();
+  const session = createDocumentExportSession(
+    { kind: 'markdown', source: 'Content' },
+    { readManagedImage: jest.fn(), saveFile },
+    () => {},
+    () => {},
+  );
+  const artifact = await session.render({
+    format: 'image',
+    presentation,
+    capture: async () => ({ images, release }),
+  });
+  if (artifact.format !== 'image') throw new Error('Expected images');
+  expect(artifact.images.map((image) => image.file.filename)).toEqual([
+    'document-001.webp',
+    'document-002.webp',
+  ]);
+  expect(artifact.images.map((image) => mockFiles.get(image.file.uri))).toEqual([
+    'image-1',
+    'image-2',
+  ]);
+  expect(Object.isFrozen(artifact.images)).toBe(true);
+  expect(Object.isFrozen(artifact.images[0].file)).toBe(true);
+  await expect(session.save(artifact)).rejects.toThrow('Save interrupted');
+  const files = await session.save(artifact);
+  expect(files.map((file) => file.entry.filename)).toEqual([
+    'document-001.webp',
+    'document-002.webp',
+  ]);
+  expect(saveFile).toHaveBeenCalledTimes(3);
+  await expect(session.save(artifact)).resolves.toEqual(files);
+  expect(saveFile).toHaveBeenCalledTimes(3);
+  expect(release).toHaveBeenCalledTimes(1);
+  await session.dispose();
+  expect(files.map((file) => mockFiles.get(file.uri))).toEqual(['image-1', 'image-2']);
+  expect(artifact.images.some((image) => mockFiles.has(image.file.uri))).toBe(false);
+});
+
+test('failure copying a later image removes all partial output and releases all native images', async () => {
+  mockFiles.set('file:///first.webp', 'first');
+  const release = jest.fn();
+  const session = createDocumentExportSession(
+    { kind: 'markdown', source: 'Content' },
+    { readManagedImage: jest.fn(), saveFile: jest.fn() },
+    () => {},
+    () => {},
+  );
+  await expect(
+    session.render({
+      format: 'image',
+      presentation,
+      capture: async () => ({
+        images: [
+          { uri: 'file:///first.webp', width: 720, height: 1000 },
+          { uri: 'file:///missing.webp', width: 720, height: 1000 },
+        ],
+        release,
+      }),
+    }),
+  ).rejects.toMatchObject({ code: 'storage-failed' });
+  expect([...mockFiles.keys()]).toEqual(['file:///first.webp']);
+  expect(release).toHaveBeenCalledTimes(1);
+  await session.dispose();
+});

@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "ios/CherryFileSharing.podspec",
+    "modules": ["FileSharingModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.cherryfilesharing.FileSharingModule"]
+  }
+}

@@ -1,4 +1,4 @@
-import { captureWebp } from '../captureWebp';
+import { captureWebp, captureWebpPages } from '../captureWebp';
 import type { ImageCapturePlan } from '../imageCapturePlan';
 
 const mockWebpBytes = new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 69, 66, 80]);
@@ -15,6 +15,7 @@ const mockDraw = jest.fn();
 const mockRunWorklet = jest.fn();
 const mockRuntimeUse = jest.fn();
 let mockRuntimeCount = 0;
+let mockOutputId = 0;
 const mockCreateRuntime = jest.fn(() => ({ runtime: ++mockRuntimeCount }));
 const mockPrepareTile = jest.fn(async () => {});
 const plan: ImageCapturePlan = {
@@ -29,7 +30,7 @@ jest.mock('react-native-view-shot', () => ({
   captureRef: (...args: unknown[]) => mockCapture(...args),
   releaseCapture: (uri: string) => mockReleaseCapture(uri),
 }));
-jest.mock('expo-crypto', () => ({ randomUUID: () => 'capture' }));
+jest.mock('expo-crypto', () => ({ randomUUID: () => `capture-${++mockOutputId}` }));
 jest.mock('expo-file-system', () => ({
   Paths: { cache: 'file:///cache' },
   File: class {
@@ -233,3 +234,44 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+test('multiple images release each canvas before the next capture and retain every output until release', async () => {
+  const pages = [
+    { ...plan, offset: 0, layoutHeight: 900 },
+    { ...plan, offset: 450, layoutHeight: 900 },
+  ];
+  const prepare = jest.fn(async (page) => {
+    if (page.offset === 450) expect(mockSurfaceDispose).toHaveBeenCalledTimes(1);
+  });
+  const progress = jest.fn();
+  const result = await captureWebpPages(1, pages, prepare, new AbortController().signal, progress);
+  expect(result.images.map(({ width, height }) => [width, height])).toEqual([
+    [720, 900],
+    [720, 900],
+  ]);
+  expect(new Set(result.images.map((image) => image.uri)).size).toBe(2);
+  expect(mockFiles.size).toBe(2);
+  expect(progress.mock.calls).toEqual([
+    [1, 2],
+    [2, 2],
+  ]);
+  result.release();
+  expect(mockFiles.size).toBe(0);
+});
+
+test('cancelling on a later image releases already completed images without returning a partial result', async () => {
+  const controller = new AbortController();
+  const pages = [
+    { ...plan, offset: 0 },
+    { ...plan, offset: 450 },
+  ];
+  const prepare = async (page: (typeof pages)[number]) => {
+    if (page.offset === 450) controller.abort();
+  };
+  await expect(captureWebpPages(1, pages, prepare, controller.signal)).rejects.toMatchObject({
+    name: 'AbortError',
+  });
+  expect(mockEncode).toHaveBeenCalledTimes(1);
+  expect(mockFiles.size).toBe(0);
+  expect(mockSurfaceDispose).toHaveBeenCalledTimes(2);
+});

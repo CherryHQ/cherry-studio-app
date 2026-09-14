@@ -6,7 +6,7 @@ import { createWorkletRuntime, runOnRuntimeAsync } from 'react-native-worklets';
 
 import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/documentExport';
 
-import type { ImageCapturePlan, ImageCaptureTile } from './imageCapturePlan';
+import type { ImageCapturePage, ImageCapturePlan, ImageCaptureTile } from './imageCapturePlan';
 
 // A worklet runtime is a separate JS engine on its own thread. Bundle Mode evaluates the
 // whole bundle inside every new one, and the library only releases it through GC. The
@@ -21,12 +21,43 @@ function getAssemblyRuntime() {
   return assemblyRuntime;
 }
 
+/** Each page is encoded and its canvas disposed before the next page starts. */
+export async function captureWebpPages(
+  view: Parameters<typeof captureRef>[0],
+  pages: readonly ImageCapturePage[],
+  prepareTile: (page: ImageCapturePage, tile: ImageCaptureTile) => Promise<void>,
+  signal: AbortSignal,
+  onProgress?: (current: number, total: number) => void,
+): Promise<Awaited<ReturnType<CaptureExportHtml>>> {
+  const outputs: Awaited<ReturnType<typeof captureWebp>>[] = [];
+  const release = () => outputs.forEach((output) => output.release());
+  try {
+    for (const [index, page] of pages.entries()) {
+      signal.throwIfAborted();
+      onProgress?.(index + 1, pages.length);
+      outputs.push(await captureWebp(view, page, (tile) => prepareTile(page, tile), signal));
+    }
+    signal.throwIfAborted();
+    return {
+      images: outputs.map((output, index) => ({
+        uri: output.uri,
+        width: pages[index].width,
+        height: pages[index].height,
+      })),
+      release,
+    };
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
+
 export async function captureWebp(
   view: Parameters<typeof captureRef>[0],
   plan: ImageCapturePlan,
   prepareTile: (tile: ImageCaptureTile) => Promise<void>,
   signal: AbortSignal,
-): Promise<Pick<Awaited<ReturnType<CaptureExportHtml>>, 'uri' | 'release'>> {
+): Promise<{ uri: string; release(): void }> {
   let output: File | undefined;
   const release = () => {
     try {

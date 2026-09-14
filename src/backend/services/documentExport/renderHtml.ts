@@ -85,7 +85,7 @@ export async function renderHtml(
     }
   };
   document.sections.forEach((section) => visitBlocks(section.blocks));
-  if (sources.size > 32) throw new DocumentExportError('size-limit');
+  if (sources.size > 32) throw new DocumentExportError('image-resource-limit');
   const prepared = await resolveDocumentAssets(sources, cache, readManagedImage, signal);
   issues.push(...prepared.issues);
   let embeddedCharacters = 0;
@@ -93,7 +93,8 @@ export async function renderHtml(
     const data = prepared.images.get(key);
     if (data) {
       embeddedCharacters += data.length;
-      if (embeddedCharacters > 24 * 1024 * 1024) throw new DocumentExportError('size-limit');
+      if (embeddedCharacters > 24 * 1024 * 1024)
+        throw new DocumentExportError('image-resource-limit');
     }
     return data
       ? `<img src="${data}" alt="${escapeHtml(alt)}">`

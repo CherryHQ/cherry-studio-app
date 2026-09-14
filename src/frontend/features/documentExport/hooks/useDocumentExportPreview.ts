@@ -12,9 +12,9 @@ import {
 
 type PreviewState =
   | { status: 'loading'; progress: DocumentExportProgress }
-  | { status: 'ready'; artifact: DocumentExportArtifact }
-  | { status: 'markdown'; text: string }
-  | { status: 'error'; code: DocumentExportError['code'] | 'cancelled' };
+  | { status: 'ready'; artifact: DocumentExportArtifact; fallback?: true }
+  | { status: 'markdown'; text: string; fallback?: true }
+  | { status: 'paused' };
 
 export function useDocumentExportPreview(
   session: DocumentExportSession,
@@ -45,25 +45,48 @@ export function useDocumentExportPreview(
       .catch(() => {})
       .then(async () => {
         if (controller.signal.aborted) return;
+        const context = {
+          signal: controller.signal,
+          onProgress: (progress: DocumentExportProgress) =>
+            publish({ status: 'loading', progress }),
+        };
+        const pause = (error: unknown) => {
+          if (
+            controller.signal.aborted ||
+            (error instanceof Error && error.name === 'AbortError') ||
+            (error instanceof DocumentExportError &&
+              ['inactive', 'disposed', 'busy'].includes(error.code))
+          ) {
+            publish({ status: 'paused' });
+            return true;
+          }
+          return false;
+        };
         try {
           const artifact = await session.render(
             format === 'html' ? { format, presentation } : { format, presentation, capture },
-            {
-              signal: controller.signal,
-              onProgress: (progress) => publish({ status: 'loading', progress }),
-            },
+            context,
           );
           publish({ status: 'ready', artifact });
         } catch (error) {
-          publish({
-            status: 'error',
-            code:
-              error instanceof DocumentExportError
-                ? error.code
-                : error instanceof Error && error.name === 'AbortError'
-                  ? 'cancelled'
-                  : 'storage-failed',
-          });
+          if (pause(error)) return;
+          if (
+            format === 'image' &&
+            !(error instanceof DocumentExportError && error.code === 'image-resource-limit')
+          ) {
+            try {
+              const artifact = await session.render(
+                { format: 'html', presentation: { ...presentation, imageFrame: undefined } },
+                context,
+              );
+              publish({ status: 'ready', artifact, fallback: true });
+              return;
+            } catch (htmlError) {
+              if (pause(htmlError)) return;
+            }
+          }
+          // A complete source preview needs neither image allocation nor temporary files.
+          publish({ status: 'markdown', text: session.markdown, fallback: true });
         }
       });
     return () => controller.abort();

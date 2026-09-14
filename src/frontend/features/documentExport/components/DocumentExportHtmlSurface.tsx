@@ -5,10 +5,10 @@ import { WebView } from 'react-native-webview';
 import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/documentExport';
 
 // Bundle Mode needs the encoder worklet in the initial bundle, not an async chunk.
-import { captureWebp } from '../utils/captureWebp';
+import { captureWebpPages } from '../utils/captureWebp';
 import {
-  imageCapturePlan,
-  type ImageCapturePlan,
+  imageCapturePages,
+  type ImageCapturePage,
   type ImageCaptureTile,
 } from '../utils/imageCapturePlan';
 
@@ -21,6 +21,7 @@ type CaptureRequest = {
   nativeStarted: boolean;
   finished?: Promise<void>;
   settled: boolean;
+  touch(): void;
   finish(error?: Error, result?: CaptureResult): void;
 };
 let nextId = 0;
@@ -39,12 +40,21 @@ export function useDocumentExportHtmlCapture() {
     if (!mounted.current) return Promise.reject(new DocumentExportError('disposed'));
     if (captureLease) return Promise.reject(new DocumentExportError('busy'));
     return new Promise<CaptureResult>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout>;
       const request: CaptureRequest = {
         input,
         id: ++nextId,
         controller: new AbortController(),
         nativeStarted: false,
         settled: false,
+        touch: () => {
+          clearTimeout(timer);
+          // Bound stalled native work, while allowing a progressing multi-image export to finish.
+          timer = setTimeout(
+            () => request.finish(new DocumentExportError('capture-failed')),
+            60_000,
+          );
+        },
         finish: (error, result) => {
           if (request.settled) {
             result?.release();
@@ -63,10 +73,7 @@ export function useDocumentExportHtmlCapture() {
         },
       };
       const abort = () => request.finish(new DOMException('Export cancelled', 'AbortError'));
-      const timer = setTimeout(
-        () => request.finish(new DocumentExportError('capture-failed')),
-        60_000,
-      );
+      request.touch();
       input.signal.addEventListener('abort', abort, { once: true });
       captureLease = request;
       current.current = request;
@@ -86,7 +93,7 @@ export function useDocumentExportHtmlCapture() {
   };
 }
 
-type TileLayout = { plan: ImageCapturePlan; tile: ImageCaptureTile };
+type TileLayout = { plan: ImageCapturePage; tile: ImageCaptureTile };
 type PendingTile = TileLayout & { injected: boolean; resolve(): void; reject(): void };
 
 function CaptureSurface({ request }: { request: CaptureRequest }) {
@@ -116,13 +123,14 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
     prepareLayout();
   }, [prepareLayout, tileLayout]);
 
-  const capture = async (plan: ImageCapturePlan) => {
+  const capture = async (pages: ImageCapturePage[]) => {
     if (request.nativeStarted || request.settled) return;
     request.nativeStarted = true;
     const signal = request.controller.signal;
-    const prepareTile = (tile: ImageCaptureTile) =>
+    const prepareTile = (plan: ImageCapturePage, tile: ImageCaptureTile) =>
       new Promise<void>((resolve, reject) => {
         signal.throwIfAborted();
+        request.touch();
         const abort = () => {
           pending.current = undefined;
           reject(new DOMException('Export cancelled', 'AbortError'));
@@ -135,6 +143,7 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
           resolve: () => {
             signal.removeEventListener('abort', abort);
             pending.current = undefined;
+            request.touch();
             resolve();
           },
           reject: abort,
@@ -142,8 +151,8 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
         setTileLayout({ plan, tile });
       });
     try {
-      const result = await captureWebp(wrapper, plan, prepareTile, signal);
-      request.finish(undefined, { ...result, width: plan.width, height: plan.height });
+      const result = await captureWebpPages(wrapper, pages, prepareTile, signal, input.onProgress);
+      request.finish(undefined, result);
     } catch {
       fail();
     } finally {
@@ -172,12 +181,16 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
         allowUniversalAccessFromFileURLs={false}
         bounces={false}
         incognito
-        injectedJavaScript={readinessScript(request.id)}
+        injectedJavaScript={readinessScript(request.id, input.maxHeight)}
         javaScriptCanOpenWindowsAutomatically={false}
         onContentProcessDidTerminate={fail}
         onError={fail}
         onMessage={({ nativeEvent }) => {
-          if (request.settled || nativeEvent.data.length > 1024) return;
+          if (request.settled) return;
+          if (nativeEvent.data.length > 4 * 1024 * 1024) {
+            request.finish(new DocumentExportError('image-size-limit'));
+            return;
+          }
           try {
             const message = JSON.parse(nativeEvent.data);
             if (message.id !== request.id) return;
@@ -190,6 +203,7 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
               if (
                 job &&
                 message.offset === job.tile.offset &&
+                message.pageOffset === job.plan.offset &&
                 Math.abs(message.height - job.plan.layoutHeight) <= 1
               ) {
                 job.resolve();
@@ -202,16 +216,18 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
               message.width > input.width + 1 ||
               typeof message.height !== 'number'
             ) {
-              request.finish(new DocumentExportError('size-limit'));
+              request.finish(new DocumentExportError('image-size-limit'));
               return;
             }
-            const plan = imageCapturePlan(
+            const pages = imageCapturePages(
               input.width,
               Math.ceil(message.height),
               input.maxHeight,
               input.maxPixels,
+              message.sections,
+              message.lineBreaks,
             );
-            request.finished = capture(plan);
+            request.finished = capture(pages);
           } catch (error) {
             if (error instanceof DocumentExportError) request.finish(error);
             else fail();
@@ -232,7 +248,7 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
   );
 }
 
-function readinessScript(id: number) {
+function readinessScript(id: number, maxHeight: number) {
   return `(async function(){try{
     await document.fonts.ready;
     await Promise.all(Array.from(document.images).map(function(image){return image.decode();}));
@@ -242,7 +258,31 @@ function readinessScript(id: number) {
       var main=document.querySelector('main');
       var height=Math.ceil(main.getBoundingClientRect().height);
       stable=height===previous?stable+1:0;previous=height;
-      if(stable>=3){window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'measure',height:height,width:main.scrollWidth}));return;}
+      if(stable>=3){
+        var sections=[], lineBreaks=[];
+        if(height>${maxHeight}) {
+        var top=main.getBoundingClientRect().top;
+        sections=Array.from(main.querySelectorAll(':scope > section,:scope > article > section'))
+          .slice(1).map(function(section){return Math.floor(section.getBoundingClientRect().top-top);});
+        var ranges=[];
+        var addRect=function(rect){if(rect.width>0&&rect.height>0) ranges.push([rect.top-top,rect.bottom-top]);};
+        var walker=document.createTreeWalker(main,NodeFilter.SHOW_TEXT), node;
+        var range=document.createRange();
+        while(node=walker.nextNode()){
+          range.selectNodeContents(node);
+          Array.from(range.getClientRects()).forEach(addRect);
+        }
+        main.querySelectorAll('img,math').forEach(function(element){addRect(element.getBoundingClientRect());});
+        ranges.sort(function(a,b){return a[0]-b[0];});
+        var bottom=0;
+        ranges.forEach(function(rect){
+          var cut=Math.floor((bottom+rect[0])/2);
+          if(cut>=bottom&&cut<rect[0]) lineBreaks.push(cut);
+          bottom=Math.max(bottom,rect[1]);
+        });
+        }
+        window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'measure',height:height,width:main.scrollWidth,sections:sections,lineBreaks:lineBreaks}));return;
+      }
     }
     throw new Error('Layout unstable');
   }catch(error){window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},error:true}));}})();true;`;
@@ -263,8 +303,8 @@ function tileReadinessScript(
     main.style.width='${width}px';main.style.maxWidth='none';main.style.margin='0';
     main.style.position='absolute';main.style.left='0';main.style.top='0';
     main.style.transformOrigin='0 0';
-    main.style.transform='matrix(${plan.scale / density},0,0,${plan.scale / density},0,${-tile.offset / density})';
+    main.style.transform='matrix(${plan.scale / density},0,0,${plan.scale / density},0,${-(plan.offset * plan.scale + tile.offset) / density})';
     for(var frame=0;frame<3;frame++) await new Promise(requestAnimationFrame);
-    window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'ready',offset:${tile.offset},height:main.offsetHeight}));
+    window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'ready',offset:${tile.offset},pageOffset:${plan.offset},height:main.offsetHeight}));
   }catch(error){window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},error:true}));}})();true;`;
 }
