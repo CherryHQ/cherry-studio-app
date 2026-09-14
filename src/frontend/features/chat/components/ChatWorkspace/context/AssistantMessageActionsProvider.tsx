@@ -1,6 +1,6 @@
 import { useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   createContext,
   type PropsWithChildren,
@@ -54,13 +54,22 @@ export function AssistantMessageActionsProvider({
   const { t } = useTranslation();
   const { toast } = useToast();
   const forkSession = useAgentChatFork();
+  const shareNavigationInFlightRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      // The chat screen remains mounted underneath the selector. Unlock only when
+      // it regains focus so rapid taps cannot push duplicate selector routes.
+      shareNavigationInFlightRef.current = false;
+    }, []),
+  );
   const shareAssistantMessage = useCallback(
     ({ messageId }: { messageId: string }) => {
-      if (!sessionId) return;
+      if (!sessionId || shareNavigationInFlightRef.current) return;
+      shareNavigationInFlightRef.current = true;
       Keyboard.dismiss();
       router.push({ pathname: '/chat-share', params: { sessionId, messageId } });
     },
-    [sessionId],
+    [sessionId, shareNavigationInFlightRef],
   );
   // Already in cache: the chat screen resolves this same Session to render.
   const sourceTitle = useAgentSession(sessionId).data?.title?.trim();
