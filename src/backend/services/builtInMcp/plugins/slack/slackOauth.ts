@@ -57,6 +57,32 @@ const base64Url = (value: string) =>
   value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const randomValue = () => base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
 
+/** Slack's official manifest link prefills app settings without a configuration token. */
+export function getSlackApplicationSetupUrl() {
+  const url = new URL('https://api.slack.com/apps');
+  url.searchParams.set('new_app', '1');
+  url.searchParams.set(
+    'manifest_json',
+    JSON.stringify({
+      display_information: {
+        name: 'Cherry personal reader',
+        description: 'Read Slack in your own Cherry Studio app',
+      },
+      oauth_config: {
+        redirect_urls: SlackApplicationSchema.shape.redirectUrl.options,
+        scopes: { user: SLACK_READ_SCOPES },
+        pkce_enabled: true,
+      },
+      settings: {
+        org_deploy_enabled: false,
+        socket_mode_enabled: false,
+        token_rotation_enabled: true,
+      },
+    }),
+  );
+  return url.href;
+}
+
 export const slackOauth = {
   application(fields: Record<string, string>): SlackApplication {
     const schemes = Constants.expoConfig?.scheme;

@@ -245,7 +245,8 @@ export class SlackAuthorizationRuntime implements PluginAuthorizationRuntime {
       const requiresDisconnect = await this.requiresDisconnect(pending.previousId, account.id);
       signal.throwIfAborted();
       this.pending = {
-        status: 'review',
+        // Slack has already collected consent; the observer completes unchanged accounts.
+        status: requiresDisconnect ? 'review' : 'ready',
         id: pending.id,
         previousId: pending.previousId,
         requiresDisconnect,
@@ -344,7 +345,7 @@ export class SlackAuthorizationRuntime implements PluginAuthorizationRuntime {
       signal.throwIfAborted();
       const pending = this.requireReview(attemptId);
       if (pending.status !== 'ready')
-        throw new PluginError('authorization', 'Confirm the Slack connection first.');
+        throw new PluginError('authorization', 'Slack authorization is not ready.');
       this.pending = undefined;
       return this.store.commit(asCredential(pending.credential), accountLabel, signal, {
         authorizationId: pending.previousId,

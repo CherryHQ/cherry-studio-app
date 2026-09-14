@@ -7,8 +7,10 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { PluginCatalogEntry, PluginInteractiveMethod } from '@/shared/data/types/plugin';
 
+import { ApplicationSetupHelp } from './ApplicationSetupHelp';
 import { CredentialFields, hasEveryField } from './CredentialFields';
 import { useInteractiveConnect } from './useInteractiveConnect';
 
@@ -42,6 +44,7 @@ export function InteractiveConnect({
   const name = t(`plugins.catalog.${entry.id}.name`);
   const textKey = `plugins.catalog.${entry.id}.authMethods.${method.id}`;
   const applicationFields = method.applicationFields;
+  const applicationSetup = method.applicationSetup;
   const waiting = state?.status === 'waiting' || state?.status === 'callback' ? state : null;
   const review = state?.status === 'review' ? state : null;
   const finalStatus =
@@ -162,9 +165,27 @@ export function InteractiveConnect({
           ) : null}
           {state?.status === 'idle' && existingApplication && applicationFields ? (
             <View className="gap-4">
+              {applicationSetup ? (
+                <Text className="text-base font-medium text-foreground">
+                  {t(`${textKey}.useExisting`)}
+                </Text>
+              ) : null}
               <Text className="text-sm text-muted-foreground">
                 {t(`${textKey}.useExistingSetup`)}
               </Text>
+              {applicationSetup ? (
+                <View className="items-start">
+                  <Button
+                    variant="link"
+                    size="inline"
+                    disabled={isBusy}
+                    onPress={() => void openExternalUrl(entry.links.credentials)}
+                    testID="plugin-existing-applications"
+                  >
+                    {t(`${textKey}.manageApplications`)}
+                  </Button>
+                </View>
+              ) : null}
               <CredentialFields
                 pluginId={entry.id}
                 fields={applicationFields}
@@ -188,15 +209,31 @@ export function InteractiveConnect({
                 onPress={() => void submitExistingApplication()}
                 testID="plugin-use-existing-submit"
               >
-                {t('plugins.authorization.useExistingSubmit')}
+                {t(
+                  applicationSetup
+                    ? `${textKey}.continue`
+                    : 'plugins.authorization.useExistingSubmit',
+                )}
               </Button>
-              <Button
-                variant="ghost"
-                disabled={isBusy}
-                onPress={() => setExistingApplication(null)}
-              >
-                {t('plugins.authorization.useExistingCancel')}
-              </Button>
+              {applicationSetup ? (
+                <Button
+                  size="lg"
+                  variant="outline"
+                  disabled={isBusy}
+                  onPress={() => void openExternalUrl(applicationSetup.createUrl)}
+                  testID="plugin-create-application"
+                >
+                  {t(`${textKey}.createApplication`)}
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  disabled={isBusy}
+                  onPress={() => setExistingApplication(null)}
+                >
+                  {t('plugins.authorization.useExistingCancel')}
+                </Button>
+              )}
             </View>
           ) : null}
           {state && !waiting && !review && state.status !== 'ready' && !existingApplication ? (
@@ -221,6 +258,13 @@ export function InteractiveConnect({
             </Button>
           ) : null}
           {children}
+          {applicationSetup && state && !waiting && !review && state.status !== 'ready' ? (
+            <ApplicationSetupHelp
+              setup={applicationSetup}
+              textKey={textKey}
+              managementUrl={entry.links.credentials}
+            />
+          ) : null}
           {state?.status === 'ready' && !error ? (
             <ContentState.Loading title={t('plugins.authorization.finishing')} />
           ) : null}

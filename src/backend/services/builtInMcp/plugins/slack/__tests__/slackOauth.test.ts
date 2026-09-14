@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 
 import { readSlackIdentity, slackRequest } from '../slackApi';
-import { SLACK_READ_SCOPES, SlackScopeSchema } from '../slackCredentials';
-import { slackOauth } from '../slackOauth';
+import { SLACK_READ_SCOPES, SlackApplicationSchema, SlackScopeSchema } from '../slackCredentials';
+import { getSlackApplicationSetupUrl, slackOauth } from '../slackOauth';
 import { SLACK_TOOLS } from '../slackTools';
 
 jest.mock('expo-constants', () => ({
@@ -31,6 +31,19 @@ const token = {
   expires_in: 43200,
 };
 beforeEach(() => mockRequest.mockReset());
+
+it('prefills the official Slack creation page with read-only scopes and native authorization settings', () => {
+  const url = new URL(getSlackApplicationSetupUrl());
+  expect(url.origin + url.pathname).toBe('https://api.slack.com/apps');
+  expect(url.searchParams.get('new_app')).toBe('1');
+  const manifest = JSON.parse(url.searchParams.get('manifest_json')!);
+  expect(manifest.oauth_config).toEqual({
+    redirect_urls: SlackApplicationSchema.shape.redirectUrl.options,
+    scopes: { user: [...SLACK_READ_SCOPES] },
+    pkce_enabled: true,
+  });
+  expect(manifest.settings.token_rotation_enabled).toBe(true);
+});
 
 it('requests user scopes with S256 PKCE and no client secret', async () => {
   const challenge = await slackOauth.challenge(application);

@@ -31,7 +31,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
   const [existingApplication, setExistingApplication] = useState<{
     fields: Record<string, string>;
     invalid: Set<string>;
-  } | null>(null);
+  } | null>(() => (method.applicationSetup ? { fields: {}, invalid: new Set() } : null));
   const finished = useRef(false);
   const browserAttempt = useRef<string | null>(null);
   const name = t(`plugins.catalog.${entry.id}.name`);
@@ -133,7 +133,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
       if (restart) await plugins.authorization.cancel(entry.id, method.id);
       const next = await plugins.authorization.begin(entry.id, method.id);
       if (next.status === 'idle' && applicationFields) {
-        setExistingApplication({ fields: {}, invalid: new Set() });
+        setExistingApplication((previous) => previous ?? { fields: {}, invalid: new Set() });
       } else {
         void openConfirmation(next);
       }
@@ -168,7 +168,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     state,
     isBusy,
     error,
-    existingApplication,
+    existingApplication: state?.status === 'idle' ? existingApplication : null,
     setExistingApplication,
     begin,
     submitExistingApplication,
@@ -178,6 +178,11 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     confirm: () =>
       state?.status === 'review' &&
       act(() => plugins.authorization.confirm(entry.id, method.id, state.attemptId)),
-    resetApplication: () => act(() => plugins.authorization.resetApplication(entry.id, method.id)),
+    resetApplication: () =>
+      act(async () => {
+        const next = await plugins.authorization.resetApplication(entry.id, method.id);
+        setExistingApplication(method.applicationSetup ? { fields: {}, invalid: new Set() } : null);
+        return next;
+      }),
   };
 }

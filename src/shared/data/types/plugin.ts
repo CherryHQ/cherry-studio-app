@@ -36,6 +36,12 @@ export type PluginInteractiveMethod = {
   readonly interaction: 'polling' | 'callback';
   readonly stages: readonly string[];
   readonly applicationFields?: readonly PluginCredentialField[];
+  /** Provider-managed setup: start with the application form and offer creation separately. */
+  readonly applicationSetup?: {
+    readonly createUrl: string;
+    readonly redirectUrls: readonly string[];
+    readonly scopes: readonly string[];
+  };
 };
 
 export type PluginAuthorizationMethod = PluginCredentialMethod | PluginInteractiveMethod;
