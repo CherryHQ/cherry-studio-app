@@ -11,6 +11,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const groupIdentifier = `group.${bundleIdentifier}`;
   const widgetBundleIdentifier = `${bundleIdentifier}.ExpoWidgetsTarget`;
   const eas = config.extra?.eas;
+  const gmailIosClientId = process.env.GMAIL_IOS_CLIENT_ID?.trim();
+  const gmailIosBundleIdentifier = process.env.GMAIL_IOS_BUNDLE_IDENTIFIER?.trim();
+  if (gmailIosClientId || gmailIosBundleIdentifier) {
+    if (
+      !gmailIosClientId ||
+      !/^[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(gmailIosClientId) ||
+      gmailIosBundleIdentifier !== bundleIdentifier
+    ) {
+      throw new Error(
+        `Set GMAIL_IOS_CLIENT_ID and GMAIL_IOS_BUNDLE_IDENTIFIER for ${bundleIdentifier}.`,
+      );
+    }
+  }
 
   return {
     ...config,
@@ -26,6 +39,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.ios,
       buildNumber: process.env.EAS_BUILD_IOS_BUILD_NUMBER ?? config.ios?.buildNumber,
       bundleIdentifier,
+      infoPlist: {
+        ...config.ios?.infoPlist,
+        ...(gmailIosClientId
+          ? {
+              GIDClientID: gmailIosClientId,
+              CFBundleURLTypes: [
+                ...(config.ios?.infoPlist?.CFBundleURLTypes ?? []),
+                {
+                  CFBundleURLSchemes: [gmailIosClientId.split('.').toReversed().join('.')],
+                },
+              ],
+            }
+          : {}),
+      },
       entitlements: {
         ...config.ios?.entitlements,
         'com.apple.security.application-groups': [groupIdentifier],

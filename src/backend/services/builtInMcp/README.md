@@ -138,13 +138,19 @@ own this user-facing copy independently of Agent guide content.
 - Pending authorization stays in memory. Errors and process interruption require a new flow;
   reusable applications survive. No legacy imports, recovery journals or automatic cleanup retries.
 
-Interactive methods declare `polling` or `callback`. Polling retains the Feishu rules above;
+Interactive methods declare `polling`, `callback` or `native`. Polling retains the Feishu rules above;
 callback methods wait for a system authentication session and an exact redirect. A generic route
 adapter removes callback parameters and forwards the original URL to the active method. GitHub
 validates the redirect, state, deadline and PKCE proof and consumes each code once. Its `review`
 state exposes the account identity and requires explicit confirmation before `ready` can
 enter the shared read-only validation and commit sequence. Failed completion requires a new attempt.
-Existing-application entry/reset remain optional; native SDK interactions remain future work.
+Existing-application entry/reset remain optional. Gmail's `native` method invokes the local
+`gmail-authorization` Expo module from an explicit connection action: Google Sign-In on iOS and
+Google Identity Services AuthorizationClient on Android. Only the short-lived access token crosses
+the native bridge; renewal credentials remain with Google’s SDK. Gmail verifies the mailbox before
+review and binds silent renewal to that account. Renewal never presents consent UI; a required
+interaction returns a reconnect error. Disconnect revokes through the native SDK after local removal.
+Gmail has no user-supplied application settings or hosted callback page.
 
 The shared connection hook uses `openAuthSessionAsync` for GitHub's callback flow and
 `openBrowserAsync` for Feishu's device flow. GitHub returns through the system authentication

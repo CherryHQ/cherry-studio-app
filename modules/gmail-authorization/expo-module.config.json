@@ -1,0 +1,11 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "ios/GmailAuthorization.podspec",
+    "modules": ["GmailAuthorizationModule"],
+    "appDelegateSubscribers": ["GmailAuthorizationAppDelegateSubscriber"]
+  },
+  "android": {
+    "modules": ["expo.modules.gmailauthorization.GmailAuthorizationModule"]
+  }
+}

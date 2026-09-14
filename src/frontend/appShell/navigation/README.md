@@ -19,6 +19,8 @@ domains.
   cache shape. Background refreshes do not unmount the admitted chat.
 - `getRootHeaderStyle`, `getTransparentHeaderStyle`, and `paintingViewerHeaderShown` expose the
   platform policy consumed by root stack configuration.
+- `nativeIntent/` is a separate entry point for system URLs before React mounts. It leaves Google
+  authorization callbacks with the native SDK and keeps their parameters out of product routes.
 
 ## Organization
 

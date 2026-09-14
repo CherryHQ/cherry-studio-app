@@ -1,6 +1,6 @@
 import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError } from '@/shared/contracts/plugins';
-import type { PluginConnectionStatus } from '@/shared/data/types/plugin';
+import type { PluginConnectionStatus, PluginInteractiveMethod } from '@/shared/data/types/plugin';
 
 import type { PluginDefinition } from '../pluginDefinition';
 import { getPluginDefinition, requirePluginAuthMethod } from '../pluginRegistry';
@@ -10,7 +10,7 @@ import { PluginCredentialStore } from './PluginCredentialStore';
 
 type Entry = {
   runtime: PluginAuthorizationRuntime;
-  interaction: 'polling' | 'callback';
+  interaction: PluginInteractiveMethod['interaction'];
   observer?: ReturnType<typeof createAuthorizationObserver>;
 };
 
@@ -59,7 +59,10 @@ export class PluginAuthorizationManager {
     let entry = methods.get(methodId);
     if (!entry) {
       const runtime = method.createRuntime(this.createStore(plugin, methodId));
-      if (method.interaction === 'polling' ? !runtime.poll : !runtime.receiveCallback)
+      if (
+        (method.interaction === 'polling' && !runtime.poll) ||
+        (method.interaction === 'callback' && !runtime.receiveCallback)
+      )
         throw new PluginError('unavailable', 'The authorization interaction is unavailable.');
       entry = { runtime, interaction: method.interaction };
       methods.set(methodId, entry);

@@ -12,33 +12,16 @@ import type {
   PluginAuthorizationStore,
 } from '../../authorization/pluginAuthorization';
 import type { PluginCredential } from '../../authorization/pluginCredential';
-import {
-  GmailApplicationSchema,
-  GmailUserCredentialSchema,
-  type GmailApplication,
-  type GmailUserCredential,
-} from './gmailCredentials';
+import { GmailUserCredentialSchema, type GmailUserCredential } from './gmailCredentials';
 import { gmailOauth } from './gmailOauth';
 
-type Pending =
-  | {
-      status: 'callback';
-      id: string;
-      application: GmailApplication;
-      previousId?: string;
-      state: string;
-      verifier: string;
-      authorizationUrl: string;
-      expiresAt: number;
-    }
-  | {
-      status: 'review' | 'ready';
-      id: string;
-      previousId?: string;
-      credential: GmailUserCredential;
-      requiresDisconnect: boolean;
-    }
-  | { status: 'expired' | 'denied'; id: string };
+type Pending = {
+  status: 'review' | 'ready';
+  id: string;
+  previousId?: string;
+  credential: GmailUserCredential;
+  requiresDisconnect: boolean;
+};
 
 const asCredential = (value: GmailUserCredential): PluginCredential =>
   JSON.parse(JSON.stringify(value));
@@ -51,7 +34,6 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
   private attempt = new AbortController();
   private renewal = new AbortController();
   private pending?: Pending;
-  private application?: GmailApplication;
   private readonly resolutions = new Map<string, Promise<PluginCredential>>();
   private readonly failures = new Map<string, PluginErrorReason>();
 
@@ -81,22 +63,8 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
   }
 
   private project(): PluginAuthorizationState {
-    let pending = this.pending;
-    if (pending?.status === 'callback' && Date.now() >= pending.expiresAt)
-      this.pending = pending = { status: 'expired', id: pending.id };
-    if (!pending)
-      return this.application
-        ? { status: 'application-ready', applicationId: this.application.clientId }
-        : { status: 'idle' };
-    if (pending.status === 'callback')
-      return {
-        status: 'callback',
-        attemptId: pending.id,
-        stage: 'user',
-        authorizationUrl: pending.authorizationUrl,
-        redirectUrl: pending.application.redirectUrl,
-        expiresAt: pending.expiresAt,
-      };
+    const pending = this.pending;
+    if (!pending) return { status: 'idle' };
     if (pending.status === 'review')
       return {
         status: 'review',
@@ -104,14 +72,11 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
         accountLabel: pending.credential.account.label,
         requiresDisconnect: pending.requiresDisconnect,
       };
-    return { status: pending.status, attemptId: pending.id };
+    return { status: 'ready', attemptId: pending.id };
   }
 
   getState() {
-    return this.serialize(async () => {
-      await this.loadApplication();
-      return this.project();
-    });
+    return this.serialize(async () => this.project());
   }
   get attemptSignal() {
     return AbortSignal.any([this.lifetime.signal, this.attempt.signal]);
@@ -121,60 +86,29 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
     const signal = this.attemptSignal;
     return this.serialize(async () => {
       signal.throwIfAborted();
-      this.project();
-      if (this.pending && ['callback', 'review', 'ready'].includes(this.pending.status))
-        return this.project();
-      const application = await this.loadApplication();
-      if (!application) return this.project();
+      if (this.pending) return this.project();
       const previousId = await this.store.getCurrentAuthorizationId();
-      const challenge = await gmailOauth.challenge(application);
-      signal.throwIfAborted();
-      this.pending = {
-        status: 'callback',
-        id: randomUUID(),
-        application,
-        previousId,
-        ...challenge,
-        expiresAt: Date.now() + 10 * 60_000,
-      };
-      return this.project();
-    });
-  }
-
-  private async loadApplication() {
-    if (!this.application) {
-      const value = await this.store.readApplication();
-      if (value) {
-        const parsed = GmailApplicationSchema.safeParse(value);
-        if (!parsed.success)
-          throw new PluginError('authorization', 'Enter the Gmail application settings again.');
-        this.application = parsed.data;
+      const current = previousId
+        ? GmailUserCredentialSchema.parse((await this.store.getGrant(previousId))?.credential)
+        : undefined;
+      try {
+        const tokens = await gmailOauth.authorize(current?.account.id ?? null, true, signal);
+        const account = await gmailOauth.getAccount(tokens.accessToken, signal);
+        const requiresDisconnect = await this.requiresDisconnect(previousId, account.id);
+        signal.throwIfAborted();
+        this.pending = {
+          status: 'review',
+          id: randomUUID(),
+          previousId,
+          requiresDisconnect,
+          credential: { version: 1, tokens, account },
+        };
+        return this.project();
+      } catch (error) {
+        if (!signal.aborted && error instanceof PluginError && error.reason === 'cancelled')
+          return this.project();
+        throw error;
       }
-    }
-    return this.application;
-  }
-
-  useApplication(fields: Record<string, string>) {
-    this.interrupt();
-    const signal = this.attemptSignal;
-    return this.serialize(async () => {
-      signal.throwIfAborted();
-      const application = gmailOauth.application(fields);
-      await this.store.writeApplication(application);
-      signal.throwIfAborted();
-      this.application = application;
-      this.pending = undefined;
-      return this.project();
-    });
-  }
-
-  resetApplication() {
-    this.interrupt();
-    return this.serialize(async () => {
-      this.pending = undefined;
-      await this.store.writeApplication(undefined);
-      this.application = undefined;
-      return this.project();
     });
   }
 
@@ -192,74 +126,6 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
     }
   }
 
-  receiveCallback(attemptId: string, rawUrl: string) {
-    const signal = this.attemptSignal;
-    return this.serialize(async () => {
-      signal.throwIfAborted();
-      this.project();
-      const pending = this.pending;
-      if (!pending || pending.id !== attemptId) throw cancelled();
-      // Only the first valid callback consumes a code. Duplicate delivery returns the current state.
-      if (pending.status !== 'callback') return this.project();
-      let url: URL;
-      try {
-        url = new URL(rawUrl);
-      } catch {
-        throw new PluginError('request', 'Invalid authorization callback.');
-      }
-      const redirect = new URL(pending.application.redirectUrl);
-      if (
-        rawUrl.length > 16_384 ||
-        url.protocol !== redirect.protocol ||
-        url.host !== redirect.host ||
-        url.pathname !== redirect.pathname ||
-        url.username ||
-        url.password ||
-        url.hash ||
-        url.searchParams.getAll('state').length !== 1 ||
-        url.searchParams.get('state') !== pending.state
-      )
-        throw new PluginError('request', 'Invalid authorization callback.');
-      if (url.searchParams.has('error')) {
-        if (url.searchParams.getAll('error').length !== 1 || url.searchParams.has('code'))
-          throw new PluginError('request', 'Invalid authorization callback.');
-        this.pending = { status: 'denied', id: pending.id };
-        if (url.searchParams.get('error') !== 'access_denied') {
-          this.pending = undefined;
-          throw new PluginError('request', 'Gmail could not complete authorization.');
-        }
-        return this.project();
-      }
-      const code = url.searchParams.get('code');
-      if (url.searchParams.getAll('code').length !== 1 || !code || !/^\S{1,4096}$/.test(code))
-        throw new PluginError('request', 'Invalid authorization callback.');
-      // Drop the verifier before exchange: failed/ambiguous exchanges require a new attempt.
-      this.pending = undefined;
-      const tokens = await gmailOauth.exchangeCode(
-        pending.application,
-        code,
-        pending.verifier,
-        signal,
-      );
-      const account = await gmailOauth.getAccount(tokens.accessToken, signal);
-      const requiresDisconnect = await this.requiresDisconnect(pending.previousId, account.id);
-      signal.throwIfAborted();
-      this.pending = {
-        status: 'review',
-        id: pending.id,
-        previousId: pending.previousId,
-        requiresDisconnect,
-        credential: {
-          version: 1,
-          application: pending.application,
-          tokens,
-          account,
-        },
-      };
-      return this.project();
-    });
-  }
-
   private requireReview(id: string) {
     if (
       this.pending?.id === id &&
@@ -275,19 +141,12 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
   ): Promise<GmailUserCredential> {
     if (credential.rejected)
       throw new PluginError('authorization', 'Gmail rejected this authorization.');
-    if (
-      credential.tokens.expiresAt === undefined ||
-      credential.tokens.expiresAt > Date.now() + 60_000
-    )
-      return credential;
-    if (
-      !credential.tokens.refreshToken ||
-      (credential.tokens.refreshExpiresAt !== undefined &&
-        credential.tokens.refreshExpiresAt <= Date.now())
-    )
-      throw new PluginError('authorization', 'Gmail authorization expired.');
-    const tokens = await gmailOauth.refresh(credential.application, credential.tokens, signal);
+    const tokens = await gmailOauth.authorize(credential.account.id, false, signal);
     signal.throwIfAborted();
+    if (tokens.accessToken === credential.tokens.accessToken) return credential;
+    const account = await gmailOauth.getAccount(tokens.accessToken, signal);
+    if (account.id !== credential.account.id)
+      throw new PluginError('authorization', 'Google returned a different Gmail account.');
     return { ...credential, tokens };
   }
 
@@ -306,7 +165,7 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
         pending.status = pending.requiresDisconnect ? 'review' : 'ready';
         return this.project();
       } catch (error) {
-        // Never retry an uncertain rotation of uncommitted credentials.
+        // A failed confirmation requires a fresh explicit authorization attempt.
         this.pending = undefined;
         throw error;
       }
@@ -360,7 +219,8 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
       operation = this.serialize(async () => {
         signal.throwIfAborted();
         const failure = this.failures.get(id);
-        if (failure) throw new PluginError(failure, 'Gmail authorization requires reconnecting.');
+        if (failure === 'authorization')
+          throw new PluginError(failure, 'Gmail authorization requires reconnecting.');
         const grant = await this.store.getGrant(id).catch((error: unknown) => {
           this.store.notifyChanged();
           throw error;
@@ -379,6 +239,7 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
           )
             throw cancelled();
           signal.throwIfAborted();
+          if (this.failures.delete(id)) this.store.notifyChanged();
           return asCredential(credential);
         } catch (error) {
           if (signal.aborted) throw cancelled();
@@ -409,16 +270,7 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
     const parsed = GmailUserCredentialSchema.safeParse(grant?.credential);
     if (!parsed.success) return { status: 'needs-reauthorization', reason: 'authorization' };
     const credential = parsed.data;
-    const reason =
-      this.failures.get(id) ??
-      (credential.rejected ||
-      (credential.tokens.expiresAt !== undefined &&
-        credential.tokens.expiresAt <= Date.now() &&
-        (!credential.tokens.refreshToken ||
-          (credential.tokens.refreshExpiresAt !== undefined &&
-            credential.tokens.refreshExpiresAt <= Date.now())))
-        ? 'authorization'
-        : undefined);
+    const reason = this.failures.get(id) ?? (credential.rejected ? 'authorization' : undefined);
     return {
       status:
         reason === 'authorization' ? 'needs-reauthorization' : reason ? 'unavailable' : 'connected',
@@ -442,6 +294,8 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
       )
         return;
       this.failures.set(id, 'authorization');
+      await gmailOauth.clearToken(sent.data.tokens.accessToken, signal).catch(() => {});
+      signal.throwIfAborted();
       try {
         await this.store.updateCredential(
           id,
@@ -458,17 +312,11 @@ export class GmailAuthorizationRuntime implements PluginAuthorizationRuntime {
     const credential = GmailUserCredentialSchema.parse((await this.store.getGrant(id))?.credential);
     return {
       managementUrl: 'https://myaccount.google.com/permissions',
-      revoke: (signal: AbortSignal) => gmailOauth.revoke(credential.tokens.accessToken, signal),
+      revoke: (signal: AbortSignal) => gmailOauth.revoke(credential.account.id, signal),
     };
   }
 
-  cancel(callbackAttemptId?: string) {
-    if (callbackAttemptId)
-      return this.serialize(async () => {
-        if (this.pending?.status === 'callback' && this.pending.id === callbackAttemptId)
-          this.pending = undefined;
-        return this.project();
-      });
+  cancel() {
     this.interrupt();
     return this.serialize(async () => {
       this.pending = undefined;

@@ -60,7 +60,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
 
   const connection = observation?.connection;
   const connected = useEffectEvent(async () => {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === 'ios' && method.interaction !== 'native') {
       try {
         await WebBrowser.dismissBrowser();
       } catch {

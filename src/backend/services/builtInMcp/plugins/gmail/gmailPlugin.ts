@@ -16,7 +16,7 @@ export const gmailPlugin: PluginDefinition = {
     id: 'gmail',
     icon: 'file-text',
     links: {
-      credentials: 'https://console.cloud.google.com/',
+      credentials: 'https://myaccount.google.com/permissions',
       website: 'https://mail.google.com',
       privacy: 'https://policies.google.com/privacy',
       authorizationManagement: 'https://myaccount.google.com/permissions',
@@ -27,18 +27,8 @@ export const gmailPlugin: PluginDefinition = {
     {
       id: 'gmail_user',
       kind: 'interactive',
-      interaction: 'callback',
-      stages: ['application', 'user', 'account'],
-      applicationFields: [
-        {
-          id: 'clientId',
-          secret: false,
-          maxLength: 256,
-          pattern: '^[a-zA-Z0-9_-]+\\.apps\\.googleusercontent\\.com$',
-        },
-        { id: 'clientSecret', secret: true, maxLength: 4096, pattern: '^\\S+$' },
-        { id: 'callbackUrl', secret: false, maxLength: 2048, pattern: '^https://\\S+$' },
-      ],
+      interaction: 'native',
+      stages: ['user', 'account'],
       createRuntime: (store) => new GmailAuthorizationRuntime(store),
       createRequestAuthorization: () => ({
         apply(credential, { headers }) {

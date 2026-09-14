@@ -12,7 +12,7 @@ import type { PluginCatalogEntry, PluginInteractiveMethod } from '@/shared/data/
 import { CredentialFields, hasEveryField } from './CredentialFields';
 import { useInteractiveConnect } from './useInteractiveConnect';
 
-/** Presents browser-confirmation stages and the optional existing-application form. */
+/** Presents provider authorization and account review, with optional application entry. */
 export function InteractiveConnect({
   entry,
   method,
@@ -63,13 +63,15 @@ export function InteractiveConnect({
       >
         <View className="gap-3">
           <Text className="text-sm text-muted-foreground">{t(`${textKey}.setup`)}</Text>
-          <View className="gap-1">
-            {method.stages.map((stage) => (
-              <Text key={stage} className="text-base font-medium text-foreground">
-                {t(`${textKey}.stages.${stage}.title`)}
-              </Text>
-            ))}
-          </View>
+          {method.interaction !== 'native' ? (
+            <View className="gap-1">
+              {method.stages.map((stage) => (
+                <Text key={stage} className="text-base font-medium text-foreground">
+                  {t(`${textKey}.stages.${stage}.title`)}
+                </Text>
+              ))}
+            </View>
+          ) : null}
           <Text className="text-sm text-muted-foreground">{t(`${textKey}.permissions`)}</Text>
         </View>
         <View className="gap-3">
