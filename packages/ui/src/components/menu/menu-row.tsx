@@ -43,7 +43,7 @@ export function MenuRow({
       accessibilityLabel={label}
       accessibilityRole={accessibilityRole}
       accessibilityState={{ ...accessibilityState, disabled }}
-      className="min-h-11 flex-row items-center gap-3 rounded-xl px-3 py-2 active:bg-secondary-active disabled:opacity-40"
+      className="min-h-14 flex-row items-center gap-3 rounded-2xl px-3 py-2 active:bg-secondary-active disabled:opacity-40"
       disabled={disabled}
       onPress={() => {
         if (isOpen && !disabled) {
@@ -53,11 +53,17 @@ export function MenuRow({
       ref={register}
       testID={testID}
     >
-      {icon ? <MenuRowDecoration>{icon}</MenuRowDecoration> : null}
+      {icon ? (
+        <MenuRowDecoration>
+          <View className="size-10 items-center justify-center rounded-full bg-secondary">
+            {icon}
+          </View>
+        </MenuRowDecoration>
+      ) : null}
       <Text
         className={cn(
           'min-w-0 flex-1 text-base',
-          destructive ? 'text-destructive' : 'text-foreground',
+          destructive ? 'text-destructive' : 'text-popover-foreground',
         )}
       >
         {label}
