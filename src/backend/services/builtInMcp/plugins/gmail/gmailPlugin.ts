@@ -16,8 +16,7 @@ export const gmailPlugin: PluginDefinition = {
     id: 'gmail',
     icon: 'file-text',
     links: {
-      credentials:
-        'https://github.com/CherryHQ/cherry-studio-app/blob/v0.2/docs/guides/gmail-plugin-authorization.md',
+      credentials: 'https://console.cloud.google.com/',
       website: 'https://mail.google.com',
       privacy: 'https://policies.google.com/privacy',
       authorizationManagement: 'https://myaccount.google.com/permissions',
