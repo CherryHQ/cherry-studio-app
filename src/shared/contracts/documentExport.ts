@@ -3,11 +3,6 @@ import type { FileEntryId } from '@/shared/data/types/file';
 import type { ResolvedFile } from './file';
 
 export const DOCUMENT_EXPORT_MAX_SECTIONS = 128;
-/** Layout points, independent of the device's screen density. Never downsample below 1x. */
-export const DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT = 16_383;
-/** 96 MB for one RGBA output bitmap; capture/encoding also need working memory. */
-export const DOCUMENT_EXPORT_IMAGE_MAX_PIXELS = 24_000_000;
-export const DOCUMENT_EXPORT_WEBP_MAX_DIMENSION = 16_383;
 
 export type ExportBlock =
   | { kind: 'text'; text: string }
@@ -85,12 +80,10 @@ export type DocumentExportArtifact = {
   | { format: 'image'; width: number; height: number }
 );
 
-/** Returns a lossless WebP file. The page also owns cleanup of late/failed native output. */
+/** Returns a lossless PNG file. The page also owns cleanup of late/failed native output. */
 export type CaptureExportHtml = (input: {
   html: string;
   width: number;
-  maxHeight: number;
-  maxPixels: number;
   signal: AbortSignal;
 }) => Promise<{
   uri: string;

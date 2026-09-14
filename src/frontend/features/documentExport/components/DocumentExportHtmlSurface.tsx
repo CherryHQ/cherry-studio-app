@@ -4,8 +4,7 @@ import { WebView } from 'react-native-webview';
 
 import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/documentExport';
 
-// Bundle Mode needs the encoder worklet in the initial bundle, not an async chunk.
-import { captureWebp } from '../utils/captureWebp';
+import { capturePng } from '../utils/capturePng';
 import { imageCapturePlan, type ImageCapturePlan } from '../utils/imageCapturePlan';
 
 type CaptureInput = Parameters<CaptureExportHtml>[0];
@@ -114,7 +113,7 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
     if (request.nativeStarted || request.settled) return;
     request.nativeStarted = true;
     try {
-      const result = await captureWebp(wrapper, plan, request.controller.signal);
+      const result = await capturePng(wrapper, plan, request.controller.signal);
       request.finish(undefined, result);
     } catch {
       fail();
@@ -176,14 +175,7 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
               request.finish(new DocumentExportError('image-size-limit'));
               return;
             }
-            setPlan(
-              imageCapturePlan(
-                input.width,
-                Math.ceil(message.height),
-                input.maxHeight,
-                input.maxPixels,
-              ),
-            );
+            setPlan(imageCapturePlan(input.width, Math.ceil(message.height)));
           } catch (error) {
             if (error instanceof DocumentExportError) request.finish(error);
             else fail();

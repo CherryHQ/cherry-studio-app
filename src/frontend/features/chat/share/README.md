@@ -34,14 +34,14 @@ intermediate prose and readable tool names. Raw tool payloads and diagnostic met
 the document. The export page receives only a source-owned label and documents; it has no chat reads.
 
 The adapter preserves plain user text and supplies bubble/message presentation hints. HTML uses
-the chat hierarchy: right-aligned questions and full-width answers. Framed WebP uses numbered
+the chat hierarchy: right-aligned questions and full-width answers. Framed PNG uses numbered
 message sections with theme-aware branding. The conversation title remains the exported filename
 and document title without adding an article heading above the exchange.
 
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
 `chat.process.duration` and `chat.reasoningStatus.thought` translations, and elapsed time uses the
 same approval-wait-aware calculation as the message list. Native previews reuse the CherryUI
-disclosures; HTML and WebP start with the same collapsed process summary.
+disclosures; HTML and PNG start with the same collapsed process summary.
 
 Rendering, temporary files, permanent storage and system delivery remain in the application export
 capability. Opening the preview renders the selection's default format without thinking content;

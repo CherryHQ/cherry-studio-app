@@ -34,7 +34,7 @@ flowchart TD
     Normalize --> Markdown[Markdown]
     Normalize --> Resources[Prepare image resources]
     Resources --> HTML[Controlled HTML and MathML]
-    HTML --> Capture[Page-owned bounded capture]
+    HTML --> Capture[Page-owned PNG capture]
     Markdown --> TextPreview[In-memory text preview]
     HTML --> Preview[Temporary artifact and preview]
     Capture --> Preview
@@ -109,7 +109,7 @@ again reuses its current file and saved entry while they remain available.
 | Managed images | Alt/name placeholder | Embed validated PNG/JPEG bytes or show a placeholder |
 | Remote images | Keep eligible external URLs | Fetch without credentials, enforce bounds and embed, or show a placeholder |
 | Attachments | Name/type and eligible external link | Name/type and eligible external link; attached documents are not rasterized |
-| Included process/details | Nested, initially collapsed `<details>` retain the summary and content | HTML retains expandable collapsed details; WebP displays the collapsed summary |
+| Included process/details | Nested, initially collapsed `<details>` retain the summary and content | HTML retains expandable collapsed details; PNG displays the collapsed summary |
 | References | Portable numbered links | Numbered links and a readable URL list, including in the image |
 
 HTML contains inline CSS and embedded displayed resources. MathML needs no downloaded fonts or
@@ -130,26 +130,22 @@ headings, code blocks, tables and process disclosures follow the native message 
 The native Markdown preview composes the same CherryUI `MessagePart.Process` and
 `MessagePart.Reasoning` components used in chat. Process summaries use the transcript's elapsed-time
 label; the nested reasoning row uses its completed-thinking label. HTML follows the same two
-initially collapsed levels, process separator, compact nested rows and reasoning rail. WebP captures
+initially collapsed levels, process separator, compact nested rows and reasoning rail. PNG captures
 the collapsed summary rather than exposing hidden thinking as plain text.
 
 The parser is `markdown-it` 15.0.1. Capture uses `react-native-view-shot` 5.1.0, matching Expo SDK 57.
-Both platforms capture the complete, scaled native view once as a temporary PNG. One module-owned
-Worklets runtime, shared by every capture, decodes it and encodes lossless WebP at quality 100 without
-an additional assembly canvas. A per-capture runtime would start another JS engine and thread,
-evaluate the whole bundle under Bundle Mode, and be released only by GC. Decoding and WebP encoding
-stay off the JS and UI threads, and decoded resources are disposed after encoding. The full native
-screenshot and encoder still need memory for one complete output image. Native screenshot files are
-released after reading, and the WebP file after the session copies it or cancellation settles.
-Published files use `.webp` and `image/webp`. Math uses
-KaTeX. This does not imply full parity with the native Markdown renderer.
+Both platforms capture the complete, scaled native view once as a lossless PNG and keep that file
+for delivery. The frontend reads only the first 24 bytes to validate the PNG signature and output
+dimensions; it does not load or decode the full file or run a second encoder. The native screenshot
+remains alive until the session finishes copying it or cancellation settles, then its capture file
+is released. Published files use `.png` and `image/png`. Math uses KaTeX. This does not imply full
+parity with the native Markdown renderer.
 
 ## Limits And Capture
 
-The image format is **one bounded lossless WebP image**, produced from one complete screenshot.
-Multiple selected chat messages support only HTML and Markdown. Content beyond the single-image
-bounds and capture failures automatically prepare HTML; image-resource limits
-or failed HTML conversion use the complete in-memory Markdown preview. Background/cancelled work
+The image format is **one lossless PNG image at a fixed 2x scale**, produced from one complete screenshot.
+Multiple selected chat messages support only HTML and Markdown. Capture failures automatically
+prepare HTML; image-resource limits or failed HTML conversion use the complete in-memory Markdown preview. Background/cancelled work
 pauses instead of triggering another conversion.
 
 | Resource | Limit |
@@ -165,25 +161,23 @@ pauses instead of triggering another conversion.
 | Embedded image text | 24 MiB of base64 references per output, including repeated references |
 | Remote read | 15 seconds; redirects rejected; response stream stopped at the byte cap |
 | HTML width / typography | 280–800 logical pixels / 12–40 pixel type, with 12–56 pixel line heights |
-| Capture per image | At most 16,383 layout points high, 16,383 output pixels on either axis, and 24 million output pixels |
-| Output images | One per operation; larger content uses a document preview |
-| Output scale | Prefers 2x, down to 1x |
+| Capture per image | No application-imposed layout-height or total-pixel cap; native capture and preview capabilities determine practical limits |
+| Output images | One per operation; capture failures use a document preview |
+| Output scale | Fixed 2x; never reduced to fit longer content |
 | Capture readiness/native wait | 60 seconds; physical lease held until native work settles |
 | Runtime sessions | At most 4 live or closing sessions; one interactive request |
 
-Admission uses measured layout and output pixels, independent of the device pixel ratio. For a
-402-point document on a 3x phone, the old 12-million-pixel budget rejected content beyond roughly
-3,316 points. One image admits up to 16,383 points at 1x, preferring 2x where it fits; longer content uses a document preview. A 24-million
-pixel RGBA bitmap needs 96 MB before encoder, source images and screenshot buffers; compressed file
-size is not a memory estimate. This budget is a bounded engineering choice, not a measured
-low-memory-device guarantee.
+Output dimensions are twice the measured layout dimensions, independent of the device pixel ratio.
+The capture never lowers resolution to fit a height or memory budget. PNG output has no 16K edge
+restriction. The full native screenshot, native PNG encoder and image preview still allocate memory
+in proportion to the output size; format support does not guarantee arbitrary dimensions on a device.
 
 The surface waits for fonts, decoded images and stable layout, then chooses output dimensions before
 allocating the full native surface. It preserves the original CSS width and scales the layout to
 the admitted output pixels, without reflowing text or multiplying the bitmap by screen density.
 It waits for matching native layout and browser painting before taking one screenshot, then checks
-the decoded dimensions before encoding. The wrapper is non-collapsible and disables clipping
-removal. The preview displays the actual final WebP. Cancellation never publishes a late result.
+the dimensions recorded in the PNG header. The wrapper is non-collapsible and disables clipping
+removal. The preview displays the actual final PNG. Cancellation never publishes a late result.
 
 Messages from the WebView must match the active request and expected dimensions. A module-local
 capture lease prevents another physical capture from reusing a closing surface. Abort/timeout has
@@ -207,7 +201,7 @@ WebView rendering works on all devices; only the local iOS text-message scenario
   process death show an unavailable state. Route cleanup is deferred one task so development
   remounts can reclaim the same request, then it waits for disposal before admitting another.
 - The source supplies allowed formats and an initial format. Single-message chat exports default
-  to WebP; multi-message selections allow HTML and Markdown and default to HTML. Selecting Markdown displays the structured
+  to PNG; multi-message selections allow HTML and Markdown and default to HTML. Selecting Markdown displays the structured
   document from memory, retaining native process/reasoning disclosures and using Markdown only for
   leaf prose, without generating any output file. A source can supply one initially unchecked option
   and an alternate document; changing it renders only the current format. Both sessions close with
@@ -219,7 +213,7 @@ WebView rendering works on all devices; only the local iOS text-message scenario
 - Saved files have `provenance: 'document-export'`. This extends the existing source enum without
   adding a column or database migration; older files retain their existing provenance. Sharing an
   existing managed file does not change its provenance.
-- Sharing is an additional source filter over the library's existing cursor stream. Exported WebP images
+- Sharing is an additional source filter over the library's existing cursor stream. Exported PNG images
   also remain in Images, while HTML/Markdown remain in Documents. There is no second table or
   separate permanent directory for sharing.
 - Permanent files follow the existing [file model](./data/file-model.md): only explicit user
@@ -257,7 +251,7 @@ dismisses to the chat route the source supplied. Neither platform reports whethe
 delivered or cancelled, so both outcomes return to the chat. The preview is an independent
 fullscreen modal using the application theme and its own close action.
 Two or more selected messages default to HTML and offer only HTML and Markdown in the format menu.
-A single selected message defaults to WebP and offers all three formats. The request preserves this
+A single selected message defaults to PNG and offers all three formats. The request preserves this
 format policy when thinking content is toggled. Images include straight
 theme-aware margins, conversation content and a compact signature: the Cherry Studio name on the left,
 with the Cherry logo, a fine vertical divider and local export time on the right. The timestamp uses
@@ -286,13 +280,12 @@ asset retry/reuse, temporary/permanent lifetime, stale artifact rejection, async
 copying, late cancellation cleanup, lifecycle admission/teardown, selected-message reads and file source persistence. Markdown lifetime
 coverage also checks that preview creates no files or asset reads and repeated sharing reuses its file.
 Preview-hook coverage includes lazy conversion, option changes and stale-format rejection; request
-coverage checks disposal of both option snapshots. WebP coverage checks output metadata, per-axis
-limits, complete-image capture, lossless encoder options, temporary-file ownership and cancellation
-during capture/encoding. The library filter and existing
-serialization/composition fixtures were updated as well.
+coverage checks disposal of both option snapshots. PNG coverage checks output metadata, complete-image
+capture, header reads and validation, temporary-file ownership and late native cancellation cleanup.
+The library filter and existing serialization/composition fixtures were updated as well.
 
-The latest changes add regression cases for density-independent budgets, complete screenshot dimensions,
-source-file cleanup, lossless encoding, cancelled native/background work, bounded excerpts and
+The latest changes add regression cases for fixed output clarity, screenshots beyond 16K,
+source-file cleanup, invalid PNG headers, cancelled native work, bounded excerpts and
 selection subscription isolation. Changed-file formatting and lint passed. Tests, type checks,
 builds and device acceptance were not run for these changes.
 
@@ -301,7 +294,7 @@ client. Those results do not validate the new selector, theme behavior or scaled
 
 When authorized, acceptance should cover both iOS and Android, light/dark themes, different pixel
 ratios, long text, wide tables/code, inline/display math, multiple images, rejected/failed resources,
-backgrounding, repeated actions, actual WebP bounds, and a recipient opening the shared file. Follow
+backgrounding, repeated actions, actual PNG dimensions, and a recipient opening the shared file. Follow
 [Testing And CI](../guides/testing-and-ci.md) and
 [Parallel Device Testing](../guides/parallel-device-testing.md).
 

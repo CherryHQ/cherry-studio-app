@@ -2,9 +2,6 @@ import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import {
-  DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
-  DOCUMENT_EXPORT_IMAGE_MAX_PIXELS,
-  DOCUMENT_EXPORT_WEBP_MAX_DIMENSION,
   DocumentExportError,
   type DocumentExportArtifact,
   type DocumentExportInput,
@@ -94,13 +91,13 @@ export function createDocumentExportSession(
         | Awaited<ReturnType<Extract<DocumentExportTarget, { format: 'image' }>['capture']>>
         | undefined;
       const extension =
-        target.format === 'markdown' ? 'md' : target.format === 'html' ? 'html' : 'webp';
+        target.format === 'markdown' ? 'md' : target.format === 'html' ? 'html' : 'png';
       const mediaType =
         target.format === 'markdown'
           ? 'text/markdown'
           : target.format === 'html'
             ? 'text/html'
-            : 'image/webp';
+            : 'image/png';
       const filename = readableFilename(document.title ?? '', { extension, fallback: 'document' });
       if (target.format === 'markdown') {
         text = markdown;
@@ -124,8 +121,6 @@ export function createDocumentExportSession(
           capture = await target.capture({
             html: result.html,
             width: target.presentation.width,
-            maxHeight: DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
-            maxPixels: DOCUMENT_EXPORT_IMAGE_MAX_PIXELS,
             signal,
           });
         }
@@ -138,13 +133,10 @@ export function createDocumentExportSession(
         let artifact: DocumentExportArtifact;
         if (capture) {
           if (
-            !Number.isInteger(capture.width) ||
-            !Number.isInteger(capture.height) ||
+            !Number.isSafeInteger(capture.width) ||
+            !Number.isSafeInteger(capture.height) ||
             capture.width < 1 ||
-            capture.height < 1 ||
-            capture.width * capture.height > DOCUMENT_EXPORT_IMAGE_MAX_PIXELS ||
-            capture.width > DOCUMENT_EXPORT_WEBP_MAX_DIMENSION ||
-            capture.height > DOCUMENT_EXPORT_WEBP_MAX_DIMENSION
+            capture.height < 1
           )
             throw new DocumentExportError('image-size-limit');
           await new File(capture.uri).copy(file);
