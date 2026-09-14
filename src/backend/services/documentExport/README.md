@@ -7,10 +7,10 @@ idempotent explicit persistence. `session.markdown` is prepared in memory withou
 reads; `render` materializes a requested file, reusing the current Markdown artifact when available. The frontend supplies native HTML capture through the shared
 callback contract; backend code never imports UI.
 
-Image artifacts contain an ordered, immutable `images` array. A capture is published only after
-every image has been copied and validated. `save` returns files in the same order and retains
-successful saves so a retry after a later failure does not duplicate earlier images. Temporary
-cleanup covers the whole artifact directory; committed files outlive the session.
+Every artifact contains one immutable file descriptor. Image artifacts also contain the captured
+width and height. A capture is published only after the image has been copied and validated.
+`save` returns one managed file and reuses it for repeated sharing of the same artifact. Temporary
+cleanup covers the artifact directory; committed files outlive the session.
 
 See [Document Export](../../../../docs/references/document-export.md) for formats, limits, storage
 semantics and pending native acceptance.

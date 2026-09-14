@@ -2,8 +2,9 @@
 
 Document export is implemented as an application capability. Chat supplies the first document
 adapter; the conversion service has no Agent, conversation, message-list, or navigation dependency.
-Previous iOS simulator acceptance covered the original selection and capture flow. The summary selector, theme-aware frame, tiled multi-image capture and native multi-file delivery
-described here still require device acceptance on iOS and Android.
+Previous iOS simulator acceptance covered the original selection and capture flow. The summary
+selector, selection format policy, theme-aware frame and scaled single-image capture described here
+still require device acceptance on iOS and Android.
 
 ## Ownership
 
@@ -73,7 +74,7 @@ try {
   const previewText = session.markdown; // No files or image reads.
   // An explicit persistence/delivery action materializes the file.
   const artifact = await session.render({ format: 'markdown' });
-  const files = await session.save(artifact); // Ordered array; Markdown/HTML contain one file.
+  const file = await session.save(artifact); // One managed file for the current artifact.
 } finally {
   await session.dispose();
 }
@@ -91,9 +92,9 @@ document. The renderer copies and validates them, escapes text, and includes the
 inside the measured and captured `main` element. The frontend supplies this treatment only for the
 image target; Markdown and HTML retain their existing document representations.
 
-A Markdown or HTML artifact contains one file descriptor and its source text. An image artifact
-contains an ordered `images` array of file descriptors and dimensions. Artifacts also contain
-structured image/formula issues. Artifacts, image arrays and file descriptors are frozen.
+Every artifact contains one file descriptor. Markdown/HTML artifacts also contain their source
+text; image artifacts contain their width and height. Artifacts also contain structured
+image/formula issues. Artifacts and file descriptors are frozen.
 The session admits one operation at a time, including saving, and accepts only its current artifact
 for persistence. A new completed render replaces the previous temporary output. Rendering Markdown
 again reuses its current file and saved entry while they remain available.
@@ -133,24 +134,21 @@ initially collapsed levels, process separator, compact nested rows and reasoning
 the collapsed summary rather than exposing hidden thinking as plain text.
 
 The parser is `markdown-it` 15.0.1. Capture uses `react-native-view-shot` 5.1.0, matching Expo SDK 57.
-Both platforms capture small temporary PNG tiles. One module-owned Worklets runtime, shared by every
-capture, keeps the CPU assembly surface alive while each PNG tile is transferred, decoded, drawn,
-and released before the next tile is captured. A per-capture runtime would start another JS engine
-and thread, evaluate the whole bundle under Bundle Mode, and be released only by GC. Each output image
-is encoded as lossless WebP at quality 100 and its canvas disposed before the next image begins.
-This keeps compressed tile bytes bounded on the JavaScript side; the surface and encoder still
-require memory for one complete output image. This avoids
-full-height native screenshots and GPU texture-size limits; decoding/assembly/encoding stay off the
-JS and UI threads. Native tile files are released after reading, and the assembled file after the
-session copies it or cancellation settles. Published files use `.webp` and `image/webp`. Math uses
+Both platforms capture the complete, scaled native view once as a temporary PNG. One module-owned
+Worklets runtime, shared by every capture, decodes it and encodes lossless WebP at quality 100 without
+an additional assembly canvas. A per-capture runtime would start another JS engine and thread,
+evaluate the whole bundle under Bundle Mode, and be released only by GC. Decoding and WebP encoding
+stay off the JS and UI threads, and decoded resources are disposed after encoding. The full native
+screenshot and encoder still need memory for one complete output image. Native screenshot files are
+released after reading, and the WebP file after the session copies it or cancellation settles.
+Published files use `.webp` and `image/webp`. Math uses
 KaTeX. This does not imply full parity with the native Markdown renderer.
 
 ## Limits And Capture
 
-The image format is **one or more ordered lossless WebP images**, assembled from small capture
-tiles. Short content keeps one image. Content beyond one image is paginated at measured message
-boundaries, then gaps between text lines when a single message is too long. An oversized indivisible
-element is sliced continuously. Capture failures automatically prepare HTML; image-resource limits
+The image format is **one bounded lossless WebP image**, produced from one complete screenshot.
+Multiple selected chat messages support only HTML and Markdown. Content beyond the single-image
+bounds and capture failures automatically prepare HTML; image-resource limits
 or failed HTML conversion use the complete in-memory Markdown preview. Background/cancelled work
 pauses instead of triggering another conversion.
 
@@ -168,25 +166,24 @@ pauses instead of triggering another conversion.
 | Remote read | 15 seconds; redirects rejected; response stream stopped at the byte cap |
 | HTML width / typography | 280–800 logical pixels / 12–40 pixel type, with 12–56 pixel line heights |
 | Capture per image | At most 16,383 layout points high, 16,383 output pixels on either axis, and 24 million output pixels |
-| Output images | At most 128 per operation; larger operations use a document preview |
-| Output scale | One image prefers 2x, down to 1x; multi-image output paginates at 2x |
-| Native capture tile | At most 1,024 output pixels high, regardless of screen density |
-| Capture readiness/native wait | 60 seconds without tile progress; physical lease held until native work settles |
+| Output images | One per operation; larger content uses a document preview |
+| Output scale | Prefers 2x, down to 1x |
+| Capture readiness/native wait | 60 seconds; physical lease held until native work settles |
 | Runtime sessions | At most 4 live or closing sessions; one interactive request |
 
 Admission uses measured layout and output pixels, independent of the device pixel ratio. For a
 402-point document on a 3x phone, the old 12-million-pixel budget rejected content beyond roughly
-3,316 points. One image admits up to 16,383 points at 1x, preferring 2x where it fits; longer content becomes multiple images. A 24-million
+3,316 points. One image admits up to 16,383 points at 1x, preferring 2x where it fits; longer content uses a document preview. A 24-million
 pixel RGBA bitmap needs 96 MB before encoder, source images and screenshot buffers; compressed file
 size is not a memory estimate. This budget is a bounded engineering choice, not a measured
 low-memory-device guarantee.
 
 The surface waits for fonts, decoded images and stable layout, then chooses output dimensions before
-allocating native surfaces. Each tile preserves the original CSS width and applies a scale and
-vertical translation, so text does not reflow at tile boundaries. It waits for matching native
-layout and browser painting before capture. Tiles share whole-pixel boundaries with no gaps or
-overlap. The wrapper is non-collapsible and disables clipping removal. The preview displays the
-actual final WebP. Cancellation never publishes a partial assembly.
+allocating the full native surface. It preserves the original CSS width and scales the layout to
+the admitted output pixels, without reflowing text or multiplying the bitmap by screen density.
+It waits for matching native layout and browser painting before taking one screenshot, then checks
+the decoded dimensions before encoding. The wrapper is non-collapsible and disables clipping
+removal. The preview displays the actual final WebP. Cancellation never publishes a late result.
 
 Messages from the WebView must match the active request and expected dimensions. A module-local
 capture lease prevents another physical capture from reusing a closing surface. Abort/timeout has
@@ -209,14 +206,15 @@ WebView rendering works on all devices; only the local iOS text-message scenario
 - The app-shell request has a 30-second deadline before route handoff. Missing requests after
   process death show an unavailable state. Route cleanup is deferred one task so development
   remounts can reclaim the same request, then it waits for disposal before admitting another.
-- Opening the page renders a WebP image by default. Selecting Markdown displays the structured
+- The source supplies allowed formats and an initial format. Single-message chat exports default
+  to WebP; multi-message selections allow HTML and Markdown and default to HTML. Selecting Markdown displays the structured
   document from memory, retaining native process/reasoning disclosures and using Markdown only for
   leaf prose, without generating any output file. A source can supply one initially unchecked option
   and an alternate document; changing it renders only the current format. Both sessions close with
   the route.
 - **Share first commits the final artifact into the existing managed file store.** It is the page’s
-  only delivery action, including for Markdown. Every image is saved in order; repeated actions
-  reuse already saved files, including after a later image fails to save. Changing formats creates a new artifact; reopening an export is a new session and
+  only delivery action, including for Markdown. Repeated actions reuse the saved file for the
+  current artifact. Changing formats creates a new artifact; reopening an export is a new session and
   may create another file.
 - Saved files have `provenance: 'document-export'`. This extends the existing source enum without
   adding a column or database migration; older files retain their existing provenance. Sharing an
@@ -227,9 +225,8 @@ WebView rendering works on all devices; only the local iOS text-message scenario
 - Permanent files follow the existing [file model](./data/file-model.md): only explicit user
   deletion removes them. Closing a preview, deleting a conversation, or dismissing a share sheet
   does not delete saved files.
-- System delivery uses the shared `FileEntryPreview.shareFiles` helper. It prepares every readable
-  cache copy before opening one system share sheet and retains copies for late recipient reads.
-  Multiple images use the local `modules/file-sharing` module. A native client rebuild is required. Share-sheet
+- System delivery uses the shared `FileEntryPreview.shareFile` helper. It prepares a readable
+  cache copy before opening the system share sheet and retains the copy for late recipient reads. Share-sheet
   completion does not claim delivery to another person. Cancelled sharing still leaves the saved
   file in Sharing. Existing file-viewer actions provide saving images to Photos and system opening.
 
@@ -259,14 +256,15 @@ Closing the preview keeps the selection editable. Once the system share sheet cl
 dismisses to the chat route the source supplied. Neither platform reports whether the user
 delivered or cancelled, so both outcomes return to the chat. The preview is an independent
 fullscreen modal using the application theme and its own close action.
-WebP is the default; a compact menu switches to Markdown or HTML on demand. Images include straight
+Two or more selected messages default to HTML and offer only HTML and Markdown in the format menu.
+A single selected message defaults to WebP and offers all three formats. The request preserves this
+format policy when thinking content is toggled. Images include straight
 theme-aware margins, conversation content and a compact signature: the Cherry Studio name on the left,
 with the Cherry logo, a fine vertical divider and local export time on the right. The timestamp uses
 `YYYY.MM.DD HH:mm` and is frozen at opening across both document snapshots and format changes.
 The baseline signature area is 44 logical points and can grow for larger or wrapped text. The displayed
-preview uses the generated images, including all document content and branding in order. It reports
-the image count, scrolls vertically through a recycling list, and shares all images with one action.
-Generation reports the current image and total instead of rejecting a long selection.
+preview uses the generated image, including the selected message and branding, and scrolls
+vertically. Images exceeding the single-file bounds fall back to a document preview.
 
 Visible thinking content is omitted by default. When present, the source supplies two immutable
 document snapshots and an option label so the preview can include that content through a switch without acquiring chat
@@ -289,17 +287,17 @@ copying, late cancellation cleanup, lifecycle admission/teardown, selected-messa
 coverage also checks that preview creates no files or asset reads and repeated sharing reuses its file.
 Preview-hook coverage includes lazy conversion, option changes and stale-format rejection; request
 coverage checks disposal of both option snapshots. WebP coverage checks output metadata, per-axis
-limits, tiled assembly, lossless encoder options, temporary-file ownership and cancellation
+limits, complete-image capture, lossless encoder options, temporary-file ownership and cancellation
 during capture/encoding. The library filter and existing
 serialization/composition fixtures were updated as well.
 
-The latest changes add regression cases for density-independent budgets, tile coverage and order,
-source-file cleanup, lossless assembly, cancelled native/background work, bounded excerpts and
+The latest changes add regression cases for density-independent budgets, complete screenshot dimensions,
+source-file cleanup, lossless encoding, cancelled native/background work, bounded excerpts and
 selection subscription isolation. Changed-file formatting and lint passed. Tests, type checks,
 builds and device acceptance were not run for these changes.
 
 The earlier implementation was exercised on an iPhone 17 Pro simulator with an iOS development
-client. Those results do not validate the new selector, theme behavior or tiled capture pipeline.
+client. Those results do not validate the new selector, theme behavior or scaled capture pipeline.
 
 When authorized, acceptance should cover both iOS and Android, light/dark themes, different pixel
 ratios, long text, wide tables/code, inline/display math, multiple images, rejected/failed resources,
@@ -307,9 +305,7 @@ backgrounding, repeated actions, actual WebP bounds, and a recipient opening the
 [Testing And CI](../guides/testing-and-ci.md) and
 [Parallel Device Testing](../guides/parallel-device-testing.md).
 
-## Multi-image change validation
-
-Regression cases cover a 128-message selection, line and message cuts, continuous page coverage,
-per-image canvas lifetime, cancelled partial output, ordered persistence with resumable saves,
-one-sheet delivery, automatic document fallback and stale-request cancellation. These cases,
-type checks, native builds and device acceptance have not been run for this change.
+Regression cases also cover the 128-message selection limit, HTML defaults and allowed formats for
+multiple messages, single-message image defaults, document-only fallback and stale-request
+cancellation. Tests, type checks, native builds and device acceptance have not been run for the
+format-policy change.

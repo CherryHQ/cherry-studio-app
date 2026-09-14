@@ -3,8 +3,7 @@ import type { FileEntryId } from '@/shared/data/types/file';
 import type { ResolvedFile } from './file';
 
 export const DOCUMENT_EXPORT_MAX_SECTIONS = 128;
-export const DOCUMENT_EXPORT_MAX_IMAGES = 128;
-/** Per-image layout points, independent of screen density. Never downsample below 1x. */
+/** Layout points, independent of the device's screen density. Never downsample below 1x. */
 export const DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT = 16_383;
 /** 96 MB for one RGBA output bitmap; capture/encoding also need working memory. */
 export const DOCUMENT_EXPORT_IMAGE_MAX_PIXELS = 24_000_000;
@@ -76,26 +75,27 @@ export type ExportPresentation = {
 };
 export type DocumentExportIssue = { code: 'image-unavailable' | 'formula-fallback'; label: string };
 export type ExportFile = { uri: string; filename: string; mediaType: string };
-export type ExportImage = { file: ExportFile; width: number; height: number };
 export type DocumentExportArtifact = {
   id: string;
+  file: ExportFile;
   issues: readonly DocumentExportIssue[];
 } & (
-  | { format: 'markdown'; file: ExportFile; text: string }
-  | { format: 'html'; file: ExportFile; html: string }
-  | { format: 'image'; images: readonly ExportImage[] }
+  | { format: 'markdown'; text: string }
+  | { format: 'html'; html: string }
+  | { format: 'image'; width: number; height: number }
 );
 
-/** Returns ordered lossless WebP images. The page owns late/failed native output cleanup. */
+/** Returns a lossless WebP file. The page also owns cleanup of late/failed native output. */
 export type CaptureExportHtml = (input: {
   html: string;
   width: number;
   maxHeight: number;
   maxPixels: number;
   signal: AbortSignal;
-  onProgress?(current: number, total: number): void;
 }) => Promise<{
-  images: readonly { uri: string; width: number; height: number }[];
+  uri: string;
+  width: number;
+  height: number;
   release(): void;
 }>;
 
@@ -103,12 +103,7 @@ export type DocumentExportTarget =
   | { format: 'markdown' }
   | { format: 'html'; presentation: ExportPresentation }
   | { format: 'image'; presentation: ExportPresentation; capture: CaptureExportHtml };
-export type DocumentExportProgress =
-  | 'rendering'
-  | 'resolving-assets'
-  | 'capturing'
-  | 'writing'
-  | { stage: 'capturing'; current: number; total: number };
+export type DocumentExportProgress = 'rendering' | 'resolving-assets' | 'capturing' | 'writing';
 
 export class DocumentExportError extends Error {
   constructor(
@@ -140,8 +135,8 @@ export interface DocumentExportSession {
       onProgress?: (progress: DocumentExportProgress) => void;
     },
   ): Promise<DocumentExportArtifact>;
-  /** Persist every file in order. A retry reuses files already saved for this artifact. */
-  save(artifact: DocumentExportArtifact, signal?: AbortSignal): Promise<readonly ResolvedFile[]>;
+  /** Explicit user intent: persist once per artifact, retaining bytes after page exit. */
+  save(artifact: DocumentExportArtifact, signal?: AbortSignal): Promise<ResolvedFile>;
   dispose(): Promise<void>;
 }
 

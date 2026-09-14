@@ -220,6 +220,6 @@ test('a selection exceeding the image resource budget still admits its complete 
   ).rejects.toMatchObject({ code: 'image-resource-limit' });
   expect(read).not.toHaveBeenCalled();
   const markdown = renderMarkdown(document);
-  expect(markdown).toContain('All selected message text.');
+  expect(markdown).toContain('All selected message text\\.');
   expect(markdown).toContain('Photo 32');
 });

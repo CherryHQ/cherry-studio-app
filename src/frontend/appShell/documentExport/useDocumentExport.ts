@@ -16,11 +16,14 @@ export function useDocumentExport() {
     async ({
       input,
       initialFormat = 'image',
+      allowedFormats,
       option,
       returnTo,
     }: {
       input: DocumentExportInput;
       initialFormat?: ExportFormat;
+      /** Formats offered for this source, in menu order. Defaults to all formats. */
+      allowedFormats?: readonly [ExportFormat, ...ExportFormat[]];
       /** An initially unchecked source option, with a complete document for its unchecked state. */
       option?: { label: string; uncheckedInput: DocumentExportInput };
       /** Dismissed to after the system share sheet closes; without it the page stays open. */
@@ -39,6 +42,7 @@ export function useDocumentExport() {
         initialFormat,
         option && uncheckedSession ? { label: option.label, uncheckedSession } : undefined,
         returnTo,
+        allowedFormats,
       );
       if (!request) {
         await Promise.allSettled([session.dispose(), uncheckedSession?.dispose()]);

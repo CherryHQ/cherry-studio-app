@@ -4,17 +4,14 @@ import { Directory, File, Paths } from 'expo-file-system';
 import {
   DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
   DOCUMENT_EXPORT_IMAGE_MAX_PIXELS,
-  DOCUMENT_EXPORT_MAX_IMAGES,
   DOCUMENT_EXPORT_WEBP_MAX_DIMENSION,
   DocumentExportError,
   type DocumentExportArtifact,
   type DocumentExportInput,
-  type DocumentExportIssue,
   type DocumentExportProgress,
   type DocumentExportSession,
   type DocumentExportTarget,
   type ExportFile,
-  type ExportImage,
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { readableFilename } from '@/shared/data/types/file';
@@ -40,8 +37,7 @@ export function createDocumentExportSession(
   const assets = new Map<string, PreparedAsset>();
   let operation: { controller: AbortController; promise: Promise<unknown> } | undefined;
   let current: DocumentExportArtifact | undefined;
-  let currentDirectory: Directory | undefined;
-  let saved: { artifactId: string; files: ResolvedFile[] } | undefined;
+  let saved: { artifactId: string; file: ResolvedFile } | undefined;
   let disposed = false;
   let disposal: Promise<void> | undefined;
 
@@ -92,7 +88,7 @@ export function createDocumentExportSession(
     let didPublish = false;
     try {
       progress('rendering');
-      let issues: readonly DocumentExportIssue[] = [];
+      let content: Omit<DocumentExportArtifact, 'id' | 'file'>;
       let text: string | undefined;
       let capture:
         | Awaited<ReturnType<Extract<DocumentExportTarget, { format: 'image' }>['capture']>>
@@ -108,6 +104,7 @@ export function createDocumentExportSession(
       const filename = readableFilename(document.title ?? '', { extension, fallback: 'document' });
       if (target.format === 'markdown') {
         text = markdown;
+        content = { format: 'markdown', issues: [] };
       } else {
         progress('resolving-assets');
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
@@ -121,7 +118,7 @@ export function createDocumentExportSession(
           signal,
         );
         text = result.html;
-        issues = result.issues;
+        content = { format: target.format, issues: result.issues };
         if (target.format === 'image') {
           progress('capturing');
           capture = await target.capture({
@@ -130,7 +127,6 @@ export function createDocumentExportSession(
             maxHeight: DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
             maxPixels: DOCUMENT_EXPORT_IMAGE_MAX_PIXELS,
             signal,
-            onProgress: (current, total) => progress({ stage: 'capturing', current, total }),
           });
         }
       }
@@ -138,51 +134,34 @@ export function createDocumentExportSession(
       try {
         progress('writing');
         outputDirectory.create({ intermediates: true });
+        const file = new File(outputDirectory, filename);
         let artifact: DocumentExportArtifact;
         if (capture) {
-          if (!capture.images.length) throw new DocumentExportError('capture-failed');
-          if (capture.images.length > DOCUMENT_EXPORT_MAX_IMAGES)
+          if (
+            !Number.isInteger(capture.width) ||
+            !Number.isInteger(capture.height) ||
+            capture.width < 1 ||
+            capture.height < 1 ||
+            capture.width * capture.height > DOCUMENT_EXPORT_IMAGE_MAX_PIXELS ||
+            capture.width > DOCUMENT_EXPORT_WEBP_MAX_DIMENSION ||
+            capture.height > DOCUMENT_EXPORT_WEBP_MAX_DIMENSION
+          )
             throw new DocumentExportError('image-size-limit');
-          const images: ExportImage[] = [];
-          for (const [index, image] of capture.images.entries()) {
-            progress('writing');
-            if (
-              !Number.isInteger(image.width) ||
-              !Number.isInteger(image.height) ||
-              image.width < 1 ||
-              image.height < 1 ||
-              image.width * image.height > DOCUMENT_EXPORT_IMAGE_MAX_PIXELS ||
-              image.width > DOCUMENT_EXPORT_WEBP_MAX_DIMENSION ||
-              image.height > DOCUMENT_EXPORT_WEBP_MAX_DIMENSION
-            )
-              throw new DocumentExportError('image-size-limit');
-            const imageFilename =
-              capture.images.length === 1
-                ? filename
-                : filename.replace(/\.webp$/, `-${String(index + 1).padStart(3, '0')}.webp`);
-            const file = new File(outputDirectory, imageFilename);
-            await new File(image.uri).copy(file);
-            images.push(
-              Object.freeze({
-                file: Object.freeze({ filename: imageFilename, mediaType, uri: file.uri }),
-                width: image.width,
-                height: image.height,
-              }),
-            );
-          }
+          await new File(capture.uri).copy(file);
           artifact = {
             id,
+            file: { filename, mediaType, uri: file.uri },
             format: 'image',
-            images: Object.freeze(images),
-            issues,
+            width: capture.width,
+            height: capture.height,
+            issues: content.issues,
           };
         } else {
-          const file = new File(outputDirectory, filename);
           file.write(text!);
           const common = {
             id,
-            file: Object.freeze({ filename, mediaType, uri: file.uri }),
-            issues,
+            file: { filename, mediaType, uri: file.uri },
+            issues: content.issues,
           };
           artifact =
             target.format === 'markdown'
@@ -191,13 +170,13 @@ export function createDocumentExportSession(
         }
         signal.throwIfAborted();
         assertActive();
-        if (currentDirectory) removeDirectory(currentDirectory);
+        if (current) removeDirectory(new File(current.file.uri).parentDirectory);
         artifact = Object.freeze({
           ...artifact,
+          file: Object.freeze(artifact.file),
           issues: Object.freeze(artifact.issues.map((issue) => Object.freeze(issue))),
         });
         current = artifact;
-        currentDirectory = outputDirectory;
         saved = undefined;
         didPublish = true;
         return artifact;
@@ -226,19 +205,11 @@ export function createDocumentExportSession(
       run(signal, async (operationSignal) => {
         operationSignal.throwIfAborted();
         if (current !== artifact) throw new DocumentExportError('invalid-input');
-        if (saved?.artifactId !== artifact.id) saved = { artifactId: artifact.id, files: [] };
-        const files =
-          artifact.format === 'image'
-            ? artifact.images.map((image) => image.file)
-            : [artifact.file];
-        for (const [index, file] of files.entries()) {
-          operationSignal.throwIfAborted();
-          if (!saved.files[index] || !new File(saved.files[index].uri).exists) {
-            // Keep successful saves even if a later page fails or the page closes.
-            saved.files[index] = await dependencies.saveFile(file, operationSignal);
-          }
-        }
-        return Object.freeze([...saved.files]);
+        if (saved?.artifactId === artifact.id && new File(saved.file.uri).exists) return saved.file;
+        const file = await dependencies.saveFile(artifact.file, operationSignal);
+        // A committed save outlives this session, including a concurrent page close.
+        saved = { artifactId: artifact.id, file };
+        return file;
       }),
     cancel: () => operation?.controller.abort(),
     dispose: () => {
@@ -251,7 +222,6 @@ export function createDocumentExportSession(
           removeDirectory(directory);
           assets.clear();
           current = undefined;
-          currentDirectory = undefined;
           saved = undefined;
           onDisposed();
         }

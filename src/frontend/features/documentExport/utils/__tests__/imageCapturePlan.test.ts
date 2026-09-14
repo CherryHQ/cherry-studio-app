@@ -4,7 +4,7 @@ import {
   DOCUMENT_EXPORT_WEBP_MAX_DIMENSION,
 } from '@/shared/contracts/documentExport';
 
-import { imageCapturePages, imageCapturePlan } from '../imageCapturePlan';
+import { imageCapturePlan } from '../imageCapturePlan';
 
 const plan = (width: number, height: number) =>
   imageCapturePlan(
@@ -26,17 +26,11 @@ test('preserves at least 1x readability through the full logical height budget',
 });
 
 test.each([1, 1024, 1025, 4000, 8192, 12000, 16383])(
-  'tiles %i points with no missing or overlapping pixels',
+  'keeps %i points within output bounds at a uniform readable scale',
   (height) => {
     const result = plan(402, height);
-    let offset = 0;
-    for (const tile of result.tiles) {
-      expect(tile.offset).toBe(offset);
-      expect(tile.height).toBeGreaterThan(0);
-      expect(tile.height).toBeLessThanOrEqual(1024);
-      offset += tile.height;
-    }
-    expect(offset).toBe(result.height);
+    expect(result.height).toBe(Math.ceil(height * result.scale));
+    expect(result.scale).toBeGreaterThanOrEqual(1);
     expect(result.width * result.height).toBeLessThanOrEqual(DOCUMENT_EXPORT_IMAGE_MAX_PIXELS);
     expect(result.height).toBeLessThanOrEqual(DOCUMENT_EXPORT_WEBP_MAX_DIMENSION);
     expect(result.width / 402).toBe(result.scale);
@@ -55,58 +49,3 @@ test.each([NaN, Infinity, 0, -1])(
     expect(() => plan(402, height)).toThrow();
   },
 );
-
-const pages = (height: number, sections: number[] = [], lines: number[] = []) =>
-  imageCapturePages(
-    402,
-    height,
-    DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
-    DOCUMENT_EXPORT_IMAGE_MAX_PIXELS,
-    sections,
-    lines,
-  );
-
-test('a selection of 128 long messages is split in reading order without dropping content', () => {
-  const result = pages(
-    128_000,
-    Array.from({ length: 127 }, (_, index) => (index + 1) * 1000),
-  );
-  expect(result).toHaveLength(16);
-  let end = 0;
-  for (const page of result) {
-    expect(page.offset).toBe(end);
-    expect(page.scale).toBe(2);
-    expect(page.width * page.height).toBeLessThanOrEqual(DOCUMENT_EXPORT_IMAGE_MAX_PIXELS);
-    expect(page.height).toBeLessThanOrEqual(DOCUMENT_EXPORT_WEBP_MAX_DIMENSION);
-    end += page.height / page.scale;
-  }
-  expect(end).toBe(128_000);
-});
-
-test('message boundaries take priority over later line breaks', () => {
-  expect(pages(20_000, [6000, 12_000, 18_000], [8000, 14_000]).map((page) => page.offset)).toEqual([
-    0, 6000, 12_000, 18_000,
-  ]);
-});
-
-test('one oversized answer is split between lines and retains its final segment', () => {
-  const result = pages(20_000, [], [8000, 16_000]);
-  expect(result.map((page) => [page.offset, page.height / page.scale])).toEqual([
-    [0, 8000],
-    [8000, 8000],
-    [16_000, 4000],
-  ]);
-});
-
-test('content with no usable boundaries still has continuous page coverage', () => {
-  const result = pages(20_000, [NaN, -1, 50_000], []);
-  expect(result.map((page) => [page.offset, page.height / page.scale])).toEqual([
-    [0, 8191],
-    [8191, 8191],
-    [16_382, 3618],
-  ]);
-});
-
-test('a short conversation keeps its existing single-image output', () => {
-  expect(pages(4000)).toEqual([{ ...plan(402, 4000), offset: 0 }]);
-});

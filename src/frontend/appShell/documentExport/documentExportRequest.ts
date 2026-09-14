@@ -9,6 +9,7 @@ type ExportRequest = {
   id: string;
   session: DocumentExportSession;
   initialFormat: ExportFormat;
+  allowedFormats: readonly ExportFormat[];
   option?: DocumentExportOption;
   /** Where the page dismisses to once the system share sheet closes. */
   returnTo?: Href;
@@ -22,6 +23,7 @@ export function createDocumentExportRequest(
   initialFormat: ExportFormat,
   option?: DocumentExportOption,
   returnTo?: Href,
+  allowedFormats: readonly [ExportFormat, ...ExportFormat[]] = ['markdown', 'html', 'image'],
 ) {
   if (active) return undefined;
   const id = randomUUID();
@@ -32,7 +34,8 @@ export function createDocumentExportRequest(
   active = {
     id,
     session,
-    initialFormat,
+    initialFormat: allowedFormats.includes(initialFormat) ? initialFormat : allowedFormats[0],
+    allowedFormats,
     option,
     returnTo,
     resolve,

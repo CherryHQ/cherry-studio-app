@@ -240,6 +240,20 @@ test('image resource limits go directly to text instead of repeating the same re
   expect(session.render).toHaveBeenCalledTimes(1);
 });
 
+test('an HTML failure keeps Markdown shareable without starting image capture', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  session.render.mockRejectedValueOnce(new DocumentExportError('image-resource-limit'));
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="html" revision={0} />);
+  });
+  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Content', fallback: true });
+  await expect(ref.current?.getArtifact(new AbortController().signal)).resolves.toBe(
+    markdownArtifact,
+  );
+  expect(session.render.mock.calls.map(([target]) => target.format)).toEqual(['html', 'markdown']);
+});
+
 test('cancelling an old image request does not start a fallback for the superseded selection', async () => {
   const ref = createRef<Preview>();
   const session = createSession();
@@ -252,8 +266,12 @@ test('cancelling an old image request does not start a fallback for the supersed
   await act(async () => {
     renderer = create(<Probe ref={ref} session={session} format="image" revision={0} />);
   });
+  const signal = session.render.mock.calls[0][1]!.signal!;
   await act(async () => {
     renderer?.update(<Probe ref={ref} session={session} format="markdown" revision={1} />);
+  });
+  expect(signal.aborted).toBe(true);
+  await act(async () => {
     reject(new DocumentExportError('capture-failed'));
   });
   expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Content' });

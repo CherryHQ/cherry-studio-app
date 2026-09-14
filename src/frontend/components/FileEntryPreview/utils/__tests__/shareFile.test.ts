@@ -1,15 +1,10 @@
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import { shareFile, shareFiles } from '../shareFile';
+import { shareFile } from '../shareFile';
 
 const mockCopy = jest.fn();
 const mockShare = jest.fn();
 const mockCreateDirectory = jest.fn();
-const mockMultiShare = jest.fn();
-
-jest.mock('../../../../../../modules/file-sharing', () => ({
-  getFileSharing: () => ({ shareFiles: mockMultiShare }),
-}));
 
 jest.mock('expo-file-system', () => ({
   Directory: jest.fn((...parts: string[]) => ({
@@ -40,7 +35,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCopy.mockResolvedValue(undefined);
   mockShare.mockResolvedValue(undefined);
-  mockMultiShare.mockResolvedValue(undefined);
 });
 
 it('shares a copy with the display filename and original media type, independent of the viewer limit', async () => {
@@ -61,43 +55,4 @@ it('does not present a partial export when copying fails', async () => {
   mockCopy.mockRejectedValueOnce(new Error('out of space'));
   await expect(shareFile({ entry, uri: 'file:///managed/id.md' })).rejects.toThrow('out of space');
   expect(mockShare).not.toHaveBeenCalled();
-});
-
-const images = [1, 2].map((index) => ({
-  entry: FileEntrySchema.parse({
-    ...entry,
-    id: `00000000-0000-7000-8000-00000000000${index}`,
-    filename: `document-00${index}.webp`,
-    mediaType: 'image/webp',
-  }),
-  uri: `file:///managed/${index}.webp`,
-}));
-
-it('opens one system sheet containing every retained image in reading order', async () => {
-  await shareFiles(images);
-  expect(mockMultiShare).toHaveBeenCalledTimes(1);
-  expect(mockMultiShare).toHaveBeenCalledWith(
-    images.map(({ entry }) => `file:///cache/FileExports/${entry.id}/2/${entry.filename}`),
-    'image/webp',
-    'document-001.webp',
-  );
-  expect(mockCopy).toHaveBeenCalledTimes(2);
-  expect(mockShare).not.toHaveBeenCalled();
-});
-
-it('a failed later copy never opens a sheet with only the first image', async () => {
-  mockCopy.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Copy failed'));
-  await expect(shareFiles(images)).rejects.toThrow('Copy failed');
-  expect(mockMultiShare).not.toHaveBeenCalled();
-  expect(mockShare).not.toHaveBeenCalled();
-});
-
-it('closing while preparing copies stops delivery before opening a system sheet', async () => {
-  const controller = new AbortController();
-  mockCopy.mockImplementationOnce(async () => {
-    controller.abort();
-  });
-  await expect(shareFiles(images, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
-  expect(mockCopy).toHaveBeenCalledTimes(1);
-  expect(mockMultiShare).not.toHaveBeenCalled();
 });

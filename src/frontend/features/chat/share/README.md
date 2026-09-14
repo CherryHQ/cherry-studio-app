@@ -23,6 +23,11 @@ restores chronological order, regardless of click order. It does not implicitly 
 or unselected messages. The conversation may exceed 128 messages. Missing or unfinished content
 and failed reads reject the export instead of silently sharing a partial selection.
 
+Two or more selected messages open HTML by default and offer only HTML and Markdown. A single
+selected message retains the image default and all three formats. Chat supplies the format policy
+with the export request; the preview menu and format changes respect that policy throughout the
+request, including when thinking content is toggled.
+
 The source adapter supplies two immutable document snapshots when thinking content exists: omitted
 by default, and included when the preview switch is enabled. Thinking covers the visible reasoning,
 intermediate prose and readable tool names. Raw tool payloads and diagnostic metadata never enter
@@ -39,9 +44,6 @@ same approval-wait-aware calculation as the message list. Native previews reuse 
 disclosures; HTML and WebP start with the same collapsed process summary.
 
 Rendering, temporary files, permanent storage and system delivery remain in the application export
-capability. Opening the preview renders an image without thinking content by default; changing the
-format or switch renders the selected snapshot as needed.
-
-Long selections automatically become multiple ordered images, shared together through one system
-sheet. Selection does not impose a single-image height limit. If image conversion cannot complete,
-the export page prepares a document without asking the user to reduce the selection and retry.
+capability. Opening the preview renders the selection's default format without thinking content;
+changing the format or switch renders the selected snapshot as needed. Image output is one bounded
+file. Image conversion failures prepare HTML; HTML failures retain the complete Markdown preview.
