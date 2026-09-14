@@ -8,6 +8,19 @@ import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/
 
 import type { ImageCapturePlan, ImageCaptureTile } from './imageCapturePlan';
 
+// A worklet runtime is a separate JS engine on its own thread. Bundle Mode evaluates the
+// whole bundle inside every new one, and the library only releases it through GC. The
+// surface lease already serializes captures, so one runtime serves every job.
+let assemblyRuntime: ReturnType<typeof createWorkletRuntime> | undefined;
+
+function getAssemblyRuntime() {
+  assemblyRuntime ??= createWorkletRuntime({
+    name: 'Document export WebP',
+    initializer: initializeAssemblyWorklet,
+  });
+  return assemblyRuntime;
+}
+
 export async function captureWebp(
   view: Parameters<typeof captureRef>[0],
   plan: ImageCapturePlan,
@@ -15,7 +28,6 @@ export async function captureWebp(
   signal: AbortSignal,
 ): Promise<Pick<Awaited<ReturnType<CaptureExportHtml>>, 'uri' | 'release'>> {
   let output: File | undefined;
-  let runtime: ReturnType<typeof createWorkletRuntime> | undefined;
   const release = () => {
     try {
       if (output?.exists) output.delete();
@@ -25,16 +37,12 @@ export async function captureWebp(
   };
 
   try {
-    // Keep the output surface in one native worklet runtime, but only transfer one
-    // compressed tile at a time. This follows the system screenshot architecture:
-    // tiles are retained by the compositor, while the JavaScript side never builds
-    // an array containing the whole document's PNG data.
-    const assemblyRuntime = createWorkletRuntime({
-      name: 'Document export WebP',
-      initializer: initializeAssemblyWorklet,
-    });
-    runtime = assemblyRuntime;
-    await runOnRuntimeAsync(assemblyRuntime, beginAssemblyWorklet, plan.width, plan.height);
+    // Keep the output surface in the worklet runtime, but only transfer one compressed
+    // tile at a time. This follows the system screenshot architecture: tiles are
+    // retained by the compositor, while the JavaScript side never builds an array
+    // containing the whole document's PNG data.
+    const runtime = getAssemblyRuntime();
+    await runOnRuntimeAsync(runtime, beginAssemblyWorklet, plan.width, plan.height);
     for (const tile of plan.tiles) {
       signal.throwIfAborted();
       await prepareTile(tile);
@@ -44,13 +52,7 @@ export async function captureWebp(
         signal.throwIfAborted();
         const encoded = await new File(uri).bytes();
         signal.throwIfAborted();
-        await runOnRuntimeAsync(
-          assemblyRuntime,
-          appendAssemblyTileWorklet,
-          encoded,
-          plan.width,
-          tile,
-        );
+        await runOnRuntimeAsync(runtime, appendAssemblyTileWorklet, encoded, plan.width, tile);
       } finally {
         try {
           releaseCapture(uri);
@@ -60,18 +62,18 @@ export async function captureWebp(
       }
     }
     signal.throwIfAborted();
-    const bytes = await runOnRuntimeAsync(assemblyRuntime, finishAssemblyWorklet);
+    const bytes = await runOnRuntimeAsync(runtime, finishAssemblyWorklet);
     signal.throwIfAborted();
     if (!bytes?.length) throw new DocumentExportError('capture-failed');
     output = new File(Paths.cache, `document-export-${randomUUID()}.webp`);
     output.write(bytes);
     return { uri: output.uri, release };
   } catch (error) {
-    if (runtime) {
+    if (assemblyRuntime) {
       try {
-        await runOnRuntimeAsync(runtime, abortAssemblyWorklet);
+        await runOnRuntimeAsync(assemblyRuntime, abortAssemblyWorklet);
       } catch {
-        /* The runtime may already be torn down after cancellation. */
+        /* Leftover state is disposed by the next capture's begin step. */
       }
     }
     release();
@@ -97,6 +99,13 @@ function beginAssemblyWorklet(width: number, height: number) {
   const globals = globalThis as typeof globalThis & {
     __documentExportAssembly?: AssemblyRuntimeState;
   };
+  const previous = globals.__documentExportAssembly;
+  if (previous) {
+    // A failed abort must not pin an earlier surface on the shared runtime.
+    previous.paint.dispose();
+    previous.surface.dispose();
+    globals.__documentExportAssembly = undefined;
+  }
   const surface = Skia.Surface.Make(width, height);
   if (!surface) throw new Error('Unable to allocate screenshot surface');
   globals.__documentExportAssembly = { surface, paint: Skia.Paint() };

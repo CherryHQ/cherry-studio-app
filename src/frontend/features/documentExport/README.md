@@ -40,8 +40,8 @@ export budget. Logical height is capped at 16,383 points, WebP axes at 16,383 pi
 allocation at 24 million pixels. Text is never reduced below 1x to force admission.
 
 Capture translates that same layout through tiles of at most 1,024 output pixels high, awaiting
-native layout and browser painting before each screenshot. PNG tiles are captured sequentially,
-then decoded one at a time into a CPU Skia surface and encoded once as lossless WebP on a dedicated
+native layout and browser painting before each screenshot. PNG tiles are captured sequentially, then
+decoded one at a time into a CPU Skia surface and encoded once as lossless WebP on one module-owned
 Worklets runtime. No full-height native view or GPU texture is allocated. The native lease remains
 held through late capture/encoding cleanup. Timeouts also cancel tile preparation. The encoder is
 imported synchronously for Worklets Bundle Mode.

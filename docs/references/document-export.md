@@ -133,15 +133,16 @@ initially collapsed levels, process separator, compact nested rows and reasoning
 the collapsed summary rather than exposing hidden thinking as plain text.
 
 The parser is `markdown-it` 15.0.1. Capture uses `react-native-view-shot` 5.1.0, matching Expo SDK 57.
-Both platforms capture small temporary PNG tiles. A job-owned Worklets runtime keeps the CPU
-assembly surface alive while each PNG tile is transferred, decoded, drawn, and released before the
-next tile is captured. The final image is then encoded as lossless WebP at quality 100. This keeps
-compressed tile bytes bounded on the JavaScript side; the final surface and encoder still require
-full-output memory.
-This avoids full-height native screenshots and GPU texture-size limits; decoding/assembly/encoding
-stay off the JS and UI threads. Native tile files are released after reading, and the assembled
-file after the session copies it or cancellation settles. Published files use `.webp` and
-`image/webp`. Math uses KaTeX. This does not imply full parity with the native Markdown renderer.
+Both platforms capture small temporary PNG tiles. One module-owned Worklets runtime, shared by every
+capture, keeps the CPU assembly surface alive while each PNG tile is transferred, decoded, drawn,
+and released before the next tile is captured. A per-capture runtime would start another JS engine
+and thread, evaluate the whole bundle under Bundle Mode, and be released only by GC. The final image
+is then encoded as lossless WebP at quality 100. This keeps compressed tile bytes bounded on the
+JavaScript side; the final surface and encoder still require full-output memory. This avoids
+full-height native screenshots and GPU texture-size limits; decoding/assembly/encoding stay off the
+JS and UI threads. Native tile files are released after reading, and the assembled file after the
+session copies it or cancellation settles. Published files use `.webp` and `image/webp`. Math uses
+KaTeX. This does not imply full parity with the native Markdown renderer.
 
 ## Limits And Capture
 

@@ -13,6 +13,9 @@ const mockEncode = jest.fn();
 const mockDecode = jest.fn();
 const mockDraw = jest.fn();
 const mockRunWorklet = jest.fn();
+const mockRuntimeUse = jest.fn();
+let mockRuntimeCount = 0;
+const mockCreateRuntime = jest.fn(() => ({ runtime: ++mockRuntimeCount }));
 const mockPrepareTile = jest.fn(async () => {});
 const plan: ImageCapturePlan = {
   width: 720,
@@ -67,13 +70,16 @@ jest.mock('@shopify/react-native-skia', () => ({
 jest.mock('react-native-worklets', () => ({
   createWorkletRuntime: ({ initializer }: { initializer?: () => void } = {}) => {
     initializer?.();
-    return {};
+    return mockCreateRuntime();
   },
   runOnRuntimeAsync: (
-    _runtime: unknown,
+    runtime: unknown,
     work: (...args: unknown[]) => unknown,
     ...args: unknown[]
-  ) => mockRunWorklet(work, ...args),
+  ) => {
+    mockRuntimeUse(runtime);
+    return mockRunWorklet(work, ...args);
+  },
 }));
 
 beforeEach(() => {
@@ -155,7 +161,9 @@ test('cancelling an in-flight capture releases its late file without starting co
   native.resolve('file:///late.png');
   await rejected;
   expect(mockReleaseCapture).toHaveBeenCalledWith('file:///late.png');
-  expect(mockRunWorklet).not.toHaveBeenCalled();
+  expect(mockDecode).not.toHaveBeenCalled();
+  expect(mockEncode).not.toHaveBeenCalled();
+  expect(mockSurfaceDispose).toHaveBeenCalledTimes(1);
   expect(mockFiles.size).toBe(0);
 });
 
@@ -191,6 +199,31 @@ test('a decoder failure disposes its data and assembly surface without publishin
   expect(mockSurfaceDispose).toHaveBeenCalledTimes(1);
   expect(mockReleaseCapture).toHaveBeenCalledWith('file:///native.png');
   expect(mockFiles.size).toBe(0);
+});
+
+test('every capture shares one worklet runtime', async () => {
+  (await captureWebp(1, plan, mockPrepareTile, new AbortController().signal)).release();
+  (await captureWebp(1, plan, mockPrepareTile, new AbortController().signal)).release();
+  expect(mockRuntimeUse).toHaveBeenCalledTimes(6);
+  expect(new Set(mockRuntimeUse.mock.calls.map(([runtime]) => runtime)).size).toBe(1);
+  expect(mockCreateRuntime.mock.calls.length).toBeLessThanOrEqual(1);
+});
+
+test('a capture disposes assembly state that an earlier failed abort left on the runtime', async () => {
+  mockRunWorklet.mockImplementation(async (work, ...args) => {
+    if (work.name === 'abortAssemblyWorklet') throw new Error('Runtime unavailable');
+    return work(...args);
+  });
+  mockDecode.mockImplementationOnce(() => {
+    throw new Error('Decode failed');
+  });
+  await expect(captureWebp(1, plan, mockPrepareTile, new AbortController().signal)).rejects.toThrow(
+    'Decode failed',
+  );
+  expect(mockSurfaceDispose).not.toHaveBeenCalled();
+  mockRunWorklet.mockImplementation(async (work, ...args) => work(...args));
+  (await captureWebp(1, plan, mockPrepareTile, new AbortController().signal)).release();
+  expect(mockSurfaceDispose).toHaveBeenCalledTimes(2);
 });
 
 function deferred<T>() {
