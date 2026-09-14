@@ -1381,7 +1381,6 @@
   "plugins.catalog.notion.examples.first": "“Find the launch decisions in my Notion workspace and include the sources.”",
   "plugins.catalog.notion.examples.second": "“Save this discussion as a page in [Notion page link].”",
   "plugins.catalog.notion.access": "Uses your Notion workspace permissions. Enterprise administrators may restrict connections. AI search, advanced filters, and database queries depend on your plan and quota.",
-  "plugins.catalog.notion.credentialLink": "Read the Notion connection guide",
   "plugins.catalog.notion.authMethods.notion_user.label": "Authorize your Notion workspace",
   "plugins.catalog.notion.authMethods.notion_user.setup": "Sign in to Notion, choose a workspace, and authorize Cherry Studio. Return here to confirm the workspace and account. No API key or developer application is required.",
   "plugins.catalog.notion.authMethods.notion_user.permissions": "Allows the permitted search, page, database-record, and comment tools. Writes use the existing tool approval controls.",
