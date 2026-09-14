@@ -26,8 +26,11 @@ export function readNotionSelf(result: CallToolResult) {
     throw new PluginError('access', 'Notion denied the workspace identity lookup.');
   if (result.structuredContent) return parseNotionSelf(result.structuredContent);
   try {
-    const text = result.content.find((block) => block.type === 'text');
-    return parseNotionSelf(text?.type === 'text' ? JSON.parse(text.text) : undefined);
+    const content = z
+      .array(z.object({ type: z.string(), text: z.string().optional() }))
+      .parse(result.content);
+    const text = content.find((block) => block.type === 'text')?.text;
+    return parseNotionSelf(text ? JSON.parse(text) : undefined);
   } catch (error) {
     if (error instanceof PluginError) throw error;
     throw new PluginError('request', 'Notion returned an invalid workspace identity.');
