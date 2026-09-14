@@ -5,13 +5,16 @@ import { useIsScreenReaderEnabled } from '../useIsScreenReaderEnabled';
 const mockAddEventListener = jest.fn();
 const mockIsScreenReaderEnabled = jest.fn();
 
-jest.mock('react-native', () => ({
-  AccessibilityInfo: {
-    addEventListener: (name: string, listener: (enabled: boolean) => void) =>
-      mockAddEventListener(name, listener),
-    isScreenReaderEnabled: () => mockIsScreenReaderEnabled(),
-  },
-}));
+jest.mock('react-native', () => {
+  const native = jest.requireActual('react-native');
+  return Object.defineProperty(Object.create(native), 'AccessibilityInfo', {
+    value: {
+      addEventListener: (name: string, listener: (enabled: boolean) => void) =>
+        mockAddEventListener(name, listener),
+      isScreenReaderEnabled: () => mockIsScreenReaderEnabled(),
+    },
+  });
+});
 
 describe('useIsScreenReaderEnabled', () => {
   let renderer: ReactTestRenderer | undefined;
