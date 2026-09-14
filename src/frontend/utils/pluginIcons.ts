@@ -8,14 +8,16 @@ export function getPluginInlineIcon(pluginId: string): { base64: string; tint: b
     case 'github':
       return { base64: icons.github, tint: true };
     case 'amap':
-      return { base64: icons['map-pin'], tint: true };
+      return { base64: icons.amap, tint: false };
+    case 'notion':
+      return { base64: icons.notion, tint: true };
     default:
       return { base64: icons['file-text'], tint: true };
   }
 }
 
 export function getPluginMentionLinkStyles(color: string) {
-  const entries = ['feishu', 'github', 'amap'].map((pluginId) => {
+  const entries = ['feishu', 'github', 'amap', 'notion'].map((pluginId) => {
     const icon = getPluginInlineIcon(pluginId);
     return [
       `^tool://plugin/[^/]+/${pluginId}$`,

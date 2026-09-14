@@ -12,7 +12,7 @@ export const notionPlugin: PluginDefinition = {
   guide: notionGuide,
   catalog: {
     id: 'notion',
-    icon: 'file-text',
+    icon: 'notion',
     links: {
       credentials: 'https://www.notion.com/help/notion-mcp',
       website: 'https://www.notion.com',
