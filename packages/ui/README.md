@@ -115,7 +115,8 @@ natural height; longer blocks keep their complete content in a native vertical s
 with horizontal scrolling for long lines. The limit applies during streaming and after completion,
 including reasoning and final answers. Code-pane drags use native scroll recognition and cancel
 text long presses; Android gives an overflowing code pane priority over the outer message list
-for that touch sequence. These behaviors are native and require a development-client rebuild
+for that touch sequence. Before opening its code menu, Android also cancels ancestor gesture
+recognizers, including for short blocks that do not scroll. These behaviors are native and require a development-client rebuild
 after changing the patch. The upstream `codeBlock` style has no `maxHeight` property; limiting
 the outer Markdown view would constrain the whole message instead of each code block.
 
@@ -475,11 +476,30 @@ const items = [
 ```
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
-action, while `false` and `true` create off and on check states. An empty array returns the child
-unchanged. Android `ActionMenu` and `ContextMenu` share the composer add menu's surface, rounded
-rows, expanding panel, and slide/blur/fade motion. Use these shared components for anchored action
+action, while `false` and `true` create off and on check states. An empty `ContextMenu` keeps its
+wrapper mounted with no available actions so enabling actions does not remount its content.
+Android `ActionMenu` and `ContextMenu` share the composer add menu's surface, rounded rows,
+expanding panel, and slide/blur/fade motion. Use these shared components for anchored action
 lists throughout the app instead of adding another menu presentation. iOS retains native action
-and context menus.
+and context menus. Long-press timing is platform-owned: iOS uses `UIContextMenuInteraction`, and
+Android reads its timeout and movement tolerance from the system configuration.
+
+Android context menus use the pointer's window coordinates when the long press commits. They open
+next to that point, shift inside the horizontal safe area, and open above it when there is more
+room there. Tap menus remain aligned to their measured button bounds. iOS menu placement is
+UIKit-owned.
+
+Use `ContextMenuExclusion` as the `View` around a region with independent interaction. On Android,
+its touch start disables the enclosing menu recognizer and guards queued opening work. On iOS,
+it withholds the native menu's items until the next touch starts; the native delegate returns no
+menu configuration for an empty list. It preserves child touch handlers and does not claim the
+responder or stop bubbling. Android release or cancellation rearms the recognizer, while the
+event-time exclusion remains sticky until the next touch start. UIKit owns native recognition,
+scroll arbitration, and presentation.
+
+The Android scroll boundary keeps a drag/momentum cancellation sticky until a fresh touch starts.
+A touch-cancel event alone is not evidence of scrolling: a successful native long press cancels
+React Native touches too, and must still be allowed to open its menu.
 
 Cherry-rendered menus use an opaque `popover` surface with a soft external shadow, keeping the
 panel distinct from the composer and page. Dark mode layers a neutral `secondary` fill over that
@@ -494,7 +514,7 @@ The child remains presentation-only; `disabled`, accessibility disabled state, a
 tap and accessibility actions.
 
 The Android menus keep a 208-point width cap, wrapping labels, checkmarks, destructive text,
-bounded scrolling, and safe-area positioning. They open above or below the trigger according to
+bounded scrolling, and safe-area positioning. They open above or below their anchor according to
 available space. All Cherry-rendered menus, including `Composer.Menu`, use the same private
 `MenuOverlay`, `MenuRow`, `MenuPanel`, and lifecycle hooks. The transparent system modal isolates
 background accessibility, preserves the caller's theme/context, and owns Back/Escape. Opening
@@ -508,27 +528,28 @@ a system picker or navigate; it does not restore old focus over the destination.
 selection sheets, forms, and system media/share interfaces retain their own interaction contracts.
 Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
-Wrap every scroll component containing an Android `ContextMenu` in one
+Wrap every scroll component containing a gesture-owned `ContextMenu` in one
 `ContextMenuScrollBoundary`. The boundary supplies drag, momentum, and touch handlers through its
 render callback without rendering another native view. Pass an existing scroll handler to the
 boundary itself when it needs to be composed with menu arbitration. A touch that only stops
-momentum stays ineligible for a context menu until that touch ends. On iOS the supplied handlers are
-forwarded unchanged because UIKit already owns menu arbitration. On Android, a custom trigger
-component must forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
+momentum stays ineligible for a context menu until that touch ends. iOS forwards the caller's scroll
+handlers and relies on UIKit arbitration. A custom trigger for a gesture-owned menu component must
+forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
 target.
 
 `ContextMenu` recognition follows
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md):
-on iOS the system `UIContextMenuInteraction` owns the long press and its coordination with scroll
-ancestors; on Android the long press is a `react-native-gesture-handler` recognizer in the shared
-gesture arena, so committed scrolling and pan gestures cancel it. Its native view is only a system
-configuration bridge with no menu items and never presents a popup. Recognition timing and touch
-slop come from Android
-`ViewConfiguration`, including the user's system long-press timeout. On Android the enabled items
-are also exposed as accessibility custom actions on the trigger child, so the contextual operations
-do not depend on long press; iOS accessibility stays with the system interaction. Verify changed
-gesture boundaries on a device — the arbitration reference is `Status: design` and JavaScript tests
-cannot prove recognizer timing.
+on iOS the default system `UIContextMenuInteraction` owns the long press and its coordination with
+scroll ancestors; on Android and for explicitly timed iOS menus, the long press is a
+`react-native-gesture-handler` recognizer in the shared gesture arena, so committed scrolling and
+pan gestures cancel it. Its native view is only a system
+configuration bridge on Android with no menu items and never presents a popup. Default timing and
+touch slop come from Android `ViewConfiguration`, including the user's system long-press timeout.
+An explicit duration overrides only timing; iOS retains its native recognizer's movement tolerance.
+For gesture-owned menus, the enabled items are also exposed as accessibility custom actions on the
+trigger child, so the contextual operations do not depend on long press; default iOS accessibility
+stays with the system interaction. Verify changed gesture boundaries on a device — the arbitration
+reference is `Status: design` and JavaScript tests cannot prove recognizer timing.
 
 The native implementation is adapted from MIT-licensed Nitro menu projects. See
 [third-party-notices.md](third-party-notices.md) for the complete attribution and license text.

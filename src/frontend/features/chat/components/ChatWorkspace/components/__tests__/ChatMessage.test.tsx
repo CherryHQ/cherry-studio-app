@@ -1,14 +1,30 @@
-import type { ReactNode } from 'react';
+import type { ContextMenuProps } from '@cherrystudio/ui/components';
+import type { ReactElement, ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 
 import { ChatMessage } from '../ChatMessage';
 
-const mockContextMenu = jest.fn(({ children }: { children: ReactNode }) => children);
+const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
+const mockCopyMessage = jest.fn();
+const mockShareMessage = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  ContextMenu: (props: { children: ReactNode }) => mockContextMenu(props),
+  Button: (props: object) => jest.requireActual('react').createElement('Button', props),
+  ContextMenu: (props: ContextMenuProps) => mockContextMenu(props),
+  ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
+}));
+
+jest.mock('../../context/AssistantMessageActionsProvider', () => ({
+  useAssistantMessageActions: () => ({
+    copyAssistantMessage: mockCopyMessage,
+    shareAssistantMessage: mockShareMessage,
+  }),
+}));
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 jest.mock('@/frontend/components/Avatar', () => {
@@ -41,7 +57,7 @@ describe('ChatMessage', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
-    mockContextMenu.mockClear();
+    jest.clearAllMocks();
   });
 
   afterEach(() => {
@@ -49,27 +65,108 @@ describe('ChatMessage', () => {
     renderer = undefined;
   });
 
-  test('does not attach a long-press menu before or after an assistant answer settles', () => {
+  test('enables copy and share only after an assistant answer settles', () => {
     act(() => {
       renderer = create(renderMessage(createMessage('pending')));
     });
 
-    expect(mockContextMenu).not.toHaveBeenCalled();
+    expect(mockContextMenu.mock.lastCall?.[0].items).toEqual([]);
 
     act(() => {
       renderer?.update(renderMessage(createMessage('success')));
     });
 
-    expect(mockContextMenu).not.toHaveBeenCalled();
+    const menu = mockContextMenu.mock.lastCall![0];
+    expect(menu.items.map((item) => item.id)).toEqual(['copy', 'share']);
+    act(() => menu.items[0].onPress());
+    expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'assistant-1', text: 'Answer' });
+    act(() => menu.items[1].onPress());
+    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'assistant-1' });
     expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(false);
   });
 
-  test('does not attach a long-press menu to user messages', () => {
+  test('copies user text and shares the selected user message through the existing actions', () => {
     act(() => {
-      renderer = create(renderMessage({ ...createMessage('success'), role: 'user' }));
+      renderer = create(
+        renderMessage({
+          ...createMessage('success'),
+          data: { parts: [{ type: 'text', text: 'My question' }] },
+          id: 'user-1',
+          role: 'user',
+        }),
+      );
     });
 
-    expect(mockContextMenu).not.toHaveBeenCalled();
+    const menu = mockContextMenu.mock.lastCall![0];
+    act(() => menu.items[0].onPress());
+    expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'user-1', text: 'My question' });
+    act(() => menu.items[1].onPress());
+    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'user-1' });
+  });
+
+  test('disables copy when the message has no copyable text but still allows sharing', () => {
+    act(() => {
+      renderer = create(renderMessage({ ...createMessage('success'), data: { parts: [] } }));
+    });
+
+    const menu = mockContextMenu.mock.lastCall![0];
+    expect(menu.items[0].disabled).toBe(true);
+    act(() => menu.items[1].onPress());
+    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'assistant-1' });
+  });
+
+  test('offers independently operable user actions when a screen reader is enabled', () => {
+    const message: MessageListItem = { ...createMessage('success'), id: 'user-1', role: 'user' };
+    act(() => {
+      renderer = create(renderMessage(message, true, true));
+    });
+
+    const copy = renderer!.root.findByProps({ testID: 'user-message-copy' });
+    const share = renderer!.root.findByProps({ testID: 'user-message-share' });
+    act(() => copy.props.onPress());
+    act(() => share.props.onPress());
+    expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'user-1', text: 'Answer' });
+    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'user-1' });
+    // Grouping the complete row would hide its attachment controls from VoiceOver.
+    const menuContent = mockContextMenu.mock.lastCall![0].children as ReactElement<{
+      accessible: boolean;
+    }>;
+    expect(menuContent.props.accessible).toBe(false);
+
+    act(() => renderer?.update(renderMessage(message, true, false)));
+    expect(renderer!.root.findAllByType('Button')).toHaveLength(0);
+  });
+
+  test('keeps attachment-only user messages shareable without an empty copy action', () => {
+    act(() => {
+      renderer = create(
+        renderMessage(
+          {
+            ...createMessage('success'),
+            id: 'user-attachment',
+            role: 'user',
+            data: { parts: [{ type: 'file', mediaType: 'image/png', url: 'file:///image.png' }] },
+          },
+          true,
+          true,
+        ),
+      );
+    });
+
+    expect(renderer!.root.findAllByProps({ testID: 'user-message-copy' })).toHaveLength(0);
+    act(() => renderer!.root.findByProps({ testID: 'user-message-share' }).props.onPress());
+    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'user-attachment' });
+  });
+
+  test.each([
+    ['pending', 'user', true],
+    ['success', 'user', false],
+    ['success', 'assistant', true],
+  ] as const)('does not add a user toolbar for %s / %s / actions=%s', (status, role, enabled) => {
+    act(() => {
+      renderer = create(renderMessage({ ...createMessage(status), role }, enabled, true));
+    });
+    expect(renderer!.root.findAllByType('Button')).toHaveLength(0);
   });
 
   test('keeps native text selection available when message actions are disabled', () => {
@@ -110,11 +207,16 @@ describe('ChatMessage', () => {
   });
 });
 
-function renderMessage(message: MessageListItem, isMessageActionsEnabled = true) {
+function renderMessage(
+  message: MessageListItem,
+  isMessageActionsEnabled = true,
+  isScreenReaderEnabled = false,
+) {
   return (
     <ChatMessage
       assistantPresentation={{ name: 'Assistant' }}
       isMessageActionsEnabled={isMessageActionsEnabled}
+      isScreenReaderEnabled={isScreenReaderEnabled}
       message={message}
       shouldShowTimestamp
     />

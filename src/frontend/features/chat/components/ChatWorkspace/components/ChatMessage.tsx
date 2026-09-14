@@ -1,9 +1,18 @@
-import { memo } from 'react';
+import {
+  Button,
+  ContextMenu,
+  ContextMenuExclusion,
+  type MenuItem,
+} from '@cherrystudio/ui/components';
+import { memo, type ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
 
+import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
+import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 import { AssistantMessageUsage } from './AssistantMessageUsage';
 
@@ -16,6 +25,7 @@ export type AssistantMessagePresentation = Readonly<{
 type ChatMessageProps = {
   assistantPresentation: AssistantMessagePresentation;
   isMessageActionsEnabled: boolean;
+  isScreenReaderEnabled?: boolean;
   message: MessageListItem;
   shouldShowTimestamp: boolean;
 };
@@ -51,12 +61,12 @@ function renderChatAssistantMessage(
       </View>
       <AssistantMessage isTextSelectionEnabled={isTextSelectionEnabled} message={message}>
         {message.status !== 'pending' ? (
-          <View className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
+          <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
             <AssistantMessageToolbar message={message} />
             <View className="min-w-0 max-w-full flex-1 items-end">
               <AssistantMessageUsage message={message} />
             </View>
-          </View>
+          </ContextMenuExclusion>
         ) : null}
       </AssistantMessage>
     </View>
@@ -84,11 +94,18 @@ function formatMessageCreatedAt(createdAt: string | undefined): string | undefin
 export const ChatMessage = memo(function ChatMessage({
   assistantPresentation,
   isMessageActionsEnabled,
+  isScreenReaderEnabled = false,
   message,
   shouldShowTimestamp,
 }: ChatMessageProps) {
   const isTextSelectionEnabled = !isMessageActionsEnabled;
   const createdAt = shouldShowTimestamp ? formatMessageCreatedAt(message.createdAt) : undefined;
+  const content =
+    message.role === 'user' ? (
+      <UserMessage message={message} />
+    ) : (
+      renderChatAssistantMessage(isTextSelectionEnabled, message, assistantPresentation)
+    );
 
   return (
     <View className="w-full gap-3" testID={`chat-message-${message.id}`}>
@@ -100,11 +117,73 @@ export const ChatMessage = memo(function ChatMessage({
           {createdAt}
         </Text>
       ) : null}
-      {message.role === 'user' ? (
-        <UserMessage message={message} />
+      {isMessageActionsEnabled ? (
+        <ChatMessageContextMenu isScreenReaderEnabled={isScreenReaderEnabled} message={message}>
+          {content}
+        </ChatMessageContextMenu>
       ) : (
-        renderChatAssistantMessage(isTextSelectionEnabled, message, assistantPresentation)
+        content
       )}
     </View>
   );
 });
+
+function ChatMessageContextMenu({
+  children,
+  isScreenReaderEnabled,
+  message,
+}: {
+  children: ReactElement;
+  isScreenReaderEnabled: boolean;
+  message: MessageListItem;
+}) {
+  const { t } = useTranslation();
+  const { copyAssistantMessage, shareAssistantMessage } = useAssistantMessageActions();
+  // These existing actions and the text projection accept either message role.
+  const text =
+    message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? []);
+  const items: readonly MenuItem[] =
+    message.status === 'pending'
+      ? []
+      : [
+          {
+            disabled: !text,
+            id: 'copy',
+            label: t('common.copy'),
+            onPress: () => copyAssistantMessage({ messageId: message.id, text }),
+          },
+          {
+            id: 'share',
+            label: t('chat.share.title'),
+            onPress: () => shareAssistantMessage({ messageId: message.id }),
+          },
+        ];
+
+  return (
+    <ContextMenu items={items}>
+      <View accessible={false} className="w-full gap-2">
+        {children}
+        {/* Keep attachment and text nodes independently reachable. Assistant rows already
+            have a toolbar; user rows need explicit actions when long press is unavailable. */}
+        {isScreenReaderEnabled && message.role === 'user' && items.length > 0 ? (
+          <ContextMenuExclusion className="flex-row justify-end gap-1">
+            {items
+              .filter((item) => !item.disabled)
+              .map((item) => (
+                <Button
+                  accessibilityLabel={item.label}
+                  key={item.id}
+                  onPress={item.onPress}
+                  size="xs"
+                  testID={`user-message-${item.id}`}
+                  variant="ghost"
+                >
+                  {item.label}
+                </Button>
+              ))}
+          </ContextMenuExclusion>
+        ) : null}
+      </View>
+    </ContextMenu>
+  );
+}
