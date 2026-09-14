@@ -81,6 +81,99 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
+test('a rejected service start interrupts unprotected work and still requests notification permission', async () => {
+  const failure = new Error('Native service admission failed');
+  native.start.mockRejectedValueOnce(failure);
+  const interrupted = jest.fn();
+  runtime.acquire('chat', interrupted);
+  await flush();
+  expect(interrupted).toHaveBeenCalledTimes(1);
+  expect(interrupted).toHaveBeenCalledWith(failure);
+  expect(running).toBe(false);
+  expect(notices.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+  runtime.acquire('next-task');
+  await flush();
+  expect(running).toBe(true);
+});
+
+test('a failed restart interrupts tasks admitted while earlier cancellation drains', async () => {
+  const firstFailure = new Error('Initial admission failed');
+  const restartFailure = new Error('Recovery admission failed');
+  native.start.mockRejectedValueOnce(firstFailure).mockRejectedValueOnce(restartFailure);
+  const surface = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('preparing'));
+  let finishCancellation!: () => void;
+  const cancellation = new Promise<void>((resolve) => {
+    finishCancellation = resolve;
+  });
+  const oldInterrupted = jest.fn(async () => {
+    await cancellation;
+    await surface.end('immediate', props('cancelled'));
+  });
+  runtime.acquire('old-task', oldInterrupted);
+  await flush();
+  expect(oldInterrupted).toHaveBeenCalledWith(firstFailure);
+
+  const newInterrupted = jest.fn();
+  runtime.acquire('new-task', newInterrupted);
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(1);
+  expect(newInterrupted).not.toHaveBeenCalled();
+
+  finishCancellation();
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(2);
+  expect(oldInterrupted).toHaveBeenCalledTimes(1);
+  expect(newInterrupted).toHaveBeenCalledTimes(1);
+  expect(newInterrupted).toHaveBeenCalledWith(restartFailure);
+  expect(running).toBe(false);
+
+  runtime.acquire('later-task');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(3);
+  expect(running).toBe(true);
+});
+
+test('returning while the service runs requests permission skipped during startup', async () => {
+  native.start.mockImplementationOnce(async () => {
+    running = true;
+    setAppState('background');
+  });
+  runtime.acquire('chat');
+  await flush();
+  expect(notices.requestPermissionsAsync).not.toHaveBeenCalled();
+  setAppState('active');
+  await flush();
+  expect(notices.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+  expect(native.start).toHaveBeenCalledTimes(1);
+});
+
+test('a notification update failure does not interrupt a service that is still running', async () => {
+  const interrupted = jest.fn();
+  native.updateNotification.mockRejectedValueOnce(new Error('Update failed'));
+  runtime.acquire('chat', interrupted);
+  await flush();
+  expect(running).toBe(true);
+  expect(interrupted).not.toHaveBeenCalled();
+  expect(notices.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+});
+
+test('returning retries a failed permission request without repeatedly prompting after denial', async () => {
+  notices.requestPermissionsAsync.mockRejectedValueOnce(
+    new Error('Permission activity unavailable'),
+  );
+  runtime.acquire('chat');
+  await flush();
+  expect(notices.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+  setAppState('background');
+  setAppState('active');
+  await flush();
+  expect(notices.requestPermissionsAsync).toHaveBeenCalledTimes(2);
+  setAppState('background');
+  setAppState('active');
+  await flush();
+  expect(notices.requestPermissionsAsync).toHaveBeenCalledTimes(2);
+});
+
 test('shares the library service across concurrent tasks and stops on the last release', async () => {
   runtime
     .createPresenter<BackgroundReplyActivityProps>()
