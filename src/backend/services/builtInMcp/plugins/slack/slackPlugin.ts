@@ -15,8 +15,7 @@ export const slackPlugin: PluginDefinition = {
     id: 'slack',
     icon: 'file-text',
     links: {
-      credentials:
-        'https://github.com/CherryHQ/cherry-studio-app/blob/v0.2/docs/guides/slack-plugin-authorization.md',
+      credentials: 'https://api.slack.com/apps',
       website: 'https://slack.com',
       privacy: 'https://slack.com/trust/privacy/privacy-policy',
       authorizationManagement: 'https://slack.com/apps/manage',
