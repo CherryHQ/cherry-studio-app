@@ -1,6 +1,8 @@
 import type { PluginDefinition } from '../../pluginDefinition';
 import { createDingtalkClient } from './createDingtalkClient';
-import { parseDingtalkConfig } from './dingtalkCredentials';
+import { DingtalkAuthorizationRuntime } from './DingtalkAuthorizationRuntime';
+import { DingtalkUserCredentialSchema } from './dingtalkCredentials';
+import { DINGTALK_MANAGEMENT_URL } from './dingtalkOauth';
 import { DINGTALK_TOOL_POLICY } from './dingtalkTools';
 import { dingtalkGuide } from './guide';
 
@@ -13,6 +15,7 @@ export const dingtalkPlugin: PluginDefinition = {
     links: {
       credentials: 'https://mcp.dingtalk.com',
       website: 'https://www.dingtalk.com',
+      authorizationManagement: DINGTALK_MANAGEMENT_URL,
       privacy:
         'https://terms.alicdn.com/legal-agreement/terms/suit_bu1_ali_third/suit_bu1_ali_third202003041308_00006.html',
     },
@@ -20,16 +23,23 @@ export const dingtalkPlugin: PluginDefinition = {
   tools: DINGTALK_TOOL_POLICY,
   authMethods: [
     {
-      id: 'official_mcp',
-      kind: 'credentials',
-      requiresDisconnect: true,
-      fields: [{ id: 'configuration', secret: true, maxLength: 16_384 }],
-      encodeCredentials: (fields) => parseDingtalkConfig(fields.configuration),
-      // Each imported session binds its own URL and headers in createDingtalkClient.
-      createRequestAuthorization: () => ({ apply() {} }),
+      id: 'dingtalk_user',
+      kind: 'interactive',
+      interaction: 'polling',
+      stages: ['user', 'account', 'permission'],
+      createRuntime: (store) => new DingtalkAuthorizationRuntime(store),
+      createRequestAuthorization: () => ({
+        apply(credential, { headers }) {
+          const parsed = DingtalkUserCredentialSchema.parse(credential);
+          headers.set('Authorization', `Bearer ${parsed.tokens.accessToken}`);
+          headers.set('x-user-access-token', parsed.tokens.accessToken);
+          // Official OSS edition routing value (pkg/edition/default.go), not a private channel ID.
+          headers.set('claw-type', 'openClaw');
+        },
+      }),
     },
   ],
   createClient: createDingtalkClient,
-  // Discovery verifies access only, not the identity of an individual employee or organization.
+  // The authorization runtime reviews account identity; discovery verifies service access.
   validation: { accountLabel: () => 'Official MCP' },
 };

@@ -2,89 +2,96 @@ import type { ListToolsResult } from '@ai-sdk/mcp';
 
 import { PluginError } from '@/shared/contracts/plugins';
 
+import type { PluginCredential } from '../../authorization/pluginCredential';
 import type { PluginClient, PluginClientContext, PluginToolPolicy } from '../../pluginDefinition';
 import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
-import { DingtalkCredentialSchema, type DingtalkConnection } from './dingtalkCredentials';
+import { DingtalkUserCredentialSchema } from './dingtalkCredentials';
+import {
+  readDingtalkPermission,
+  readDingtalkResponsePermission,
+  type DingtalkPermission,
+} from './dingtalkPermission';
 import { DINGTALK_TOOL_POLICY, DINGTALK_SERVICES } from './dingtalkTools';
 
 type Source = {
-  connection: DingtalkConnection;
+  id: string;
+  url: string;
+  tools: PluginToolPolicy;
   client?: PluginClient;
   connecting?: Promise<PluginClient>;
 };
 
-/** Owns the imported official sessions and one atomic, reviewed tool-routing snapshot. */
+/** Owns official cloud sessions and one atomic, reviewed tool-routing snapshot. */
 export async function createDingtalkClient(context: PluginClientContext): Promise<PluginClient> {
   context.signal.throwIfAborted();
-  const initial = DingtalkCredentialSchema.safeParse(await context.getCredential(context.signal));
+  const credential = await context.getCredential(context.signal);
+  const initial = DingtalkUserCredentialSchema.safeParse(credential);
   if (!initial.success)
-    throw new PluginError(
-      'authorization',
-      'Reconnect Dingtalk with an official MCP configuration.',
-    );
+    throw new PluginError('authorization', 'Connect with your Dingtalk account first.');
+  const user = initial.data;
   context.signal.throwIfAborted();
   const lifetime = new AbortController();
-  const sources: Source[] = initial.data.connections.map((connection) => ({ connection }));
+  const sources: Source[] = Object.entries(DINGTALK_SERVICES).map(([id, service]) => ({
+    id,
+    url: `https://mcp-gw.dingtalk.com${service.path}`,
+    tools: Object.fromEntries(
+      Object.entries(service.tools).filter(([name, effect]) => context.tools[name] === effect),
+    ),
+  }));
+  let warnings: string[] = [];
   let routes = new Map<string, Source>();
   let discovering: Promise<ListToolsResult> | undefined;
   let closing: Promise<void> | undefined;
   const operationSignal = (caller?: AbortSignal) =>
     caller ? AbortSignal.any([caller, lifetime.signal]) : lifetime.signal;
-  function policy(connection: DingtalkConnection): PluginToolPolicy {
-    const reviewed: PluginToolPolicy = Object.values(DINGTALK_SERVICES).find(
-      (service) => service.path === new URL(connection.url).pathname,
-    )!.tools;
-    return Object.fromEntries(
-      Object.entries(reviewed).filter(([name, effect]) => context.tools[name] === effect),
+  async function requirePermission(permission: DingtalkPermission) {
+    await context.requestAuthorization?.(JSON.parse(JSON.stringify(permission)));
+    throw new PluginError(
+      permission.code.startsWith('DWS_') ? 'authorization' : 'access',
+      permission.code === 'PAT_ORG_POLICY_DENIED'
+        ? 'Dingtalk organization policy denies this action. Contact your administrator.'
+        : 'Dingtalk requires additional authorization. Open the plugin connection to continue, then explicitly retry the operation.',
     );
   }
-  async function authorize(source: Source, signal: AbortSignal) {
-    signal.throwIfAborted();
-    const current = DingtalkCredentialSchema.safeParse(await context.getCredential(signal));
-    const same =
-      current.success &&
-      current.data.connections.some(
-        (connection) =>
-          connection.url === source.connection.url &&
-          JSON.stringify(connection.headers ?? {}) ===
-            JSON.stringify(source.connection.headers ?? {}),
-      );
-    if (!same)
-      throw new PluginError(
-        'authorization',
-        'The Dingtalk connection changed. Reconnect before using it.',
-      );
-    await context.assertAuthorized();
-    signal.throwIfAborted();
+  function assertAccount(value: PluginCredential) {
+    const current = DingtalkUserCredentialSchema.safeParse(value);
+    if (
+      !current.success ||
+      current.data.rejected ||
+      current.data.clientId !== user.clientId ||
+      current.data.account.corpId !== user.account.corpId ||
+      current.data.account.userId !== user.account.userId
+    )
+      throw new PluginError('authorization', 'The Dingtalk account changed.');
   }
   async function getClient(source: Source, signal: AbortSignal): Promise<PluginClient> {
-    await authorize(source, signal);
+    signal.throwIfAborted();
+    assertAccount(await context.getCredential(signal));
+    await context.assertAuthorized();
+    signal.throwIfAborted();
     if (source.client) return source.client;
     source.connecting ??= createOfficialMcpClient(
       {
         ...context,
         signal,
-        tools: policy(source.connection),
+        tools: source.tools,
         authorization: {
           async apply(credential, { url, headers, signal: requestSignal }) {
-            const parsed = DingtalkCredentialSchema.safeParse(credential);
-            const connection =
-              parsed.success &&
-              parsed.data.connections.find((item) => item.url === source.connection.url);
-            if (
-              !connection ||
-              url.href !== connection.url ||
-              JSON.stringify(connection.headers ?? {}) !==
-                JSON.stringify(source.connection.headers ?? {})
-            )
-              throw new PluginError('authorization', 'The Dingtalk connection changed.');
+            if (url.href !== source.url)
+              throw new PluginError('request', 'The Dingtalk request target changed.');
+            assertAccount(credential);
             requestSignal?.throwIfAborted();
-            for (const [name, value] of Object.entries(connection.headers ?? {}))
-              headers.set(name, value);
+            await context.authorization.apply(credential, { url, headers, signal: requestSignal });
           },
         },
       },
-      { url: source.connection.url },
+      {
+        url: source.url,
+        async inspectResponse(response, signal) {
+          const permission = await readDingtalkResponsePermission(response, signal);
+          if (permission) await requirePermission(permission);
+        },
+      },
     )
       .then(async (client) => {
         if (signal.aborted || lifetime.signal.aborted) {
@@ -100,69 +107,92 @@ export async function createDingtalkClient(context: PluginClientContext): Promis
     return source.connecting;
   }
   async function discover(signal: AbortSignal): Promise<ListToolsResult> {
-    const results = await Promise.allSettled(
-      sources.map(async (source) => {
-        const client = await getClient(source, signal);
-        const allowed = policy(source.connection);
-        const tools: ListToolsResult['tools'] = [];
-        const cursors = new Set<string>();
-        const names = new Set<string>();
-        let cursor: string | undefined;
-        for (let pageIndex = 0; pageIndex < 20; pageIndex++) {
-          const page = await client.listTools({
-            options: { signal },
-            ...(cursor ? { params: { cursor } } : {}),
+    const discoverSource = async (source: Source) => {
+      // Bound each service independently so an unavailable service cannot discard useful tools.
+      const serviceSignal = AbortSignal.any([signal, AbortSignal.timeout(3000)]);
+      const client = await getClient(source, serviceSignal);
+      const allowed = source.tools;
+      const tools: ListToolsResult['tools'] = [];
+      const cursors = new Set<string>();
+      const names = new Set<string>();
+      let cursor: string | undefined;
+      for (let pageIndex = 0; pageIndex < 20; pageIndex++) {
+        const page = await client.listTools({
+          options: { signal: serviceSignal },
+          ...(cursor ? { params: { cursor } } : {}),
+        });
+        signal.throwIfAborted();
+        for (const tool of page.tools) {
+          if (!Object.hasOwn(allowed, tool.name)) continue;
+          if (names.has(tool.name))
+            throw new PluginError('request', 'Dingtalk returned a duplicate tool.');
+          names.add(tool.name);
+          // Read/write effects come from bundled policy, not a server hint.
+          tools.push({
+            ...tool,
+            annotations: { ...tool.annotations, readOnlyHint: allowed[tool.name] === 'read' },
           });
-          signal.throwIfAborted();
-          for (const tool of page.tools) {
-            if (!Object.hasOwn(allowed, tool.name)) continue;
-            if (names.has(tool.name))
-              throw new PluginError('request', 'Dingtalk returned a duplicate tool.');
-            names.add(tool.name);
-            // Read/write effects come from bundled policy, not a server hint.
-            tools.push({
-              ...tool,
-              annotations: { ...tool.annotations, readOnlyHint: allowed[tool.name] === 'read' },
-            });
-          }
-          if (!page.nextCursor) {
-            if (!tools.length)
-              throw new PluginError(
-                'access',
-                'An imported Dingtalk service has no supported authorized tools.',
-              );
-            return { source, tools };
-          }
-          if (cursors.has(page.nextCursor))
-            throw new PluginError('request', 'Dingtalk repeated a tool page.');
-          cursors.add(page.nextCursor);
-          cursor = page.nextCursor;
         }
-        throw new PluginError('request', 'Dingtalk returned too many tool pages.');
-      }),
-    );
+        if (!page.nextCursor) {
+          if (!tools.length)
+            throw new PluginError(
+              'access',
+              'This Dingtalk service has no supported authorized tools.',
+            );
+          return { source, tools };
+        }
+        if (cursors.has(page.nextCursor))
+          throw new PluginError('request', 'Dingtalk repeated a tool page.');
+        cursors.add(page.nextCursor);
+        cursor = page.nextCursor;
+      }
+      throw new PluginError('request', 'Dingtalk returned too many tool pages.');
+    };
+    const results: PromiseSettledResult<Awaited<ReturnType<typeof discoverSource>>>[] = [];
+    // Four sessions at a time avoids opening the whole service catalog at once on mobile.
+    for (let index = 0; index < sources.length; index += 4) {
+      results.push(
+        ...(await Promise.allSettled(sources.slice(index, index + 4).map(discoverSource))),
+      );
+      signal.throwIfAborted();
+    }
     signal.throwIfAborted();
     const next = new Map<string, Source>();
     const tools: ListToolsResult['tools'] = [];
-    for (const result of results) {
-      if (result.status === 'rejected') throw result.reason;
+    const failures: string[] = [];
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'rejected') {
+        if (result.reason instanceof PluginError && result.reason.reason === 'authorization')
+          throw result.reason;
+        const service = sources[index]!.id;
+        failures.push(
+          `Dingtalk ${service} tools are currently unavailable. Check organization access and reconnect to discover them again.`,
+        );
+        continue;
+      }
       for (const tool of result.value.tools) {
         if (next.has(tool.name))
-          throw new PluginError('request', 'Import each Dingtalk service only once.');
+          throw new PluginError('request', 'Dingtalk returned a conflicting tool name.');
         next.set(tool.name, result.value.source);
         tools.push(tool);
       }
     }
+    if (!tools.length)
+      throw new PluginError('access', 'No supported Dingtalk services are authorized.');
     routes = next;
+    warnings = failures;
     return { tools };
   }
   return {
     serverInfo: { name: 'Cherry Studio Dingtalk', version: '1' },
+    get discoveryWarnings() {
+      return warnings;
+    },
     async listTools(input) {
       const signal = operationSignal(input?.options?.signal);
       signal.throwIfAborted();
       // Shared discovery owns its deadline; cancellation of one observer cannot cancel another.
-      discovering ??= discover(operationSignal(AbortSignal.timeout(12_000))).finally(() => {
+      discovering ??= discover(operationSignal(AbortSignal.timeout(14_000))).finally(() => {
         discovering = undefined;
       });
       try {
@@ -174,7 +204,7 @@ export async function createDingtalkClient(context: PluginClientContext): Promis
         if (error instanceof PluginError) throw error;
         throw new PluginError(
           'request',
-          'Could not load Dingtalk tools. Check the imported configuration and permissions.',
+          'Could not load Dingtalk tools. Check your connection and organization permissions.',
         );
       }
     },
@@ -193,7 +223,10 @@ export async function createDingtalkClient(context: PluginClientContext): Promis
         const client = await getClient(source, signal);
         signal.throwIfAborted();
         submitted = true;
-        return await client.callTool({ ...input, options: { abortSignal: signal } });
+        const result = await client.callTool({ ...input, options: { abortSignal: signal } });
+        const permission = readDingtalkPermission(result);
+        if (permission) await requirePermission(permission);
+        return result;
       } catch (error) {
         if (error instanceof PluginError) throw error;
         if (effect === 'write' && submitted)
