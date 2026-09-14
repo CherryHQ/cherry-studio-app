@@ -1,7 +1,7 @@
 # Built-In MCP Plugins
 
 This module owns bundled plugin clients and the connect/disconnect workflow for **Plugins**.
-GitHub, Amap and Feishu are implemented. Current behavior is documented in the
+GitHub, Amap, Feishu and DingTalk are implemented. Current behavior is documented in the
 [integration reference](../../../../docs/references/agent/built-in-mcp-design.md); proposed designs
 are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 
@@ -18,6 +18,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `plugins/amap/` | Amap definition and workflow guide |
 | `plugins/github/` | GitHub definition, workflow guide, OAuth App authorization with PKCE, account identity, token rotation and revocation |
 | `plugins/feishu/` | Feishu workflow guide, authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
+| `plugins/dingtalk/` | Official cloud device authorization, account review, token renewal, behavior authorization and service-bound tools |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
 internal responsibility groups; they do not add public barrels. Each plugin exposes only its
@@ -29,7 +30,7 @@ observation, browser actions and form state; backend observers own polling and c
 
 ## Plugin Guides
 
-GitHub, Amap and Feishu each own a plain TypeScript guide module at `plugins/<id>/guide.ts` beside
+Bundled providers each own a plain TypeScript guide module at `plugins/<id>/guide.ts` beside
 their plugin definition. `PluginDefinition.guide` references its exported
 data directly. Each guide contains a positive integer `revision` and ordered `sections`; each section
 has a `content` string and a `requiredTools` array of raw MCP names. Template strings can retain
@@ -148,6 +149,29 @@ Existing-application entry/reset remain optional; native SDK interactions remain
 The shared connection hook uses `openAuthSessionAsync` for GitHub's callback flow and
 `openBrowserAsync` for Feishu's device flow. GitHub returns through the system authentication
 session; Feishu checks the provider's authorization result by polling after browser confirmation.
+
+DingTalk's default `dingtalk_user` method uses the official cloud device flow: retrieve the managed
+client ID, open the official confirmation page, poll for an authorization code, exchange it once,
+check organization CLI access, then review the account before discovery and commit. Tokens and
+optional server-issued application credentials stay in native secure storage. Organization/user IDs
+from the token response or optional read-only contact lookup bind reconnects; unknown employee
+identity requires disconnect before replacing an existing account.
+
+Its fixed manifest admits selected tools from 14 official services: doc, todo, calendar, contact,
+wiki, drive, aitable, sheet, chat, mail, oa, report, minutes and attendance. Discovery uses four
+concurrent sessions with per-service deadlines; available cloud tools survive other services'
+failures and carry safe warnings.
+Raw tool names and write effects remain bound to their reviewed service, never arbitrary endpoints
+or remote safety hints. Protocol and tool references are pinned to the
+[official DWS source](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/tree/8cacb01951d2567b2c0466d14cb6c5c9d0267a68).
+
+PAT (Personal Action Token) challenges are intercepted in JSON HTTP/RPC envelopes and tool results.
+Only the provider runtime receives their private fields; the connection page opens the validated
+official authorization URL. Scope requests begin a fresh explicit device flow. Approved flows may
+exchange new credentials only before account review; no failed tool is replayed. Organization-policy
+denials direct users to their administrator. Pending permission flows are memory-only and tied to
+the current grant. Disconnect removes local access first and attempts MCP token revocation;
+server-issued direct credentials require revocation through DingTalk's authorization management.
 
 GitHub's `github_user` method uses an OAuth App with `repo offline_access` and is available only
 with the publisher configuration described in

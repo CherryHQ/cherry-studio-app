@@ -245,7 +245,7 @@ function AgentListRow({
       }}
       testID={`agent-list-${agent.id}`}
     >
-      <View className="relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b py-2 pl-2 pr-4">
+      <View className="relative min-w-0 flex-row items-center gap-2 border-border border-b py-2 pl-2 pr-4">
         <View className="ml-1">
           <AgentAvatar avatar={agent.avatar} name={agent.name} uri={agent.avatarUri} />
         </View>
