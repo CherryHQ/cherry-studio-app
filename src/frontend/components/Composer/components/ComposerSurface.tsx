@@ -1,11 +1,14 @@
 import { Composer, useToast } from '@cherrystudio/ui/components';
 import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardController } from 'react-native-keyboard-controller';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { useComposerActions, useComposerState } from '../context/ComposerProvider';
+import {
+  useComposerActions,
+  useComposerPresentationActions,
+  useComposerState,
+} from '../context/ComposerProvider';
 import { useComposerSendError } from '../hooks/useComposerSendError';
 import {
   type ComposerAttachmentReady,
@@ -65,6 +68,7 @@ export function ComposerSurface({
   });
   const { attachments, draft } = useComposerState();
   const { addAttachments, clearAttachments, setDraft } = useComposerActions();
+  const { dismissInput } = useComposerPresentationActions();
   const activeSendAttemptIdRef = useRef<number | null>(null);
   const nextSendAttemptIdRef = useRef(0);
 
@@ -91,9 +95,8 @@ export function ComposerSurface({
     setDraft('');
     clearAttachments();
     if (dismissKeyboardOnSend) {
-      // Not animated: an animated dismissal races the message list's
-      // scroll-to-bottom and the two fight over the same pixels.
-      void KeyboardController.dismiss({ animated: false });
+      // Native blur preserves the system keyboard transition that the dock follows.
+      dismissInput();
     }
 
     try {
@@ -110,6 +113,7 @@ export function ComposerSurface({
   }, [
     attachments,
     clearAttachments,
+    dismissInput,
     dismissKeyboardOnSend,
     draft,
     reportSendError,

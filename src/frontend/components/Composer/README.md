@@ -40,7 +40,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   - `canSend` — omit for "there is text or there is an attachment". Pass a
     boolean when the screen has its own conditions, as painting does.
   - `getSendErrorLabel` — a message for a failure the caller recognises.
-  - `dismissKeyboardOnSend` — defaults to dismissal; chat disables it, including in its list.
+  - `dismissKeyboardOnSend` — defaults to blurring the input, ending editing, and dismissing the
+    keyboard with its native transition when submitting. The dock follows that transition, just
+    as it follows keyboard opening. Chat enables it; its list does not dismiss the keyboard again.
 - `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
   shared editing state. It forwards `style`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
@@ -58,8 +60,8 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   input context.
 - `useComposerPresentationState` — exposes `isEditing` independently of native field focus,
   alongside dock keyboard tracking. Screens derive their expanded state from editing and content.
-- `useComposerPresentationActions` — activates editing on field focus, ends it on explicit outside
-  dismissal, and presents a Sheet or native picker while retaining the editing state. The model
+- `useComposerPresentationActions` — activates editing on field focus, ends it on send or explicit
+  outside dismissal, and presents a Sheet or native picker while retaining the editing state. The model
   pill and media menu already use the replacement action; caller-owned replacement buttons, such
   as painting settings, use the same action.
 - `ComposerDock` — connects that input-context state to CherryUI's
@@ -73,7 +75,7 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 ## What is deliberately *not* pluggable
 
 Sending. Trim, clear before awaiting, restore the draft *and* the attachments if
-it rejects, explain the outcome, log, and the un-animated keyboard dismissal — that is a
+it rejects, explain the outcome, log, and dismiss the input with its native keyboard transition — that is a
 protocol, not a part, and two screens assembling it separately would be two
 implementations of it. It lives in `ComposerSurface`, which is what renders the
 surface, so there is no way to compose a composer that skips it. A synchronous
