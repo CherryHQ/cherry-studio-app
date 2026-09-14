@@ -8,16 +8,24 @@ numbered dot-matrix loaders ported from the source design set: `DotMatrixSquare2
 ## ImageGenerationLoader
 
 `ImageGenerationLoader` is the pending state for generated images, in one treatment at every size:
-a 19x19 dot field with a resolution badge and shimmering status copy inside the canvas. Callers can
-provide `active`, `height`, `label`, `resolution`, `size`, `width`, and standard `View` props.
-`resolution` is optional — the badge is dropped when the request never named a size — and hosts that
+a dot field with a soft diagonal glare, plain resolution text, and shimmering status copy inside
+the canvas. The short edge spans 19 cells, preserving dot spacing on rectangular previews. Callers
+can provide `active`, `height`, `label`, `resolution`, `size`, `width`, and standard `View` props.
+`resolution` is optional — the label is dropped when the request never named a size — and hosts that
 already speak for the loader (a gallery tile, say) pass `accessible={false}`.
 
-- One Skia runtime shader draws the background field and both moving ellipse masks in a single GPU
-  pass. Building the same mask from React Native views would require hundreds of mounted nodes.
+- One Skia runtime shader draws the dot field and reflection in a single GPU pass, with no
+  per-dot React Native views or extra blur layer.
+- The glare indicates ongoing generation, not completion percentage. Each 4.8-second cycle sweeps
+  diagonally across the surface for 3.84 seconds, then rests off-canvas for 0.96 seconds. Point-based
+  projection keeps the reflection's angle consistent across preview aspect ratios.
 - Reanimated drives the shader clock and shared `ShimmerText` sweep on the UI thread.
-- The clock pauses and resets while inactive, and Reduce Motion renders a readable static frame.
+- Deactivation stops and resets the clock immediately. Inactive and Reduce Motion states show
+  static dots without glare; the existing image handoff owns the final result transition.
 - Colors come from Cherry's semantic Uniwind tokens, so scoped and app-selected themes both work.
+- A neutral secondary surface and subtle border frame the field. Highlighted dots and resolution
+  text use secondary ink; the resolution has no separate capsule, fill, or border. The reflection
+  uses the constant-white token at 60% in light themes and 10% in dark themes to limit its contrast.
 - Product call sites should pass translated `label` and `accessibilityLabel` values.
 
 ## Dot matrix foundation
