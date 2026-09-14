@@ -1,6 +1,10 @@
 import type { DocumentExportSession } from '@/shared/contracts/documentExport';
 
-import { createDocumentExportRequest, finishDocumentExportRequest } from '../documentExportRequest';
+import {
+  createDocumentExportRequest,
+  finishDocumentExportRequest,
+  getDocumentExportRequest,
+} from '../documentExportRequest';
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'request' }));
 
@@ -34,5 +38,23 @@ test('closing a preview disposes both option snapshots before admitting the next
   await request.outcome;
   const next = createDocumentExportRequest(session(), 'markdown')!;
   expect(next).toBeDefined();
+  await finishDocumentExportRequest(next.id);
+});
+
+test('a document-only request replaces an unsupported image default with HTML', async () => {
+  const request = createDocumentExportRequest(session(), 'image', undefined, undefined, [
+    'html',
+    'markdown',
+  ])!;
+  expect(getDocumentExportRequest(request.id)).toMatchObject({
+    initialFormat: 'html',
+    allowedFormats: ['html', 'markdown'],
+  });
+  await finishDocumentExportRequest(request.id);
+  const next = createDocumentExportRequest(session(), 'image')!;
+  expect(getDocumentExportRequest(next.id)).toMatchObject({
+    initialFormat: 'image',
+    allowedFormats: ['markdown', 'html', 'image'],
+  });
   await finishDocumentExportRequest(next.id);
 });
