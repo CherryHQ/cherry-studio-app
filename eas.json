@@ -15,7 +15,7 @@
       },
       "android": {
         "buildType": "apk",
-        "withoutCredentials": "true",
+        "withoutCredentials": true,
         "gradleCommand": ":app:assembleDebug -PreactNativeArchitectures=arm64-v8a"
       }
     },
@@ -54,7 +54,8 @@
       },
       "android": {
         "buildType": "apk",
-        "withoutCredentials": "true",
+        "withoutCredentials": false,
+        "credentialsSource": "remote",
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
       }
     }
