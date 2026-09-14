@@ -35,6 +35,10 @@ let mockAgentChatSession: {
   status: 'ready';
 };
 
+jest.mock('../hooks/useIsScreenReaderEnabled', () => ({
+  useIsScreenReaderEnabled: () => false,
+}));
+
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));

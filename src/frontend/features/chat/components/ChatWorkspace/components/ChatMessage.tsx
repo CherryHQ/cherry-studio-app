@@ -1,4 +1,9 @@
-import { ContextMenu, ContextMenuExclusion, type MenuItem } from '@cherrystudio/ui/components';
+import {
+  Button,
+  ContextMenu,
+  ContextMenuExclusion,
+  type MenuItem,
+} from '@cherrystudio/ui/components';
 import { memo, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -22,6 +27,7 @@ export type AssistantMessagePresentation = Readonly<{
 type ChatMessageProps = {
   assistantPresentation: AssistantMessagePresentation;
   isMessageActionsEnabled: boolean;
+  isScreenReaderEnabled?: boolean;
   message: MessageListItem;
   shouldShowTimestamp: boolean;
 };
@@ -90,6 +96,7 @@ function formatMessageCreatedAt(createdAt: string | undefined): string | undefin
 export const ChatMessage = memo(function ChatMessage({
   assistantPresentation,
   isMessageActionsEnabled,
+  isScreenReaderEnabled = false,
   message,
   shouldShowTimestamp,
 }: ChatMessageProps) {
@@ -113,7 +120,9 @@ export const ChatMessage = memo(function ChatMessage({
         </Text>
       ) : null}
       {isMessageActionsEnabled ? (
-        <ChatMessageContextMenu message={message}>{content}</ChatMessageContextMenu>
+        <ChatMessageContextMenu isScreenReaderEnabled={isScreenReaderEnabled} message={message}>
+          {content}
+        </ChatMessageContextMenu>
       ) : (
         content
       )}
@@ -123,9 +132,11 @@ export const ChatMessage = memo(function ChatMessage({
 
 function ChatMessageContextMenu({
   children,
+  isScreenReaderEnabled,
   message,
 }: {
   children: ReactElement;
+  isScreenReaderEnabled: boolean;
   message: MessageListItem;
 }) {
   const { t } = useTranslation();
@@ -152,7 +163,29 @@ function ChatMessageContextMenu({
 
   return (
     <ContextMenu delayLongPress={MESSAGE_CONTEXT_MENU_DELAY_MS} items={items}>
-      <View className="w-full">{children}</View>
+      <View accessible={false} className="w-full gap-2">
+        {children}
+        {/* Keep attachment and text nodes independently reachable. Assistant rows already
+            have a toolbar; user rows need explicit actions when long press is unavailable. */}
+        {isScreenReaderEnabled && message.role === 'user' && items.length > 0 ? (
+          <ContextMenuExclusion className="flex-row justify-end gap-1">
+            {items
+              .filter((item) => !item.disabled)
+              .map((item) => (
+                <Button
+                  accessibilityLabel={item.label}
+                  key={item.id}
+                  onPress={item.onPress}
+                  size="xs"
+                  testID={`user-message-${item.id}`}
+                  variant="ghost"
+                >
+                  {item.label}
+                </Button>
+              ))}
+          </ContextMenuExclusion>
+        ) : null}
+      </View>
     </ContextMenu>
   );
 }

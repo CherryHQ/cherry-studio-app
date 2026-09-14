@@ -278,6 +278,14 @@ changing the child's tap, native selection, or scrolling behavior.
 | Fenced code and Markdown tables | Native renderer owns code copy/menu and nested scrolling; the existing table patch removes the table-wide copy menu |
 | Video/source-document/step-start parts | No rendered touch target |
 
+Android code menus explicitly cancel ancestor gesture recognizers before presenting. This also
+covers short, non-scrolling code blocks; moving focus to the native popup alone does not cancel
+the message hold.
+
+The chat keeps message containers non-accessible so native text, attachment controls, and toolbars
+remain separate screen-reader targets. With a screen reader enabled, settled user messages expose
+copy/share buttons through an excluded footer; assistant messages retain their existing toolbar.
+
 This inventory is based on source inspection. Native code-menu versus message-menu precedence,
 inline-link long presses, code/table pans, and excluded-control holds still require iOS/Android
 device acceptance; mocked gesture callbacks cannot establish their timing or native cancellation.

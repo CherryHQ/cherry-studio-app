@@ -36,3 +36,10 @@ cancels menu recognition during drag and momentum. Main-answer text selection st
 message actions are enabled. Process details keep their own selection and scrolling inside a
 `ContextMenuExclusion`, as do source entry points, attachments, errors, and the assistant toolbar.
 Holding these regions belongs to the child interaction and does not open the message menu.
+
+`ChatWorkspace` observes the native screen-reader setting once for all rows. When enabled, settled
+user messages show explicit copy/share buttons, including a share action for attachment-only
+messages. Assistant messages keep their existing toolbar. These controls sit outside the message
+content's accessibility nodes; the complete row is never grouped into a single accessible element
+that would hide attachments or inline controls. A late initial status response cannot overwrite a
+newer setting-change event.

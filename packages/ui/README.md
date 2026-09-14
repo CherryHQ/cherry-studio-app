@@ -115,7 +115,8 @@ natural height; longer blocks keep their complete content in a native vertical s
 with horizontal scrolling for long lines. The limit applies during streaming and after completion,
 including reasoning and final answers. Code-pane drags use native scroll recognition and cancel
 text long presses; Android gives an overflowing code pane priority over the outer message list
-for that touch sequence. These behaviors are native and require a development-client rebuild
+for that touch sequence. Before opening its code menu, Android also cancels ancestor gesture
+recognizers, including for short blocks that do not scroll. These behaviors are native and require a development-client rebuild
 after changing the patch. The upstream `codeBlock` style has no `maxHeight` property; limiting
 the outer Markdown view would constrain the whole message instead of each code block.
 

@@ -6,6 +6,19 @@ const patch = readFileSync(
 );
 
 // Native-source patch guards; gesture behavior still needs device acceptance.
+describe('native Markdown code-block menu patch', () => {
+  test('cancels ancestor recognizers before either code target presents its menu', () => {
+    const codeBlockPatch = patch
+      .split(
+        '+++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt',
+      )[1]
+      ?.split('diff --git ')[0];
+    expect(codeBlockPatch).toMatch(
+      /private fun showContextMenu\(anchor: View\): Boolean \{\n     if \(pending\) return false\n(?:\+[^\n]*\n)*\+    anchor\.parent\?\.requestDisallowInterceptTouchEvent\(true\)\n     ContextMenuPopup\.show\(anchor, this\)/,
+    );
+  });
+});
+
 describe('native Markdown table interaction patch', () => {
   test('removes the iOS table copy menu recognizer', () => {
     expect(patch).toContain('-  [_gridContainer addInteraction:contextMenu];');

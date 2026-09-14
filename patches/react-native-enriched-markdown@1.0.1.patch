@@ -177,7 +177,7 @@ diff --git a/ios/views/TableContainerView.m b/ios/views/TableContainerView.m
  #else
    CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
-index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42469161eb 100644
+index 380c6be097ff3e6b67e6f66ec32b205af196844f..bc136c58efbbda564e941a2de863f87ee3c5c5dc 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
 @@ -17,10 +17,12 @@ import android.text.StaticLayout
@@ -281,7 +281,17 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42
    }
  
    // Divider between the header and the code, centered in the gap the code
-@@ -305,6 +331,12 @@ class CodeBlockContainerView(
+@@ -246,6 +272,9 @@ class CodeBlockContainerView(
+   // the event when there is one (a pending block has no menu yet).
+   private fun showContextMenu(anchor: View): Boolean {
+     if (pending) return false
++    // A popup only takes window focus; it does not cancel an ancestor's long press.
++    // Commit this native gesture before presenting, including for non-scrolling blocks.
++    anchor.parent?.requestDisallowInterceptTouchEvent(true)
+     ContextMenuPopup.show(anchor, this) {
+       item(ContextMenuPopup.Icon.COPY, copyLabel) { copyCode() }
+       item(ContextMenuPopup.Icon.DOCUMENT, copyAsMarkdownLabel) { copyFencedMarkdown() }
+@@ -305,6 +334,12 @@ class CodeBlockContainerView(
    }
  
    companion object {
@@ -294,7 +304,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42
      private const val HEADER_LABEL_SCALE = 0.85f
  
      // Drawable box for the copy glyph, as a multiple of the code font size.
-@@ -366,7 +398,7 @@ class CodeBlockContainerView(
+@@ -366,7 +401,7 @@ class CodeBlockContainerView(
        val inset = contentInset(style)
        val headerH = headerHeight(style)
        val text = buildCodeText(CodeBlockNode.extractCode(node), style)
@@ -303,7 +313,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42
        val paint = createCodePaint(style, context)
        val contentWidth = ceil(Layout.getDesiredWidth(text, paint)).toInt().coerceAtLeast(1)
        val layout =
-@@ -377,7 +409,7 @@ class CodeBlockContainerView(
+@@ -377,7 +412,7 @@ class CodeBlockContainerView(
            .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
            .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
            .build()
