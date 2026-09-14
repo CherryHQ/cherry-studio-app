@@ -1,5 +1,6 @@
 import { useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
+import { router, useFocusEffect } from 'expo-router';
 import {
   createContext,
   type PropsWithChildren,
@@ -11,12 +12,12 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Keyboard } from 'react-native';
 
 import { useAgentSession } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatFork } from '../../../runtime';
-import { useShareChatMessage } from '../../../share';
 
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
 /** Matches the Session title column, which the fork input also caps at 255. */
@@ -25,7 +26,6 @@ const logger = loggerService.withContext('AssistantMessageActions');
 
 type AssistantMessageActionsState = {
   copiedMessageId?: string;
-  sharingMessageId?: string;
   isAssistantToolbarEnabled: boolean;
 };
 
@@ -54,7 +54,23 @@ export function AssistantMessageActionsProvider({
   const { t } = useTranslation();
   const { toast } = useToast();
   const forkSession = useAgentChatFork();
-  const { shareAssistantMessage, sharingMessageId } = useShareChatMessage(sessionId);
+  const shareNavigationInFlightRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      // The chat screen remains mounted underneath the selector. Unlock only when
+      // it regains focus so rapid taps cannot push duplicate selector routes.
+      shareNavigationInFlightRef.current = false;
+    }, []),
+  );
+  const shareAssistantMessage = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      if (!sessionId || shareNavigationInFlightRef.current) return;
+      shareNavigationInFlightRef.current = true;
+      Keyboard.dismiss();
+      router.push({ pathname: '/chat-share', params: { sessionId, messageId } });
+    },
+    [sessionId, shareNavigationInFlightRef],
+  );
   // Already in cache: the chat screen resolves this same Session to render.
   const sourceTitle = useAgentSession(sessionId).data?.title?.trim();
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
@@ -124,8 +140,11 @@ export function AssistantMessageActionsProvider({
   );
 
   const stateValue = useMemo(
-    () => ({ copiedMessageId, isAssistantToolbarEnabled, sharingMessageId }),
-    [copiedMessageId, isAssistantToolbarEnabled, sharingMessageId],
+    () => ({
+      copiedMessageId,
+      isAssistantToolbarEnabled,
+    }),
+    [copiedMessageId, isAssistantToolbarEnabled],
   );
   const actionsValue = useMemo(
     () => ({ copyAssistantMessage, forkFromAssistantMessage, shareAssistantMessage }),

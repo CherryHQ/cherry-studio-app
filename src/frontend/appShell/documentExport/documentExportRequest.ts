@@ -1,4 +1,5 @@
 import { randomUUID } from 'expo-crypto';
+import type { Href } from 'expo-router';
 
 import type { DocumentExportSession, ExportFormat } from '@/shared/contracts/documentExport';
 
@@ -8,7 +9,10 @@ type ExportRequest = {
   id: string;
   session: DocumentExportSession;
   initialFormat: ExportFormat;
+  allowedFormats: readonly ExportFormat[];
   option?: DocumentExportOption;
+  /** Where the page dismisses to once the system share sheet closes. */
+  returnTo?: Href;
   resolve(): void;
   timer: ReturnType<typeof setTimeout>;
 };
@@ -18,6 +22,8 @@ export function createDocumentExportRequest(
   session: DocumentExportSession,
   initialFormat: ExportFormat,
   option?: DocumentExportOption,
+  returnTo?: Href,
+  allowedFormats: readonly [ExportFormat, ...ExportFormat[]] = ['markdown', 'html', 'image'],
 ) {
   if (active) return undefined;
   const id = randomUUID();
@@ -28,8 +34,10 @@ export function createDocumentExportRequest(
   active = {
     id,
     session,
-    initialFormat,
+    initialFormat: allowedFormats.includes(initialFormat) ? initialFormat : allowedFormats[0],
+    allowedFormats,
     option,
+    returnTo,
     resolve,
     // Release a navigation request that never reached its route.
     timer: setTimeout(() => {

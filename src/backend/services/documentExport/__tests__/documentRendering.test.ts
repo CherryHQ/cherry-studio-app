@@ -188,3 +188,38 @@ test('Markdown image examples inside code never fetch resources', async () => {
   await renderHtml(document, presentation, new Map(), jest.fn(), new AbortController().signal);
   expect(fetch).not.toHaveBeenCalled();
 });
+
+test('a selection exceeding the image resource budget still admits its complete text export', async () => {
+  const document = normalizeDocument({
+    kind: 'document',
+    document: {
+      sections: [
+        {
+          id: 'selection',
+          blocks: [
+            { kind: 'text', text: 'All selected message text.' },
+            ...Array.from({ length: 33 }, (_, index) => ({
+              kind: 'image' as const,
+              assetId: `image-${index}`,
+              alt: `Photo ${index}`,
+            })),
+          ],
+        },
+      ],
+      assets: Object.fromEntries(
+        Array.from({ length: 33 }, (_, index) => [
+          `image-${index}`,
+          { kind: 'remote-image' as const, url: `https://example.com/${index}.png` },
+        ]),
+      ),
+    },
+  });
+  const read = jest.fn();
+  await expect(
+    renderHtml(document, presentation, new Map(), read, new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'image-resource-limit' });
+  expect(read).not.toHaveBeenCalled();
+  const markdown = renderMarkdown(document);
+  expect(markdown).toContain('All selected message text\\.');
+  expect(markdown).toContain('Photo 32');
+});
