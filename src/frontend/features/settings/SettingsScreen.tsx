@@ -54,6 +54,11 @@ export default function SettingsScreen() {
               leading={<CircleUserRoundIcon className="size-4 text-foreground" />}
               onPress={openProfileSettings}
             />
+            <Section.Item
+              label={t('settings.items.deviceConnections')}
+              leading={<NetworkIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/device-connections')}
+            />
           </Section>
           <Section>
             <Section.Item
@@ -61,11 +66,6 @@ export default function SettingsScreen() {
               leading={<CloudIcon className="size-4 text-foreground" />}
               onPress={openProviderList}
               onPressIn={prepareProviderList}
-            />
-            <Section.Item
-              label={t('settings.items.deviceConnections')}
-              leading={<NetworkIcon className="size-4 text-foreground" />}
-              onPress={() => router.push('/settings/device-connections')}
             />
             <Section.Item
               label={t('settings.items.defaultModel')}
