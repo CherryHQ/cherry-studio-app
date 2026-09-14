@@ -67,7 +67,7 @@ export type PluginAuthorizationObservation = {
   state: PluginAuthorizationState;
   /** True while the backend is reading, polling or completing. */
   busy: boolean;
-  /** Last failure since the previous successful step; cleared when a new step starts. */
+  /** Retained across passive reads and focus changes; cleared by an explicit step or successful work. */
   error?: PluginErrorReason;
   /** Set once the grant is committed as a connection. */
   connection?: PluginConnection;
