@@ -13,6 +13,7 @@ import { amapPlugin } from './plugins/amap';
 import { feishuPlugin } from './plugins/feishu';
 import { githubPlugin } from './plugins/github';
 import { gmailPlugin } from './plugins/gmail';
+import { notionPlugin } from './plugins/notion';
 
 /** Registration is a bundled-code decision; there is no runtime installation or code loading. */
 export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
@@ -146,7 +147,13 @@ function validateFields(id: string, fields: readonly PluginCredentialField[]) {
   createPluginCredentialsSchema(fields);
 }
 
-const registry = createPluginRegistry([githubPlugin, amapPlugin, feishuPlugin, gmailPlugin]);
+const registry = createPluginRegistry([
+  githubPlugin,
+  amapPlugin,
+  feishuPlugin,
+  gmailPlugin,
+  notionPlugin,
+]);
 
 export const getPluginDefinition = registry.get;
 export const getBuiltInPluginCatalog = registry.listCatalog;

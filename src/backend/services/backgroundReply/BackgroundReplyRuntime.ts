@@ -16,6 +16,10 @@ import type {
   BackgroundActivitySessionInput,
 } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type {
+  KeepAliveLease,
+  KeepAliveSource,
+} from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type {
   BackgroundReplyActivityProps,
   BackgroundReplyContent,
   BackgroundReplyPhase,
@@ -85,7 +89,12 @@ type EnvironmentPort = {
  */
 @Injectable('BackgroundReplyRuntime')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['BackgroundActivityManager', 'PreferenceService', 'BackgroundActivityEnvironment'])
+@DependsOn([
+  'BackgroundActivityManager',
+  'PreferenceService',
+  'BackgroundActivityEnvironment',
+  'KeepAliveCoordinator',
+])
 @AppStatePolicy('background-presentation')
 export class BackgroundReplyRuntime
   extends BaseService
@@ -94,12 +103,14 @@ export class BackgroundReplyRuntime
   private disposed = false;
   private generation = 0;
   private operationTail: Promise<void> = Promise.resolve();
+  private readonly preparationLeases = new Set<KeepAliveLease>();
   private turns = new Map<string, TurnRecord>();
 
   constructor(
     private readonly activities: BackgroundActivityPort,
     private readonly preference: PreferencePort,
     private readonly environment: EnvironmentPort,
+    private readonly keepAlive: KeepAliveSource,
   ) {
     super();
   }
@@ -131,12 +142,25 @@ export class BackgroundReplyRuntime
   }
 
   private cancelSessions(): void {
+    for (const lease of this.preparationLeases) lease.release();
+    this.preparationLeases.clear();
     for (const record of this.turns.values()) {
       this.clearUpdateTimer(record);
       record.session?.cancel();
       record.session = undefined;
     }
   }
+
+  acquirePreparation = (onInterrupt: (reason: Error) => void): KeepAliveLease => {
+    if (!this.isActivated || this.disposed) return { release() {} };
+    const lease = this.keepAlive.acquire('chat.preparation', onInterrupt);
+    this.preparationLeases.add(lease);
+    return {
+      release: () => {
+        if (this.preparationLeases.delete(lease)) lease.release();
+      },
+    };
+  };
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
     if (!this.isActivated || this.disposed) return noOpTurn;
@@ -229,13 +253,8 @@ export class BackgroundReplyRuntime
     if (this.disposed) return;
     this.disposed = true;
 
-    const records = [...this.turns.values()];
+    this.cancelSessions();
     this.turns.clear();
-    for (const record of records) {
-      this.clearUpdateTimer(record);
-      record.session?.cancel();
-      record.session = undefined;
-    }
     await this.operationTail;
   }
 
