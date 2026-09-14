@@ -36,6 +36,7 @@ export function CredentialConnect({
   const [isConnecting, setIsConnecting] = useState(false);
   const [invalidFields, setInvalidFields] = useState<Set<string>>(() => new Set());
   const name = t(`plugins.catalog.${entry.id}.name`);
+  const credentialUrl = entry.links.credentials;
 
   async function connect() {
     if (pendingConnection.current) return;
@@ -104,15 +105,17 @@ export function CredentialConnect({
             }}
             onSubmit={() => void connect()}
           />
-          <View className="items-start">
-            <Button
-              variant="link"
-              size="inline"
-              onPress={() => void openExternalUrl(entry.links.credentials)}
-            >
-              {t(`plugins.catalog.${entry.id}.credentialLink`)}
-            </Button>
-          </View>
+          {credentialUrl ? (
+            <View className="items-start">
+              <Button
+                variant="link"
+                size="inline"
+                onPress={() => void openExternalUrl(credentialUrl)}
+              >
+                {t(`plugins.catalog.${entry.id}.credentialLink`)}
+              </Button>
+            </View>
+          ) : null}
         </View>
         <View className="gap-3">
           <Button

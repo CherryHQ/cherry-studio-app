@@ -11,8 +11,6 @@ export const wecomPlugin: PluginDefinition = {
     id: 'wecom',
     icon: 'file-text',
     links: {
-      credentials:
-        'https://github.com/CherryHQ/cherry-studio-app/blob/v0.2/docs/guides/wecom-plugin-authorization.md',
       website: 'https://work.weixin.qq.com',
       privacy: 'https://work.weixin.qq.com/nl/privacy',
     },

@@ -48,7 +48,7 @@ export type PluginCatalogEntry = {
   readonly id: PluginId;
   readonly icon?: string;
   readonly links: {
-    readonly credentials: string;
+    readonly credentials?: string;
     readonly website: string;
     readonly privacy: string;
     readonly authorizationManagement?: string;
