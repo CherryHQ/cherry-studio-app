@@ -1,5 +1,5 @@
 import { Image, Text, useWindowDimensions } from 'react-native';
-import { useResolveClassNames } from 'uniwind';
+import { useResolveClassNames, useUniwind } from 'uniwind';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getPluginInlineIcon } from '@/frontend/utils/pluginIcons';
@@ -49,6 +49,7 @@ function renderMentionSegments(segments: readonly MentionSegment[]) {
 function PlainTextWithMentions({ text, references }: { text: string; references?: unknown[] }) {
   const segments = splitPluginReferences(text, references);
   const color = useThemeColor('primary');
+  const { theme } = useUniwind();
   const { fontScale } = useWindowDimensions();
   const textStyle = useResolveClassNames('text-base');
   const iconSize = (textStyle.fontSize ?? 16) * fontScale;
@@ -57,7 +58,7 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
     <Text className="text-base text-foreground" accessibilityLabel={text}>
       {segments.map((segment) => {
         if (!segment.reference) return renderMentionSegments(splitToolMentions(segment.text));
-        const icon = getPluginInlineIcon(segment.reference.pluginId);
+        const icon = getPluginInlineIcon(segment.reference.pluginId, theme);
         return (
           <Text className="text-primary" key={segment.reference.offset}>
             <Image

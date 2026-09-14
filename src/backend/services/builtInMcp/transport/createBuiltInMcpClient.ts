@@ -49,6 +49,15 @@ export async function createBuiltInMcpClient(
               .get(pluginId, method.id)
               .rejectCredential?.(authorizationId, credential) ?? Promise.resolve()
         : undefined,
+    requestAuthorization:
+      method.kind === 'interactive'
+        ? async (challenge) => {
+            await readGrant();
+            await authorizations
+              .get(pluginId, method.id)
+              .requestAuthorization?.(authorizationId, challenge);
+          }
+        : undefined,
     async assertAuthorized() {
       await readGrant();
     },

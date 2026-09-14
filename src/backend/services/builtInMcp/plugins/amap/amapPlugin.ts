@@ -13,7 +13,7 @@ export const amapPlugin: PluginDefinition = {
   guide: amapGuide,
   catalog: {
     id: 'amap',
-    icon: 'amap',
+    icon: 'file-text',
     links: {
       credentials: 'https://console.amap.com/dev/key/app',
       website: 'https://lbs.amap.com',
