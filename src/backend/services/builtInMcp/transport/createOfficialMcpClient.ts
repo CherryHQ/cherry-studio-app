@@ -10,6 +10,8 @@ type HttpTransportConfig = Extract<MCPClientConfig['transport'], { type: 'http' 
 
 type OfficialMcpConnection = {
   readonly url: string;
+  /** Provider-owned authorization challenges can appear in HTTP or JSON-RPC error envelopes. */
+  readonly inspectResponse?: (response: Response, signal?: AbortSignal) => Promise<void>;
 };
 
 /** Shared fixed-endpoint HTTP mechanics; platform authorization belongs to the plugin. */
@@ -73,6 +75,12 @@ export async function createOfficialMcpClient(
         redirect: 'error',
         signal: init?.signal ?? AbortSignal.timeout(CONNECTION_TIMEOUT_MS),
       });
+      try {
+        await connection.inspectResponse?.(response, init?.signal ?? undefined);
+      } catch (error) {
+        void response.body?.cancel().catch(() => undefined);
+        throw error;
+      }
       // Optional inbound SSE and session cleanup may be unsupported by the server.
       if (!response.ok && !(init?.method === 'GET' && response.status === 405)) {
         void response.body?.cancel().catch(() => undefined);

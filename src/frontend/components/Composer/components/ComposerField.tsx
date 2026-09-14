@@ -2,6 +2,7 @@ import { Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import type { PasteEventPayload } from 'expo-paste-input';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUniwind } from 'uniwind';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getPluginMentionLinkStyles } from '@/frontend/utils/pluginIcons';
@@ -29,6 +30,7 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
   const { inputRef } = useComposerMeta();
   const { activateInput } = useComposerPresentationActions();
   const linkColor = useThemeColor('primary');
+  const { theme } = useUniwind();
 
   const handlePaste = useCallback(
     (payload: PasteEventPayload) => {
@@ -47,9 +49,9 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
 
     return {
       link: mentionStyle,
-      linkVariants: getPluginMentionLinkStyles(linkColor),
+      linkVariants: getPluginMentionLinkStyles(linkColor, theme),
     };
-  }, [linkColor]);
+  }, [linkColor, theme]);
 
   const handleFocus = useCallback<NonNullable<ComposerInputProps['onFocus']>>(() => {
     // Focus is the only event that is allowed to reconnect the dock after a
