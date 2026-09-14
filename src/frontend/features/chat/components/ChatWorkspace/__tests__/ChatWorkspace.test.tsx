@@ -35,12 +35,14 @@ let mockAgentChatSession: {
   status: 'ready';
 };
 
-jest.mock('../../../share', () => ({
-  useShareChatMessage: () => ({ shareAssistantMessage: jest.fn(), sharingMessageId: undefined }),
-}));
-
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
+}));
+
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+  useFocusEffect: (callback: () => (() => void) | void) =>
+    jest.requireActual<typeof import('react')>('react').useEffect(callback, [callback]),
 }));
 
 jest.mock('expo-router/react-navigation', () => ({

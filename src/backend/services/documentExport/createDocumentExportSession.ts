@@ -91,13 +91,13 @@ export function createDocumentExportSession(
         | Awaited<ReturnType<Extract<DocumentExportTarget, { format: 'image' }>['capture']>>
         | undefined;
       const extension =
-        target.format === 'markdown' ? 'md' : target.format === 'html' ? 'html' : 'webp';
+        target.format === 'markdown' ? 'md' : target.format === 'html' ? 'html' : 'png';
       const mediaType =
         target.format === 'markdown'
           ? 'text/markdown'
           : target.format === 'html'
             ? 'text/html'
-            : 'image/webp';
+            : 'image/png';
       const filename = readableFilename(document.title ?? '', { extension, fallback: 'document' });
       if (target.format === 'markdown') {
         text = markdown;
@@ -121,8 +121,6 @@ export function createDocumentExportSession(
           capture = await target.capture({
             html: result.html,
             width: target.presentation.width,
-            maxHeight: 8192,
-            maxPixels: 12_000_000,
             signal,
           });
         }
@@ -135,15 +133,12 @@ export function createDocumentExportSession(
         let artifact: DocumentExportArtifact;
         if (capture) {
           if (
-            !Number.isInteger(capture.width) ||
-            !Number.isInteger(capture.height) ||
+            !Number.isSafeInteger(capture.width) ||
+            !Number.isSafeInteger(capture.height) ||
             capture.width < 1 ||
-            capture.height < 1 ||
-            capture.width * capture.height > 12_000_000 ||
-            capture.width > 16383 ||
-            capture.height > 16383
+            capture.height < 1
           )
-            throw new DocumentExportError('size-limit');
+            throw new DocumentExportError('image-size-limit');
           await new File(capture.uri).copy(file);
           artifact = {
             id,
