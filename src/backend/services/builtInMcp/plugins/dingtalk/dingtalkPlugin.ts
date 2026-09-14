@@ -11,8 +11,7 @@ export const dingtalkPlugin: PluginDefinition = {
     id: 'dingtalk',
     icon: 'file-text',
     links: {
-      credentials:
-        'https://github.com/CherryHQ/cherry-studio-app/blob/v0.2/docs/guides/dingtalk-plugin-authorization.md',
+      credentials: 'https://mcp.dingtalk.com',
       website: 'https://www.dingtalk.com',
       privacy:
         'https://terms.alicdn.com/legal-agreement/terms/suit_bu1_ali_third/suit_bu1_ali_third202003041308_00006.html',

@@ -1503,9 +1503,9 @@
   "plugins.catalog.dingtalk.examples.first": "“Review my schedule and tasks for today and help plan my work.”",
   "plugins.catalog.dingtalk.examples.second": "“Save this discussion as a document and create the related tasks.”",
   "plugins.catalog.dingtalk.access": "Authorize each capability in the platform. Organization approval may be required. Only supported, currently authorized tools are exposed.",
-  "plugins.catalog.dingtalk.credentialLink": "Read the official cloud connection guide",
+  "plugins.catalog.dingtalk.credentialLink": "Open the DingTalk MCP platform",
   "plugins.catalog.dingtalk.authMethods.official_mcp.label": "Import official MCP configuration",
   "plugins.catalog.dingtalk.authMethods.official_mcp.setup": "Authorize access in the platform, then paste one official connection URL or JSON containing up to three services. The configuration may contain credentials; enter it only here. Setup checks tool discovery only.",
   "plugins.catalog.dingtalk.fields.configuration.label": "Official MCP URL or JSON configuration",
-  "plugins.catalog.dingtalk.fields.configuration.error": "Enter an official cloud URL or JSON configuration supported by the guide."
+  "plugins.catalog.dingtalk.fields.configuration.error": "Enter a supported official DingTalk MCP URL or JSON configuration."
 }
