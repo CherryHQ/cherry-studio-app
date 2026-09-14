@@ -109,6 +109,28 @@ it('does not repeat a failed completion until a new attempt is authorized', asyn
   expect(seen.at(-1)).toMatchObject({ error: undefined, connection });
 });
 
+it('retains a failed completion throughout passive checks and foreground reattachment', async () => {
+  state = { status: 'ready', attemptId: 'attempt-1' };
+  flow.complete.mockRejectedValueOnce(new PluginError('storage', 'safe'));
+  const { observer, seen, detach } = observe();
+  await flush();
+  seen.length = 0;
+  observer.check();
+  await flush();
+  expect(seen.length).toBeGreaterThan(0);
+  expect(seen.every((item) => item.error === 'storage')).toBe(true);
+
+  detach();
+  const resumed: PluginAuthorizationObservation[] = [];
+  observer.observe((item) => resumed.push(item));
+  await flush();
+  expect(resumed.every((item) => item.error === 'storage')).toBe(true);
+  expect(flow.complete).toHaveBeenCalledTimes(1);
+
+  observer.clearError();
+  expect(resumed.at(-1)?.error).toBeUndefined();
+});
+
 it('drops session progress when the last observer detaches so a later visit starts clean', async () => {
   state = { status: 'ready', attemptId: 'attempt-1' };
   const { observer, detach } = observe();

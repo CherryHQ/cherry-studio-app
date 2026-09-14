@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { ContextMenuExclusion } from '@cherrystudio/ui/components';
 
 import { FileEntryAttachment } from '@/frontend/components/FileEntryPreview';
 import type { FileEntryId } from '@/shared/data/types/file';
@@ -10,11 +10,11 @@ type MessageFilePart = Extract<CherryMessagePart, { type: 'file' }>;
 /** Assistant deliverables: images themselves, and file rows for other kinds. */
 export function GeneratedFileStrip({ parts }: { parts: readonly MessageFilePart[] }) {
   return (
-    <View className="w-full gap-2">
+    <ContextMenuExclusion className="w-full gap-2">
       {parts.map((part) => {
         const entryId = readCherryMeta(part)?.fileEntryId as FileEntryId | undefined;
         return entryId ? <FileEntryAttachment entryId={entryId} key={part.url} /> : null;
       })}
-    </View>
+    </ContextMenuExclusion>
   );
 }

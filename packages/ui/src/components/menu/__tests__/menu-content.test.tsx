@@ -1,10 +1,16 @@
+import * as ReactNative from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MenuContent } from '../menu-content';
+import { MenuPanel } from '../menu-panel';
 
 const mockOpenChange = jest.fn();
 const mockClosed = jest.fn();
 const anchor = { height: 48, pageX: 16, pageY: 120, width: 200 };
+
+jest.mock('../use-menu-motion', () => ({
+  useMenuMotion: () => ({ isVisible: true, progress: { value: 1 } }),
+}));
 
 jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual('react');
@@ -85,6 +91,72 @@ describe('MenuContent', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
     jest.restoreAllMocks();
+  });
+
+  it.each([
+    { name: 'ordinary touch', pageX: 100, pageY: 240, left: 100, top: 248 },
+    { name: 'lower-right edge', pageX: 390, pageY: 730, left: 176, top: 602 },
+    { name: 'upper-left edge', pageX: 2, pageY: 2, left: 16, top: 40 },
+  ])('positions a pointer menu within the safe area: $name', ({ pageX, pageY, left, top }) => {
+    jest.spyOn(ReactNative, 'useWindowDimensions').mockReturnValue({
+      fontScale: 1,
+      height: 800,
+      scale: 1,
+      width: 400,
+    });
+    act(() => {
+      renderer = create(
+        <MenuContent
+          anchor={{ height: 0, pageX, pageY, width: 0 }}
+          isOpen
+          items={[{ id: 'copy', label: 'Copy', onPress: jest.fn() }]}
+          onClose={mockOpenChange}
+          onClosed={mockClosed}
+        />,
+      );
+    });
+    act(() => {
+      renderer!.root.findByType(MenuPanel).props.onLayout({
+        nativeEvent: { layout: { height: 120 } },
+      });
+    });
+
+    expect(renderer!.root.findByProps({ role: 'menu' }).props.style).toMatchObject({
+      height: 120,
+      left,
+      top,
+      width: 208,
+    });
+  });
+
+  it('keeps a button menu aligned to the right edge of its measured trigger', () => {
+    jest.spyOn(ReactNative, 'useWindowDimensions').mockReturnValue({
+      fontScale: 1,
+      height: 800,
+      scale: 1,
+      width: 400,
+    });
+    act(() => {
+      renderer = create(
+        <MenuContent
+          anchor={{ height: 44, pageX: 200, pageY: 240, width: 44 }}
+          isOpen
+          items={[{ id: 'copy', label: 'Copy', onPress: jest.fn() }]}
+          onClose={mockOpenChange}
+          onClosed={mockClosed}
+        />,
+      );
+    });
+    act(() => {
+      renderer!.root.findByType(MenuPanel).props.onLayout({
+        nativeEvent: { layout: { height: 120 } },
+      });
+    });
+
+    expect(renderer!.root.findByProps({ role: 'menu' }).props.style).toMatchObject({
+      left: 36,
+      top: 292,
+    });
   });
 
   it('hands the selected action to dismissal without running it in the open menu', () => {
