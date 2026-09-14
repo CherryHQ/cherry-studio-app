@@ -80,8 +80,7 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
       signal.throwIfAborted();
       this.project();
       if (this.pending && this.pending.status !== 'expired') return this.project();
-      // Bot discovery does not establish employee identity. Require an explicit disconnect
-      // before authorizing another bot or replacing an imported MCP connection.
+      // Require an explicit disconnect before replacing the active bot authorization.
       if (await this.store.getCurrentAuthorizationId())
         throw new PluginError('requires-disconnect', 'Disconnect Wecom before authorizing a bot.');
       const challenge = await wecomBotApi.begin(signal);

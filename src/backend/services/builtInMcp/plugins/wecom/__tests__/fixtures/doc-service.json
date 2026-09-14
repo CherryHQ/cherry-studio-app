@@ -1,0 +1,287 @@
+{
+  "source": "WecomTeam/wecom-cli@1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08; public discovery 2026-09-14",
+  "schemas": {
+    "OaDocCreateReq": {
+      "type": "object",
+      "description": "OaDocCreate (新建文档)",
+      "required": ["doc_name"],
+      "properties": {
+        "content": {
+          "type": "string",
+          "maxLength": 1048576,
+          "description": "纯文本初始内容，doc_type=doc 时有效，不传则不设置初始内容"
+        },
+        "content_path": {
+          "type": "string",
+          "description": "同 file_path，兼容模型传 content_path 字段名",
+          "x-wecom-file-upload": true,
+          "hidden": true
+        },
+        "content_type": {
+          "type": "string",
+          "enum": ["text", "markdown"],
+          "description": "内容格式，doc_type=doc 时传 text 不传则默认 text"
+        },
+        "doc_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "文档标题"
+        },
+        "doc_requests": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 100,
+          "description": "document 节点编辑写入，doc_type=doc 时有效，与 content 二选一，不传则不设置初始内容",
+          "items": {
+            "type": "object",
+            "$ref": "OaUpdateRequest"
+          }
+        },
+        "doc_type": {
+          "type": "string",
+          "enum": ["doc", "sheet", "smartsheet"],
+          "description": "文档类型，不传则默认为 doc"
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 100,
+          "description": "初始化字段列表，doc_type=smartsheet 时有效，不传则使用默认字段",
+          "items": {
+            "type": "object",
+            "$ref": "OaField"
+          }
+        },
+        "file_path": {
+          "type": "string",
+          "description": "纯文本初始内容路径，与 content 二选一",
+          "x-wecom-file-upload": true
+        },
+        "grid_data": {
+          "type": "object",
+          "$ref": "OaGridData",
+          "description": "写入默认子表的表格数据，doc_type=sheet 时有效，不传则创建空表格"
+        },
+        "sheet_title": {
+          "type": "string",
+          "maxLength": 255,
+          "description": "子表名称，doc_type=smartsheet 时有效，不传则使用默认名称"
+        }
+      }
+    },
+    "OaDocCreateTypedRsp": {
+      "type": "object",
+      "properties": {
+        "doc_name": {
+          "type": "string",
+          "description": "文档名"
+        },
+        "docid": {
+          "type": "string",
+          "description": "新建的文档 ID"
+        },
+        "url": {
+          "type": "string",
+          "description": "文档访问链接"
+        }
+      }
+    },
+    "OaWordGetContentReq": {
+      "type": "object",
+      "description": "OaWordGetContent (读取 Word 内容)",
+      "required": ["docid"],
+      "properties": {
+        "content_type": {
+          "type": "string",
+          "enum": ["text", "markdown", "ooxml"],
+          "description": "返回的文档内容格式，不传则默认为 markdown"
+        },
+        "docid": {
+          "type": "string",
+          "minLength": 5,
+          "description": "支持文档的 docid 和 url"
+        }
+      }
+    },
+    "OaWordGetContentTypedRsp": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "文档内容路径（内容不长时直接返回原文）"
+        },
+        "document": {
+          "type": "object",
+          "$ref": "OaNode",
+          "description": "文档对象，content_type 为 ooxml 格式时返回"
+        },
+        "errcode": {
+          "type": "integer",
+          "format": "int32",
+          "description": "错误码"
+        },
+        "errmsg": {
+          "type": "string",
+          "description": "错误信息"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "文档内容路径（内容超长时框架自动落盘为文件，值为文件路径）",
+          "x-wecom-file-save": {
+            "fileName": "doc_content"
+          }
+        },
+        "name": {
+          "type": "string",
+          "description": "文档标题"
+        },
+        "url": {
+          "type": "string",
+          "description": "文档链接"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "description": "文档版本"
+        }
+      }
+    },
+    "OaWordAppendContentReq": {
+      "type": "object",
+      "description": "OaWordAppendContent (追加 Word 内容)",
+      "required": ["docid"],
+      "properties": {
+        "content": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 10000,
+          "description": "要追加的文档内容，支持格式：text"
+        },
+        "docid": {
+          "type": "string",
+          "minLength": 5,
+          "description": "支持文档的 docid 和 url"
+        }
+      }
+    },
+    "OaWordAppendContentTypedRsp": {
+      "type": "object",
+      "properties": {
+        "errcode": {
+          "type": "integer",
+          "format": "int32",
+          "description": "错误码"
+        },
+        "errmsg": {
+          "type": "string",
+          "description": "错误信息"
+        }
+      }
+    },
+    "OaWordOverwriteContentReq": {
+      "type": "object",
+      "description": "OaWordOverwriteContent (全量覆盖 Word 内容)",
+      "required": ["docid"],
+      "properties": {
+        "content": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 1000000,
+          "description": "文档内容"
+        },
+        "content_path": {
+          "type": "string",
+          "description": "同 file_path，兼容模型传 content_path 字段名",
+          "x-wecom-file-upload": true,
+          "hidden": true
+        },
+        "content_type": {
+          "type": "string",
+          "enum": ["text", "markdown"],
+          "description": "内容格式"
+        },
+        "docid": {
+          "type": "string",
+          "minLength": 5,
+          "description": "支持文档的 docid 和 url"
+        },
+        "file_path": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 1000000,
+          "description": "文档内容地址，content 二选一",
+          "x-wecom-file-upload": true
+        }
+      }
+    },
+    "OaWordOverwriteContentTypedRsp": {
+      "type": "object",
+      "properties": {
+        "errcode": {
+          "type": "integer",
+          "format": "int32",
+          "description": "错误码"
+        },
+        "errmsg": {
+          "type": "string",
+          "description": "错误信息"
+        }
+      }
+    }
+  },
+  "methods": {
+    "create": {
+      "path": "/doc/create",
+      "http_method": "POST",
+      "response": {
+        "$ref": "OaDocCreateTypedRsp"
+      },
+      "description": "新建文档，支持 doc/sheet/smartsheet 文档类型，可设置初始内容和字段",
+      "request": {
+        "$ref": "OaDocCreateReq"
+      }
+    }
+  },
+  "resources": {
+    "contents": {
+      "methods": {
+        "get": {
+          "path": "/doc/contents/get",
+          "path_alias": ["/doc/get", "/doc/read"],
+          "http_method": "POST",
+          "x-wecom-long-task": true,
+          "description": "读取 Word 文档内容，支持 text 和 ooxml 格式返回",
+          "request": {
+            "$ref": "OaWordGetContentReq"
+          },
+          "response": {
+            "$ref": "OaWordGetContentTypedRsp"
+          }
+        },
+        "append": {
+          "path": "/doc/contents/append",
+          "http_method": "POST",
+          "response": {
+            "$ref": "OaWordAppendContentTypedRsp"
+          },
+          "description": "在 Word 文档末尾追加文本内容",
+          "request": {
+            "$ref": "OaWordAppendContentReq"
+          }
+        },
+        "overwrite": {
+          "path": "/doc/contents/overwrite",
+          "http_method": "POST",
+          "response": {
+            "$ref": "OaWordOverwriteContentTypedRsp"
+          },
+          "description": "用新内容全量覆盖 Word 文档的全部内容，原内容将被替换",
+          "request": {
+            "$ref": "OaWordOverwriteContentReq"
+          }
+        }
+      }
+    }
+  }
+}

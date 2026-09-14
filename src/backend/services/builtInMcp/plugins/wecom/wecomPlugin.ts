@@ -1,8 +1,10 @@
+import * as z from 'zod';
+
 import type { PluginDefinition } from '../../pluginDefinition';
 import { createWecomClient } from './createWecomClient';
 import { wecomGuide } from './guide';
 import { WecomAuthorizationRuntime } from './WecomAuthorizationRuntime';
-import { parseWecomConfig } from './wecomCredentials';
+import { parseWecomResponse } from './wecomBotApi';
 import { WECOM_TOOL_POLICY } from './wecomTools';
 
 export const wecomPlugin: PluginDefinition = {
@@ -27,17 +29,15 @@ export const wecomPlugin: PluginDefinition = {
       // The local bot client binds credentials to the official CLI gateway.
       createRequestAuthorization: () => ({ apply() {} }),
     },
-    {
-      id: 'official_mcp',
-      kind: 'credentials',
-      requiresDisconnect: true,
-      fields: [{ id: 'configuration', secret: true, maxLength: 16_384 }],
-      encodeCredentials: (fields) => parseWecomConfig(fields.configuration),
-      // Each imported session binds its own URL and headers in createWecomClient.
-      createRequestAuthorization: () => ({ apply() {} }),
-    },
   ],
   createClient: createWecomClient,
-  // Discovery verifies access only, not the identity of an individual employee or organization.
-  validation: { accountLabel: () => 'Official MCP' },
+  // The public tool directory is not proof that a credential works. Read the session identity.
+  validation: {
+    tool: 'wecom_identity_whoami',
+    args: {},
+    accountLabel(output) {
+      parseWecomResponse(z.object({ extra_identity_context: z.string().trim().min(1) }), output);
+      return 'WeCom';
+    },
+  },
 };

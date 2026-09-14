@@ -1,42 +1,102 @@
 import type { PluginToolPolicy } from '../../pluginDefinition';
 
-// Reviewed MCP names from TencentCloud-Lighthouse/openclaw-wecom at
-// 5edda565415e29e30f6388c2160f750bb026ec32. CLI command names are not MCP aliases.
-export const WECOM_MCP_TOOL_POLICY = {
-  create_doc: 'write',
-  edit_doc_content: 'write',
-  get_todo_list: 'read',
-  get_todo_detail: 'read',
-  create_todo: 'write',
-  update_todo: 'write',
-  change_todo_user_status: 'write',
-  get_schedule_list_by_range: 'read',
-  get_schedule_detail: 'read',
-  check_availablity: 'read',
-  create_schedule: 'write',
-  update_schedule: 'write',
-} satisfies PluginToolPolicy;
+// Official non-file command paths from WecomTeam/wecom-cli at
+// 1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08. Effects are owned locally, never by discovery.
+export const WECOM_SERVICES = {
+  identity: { whoami: 'read' },
+  contact: { 'users search': 'read' },
+  doc: {
+    create: 'write',
+    search: 'read',
+    'contents get': 'read',
+    'contents append': 'write',
+    'contents overwrite': 'write',
+    'names update': 'write',
+    'members update': 'write',
+    'rules update': 'write',
+  },
+  smartpage: {
+    create: 'write',
+    'pages get': 'read',
+    'pages update': 'write',
+    'blocks update': 'write',
+    'databases get': 'read',
+  },
+  sheet: {
+    create: 'write',
+    get: 'read',
+    'ranges get': 'read',
+    'contents update': 'write',
+    'rows append': 'write',
+    'subsheets add': 'write',
+    'subsheets delete': 'write',
+  },
+  smartsheet: {
+    create: 'write',
+    get: 'read',
+    'sheets list': 'read',
+    'sheets add': 'write',
+    'sheets update': 'write',
+    'sheets delete': 'write',
+    'fields list': 'read',
+    'fields add': 'write',
+    'fields update': 'write',
+    'fields delete': 'write',
+    'records list': 'read',
+    'records query': 'read',
+    'records add': 'write',
+    'records update': 'write',
+    'records delete': 'write',
+    'views list': 'read',
+    'views add': 'write',
+    'views update': 'write',
+    'views delete': 'write',
+    'charts list': 'read',
+    'charts add': 'write',
+    'charts update': 'write',
+    'charts delete': 'write',
+  },
+  todo: {
+    list: 'read',
+    get: 'read',
+    create: 'write',
+    update: 'write',
+    finish: 'write',
+    delete: 'write',
+  },
+  calendar: {
+    'schedules list': 'read',
+    'schedules get': 'read',
+    'schedules search': 'read',
+    'schedules create': 'write',
+    'schedules update': 'write',
+    'schedules cancel': 'write',
+    'schedules free list': 'read',
+  },
+  meeting: {
+    list: 'read',
+    get: 'read',
+    search: 'read',
+    'original get': 'read',
+    'rooms buildings list': 'read',
+    'rooms search': 'read',
+    create: 'write',
+    update: 'write',
+    cancel: 'write',
+  },
+  mail: { search: 'read', get: 'read', send: 'write' },
+  message: { 'aibot sessions list': 'read', 'aibot send': 'write' },
+} satisfies Record<string, PluginToolPolicy>;
 
-// Reviewed command paths from WecomTeam/wecom-cli at
-// 1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08, skills/wecomcli-{doc,todo,calendar}.
-// Separate tool names preserve the different request and response contracts of MCP and CLI.
-export const WECOM_BOT_METHODS = {
-  bot_doc_get: { path: ['doc', 'contents', 'get'], effect: 'read' },
-  bot_todo_list: { path: ['todo', 'list'], effect: 'read' },
-  bot_todo_get: { path: ['todo', 'get'], effect: 'read' },
-  bot_todo_create: { path: ['todo', 'create'], effect: 'write' },
-  bot_todo_update: { path: ['todo', 'update'], effect: 'write' },
-  bot_todo_finish: { path: ['todo', 'finish'], effect: 'write' },
-  bot_schedule_list: { path: ['calendar', 'schedules', 'list'], effect: 'read' },
-  bot_schedule_get: { path: ['calendar', 'schedules', 'get'], effect: 'read' },
-  bot_schedule_create: { path: ['calendar', 'schedules', 'create'], effect: 'write' },
-  bot_schedule_update: { path: ['calendar', 'schedules', 'update'], effect: 'write' },
-  bot_schedule_freebusy: { path: ['calendar', 'schedules', 'free', 'list'], effect: 'read' },
-} as const;
-
-export const WECOM_TOOL_POLICY: PluginToolPolicy = {
-  ...WECOM_MCP_TOOL_POLICY,
-  ...Object.fromEntries(
-    Object.entries(WECOM_BOT_METHODS).map(([name, method]) => [name, method.effect]),
+export const WECOM_BOT_METHODS = Object.fromEntries(
+  Object.entries(WECOM_SERVICES).flatMap(([service, methods]) =>
+    Object.entries(methods).map(([method, effect]) => {
+      const path = [service, ...method.split(' ')];
+      return [`wecom_${path.join('_')}`, { path, effect }];
+    }),
   ),
-};
+) as Record<string, { path: string[]; effect: 'read' | 'write' }>;
+
+export const WECOM_TOOL_POLICY: PluginToolPolicy = Object.fromEntries(
+  Object.entries(WECOM_BOT_METHODS).map(([name, method]) => [name, method.effect]),
+);
