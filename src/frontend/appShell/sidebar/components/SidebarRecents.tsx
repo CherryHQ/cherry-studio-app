@@ -1,13 +1,18 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { ActionMenu, ContentState, type MenuItem } from '@cherrystudio/ui/components';
-import { Link } from 'expo-router';
+import { cn } from '@cherrystudio/ui/utils';
+import { Link, useGlobalSearchParams, usePathname } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/appShell/navigation';
-import { chatHref } from '@/frontend/appShell/navigation/chat';
+import {
+  chatHref,
+  type ChatRouteParamsInput,
+  parseChatRoute,
+} from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import {
   SessionListProvider,
@@ -85,6 +90,14 @@ function SidebarRecentsView({ registerEndReachedHandler }: SidebarRecentsProps) 
 
 function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
+  // The drawer sits outside the chat screen's local route context.
+  const params = useGlobalSearchParams<ChatRouteParamsInput>();
+  const pathname = usePathname();
+  const route = parseChatRoute(params);
+  const selectedSessionId =
+    pathname === '/' && route.status === 'ready' && route.target.kind === 'session'
+      ? route.target.sessionId
+      : undefined;
   const [isShowingAllSessions, setIsShowingAllSessions] = useState(false);
   const [visibleSessionLimit, setVisibleSessionLimit] = useState<number>(
     appSidebar.recentSessionLimit,
@@ -171,6 +184,7 @@ function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsP
       {visibleSessions.map((session) => (
         <SidebarSessionRow
           key={session.id}
+          isSelected={session.id === selectedSessionId}
           onCloseDrawer={closeDrawer}
           onDelete={requestDelete}
           onRename={requestRename}
@@ -269,13 +283,20 @@ function SidebarAgentRow({ agent }: { agent: Agent }) {
 }
 
 type SidebarSessionRowProps = {
+  isSelected: boolean;
   onCloseDrawer: () => void;
   onDelete: (session: AgentSessionEntity) => void;
   onRename: (session: AgentSessionEntity) => void;
   session: AgentSessionEntity;
 };
 
-function SidebarSessionRow({ onCloseDrawer, onDelete, onRename, session }: SidebarSessionRowProps) {
+function SidebarSessionRow({
+  isSelected,
+  onCloseDrawer,
+  onDelete,
+  onRename,
+  session,
+}: SidebarSessionRowProps) {
   const { t } = useTranslation();
   const href = chatHref({ kind: 'session', sessionId: session.id });
   const menuItems: readonly ContextMenuLinkItem[] = [
@@ -296,12 +317,19 @@ function SidebarSessionRow({ onCloseDrawer, onDelete, onRename, session }: Sideb
     <ContextMenuLink href={href} items={menuItems}>
       <Pressable
         accessibilityRole="link"
-        className="w-full active:bg-sidebar-accent"
+        accessibilityState={{ selected: isSelected }}
+        className={cn('w-full active:bg-sidebar-accent', isSelected && 'bg-secondary')}
         onPress={onCloseDrawer}
         testID={`sidebar-session-${session.id}`}
       >
         <View className="flex-row items-center gap-2 px-5 py-2.5">
-          <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+          <Text
+            className={cn(
+              'min-w-0 flex-1 text-base text-sidebar-foreground',
+              isSelected && 'font-medium',
+            )}
+            numberOfLines={1}
+          >
             {session.title || t('session.list.untitled')}
           </Text>
           <SessionStatus sessionId={session.id} />
