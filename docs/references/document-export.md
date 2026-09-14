@@ -239,8 +239,8 @@ payload or media view is mounted inside a selection row.
 
 The original chat list and composer remain mounted with unchanged layout and draft state. Only the
 selected summary row and count subscribe to an individual toggle. Cancel/native Back closes the
-selector. Returning from the export preview retains the selection; changing route identity resets
-it. The selector has no per-row local state and can recycle rows by message ID.
+selector. Closing the export preview retains the selection; changing route identity resets it. The
+selector has no per-row local state and can recycle rows by message ID.
 
 Confirmation resolves exactly the selected persisted messages in one bounded ID query,
 and supplies them in chronological order to `/document-export`. Same-turn questions are included
@@ -248,8 +248,10 @@ only when selected. Unselected pending messages do not block export. A conversat
 than 128 messages; the existing section limit applies only to the selection. Missing/unfinished
 selected messages, failed reads, and exceeded content budgets produce localized feedback without
 silently dropping content. Cancelling preparation or unmounting/backgrounding stops pending reads.
-Returning from the preview keeps the selection editable. The preview is an independent fullscreen
-modal using the application theme and its own close action.
+Closing the preview keeps the selection editable. Once the system share sheet closes, the preview
+dismisses to the chat route the source supplied. Neither platform reports whether the user
+delivered or cancelled, so both outcomes return to the chat. The preview is an independent
+fullscreen modal using the application theme and its own close action.
 WebP is the default; a compact menu switches to Markdown or HTML on demand. Images include straight
 theme-aware margins, conversation content and a compact signature: the Cherry Studio name on the left,
 with the Cherry logo, a fine vertical divider and local export time on the right. The timestamp uses

@@ -14,8 +14,9 @@ subscribe to the count. Individual toggles leave unrelated rows and action consu
 These are source-level guarantees; device rendering/scroll performance is not yet measured.
 
 `ChatShareSelectionProvider` owns IDs for one route identity. Cancel/native Back closes this page;
-returning from the export preview retains the existing selection. At most 128 messages can be
-selected; an empty selection cannot be confirmed. Leaving the page cancels pending export reads.
+closing the export preview retains the existing selection, while a closed system share sheet
+dismisses both pages to the chat. At most 128 messages can be selected; an empty selection cannot
+be confirmed. Leaving the page cancels pending export reads.
 
 Confirmation reads only the selected persisted messages through a single bounded ID query and
 restores chronological order, regardless of click order. It does not implicitly include questions

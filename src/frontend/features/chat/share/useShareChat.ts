@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
 
 import { useDocumentExport } from '@/frontend/appShell/documentExport';
+import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { DocumentExportError } from '@/shared/contracts/documentExport';
 import type { ListAgentSessionMessagesQueryParams } from '@/shared/data/api/schemas/agentSessionMessages';
@@ -92,6 +93,7 @@ export function useShareChat(sessionId?: string) {
                   },
                 }
               : undefined,
+            returnTo: chatHref({ kind: 'session', sessionId }),
           });
           if (outcome === 'busy' && mounted.current)
             toast.show({ label: t('documentExport.errors.busy'), variant: 'danger' });

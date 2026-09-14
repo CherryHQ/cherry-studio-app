@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { type Href, router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 
 import { useBackendModule } from '@/frontend/data';
@@ -17,11 +17,14 @@ export function useDocumentExport() {
       input,
       initialFormat = 'image',
       option,
+      returnTo,
     }: {
       input: DocumentExportInput;
       initialFormat?: ExportFormat;
       /** An initially unchecked source option, with a complete document for its unchecked state. */
       option?: { label: string; uncheckedInput: DocumentExportInput };
+      /** Dismissed to after the system share sheet closes; without it the page stays open. */
+      returnTo?: Href;
     }): Promise<'closed' | 'busy'> => {
       const session = module.createSession(input);
       let uncheckedSession: DocumentExportSession | undefined;
@@ -35,6 +38,7 @@ export function useDocumentExport() {
         session,
         initialFormat,
         option && uncheckedSession ? { label: option.label, uncheckedSession } : undefined,
+        returnTo,
       );
       if (!request) {
         await Promise.allSettled([session.dispose(), uncheckedSession?.dispose()]);

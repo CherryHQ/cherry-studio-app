@@ -2,9 +2,11 @@
 
 Owns an independent fullscreen share layer, compact format menu, preview, bounded HTML capture and
 a single Share action. The root stack presents it as a fullscreen modal without the regular route
-header. The layer owns its safe areas, close action and the application theme; closing returns
-to the caller's existing selection. Image is the default format. The Markdown preview reads the
-frozen in-memory document without creating a file.
+header. The layer owns its safe areas, close action and the application theme. Closing returns to
+the caller; once the system share sheet closes, the layer dismisses to the caller's optional
+`returnTo` href instead, because neither platform distinguishes delivery from cancellation. Image
+is the default format. The Markdown preview reads the frozen in-memory document without creating a
+file.
 It renders leaf prose with the existing Markdown component and composes the actual CherryUI
 `MessagePart.Process` and `MessagePart.Reasoning` components for disclosures. Both start collapsed
 and retain independent toggles; the source snapshot has no live chat reads.

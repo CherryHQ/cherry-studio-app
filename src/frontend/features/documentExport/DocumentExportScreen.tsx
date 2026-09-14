@@ -10,7 +10,7 @@ import {
   useToast,
 } from '@cherrystudio/ui/components';
 import { resolveTypographyScale } from '@cherrystudio/ui/utils';
-import { router, useLocalSearchParams } from 'expo-router';
+import { type Href, router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -81,6 +81,7 @@ function DocumentExportRoute({ requestId }: { requestId?: string }) {
         <DocumentExportBody
           initialFormat={request.initialFormat}
           option={request.option}
+          returnTo={request.returnTo}
           session={request.session}
         />
       ) : (
@@ -96,10 +97,12 @@ function DocumentExportBody({
   session: checkedSession,
   initialFormat,
   option,
+  returnTo,
 }: {
   session: DocumentExportSession;
   initialFormat: ExportFormat;
   option?: DocumentExportOption;
+  returnTo?: Href;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -240,6 +243,7 @@ function DocumentExportBody({
     sharing.current = controller;
     setDeliveryPresentation(previewPresentation);
     setIsSharing(true);
+    let sheetClosed = false;
     try {
       const selected = await getArtifact(controller.signal);
       const file = await session.save(selected, controller.signal);
@@ -251,6 +255,7 @@ function DocumentExportBody({
       }
       controller.signal.throwIfAborted();
       await shareFile(file);
+      sheetClosed = true;
     } catch {
       if (!controller.signal.aborted)
         toast.show({ label: t('documentExport.deliveryFailed'), variant: 'danger' });
@@ -261,6 +266,9 @@ function DocumentExportBody({
         setDeliveryPresentation(undefined);
       }
     }
+    // Both platforms resolve the sheet on dismissal without saying whether the user
+    // delivered or cancelled, so either outcome returns to the source.
+    if (sheetClosed && returnTo && !controller.signal.aborted) router.dismissTo(returnTo);
   };
 
   return (
