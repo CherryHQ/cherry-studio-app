@@ -47,7 +47,7 @@ export function CredentialConnect({
   const [isConnected, setIsConnected] = useState(false);
   const [invalidFields, setInvalidFields] = useState<Set<string>>(() => new Set());
   const name = t(`plugins.catalog.${entry.id}.name`);
-  const needsConnectionCheck = method.requiresDisconnect && !isConnecting && !isConnected;
+  const needsConnectionCheck = method.requiresDisconnect === true && !isConnecting && !isConnected;
   const requiresDisconnect =
     needsConnectionCheck &&
     connections.data?.some((connection) => connection.pluginId === entry.id);
