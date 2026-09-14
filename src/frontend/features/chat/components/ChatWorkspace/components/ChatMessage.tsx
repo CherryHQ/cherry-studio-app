@@ -16,8 +16,6 @@ import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 import { AssistantMessageUsage } from './AssistantMessageUsage';
 
-const MESSAGE_CONTEXT_MENU_DELAY_MS = 1_500;
-
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
   avatarUri?: null | string;
@@ -162,7 +160,7 @@ function ChatMessageContextMenu({
         ];
 
   return (
-    <ContextMenu delayLongPress={MESSAGE_CONTEXT_MENU_DELAY_MS} items={items}>
+    <ContextMenu items={items}>
       <View accessible={false} className="w-full gap-2">
         {children}
         {/* Keep attachment and text nodes independently reachable. Assistant rows already

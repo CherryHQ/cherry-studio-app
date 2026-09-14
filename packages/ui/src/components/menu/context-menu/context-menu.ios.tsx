@@ -1,34 +1,34 @@
+import { View } from 'react-native';
 import { callback } from 'react-native-nitro-modules';
 
 import type { ContextMenuProps } from '../menu.types';
 import { NativeCherryMenuView, useNativeMenu } from '../use-native-menu';
-import { GestureContextMenu } from './context-menu-gesture';
+import { ContextMenuExclusionContext, useContextMenuTouch } from './context-menu-exclusion';
+
+const EMPTY_NATIVE_ITEMS: [] = [];
 
 /**
- * Default iOS long-press recognition stays system-owned: the native view attaches a
+ * iOS long-press recognition stays system-owned: the native view attaches a
  * UIContextMenuInteraction and UIKit arbitrates it against scroll ancestors,
  * cancellation, and accessibility.
  */
-export function ContextMenu({ children, delayLongPress, items }: ContextMenuProps) {
+export function ContextMenu({ children, items }: ContextMenuProps) {
   const { nativeItems, onAction } = useNativeMenu(items);
-
-  // UIContextMenuInteraction does not expose a configurable recognition duration.
-  // Explicit timing uses the existing Cherry menu and native gesture recognizer.
-  if (delayLongPress !== undefined) {
-    return (
-      <GestureContextMenu configuration={{ minDuration: delayLongPress }} items={items}>
-        {children}
-      </GestureContextMenu>
-    );
-  }
-
-  if (items.length === 0) {
-    return children;
-  }
+  const touch = useContextMenuTouch();
 
   return (
-    <NativeCherryMenuView items={nativeItems} onAction={callback(onAction)} trigger="longPress">
-      {children}
-    </NativeCherryMenuView>
+    <ContextMenuExclusionContext value={touch.excludeTouch}>
+      {/* Keep exclusion until a fresh touch. UIKit can cancel RN touches while
+          requesting its menu; clearing on cancellation would re-enable that menu. */}
+      <View collapsable={false} onTouchStart={touch.onTouchStart}>
+        <NativeCherryMenuView
+          items={touch.isTouchExcluded ? EMPTY_NATIVE_ITEMS : nativeItems}
+          onAction={callback(onAction)}
+          trigger="longPress"
+        >
+          {children}
+        </NativeCherryMenuView>
+      </View>
+    </ContextMenuExclusionContext>
   );
 }

@@ -5,7 +5,7 @@ type ExcludeTouch = (event: GestureResponderEvent) => void;
 
 export const ContextMenuExclusionContext = createContext<ExcludeTouch | null>(null);
 
-/** A child-owned interaction region inside a gesture-owned context menu. */
+/** A child-owned interaction region inside a context menu. */
 export function ContextMenuExclusion({ onTouchStart, ...props }: ViewProps) {
   const excludeTouch = use(ContextMenuExclusionContext);
 
@@ -26,7 +26,6 @@ export function useContextMenuTouch() {
   const touch = useRef({
     excludedStart: null as GestureResponderEvent['nativeEvent'] | null,
     isExcluded: false,
-    generation: 0,
   });
   const excludeTouch = useCallback((event: GestureResponderEvent) => {
     // Child touch handlers bubble before the menu's handler. Keep the actual start
@@ -39,7 +38,6 @@ export function useContextMenuTouch() {
     const isExcluded =
       touch.current.excludedStart === event.nativeEvent || event.nativeEvent.touches.length > 1;
     touch.current.isExcluded = isExcluded;
-    touch.current.generation += 1;
     setIsTouchExcluded(isExcluded);
   }, []);
   const onTouchFinish = useCallback((event: GestureResponderEvent) => {
@@ -54,7 +52,6 @@ export function useContextMenuTouch() {
   }, []);
   const interaction = useMemo(
     () => ({
-      getGeneration: () => touch.current.generation,
       isRecognitionBlocked: () => touch.current.isExcluded,
     }),
     [],

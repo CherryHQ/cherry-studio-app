@@ -77,7 +77,6 @@ describe('ChatMessage', () => {
     });
 
     const menu = mockContextMenu.mock.lastCall![0];
-    expect(menu.delayLongPress).toBe(1_500);
     expect(menu.items.map((item) => item.id)).toEqual(['copy', 'share']);
     act(() => menu.items[0].onPress());
     expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'assistant-1', text: 'Answer' });

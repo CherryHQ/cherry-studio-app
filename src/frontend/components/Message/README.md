@@ -263,9 +263,11 @@ and stable render identity.
 
 ## Message Interaction Ownership
 
-The chat's 1.5-second menu covers ordinary message content and whitespace. Child-owned regions use
-CherryUI's `ContextMenuExclusion`; this disables the ancestor recognizer for that touch without
-changing the child's tap, native selection, or scrolling behavior.
+The chat's menu uses the platform's default long-press timing and covers ordinary message content
+and whitespace. Android places the menu near the long-press pointer with screen-edge adjustment;
+iOS delegates placement to UIKit. Child-owned regions use CherryUI's `ContextMenuExclusion`;
+this disables the Android ancestor recognizer or withholds iOS native menu items for that touch without changing
+the child's tap, native selection, or scrolling behavior.
 
 | Region | Interaction owner |
 | --- | --- |

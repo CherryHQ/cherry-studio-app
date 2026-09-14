@@ -17,7 +17,7 @@ const ContextMenuInteractionContext = createContext<ContextMenuInteraction>(
 );
 
 /**
- * Gives descendant context menus the scroll owner's drag and momentum state.
+ * Gives Android context menus the scroll owner's drag and momentum state.
  * A touch that begins during momentum remains blocked for its complete touch
  * sequence, even after that touch stops the momentum animation.
  */

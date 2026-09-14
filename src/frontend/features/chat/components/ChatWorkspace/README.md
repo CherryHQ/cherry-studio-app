@@ -27,14 +27,17 @@ Fork provenance stays on the Session, not in persisted Messages. When the copied
 is present in the paginated window, `ChatWorkspace` inserts a presentation-only system row after it;
 until that boundary loads, the divider remains absent rather than attaching to a page edge.
 
-With message actions enabled, holding a settled user or assistant message for 1.5 seconds opens
-CherryUI's context menu with copy and share. Copy uses the toolbar's existing text projection and
-clipboard action; content without copyable text disables copy. Share opens the existing selector
-with the pressed message selected. Pending messages have no menu actions; their gesture wrapper
-stays mounted so settling does not recreate the streamed body. The list's existing scroll boundary
-cancels menu recognition during drag and momentum. Main-answer text selection stays disabled while
-message actions are enabled. Process details keep their own selection and scrolling inside a
-`ContextMenuExclusion`, as do source entry points, attachments, errors, and the assistant toolbar.
+With message actions enabled, long-pressing a settled user or assistant message opens copy and
+share using the platform's default timing. iOS presents its native context menu; Android positions
+CherryUI's menu at the long-press pointer, adjusted to stay inside the screen's safe area.
+Copy uses the toolbar's existing text projection and clipboard action; content
+without copyable text disables copy. Share opens the existing selector with the pressed message
+selected. Pending messages have no menu actions; their wrapper stays mounted so settling does not
+recreate the streamed body. Android's scroll boundary cancels
+menu recognition during drag and momentum; iOS relies on UIKit arbitration. Main-answer text
+selection stays disabled while message actions are enabled. Process details keep their own
+selection and scrolling inside a `ContextMenuExclusion`, as do source entry points, attachments,
+errors, and the assistant toolbar.
 Holding these regions belongs to the child interaction and does not open the message menu.
 
 `ChatWorkspace` observes the native screen-reader setting once for all rows. When enabled, settled
