@@ -323,3 +323,53 @@ it('withholds Feishu mutation workflows until their read prerequisites are avail
     expect(readable.content).toContain(name);
   }
 });
+
+it.each([
+  ['get_document_content', 'Read a document'],
+  ['search_wikiSpaces', 'Knowledge spaces'],
+  ['search_files', 'Drive files'],
+  ['search_messages_by_keyword', 'Search messages'],
+  ['get_email_by_message_id', 'Read mail'],
+  ['create_draft', 'Draft new mail'],
+  ['send_draft', 'Send an existing draft'],
+  ['get_report_entry_details', 'Work reports'],
+  ['get_user_attendance_record', 'Attendance'],
+  ['get_user_todos_in_current_org', 'Organization tasks'],
+  ['list_calendar_events', 'Calendar events'],
+])(
+  'keeps the DingTalk %s guide without unrelated discovery, domain or send tools',
+  (rawToolName, heading) => {
+    const [guide] = resolveBuiltInPluginGuides([
+      { pluginId: 'dingtalk', serverId: 'dingtalk-connection', rawToolName },
+    ]);
+    expect(guide.content).toContain(`## ${heading}`);
+  },
+);
+
+it('keeps DingTalk mutation workflows out of a read-only connection', () => {
+  const dingtalk = getPluginDefinition('dingtalk')!;
+  const selections = Object.entries(dingtalk.tools).map(([rawToolName, effect]) => ({
+    pluginId: 'dingtalk',
+    serverId: 'dingtalk-connection',
+    rawToolName,
+    effect,
+  }));
+  const [readOnly] = resolveBuiltInPluginGuides(
+    selections.filter(({ effect }) => effect === 'read'),
+  );
+  const [complete] = resolveBuiltInPluginGuides(selections);
+  for (const heading of [
+    'Modify a document',
+    'Populate a newly created document',
+    'Create table records',
+    'Draft new mail',
+    'Draft a reply',
+    'Send an existing draft',
+    'Start an approval',
+    'Complete a task',
+  ]) {
+    expect(readOnly.content).not.toContain(`## ${heading}`);
+    expect(complete.content).toContain(`## ${heading}`);
+  }
+  expect(readOnly.content).not.toContain('update_document');
+});
