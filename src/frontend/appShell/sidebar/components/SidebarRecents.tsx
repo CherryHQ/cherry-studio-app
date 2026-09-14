@@ -326,8 +326,8 @@ function SidebarSessionRow({
       >
         <View
           className={cn(
-            'flex-row items-center gap-2 rounded-lg px-3 py-2.5',
-            isSelected && 'bg-secondary',
+            'flex-row items-center gap-2 rounded-xl px-3 py-2.5',
+            isSelected && 'bg-secondary/70',
           )}
         >
           <Text
