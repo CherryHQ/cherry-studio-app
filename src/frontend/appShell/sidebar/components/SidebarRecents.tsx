@@ -181,16 +181,18 @@ function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsP
 
   return (
     <>
-      {visibleSessions.map((session) => (
-        <SidebarSessionRow
-          key={session.id}
-          isSelected={session.id === selectedSessionId}
-          onCloseDrawer={closeDrawer}
-          onDelete={requestDelete}
-          onRename={requestRename}
-          session={session}
-        />
-      ))}
+      <View className="px-2">
+        {visibleSessions.map((session) => (
+          <SidebarSessionRow
+            key={session.id}
+            isSelected={session.id === selectedSessionId}
+            onCloseDrawer={closeDrawer}
+            onDelete={requestDelete}
+            onRename={requestRename}
+            session={session}
+          />
+        ))}
+      </View>
       {canShowAllSessions ? (
         <Pressable
           accessibilityLabel={t('session.list.viewAll')}
@@ -324,8 +326,8 @@ function SidebarSessionRow({
       >
         <View
           className={cn(
-            'flex-row items-center gap-2 px-5 py-2.5',
-            isSelected && 'bg-secondary-active',
+            'flex-row items-center gap-2 rounded-lg px-3 py-2.5',
+            isSelected && 'bg-secondary',
           )}
         >
           <Text
