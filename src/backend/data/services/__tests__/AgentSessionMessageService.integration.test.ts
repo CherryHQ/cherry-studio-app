@@ -62,6 +62,39 @@ describe('AgentSessionMessageService persistence', () => {
     });
   });
 
+  test('resolves only selected IDs in timeline order within the requested session', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'old-a', text: 'A' });
+    insertMessage(sqlite, { createdAt: 100, id: 'old-b', text: 'B' });
+    insertMessage(sqlite, { createdAt: 200, id: 'unselected', text: 'Unselected' });
+    insertMessage(sqlite, { createdAt: 300, id: 'new', text: 'New' });
+    insertMessage(sqlite, { createdAt: 400, id: 'foreign', text: 'Other session' });
+    insertSession(sqlite, 'session-2');
+    sqlite
+      .prepare('UPDATE agent_session_message SET session_id = ? WHERE id = ?')
+      .run('session-2', 'foreign');
+    // A selected-ID read must not deserialize unrelated history, even between selected rows.
+    sqlite
+      .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
+      .run(JSON.stringify({ version: 99, parts: [] }), 'unselected');
+
+    const page = await agentSessionMessageService.listByCursor('session-1', {
+      ids: ['old-a', 'new', 'foreign', 'old-b', 'missing', 'old-a'],
+    });
+    expect(page.items.map((message) => message.id)).toEqual(['new', 'old-b', 'old-a']);
+    expect(page.nextCursor).toBeUndefined();
+    expect(page.previousCursor).toBeUndefined();
+    await expect(
+      agentSessionMessageService.listByCursor('missing-session', { ids: ['new'] }),
+    ).rejects.toMatchObject({ details: { id: 'missing-session', resource: 'AgentSession' } });
+  });
+
+  test('does not truncate an ID selection to the default history page size', async () => {
+    const ids = Array.from({ length: 128 }, (_, index) => `selected-${index}`);
+    ids.forEach((id, index) => insertMessage(sqlite, { createdAt: index + 1, id, text: id }));
+    const page = await agentSessionMessageService.listByCursor('session-1', { ids });
+    expect(page.items.map((message) => message.id)).toEqual(ids.toReversed());
+  });
+
   test('opens around a message and pages both ways without skipping tied timestamps', async () => {
     for (const id of ['a', 'b', 'c', 'd', 'e', 'f', 'g']) {
       insertMessage(sqlite, { createdAt: 100, id, text: id });

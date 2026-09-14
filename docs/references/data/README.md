@@ -175,7 +175,9 @@ available before automatic deletion or aggregation is introduced.
 
 `MobileAgentHost` persists Agent Session reservations and terminal messages through
 `AgentSessionStore`; `/agent-sessions/:sessionId/messages` exposes newest-first cursor pagination to
-the frontend. Live deltas are protocol events and do not write every token to SQLite.
+the frontend. Its optional `ids` query resolves up to 200 messages within the requested Session in
+the same order, without pagination; it cannot be combined with window or pagination options.
+Live deltas are protocol events and do not write every token to SQLite.
 
 ## Service Graph
 

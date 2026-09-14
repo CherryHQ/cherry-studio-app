@@ -1,11 +1,13 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type {
-  DocumentExportArtifact,
-  DocumentExportSession,
-  DocumentExportTarget,
-  ExportFormat,
+import {
+  DocumentExportError,
+  type DocumentExportArtifact,
+  type DocumentExportSession,
+  type DocumentExportTarget,
+  type ExportFormat,
+  type ExportPresentation,
 } from '@/shared/contracts/documentExport';
 
 import { useDocumentExportPreview } from '../useDocumentExportPreview';
@@ -54,13 +56,15 @@ function Probe({
   session,
   format,
   revision,
+  currentPresentation = presentation,
 }: {
   ref: Ref<Preview>;
   session: DocumentExportSession;
   format: ExportFormat;
   revision: number;
+  currentPresentation?: ExportPresentation;
 }) {
-  const preview = useDocumentExportPreview(session, format, presentation, capture, revision);
+  const preview = useDocumentExportPreview(session, format, currentPresentation, capture, revision);
   useImperativeHandle(ref, () => preview, [preview]);
   return null;
 }
@@ -162,3 +166,114 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+test('a theme change invalidates the old artifact while the new presentation is rendering', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="html" revision={0} />);
+  });
+  expect(ref.current!.state.status).toBe('ready');
+  const pending = deferred<DocumentExportArtifact>();
+  session.render.mockReturnValueOnce(pending.promise);
+  const dark = {
+    ...presentation,
+    colors: { ...presentation.colors, background: 'black', foreground: 'white' },
+  };
+  await act(async () => {
+    renderer?.update(
+      <Probe ref={ref} session={session} format="html" revision={0} currentPresentation={dark} />,
+    );
+  });
+  expect(ref.current!.state.status).toBe('loading');
+  await expect(ref.current!.getArtifact(new AbortController().signal)).rejects.toMatchObject({
+    code: 'busy',
+  });
+  expect(session.render.mock.calls.at(-1)?.[0]).toEqual({ format: 'html', presentation: dark });
+  await act(async () => pending.resolve({ ...htmlArtifact, id: 'dark' }));
+  expect(ref.current!.state).toMatchObject({ status: 'ready', artifact: { id: 'dark' } });
+});
+
+test('an image failure automatically produces a shareable document instead of an error state', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  session.render.mockRejectedValueOnce(new DocumentExportError('image-size-limit'));
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="image" revision={0} />);
+  });
+  expect(ref.current?.state).toEqual({ status: 'ready', artifact: htmlArtifact, fallback: true });
+  expect(session.render.mock.calls.map(([target]) => target.format)).toEqual(['image', 'html']);
+  await expect(ref.current?.getArtifact(new AbortController().signal)).resolves.toBe(htmlArtifact);
+});
+
+test('if HTML also fails, complete Markdown stays available without writing a file until sharing', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession('The entire selection');
+  session.render
+    .mockRejectedValueOnce(new DocumentExportError('capture-failed'))
+    .mockRejectedValueOnce(new DocumentExportError('storage-failed'));
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="image" revision={0} />);
+  });
+  expect(ref.current?.state).toEqual({
+    status: 'markdown',
+    text: 'The entire selection',
+    fallback: true,
+  });
+  expect(session.render).toHaveBeenCalledTimes(2);
+  await ref.current?.getArtifact(new AbortController().signal);
+  expect(session.render.mock.calls.map(([target]) => target.format)).toEqual([
+    'image',
+    'html',
+    'markdown',
+  ]);
+});
+
+test('image resource limits go directly to text instead of repeating the same rejected HTML render', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  session.render.mockRejectedValueOnce(new DocumentExportError('image-resource-limit'));
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="image" revision={0} />);
+  });
+  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Content', fallback: true });
+  expect(session.render).toHaveBeenCalledTimes(1);
+});
+
+test('an HTML failure keeps Markdown shareable without starting image capture', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  session.render.mockRejectedValueOnce(new DocumentExportError('image-resource-limit'));
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="html" revision={0} />);
+  });
+  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Content', fallback: true });
+  await expect(ref.current?.getArtifact(new AbortController().signal)).resolves.toBe(
+    markdownArtifact,
+  );
+  expect(session.render.mock.calls.map(([target]) => target.format)).toEqual(['html', 'markdown']);
+});
+
+test('cancelling an old image request does not start a fallback for the superseded selection', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  let reject!: (error: Error) => void;
+  session.render.mockReturnValueOnce(
+    new Promise((_, fail) => {
+      reject = fail;
+    }),
+  );
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="image" revision={0} />);
+  });
+  const signal = session.render.mock.calls[0][1]!.signal!;
+  await act(async () => {
+    renderer?.update(<Probe ref={ref} session={session} format="markdown" revision={1} />);
+  });
+  expect(signal.aborted).toBe(true);
+  await act(async () => {
+    reject(new DocumentExportError('capture-failed'));
+  });
+  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Content' });
+  expect(session.render).toHaveBeenCalledTimes(1);
+});
