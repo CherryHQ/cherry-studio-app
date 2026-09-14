@@ -19,14 +19,12 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useResolveClassNames } from 'uniwind';
 
 import { focusMenuTarget } from '../../menu/menu-focus';
-import { useMenuPanelRadius } from '../../menu/menu-panel';
+import { MenuSurface } from '../../menu/menu-surface';
 import { useMenuMotion } from '../../menu/use-menu-motion';
 import { Portal } from '../../portal';
 import { usePortalBackgroundIsolation } from '../../portal/portal-accessibility';
-import { SurfaceFrame } from '../../surface/surface-frame';
 import {
   type ComposerPopoverFrame,
   getComposerPopoverLayout,
@@ -144,8 +142,6 @@ function ComposerPopoverPanel({
   const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
   const insets = useSafeAreaInsets();
   const closeFromBack = useEffectEvent(() => onClose('back'));
-  const cornerRadius = useMenuPanelRadius();
-  const surfaceFill = useResolveClassNames('bg-popover');
   const layout = useDerivedValue(() =>
     getComposerPopoverLayout({
       anchor: frame.get(),
@@ -222,8 +218,7 @@ function ComposerPopoverPanel({
     maxWidth,
     transform: [{ translateY: 8 * (1 - progress.get()) }],
   }));
-  // Keep opacity below the material boundary: alpha on a GlassView ancestor
-  // can permanently strip the native glass fill.
+  // Fade the content independently from the shared menu surface.
   const contentStyle = useAnimatedStyle(() => ({
     opacity: Math.min(1, Math.max(0, progress.get())),
   }));
@@ -265,20 +260,11 @@ function ComposerPopoverPanel({
             style={panelStyle}
             testID={testID}
           >
-            <SurfaceFrame
-              className="bg-popover"
-              cornerRadius={cornerRadius}
-              style={surfaceStyle}
-              tintColor={
-                typeof surfaceFill.backgroundColor === 'string'
-                  ? surfaceFill.backgroundColor
-                  : undefined
-              }
-            >
+            <MenuSurface style={surfaceStyle}>
               <Animated.View className="max-h-full shrink" style={contentStyle}>
                 {children}
               </Animated.View>
-            </SurfaceFrame>
+            </MenuSurface>
           </Animated.View>
         </Animated.View>
       </View>

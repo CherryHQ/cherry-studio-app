@@ -498,6 +498,13 @@ The scroll boundary also keeps a drag/momentum cancellation sticky until a fresh
 A touch-cancel event alone is not evidence of scrolling: a successful native long press cancels
 React Native touches too, and must still be allowed to open its menu.
 
+Cherry-rendered menus use an opaque `popover` surface with a soft external shadow, keeping the
+panel distinct from the composer and page. Dark mode layers a neutral `secondary` fill over that
+opaque base for separation from other dark surfaces. The private `MenuSurface` also supplies
+`Composer.Popover`; content clipping stays inside the shadow boundary. Leading icons sit in
+40-point neutral circles within 56-point minimum rows; labels retain `popover-foreground` contrast,
+pressed rows use `secondary-active`, and trailing checkmarks and switches keep their state cues.
+
 Android tap menus own one press target even when their trigger contains a `Button` or `Pressable`.
 The child remains presentation-only; `disabled`, accessibility disabled state, and
 `pointerEvents="none"` all disable the menu trigger. Long-press menus retain the child's ordinary
