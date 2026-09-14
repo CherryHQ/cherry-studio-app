@@ -24,6 +24,7 @@ import { cn } from '../../utils';
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
 const TOP_INSET = 12;
+const MAX_CARD_WIDTH = 720;
 const TOP_CORNER_RADIUS = 32;
 const HEIGHT_RATIOS = {
   compact: 0.4,
@@ -96,6 +97,7 @@ export function BottomSheet(props: BottomSheetProps) {
   } = props;
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const cardWidth = Math.max(0, Math.min(MAX_CARD_WIDTH, windowWidth - insets.left - insets.right));
   const scrimStyle = useResolveClassNames('bg-scrim');
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
@@ -175,7 +177,27 @@ export function BottomSheet(props: BottomSheetProps) {
       onSettle={handleSettle}
       scrimColor={scrimColor}
     >
-      <View style={[styles.layout, { height: cardHeight, width: '100%' }]}>
+      <View
+        style={[
+          styles.layout,
+          {
+            height: cardHeight,
+            width: '100%',
+            paddingLeft: insets.left,
+            paddingRight: insets.right,
+          },
+        ]}
+      >
+        {/* The native host keeps its full-window scrim. The transparent space
+            beside a bounded card must dismiss just like the scrim above it. */}
+        <Pressable
+          accessibilityElementsHidden
+          accessible={false}
+          disabled={!open || !dismissible}
+          importantForAccessibility="no-hide-descendants"
+          onPress={requestClose}
+          style={StyleSheet.absoluteFill}
+        />
         <View
           accessibilityElementsHidden={!open}
           accessibilityViewIsModal
@@ -186,7 +208,7 @@ export function BottomSheet(props: BottomSheetProps) {
             styles.card,
             {
               height: cardHeight,
-              width: windowWidth,
+              width: cardWidth,
             },
           ]}
           testID={testID}

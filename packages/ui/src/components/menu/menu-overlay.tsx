@@ -137,6 +137,12 @@ function NativeMenuOverlayHost({ onDismiss, visible, ...props }: MenuOverlayHost
       onDismiss={onDismiss}
       presentationStyle="overFullScreen"
       statusBarTranslucent
+      supportedOrientations={[
+        'portrait',
+        'portrait-upside-down',
+        'landscape-left',
+        'landscape-right',
+      ]}
       transparent
       visible={visible}
     />

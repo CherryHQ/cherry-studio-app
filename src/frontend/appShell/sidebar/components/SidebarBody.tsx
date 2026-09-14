@@ -58,6 +58,7 @@ export function SidebarBody({ children }: PropsWithChildren) {
               contentContainerStyle={{
                 // Clears the floating dock at its shared composer-aligned position.
                 paddingBottom: dockBottomPadding + appSidebar.dockHeight + appSidebar.headerGapY,
+                paddingLeft: insets.left,
                 paddingTop: headerInset,
               }}
               contentInsetAdjustmentBehavior="never"

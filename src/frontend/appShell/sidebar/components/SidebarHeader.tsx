@@ -30,7 +30,11 @@ export function SidebarHeader() {
       <SidebarFade edge="top" size={headerInset} />
       <View
         className="absolute right-0 left-0 flex-row items-center gap-2 px-5"
-        style={{ height: appSidebar.headerRowHeight, top: insets.top + appSidebar.headerGapY }}
+        style={{
+          height: appSidebar.headerRowHeight,
+          paddingLeft: 20 + insets.left,
+          top: insets.top + appSidebar.headerGapY,
+        }}
       >
         <Text className="flex-1 font-semibold text-2xl text-sidebar-foreground" numberOfLines={1}>
           Cherry Studio

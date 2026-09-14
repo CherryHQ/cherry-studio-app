@@ -6,7 +6,7 @@ export const fileLibrarySelectionScope = 'file-library';
 
 /** Grid geometry and paging thresholds shared by the library's screen parts. */
 export const fileLibraryGrid = {
-  columns: 2,
+  minTileSize: 180,
   pageEdge: 16, // page margin outside the outermost tiles
   skeletonTiles: 6, // placeholder tiles shown while a page is in flight
   tileGap: 12, // gap between tiles, horizontally and vertically
