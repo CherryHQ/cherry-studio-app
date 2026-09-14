@@ -36,6 +36,8 @@ export interface PluginAuthorizationRuntime {
   confirm?(attemptId: string): Promise<PluginAuthorizationState>;
   describeConnection?(authorizationId: string): Promise<PluginConnectionStatus>;
   rejectCredential?(authorizationId: string, credential: PluginCredential): Promise<void>;
+  /** Provider-owned, backend-only challenge. It must never enter tool output or durable metadata. */
+  requestAuthorization?(authorizationId: string, challenge: PluginCredential): Promise<void>;
   prepareRevocation?(
     authorizationId: string,
   ): Promise<{ managementUrl: string; revoke(signal: AbortSignal): Promise<void> }>;

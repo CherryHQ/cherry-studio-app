@@ -6,7 +6,6 @@ import { View } from 'react-native';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 const ICONS = {
-  amap: { source: require('@/assets/plugins/amap.webp'), tint: false },
   feishu: { source: require('@/assets/plugins/feishu.jpeg'), tint: false },
   github: { source: resolveProviderIcon('github')?.light, tint: true },
   notion: { source: require('@/assets/plugins/notion.webp'), tint: true },
