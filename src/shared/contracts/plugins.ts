@@ -41,6 +41,8 @@ export type PluginAuthorizationState =
       attemptId: string;
       stage: string;
       verificationUrl: string;
+      /** Some providers require this link to be opened inside their own app. */
+      verificationAction?: 'copy';
       userCode?: string;
       expiresAt: number;
       nextPollAt: number;

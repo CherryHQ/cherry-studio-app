@@ -4,8 +4,10 @@ import { PluginError } from '@/shared/contracts/plugins';
 
 import type { PluginClient, PluginClientContext, PluginToolPolicy } from '../../pluginDefinition';
 import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
+import { createWecomBotClient } from './createWecomBotClient';
+import { WecomBotCredentialSchema } from './wecomBotApi';
 import { WecomCredentialSchema, type WecomConnection } from './wecomCredentials';
-import { WECOM_TOOL_POLICY } from './wecomTools';
+import { WECOM_MCP_TOOL_POLICY } from './wecomTools';
 
 type Source = {
   connection: WecomConnection;
@@ -16,7 +18,11 @@ type Source = {
 /** Owns the imported official sessions and one atomic, reviewed tool-routing snapshot. */
 export async function createWecomClient(context: PluginClientContext): Promise<PluginClient> {
   context.signal.throwIfAborted();
-  const initial = WecomCredentialSchema.safeParse(await context.getCredential(context.signal));
+  const credential = await context.getCredential(context.signal);
+  context.signal.throwIfAborted();
+  const bot = WecomBotCredentialSchema.safeParse(credential);
+  if (bot.success) return createWecomBotClient(context, bot.data.botId);
+  const initial = WecomCredentialSchema.safeParse(credential);
   if (!initial.success)
     throw new PluginError('authorization', 'Reconnect Wecom with an official MCP configuration.');
   context.signal.throwIfAborted();
@@ -28,7 +34,7 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
   const operationSignal = (caller?: AbortSignal) =>
     caller ? AbortSignal.any([caller, lifetime.signal]) : lifetime.signal;
   function policy(_connection: WecomConnection): PluginToolPolicy {
-    const reviewed: PluginToolPolicy = WECOM_TOOL_POLICY;
+    const reviewed: PluginToolPolicy = WECOM_MCP_TOOL_POLICY;
     return Object.fromEntries(
       Object.entries(reviewed).filter(([name, effect]) => context.tools[name] === effect),
     );
@@ -189,8 +195,8 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
     },
     async callTool(input) {
       const signal = operationSignal(input.options?.abortSignal);
-      const effect = Object.hasOwn(WECOM_TOOL_POLICY, input.name)
-        ? (WECOM_TOOL_POLICY as PluginToolPolicy)[input.name]
+      const effect = Object.hasOwn(WECOM_MCP_TOOL_POLICY, input.name)
+        ? (WECOM_MCP_TOOL_POLICY as PluginToolPolicy)[input.name]
         : undefined;
       if (!effect || context.tools[input.name] !== effect)
         throw new PluginError('access', 'The Wecom tool is not admitted.');

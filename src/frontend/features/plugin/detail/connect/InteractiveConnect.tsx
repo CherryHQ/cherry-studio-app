@@ -81,9 +81,11 @@ export function InteractiveConnect({
               </Text>
               <Text className="text-sm text-muted-foreground">
                 {t(
-                  waiting.status === 'callback'
-                    ? 'plugins.authorization.returnFromCallback'
-                    : 'plugins.authorization.returnToCherry',
+                  waiting.status === 'waiting' && waiting.verificationAction === 'copy'
+                    ? 'plugins.authorization.returnFromApp'
+                    : waiting.status === 'callback'
+                      ? 'plugins.authorization.returnFromCallback'
+                      : 'plugins.authorization.returnToCherry',
                   { name },
                 )}
               </Text>
@@ -93,7 +95,11 @@ export function InteractiveConnect({
                 </Text>
               ) : null}
               <Button size="lg" onPress={() => void openConfirmation(waiting)}>
-                {t('plugins.authorization.openAgain')}
+                {t(
+                  waiting.status === 'waiting' && waiting.verificationAction === 'copy'
+                    ? 'plugins.authorization.copyLink'
+                    : 'plugins.authorization.openAgain',
+                )}
               </Button>
               {waiting.status === 'waiting' ? (
                 <Button size="lg" variant="outline" disabled={isBusy} onPress={() => check()}>

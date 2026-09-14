@@ -1,4 +1,5 @@
 import { useToast } from '@cherrystudio/ui/components';
+import * as Clipboard from 'expo-clipboard';
 import { clearInitialURL } from 'expo-linking';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -82,6 +83,11 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     if (browserAttempt.current) return;
     browserAttempt.current = state.attemptId;
     try {
+      if (state.status === 'waiting' && state.verificationAction === 'copy') {
+        await Clipboard.setStringAsync(state.verificationUrl);
+        toast.show({ label: t('plugins.authorization.linkCopied'), variant: 'success' });
+        return;
+      }
       if (state.status === 'callback') {
         const result = await WebBrowser.openAuthSessionAsync(
           state.authorizationUrl,

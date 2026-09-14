@@ -1503,5 +1503,14 @@
   "plugins.catalog.wecom.authMethods.official_mcp.label": "导入官方 MCP 配置",
   "plugins.catalog.wecom.authMethods.official_mcp.setup": "在企业微信完成授权后，粘贴一个官方连接地址，或包含最多三个服务的 JSON 配置。配置可能包含访问凭证，请仅在此处填写。连接检查只读取工具列表。",
   "plugins.catalog.wecom.fields.configuration.label": "官方 MCP 地址或 JSON 配置",
-  "plugins.catalog.wecom.fields.configuration.error": "请输入有效的企业微信官方 MCP 地址或 JSON 配置。"
+  "plugins.catalog.wecom.fields.configuration.error": "请输入有效的企业微信官方 MCP 地址或 JSON 配置。",
+  "plugins.authorization.copyLink": "复制授权链接",
+  "plugins.authorization.linkCopied": "授权链接已复制",
+  "plugins.authorization.returnFromApp": "在 {{name}} 内打开链接并完成确认，然后返回 Cherry 继续连接。",
+  "plugins.catalog.wecom.authMethods.wecom_bot.label": "通过企业微信授权",
+  "plugins.catalog.wecom.authMethods.wecom_bot.setup": "复制授权链接，在企业微信的文件传输助手中粘贴并打开，按页面提示连接机器人。完成后返回 Cherry；链接在 5 分钟内有效。",
+  "plugins.catalog.wecom.authMethods.wecom_bot.permissions": "可读取在线文档、查询和管理待办与日程。实际可用能力取决于机器人获准的权限，企业管理员可能需要审批。",
+  "plugins.catalog.wecom.authMethods.wecom_bot.start": "生成并复制授权链接",
+  "plugins.catalog.wecom.authMethods.wecom_bot.stages.bot.title": "在企业微信中连接机器人",
+  "plugins.catalog.wecom.authMethods.wecom_bot.stages.bot.waiting": "等待在企业微信中确认"
 }

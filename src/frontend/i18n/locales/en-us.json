@@ -1506,5 +1506,14 @@
   "plugins.catalog.wecom.authMethods.official_mcp.label": "Import official MCP configuration",
   "plugins.catalog.wecom.authMethods.official_mcp.setup": "Authorize access in the platform, then paste one official connection URL or JSON containing up to three services. The configuration may contain credentials; enter it only here. Setup checks tool discovery only.",
   "plugins.catalog.wecom.fields.configuration.label": "Official MCP URL or JSON configuration",
-  "plugins.catalog.wecom.fields.configuration.error": "Enter a valid official WeCom MCP URL or JSON configuration."
+  "plugins.catalog.wecom.fields.configuration.error": "Enter a valid official WeCom MCP URL or JSON configuration.",
+  "plugins.authorization.copyLink": "Copy authorization link",
+  "plugins.authorization.linkCopied": "Authorization link copied",
+  "plugins.authorization.returnFromApp": "Open the link inside {{name}} and complete confirmation, then return to Cherry to finish connecting.",
+  "plugins.catalog.wecom.authMethods.wecom_bot.label": "Authorize in WeCom",
+  "plugins.catalog.wecom.authMethods.wecom_bot.setup": "Copy the authorization link, paste it into File Transfer in WeCom, and open it. Follow the page to connect a bot, then return to Cherry. The link is valid for 5 minutes.",
+  "plugins.catalog.wecom.authMethods.wecom_bot.permissions": "Read online documents and manage tasks and schedules. Available capabilities depend on the bot permissions granted. Organization approval may be required.",
+  "plugins.catalog.wecom.authMethods.wecom_bot.start": "Create and copy authorization link",
+  "plugins.catalog.wecom.authMethods.wecom_bot.stages.bot.title": "Connect a bot in WeCom",
+  "plugins.catalog.wecom.authMethods.wecom_bot.stages.bot.waiting": "Waiting for confirmation in WeCom"
 }
