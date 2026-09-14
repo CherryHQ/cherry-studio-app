@@ -25,6 +25,9 @@ export function createLiveActivityPresenter<Props extends BackgroundActivityBase
       return activities.length;
     },
     start: (props, deepLinkUrl) => {
+      // expo-widgets prunes ended native handles only when enumerating instances.
+      // Sweep before each start so a long-lived factory cannot accumulate them.
+      factory.getInstances();
       const activity = factory.start(props, deepLinkUrl);
       return {
         end: (policy, endProps) =>

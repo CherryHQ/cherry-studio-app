@@ -8,8 +8,10 @@ A keyboard-stability fix preserves these visuals and changes only the conflictin
 
 ## Keyboard And Selection Rules
 
-- Send submits the draft. The chat's existing `dismissKeyboardOnSend={false}` also applies to
-  list scrolling after submission; the list must not issue a second keyboard-dismiss command.
+- Send submits the draft, explicitly blurs the input, ends composer editing, and dismisses the
+  keyboard through its native transition. The dock follows the keyboard's actual position on both
+  opening and closing; the empty composer's collapse uses the same motion as expansion. List
+  scrolling after submission must not issue a second keyboard-dismiss command.
 - Scrolling, selecting text, copying, and pressing message actions perform their own operation.
   A parent `onTouchEnd` must not turn all of them into an input-dismiss action. A completed,
   unhandled tap on the chat background explicitly blurs the input and ends composer editing.
@@ -35,7 +37,8 @@ A keyboard-stability fix preserves these visuals and changes only the conflictin
 | Open/close add or reasoning controls | Existing control and animation; no new global keyboard policy |
 | Choose a plugin | Insert once or retain the existing reference; no forced text focus |
 | Select a model or choose media/files | Existing picker and input-transfer path |
-| Send or stop | Existing submission/cancellation flow; local-send scrolling does not dismiss input |
+| Send | Submit the draft, blur the input, end editing, and dismiss the keyboard; local-send scrolling does not dismiss input again |
+| Stop | Existing cancellation flow; preserve the input's focus and keyboard state |
 | Admission/import failure or approval arrival | Existing recovery, attachment, and approval workflow |
 | Scroll or use message content | Message/list owner; no blanket parent touch dismissal |
 | Navigate to another context | Existing navigation and draft ownership |
@@ -53,7 +56,8 @@ or selection conformance. With explicit device-verification authorization, check
 - With the keyboard open and then closed, select text, drag both handles, Select All, Copy, and
   dismiss the editing menu. The selected range may change; the outer composer and keyboard state
   remain stable without a brief hide/show cycle.
-- Send, scroll, and use message actions without unintended keyboard dismissal.
+- Send a message to blur the input, end editing, and dismiss the keyboard. Scrolling and message
+  actions do not issue additional keyboard-dismiss commands.
 - Tap the empty chat or unused message-list area to blur the input and dismiss its keyboard.
   An empty composer follows its existing collapse animation; dragging or child actions do not
   count as background presses.
