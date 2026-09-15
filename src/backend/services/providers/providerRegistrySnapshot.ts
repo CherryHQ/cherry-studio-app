@@ -4,7 +4,7 @@ import {
   type RemoteRegistryFileName,
 } from '@cherrystudio/provider-registry/mobile';
 import { loggerService } from '@logger';
-import { Directory, File, Paths } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import * as z from 'zod';
 
 const logger = loggerService.withContext('ProviderRegistrySnapshot');
@@ -13,39 +13,21 @@ const SnapshotSchema = z.object({
   manifest: CatalogManifestSchema,
 });
 const slots = ['a', 'b'] as const;
-type SnapshotSlot = (typeof slots)[number] | 'legacy';
+type SnapshotSlot = (typeof slots)[number];
 export type ProviderRegistrySnapshot = z.infer<typeof SnapshotSchema> & { slot: SnapshotSlot };
 
 function snapshotFile(slot: SnapshotSlot): File {
-  return slot === 'legacy'
-    ? new File(Paths.cache, 'provider-registry-v2', 'snapshot.json')
-    : new File(Paths.document, 'provider-registry', `snapshot-${slot}.json`);
+  return new File(Paths.document, 'provider-registry', `snapshot-${slot}.json`);
 }
 
 /** Return newest first; the updater validates compatibility and both payloads before activation. */
 export async function readProviderRegistrySnapshots(): Promise<ProviderRegistrySnapshot[]> {
   const snapshots: ProviderRegistrySnapshot[] = [];
-  for (const slot of [...slots, 'legacy'] as const) {
+  for (const slot of slots) {
     const file = snapshotFile(slot);
     if (!file.exists) continue;
     try {
-      let snapshot: z.infer<typeof SnapshotSchema>;
-      if (slot === 'legacy') {
-        const { manifest } = z
-          .object({ manifest: CatalogManifestSchema })
-          .parse(JSON.parse(await file.text()));
-        const directory = new Directory(Paths.cache, 'provider-registry-v2');
-        const [models, providerModels] = await Promise.all([
-          new File(directory, 'models.json').text(),
-          new File(directory, 'provider-models.json').text(),
-        ]);
-        snapshot = {
-          files: { 'models.json': models, 'provider-models.json': providerModels },
-          manifest,
-        };
-      } else {
-        snapshot = SnapshotSchema.parse(JSON.parse(await file.text()));
-      }
+      const snapshot = SnapshotSchema.parse(JSON.parse(await file.text()));
       snapshots.push({ ...snapshot, slot });
     } catch (error) {
       logger.warn('Could not read a saved registry snapshot', error as Error, { slot });
