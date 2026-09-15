@@ -197,7 +197,7 @@ test('a theme change invalidates the old artifact while the new presentation is 
 test('an image failure automatically produces a shareable document instead of an error state', async () => {
   const ref = createRef<Preview>();
   const session = createSession();
-  session.render.mockRejectedValueOnce(new DocumentExportError('image-size-limit'));
+  session.render.mockRejectedValueOnce(new DocumentExportError('capture-failed'));
   await act(async () => {
     renderer = create(<Probe ref={ref} session={session} format="image" revision={0} />);
   });
@@ -229,21 +229,10 @@ test('if HTML also fails, complete Markdown stays available without writing a fi
   ]);
 });
 
-test('image resource limits go directly to text instead of repeating the same rejected HTML render', async () => {
-  const ref = createRef<Preview>();
-  const session = createSession();
-  session.render.mockRejectedValueOnce(new DocumentExportError('image-resource-limit'));
-  await act(async () => {
-    renderer = create(<Probe ref={ref} session={session} format="image" revision={0} />);
-  });
-  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Content', fallback: true });
-  expect(session.render).toHaveBeenCalledTimes(1);
-});
-
 test('an HTML failure keeps Markdown shareable without starting image capture', async () => {
   const ref = createRef<Preview>();
   const session = createSession();
-  session.render.mockRejectedValueOnce(new DocumentExportError('image-resource-limit'));
+  session.render.mockRejectedValueOnce(new DocumentExportError('storage-failed'));
   await act(async () => {
     renderer = create(<Probe ref={ref} session={session} format="html" revision={0} />);
   });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PixelRatio, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -6,9 +6,10 @@ import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/
 
 import { capturePng } from '../utils/capturePng';
 import { imageCapturePlan, type ImageCapturePlan } from '../utils/imageCapturePlan';
+import { imageMeasurementScript, imagePageReadinessScript } from '../utils/imageCaptureScripts';
+import { IMAGE_PAGE_CHROME, imagePagePlan, type ImagePageSlice } from '../utils/imagePagePlan';
 
 type CaptureInput = Parameters<CaptureExportHtml>[0];
-type CaptureResult = Awaited<ReturnType<CaptureExportHtml>>;
 type CaptureRequest = {
   input: CaptureInput;
   id: number;
@@ -16,10 +17,12 @@ type CaptureRequest = {
   nativeStarted: boolean;
   finished?: Promise<void>;
   settled: boolean;
-  finish(error?: Error, result?: CaptureResult): void;
+  touch(): void;
+  finish(error?: Error): void;
 };
+type PageFrame = { pages: ImagePageSlice[]; index: number; plan: ImageCapturePlan };
 let nextId = 0;
-// Protect physical surface work across closing/reopened pages as well as logical operations.
+// Hold the physical lease through native work and the receiving session's file copy.
 let captureLease: CaptureRequest | undefined;
 
 export function useDocumentExportHtmlCapture() {
@@ -28,40 +31,49 @@ export function useDocumentExportHtmlCapture() {
   const mounted = useRef(true);
   const capture = useCallback<CaptureExportHtml>(async (input) => {
     input.signal.throwIfAborted();
-    // Superseded previews wait for late native cleanup before starting another capture.
     if (captureLease?.settled) await captureLease.finished;
     input.signal.throwIfAborted();
-    if (!mounted.current) return Promise.reject(new DocumentExportError('disposed'));
-    if (captureLease) return Promise.reject(new DocumentExportError('busy'));
-    return new Promise<CaptureResult>((resolve, reject) => {
+    if (!mounted.current) throw new DocumentExportError('disposed');
+    if (captureLease) throw new DocumentExportError('busy');
+    return new Promise<void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout>;
       const request: CaptureRequest = {
         input,
         id: ++nextId,
         controller: new AbortController(),
         nativeStarted: false,
         settled: false,
-        finish: (error, result) => {
-          if (request.settled) {
-            result?.release();
-            return;
-          }
+        touch: () => {
+          clearTimeout(timer);
+          timer = setTimeout(
+            () => request.finish(new DocumentExportError('capture-failed')),
+            60_000,
+          );
+        },
+        finish: (error) => {
+          if (request.settled) return;
           request.settled = true;
           request.controller.abort();
           clearTimeout(timer);
           input.signal.removeEventListener('abort', abort);
           if (!request.nativeStarted && captureLease === request) captureLease = undefined;
           if (current.current === request) current.current = undefined;
-          if (mounted.current) setRequest(undefined);
-          if (error) reject(error);
-          else if (result) resolve(result);
-          else reject(new DocumentExportError('capture-failed'));
+          if (mounted.current) setRequest((current) => (current === request ? undefined : current));
+          const settle = () => {
+            if (error) reject(error);
+            else resolve();
+          };
+          // A page copy may still be writing inside onPage. The session must not
+          // remove its output directory until that physical work has settled.
+          if (request.nativeStarted)
+            void Promise.resolve()
+              .then(() => request.finished)
+              .then(settle, settle);
+          else settle();
         },
       };
       const abort = () => request.finish(new DOMException('Export cancelled', 'AbortError'));
-      const timer = setTimeout(
-        () => request.finish(new DocumentExportError('capture-failed')),
-        60_000,
-      );
+      request.touch();
       input.signal.addEventListener('abort', abort, { once: true });
       captureLease = request;
       current.current = request;
@@ -84,41 +96,79 @@ export function useDocumentExportHtmlCapture() {
 function CaptureSurface({ request }: { request: CaptureRequest }) {
   const wrapper = useRef<View>(null);
   const webView = useRef<WebView>(null);
-  const layout = useRef({ width: 0, height: 0 });
+  const nativeLayout = useRef({ width: 0, height: 0 });
   const injected = useRef(false);
-  const [plan, setPlan] = useState<ImageCapturePlan>();
+  const [frame, setFrame] = useState<PageFrame>();
   const { input } = request;
+  const source = useMemo(() => ({ html: input.html }), [input.html]);
   const density = PixelRatio.get();
-  const width = plan ? plan.width / density : input.width;
-  const height = plan ? plan.height / density : 1;
+  const width = frame ? frame.plan.width / density : input.width;
+  // The WebView lays out the entire document inside a bounded viewport before capture.
+  const height = frame ? frame.plan.height / density : 1;
   const fail = () => request.finish(new DocumentExportError('capture-failed'));
+  const makeFrame = (pages: ImagePageSlice[], index: number): PageFrame => ({
+    pages,
+    index,
+    plan: imageCapturePlan(
+      input.width,
+      pages[index].height + (input.layout === 'pages' ? IMAGE_PAGE_CHROME : 0),
+    ),
+  });
 
   const prepareLayout = useCallback(() => {
-    if (!plan || injected.current || request.settled) return;
+    if (!frame || injected.current || request.settled) return;
     if (
-      Math.abs(layout.current.width * density - plan.width) > 1 ||
-      Math.abs(layout.current.height * density - plan.height) > 1
+      Math.abs(nativeLayout.current.width * density - frame.plan.width) > 1 ||
+      Math.abs(nativeLayout.current.height * density - frame.plan.height) > 1
     )
       return;
     injected.current = true;
     webView.current?.injectJavaScript(
-      captureReadinessScript(request.id, input.width, plan, density),
+      imagePageReadinessScript(
+        request.id,
+        frame.index,
+        frame.pages.length,
+        input.width,
+        frame.pages[frame.index],
+        frame.plan,
+        density,
+        input.layout,
+      ),
     );
-  }, [density, input.width, plan, request]);
+  }, [density, frame, input.layout, input.width, request]);
   useEffect(() => {
     prepareLayout();
   }, [prepareLayout]);
 
-  const capture = async (plan: ImageCapturePlan) => {
+  const capturePage = async (frame: PageFrame) => {
     if (request.nativeStarted || request.settled) return;
     request.nativeStarted = true;
     try {
-      const result = await capturePng(wrapper, plan, request.controller.signal);
-      request.finish(undefined, result);
-    } catch {
-      fail();
+      const image = await capturePng(wrapper, frame.plan, request.controller.signal);
+      try {
+        request.controller.signal.throwIfAborted();
+        await input.onPage({
+          uri: image.uri,
+          width: image.width,
+          height: image.height,
+          index: frame.index,
+          total: frame.pages.length,
+        });
+        request.controller.signal.throwIfAborted();
+      } finally {
+        image.release();
+      }
+      if (frame.index + 1 === frame.pages.length) request.finish();
+      else {
+        injected.current = false;
+        request.touch();
+        setFrame(makeFrame(frame.pages, frame.index + 1));
+      }
+    } catch (error) {
+      request.finish(error instanceof Error ? error : new DocumentExportError('capture-failed'));
     } finally {
-      if (captureLease === request) captureLease = undefined;
+      request.nativeStarted = false;
+      if (request.settled && captureLease === request) captureLease = undefined;
     }
   };
 
@@ -130,7 +180,7 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       onLayout={({ nativeEvent }) => {
-        layout.current = nativeEvent.layout;
+        nativeLayout.current = nativeEvent.layout;
         prepareLayout();
       }}
       style={{ width, height, overflow: 'hidden' }}
@@ -142,12 +192,13 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
         allowUniversalAccessFromFileURLs={false}
         bounces={false}
         incognito
-        injectedJavaScript={readinessScript(request.id)}
+        injectedJavaScript={imageMeasurementScript(request.id, input.layout)}
         javaScriptCanOpenWindowsAutomatically={false}
         onContentProcessDidTerminate={fail}
         onError={fail}
         onMessage={({ nativeEvent }) => {
-          if (request.settled || request.nativeStarted || nativeEvent.data.length > 1024) return;
+          if (request.settled || request.nativeStarted || nativeEvent.data.length > 2_000_000)
+            return;
           try {
             const message = JSON.parse(nativeEvent.data);
             if (message.id !== request.id) return;
@@ -156,29 +207,25 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
               return;
             }
             if (message.phase === 'ready') {
-              if (
-                plan &&
-                injected.current &&
-                typeof message.height === 'number' &&
-                Math.abs(message.height - plan.layoutHeight) <= 1
-              ) {
-                request.finished = capture(plan);
-              } else fail();
+              if (frame && injected.current && message.index === frame.index)
+                request.finished = capturePage(frame);
+              else fail();
               return;
             }
-            if (message.phase !== 'measure' || plan) return;
-            if (
-              !Number.isFinite(message.width) ||
-              message.width > input.width + 1 ||
-              typeof message.height !== 'number'
-            ) {
-              request.finish(new DocumentExportError('image-size-limit'));
+            if (message.phase !== 'measure' || frame) return;
+            if (!Number.isFinite(message.width) || message.width > input.width + 1) {
+              fail();
               return;
             }
-            setPlan(imageCapturePlan(input.width, Math.ceil(message.height)));
+            const pages = imagePagePlan(message, input.layout);
+            request.touch();
+            setFrame(makeFrame(pages, 0));
           } catch (error) {
-            if (error instanceof DocumentExportError) request.finish(error);
-            else fail();
+            request.finish(
+              error instanceof DocumentExportError
+                ? error
+                : new DocumentExportError('capture-failed'),
+            );
           }
         }}
         onRenderProcessGone={fail}
@@ -187,48 +234,11 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
         scrollEnabled={false}
         setSupportMultipleWindows={false}
         sharedCookiesEnabled={false}
-        source={{ html: input.html }}
+        source={source}
         style={{ width, height }}
         textZoom={100}
         thirdPartyCookiesEnabled={false}
       />
     </View>
   );
-}
-
-function readinessScript(id: number) {
-  return `(async function(){try{
-    await document.fonts.ready;
-    await Promise.all(Array.from(document.images).map(function(image){return image.decode();}));
-    var previous=-1, stable=0;
-    for(var frame=0;frame<120;frame++){
-      await new Promise(requestAnimationFrame);
-      var main=document.querySelector('main');
-      var height=Math.ceil(main.getBoundingClientRect().height);
-      stable=height===previous?stable+1:0;previous=height;
-      if(stable>=3){window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'measure',height:height,width:main.scrollWidth}));return;}
-    }
-    throw new Error('Layout unstable');
-  }catch(error){window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},error:true}));}})();true;`;
-}
-
-function captureReadinessScript(
-  id: number,
-  width: number,
-  plan: ImageCapturePlan,
-  density: number,
-) {
-  // Size the full native view to the admitted output pixels. Scaling the original
-  // CSS layout avoids reflow or allocating a bitmap at the device's higher density.
-  return `(async function(){try{
-    document.documentElement.style.cssText='overflow:hidden;height:100%';
-    document.body.style.cssText='overflow:hidden;height:100%;margin:0';
-    var main=document.querySelector('main');
-    main.style.width='${width}px';main.style.maxWidth='none';main.style.margin='0';
-    main.style.position='absolute';main.style.left='0';main.style.top='0';
-    main.style.transformOrigin='0 0';
-    main.style.transform='scale(${plan.scale / density})';
-    for(var frame=0;frame<3;frame++) await new Promise(requestAnimationFrame);
-    window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'ready',height:main.offsetHeight}));
-  }catch(error){window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},error:true}));}})();true;`;
 }

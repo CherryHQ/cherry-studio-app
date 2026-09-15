@@ -7,6 +7,7 @@ import {
   type DocumentExportProgress,
   type DocumentExportSession,
   type ExportFormat,
+  type ExportImageLayout,
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
 
@@ -22,6 +23,7 @@ export function useDocumentExportPreview(
   presentation: ExportPresentation,
   capture: CaptureExportHtml,
   revision: number,
+  imageLayout: ExportImageLayout = 'pages',
 ) {
   const [result, setResult] = useState<{
     session: DocumentExportSession;
@@ -29,6 +31,7 @@ export function useDocumentExportPreview(
     presentation: ExportPresentation;
     attempt: number;
     revision: number;
+    imageLayout: ExportImageLayout;
     state: PreviewState;
   }>();
   const [attempt, setAttempt] = useState(0);
@@ -38,7 +41,7 @@ export function useDocumentExportPreview(
     const controller = new AbortController();
     const publish = (state: PreviewState) => {
       if (!controller.signal.aborted)
-        setResult({ session, format, presentation, attempt, revision, state });
+        setResult({ session, format, presentation, attempt, revision, imageLayout, state });
     };
     // Abort, then settle the old work before admitting the next render.
     tail.current = tail.current
@@ -64,16 +67,15 @@ export function useDocumentExportPreview(
         };
         try {
           const artifact = await session.render(
-            format === 'html' ? { format, presentation } : { format, presentation, capture },
+            format === 'html'
+              ? { format, presentation }
+              : { format, presentation, capture, layout: imageLayout },
             context,
           );
           publish({ status: 'ready', artifact });
         } catch (error) {
           if (pause(error)) return;
-          if (
-            format === 'image' &&
-            !(error instanceof DocumentExportError && error.code === 'image-resource-limit')
-          ) {
+          if (format === 'image') {
             try {
               const artifact = await session.render(
                 { format: 'html', presentation: { ...presentation, imageFrame: undefined } },
@@ -90,7 +92,7 @@ export function useDocumentExportPreview(
         }
       });
     return () => controller.abort();
-  }, [attempt, capture, format, presentation, revision, session]);
+  }, [attempt, capture, format, imageLayout, presentation, revision, session]);
   const state: PreviewState =
     format === 'markdown'
       ? { status: 'markdown', text: session.markdown }
@@ -98,6 +100,7 @@ export function useDocumentExportPreview(
           result.format === format &&
           result.presentation === presentation &&
           result.attempt === attempt &&
+          result.imageLayout === imageLayout &&
           result.revision === revision
         ? result.state
         : { status: 'loading', progress: 'rendering' };

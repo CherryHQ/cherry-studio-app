@@ -4,11 +4,7 @@ import type { DocumentExportIssue, ExportDocument } from '@/shared/contracts/doc
 
 import { safeExportUrl } from './normalizeDocument';
 
-export const MAX_ASSET_BYTES = 4 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 16 * 1024 * 1024;
-const MAX_IMAGE_PIXELS = 8_000_000;
-const MAX_TOTAL_PIXELS = 16_000_000;
-export type PreparedAsset = { dataUrl: string; bytes: number; pixels: number };
+export type PreparedAsset = { dataUrl: string };
 export type ReadManagedImage = (id: string, signal: AbortSignal) => Promise<Uint8Array>;
 
 export async function resolveDocumentAssets(
@@ -19,8 +15,6 @@ export async function resolveDocumentAssets(
 ): Promise<{ images: Map<string, string>; issues: DocumentExportIssue[] }> {
   const images = new Map<string, string>();
   const issues: DocumentExportIssue[] = [];
-  let totalBytes = [...cache.values()].reduce((sum, item) => sum + item.bytes, 0);
-  let totalPixels = [...cache.values()].reduce((sum, item) => sum + item.pixels, 0);
   for (const [key, source] of sources) {
     signal.throwIfAborted();
     try {
@@ -31,28 +25,13 @@ export async function resolveDocumentAssets(
             ? await readManagedImage(source.fileEntryId, signal)
             : await fetchImage(source.url, signal);
         signal.throwIfAborted();
-        if (bytes.byteLength > MAX_ASSET_BYTES) throw new Error('Image exceeds byte limit');
         const { width, height, mediaType } = inspectImage(bytes);
-        const pixels = width * height;
-        if (
-          width < 1 ||
-          height < 1 ||
-          width > 8192 ||
-          height > 8192 ||
-          pixels > MAX_IMAGE_PIXELS ||
-          totalPixels + pixels > MAX_TOTAL_PIXELS ||
-          totalBytes + bytes.byteLength > MAX_TOTAL_BYTES
-        ) {
-          throw new Error('Image exceeds resource limit');
-        }
+        if (width < 1 || height < 1) throw new Error('Invalid image dimensions');
+        // Admit valid source images at their original size; device allocation decides capacity.
         asset = {
-          bytes: bytes.byteLength,
-          pixels,
           dataUrl: `data:${mediaType};base64,${encodeBase64(bytes)}`,
         };
         cache.set(key, asset);
-        totalBytes += asset.bytes;
-        totalPixels += pixels;
       }
       images.set(key, asset.dataUrl);
     } catch {
@@ -80,19 +59,19 @@ async function fetchImage(value: string, signal: AbortSignal): Promise<Uint8Arra
       redirect: 'error',
       signal: controller.signal,
     });
-    if (!response.ok || Number(response.headers.get('content-length')) > MAX_ASSET_BYTES)
-      throw new Error('Image unavailable');
+    if (!response.ok) throw new Error('Image unavailable');
     reader = response.body?.getReader();
     if (!reader) throw new Error('Image stream unavailable');
     const chunks: Uint8Array[] = [];
     let length = 0;
     while (true) {
+      controller.signal.throwIfAborted();
       const chunk = await reader.read();
       if (chunk.done) break;
       length += chunk.value.byteLength;
-      if (length > MAX_ASSET_BYTES) throw new Error('Image exceeds byte limit');
       chunks.push(chunk.value);
     }
+    controller.signal.throwIfAborted();
     const bytes = new Uint8Array(length);
     let offset = 0;
     for (const chunk of chunks) {

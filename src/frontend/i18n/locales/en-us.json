@@ -1494,7 +1494,7 @@
   "documentExport.unavailable": "This export is no longer available. Open it again from the source.",
   "documentExport.failed": "Could not generate this format",
   "documentExport.previewFailed": "Could not display the preview",
-  "documentExport.imagePreview": "Exported long image",
+  "documentExport.imagePreview": "Exported image",
   "documentExport.useHtml": "Export as HTML",
   "documentExport.issues": "{{count}} images or formulas could not be rendered. Placeholders or original formula text are included.",
   "documentExport.share": "Share",
@@ -1556,8 +1556,14 @@
   "plugins.catalog.dingtalk.authMethods.dingtalk_user.recovery": "Complete authorization in DingTalk and retry. If it still fails, check connectivity and organization permissions. Disconnect before changing accounts or organizations.",
   "chat.share.selectionHint": "Sharing includes the full selected messages. Multiple messages support HTML and Markdown, with HTML selected by default.",
   "chat.share.previewWithoutText": "Images, attachments or thinking content",
-  "documentExport.errors.image-size-limit": "This message exceeds one image. Use HTML or Markdown to keep all content.",
   "documentExport.documentReady": "Your selected content is ready to share as a document.",
   "documentExport.paused": "Preview paused",
-  "documentExport.resume": "Continue generation"
+  "documentExport.resume": "Continue generation",
+  "documentExport.imageLayout": "Image layout",
+  "documentExport.imageLayouts.pages": "Paged images",
+  "documentExport.imageLayouts.single": "Single long image",
+  "documentExport.page": "Page {{page}} of {{total}}",
+  "documentExport.progress.page": "Generating image {{page}} of {{total}}…",
+  "documentExport.shareImages_one": "Share image",
+  "documentExport.shareImages_other": "Share {{count}} images"
 }

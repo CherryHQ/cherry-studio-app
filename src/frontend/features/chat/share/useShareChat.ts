@@ -84,8 +84,8 @@ export function useShareChat(sessionId?: string) {
           loading.current = undefined;
           const outcome = await open({
             input: { kind: 'document', document },
-            initialFormat: messages.length > 1 ? 'html' : 'image',
-            allowedFormats: messages.length > 1 ? ['html', 'markdown'] : undefined,
+            initialFormat: 'image',
+            allowedFormats: ['image', 'html', 'markdown'],
             option: hasProcess
               ? {
                   label: t('chat.share.includeProcess'),
