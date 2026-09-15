@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.crashreporting'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.crashreporting'
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // Match @sentry/react-native 7.11.0, including its NDK crash handler.
+  implementation 'io.sentry:sentry-android:8.31.0'
+}

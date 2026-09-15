@@ -31,10 +31,7 @@ export const paintingTable = sqliteTable(
     prompt: text().notNull(),
     ...orderKeyColumns,
     ...createUpdateTimestamps,
-    // Declared last to match the physical column order: SQLite's ADD COLUMN
-    // appends, and this column arrived that way in 0002 — with this DB DEFAULT,
-    // which migrations.test.ts guards. A `$defaultFn` here instead would drift
-    // the schema from the deployed table and make drizzle-kit queue a rebuild.
+    // A database default also gives raw SQL writers an empty file list.
     files: text({ mode: 'json' })
       .$type<PaintingFiles>()
       .notNull()

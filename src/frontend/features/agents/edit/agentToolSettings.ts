@@ -3,7 +3,7 @@ import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import { clampMcpToolApproval } from '@/shared/utils/agentToolApproval';
 
-export type McpToolBindingDraft = Extract<WriteAgentToolBinding, { source: 'mcp' }>;
+export type McpToolBindingDraft = WriteAgentToolBinding;
 
 export type AgentMcpServerOptionStatus =
   | 'available'
@@ -41,20 +41,14 @@ export type McpToolCatalog = {
 export function createAgentToolBindingDraft(
   bindings: readonly AgentToolBinding[],
 ): WriteAgentToolBinding[] {
-  return bindings.flatMap((binding) =>
-    binding.source === 'mcp'
-      ? [
-          {
-            approval: clampMcpToolApproval(binding.approval),
-            displayNameSnapshot: binding.displayNameSnapshot,
-            enabled: binding.enabled,
-            ...(binding.rawToolName ? { rawToolName: binding.rawToolName } : {}),
-            serverId: binding.serverId,
-            source: 'mcp' as const,
-          },
-        ]
-      : [],
-  );
+  return bindings.map((binding) => ({
+    approval: clampMcpToolApproval(binding.approval),
+    displayNameSnapshot: binding.displayNameSnapshot,
+    enabled: binding.enabled,
+    ...(binding.rawToolName ? { rawToolName: binding.rawToolName } : {}),
+    serverId: binding.serverId,
+    source: 'mcp',
+  }));
 }
 
 export function buildAgentMcpServerOptions(input: {
@@ -198,17 +192,13 @@ function getServerDefaultMcpBindings(
 ): Map<string, McpToolBindingDraft> {
   return new Map(
     bindings.flatMap((binding) =>
-      binding.source === 'mcp' && binding.rawToolName === undefined
-        ? [[binding.serverId, binding] as const]
-        : [],
+      binding.rawToolName === undefined ? [[binding.serverId, binding] as const] : [],
     ),
   );
 }
 
 function bindingIdentity(binding: WriteAgentToolBinding): string {
-  return binding.source === 'builtin'
-    ? JSON.stringify(['builtin', binding.capabilityId])
-    : mcpBindingIdentity(binding.serverId, binding.rawToolName);
+  return mcpBindingIdentity(binding.serverId, binding.rawToolName);
 }
 
 function mcpBindingIdentity(serverId: string, rawToolName?: string): string {

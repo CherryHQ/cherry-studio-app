@@ -130,9 +130,10 @@ See [Storage Engine](./storage-engine.md) for the current engine constraints and
 ## Schema And Message Persistence
 
 The active schema includes app state/preferences, Agent and Agent Session data, provider/model,
-MCP, file, painting, job, and AI usage tables. Agent Session messages are linear and use stable
-protocol message ids. The retired `assistant`, `topic`, `message`, and `assistant_mcp_server`
-tables, plus message FTS triggers and indexes, are removed by migration `0005_remove_legacy_chat`.
+MCP, plugin authorization, desktop connection, file, painting, job, and AI usage tables. Agent Session
+messages are linear and use stable protocol message ids. The initial migration creates these 15
+tables directly. See [Database Migrations](../../../migrations/README.md) for the unreleased
+baseline and development database reset requirement.
 
 Usage behavior was compared against Desktop commit `ea2f6bc3befd7a028c2e2b2a4310e5cceba1b676`
 on 2026-09-07. AI usage keeps Desktop's 37-column `ai_usage_record` contract, including immutable pricing and
@@ -140,9 +141,8 @@ credential snapshots, per-currency cost, cache/reasoning counts, and optional pr
 Each successful provider call is one `invocation`; tool loops and context compaction contribute
 separate records. Input-token tiers select one rate set for the entire request using all-in input
 (including cached tokens). Missing rates remain unpriced, and trusted provider-reported cost takes
-precedence. Migration `0018_usage-invocation-semantics` marks older `agent-session-turn:*` rows as
-`legacy-aggregate`; original counts, costs, and snapshots are retained because their provider
-boundaries cannot be recovered.
+precedence. The shared usage contract also represents `legacy-aggregate` records whose individual
+provider boundaries are unknown; new Mobile calls write `invocation` records.
 
 Provider model creation and editing expose `pricing.inputTokenTiers` alongside base and cache rates.
 The editor preserves unknown prices and per-image/per-minute rates, and validates increasing tier
@@ -221,8 +221,7 @@ initial download fails.
 
 Complete, validated snapshots occupy two alternating files in persistent document storage. Writes
 replace the inactive slot, preserving the active snapshot even when the filesystem's overwrite/move
-is interrupted. Startup can fall back to the previous valid slot. Legacy cache snapshots migrate
-after validation, without depending on the old bundled catalog version. Mounted model projections
+is interrupted. Startup can fall back to the previous valid slot. Mounted model projections
 refresh after activation. User-model overrides and custom records are never rewritten by catalog
 updates; unset preset fields inherit the current snapshot.
 

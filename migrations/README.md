@@ -1,18 +1,17 @@
-**THIS DIRECTORY IS NOT FOR RUNTIME USE**
+# Database Migrations
 
-**Mobile Data Refactoring Notice**
-Before the mobile data layer is finalized, the database structure may change.
-If the schema is reinitialized during development, delete the local `cherry.db`
-database from the Expo SQLite storage.
+Cherry Mobile is unreleased. `sqlite-drizzle/0000_initial.sql` creates the current
+15-table schema from an empty database. Earlier development migrations and data
+backfills have been replaced by this baseline. Existing development databases
+must be recreated before using it; there is no upgrade path from the old history.
+The app does not automatically delete the local `cherry.db`.
 
-- Using `expo-sqlite` as the SQLite driver, and `drizzle` as the ORM and
-  database migration tool.
-- Table schemas are defined in `src/backend/data/db/schemas`.
-- `migrations/sqlite-drizzle` contains auto-generated migration data. Please
-  **DO NOT** modify it manually unless intentionally reconciling the mobile
-  migration history.
-- Expo runtime does not read this folder directly.
-  `src/backend/data/db/migrations.ts`
-  bundles the SQL and journal into the object required by
-  `drizzle-orm/expo-sqlite/migrator`.
-- If table structure changes, generate migrations with `drizzle-kit`.
+- Table definitions live in `src/backend/data/db/schemas`.
+- `sqlite-drizzle` contains generated SQL, the migration journal, and schema snapshots.
+  Keep them generated unless intentionally reconciling the migration history.
+- Expo cannot read this directory at runtime. `src/backend/data/db/migrations.ts`
+  bundles SQL and the journal for `drizzle-orm/expo-sqlite/migrator`.
+- After changing table definitions, run `pnpm db:generate` and register the new SQL
+  import in `migrations.ts`.
+- Full-text search tables and triggers remain in `src/backend/data/db/customSql.ts`.
+  `DbService` runs that SQL and the seeders after applying the bundled migrations.

@@ -686,7 +686,7 @@ export class JobRuntime extends BaseService {
     this.recoveryDone ??= this.runRecovery().catch((error) => {
       // Recovery is restartable and every step is fenced; a failure here must
       // not wedge the pump forever.
-      logger.error('startup recovery failed', error as Error);
+      logger.error('startup recovery failed', error as Error, { operation: 'job.recover' });
     });
     return this.recoveryDone;
   }
@@ -901,6 +901,7 @@ export class JobRuntime extends BaseService {
       )
         .catch((error: unknown) => {
           logger.error('failed to force terminal state after handler timeout', error as Error, {
+            operation: 'job.timeout.persist',
             jobId: row.id,
             timeout: timeoutError.message,
           });
@@ -1044,7 +1045,9 @@ export class JobRuntime extends BaseService {
       );
     } catch (err) {
       txFailed = err as Error;
-      logger.error('finalizeJob: terminal write failed — synthesizing snapshot', txFailed);
+      logger.error('finalizeJob: terminal write failed — synthesizing snapshot', txFailed, {
+        operation: 'job.finalize.persist',
+      });
     }
 
     const persisted = terminalResult?.snapshot ?? null;

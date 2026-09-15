@@ -1,1 +1,0 @@
-CREATE INDEX `agent_session_message_created_id_idx` ON `agent_session_message` (`created_at`,`id`);
