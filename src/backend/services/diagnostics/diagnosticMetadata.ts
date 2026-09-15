@@ -72,6 +72,33 @@ function metadataValue(value: unknown): string | number | boolean | undefined {
   return diagnosticIdentifier(value);
 }
 
+function projectRepetition(value: unknown, timestamp: string) {
+  if (!value || typeof value !== 'object') return undefined;
+  const source = value as Record<string, unknown>;
+  if (
+    typeof source.count !== 'number' ||
+    !Number.isSafeInteger(source.count) ||
+    source.count < 1 ||
+    typeof source.firstSeenAt !== 'string' ||
+    typeof source.lastSeenAt !== 'string'
+  )
+    return undefined;
+  const first = Date.parse(source.firstSeenAt);
+  const last = Date.parse(source.lastSeenAt);
+  if (
+    !Number.isFinite(first) ||
+    !Number.isFinite(last) ||
+    first > last ||
+    last !== Date.parse(timestamp)
+  )
+    return undefined;
+  return {
+    count: source.count,
+    firstSeenAt: new Date(first).toISOString(),
+    lastSeenAt: new Date(last).toISOString(),
+  };
+}
+
 /** Drop arbitrary log messages and nested payloads before any persistent write. */
 export function projectDiagnosticLog(record: Record<string, unknown>) {
   if (record.level !== 'warn' && record.level !== 'error') return undefined;
@@ -128,6 +155,10 @@ export function projectDiagnosticLog(record: Record<string, unknown>) {
           ? 'Application error'
           : 'Application warning',
     facts,
+    repetition:
+      record.capture === 'metadata'
+        ? projectRepetition(record.repetition, record.timestamp)
+        : undefined,
   };
 }
 

@@ -30,7 +30,7 @@ import {
   type DiagnosticUploadInput,
   type DiagnosticUploadResult,
 } from '@/shared/contracts/diagnostics';
-import { loggerService } from '@/shared/core/logger/LoggerService';
+import { flushLogWriter, loggerService } from '@/shared/core/logger/LoggerService';
 
 import { getNativeDiagnostics } from '../../../../modules/diagnostics';
 import { CherryDiagnosticUploadClient } from './CherryDiagnosticUploadClient';
@@ -265,6 +265,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     range: DiagnosticTimeRange,
     input: Pick<DiagnosticBundleInput, 'includeLogs' | 'includeTraces'>,
   ) {
+    if (input.includeLogs) flushLogWriter();
     let snapshot: TraceDiagnosticSnapshot | undefined;
     const warnings = new Set<DiagnosticWarning>();
     if (input.includeTraces) {

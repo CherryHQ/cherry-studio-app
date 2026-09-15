@@ -107,3 +107,38 @@ test('uses terminal time for completed requests and start time for unfinished re
     ),
   ).toBeUndefined();
 });
+
+test('projects repetition counts and times without accepting payload fields or invalid ranges', () => {
+  const record = {
+    schemaVersion: 1,
+    capture: 'metadata',
+    timestamp: new Date(2000).toISOString(),
+    level: 'error',
+    module: 'HttpTransport',
+    message: 'HTTP request failed.',
+    facts: {},
+    repetition: {
+      count: 4,
+      firstSeenAt: new Date(1000).toISOString(),
+      lastSeenAt: new Date(2000).toISOString(),
+      body: 'private body',
+    },
+  };
+  const projected = projectDiagnosticLog(record);
+  expect(projected?.repetition).toEqual({
+    count: 4,
+    firstSeenAt: new Date(1000).toISOString(),
+    lastSeenAt: new Date(2000).toISOString(),
+  });
+  expect(JSON.stringify(projected)).not.toContain('private');
+  expect(
+    projectDiagnosticLog({ ...record, repetition: { ...record.repetition, count: -1 } })
+      ?.repetition,
+  ).toBeUndefined();
+  expect(
+    projectDiagnosticLog({
+      ...record,
+      repetition: { ...record.repetition, firstSeenAt: new Date(3000).toISOString() },
+    })?.repetition,
+  ).toBeUndefined();
+});

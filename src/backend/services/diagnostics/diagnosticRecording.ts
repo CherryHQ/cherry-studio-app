@@ -1,17 +1,18 @@
 import { File } from 'expo-file-system';
 
-import type { LogRecord } from '@/shared/core/logger/LoggerService';
+import type { LogRecord, LogWriter } from '@/shared/core/logger/LoggerService';
 
 import { appendBytes, diagnosticDirectory } from './diagnosticFiles';
+import { createDiagnosticLogAggregator } from './diagnosticLogAggregation';
 import { projectDiagnosticLog } from './diagnosticMetadata';
 
 const MAX_FILE_BYTES = 1024 * 1024;
-const MAX_HISTORY_BYTES = 10 * MAX_FILE_BYTES;
+const MAX_HISTORY_BYTES = 20 * MAX_FILE_BYTES;
 const MAX_AGE_MS = 7 * 86400000;
 const LOG_NAME = /^app-error\.(\d{4}-\d{2}-\d{2})\.log(?:\.(\d+))?$/;
 
 /** Only warning/error metadata is persisted, independently of database or host startup. */
-export function createDiagnosticLogWriter(): (record: LogRecord) => void {
+export function createDiagnosticLogWriter(): LogWriter {
   const directory = diagnosticDirectory('logs');
   const encoder = new TextEncoder();
   let currentDay = '';
@@ -36,10 +37,9 @@ export function createDiagnosticLogWriter(): (record: LogRecord) => void {
 
   if (directory.exists) prune(Date.now());
 
-  return (record) => {
-    const safe = projectDiagnosticLog(record);
-    if (!safe) return;
-    const now = Date.parse(safe.timestamp);
+  const aggregate = createDiagnosticLogAggregator((safe) => {
+    const now = Date.now();
+    if (Date.parse(safe.timestamp) < now - MAX_AGE_MS) return;
     const day = safe.timestamp.slice(0, 10);
     if (day !== currentDay) {
       directory.create({ intermediates: true, idempotent: true });
@@ -59,5 +59,12 @@ export function createDiagnosticLogWriter(): (record: LogRecord) => void {
     appendBytes(file, bytes);
     historyBytes += bytes.length;
     if (historyBytes > MAX_HISTORY_BYTES) prune(now);
-  };
+  });
+  return Object.assign(
+    (record: LogRecord) => {
+      const safe = projectDiagnosticLog(record);
+      if (safe) aggregate(safe);
+    },
+    { flush: aggregate.flush },
+  );
 }

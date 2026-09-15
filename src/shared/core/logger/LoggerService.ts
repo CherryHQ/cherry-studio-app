@@ -12,14 +12,29 @@ export type LogRecord = Record<string, unknown> & {
   process: 'main';
 };
 
-let logWriter: ((record: LogRecord) => void) | undefined;
+export type LogWriter = ((record: LogRecord) => void) & { flush?: () => void };
+
+let logWriter: LogWriter | undefined;
 
 /** Bootstrap supplies the platform writer; shared logging has no native dependencies. */
-export function installLogWriter(writer: (record: LogRecord) => void): () => void {
+export function installLogWriter(writer: LogWriter): () => void {
+  flushLogWriter();
   logWriter = writer;
   return () => {
-    if (logWriter === writer) logWriter = undefined;
+    if (logWriter === writer) {
+      flushLogWriter();
+      logWriter = undefined;
+    }
   };
+}
+
+/** Flush pending summaries before backgrounding or collecting a diagnostic bundle. */
+export function flushLogWriter(): void {
+  try {
+    logWriter?.flush?.();
+  } catch {
+    /* Logging must not fail the caller. */
+  }
 }
 
 const LEVEL = {

@@ -1,6 +1,19 @@
-import { createLogRecord, installLogWriter, LoggerService } from '../LoggerService';
+import { createLogRecord, flushLogWriter, installLogWriter, LoggerService } from '../LoggerService';
 
 describe('file log transport', () => {
+  test('flushes the active writer on replacement and isolates flush failures', () => {
+    const oldFlush = jest.fn();
+    const disposeOld = installLogWriter(Object.assign(jest.fn(), { flush: oldFlush }));
+    const flush = jest.fn(() => {
+      throw new Error('disk full');
+    });
+    const dispose = installLogWriter(Object.assign(jest.fn(), { flush }));
+    expect(oldFlush).toHaveBeenCalledTimes(1);
+    disposeOld();
+    expect(() => flushLogWriter()).not.toThrow();
+    expect(flush).toHaveBeenCalledTimes(1);
+    dispose();
+  });
   test('preserves caller metadata while protecting log source fields', () => {
     const error = Object.assign(new Error('HTTP 401'), { requestBody: { prompt: 'raw prompt' } });
     const record = createLogRecord(

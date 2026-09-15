@@ -1,6 +1,12 @@
+import { AppState } from 'react-native';
+
 import { removeLegacyDiagnosticData } from '@/backend/services/diagnostics/diagnosticFiles';
 import { createDiagnosticLogWriter } from '@/backend/services/diagnostics/diagnosticRecording';
-import { installLogWriter, loggerService } from '@/shared/core/logger/LoggerService';
+import {
+  flushLogWriter,
+  installLogWriter,
+  loggerService,
+} from '@/shared/core/logger/LoggerService';
 
 type RejectionOptions = {
   allRejections: boolean;
@@ -23,6 +29,10 @@ try {
 }
 try {
   installLogWriter(createDiagnosticLogWriter());
+  // This observer has the same app-entry process lifetime as the installed writer.
+  AppState.addEventListener('change', (state) => {
+    if (state !== 'active') flushLogWriter();
+  });
 } catch (error) {
   // Unavailable file storage must not turn diagnostic setup into a boot failure.
   logger.warn('Diagnostic file logging unavailable', { error });

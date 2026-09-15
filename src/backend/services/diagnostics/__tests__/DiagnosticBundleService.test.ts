@@ -1,4 +1,5 @@
 import type { DbService } from '@/backend/data/db/DbService';
+import { installLogWriter } from '@/shared/core/logger/LoggerService';
 
 import { DiagnosticBundleService } from '../DiagnosticBundleService';
 
@@ -100,6 +101,20 @@ beforeEach(() => {
 function service() {
   return new DiagnosticBundleService({} as DbService, { createDiagnosticSnapshot: mockSnapshot });
 }
+
+test('flushes pending log summaries before taking an inspection snapshot', async () => {
+  const flush = jest.fn();
+  const dispose = installLogWriter(Object.assign(jest.fn(), { flush }));
+  mockSnapshot.mockImplementationOnce(async () => {
+    expect(flush).toHaveBeenCalledTimes(1);
+    return snapshot;
+  });
+  try {
+    await service().inspect('24h');
+  } finally {
+    dispose();
+  }
+});
 
 test('exports schema-v2 with an empty crash inventory and reports the system destination', async () => {
   const result = await service().exportBundle(input);

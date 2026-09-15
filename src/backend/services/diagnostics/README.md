@@ -25,11 +25,23 @@ existing [Sentry integration](../../../frontend/appShell/observability/README.md
 
 The process-owned logger and JS exception/rejection observer are installed before router imports.
 They preserve React Native's existing handlers and persist only projected warning/error metadata.
-Logs live under `Diagnostics/logs-v1`, rotate at 1 MiB and retain at most 7 days / 10 MiB.
+Logs live under `Diagnostics/logs-v1`, rotate at 1 MiB and retain at most 7 days / 20 MiB.
+The first matching error is written immediately. Within a 30-second window, repeated records with
+matching level/module/template and stable error/context facts are summarized. Request/turn/message
+ids, elapsed time, token totals and cumulative storage counters do not split a group; summaries omit
+those per-occurrence values. `repetition.count` counts **additional** occurrences, with their first
+and last timestamps; add the separately written first record when counting the complete burst.
+At most 64 groups are retained in memory, and pending counts are written before a group is evicted.
+Fatal exceptions bypass aggregation. Summaries flush on a timer, backgrounding, writer replacement,
+and inspection/export. An abrupt process exit can lose pending repeat counts, but not the already
+written first occurrence. Collection limits are upper bounds, not a guarantee of seven days of history.
+
 Legacy `Diagnostics/logs`, `Diagnostics/traces` and `Diagnostics/crashes` are removed at startup;
 the new collector never reads those paths, even if cleanup fails.
 
-Request traces retain at most 7 days / 20 MiB / 512 files under `Runtime/trace/v1`. Inspection and
+Request traces retain at most 7 days / 20 MiB / 512 files under `Runtime/trace/v1`. Flushes append to
+the current file, rotating at 1 MiB or a UTC day boundary instead of creating a file per request
+boundary. The 512-file guard remains for legacy files and exceptional histories. Inspection and
 export flush and copy stable trace snapshots, then release them on success, failure or cancellation.
 Export projects every record again through an explicit field allowlist and filters by the selected
 24-hour, 3-day or 7-day range. A terminal span uses its end timestamp; a running span uses its start.
