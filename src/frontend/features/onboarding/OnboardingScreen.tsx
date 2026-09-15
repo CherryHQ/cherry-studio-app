@@ -34,7 +34,7 @@ export function OnboardingScreen() {
     isSaving.current = true;
     setPendingAction(action);
     try {
-      let agentId = agents.agents[0]?.id;
+      let agentId: string | undefined = agents.agents[0]?.id;
       if (action === 'skip' && !agentId) {
         const result = await agents.refetch({ throwOnError: true });
         agentId = result.data?.items[0]?.id;
