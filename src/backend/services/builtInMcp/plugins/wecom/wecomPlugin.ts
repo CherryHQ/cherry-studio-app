@@ -4,18 +4,15 @@ import type { PluginDefinition, PluginRequestAuthorization } from '../../pluginD
 import { createWecomClient } from './createWecomClient';
 import { wecomGuide } from './guide';
 import { WecomAuthorizationRuntime } from './WecomAuthorizationRuntime';
-import { importWecomMcpConfig, readWecomCredential } from './wecomCredentials';
+import { readWecomCredential } from './wecomCredentials';
+import { isWecomApiUrl } from './wecomSchema';
 import { acceptsWecomTool, WECOM_TOOL_POLICY } from './wecomTools';
 
 const authorization: PluginRequestAuthorization = {
-  apply(value, { url }) {
+  apply(value, { url, headers }) {
     const credential = readWecomCredential(value);
-    const connection = credential.connections.find(({ url: target }) => {
-      const endpoint = new URL(target);
-      return endpoint.origin === url.origin && endpoint.pathname === url.pathname;
-    });
-    if (!connection) throw new PluginError('access', 'The Wecom MCP service is not authorized.');
-    url.search = new URL(connection.url).search;
+    if (!isWecomApiUrl(url)) throw new PluginError('access', 'Untrusted Wecom service endpoint.');
+    headers.set('Authorization', `Bearer ${credential.token}`);
   },
 };
 
@@ -26,7 +23,7 @@ export const wecomPlugin: PluginDefinition = {
     id: 'wecom',
     icon: 'file-text',
     links: {
-      credentials: 'https://open.work.weixin.qq.com/help2/pc/21676',
+      credentials: 'https://open.work.weixin.qq.com/help2/pc/cat?doc_id=21677',
       website: 'https://work.weixin.qq.com',
       privacy: 'https://work.weixin.qq.com/nl/privacy',
     },
@@ -42,17 +39,9 @@ export const wecomPlugin: PluginDefinition = {
       createRuntime: (store) => new WecomAuthorizationRuntime(store),
       createRequestAuthorization: () => authorization,
     },
-    {
-      id: 'wecom_mcp',
-      kind: 'credentials',
-      requiresDisconnect: true,
-      fields: [{ id: 'mcpConfig', secret: true, maxLength: 16_384 }],
-      encodeCredentials: (fields) => importWecomMcpConfig(fields.mcpConfig),
-      createRequestAuthorization: () => authorization,
-    },
   ],
   createClient: createWecomClient,
-  // The signed bootstrap establishes bot authorization; MCP setup only discovers tools.
+  // Authorization exchanges a token; setup only discovers tools, without business calls.
   validation: {
     accountLabel: () => 'WeCom',
   },

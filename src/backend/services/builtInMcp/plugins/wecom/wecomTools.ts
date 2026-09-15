@@ -1,32 +1,37 @@
 import type { PluginToolPolicy } from '../../pluginDefinition';
 
-// Read effects reviewed against WecomTeam/wecom-cli at 9eb7898b959861af879495e211e37431fa908f19.
-// Everything else discovered from the official service remains available with write approval.
+// Reviewed against official CLI 1.2.1 skills at 1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08.
+// New service/resource/method paths are admitted with write approval.
 const READ_TOOLS = {
-  contact: ['get_userlist'],
-  doc: [
-    'get_doc_content',
-    'sheet_get_info',
-    'smartsheet_get_sheet',
-    'smartsheet_get_fields',
-    'smartsheet_get_records',
-    'smartpage_get_export_result',
+  calendar: ['schedules__free__list', 'schedules__get', 'schedules__list', 'schedules__search'],
+  contact: ['users__search'],
+  disk: ['files__get', 'files__list', 'files__search'],
+  doc: ['contents__get', 'search'],
+  identity: ['whoami'],
+  mail: ['get', 'search'],
+  meeting: ['get', 'list', 'original__get', 'rooms__buildings__list', 'rooms__search', 'search'],
+  message: ['aibot__sessions__list'],
+  sheet: ['get', 'ranges__get'],
+  smartpage: ['databases__get', 'pages__get'],
+  smartsheet: [
+    'charts__list',
+    'fields__list',
+    'records__list',
+    'records__query',
+    'sheets__list',
+    'views__list',
   ],
-  meeting: ['get_meeting_info', 'list_user_meetings'],
-  msg: ['get_message', 'get_msg_chat_list', 'get_msg_media'],
-  schedule: ['get_schedule_detail', 'get_schedule_list_by_range', 'check_availability'],
-  todo: ['get_todo_detail', 'get_todo_list', 'search_todo_userid'],
+  todo: ['get', 'list'],
 } as const;
 
-/** Category-qualified names prevent an identically named tool in another service gaining read access. */
 export const WECOM_TOOL_POLICY: PluginToolPolicy = Object.fromEntries(
-  Object.entries(READ_TOOLS).flatMap(([category, tools]) =>
-    tools.map((name) => [`wecom_${category}__${name}`, 'read']),
+  Object.entries(READ_TOOLS).flatMap(([service, methods]) =>
+    methods.map((name) => [`wecom_${service}__${name}`, 'read']),
   ),
 );
 
 export function acceptsWecomTool(name: string): boolean {
-  return /^wecom_[a-z][a-z0-9]*(?:_[a-z0-9]+)*__[A-Za-z0-9_.-]{1,128}$/.test(name);
+  return name.length <= 128 && /^wecom_[a-zA-Z][a-zA-Z0-9_-]*__[a-zA-Z][a-zA-Z0-9_-]*$/.test(name);
 }
 
 export function getWecomToolEffect(name: string): 'read' | 'write' | undefined {

@@ -1,233 +1,120 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
-
-import { PluginError } from '@/shared/contracts/plugins';
-
-import {
-  getPluginToolEffect,
-  type PluginClient,
-  type PluginClientContext,
-} from '../../../pluginDefinition';
-import { createOfficialMcpClient } from '../../../transport/createOfficialMcpClient';
+import type { PluginClient, PluginClientContext } from '../../../pluginDefinition';
 import { createWecomClient } from '../createWecomClient';
-import type { WecomBotCredential, WecomCredential } from '../wecomCredentials';
-import { wecomPlugin } from '../wecomPlugin';
+import { getWecomToolEffect } from '../wecomTools';
 
-jest.mock('../../../transport/createOfficialMcpClient', () => ({
-  createOfficialMcpClient: jest.fn(),
+const mockCall = jest.fn();
+jest.mock('../wecomApi', () => ({
+  ...jest.requireActual('../wecomApi'),
+  createWecomApi: () => ({ call: mockCall }),
 }));
-const makeCredential = (): WecomBotCredential => ({
-  version: 3,
+jest.mock('../wecomFiles', () => ({
+  prepareWecomFiles: async (_api: unknown, _schema: unknown, args: unknown) => ({ payload: args }),
+  saveWecomResult: (_schema: unknown, value: unknown) => value,
+  saveWecomFile: () => ({ file_path: 'file:///download' }),
+}));
+
+const output = (value: unknown) => ({ kind: 'json', value: { result: JSON.stringify(value) } });
+const method = (path: string) => ({
+  path,
+  http_method: 'POST',
+  request: { $ref: 'Request' },
+  description: 'Official description',
+});
+const service = (methods: Record<string, unknown>) => ({
+  schemas: {
+    Request: {
+      type: 'object',
+      properties: { keywords: { type: 'array', items: { type: 'string' } } },
+    },
+  },
+  methods,
+});
+let context: PluginClientContext;
+let credential = {
+  version: 4,
   kind: 'bot',
   botId: 'bot-1',
   secret: 'private-secret',
-  configId: 'config-1',
-  connections: ['doc', 'mail'].map((category) => ({
-    category,
-    url: `https://qyapi.weixin.qq.com/mcp/bot/${category}?key=private-${category}`,
-  })),
-});
-function remote(tools: ListToolsResult['tools']) {
-  return {
-    serverInfo: { name: 'Official WeCom', version: '1' },
-    listTools: jest.fn(async (): Promise<ListToolsResult> => ({ tools })),
-    callTool: jest.fn(async () => ({
-      content: [{ type: 'text' as const, text: '{"errcode":0}' }],
-    })),
-    close: jest.fn(async () => {}),
-  };
-}
-const definition = (name: string): ListToolsResult['tools'][number] => ({
-  name,
-  description: 'Official description',
-  inputSchema: { type: 'object', properties: {} },
-});
-let credential: WecomCredential;
-let context: PluginClientContext;
-let doc: ReturnType<typeof remote>;
-let mail: ReturnType<typeof remote>;
+  token: 'private-token',
+};
 let client: PluginClient | undefined;
 beforeEach(() => {
-  jest.clearAllMocks();
-  credential = makeCredential();
+  mockCall.mockReset();
+  credential = { ...credential, botId: 'bot-1' };
   context = {
     pluginId: 'wecom',
-    tools: wecomPlugin.tools,
+    tools: {},
     signal: new AbortController().signal,
     getCredential: jest.fn(async () => credential),
     assertAuthorized: jest.fn(async () => {}),
-    rejectCredential: jest.fn(async () => {}),
-    authorization: wecomPlugin.authMethods[0].createRequestAuthorization(wecomPlugin.tools),
+    authorization: { apply: () => {} },
   };
-  doc = remote([definition('get_doc_content'), definition('create_doc')]);
-  mail = remote([definition('send_mail')]);
-  jest
-    .mocked(createOfficialMcpClient)
-    .mockImplementation(async (_context, connection) =>
-      connection.url.endsWith('/doc') ? doc : mail,
+  mockCall.mockImplementation(async ({ endpoint, payload }) => {
+    if (endpoint.path !== '/cli/service/discovery')
+      return output({ items: [1], next_cursor: 'next' });
+    if (!payload.service) return output({ items: [{ name: 'doc' }, { name: 'mail' }] });
+    return output(
+      payload.service === 'doc'
+        ? service({ search: method('/doc/search') })
+        : service({ new_action: method('/mail/new_action') }),
     );
+  });
 });
 afterEach(async () => {
   await client?.close();
   client = undefined;
 });
 
-it('exposes official schemas and new tools while reserving read access for reviewed service/name pairs', async () => {
-  const schema = { type: 'object' as const, properties: { mode: { enum: ['new-mode'] } } };
-  mail.listTools.mockResolvedValue({
-    tools: [
-      { ...definition('new_operation'), inputSchema: schema, annotations: { readOnlyHint: true } },
-      definition('get_doc_content'),
-    ],
-  });
+it('discovers current official tools and routes exact arguments through the new gateway', async () => {
   client = await createWecomClient(context);
-  const page = await client.listTools();
-  const tool = page.tools.find(({ name }) => name === 'wecom_mail__new_operation')!;
-  expect(tool.inputSchema).toBe(schema);
-  expect(tool.description).toBe('Official description');
-  expect(tool.annotations?.readOnlyHint).toBe(false);
-  expect(getPluginToolEffect(wecomPlugin, tool.name)).toBe('write');
-  expect(getPluginToolEffect(wecomPlugin, 'wecom_mail__get_doc_content')).toBe('write');
-  expect(getPluginToolEffect(wecomPlugin, 'wecom_doc__get_doc_content')).toBe('read');
-  const args = { mode: 'new-mode', file_url: 'https://example.test/report.pdf' };
-  const output = { content: [{ type: 'text' as const, text: '{"official":"result"}' }] };
-  mail.callTool.mockResolvedValue(output);
-  expect(await client.callTool({ name: tool.name, args })).toBe(output);
-  expect(mail.callTool.mock.calls[0]).toEqual([
-    expect.objectContaining({ name: 'new_operation', args }),
-  ]);
+  const { tools } = await client.listTools();
+  expect(tools.map(({ name }) => name)).toEqual(['wecom_doc__search', 'wecom_mail__new_action']);
+  expect(tools[0].inputSchema.properties).toEqual({
+    keywords: { type: 'array', items: { type: 'string' } },
+  });
+  expect(getWecomToolEffect(tools[0].name)).toBe('read');
+  expect(getWecomToolEffect(tools[1].name)).toBe('write');
+  const args = { keywords: ['weekly'] };
+  const result = await client.callTool({ name: 'wecom_doc__search', args });
+  expect(result.content).toEqual([{ type: 'text', text: '{"items":[1],"next_cursor":"next"}' }]);
+  expect(mockCall.mock.calls.at(-1)?.[0]).toMatchObject({
+    endpoint: { path: '/cli/doc/search' },
+    payload: args,
+    effect: 'read',
+  });
+  expect(JSON.stringify(mockCall.mock.calls)).not.toContain('private-');
 });
 
-it('rejects undiscovered names and keeps credentials out of SDK endpoints', async () => {
+it('retains successful services and safe diagnostics after a partial discovery failure', async () => {
+  const implementation = mockCall.getMockImplementation()!;
+  mockCall.mockImplementation((request) =>
+    request.payload.service === 'mail'
+      ? Promise.reject(new Error('private-url'))
+      : implementation(request),
+  );
   client = await createWecomClient(context);
-  await expect(client.callTool({ name: 'wecom_doc__create_doc', args: {} })).rejects.toMatchObject({
+  expect((await client.listTools()).tools.map(({ name }) => name)).toEqual(['wecom_doc__search']);
+  expect(client.discoveryWarnings).toEqual([expect.stringContaining('Wecom mail')]);
+  expect(JSON.stringify(client.discoveryWarnings)).not.toContain('private-url');
+});
+
+it('caches discovery but rejects undiscovered names, changed identities and calls after close', async () => {
+  client = await createWecomClient(context);
+  await expect(client.callTool({ name: 'wecom_doc__search', args: {} })).rejects.toMatchObject({
     reason: 'access',
   });
   await client.listTools();
-  const [transport, connection] = jest.mocked(createOfficialMcpClient).mock.calls[0];
-  expect(connection.url).toBe('https://qyapi.weixin.qq.com/mcp/bot/doc');
-  const url = new URL(connection.url);
-  await transport.authorization.apply(credential, { url, headers: new Headers() });
-  expect(url.href).toBe(credential.connections[0].url);
+  await client.listTools();
+  expect(mockCall).toHaveBeenCalledTimes(3);
   await expect(client.callTool({ name: 'wecom_doc__invented', args: {} })).rejects.toMatchObject({
     reason: 'access',
   });
-  expect(doc.callTool).not.toHaveBeenCalled();
-});
-
-it('retains other services after partial discovery failures and handles tool pagination', async () => {
-  mail.listTools.mockRejectedValue(new Error('private-upstream-url'));
-  doc.listTools.mockResolvedValueOnce({
-    tools: [definition('get_doc_content')],
-    nextCursor: 'page2',
-  });
-  doc.listTools.mockResolvedValueOnce({ tools: [definition('create_doc')] });
-  client = await createWecomClient(context);
-  expect((await client.listTools()).tools.map(({ name }) => name)).toEqual([
-    'wecom_doc__get_doc_content',
-    'wecom_doc__create_doc',
-  ]);
-  expect(client.discoveryWarnings).toEqual([expect.stringContaining('Wecom mail')]);
-  expect(JSON.stringify(client.discoveryWarnings)).not.toContain('private-upstream');
-});
-
-it('binds each category to its own credential even when official MCP paths are shared', async () => {
-  const endpoint = 'https://qyapi.weixin.qq.com/mcp/services';
-  credential = {
-    ...makeCredential(),
-    connections: ['doc', 'mail'].map((category) => ({
-      category,
-      url: `${endpoint}?key=private-${category}`,
-    })),
-  };
-  jest.mocked(createOfficialMcpClient).mockResolvedValueOnce(doc).mockResolvedValueOnce(mail);
-  client = await createWecomClient(context);
-  const page = await client.listTools();
-  expect(page.tools.map(({ name }) => name)).toContain('wecom_mail__send_mail');
-  for (const [index, [transport, connection]] of jest
-    .mocked(createOfficialMcpClient)
-    .mock.calls.entries()) {
-    expect(connection.url).toBe(endpoint);
-    const url = new URL(connection.url);
-    await transport.authorization.apply(credential, { url, headers: new Headers() });
-    expect(url.href).toBe(credential.connections[index].url);
-    await expect(
-      transport.authorization.apply(credential, {
-        url: new URL(`${endpoint}/other`),
-        headers: new Headers(),
-      }),
-    ).rejects.toMatchObject({ reason: 'access' });
-  }
-});
-
-it('replaces sessions after MCP credential rotation and rejects an old session using a new grant', async () => {
-  client = await createWecomClient(context);
-  await client.listTools();
-  const oldTransport = jest.mocked(createOfficialMcpClient).mock.calls[0][0];
-  credential = { ...makeCredential(), configId: 'config-2' };
-  await expect(
-    oldTransport.authorization.apply(credential, {
-      url: new URL('https://qyapi.weixin.qq.com/mcp/bot/doc'),
-      headers: new Headers(),
-    }),
-  ).rejects.toMatchObject({ reason: 'access' });
-  await client.callTool({ name: 'wecom_doc__get_doc_content', args: {} });
-  expect(doc.close).toHaveBeenCalledTimes(1);
-  expect(createOfficialMcpClient).toHaveBeenCalledTimes(3);
-});
-
-it('never replays uncertain writes or authorization failures', async () => {
-  client = await createWecomClient(context);
-  await client.listTools();
-  doc.callTool.mockRejectedValueOnce(new Error('private-network-detail'));
-  await expect(client.callTool({ name: 'wecom_doc__create_doc', args: {} })).rejects.toMatchObject({
-    reason: 'unknown-write',
-    message: expect.not.stringContaining('private-'),
-  });
-  doc.callTool.mockRejectedValueOnce(new PluginError('authorization', 'Refresh authorization.'));
-  await expect(client.callTool({ name: 'wecom_doc__create_doc', args: {} })).rejects.toMatchObject({
+  credential = { ...credential, botId: 'other-bot' };
+  await expect(client.callTool({ name: 'wecom_doc__search', args: {} })).rejects.toMatchObject({
     reason: 'authorization',
   });
-  expect(doc.callTool).toHaveBeenCalledTimes(2);
-});
-
-it('treats cancellation during an attempted write as an uncertain outcome', async () => {
-  client = await createWecomClient(context);
-  await client.listTools();
-  doc.callTool.mockRejectedValueOnce(new PluginError('cancelled', 'Request cancelled.'));
-  await expect(client.callTool({ name: 'wecom_doc__create_doc', args: {} })).rejects.toMatchObject({
-    reason: 'unknown-write',
-  });
-  expect(doc.callTool).toHaveBeenCalledTimes(1);
-});
-
-it.each([-32001, -32002, -32003])(
-  'invalidates rejected MCP configurations for error %s without exposing the response',
-  async (code) => {
-    client = await createWecomClient(context);
-    await client.listTools();
-    const connection = jest.mocked(createOfficialMcpClient).mock.calls[0][1];
-    const response = new Response(
-      JSON.stringify({ error: { code, message: 'private-upstream' } }),
-      {
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
-    await expect(connection.inspectResponse!(response)).rejects.toMatchObject({
-      reason: 'authorization',
-      message: expect.not.stringContaining('private-upstream'),
-    });
-    expect(context.rejectCredential).toHaveBeenCalledWith(credential);
-    expect(doc.callTool).not.toHaveBeenCalled();
-  },
-);
-
-it('closes official sessions and prevents calls after disconnect', async () => {
-  client = await createWecomClient(context);
-  await client.listTools();
   await client.close();
-  await expect(client.callTool({ name: 'wecom_doc__create_doc', args: {} })).rejects.toMatchObject({
-    reason: 'access',
+  await expect(client.callTool({ name: 'wecom_doc__search', args: {} })).rejects.toMatchObject({
+    reason: 'cancelled',
   });
-  expect(doc.close).toHaveBeenCalledTimes(1);
-  expect(mail.close).toHaveBeenCalledTimes(1);
 });

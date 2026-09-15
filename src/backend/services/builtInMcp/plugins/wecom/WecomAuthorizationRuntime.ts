@@ -9,18 +9,14 @@ import type {
 } from '../../authorization/pluginAuthorization';
 import type { PluginCredential } from '../../authorization/pluginCredential';
 import { wecomBotApi } from './wecomBotApi';
-import {
-  WecomBotCredentialSchema,
-  type WecomBot,
-  type WecomBotCredential,
-} from './wecomCredentials';
+import { WecomCredentialSchema, type WecomBot, type WecomCredential } from './wecomCredentials';
 
 type Pending =
   | ({ status: 'waiting'; id: string } & Awaited<ReturnType<typeof wecomBotApi.begin>>)
-  | { status: 'ready'; id: string; bot: WecomBot; credential?: WecomBotCredential }
+  | { status: 'ready'; id: string; bot: WecomBot; credential?: WecomCredential }
   | { status: 'expired'; id: string };
 
-/** Owns phone authorization and serialized renewal of official MCP connection credentials. */
+/** Owns phone authorization and serialized renewal of the official CLI access token. */
 export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
   private pending?: Pending;
   private operations: Promise<unknown> = Promise.resolve();
@@ -151,7 +147,7 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
     signal?.throwIfAborted();
     this.lifetime.signal.throwIfAborted();
     const current = await this.store.getGrant(authorizationId);
-    const parsed = WecomBotCredentialSchema.safeParse(current?.credential);
+    const parsed = WecomCredentialSchema.safeParse(current?.credential);
     if (!parsed.success)
       throw new PluginError('authorization', 'Wecom bot credentials are unavailable.');
     signal?.throwIfAborted();
@@ -163,14 +159,14 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
     const signal = AbortSignal.any([this.lifetime.signal, this.renewal.signal]);
     return this.serialize(async () => {
       signal.throwIfAborted();
-      const sent = WecomBotCredentialSchema.safeParse(rejected);
-      const current = WecomBotCredentialSchema.safeParse(
+      const sent = WecomCredentialSchema.safeParse(rejected);
+      const current = WecomCredentialSchema.safeParse(
         (await this.store.getGrant(authorizationId))?.credential,
       );
       if (!sent.success || !current.success)
         throw new PluginError('authorization', 'Wecom authorization is unavailable.');
-      // Concurrent rejections of the same configuration share the first successful renewal.
-      if (sent.data.configId !== current.data.configId) return;
+      // Concurrent rejections of the same token share the first successful renewal.
+      if (sent.data.botId !== current.data.botId || sent.data.token !== current.data.token) return;
       const renewed = await wecomBotApi.exchange(current.data, 1, signal);
       signal.throwIfAborted();
       if (!(await this.store.updateCredential(authorizationId, renewed, signal)))
@@ -180,7 +176,7 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
 
   async describeConnection(authorizationId: string): Promise<PluginConnectionStatus> {
     const grant = await this.store.getGrant(authorizationId);
-    return WecomBotCredentialSchema.safeParse(grant?.credential).success
+    return WecomCredentialSchema.safeParse(grant?.credential).success
       ? { status: 'connected' }
       : { status: 'needs-reauthorization', reason: 'authorization' };
   }

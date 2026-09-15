@@ -19,7 +19,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `plugins/github/` | GitHub definition, workflow guide, OAuth App authorization with PKCE, account identity, token rotation and revocation |
 | `plugins/feishu/` | Feishu workflow guide, authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
 | `plugins/dingtalk/` | Official cloud device authorization, account review, token renewal, behavior authorization and service-bound tools |
-| `plugins/wecom/` | Official bot authorization, imported MCP configurations, service-bound MCP sessions, discovered tool policy and workflow guide |
+| `plugins/wecom/` | Official bot authorization, CLI gateway requests, discovered service schemas, native file transfer and workflow guide |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
 internal responsibility groups; they do not add public barrels. Each plugin exposes only its
@@ -212,51 +212,54 @@ names through `acceptsDiscoveredTool`; those names always receive `write` policy
 invocation to tools actually discovered on that authorized service. The existing runtime validates
 discovered input schemas and applies result-size limits.
 
-## WeCom Official MCP
+## WeCom Official API
 
-WeCom business operations use the official Streamable HTTP MCP services through
-`createOfficialMcpClient`. Cherry does not bundle or run the desktop CLI, convert its HTTP service
-descriptions into schemas, or implement business request envelopes. `wecomBotApi.ts` owns only the
-official confirmation-link, polling and signed MCP-configuration exchange. This is bot
-authorization, not a standard OAuth authorization-code flow.
+WeCom business operations use the current official CLI HTTP gateway under
+`https://qyapi.weixin.qq.com/cli`. Cherry implements the protocol in native TypeScript; it does not
+bundle a CLI executable. `wecomBotApi.ts` owns confirmation-link creation, polling for bot identity
+and the signed `get_cli_config` exchange. Version 4 native credentials store bot identity, secret
+and the resulting bearer token. The single `wecom_bot` authorization method retains confirmation
+inside WeCom. Old CLI/MCP credentials require disconnecting and reconnecting; MCP URL/JSON import
+and the obsolete `get_mcp_config` transport are removed.
 
-The default `wecom_bot` method copies a link for confirmation inside WeCom. The alternative
-`wecom_mcp` method imports an official MCP URL or `mcpServers` JSON export from the bot's permission
-page. Both accept only HTTPS endpoints under `qyapi.weixin.qq.com/mcp/`. Signed configuration uses
-the official `biz_type` independently of the service's URL path. Imports infer categories for known
-personal and enterprise document paths; other paths receive neutral `service_<index>` names and
-default write approval. Native credential storage holds private query parameters; SDK endpoint
-metadata excludes them. Each MCP session receives only its own service's query parameters, even
-when multiple services share a path. The import method rejects executable commands, arbitrary hosts
-and custom headers.
+`createWecomClient` queries `/service/discovery` for the catalog and each service schema. It resolves
+named request/response references and nested resources, hides upstream internal input fields, and
+qualifies names as `wecom_<service>__<resource>__<method>` (with additional resource segments when
+needed). Only discovered routes can be called. Reviewed service/resource/method names have read
+policy; new names receive the existing write approval policy. A reviewed read that acquires upload
+or confirmation directives is omitted. Unsupported definitions produce safe warnings alongside
+usable tools. Successful discovery is cached for 60 seconds; partial results refresh on the next
+request. Schema endpoints must stay under the fixed official HTTPS gateway, without redirects or
+credential-bearing query strings.
 
-`createWecomClient` discovers tools across authorized categories and qualifies their names as
-`wecom_<category>__<upstream-name>`. Official schemas, descriptions, arguments and results stay intact.
-Reviewed service/name pairs have read policy; all other discovered names require the existing write
-approval policy even if the server advertises `readOnlyHint`. Partial discovery retains usable tools
-and safe warnings. The bundled guide explains how to use the current catalog, including documents,
-tables, mail, messages, files and asynchronous results; actual availability follows the grant.
+`wecomApi.ts` uses the shared HTTP client and always POSTs the official stringified `payload`
+envelope, including methods whose schema describes a GET. It decodes both gateway and business
+errors. Explicit token rejection (`853004`) serializes renewal; a rejected read can replay once,
+while a write requires an explicit retry. Network failures and interrupted long writes report an
+unknown outcome. Long tasks use the returned task ID through `/task/query` or the original endpoint
+with `X-Long-Poll-TaskId` and an empty payload; original write content is not resubmitted for polling.
 
-HTTP 401 or official JSON-RPC configuration errors request bot-configuration renewal without
-replaying the failed operation. Changed configurations replace MCP sessions. Imported configurations
-require reimporting after expiration or a permission change. Version 2 CLI credentials require
-disconnecting and reconnecting; version 3 stores bot identity plus MCP configuration, or an imported
-MCP configuration. There is no automatic credential conversion.
+`wecomFiles.ts` resolves attachment/file-tool `file_entry_id` values through the existing file
+service and applies official file directives to native files. Media uploads replace local paths
+with media IDs; octet-stream methods use multipart fields. Uploads are limited to Cherry attachment,
+document-export and WeCom-download directories, with a 100 MiB file/multipart limit. Binary/range
+downloads are bounded at 64 MiB. File-save fields become actual paths under the app cache, with safe
+unique filenames; large JSON results are saved intact instead of being silently truncated. File
+directives inside schema unions are omitted as unsupported rather than forwarding unprocessed
+paths. The shared runtime continues to validate arguments and apply tool-result limits.
 
-The signed configuration exchange follows the official CLI's
-[MCP implementation at 9eb7898](https://github.com/WecomTeam/wecom-cli/blob/9eb7898b959861af879495e211e37431fa908f19/src/mcp/config.rs).
-The latest CLI uses a different business transport; this integration retains the pinned MCP
-bootstrap. The user confirmed successful bot connection in the development app on 2026-09-15 after
-removing the category/path coupling. The independent import path follows the
-[current official MCP setup guide](https://open.work.weixin.qq.com/help2/pc/21676).
-Configuration import and business tool calls still need live-account acceptance; related regression
-suites were updated but not run.
+The bundled guide follows current document, table, people, task, calendar, mail, message and file
+workflows. Availability and data access still depend on the official service and authorization.
+Message-session discovery does not imply unread-message or full chat-history access. Authorization
+errors log safe stages and schema locations through `WecomAuthorization`; private values and bot
+secrets are excluded from diagnostics.
 
-Enterprise document bots can have their own document permissions rather than inherit the user's;
-see the [official CLI discussion](https://github.com/WecomTeam/wecom-cli/issues/64). Authorization
-response failures log the stage and schema locations through `WecomAuthorization`, without response
-values, URL query credentials or bot secrets. Development builds expose safe authorization diagnostics
-through the connection screen's explicit Error details action.
+Protocol reference: official CLI 1.2.1 at
+[1cd90a5](https://github.com/WecomTeam/wecom-cli/tree/1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08),
+including its [token bootstrap](https://github.com/WecomTeam/wecom-cli/blob/1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08/crates/wecom-cli/src/auth/bootstrap.rs)
+and [HTTP transport](https://github.com/WecomTeam/wecom-cli/tree/1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08/crates/wecom-transport/src/http).
+Regression suites were updated but not run. New authorization, business calls and native file
+transfer still require device and live-account acceptance.
 
 ## Compatibility And Verification
 

@@ -9,13 +9,10 @@ jest.mock('../wecomBotApi', () => ({
 
 const bot = { botId: 'bot-1', secret: 'private-secret' };
 const credential = {
-  version: 3 as const,
+  version: 4 as const,
   kind: 'bot' as const,
   ...bot,
-  configId: 'config-1',
-  connections: [
-    { category: 'doc', url: 'https://qyapi.weixin.qq.com/mcp/bot/doc?key=private-key' },
-  ],
+  token: 'private-token',
 };
 const challenge = {
   sessionCode: 'private-session',
@@ -47,7 +44,7 @@ it('keeps the polling secret off the screen and saves only an approved, exchange
     verificationAction: 'copy',
     verificationUrl: challenge.verificationUrl,
   });
-  expect(JSON.stringify(state)).not.toMatch(/private-session|private-secret|private-key/);
+  expect(JSON.stringify(state)).not.toMatch(/private-session|private-secret|private-token/);
   expect(fixture.data.grant).toBeUndefined();
   if (state.status !== 'waiting') throw new Error('Expected waiting');
   // Re-entering the page before the deadline resumes the same attempt.
@@ -82,15 +79,18 @@ it('does not replace an existing connection or poll an expired attempt', async (
   expect(wecomBotApi.poll).not.toHaveBeenCalled();
 });
 
-it('deduplicates renewal of rejected MCP credentials and preserves the bot identity', async () => {
+it('deduplicates renewal of rejected gateway tokens and preserves the bot identity', async () => {
   fixture.data.grant = { id: 'grant', credential };
-  jest.mocked(wecomBotApi.exchange).mockResolvedValue({ ...credential, configId: 'config-2' });
+  jest.mocked(wecomBotApi.exchange).mockResolvedValue({ ...credential, token: 'renewed-token' });
   await Promise.all([
     runtime.rejectCredential('grant', credential),
     runtime.rejectCredential('grant', credential),
   ]);
   expect(wecomBotApi.exchange).toHaveBeenCalledTimes(1);
-  expect(await runtime.resolveCredential('grant')).toEqual({ ...credential, configId: 'config-2' });
+  expect(await runtime.resolveCredential('grant')).toEqual({
+    ...credential,
+    token: 'renewed-token',
+  });
 });
 
 it('discards a late approval after cancellation', async () => {

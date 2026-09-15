@@ -7,13 +7,13 @@ import { PluginError } from '@/shared/contracts/plugins';
 
 import {
   WecomBotSchema,
-  WecomBotCredentialSchema,
+  WecomCredentialSchema,
   type WecomBot,
-  type WecomBotCredential,
+  type WecomCredential,
 } from './wecomCredentials';
 
-// Official MCP bootstrap: WecomTeam/wecom-cli at 9eb7898b959861af879495e211e37431fa908f19,
-// src/auth/qrcode.rs, src/mcp/config.rs and src/constants.rs. Business calls use MCP directly.
+// Official CLI 1.2.1 at 1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08:
+// crates/wecom-cli/src/auth/{qrcode,bootstrap}.rs.
 const logger = loggerService.withContext('WecomAuthorization');
 const authorization = createHttpClient({
   baseUrl: 'https://work.weixin.qq.com',
@@ -141,63 +141,31 @@ export const wecomBotApi = {
     );
   },
 
-  async exchange(
-    bot: WecomBot,
-    bindSource: 1 | 2,
-    signal: AbortSignal,
-  ): Promise<WecomBotCredential> {
+  async exchange(bot: WecomBot, bindSource: 1 | 2, signal: AbortSignal): Promise<WecomCredential> {
     const time = Math.floor(Date.now() / 1000);
-    const nonce = `mcp_${Date.now()}_${randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const nonce = `cli_${Date.now()}_${randomUUID().replaceAll('-', '').slice(0, 8)}`;
     const signature = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       `${bot.secret}${bot.botId}${time}${nonce}`,
     );
-    const response = await request(api, '/cgi-bin/aibot/cli/get_mcp_config', signal, {
+    const response = await request(api, '/cgi-bin/aibot/cli/get_cli_config', signal, {
       body: {
         bot_id: bot.botId,
         time,
         nonce,
         signature,
         bind_source: bindSource,
-        cli_version: 'CherryStudio/WeComMcp',
       },
     });
-    const { list } = parseResponse(
-      z.object({
-        list: z
-          .array(
-            z.object({
-              biz_type: z.string().nullish(),
-              url: z.string().nullish(),
-              type: z.string().nullish(),
-              is_authed: z.boolean().nullish(),
-            }),
-          )
-          .max(32),
-      }),
-      response,
-      'mcp-config-list',
-    );
-    const connections = list
-      .filter(
-        (item) =>
-          item.url &&
-          item.is_authed !== false &&
-          (!item.type || item.type === 'streamable-http' || item.type === 'http'),
-      )
-      .map((item) => ({ category: item.biz_type, url: item.url }));
-    if (!connections.length)
-      throw new PluginError('access', 'Authorize at least one Wecom capability before connecting.');
     return parseResponse(
-      WecomBotCredentialSchema,
+      WecomCredentialSchema,
       {
-        version: 3,
+        version: 4,
         kind: 'bot',
         ...bot,
-        configId: randomUUID(),
-        connections,
+        token: response.token,
       },
-      'mcp-config',
+      'cli-credential',
     );
   },
 };

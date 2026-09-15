@@ -12,10 +12,10 @@
 > live in [Built-In MCP Roadmap](./built-in-mcp-roadmap.md); availability research is in
 > [Plugin Expansion Research](./plugin-expansion-research.md).
 
-> WeCom update (2026-09-15): business tools now use official hosted MCP with bot authorization or
-> imported official configuration. Discovery includes authorized upstream tools with conservative
-> write approval for new names. The automatic bootstrap follows an earlier official CLI revision;
-> live-account acceptance and the updated regression suites remain pending.
+> WeCom update (2026-09-15): business tools use the current official CLI HTTP gateway with bot
+> authorization, discovered service schemas and native file handling. Old MCP transport and
+> configuration import are removed. New names require write approval. Live-account acceptance and
+> the updated regression suites remain pending.
 
 ## Plugins
 
@@ -51,7 +51,7 @@ Plugin references and popover interactions still require device acceptance on bo
 | GitHub | Publisher-configured OAuth App authorization with account confirmation, or a personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
 | Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
 | Feishu | Browser-confirmed user authorization with a new or existing application. Setup checks account identity and discovery of at least one authorized tool without a business-tool call | Nine hosted document/people tools and nineteen curated wiki, Base, task and calendar operations; see [Feishu Business Tools](#feishu-business-tools) |
-| WeCom | Confirmation inside WeCom followed by signed MCP configuration exchange, or imported official MCP URL/JSON; discovery-only setup | Dynamically discovered official tools for authorized categories; see [WeCom Official MCP](#wecom-official-mcp) |
+| WeCom | Confirmation inside WeCom followed by signed CLI token exchange; discovery-only setup | Dynamically discovered official service schemas; see [WeCom Official API](#wecom-official-api) |
 
 ### Official Cloud Coverage
 
@@ -299,50 +299,49 @@ Protocol references: [hosted tools](https://open.feishu.cn/document/mcp_open_too
 [calendar instances](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar-event/instance_view),
 [common error codes](https://open.feishu.cn/document/ukTMukTMukTM/ugjM14COyUjL4ITN).
 
-## WeCom Official MCP
+## WeCom Official API
 
-Cherry owns bot authorization, native credential storage, MCP session routing and the bundled AI
-workflow guide. The official service owns business tool definitions and execution. No local CLI
-executable, CLI schema conversion, business HTTP wrapper or app-hosted MCP server is involved.
+Cherry implements the current official CLI gateway protocol in native TypeScript. The plugin owns
+bot authorization, native credential storage, schema discovery, request envelopes, file handling,
+long-task polling and the AI workflow guide. Official services own business definitions and
+execution. No CLI executable or app-hosted MCP server is required.
 
-The default `wecom_bot` method copies an official confirmation link for opening in WeCom's File
-Transfer conversation, polls for bot identity and secret, then signs `get_mcp_config` to obtain
-authorized MCP connections. It is bot authorization rather than standard OAuth. `wecom_mcp` instead
-accepts a URL or `mcpServers` JSON copied from a bot permission's detail page. Both methods verify
-that at least one admitted tool is discoverable without executing a business operation.
+The single `wecom_bot` method copies an official confirmation link for opening inside WeCom, polls
+for bot identity and secret, and signs `get_cli_config` to obtain a bearer token. Setup validates
+authorized service discovery without executing a business operation. Version 4 credentials replace
+old CLI/MCP records through explicit disconnect/reconnection. The obsolete `get_mcp_config` exchange
+and `wecom_mcp` URL/JSON import method are removed.
 
-MCP connections are restricted to HTTPS endpoints under `qyapi.weixin.qq.com/mcp/`. Signed
-configuration owns each service's `biz_type` and URL independently; paths need not encode categories.
-Imports infer known personal and enterprise document categories, assigning other endpoints neutral
-`service_<index>` names with default write approval. Private query parameters live in native storage
-and are applied only to the corresponding MCP session, including when categories share a path.
-Redirects, custom hosts, custom headers and executable configurations are rejected.
-The app qualifies tool names as `wecom_<category>__<upstream-name>` to bind calls and reviewed read
-policy to a specific service. Input schemas, descriptions, arguments and results remain official.
-Every newly discovered tool is available under the existing write approval policy; upstream
-`readOnlyHint` cannot give it read approval. The client invokes only names from its actual discovery.
-Failed categories retain safe warnings alongside surviving tools.
+Business traffic stays under `https://qyapi.weixin.qq.com/cli`, using the shared non-streaming HTTP
+client. `/service/discovery` supplies the service catalog and named schemas, with a 60-second cache.
+Tool names follow `wecom_<service>__<resource>__<method>`, including deeper resource paths. The client
+resolves references, hides internal fields and invokes only discovered routes. Reviewed read paths
+retain read policy; every new name requires the existing write approval policy. Unsupported
+interfaces or unavailable services leave safe warnings alongside usable tools. An upstream hint
+cannot grant read approval to an unknown tool.
 
-Bot configurations renew after HTTP 401 or official JSON-RPC configuration errors, and session
-replacement follows configuration changes. Failed business calls are never replayed automatically.
-Imported URLs require reimporting when no longer valid; newly granted categories can require
-reconnection. Earlier version 2 CLI credentials require an explicit disconnect and reconnection.
-Version 3 distinguishes bot-backed and imported configurations without changing database identities.
+Every JSON request uses POST and the official stringified `payload` envelope. Responses validate
+both gateway and nested business errors. Token rejection `853004` renews the token; only a rejected
+read can replay once. Failed writes require explicit retry, and uncertain outcomes must be checked
+in WeCom first. Long tasks poll by task ID, using `/task/query` or an empty original-endpoint request
+with `X-Long-Poll-TaskId`; polling does not resubmit original write content.
 
-The workflow guide uses the live catalog as the capability authority and covers document types,
-table metadata, people/task/calendar dependencies, mail/message targets, file inputs, pagination and
-asynchronous completion. A desktop CLI file path does not imply a remote MCP tool can access local
-device files. Enterprise data permissions and any required administrator approval remain upstream.
-An enterprise document bot may act under its own identity and does not automatically inherit the
-authorizing user's existing document access; see the [official CLI discussion](https://github.com/WecomTeam/wecom-cli/issues/64).
+Official file-upload directives resolve attachment/file-tool IDs or local export/download paths, upload media
+or create multipart fields. Uploads have a 100 MiB file/multipart cap. Binary/range downloads have a
+64 MiB cap; file-save directives create unique files under the app cache and return their actual
+paths. Large JSON results are saved intact, with guidance to request smaller pages for chat.
+Branch-dependent file directives are treated as unsupported definitions. Native file transfer
+still needs device acceptance.
 
-Sources: [official MCP setup](https://open.work.weixin.qq.com/help2/pc/21676),
-[official capability comparison](https://open.work.weixin.qq.com/help2/pc/21714), and
-[the CLI's signed MCP bootstrap](https://github.com/WecomTeam/wecom-cli/blob/9eb7898b959861af879495e211e37431fa908f19/src/mcp/config.rs).
-The latest CLI changed its business transport; the signed bootstrap uses the pinned earlier MCP
-implementation. The user confirmed successful bot connection in the development app on 2026-09-15
-after removing category/path coupling. Configuration import and business tool calls still require
-live-account acceptance. Regression suites were updated but not run.
+The workflow guide covers current document and table types, identity resolution, task/calendar
+semantics, mail/message targets, pagination and asynchronous completion. Message-session discovery
+does not imply access to unread messages or all chat history. Data access and administrator
+requirements remain controlled by WeCom; discovery is not proof of permission for every resource.
+
+Protocol source: [official CLI 1.2.1 at 1cd90a5](https://github.com/WecomTeam/wecom-cli/tree/1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08).
+See [the integration reference](../../../src/backend/services/builtInMcp/README.md#wecom-official-api)
+for module ownership, limits and source links. Regression suites were updated but not run; the new
+authorization and business transport still require live-account acceptance.
 
 ## Extensible Plugin Definitions
 
