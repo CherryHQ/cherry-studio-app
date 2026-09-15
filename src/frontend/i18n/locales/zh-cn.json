@@ -1557,14 +1557,7 @@
   "documentExport.documentReady": "已为所选内容准备文档，可继续分享。",
   "documentExport.paused": "预览已暂停",
   "documentExport.resume": "继续生成",
-  "settings.privacy.title": "错误与崩溃报告",
-  "settings.privacy.sendReports": "发送错误与崩溃报告",
-  "settings.privacy.description": "开启后，将错误类型、调用栈、应用版本及系统和设备类型发送至 Sentry，帮助定位故障。不会主动附加聊天内容、模型请求或响应、工具参数和密钥。关闭后立即停止后续上报并清理待发送缓存。",
-  "settings.privacy.nativeDisclosure": "原生崩溃报告包含线程和底层诊断信息；Android 原生转储还可能包含部分进程内存，无法保证完全匿名。报告会发送至第三方 Sentry 服务。本开关仅管理错误与崩溃报告，不控制应用更新服务的性能统计。",
-  "settings.privacy.status": "上报状态",
-  "settings.privacy.active": "本次运行已开启",
-  "settings.privacy.disabled": "已关闭",
-  "settings.privacy.productionOnly": "已授权（仅正式版本上报）",
-  "settings.privacy.unavailable": "当前安装版本暂不支持此设置",
+  "settings.privacy.title": "隐私设置",
+  "settings.privacy.sendReports": "匿名发送错误报告",
   "settings.privacy.saveFailed": "未能保存此设置，请重试。"
 }

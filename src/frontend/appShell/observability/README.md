@@ -19,12 +19,13 @@ session tracking, breadcrumbs, screenshots, view hierarchies, and log streaming 
 
 ### Consent
 
-Settings → Error and crash reports owns the disclosure and user choice. New installs and upgrades
-without a matching grant default to off. A grant is the stored `SENTRY_CONSENT_VERSION`; Android
-also stores when the grant began so older system ANR history is rejected. The native module stores
-this outside SQLite and excludes it from backups, so database startup failures do not prevent
-reading an existing grant. This is consent to the displayed diagnostics scope, not acceptance of a complete
-legal privacy policy. Bump the version when that scope changes.
+Settings places Privacy settings and About us in the same group, with Privacy settings first.
+Privacy settings opens a page with one Send anonymous error reports switch. New installs and
+upgrades without a matching grant default to off. A grant is the stored `SENTRY_CONSENT_VERSION`;
+Android also stores when the grant began so older system ANR history is rejected. The native module
+stores this outside SQLite and excludes it from backups, so database startup failures do not
+prevent reading an existing grant. This is consent to diagnostic reporting, not acceptance of a
+complete legal privacy policy. Bump the version when that scope changes.
 
 Enabling starts native and JavaScript reporting immediately in production builds; other builds only
 record the choice. Disabling closes the JS gate immediately, revokes the native gate, stops the SDK,
@@ -57,14 +58,13 @@ error log stays local. Only the fixed `module` and `operation` tags cross that b
 cancellation errors are excluded. Startup, service initialization, task recovery, task
 finalization, and chat terminal persistence name their operations today. Existing service
 initialization errors include database migration failures through their call stacks. Adding a call
-site to the upload set means adding an `operation` to its log context; keep the settings disclosure
-accurate when the set grows.
+site to the upload set means adding an `operation` to its log context; keep the documented collection
+scope accurate when the set grows.
 
 Android NDK minidumps remain necessary for native crash diagnosis and may contain process memory;
 structured event filtering cannot scrub that binary content. Do not claim these reports are fully
-anonymous or guaranteed free of user content. The settings disclosure explicitly states this
-limitation and identifies Sentry as the recipient. EAS Observe is separate and is not controlled by
-this error-reporting switch.
+anonymous or guaranteed free of user content. Reports are sent to Sentry. EAS Observe is separate
+and is not controlled by this error-reporting switch.
 
 `app.json` explicitly declares crash, performance, and other diagnostic data for observability in
 `ios.privacyManifests`, without identity linkage or tracking. It also declares Sentry's required

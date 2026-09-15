@@ -43,8 +43,8 @@ release/environment, and debug images stay as the SDK produced them. JavaScript 
 emitted by React Native's native bridge are excluded.
 
 Android NDK minidumps are retained to preserve native crash reporting. They can contain portions of
-process memory, outside the reach of structured `beforeSend` filtering. The user-facing disclosure
-must retain that limitation. This module does not promise complete anonymity and does not change
+process memory, outside the reach of structured `beforeSend` filtering. The compact settings switch
+does not change this limitation. This module does not promise complete anonymity and does not change
 Sentry project storage, retention, or server-side scrubbing settings.
 
 ## Verification still required

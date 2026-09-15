@@ -43,8 +43,9 @@ SENTRY_AUTH_TOKEN=
 
 - `EXPO_PUBLIC_SENTRY_DSN` is the public event-ingestion address embedded in the app. Reporting is
   enabled only for the production profile, with a DSN, current diagnostics consent, and outside
-  development mode (`__DEV__`). Users enable reports in Settings → Error and crash reports. Native consent/filtering changes require a new installation
-  package; an OTA update cannot add `modules/crash-reporting` to an existing client.
+  development mode (`__DEV__`). Users enable reports in Settings → Privacy settings → Send anonymous
+  error reports. Native consent/filtering changes require a new installation package; an OTA update
+  cannot add `modules/crash-reporting` to an existing client.
 - `SENTRY_AUTH_TOKEN` is a build-only credential used to upload source maps and debug symbols.
   Use a token with the source-map upload permissions for the configured Sentry project. Do not
   prefix it with `EXPO_PUBLIC_` or add it to app config.

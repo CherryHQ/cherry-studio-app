@@ -6,6 +6,7 @@ import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import PackageIcon from '@cherrystudio/app-icons/icons/package';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
+import ShieldIcon from '@cherrystudio/app-icons/icons/shield';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
@@ -97,11 +98,6 @@ export default function SettingsScreen() {
               />
             ) : null}
             <Section.Item
-              label={t('settings.privacy.title')}
-              leading={<LockIcon className="size-4 text-foreground" />}
-              onPress={() => router.push('/settings/privacy')}
-            />
-            <Section.Item
               label={t('settings.items.permissions')}
               leading={<LockIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/permissions')}
@@ -113,6 +109,11 @@ export default function SettingsScreen() {
             />
           </Section>
           <Section>
+            <Section.Item
+              label={t('settings.privacy.title')}
+              leading={<ShieldIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/privacy')}
+            />
             <Section.Item
               label={t('settings.items.aboutUs')}
               leading={<InfoIcon className="size-4 text-foreground" />}

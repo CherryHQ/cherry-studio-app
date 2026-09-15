@@ -25,7 +25,7 @@ internal fun sanitizeCrashEvent(event: SentryEvent): SentryEvent? {
   event.serverName = null
   event.transaction = null
   event.fingerprints = null
-  event.modules = null
+  event.setModules(null)
   event.extras = null
   event.user = null
   event.request = null
@@ -52,8 +52,8 @@ internal fun sanitizeCrashEvent(event: SentryEvent): SentryEvent? {
     }
   }
   event.contexts.keys().toList().forEach { event.contexts.remove(it) }
-  os?.let { event.contexts.operatingSystem = it }
-  device?.let { event.contexts.device = it }
+  os?.let { event.contexts.setOperatingSystem(it) }
+  device?.let { event.contexts.setDevice(it) }
 
   event.exceptions?.forEach { exception ->
     exception.value = "Error details omitted for privacy"
