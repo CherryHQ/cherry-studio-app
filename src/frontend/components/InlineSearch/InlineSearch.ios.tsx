@@ -6,14 +6,8 @@ import type { SearchBarCommands } from 'react-native-screens';
 import type { InlineSearchProps } from './InlineSearch.types';
 
 /**
- * Mounts the list search contract as the native header search bar.
- *
- * `stacked` gives the field its own row under the title. The `integrated`
- * placement was the other candidate, but UIKit pins that one to the very end of
- * the navigation bar — outside the toolbar's own actions, so the field lands to
- * the right of a screen's overflow button and draws bare instead of picking up
- * the glass circle every other top action wears. A row of its own sidesteps the
- * ordering entirely, and it is the placement Android's field is drawn to match.
+ * Keeps native search in its own row under the title, matching Android's field.
+ * The shared adapter owns placement so screens use the same top search layout.
  */
 export function InlineSearch({ onChangeText, placeholder, value }: InlineSearchProps) {
   const { t } = useTranslation();
@@ -33,6 +27,7 @@ export function InlineSearch({ onChangeText, placeholder, value }: InlineSearchP
 
   return (
     <Stack.SearchBar
+      allowToolbarIntegration={false}
       autoCapitalize="none"
       // The field is the screen's only search affordance, so it stays put
       // rather than scrolling away with the list.
