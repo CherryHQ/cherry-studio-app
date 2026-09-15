@@ -82,8 +82,6 @@ export function normalizeDocument(input: DocumentExportInput): ExportDocument {
       : input.document;
   const result = documentSchema.safeParse(value);
   if (!result.success) throw new DocumentExportError('invalid-input');
-  // Image preparation has its own budget. Keep the source available for a text export
-  // even when the selection contains more images than one HTML render can prepare.
   // Zod returns new objects; none of the session's values alias caller-owned data.
   freezeSnapshot(result.data);
   return result.data;

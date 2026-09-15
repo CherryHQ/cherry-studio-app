@@ -23,10 +23,9 @@ restores chronological order, regardless of click order. It does not implicitly 
 or unselected messages. The conversation may exceed 128 messages. Missing or unfinished content
 and failed reads reject the export instead of silently sharing a partial selection.
 
-Two or more selected messages open HTML by default and offer only HTML and Markdown. A single
-selected message retains the image default and all three formats. Chat supplies the format policy
-with the export request; the preview menu and format changes respect that policy throughout the
-request, including when thinking content is toggled.
+Any nonempty selection defaults to ordered PNG pages containing all selected messages in chronological
+order. Short selections produce one page; the layout menu also offers a single long image. Image, HTML and Markdown remain available regardless of the selected message count, including
+when thinking content is toggled. There is no image-size gate before conversion.
 
 The source adapter supplies two immutable document snapshots when thinking content exists: omitted
 by default, and included when the preview switch is enabled. Thinking covers the visible reasoning,
@@ -42,9 +41,11 @@ Markdown ends with a separated brand-name and export-time row using the same sig
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
 `chat.process.duration` and `chat.reasoningStatus.thought` translations, and elapsed time uses the
 same approval-wait-aware calculation as the message list. Native previews reuse the CherryUI
-disclosures; HTML and PNG start with the same collapsed process summary.
+disclosures and HTML starts collapsed. Image capture expands included process/reasoning content
+because the resulting PNG has no disclosure interaction.
 
 Rendering, temporary files, permanent storage and system delivery remain in the application export
 capability. Opening the preview renders the selection's default format without thinking content;
-changing the format or switch renders the selected snapshot as needed. Image output is one bounded
-file. Image conversion failures prepare HTML; HTML failures retain the complete Markdown preview.
+changing the format or switch renders the selected snapshot as needed. Image output uses a fixed-width layout at
+3x density and sequential page capture, without source-image byte, pixel or count caps. Device resources determine practical
+capacity. Image conversion failures prepare HTML; HTML failures retain the complete Markdown preview.

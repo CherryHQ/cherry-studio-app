@@ -1,6 +1,6 @@
 import { DocumentExportError } from '@/shared/contracts/documentExport';
 
-const CAPTURE_SCALE = 2;
+const CAPTURE_SCALE = 3;
 
 export type ImageCapturePlan = {
   width: number;
@@ -9,7 +9,7 @@ export type ImageCapturePlan = {
   layoutHeight: number;
 };
 
-/** Keep fixed 2x clarity, independent of screen density or document length. */
+/** Fixed output density; page count grows with content instead of reducing text resolution. */
 export function imageCapturePlan(width: number, height: number): ImageCapturePlan {
   if (![width, height].every((value) => Number.isFinite(value) && value > 0)) {
     throw new DocumentExportError('capture-failed');

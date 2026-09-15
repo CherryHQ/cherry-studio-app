@@ -19,6 +19,9 @@ logging, and the single opening policy shared by the composer, messages, and fil
 - `useShareFile`: shares a resolved file with availability checks, busy state, and failure feedback.
 - `shareFile`: copies a resolved file into the share cache and opens the system share sheet for
   callers such as document export that own availability, cancellation, and feedback.
+- `shareFiles`: copies all files in order before opening one chooser. Single-file delivery uses
+  Expo Sharing; multiple files use React Native Share without re-encoding. An optional abort signal
+  can stop copying/delivery, and cache copies remain available for late recipient reads.
 - `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by
   the attachment image and painting outputs so neither renders a broken frame.
 

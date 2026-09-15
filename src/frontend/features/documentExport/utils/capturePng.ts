@@ -1,7 +1,7 @@
 import { File, FileMode } from 'expo-file-system';
 import { captureRef, releaseCapture } from 'react-native-view-shot';
 
-import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/documentExport';
+import { DocumentExportError } from '@/shared/contracts/documentExport';
 
 import type { ImageCapturePlan } from './imageCapturePlan';
 
@@ -9,7 +9,7 @@ export async function capturePng(
   view: Parameters<typeof captureRef>[0],
   plan: ImageCapturePlan,
   signal: AbortSignal,
-): Promise<Awaited<ReturnType<CaptureExportHtml>>> {
+): Promise<{ uri: string; width: number; height: number; release(): void }> {
   let screenshotUri: string | undefined;
   const release = () => {
     if (!screenshotUri) return;

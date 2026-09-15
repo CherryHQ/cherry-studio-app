@@ -61,7 +61,7 @@ afterEach(() => {
   renderer = undefined;
 });
 
-test('multiple selected messages open an HTML preview with only document formats', async () => {
+test('multiple selected messages open one image preview in chronological order with every format available', async () => {
   const ref = createRef<ShareChat>();
   await act(async () => {
     renderer = create(<Probe ref={ref} />);
@@ -70,8 +70,8 @@ test('multiple selected messages open an HTML preview with only document formats
   expect(mockOpen).toHaveBeenCalledTimes(1);
   expect(mockOpen).toHaveBeenCalledWith(
     expect.objectContaining({
-      initialFormat: 'html',
-      allowedFormats: ['html', 'markdown'],
+      initialFormat: 'image',
+      allowedFormats: ['image', 'html', 'markdown'],
       input: {
         kind: 'document',
         document: expect.objectContaining({
@@ -95,7 +95,10 @@ test.each([{ ids: ['answer'] }, { ids: ['answer', 'answer'] }])(
     await act(async () => ref.current!.shareChat(ids));
     expect(mockOpen).toHaveBeenCalledTimes(1);
     expect(mockOpen).toHaveBeenCalledWith(
-      expect.objectContaining({ initialFormat: 'image', allowedFormats: undefined }),
+      expect.objectContaining({
+        initialFormat: 'image',
+        allowedFormats: ['image', 'html', 'markdown'],
+      }),
     );
   },
 );

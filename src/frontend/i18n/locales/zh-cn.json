@@ -1510,7 +1510,7 @@
   "documentExport.unavailable": "此次导出已失效，请从原内容重新打开。",
   "documentExport.failed": "无法生成此格式",
   "documentExport.previewFailed": "无法显示预览",
-  "documentExport.imagePreview": "导出的长图",
+  "documentExport.imagePreview": "导出的图片",
   "documentExport.useHtml": "改用 HTML",
   "documentExport.issues": "有 {{count}} 处图片或公式无法排版，已保留占位或公式原文。",
   "documentExport.share": "分享",
@@ -1589,11 +1589,16 @@
   "plugins.catalog.dingtalk.authMethods.dingtalk_user.recovery": "请返回钉钉完成授权后重试；如仍无法连接，请检查网络和组织权限。切换账号或组织时需先断开当前连接。",
   "chat.share.selectionHint": "分享包含所选消息的完整内容。多选仅支持 HTML 和 Markdown，默认使用 HTML。",
   "chat.share.previewWithoutText": "图片、附件或思考内容",
-  "documentExport.errors.image-size-limit": "这条消息超过单张图片容量，请使用 HTML 或 Markdown 保留完整内容。",
   "documentExport.documentReady": "已为所选内容准备文档，可继续分享。",
   "documentExport.paused": "预览已暂停",
   "documentExport.resume": "继续生成",
   "settings.privacy.title": "隐私设置",
   "settings.privacy.sendReports": "匿名发送错误报告",
-  "settings.privacy.saveFailed": "未能保存此设置，请重试。"
+  "settings.privacy.saveFailed": "未能保存此设置，请重试。",
+  "documentExport.imageLayout": "图片布局",
+  "documentExport.imageLayouts.pages": "分页图片",
+  "documentExport.imageLayouts.single": "单张长图",
+  "documentExport.page": "第 {{page}} / {{total}} 页",
+  "documentExport.progress.page": "正在生成第 {{page}} / {{total}} 张图片…",
+  "documentExport.shareImages": "分享 {{count}} 张图片"
 }
