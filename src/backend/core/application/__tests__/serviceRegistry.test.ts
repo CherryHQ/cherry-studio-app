@@ -144,10 +144,8 @@ describe('service registry', () => {
     );
     const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
     expect(layerOf('TraceStorageService')).toBeGreaterThanOrEqual(0);
-    for (const producer of ['McpRuntimeService', 'MobileAgentHost']) {
+    for (const producer of ['McpRuntimeService', 'MobileAgentHost', 'DiagnosticBundleService']) {
       expect(layerOf('TraceStorageService')).toBeLessThan(layerOf(producer));
     }
-    expect(layerOf('AgentEventTraceRuntime')).toBeGreaterThanOrEqual(0);
-    expect(layerOf('AgentEventTraceRuntime')).toBeLessThan(layerOf('MobileAgentHost'));
   });
 });

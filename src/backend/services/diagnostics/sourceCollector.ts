@@ -1,20 +1,20 @@
-import { Directory, File, FileMode } from 'expo-file-system';
+import { File, FileMode } from 'expo-file-system';
+
+import type { TraceDiagnosticSnapshot } from '@/backend/utils/diagnosticTrace';
 
 import { getNativeDiagnostics } from '../../../../modules/diagnostics';
 import { diagnosticDirectory, yieldToRuntime } from './diagnosticFiles';
+import { projectDiagnosticLog, projectDiagnosticTrace } from './diagnosticMetadata';
 import type {
-  CrashDumpInventory,
   DiagnosticFileSourceKind,
   DiagnosticTimeRange,
-  DiagnosticWarning,
   SourceCandidate,
   SourceCollection,
-  SourceStats,
   StagedSource,
 } from './types';
 
-export const LOG_NAME = /^app(?:-error)?\.(\d{4}-\d{2}-\d{2})\.log(?:\.\d+)?$/;
-const MAX_JSON_LINE_BYTES = 16 * 1024 * 1024;
+export const LOG_NAME = /^app-error\.(\d{4}-\d{2}-\d{2})\.log(?:\.\d+)?$/;
+const MAX_JSON_LINE_BYTES = 128 * 1024;
 const decoder = new TextDecoder();
 export type RawLine = { data?: Uint8Array; tooLarge: boolean };
 
@@ -86,133 +86,100 @@ function concatenate(parts: Uint8Array[], size: number): Uint8Array {
   return bytes;
 }
 
-export function parseLogTimestampString(value: string): number | undefined {
-  const timestamp = Date.parse(value.includes('T') ? value : value.replace(' ', 'T'));
-  return Number.isFinite(timestamp) ? timestamp : undefined;
-}
-
-export function logMayOverlapRange(name: string, range: DiagnosticTimeRange): boolean {
-  const match = LOG_NAME.exec(name);
-  if (!match) return false;
-  const [year, month, day] = match[1].split('-').map(Number);
-  const start = new Date(year, month - 1, day);
-  if (start.getFullYear() !== year || start.getMonth() !== month - 1 || start.getDate() !== day)
-    return false;
-  return (
-    start.getTime() <= range.toMs && new Date(year, month - 1, day + 1).getTime() > range.fromMs
-  );
-}
-
-function classifyLine(
+/** Project on both inspection and staging; budget the bytes actually exported. */
+export function projectDiagnosticLine(
   line: RawLine,
   kind: DiagnosticFileSourceKind,
   range: DiagnosticTimeRange,
-): number | 'malformed' | undefined {
-  if (line.tooLarge || !line.data) return 'malformed';
-  const text = decoder.decode(line.data).trim();
-  if (!text) return undefined;
+) {
+  if (line.tooLarge || !line.data) return 'malformed' as const;
   try {
-    const value = JSON.parse(text);
+    const value = JSON.parse(decoder.decode(line.data));
+    const record =
+      kind === 'logs'
+        ? value?.schemaVersion === 1 && value.capture === 'metadata'
+          ? projectDiagnosticLog(value)
+          : undefined
+        : projectDiagnosticTrace(value);
+    if (!record) return 'malformed' as const;
     const timestamp =
-      kind === 'traces'
-        ? value?.startTime
-        : typeof value?.timestamp === 'string'
-          ? parseLogTimestampString(value.timestamp)
-          : undefined;
-    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return 'malformed';
-    return timestamp >= range.fromMs && timestamp <= range.toMs ? timestamp : undefined;
+      'timestamp' in record ? Date.parse(record.timestamp) : (record.endedAt ?? record.startedAt);
+    if (timestamp < range.fromMs || timestamp > range.toMs) return undefined;
+    return { timestamp, data: new TextEncoder().encode(`${JSON.stringify(record)}\n`) };
   } catch {
-    return 'malformed';
+    return 'malformed' as const;
   }
-}
-
-function portableSegment(value: string): string {
-  return [...new TextEncoder().encode(value)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 export async function collectDiagnosticSources(
   range: DiagnosticTimeRange,
   selection: { includeLogs: boolean; includeTraces: boolean },
   signal?: AbortSignal,
+  snapshot?: TraceDiagnosticSnapshot,
 ): Promise<SourceCollection> {
   const collection: SourceCollection = { logs: [], traces: [], warnings: new Set() };
-  for (const kind of ['logs', 'traces'] as const) {
-    if (!(kind === 'logs' ? selection.includeLogs : selection.includeTraces)) continue;
-    const root = diagnosticDirectory(kind);
-    if (!root.exists) continue;
+  const sources: { file: File; name: string; kind: DiagnosticFileSourceKind }[] = [];
+  if (selection.includeLogs) {
     try {
-      const sources: { file: File; name: string }[] = [];
-      for (const entry of root.list()) {
-        if (kind === 'logs' && entry instanceof File && logMayOverlapRange(entry.name, range)) {
-          sources.push({ file: entry, name: `logs/${entry.name}` });
-        } else if (kind === 'traces' && entry instanceof Directory) {
-          try {
-            for (const trace of entry.list()) {
-              if (
-                trace instanceof File &&
-                !trace.name.endsWith('.tmp') &&
-                (trace.modificationTime ?? 0) >= range.fromMs
-              ) {
-                sources.push({
-                  file: trace,
-                  name: `traces/${portableSegment(entry.name)}/${portableSegment(trace.name)}.jsonl`,
-                });
-              }
-            }
-          } catch {
-            signal?.throwIfAborted();
-            collection.warnings.add('source_unreadable');
+      const root = diagnosticDirectory('logs');
+      if (root.exists) {
+        for (const file of root.list()) {
+          if (file instanceof File && LOG_NAME.test(file.name)) {
+            sources.push({ file, name: `logs/${file.name}`, kind: 'logs' });
           }
-        }
-      }
-      for (const { file, name } of sources) {
-        signal?.throwIfAborted();
-        try {
-          const identity = getNativeDiagnostics().identifyFile(file.uri);
-          let eligibleBytes = 0;
-          let malformedLineCount = 0;
-          let latestAt = 0;
-          for await (const line of readRawLines(file, identity.size, signal)) {
-            const timestamp = classifyLine(line, kind, range);
-            if (timestamp === 'malformed') {
-              malformedLineCount += 1;
-              continue;
-            }
-            if (timestamp === undefined) continue;
-            eligibleBytes += line.data!.length;
-            latestAt = Math.max(latestAt, timestamp);
-          }
-          if (getNativeDiagnostics().identifyFile(file.uri).fileKey !== identity.fileKey)
-            throw new SourceChangedError();
-          if (malformedLineCount) collection.warnings.add('malformed_lines');
-          if (eligibleBytes)
-            collection[kind].push({
-              archiveName: name,
-              eligibleBytes,
-              identity,
-              kind,
-              latestAt,
-              malformedLineCount,
-              sourcePath: file.uri,
-            });
-        } catch (error) {
-          signal?.throwIfAborted();
-          collection.warnings.add(
-            error instanceof SourceChangedError ? 'source_changed' : 'source_unreadable',
-          );
         }
       }
     } catch {
-      signal?.throwIfAborted();
       collection.warnings.add('source_unreadable');
+    }
+  }
+  if (selection.includeTraces && snapshot) {
+    for (const entry of snapshot.files) {
+      if (/^\d+-[0-9a-f-]{36}\.jsonl$/.test(entry.name))
+        sources.push({ file: new File(entry.uri), name: `traces/${entry.name}`, kind: 'traces' });
+    }
+  }
+  for (const { file, name, kind } of sources) {
+    signal?.throwIfAborted();
+    try {
+      const identity = getNativeDiagnostics().identifyFile(file.uri);
+      let eligibleBytes = 0;
+      let malformedLineCount = 0;
+      let latestAt = 0;
+      for await (const line of readRawLines(file, identity.size, signal)) {
+        const projected = projectDiagnosticLine(line, kind, range);
+        if (projected === 'malformed') {
+          malformedLineCount += 1;
+          continue;
+        }
+        if (!projected) continue;
+        eligibleBytes += projected.data.length;
+        latestAt = Math.max(latestAt, projected.timestamp);
+      }
+      if (getNativeDiagnostics().identifyFile(file.uri).fileKey !== identity.fileKey)
+        throw new SourceChangedError();
+      if (malformedLineCount) collection.warnings.add('malformed_lines');
+      if (eligibleBytes)
+        collection[kind].push({
+          archiveName: name,
+          eligibleBytes,
+          identity,
+          kind,
+          latestAt,
+          malformedLineCount,
+          sourcePath: file.uri,
+        });
+    } catch (error) {
+      signal?.throwIfAborted();
+      collection.warnings.add(
+        error instanceof SourceChangedError ? 'source_changed' : 'source_unreadable',
+      );
     }
   }
   return collection;
 }
 
-export function sourceStats(candidates: readonly SourceCandidate[]): SourceStats {
+export function sourceStats(candidates: readonly SourceCandidate[]) {
   return candidates.reduce(
     (stats, candidate) => ({
       bytes: stats.bytes + candidate.eligibleBytes,
@@ -235,8 +202,6 @@ export async function stageSourceCandidate(
   const same =
     identity.size === candidate.identity.size &&
     identity.modifiedAt === candidate.identity.modifiedAt;
-  // Log files are append-only. Read exactly the inspected prefix, never lines
-  // generated by the export itself; traces require an unchanged source.
   if (!same && !(candidate.kind === 'logs' && source.size > candidate.identity.size))
     throw new SourceChangedError();
   destination.create({ intermediates: true });
@@ -245,18 +210,27 @@ export async function stageSourceCandidate(
   let malformedLineCount = 0;
   try {
     for await (const line of readRawLines(source, candidate.identity.size, signal)) {
-      const timestamp = classifyLine(line, candidate.kind, range);
-      if (timestamp === 'malformed') {
+      const projected = projectDiagnosticLine(line, candidate.kind, range);
+      if (projected === 'malformed') {
         malformedLineCount += 1;
         continue;
       }
-      if (timestamp === undefined) continue;
-      writer.writeBytes(line.data!);
-      bytes += line.data!.length;
+      if (!projected) continue;
+      if (bytes + projected.data.length > candidate.eligibleBytes) throw new SourceChangedError();
+      writer.writeBytes(projected.data);
+      bytes += projected.data.length;
     }
-    if (bytes !== candidate.eligibleBytes || malformedLineCount !== candidate.malformedLineCount)
-      throw new SourceChangedError();
-    if (getNativeDiagnostics().identifyFile(source.uri).fileKey !== identity.fileKey)
+    const finalIdentity = getNativeDiagnostics().identifyFile(source.uri);
+    if (
+      finalIdentity.fileKey !== candidate.identity.fileKey ||
+      bytes !== candidate.eligibleBytes ||
+      malformedLineCount !== candidate.malformedLineCount ||
+      !(
+        (finalIdentity.size === identity.size &&
+          finalIdentity.modifiedAt === identity.modifiedAt) ||
+        (candidate.kind === 'logs' && finalIdentity.size > identity.size)
+      )
+    )
       throw new SourceChangedError();
     return {
       archiveName: candidate.archiveName,
@@ -265,37 +239,7 @@ export async function stageSourceCandidate(
       malformedLineCount,
       path: destination.uri,
     };
-  } catch (error) {
-    writer.close();
-    if (destination.exists) destination.delete();
-    throw error;
   } finally {
-    try {
-      writer.close();
-    } catch {
-      /* Already closed on failure. */
-    }
+    writer.close();
   }
-}
-
-export async function collectCrashDumpInventory(
-  range: DiagnosticTimeRange,
-  warnings: Set<DiagnosticWarning>,
-): Promise<CrashDumpInventory> {
-  const files: CrashDumpInventory['files'] = [];
-  const root = diagnosticDirectory('crashes');
-  if (root.exists) {
-    try {
-      for (const file of root.list()) {
-        if (!(file instanceof File)) continue;
-        const timestamp = file.modificationTime;
-        if (timestamp !== null && timestamp >= range.fromMs && timestamp <= range.toMs)
-          files.push({ createdAt: new Date(timestamp).toISOString(), size: file.size });
-      }
-    } catch {
-      warnings.add('source_unreadable');
-    }
-  }
-  files.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return { files, totalBytes: files.reduce((total, file) => total + file.size, 0) };
 }

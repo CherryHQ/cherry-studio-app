@@ -1,12 +1,8 @@
 package expo.modules.diagnostics
 
 import android.app.Activity
-import android.app.ActivityManager
-import android.app.ApplicationExitInfo
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.system.Os
 import android.system.OsConstants
 import expo.modules.kotlin.Promise
@@ -20,7 +16,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 
 private const val SAVE_REQUEST = 48271
 private const val SECRET_SUFFIX = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
@@ -57,33 +52,6 @@ class DiagnosticsModule : Module() {
         promise.resolve(transfer.send(File(Uri.parse(uri).path!!), name, description, headers))
       } catch (error: Exception) {
         promise.reject("ERR_UPLOAD_PREPARATION", "Unable to prepare diagnostic upload", error)
-      }
-    }
-
-    Function("startCrashCapture") { directory: String ->
-      val context = appContext.reactContext ?: return@Function
-      val root = File(Uri.parse(directory).path!!).apply { mkdirs() }
-      DiagnosticCrashCapture.start(root)
-      // Android's persisted process-exit history survives native crashes and ANRs.
-      // Querying it does not install a competing fatal-exception handler.
-      scope.launch {
-        if (Build.VERSION.SDK_INT >= 30) {
-          val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-          runCatching {
-            manager.getHistoricalProcessExitReasons(context.packageName, 0, 0)
-              .filter { it.reason in listOf(ApplicationExitInfo.REASON_CRASH,
-                ApplicationExitInfo.REASON_CRASH_NATIVE, ApplicationExitInfo.REASON_ANR) }
-              .forEach { exit ->
-                val file = File(root, "${exit.timestamp}-${exit.pid}.json")
-                if (!file.exists()) {
-                  file.writeText(JSONObject().put("timestamp", exit.timestamp)
-                    .put("reason", exit.reason).put("description", exit.description)
-                    .put("status", exit.status).put("process", exit.processName).toString())
-                  file.setLastModified(exit.timestamp)
-                }
-              }
-          }
-        }
       }
     }
 

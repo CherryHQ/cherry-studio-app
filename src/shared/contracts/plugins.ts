@@ -22,12 +22,25 @@ export type PluginErrorReason =
 
 /** Safe diagnostics for tools; UI translates the closed reason instead of the message. */
 export class PluginError extends Error {
+  readonly statusCode?: number;
+  readonly code?: number;
   constructor(
     public readonly reason: PluginErrorReason,
     message: string,
+    metadata?: { statusCode?: number; code?: number },
   ) {
     super(message);
     this.name = 'PluginError';
+    const statusCode = metadata?.statusCode;
+    if (
+      typeof statusCode === 'number' &&
+      Number.isInteger(statusCode) &&
+      statusCode >= 100 &&
+      statusCode <= 599
+    )
+      this.statusCode = statusCode;
+    if (typeof metadata?.code === 'number' && Number.isSafeInteger(metadata.code))
+      this.code = metadata.code;
     this.stack = undefined;
   }
 }

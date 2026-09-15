@@ -135,7 +135,7 @@ export class LoggerService {
   }
 }
 
-/** Same caller-data merge and reserved source fields as the desktop file logger. */
+/** Preserve the source template and structured error separately for metadata-only writers. */
 export function createLogRecord(
   level: LogLevel,
   message: string,
@@ -146,11 +146,8 @@ export function createLogRecord(
   const entry: Record<string, unknown> = {};
   const [first, ...others] = data;
   const rest: unknown[] = [];
-  let fileMessage = message;
   if (first instanceof Error) {
-    Object.assign(entry, first);
-    entry.stack = first.stack;
-    fileMessage = `${message} ${first.message}`;
+    entry.error = first;
   } else if (first !== null && typeof first === 'object') {
     Object.assign(entry, first);
   } else if (first !== undefined) {
@@ -169,7 +166,7 @@ export function createLogRecord(
     ...entry,
     timestamp: new Date().toISOString(),
     level,
-    message: fileMessage,
+    message,
     module,
     process: 'main',
   };

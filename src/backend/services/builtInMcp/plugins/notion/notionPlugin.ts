@@ -36,7 +36,7 @@ export const notionPlugin: PluginDefinition = {
       kind: 'interactive',
       interaction: 'callback',
       stages: ['user', 'account'],
-      createRuntime: (store) => new NotionAuthorizationRuntime(store),
+      createRuntime: (store, diagnostics) => new NotionAuthorizationRuntime(store, diagnostics),
       createRequestAuthorization: () => ({
         apply(credential, { headers }) {
           const parsed = NotionUserCredentialSchema.safeParse(credential);

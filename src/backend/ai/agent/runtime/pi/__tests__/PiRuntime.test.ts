@@ -161,7 +161,6 @@ function createResolution(): PiModelResolution {
 function createTestRuntime(
   limits: PiRuntimeLimits = DEFAULT_PI_RUNTIME_LIMITS,
   contextOptions: PiRuntimeContextOptions = {},
-  recordDiagnostic?: (data: Record<string, unknown>) => void,
 ): PiRuntime {
   const holder: RuntimeHolder = { resolution: createResolution() };
   const factory: PiRuntimeAgentFactory = (options) => {
@@ -179,7 +178,6 @@ function createTestRuntime(
         supportsTools: holder.resolution.supportsTools,
       }),
       resolveModel: () => holder.resolution,
-      recordDiagnostic,
     },
     factory,
     limits,
@@ -1870,10 +1868,7 @@ describe('PiRuntime mapping', () => {
   });
 
   test('surfaces provider errors after redacting resolved credentials', async () => {
-    const recordDiagnostic = jest.fn(() => {
-      throw new Error('Diagnostic storage unavailable');
-    });
-    const runtime = createTestRuntime(DEFAULT_PI_RUNTIME_LIMITS, {}, recordDiagnostic);
+    const runtime = createTestRuntime();
     arrange(runtime, async (context) => {
       const failed = assistantMessage({
         errorMessage: `OpenAI API error (403): access denied for ${ERROR_SECRET}`,
@@ -1920,19 +1915,6 @@ describe('PiRuntime mapping', () => {
     expect(JSON.stringify(events)).not.toContain(ERROR_SECRET);
     expect(JSON.stringify(events)).not.toContain('unregistered-secret');
     expect(JSON.stringify(events)).not.toContain('provider stack');
-    expect(recordDiagnostic).toHaveBeenCalledTimes(1);
-    expect(recordDiagnostic).toHaveBeenCalledWith(
-      expect.objectContaining({
-        turnId: 'turn-provider-error',
-        providerId: 'mock-provider',
-        modelId: 'mock-model',
-        assistantMessage: expect.objectContaining({ stopReason: 'error' }),
-      }),
-    );
-    const recorded = JSON.stringify(recordDiagnostic.mock.calls);
-    expect(recorded).toContain(ERROR_SECRET);
-    expect(recorded).toContain('unregistered-secret');
-    expect(recorded).toContain('provider stack');
     await session.close();
   });
 

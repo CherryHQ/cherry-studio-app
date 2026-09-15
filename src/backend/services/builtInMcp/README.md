@@ -233,3 +233,11 @@ Official service references: [GitHub remote MCP](https://github.com/github/githu
 
 The authorization, transport, Feishu business-operation and persistence regression suites were added or updated but not run.
 No compilation, build, simulator, device or live-account acceptance was performed.
+
+## Diagnostic metadata
+
+The authorization manager records explicit setup steps and polling through the existing request
+trace recorder. Provider runtimes record actual token refresh calls; ordinary credential reads
+are not counted as refreshes. MCP requests include the bundled plugin identifier, and safe
+`PluginError` reasons/status codes survive the tool error adapter. No credentials, callback URLs,
+account labels, provider messages, tool inputs or response bodies enter these records.

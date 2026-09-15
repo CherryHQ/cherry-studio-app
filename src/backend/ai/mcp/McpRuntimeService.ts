@@ -200,13 +200,14 @@ function isMcpToolCallingClient(client: McpRuntimeClient): client is McpToolCall
 @ServicePhase(Phase.PostReady)
 @DependsOn(['TraceStorageService'])
 export class McpRuntimeService extends BaseService implements McpModule {
-  readonly pluginAuthorizations = new PluginAuthorizationManager();
+  readonly pluginAuthorizations: PluginAuthorizationManager;
   private nextGeneration = 0;
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
 
   constructor(private readonly traces?: TraceRecorder) {
     super();
+    this.pluginAuthorizations = new PluginAuthorizationManager(undefined, undefined, traces);
   }
 
   /** Runtime metadata for the settings list, initializing any runnable server not yet observed. */
@@ -447,6 +448,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     const generation = state.generation;
     const trace = this.traces?.startTrace('mcp.connect', undefined, {
       'mcp.server.id': state.serverId,
+      'plugin.id': server.origin === 'builtin' ? server.builtinId : undefined,
       'mcp.connection.generation': generation,
     });
     const initPromise: Promise<McpRuntimeClient> = createMcpClient(
@@ -489,6 +491,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS);
     const trace = this.traces?.startTrace('mcp.connect', undefined, {
       'mcp.connection.temporary': true,
+      'plugin.id': config.origin === 'builtin' ? config.builtinId : undefined,
     });
     let client: McpRuntimeClient | undefined;
     try {
@@ -627,6 +630,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
             : 'mcp_tool_call_failed',
           error.message,
           error.reason === 'network' || error.reason === 'quota',
+          { pluginReason: error.reason, statusCode: error.statusCode, providerCode: error.code },
         );
       }
       throw error;
@@ -673,6 +677,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       const client = await this.getClient(server, state, bound.signal, bound.didTimeout);
       trace = this.traces?.startTrace('mcp.list_tools', undefined, {
         'mcp.server.id': server.id,
+        'plugin.id': server.origin === 'builtin' ? server.builtinId : undefined,
         'mcp.connection.generation': generation,
       });
       rawTools = await listAllTools(client, bound.signal);

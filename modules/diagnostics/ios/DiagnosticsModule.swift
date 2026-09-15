@@ -1,33 +1,8 @@
 import CryptoKit
 import ExpoModulesCore
-import MetricKit
 import UIKit
 
 private let secretSuffix = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
-
-private final class DiagnosticCapture: NSObject, MXMetricManagerSubscriber {
-  static let shared = DiagnosticCapture()
-  private var directory: URL?
-
-  func start(_ uri: String) {
-    guard directory == nil, let url = URL(string: uri), url.isFileURL else { return }
-    directory = url
-    try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-    MXMetricManager.shared.add(self)
-  }
-
-  // MetricKit delivers OS-owned crash/hang reports after the event. Only their
-  // inventory is exported; the original reports remain local, as on desktop.
-  func didReceive(_ payloads: [MXDiagnosticPayload]) {
-    guard let directory else { return }
-    for payload in payloads {
-      let target = directory.appendingPathComponent("\(UUID().uuidString).json")
-      try? payload.jsonRepresentation().write(to: target, options: .atomic)
-      try? FileManager.default.setAttributes(
-        [.modificationDate: payload.timeStampEnd], ofItemAtPath: target.path)
-    }
-  }
-}
 
 private final class SaveDelegate: NSObject, UIDocumentPickerDelegate,
   UIAdaptivePresentationControllerDelegate
@@ -65,9 +40,6 @@ public class DiagnosticsModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("CherryDiagnostics")
-
-    Function("startCrashCapture") { (directory: String) in DiagnosticCapture.shared.start(directory)
-    }
 
     Function("identifyFile") { (uri: URL) -> [String: Any] in
       let attributes = try FileManager.default.attributesOfItem(atPath: uri.path)

@@ -4,7 +4,6 @@ type NativeDiagnostics = {
   saveFile(uri: string, name: string): Promise<string | null>;
   sha256(uri: string): Promise<string>;
   sign(value: string): Promise<string>;
-  startCrashCapture(directory: string): void;
   cancelOperations(): void;
   identifyFile(uri: string): { size: number; modifiedAt: number; fileKey: string };
   upload(

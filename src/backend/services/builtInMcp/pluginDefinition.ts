@@ -11,6 +11,7 @@ import type {
   PluginAuthorizationStore,
 } from './authorization/pluginAuthorization';
 import type { PluginCredential } from './authorization/pluginCredential';
+import type { RecordPluginOperation } from './pluginDiagnostics';
 import type { PluginGuideDefinition } from './pluginGuide';
 
 export type PluginToolPolicy = Readonly<Record<string, 'read' | 'write'>>;
@@ -49,7 +50,10 @@ export type PluginAuthorizationDefinition = (
       encodeCredentials(fields: Record<string, string>): PluginCredential;
     })
   | (PluginInteractiveMethod & {
-      createRuntime(store: PluginAuthorizationStore): PluginAuthorizationRuntime;
+      createRuntime(
+        store: PluginAuthorizationStore,
+        diagnostics?: RecordPluginOperation,
+      ): PluginAuthorizationRuntime;
     })
 ) & {
   createRequestAuthorization(tools: PluginToolPolicy): PluginRequestAuthorization;

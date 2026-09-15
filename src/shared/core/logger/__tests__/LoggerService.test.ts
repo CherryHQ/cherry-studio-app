@@ -12,14 +12,14 @@ describe('file log transport', () => {
     );
     expect(record).toMatchObject({
       level: 'error',
-      message: 'Provider failed HTTP 401',
+      message: 'Provider failed',
       module: 'PiRuntime',
       process: 'main',
-      requestBody: { prompt: 'raw prompt' },
+      error,
       context: { sessionId: 'session' },
       data: [{ token: 'raw token' }],
     });
-    expect(record.stack).toContain('HTTP 401');
+    expect(record.stack).toBeUndefined();
     expect(
       createLogRecord('warn', 'actual', 'actual module', {}, [
         { message: 'forged', process: 'renderer' },

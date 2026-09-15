@@ -1,68 +1,63 @@
-import Constants from 'expo-constants';
 import { File } from 'expo-file-system';
-import { Platform } from 'react-native';
 
-import { type LogRecord } from '@/shared/core/logger/LoggerService';
+import type { LogRecord } from '@/shared/core/logger/LoggerService';
 
-import { appendBytes, diagnosticDirectory, serializeDiagnosticRecord } from './diagnosticFiles';
+import { appendBytes, diagnosticDirectory } from './diagnosticFiles';
+import { projectDiagnosticLog } from './diagnosticMetadata';
 
-const MAX_LOG_BYTES = 10 * 1024 * 1024;
-const encoder = new TextEncoder();
+const MAX_FILE_BYTES = 1024 * 1024;
+const MAX_HISTORY_BYTES = 10 * MAX_FILE_BYTES;
+const MAX_AGE_MS = 7 * 86400000;
+const LOG_NAME = /^app-error\.(\d{4}-\d{2}-\d{2})\.log(?:\.(\d+))?$/;
 
-function localDate(now: Date): string {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
-
-/** Process-owned writer: no open handles, timers, or dependency on database startup. */
+/** Only warning/error metadata is persisted, independently of database or host startup. */
 export function createDiagnosticLogWriter(): (record: LogRecord) => void {
   const directory = diagnosticDirectory('logs');
+  const encoder = new TextEncoder();
   let currentDay = '';
-  const shards = new Map<string, number>();
+  let shard = 0;
+  let historyBytes = 0;
+
+  function prune(now: number) {
+    historyBytes = 0;
+    const files = directory
+      .list()
+      .filter((entry): entry is File => entry instanceof File && LOG_NAME.test(entry.name));
+    files.sort((a, b) => (b.modificationTime ?? 0) - (a.modificationTime ?? 0));
+    for (const file of files) {
+      if (
+        (file.modificationTime ?? 0) < now - MAX_AGE_MS ||
+        historyBytes + file.size > MAX_HISTORY_BYTES
+      )
+        file.delete();
+      else historyBytes += file.size;
+    }
+  }
+
+  if (directory.exists) prune(Date.now());
 
   return (record) => {
-    const now = new Date(record.timestamp);
-    const day = localDate(now);
+    const safe = projectDiagnosticLog(record);
+    if (!safe) return;
+    const now = Date.parse(safe.timestamp);
+    const day = safe.timestamp.slice(0, 10);
     if (day !== currentDay) {
       directory.create({ intermediates: true, idempotent: true });
-      shards.clear();
+      prune(now);
+      shard = 0;
       for (const entry of directory.list()) {
-        if (!(entry instanceof File)) continue;
-        const match = /^(app(?:-error)?)\.(\d{4}-\d{2}-\d{2})\.log(?:\.(\d+))?$/.exec(entry.name);
-        if (!match) continue;
-        const retention = (match[1] === 'app-error' ? 60 : 30) * 86400000;
-        if (Date.parse(`${match[2]}T00:00:00`) < now.getTime() - retention) {
-          try {
-            entry.delete();
-          } catch {
-            /* Retry cleanup on the next date. */
-          }
-        } else if (match[2] === day) {
-          shards.set(match[1], Math.max(shards.get(match[1]) ?? 0, Number(match[3] ?? 0)));
-        }
+        const match = LOG_NAME.exec(entry.name);
+        if (match?.[1] === day) shard = Math.max(shard, Number(match[2] ?? 0));
       }
       currentDay = day;
     }
-    const isError = record.level === 'error' || record.level === 'warn';
-    const bytes = encoder.encode(
-      `${serializeDiagnosticRecord(
-        isError
-          ? {
-              ...record,
-              sys: `${Platform.OS} ${Platform.Version}`,
-              appVersion: Constants.expoConfig?.version,
-            }
-          : record,
-      )}\n`,
-    );
-    for (const prefix of isError ? ['app', 'app-error'] : ['app']) {
-      let shard = shards.get(prefix) ?? 0;
-      let file = new File(directory, `${prefix}.${day}.log${shard ? `.${shard}` : ''}`);
-      if (file.exists && file.size > 0 && file.size + bytes.length > MAX_LOG_BYTES) {
-        shard += 1;
-        shards.set(prefix, shard);
-        file = new File(directory, `${prefix}.${day}.log.${shard}`);
-      }
-      appendBytes(file, bytes);
+    const bytes = encoder.encode(`${JSON.stringify(safe)}\n`);
+    let file = new File(directory, `app-error.${day}.log${shard ? `.${shard}` : ''}`);
+    if (file.exists && file.size + bytes.length > MAX_FILE_BYTES) {
+      file = new File(directory, `app-error.${day}.log.${++shard}`);
     }
+    appendBytes(file, bytes);
+    historyBytes += bytes.length;
+    if (historyBytes > MAX_HISTORY_BYTES) prune(now);
   };
 }

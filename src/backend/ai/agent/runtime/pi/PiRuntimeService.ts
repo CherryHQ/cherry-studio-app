@@ -1,6 +1,5 @@
 import type { LanguageServingSupport } from '@/backend/ai/provider/systemModelSupport';
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -15,8 +14,6 @@ import { supportsPiLanguageModel } from './piLanguageBinding';
 import { createPiModelResolver } from './piModelResolver';
 import { PiRuntime } from './PiRuntime';
 
-const logger = loggerService.withContext('PiRuntime');
-
 /**
  * The composition-root binding of the Agent Runtime contract to Pi.
  *
@@ -29,10 +26,7 @@ const logger = loggerService.withContext('PiRuntime');
 @Injectable('AgentRuntime')
 @ServicePhase(Phase.PostReady)
 export class PiRuntimeService extends BaseService implements AgentRuntime, LanguageServingSupport {
-  private readonly runtime: AgentRuntime = new PiRuntime({
-    ...createPiModelResolver(),
-    recordDiagnostic: (data) => logger.error('Provider execution failed', data),
-  });
+  private readonly runtime: AgentRuntime = new PiRuntime(createPiModelResolver());
 
   get descriptor(): RuntimeDescriptor {
     return this.runtime.descriptor;

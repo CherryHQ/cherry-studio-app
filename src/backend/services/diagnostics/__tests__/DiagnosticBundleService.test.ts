@@ -19,18 +19,28 @@ jest.mock('../CherryDiagnosticUploadClient', () => ({
     upload = mockUpload;
   },
 }));
-jest.mock('@/backend/data/services/diagnosticChatRecords', () => ({
-  createDiagnosticChatReader: () => ({ page: async () => [] }),
+jest.mock('@/backend/data/services/diagnosticPluginState', () => ({
+  readDiagnosticPluginState: () => ({
+    truncated: false,
+    connections: [
+      {
+        serverId: 'server-1',
+        origin: 'builtin',
+        pluginId: 'github',
+        enabled: true,
+        authMethod: 'personal_token',
+        disabledToolCount: 2,
+        accountLabel: 'private account',
+        token: 'private token',
+      },
+    ],
+  }),
 }));
 jest.mock('../systemInfo', () => ({
   collectDiagnosticSystemInfo: () => ({ operatingSystem: { platform: 'ios' } }),
 }));
 jest.mock('../sourceCollector', () => ({
   collectDiagnosticSources: async () => ({ logs: [], traces: [], warnings: new Set() }),
-  collectCrashDumpInventory: async () => ({
-    files: [{ createdAt: '2026-09-07T00:00:00.000Z', size: 10 }],
-    totalBytes: 10,
-  }),
   sourceStats: () => ({ bytes: 0, fileCount: 0, malformedLineCount: 0 }),
 }));
 jest.mock('expo-file-system', () => {
@@ -60,24 +70,38 @@ jest.mock('expo-file-system', () => {
   };
 });
 
+const snapshot = {
+  directoryUri: 'file:///snapshot',
+  files: [],
+  dispose: jest.fn(),
+  metadata: {
+    capture: 'metadata' as const,
+    retention: { maxAgeMs: 604800000, maxBytes: 20971520, maxFiles: 512 },
+    diagnostics: { droppedRecords: 0, writeFailures: 0 },
+  },
+};
+const mockSnapshot = jest.fn(async () => snapshot);
+
 const input = {
   range: '24h' as const,
   includeLogs: false,
   includeTraces: false,
-  includeChatRecords: false,
 };
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSnapshot.mockResolvedValue(snapshot);
+  snapshot.dispose.mockImplementation(() => {});
+  snapshot.metadata.diagnostics = { droppedRecords: 0, writeFailures: 0 };
   mockDeletedPaths.length = 0;
   mockSave.mockResolvedValue('content://documents/user-selected.zip');
   mockUpload.mockResolvedValue({ status: 'submission_unknown', fileSha256: 'a'.repeat(64) });
 });
 
 function service() {
-  return new DiagnosticBundleService({} as DbService);
+  return new DiagnosticBundleService({} as DbService, { createDiagnosticSnapshot: mockSnapshot });
 }
 
-test('exports the schema-v2 privacy and inventory contract and reports the system destination', async () => {
+test('exports schema-v2 with an empty crash inventory and reports the system destination', async () => {
   const result = await service().exportBundle(input);
   expect(result).toMatchObject({
     status: 'saved',
@@ -100,9 +124,23 @@ test('exports the schema-v2 privacy and inventory contract and reports the syste
       includeSystemInformation: true,
       persistedTracesOnly: true,
     },
-    crashDumps: { mode: 'inventory_only', totalBytes: 10 },
+    system: { operatingSystem: { platform: 'ios' } },
+    plugins: {
+      connections: [
+        {
+          serverId: 'server-1',
+          pluginId: 'github',
+          enabled: true,
+          authMethod: 'personal_token',
+          disabledToolCount: 2,
+        },
+      ],
+    },
+    crashDumps: { files: [], mode: 'inventory_only', totalBytes: 0 },
     scan: { status: 'skipped' },
   });
+  expect(entries[0].content).not.toContain('private');
+  expect(mockSnapshot).not.toHaveBeenCalled();
   expect(mockDeletedPaths).toHaveLength(1);
   expect(mockDeletedPaths[0]).toMatch(/^file:\/\/\/cache/);
 });
@@ -167,4 +205,40 @@ test('operations are mutually exclusive while a native save is pending', async (
   finish(null);
   await exporting;
   expect(mockUpload).not.toHaveBeenCalled();
+});
+
+test('inspection and export release stable snapshots and report collection loss', async () => {
+  snapshot.metadata.diagnostics.droppedRecords = 3;
+  const diagnostics = service();
+  await expect(diagnostics.inspect('24h')).resolves.toMatchObject({ hasWarnings: true });
+  expect(snapshot.dispose).toHaveBeenCalledTimes(1);
+  await diagnostics.exportBundle({ ...input, includeTraces: true });
+  expect(snapshot.dispose).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(mockWriteZip.mock.calls[0][1][0].content)).toMatchObject({
+    trace: { capture: 'metadata', diagnostics: { droppedRecords: 3 } },
+    warnings: ['trace_records_lost'],
+  });
+});
+
+test('snapshot creation failure still produces a system bundle with an explicit warning', async () => {
+  mockSnapshot.mockRejectedValueOnce(new Error('unreadable private path'));
+  await expect(service().exportBundle({ ...input, includeTraces: true })).resolves.toMatchObject({
+    status: 'saved',
+    hasWarnings: true,
+  });
+  const manifest = mockWriteZip.mock.calls[0][1][0].content;
+  expect(JSON.parse(manifest).warnings).toEqual(['trace_snapshot_failed']);
+  expect(manifest).not.toContain('private');
+});
+
+test('releases snapshots on archive failure and cleanup failures do not replace successful work', async () => {
+  mockWriteZip.mockRejectedValueOnce(new Error('disk full'));
+  await expect(service().exportBundle({ ...input, includeTraces: true })).rejects.toMatchObject({
+    code: 'BUNDLE_BUILD_FAILED',
+  });
+  expect(snapshot.dispose).toHaveBeenCalledTimes(1);
+  snapshot.dispose.mockImplementationOnce(() => {
+    throw new Error('cleanup failed');
+  });
+  await expect(service().inspect('24h')).resolves.toMatchObject({ hasWarnings: false });
 });

@@ -11,7 +11,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { usePreference } from '@/frontend/data/hooks';
 import type { DiagnosticBundleInput, DiagnosticRange } from '@/shared/contracts/diagnostics';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
@@ -19,7 +18,7 @@ import { DiagnosticSubmissionActions } from './DiagnosticSubmissionActions';
 import { useDiagnosticBundle } from './useDiagnosticBundle';
 
 const RANGES: DiagnosticRange[] = ['24h', '3d', '7d'];
-const SOURCES = ['logs', 'traces', 'chatRecords'] as const;
+const SOURCES = ['logs', 'traces'] as const;
 const formatBytes = (bytes: number) =>
   bytes >= 1024 * 1024
     ? `${(bytes / (1024 * 1024)).toFixed(1)} MiB`
@@ -30,16 +29,15 @@ export default function DiagnosticsScreen() {
   const { toast } = useToast();
   const [range, setRange] = useState<DiagnosticRange>('24h');
   const [isPickerOpen, setPickerOpen] = useState(false);
-  const [selected, setSelected] = useState({ logs: true, traces: true, chatRecords: false });
+  const [selected, setSelected] = useState({ logs: true, traces: true });
   const [acknowledged, setAcknowledged] = useState(false);
   const workflow = useDiagnosticBundle(range);
   usePreventRemove(workflow.isBusy, () => workflow.showBusy());
   const { inspection, outcome } = workflow;
   const input: DiagnosticBundleInput = {
     range,
-    includeLogs: selected.logs && !!inspection?.sources.logs.available,
-    includeTraces: selected.traces && !!inspection?.sources.traces.available,
-    includeChatRecords: selected.chatRecords && !!inspection?.sources.chatRecords.available,
+    includeLogs: selected.logs,
+    includeTraces: selected.traces,
   };
   const canSubmit = !!inspection && acknowledged;
   const estimatedBytes = SOURCES.reduce(
@@ -89,21 +87,20 @@ export default function DiagnosticsScreen() {
               >
                 {SOURCES.map((source) => {
                   const info = inspection.sources[source];
-                  const count = 'messageCount' in info ? info.messageCount : info.fileCount;
                   return (
                     <Section.SwitchItem
                       key={source}
-                      disabled={workflow.isBusy || !info.available}
+                      disabled={workflow.isBusy}
                       label={t(`settings.about.diagnostics.sourceLabels.${source}`)}
                       description={
                         info.available
                           ? t('settings.about.diagnostics.sourceAvailable', {
-                              count,
+                              count: info.fileCount,
                               size: formatBytes(info.estimatedBytes),
                             })
                           : t('settings.about.diagnostics.sourceUnavailable')
                       }
-                      value={selected[source] && info.available}
+                      value={selected[source]}
                       onValueChange={(value) =>
                         setSelected((current) => ({ ...current, [source]: value }))
                       }
@@ -112,9 +109,7 @@ export default function DiagnosticsScreen() {
                 })}
                 <Section.Item
                   label={t('settings.about.diagnostics.system')}
-                  description={t('settings.about.diagnostics.systemHint', {
-                    count: inspection.sources.crashDumps.fileCount,
-                  })}
+                  description={t('settings.about.diagnostics.systemHint')}
                   showChevron={false}
                 />
               </Section>
@@ -124,7 +119,6 @@ export default function DiagnosticsScreen() {
                 {t('settings.about.diagnostics.inspectionWarning')}
               </Text>
             )}
-            <TraceRecordingPreference disabled={workflow.isBusy} />
             <Section footer={t('settings.about.diagnostics.privacy')}>
               <Section.SwitchItem
                 disabled={workflow.isBusy}
@@ -274,34 +268,5 @@ export default function DiagnosticsScreen() {
         size="compact"
       />
     </>
-  );
-}
-
-function TraceRecordingPreference({ disabled }: { disabled: boolean }) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const [enabled, setEnabled] = usePreference('app.developer_mode.enabled');
-  return (
-    <Section footer={t('settings.about.diagnostics.traceRecordingHint')}>
-      <Section.SwitchItem
-        disabled={disabled}
-        label={t('settings.about.diagnostics.traceRecording')}
-        value={enabled}
-        onValueChange={(value) => {
-          void setEnabled(value).then(
-            () =>
-              toast.show({
-                label: t('settings.about.diagnostics.restartRequired'),
-                variant: 'success',
-              }),
-            () =>
-              toast.show({
-                label: t('settings.about.diagnostics.errors.operationFailed'),
-                variant: 'danger',
-              }),
-          );
-        }}
-      />
-    </Section>
   );
 }

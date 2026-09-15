@@ -1,8 +1,6 @@
-import { diagnosticDirectory } from '@/backend/services/diagnostics/diagnosticFiles';
+import { removeLegacyDiagnosticData } from '@/backend/services/diagnostics/diagnosticFiles';
 import { createDiagnosticLogWriter } from '@/backend/services/diagnostics/diagnosticRecording';
 import { installLogWriter, loggerService } from '@/shared/core/logger/LoggerService';
-
-import { getNativeDiagnostics } from '../../../modules/diagnostics';
 
 type RejectionOptions = {
   allRejections: boolean;
@@ -18,6 +16,11 @@ type RuntimeGlobals = {
 // Installed once from the app entry, ahead of router imports and database boot.
 // A process-level log sink must also survive a failed/replaced ApplicationHost.
 const logger = loggerService.withContext('CrashTelemetry');
+try {
+  removeLegacyDiagnosticData();
+} catch {
+  // Old source paths are never read by the metadata collector. Retry cleanup next launch.
+}
 try {
   installLogWriter(createDiagnosticLogWriter());
 } catch (error) {
@@ -50,9 +53,4 @@ if (runtime.HermesInternal?.enablePromiseRejectionTracker) {
       if (__DEV__) defaults.onHandled(id);
     },
   });
-}
-try {
-  getNativeDiagnostics().startCrashCapture(diagnosticDirectory('crashes').uri);
-} catch (error) {
-  logger.warn('Native diagnostic crash capture unavailable', { error });
 }

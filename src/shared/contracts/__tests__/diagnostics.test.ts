@@ -5,13 +5,15 @@ import {
   normalizeDiagnosticDescription,
 } from '../diagnostics';
 
-const input = { range: '24h', includeLogs: true, includeTraces: true, includeChatRecords: false };
+const input = { range: '24h', includeLogs: true, includeTraces: true };
 
 describe('diagnostic wire inputs', () => {
   test('accepts only PC ranges and explicit source choices', () => {
     expect(DiagnosticBundleInputSchema.parse(input)).toEqual(input);
     expect(DiagnosticBundleInputSchema.safeParse({ ...input, range: '30d' }).success).toBe(false);
-    expect(DiagnosticBundleInputSchema.safeParse({ ...input, redact: true }).success).toBe(false);
+    expect(
+      DiagnosticBundleInputSchema.safeParse({ ...input, includeChatRecords: true }).success,
+    ).toBe(false);
   });
 
   test('counts normalized multipart newlines and UTF-8 bytes', () => {

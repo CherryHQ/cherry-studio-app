@@ -89,18 +89,25 @@ export async function createOfficialMcpClient(
           throw new PluginError(
             'authorization',
             'The official MCP service rejected the credential.',
+            { statusCode: response.status },
           );
         }
         if (response.status === 403) {
-          throw new PluginError('access', 'The official MCP service denied access.');
+          throw new PluginError('access', 'The official MCP service denied access.', {
+            statusCode: response.status,
+          });
         }
         if (response.status === 429) {
-          throw new PluginError('quota', 'The official MCP service rate limit was reached.');
+          throw new PluginError('quota', 'The official MCP service rate limit was reached.', {
+            statusCode: response.status,
+          });
         }
         if (isWrite && (response.status === 408 || response.status >= 500)) {
-          throw unknownWriteError(context.pluginId);
+          throw unknownWriteError(context.pluginId, response.status);
         }
-        throw new PluginError('request', 'The official MCP request failed.');
+        throw new PluginError('request', 'The official MCP request failed.', {
+          statusCode: response.status,
+        });
       }
       return response;
     } catch (error) {
@@ -128,9 +135,10 @@ export async function createOfficialMcpClient(
   return client as MCPClient & PluginClient;
 }
 
-function unknownWriteError(pluginId: string): PluginError {
+function unknownWriteError(pluginId: string, statusCode?: number): PluginError {
   return new PluginError(
     'unknown-write',
     `The ${pluginId} write outcome is unknown. Check the service before retrying.`,
+    { statusCode },
   );
 }

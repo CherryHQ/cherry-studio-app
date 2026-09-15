@@ -14,7 +14,6 @@ export function diagnosticDescriptionByteLength(value: string): number {
 }
 
 export const DiagnosticBundleInputSchema = z.strictObject({
-  includeChatRecords: z.boolean(),
   includeLogs: z.boolean(),
   includeTraces: z.boolean(),
   range: DiagnosticRangeSchema,
@@ -34,8 +33,6 @@ export type DiagnosticInspection = {
   hasWarnings: boolean;
   sourceLimitBytes: number;
   sources: {
-    chatRecords: { available: boolean; estimatedBytes: number; messageCount: number };
-    crashDumps: { fileCount: number };
     logs: { available: boolean; estimatedBytes: number; fileCount: number };
     traces: { available: boolean; estimatedBytes: number; fileCount: number };
   };

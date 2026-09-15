@@ -27,7 +27,7 @@ export const dingtalkPlugin: PluginDefinition = {
       kind: 'interactive',
       interaction: 'polling',
       stages: ['user', 'account', 'permission'],
-      createRuntime: (store) => new DingtalkAuthorizationRuntime(store),
+      createRuntime: (store, diagnostics) => new DingtalkAuthorizationRuntime(store, diagnostics),
       createRequestAuthorization: () => ({
         apply(credential, { headers }) {
           const parsed = DingtalkUserCredentialSchema.parse(credential);

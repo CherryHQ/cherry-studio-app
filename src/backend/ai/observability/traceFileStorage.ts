@@ -102,6 +102,11 @@ export const traceFileStorage: TraceFileStorage = {
       return {
         directoryUri: directory.uri,
         files,
+        metadata: {
+          capture: 'metadata',
+          retention: TRACE_RETENTION,
+          diagnostics: { ...diagnostics },
+        },
         dispose() {
           if (directory.exists) directory.delete();
         },

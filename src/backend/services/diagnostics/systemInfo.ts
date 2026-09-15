@@ -20,6 +20,17 @@ export function collectDiagnosticSystemInfo(warnings: Set<DiagnosticWarning>) {
       isPackaged: !__DEV__,
       name: Constants.expoConfig?.name ?? 'Cherry Studio',
       version: Constants.expoConfig?.version ?? 'unknown',
+      buildNumber: Constants.platform?.ios?.buildNumber ?? Constants.platform?.android?.versionCode,
+      profile: ['development', 'development-simulator', 'preview', 'production'].includes(
+        Constants.expoConfig?.extra?.sentryEnvironment,
+      )
+        ? Constants.expoConfig?.extra?.sentryEnvironment
+        : 'unknown',
+    })),
+    device: collectValue(warnings, () => ({
+      model: Device.modelName,
+      modelId: Device.modelId,
+      isPhysicalDevice: Device.isDevice,
     })),
     operatingSystem: {
       arch: collectValue(warnings, () => Device.supportedCpuArchitectures?.join(',') ?? 'unknown'),
@@ -30,6 +41,8 @@ export function collectDiagnosticSystemInfo(warnings: Set<DiagnosticWarning>) {
     },
     runtime: {
       expo: Constants.expoConfig?.sdkVersion,
+      runtimeVersion: Constants.expoRuntimeVersion,
+      updateId: Constants.manifest2?.id,
       reactNative: Platform.constants.reactNativeVersion,
       hermes: 'HermesInternal' in globalThis,
     },

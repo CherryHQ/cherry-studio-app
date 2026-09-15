@@ -1,6 +1,28 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { AssistantMessage } from '@earendil-works/pi-ai';
 
 import { traceErrorAttributes, type TraceSpan } from '../../../observability';
+
+function terminalErrorFacts(message: AssistantMessage) {
+  if (message.stopReason !== 'error') return {};
+  const diagnostics = message.diagnostics ?? [];
+  for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
+    const diagnostic = diagnostics[index];
+    if (
+      !diagnostic?.error ||
+      (diagnostic.type !== 'pi_messages_response_failure' &&
+        diagnostic.type !== 'provider_response_failure')
+    )
+      continue;
+    return traceErrorAttributes({
+      name: diagnostic.error.name,
+      code: diagnostic.error.code,
+      statusCode: diagnostic.details?.statusCode ?? diagnostic.details?.status,
+      retryable: diagnostic.details?.retryable,
+    });
+  }
+  return {};
+}
 
 /** Observes the result promise without consuming or replacing Pi's event stream. */
 export function tracePiStream(streamFn: StreamFn, parent: TraceSpan | undefined): StreamFn {
@@ -25,6 +47,7 @@ export function tracePiStream(streamFn: StreamFn, parent: TraceSpan | undefined)
                   : 'ok',
               {
                 'gen_ai.response.finish_reason': message.stopReason,
+                ...terminalErrorFacts(message),
               },
             );
           },

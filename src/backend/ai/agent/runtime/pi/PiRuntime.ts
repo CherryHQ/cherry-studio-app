@@ -81,7 +81,6 @@ export type PiModelResolution = {
 };
 
 export interface PiRuntimeDependencies {
-  recordDiagnostic?(data: Record<string, unknown>): void;
   preflightModel(model: RuntimeModel): RuntimeModelPreflight | Promise<RuntimeModelPreflight>;
   resolveModel(
     model: RuntimeExecutionRequest['model'],
@@ -935,11 +934,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
     } catch (error) {
       if (!this.settleIfEnding(turn, { emitCancelled: true })) {
-        this.recordDiagnostic(turn, {
-          error,
-          providerId: turn.usageContext?.providerId ?? request.model.providerId,
-          modelId: turn.usageContext?.modelId ?? request.model.modelId,
-        });
         this.emit(turn, {
           type: 'failed',
           error: normalizeAiError(error, secrets, {
@@ -950,19 +944,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
     } finally {
       unsubscribe?.();
-    }
-  }
-
-  private recordDiagnostic(turn: ActiveTurn, data: Record<string, unknown>): void {
-    try {
-      this.dependencies.recordDiagnostic?.({
-        turnId: turn.turnId,
-        providerId: turn.usageContext?.providerId,
-        modelId: turn.usageContext?.modelId,
-        ...data,
-      });
-    } catch {
-      // Diagnostic storage must not change execution or its public error contract.
     }
   }
 
@@ -987,12 +968,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
         break;
       case 'turn_end':
         if (event.message.role === 'assistant') {
-          if (event.message.stopReason === 'error') {
-            this.recordDiagnostic(turn, {
-              assistantMessage: event.message,
-              error: terminalExecutionError(event.message),
-            });
-          }
           turn.terminalMessage = event.message;
         }
         this.settleUnmappedToolResults(turn, event.toolResults);

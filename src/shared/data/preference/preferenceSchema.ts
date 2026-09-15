@@ -28,7 +28,6 @@ export const FONT_SIZE_STEPS = [0, 1, 2] as const;
 export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
 
 export interface PreferenceSchema {
-  'app.developer_mode.enabled': boolean;
   'app.language': LanguageVarious | null;
   'app.onboarding.status': 'unseen' | 'pending' | 'skipped' | 'completed';
   /** `avatar-file:{uuid}.webp` for a managed avatar image, or a direct image URI. */
@@ -60,7 +59,6 @@ export interface PreferenceSchema {
 }
 
 export const PreferenceDefaults = {
-  'app.developer_mode.enabled': false,
   'app.language': null,
   'app.onboarding.status': 'unseen',
   'app.user.avatar': '',

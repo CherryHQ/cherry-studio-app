@@ -12,10 +12,9 @@ suffix.
 
 ## Ownership
 
-- `diagnostics` owns Desktop-aligned bundle inspection, archive creation, rule scanning, system
-  export, and retained upload retry. Its process logger captures startup errors; its
-  `AgentEventTraceRuntime` is an application-host resource. See [Diagnostics](diagnostics/README.md).
-
+- `diagnostics` owns metadata-only bundle inspection, archive creation, system saving and upload.
+  It receives request snapshots through a constructor interface; process logging persists only
+  warning/error summaries. See [Diagnostics](diagnostics/README.md).
 - `models`, `paintings`, `mcp`, `providers`, and `profile` expose mobile workflow
   factories named `createXxxModule()`. Their modules retain only orchestration that earns a
   frontend workflow contract; resource CRUD remains in Data API handlers.

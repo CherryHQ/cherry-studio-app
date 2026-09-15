@@ -1,7 +1,6 @@
 import type { File } from 'expo-file-system';
 
-import { serializeDiagnosticRecord } from '../diagnosticFiles';
-import { readRawLines, SourceChangedError } from '../sourceCollector';
+import { projectDiagnosticLine, readRawLines, SourceChangedError } from '../sourceCollector';
 
 function snapshot(bytes: Uint8Array, claimedSize = bytes.length) {
   const close = jest.fn();
@@ -49,12 +48,28 @@ test('detects a truncated snapshot and closes the handle even on reader cancella
   expect(aborted.close).toHaveBeenCalledTimes(1);
 });
 
-test('serializes Error causes and cycles without removing repeated shared objects', () => {
-  const error = new Error('failure');
-  error.cause = error;
-  const shared = { prompt: 'original body', token: 'original token' };
-  const parsed = JSON.parse(serializeDiagnosticRecord({ error, a: shared, b: shared }));
-  expect(parsed.error).toMatchObject({ name: 'Error', message: 'failure', cause: '[Circular]' });
-  expect(parsed.a).toEqual(shared);
-  expect(parsed.b).toEqual(shared);
+test('rejects legacy raw logs and reprojects metadata before range filtering', () => {
+  const line = (value: unknown) => ({
+    tooLarge: false,
+    data: new TextEncoder().encode(JSON.stringify(value)),
+  });
+  const range = { fromMs: 1000, toMs: 2000 };
+  const record = {
+    schemaVersion: 1,
+    capture: 'metadata',
+    timestamp: new Date(1500).toISOString(),
+    level: 'error',
+    module: 'HTTP',
+    message: 'private request',
+    facts: { statusCode: 401, responseBody: 'private body' },
+  };
+  expect(projectDiagnosticLine(line({ ...record, capture: 'raw' }), 'logs', range)).toBe(
+    'malformed',
+  );
+  const projected = projectDiagnosticLine(line(record), 'logs', range);
+  if (!projected || projected === 'malformed') throw new Error('Expected metadata');
+  const text = new TextDecoder().decode(projected.data);
+  expect(JSON.parse(text)).toMatchObject({ facts: { statusCode: 401 } });
+  expect(text).not.toContain('private');
+  expect(projectDiagnosticLine(line(record), 'logs', { fromMs: 1600, toMs: 2000 })).toBeUndefined();
 });
