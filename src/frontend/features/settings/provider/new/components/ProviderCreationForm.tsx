@@ -1,6 +1,6 @@
 import { Button, useAlert, useToast } from '@cherrystudio/ui/components';
 import * as Crypto from 'expo-crypto';
-import { type ReactElement, useCallback } from 'react';
+import { type ReactElement, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -105,6 +105,7 @@ export function useNewProviderForm() {
 }
 
 export function ProviderNewFormContent({
+  account,
   avatar,
   canSave,
   endpointMode = 'primary',
@@ -116,6 +117,7 @@ export function ProviderNewFormContent({
   disabledKeys = false,
   onEnableKeys,
 }: {
+  account?: ReactNode;
   avatar?: ReactElement;
   canSave: boolean;
   endpointMode?: 'custom-text' | 'primary';
@@ -154,6 +156,7 @@ export function ProviderNewFormContent({
           ) : null}
         </View>
       ) : null}
+      {account ? <View className="px-4 py-3">{account}</View> : null}
       <ProviderForm value={form}>
         <ProviderForm.Avatar>{avatar}</ProviderForm.Avatar>
         <ProviderForm.Name />

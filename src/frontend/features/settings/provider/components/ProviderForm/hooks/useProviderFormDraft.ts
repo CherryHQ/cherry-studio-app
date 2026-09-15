@@ -74,6 +74,10 @@ export function useProviderFormDraft({
     (apiKey: string) => setValues((current) => ({ ...current, apiKey })),
     [],
   );
+  const replaceSavedApiKey = useCallback((apiKey: string) => {
+    setSeed((current) => ({ ...current, values: { ...current.values, apiKey } }));
+    setValues((current) => ({ ...current, apiKey }));
+  }, []);
   const setAvatarUri = useCallback(
     (avatarUri: string | null) => setValues((current) => ({ ...current, avatarUri })),
     [],
@@ -108,13 +112,22 @@ export function useProviderFormDraft({
   const actions = useMemo<ProviderFormActions>(
     () => ({
       reset,
+      replaceSavedApiKey,
       setApiKey,
       setAvatarUri,
       setDefaultChatEndpoint,
       setEndpointUrl,
       setName,
     }),
-    [reset, setApiKey, setAvatarUri, setDefaultChatEndpoint, setEndpointUrl, setName],
+    [
+      reset,
+      replaceSavedApiKey,
+      setApiKey,
+      setAvatarUri,
+      setDefaultChatEndpoint,
+      setEndpointUrl,
+      setName,
+    ],
   );
 
   return useMemo(

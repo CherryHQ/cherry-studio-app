@@ -2,7 +2,12 @@ import type { ProviderService } from '@/backend/data/services/ProviderService';
 import type { ProviderSchemas } from '@/shared/data/api/schemas/providers';
 import type { HandlersFor } from '@/shared/data/api/types';
 
-export function createProviderHandlers(service: ProviderService): HandlersFor<ProviderSchemas> {
+export type ProviderAccountCleanup = { forget(providerId: string): Promise<void> };
+
+export function createProviderHandlers(
+  service: ProviderService,
+  accounts: ProviderAccountCleanup,
+): HandlersFor<ProviderSchemas> {
   return {
     '/providers': {
       GET: ({ query }) => service.list(query),
@@ -12,7 +17,10 @@ export function createProviderHandlers(service: ProviderService): HandlersFor<Pr
       GET: ({ query }) => service.listPage(query),
     },
     '/providers/:id': {
-      DELETE: ({ params }) => service.delete(params.id),
+      DELETE: async ({ params }) => {
+        await accounts.forget(params.id);
+        return service.delete(params.id);
+      },
       GET: ({ params }) => service.getByProviderId(params.id),
       PATCH: ({ body, params }) => service.update(params.id, body),
     },

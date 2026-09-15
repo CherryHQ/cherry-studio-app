@@ -27,7 +27,7 @@ import { createModelHandlers, type SystemModelSupportFilter } from './models';
 import { createPaintingHandlers } from './paintings';
 import { createPluginCatalogHandlers, type PluginCatalogReader } from './pluginCatalog';
 import { createPluginConnectionHandlers } from './pluginConnections';
-import { createProviderHandlers } from './providers';
+import { createProviderHandlers, type ProviderAccountCleanup } from './providers';
 import { createSearchHandlers } from './search';
 
 export type DataApiDependencies = {
@@ -51,6 +51,7 @@ export type DataApiDependencies = {
   pluginCatalog: PluginCatalogReader;
   pluginConnections: Pick<PluginAuthorizationService, 'listConnections'>;
   providers: ProviderService;
+  providerAccounts: ProviderAccountCleanup;
 };
 
 export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImplementation {
@@ -68,7 +69,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createPaintingHandlers(dependencies.paintings),
     ...createPluginCatalogHandlers(dependencies.pluginCatalog),
     ...createPluginConnectionHandlers(dependencies.pluginConnections),
-    ...createProviderHandlers(dependencies.providers),
+    ...createProviderHandlers(dependencies.providers, dependencies.providerAccounts),
     ...createSearchHandlers(dependencies.contentSearch, dependencies.entitySearch),
   };
 }
