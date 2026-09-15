@@ -39,7 +39,7 @@ void SplashScreen.preventAutoHideAsync().catch(() => {});
 // The router integration has to be live before the first screen mounts, so this
 // runs at module scope alongside the splash screen hold rather than in an effect.
 configureObserve();
-configureSentry();
+void configureSentry();
 
 const RootGestureView = withUniwind(GestureHandlerRootView);
 

@@ -8,7 +8,7 @@ The existing `eas-build-post-install` hook builds the workspace packages during 
 | --- | --- | --- |
 | `development` / `development-simulator` | Disabled | Disabled |
 | `preview` | Disabled | Disabled |
-| `production` | Enabled with a DSN outside development mode | Enabled; requires an upload token |
+| `production` | Enabled with a DSN, current user consent, and outside development mode | Enabled; requires an upload token |
 
 ## Prerequisites
 
@@ -42,7 +42,10 @@ SENTRY_AUTH_TOKEN=
 ```
 
 - `EXPO_PUBLIC_SENTRY_DSN` is the public event-ingestion address embedded in the app. Reporting is
-  enabled only for the production profile, with a DSN, and outside development mode (`__DEV__`).
+  enabled only for the production profile, with a DSN, current diagnostics consent, and outside
+  development mode (`__DEV__`). Users enable reports in Settings → Privacy settings → Send anonymous
+  error reports. Native consent/filtering changes require a new installation package; an OTA update
+  cannot add `modules/crash-reporting` to an existing client.
 - `SENTRY_AUTH_TOKEN` is a build-only credential used to upload source maps and debug symbols.
   Use a token with the source-map upload permissions for the configured Sentry project. Do not
   prefix it with `EXPO_PUBLIC_` or add it to app config.

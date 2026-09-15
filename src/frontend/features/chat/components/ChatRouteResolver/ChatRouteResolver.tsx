@@ -58,5 +58,5 @@ export function ChatRouteResolver() {
 }
 
 function ChatRouteResolverLayout({ children }: { children: ReactNode }) {
-  return <View className="flex-1">{children}</View>;
+  return <View className="flex-1 justify-center">{children}</View>;
 }
