@@ -93,12 +93,6 @@ function SidebarBodyDefault({
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
         <SidebarNavRow
-          icon={FolderIcon}
-          label={t('navigation.library')}
-          onPress={openLibrary}
-          testID="sidebar-library"
-        />
-        <SidebarNavRow
           icon={MousePointerClickIcon}
           label={t('navigation.agents')}
           onPress={navigateAgents}
@@ -115,6 +109,12 @@ function SidebarBodyDefault({
           label={t('plugins.title')}
           onPress={openPlugins}
           testID="sidebar-plugins"
+        />
+        <SidebarNavRow
+          icon={FolderIcon}
+          label={t('navigation.library')}
+          onPress={openLibrary}
+          testID="sidebar-library"
         />
       </View>
 
