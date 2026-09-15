@@ -9,7 +9,8 @@ page.
 - `search/` owns the cross-page request session that opens the transient search page.
 - `backgroundActivity/` owns platform Live Activity factories registered during bootstrap.
 - `startup/` owns the frontend startup cover, readiness reporting, and handoff lifecycle.
-- `observability/` owns the EAS Observe configuration and the entry-screen interactive marker.
+- `observability/` owns EAS Observe, the entry-screen interactive marker, and Sentry consent,
+  JavaScript event filtering, and the connection to the native crash-reporting module.
 
 App Shell modules expose deliberate public roots and may depend on shared frontend components,
 data, hooks, and utilities. They must not import page-private code.

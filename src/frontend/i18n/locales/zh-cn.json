@@ -1603,5 +1603,8 @@
   "documentExport.errors.image-size-limit": "这条消息超过单张图片容量，请使用 HTML 或 Markdown 保留完整内容。",
   "documentExport.documentReady": "已为所选内容准备文档，可继续分享。",
   "documentExport.paused": "预览已暂停",
-  "documentExport.resume": "继续生成"
+  "documentExport.resume": "继续生成",
+  "settings.privacy.title": "隐私设置",
+  "settings.privacy.sendReports": "匿名发送错误报告",
+  "settings.privacy.saveFailed": "未能保存此设置，请重试。"
 }

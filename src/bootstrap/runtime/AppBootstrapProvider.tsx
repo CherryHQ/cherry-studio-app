@@ -1,3 +1,4 @@
+import { loggerService } from '@logger';
 import { createContext, type PropsWithChildren, use, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -30,6 +31,7 @@ type AppBootstrapState =
     };
 
 const AppBootstrapContext = createContext<AppBootstrapState | null>(null);
+const logger = loggerService.withContext('AppBootstrap');
 
 export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapProviderProps) {
   const runtime = useMemo(() => (createRuntime ?? createAppBootstrapRuntime)(), [createRuntime]);
@@ -83,6 +85,9 @@ async function initializeApp({
     }
   } catch (error) {
     if (!isDisposed()) {
+      logger.error('Application initialization failed', toError(error), {
+        operation: 'app.initialize',
+      });
       setState({ error: toError(error), status: 'error' });
     }
   }

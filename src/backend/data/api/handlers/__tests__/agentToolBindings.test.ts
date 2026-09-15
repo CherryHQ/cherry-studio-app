@@ -26,7 +26,7 @@ describe('Agent tool binding handlers', () => {
       params: { agentId: AGENT_ID },
     });
     await handlers['/agents/:agentId/tool-bindings'].PUT({
-      body: { bindings: [{ capabilityId: 'calendar.read', source: 'builtin' }] },
+      body: { bindings: [{ rawToolName: 'read', serverId: SERVER_ID, source: 'mcp' }] },
       params: { agentId: AGENT_ID },
     });
     await handlers['/agents/:agentId/tool-bindings/:bindingId'].DELETE({
@@ -44,9 +44,10 @@ describe('Agent tool binding handlers', () => {
       bindings: [
         {
           approval: 'ask',
-          capabilityId: 'calendar.read',
           enabled: true,
-          source: 'builtin',
+          rawToolName: 'read',
+          serverId: SERVER_ID,
+          source: 'mcp',
         },
       ],
     });

@@ -154,21 +154,6 @@ export class ProviderRegistryUpdaterService extends BaseService {
         if (!isCatalogManifestCompatible(snapshot.manifest)) continue;
         const parsed = this.parseAndValidateFiles(snapshot.files, snapshot.manifest);
         this.activeSlot = snapshot.slot;
-        if (snapshot.slot === 'legacy') {
-          try {
-            this.activeSlot = await writeProviderRegistrySnapshot(
-              snapshot.files,
-              snapshot.manifest,
-              snapshot.slot,
-            );
-          } catch (error) {
-            logger.warn(
-              'Could not migrate the registry; using the validated cache',
-              toError(error),
-            );
-          }
-        }
-        if (this.stopped) return;
         providerRegistryService.installRemoteSnapshot(parsed);
         this.activeManifest = snapshot.manifest;
         providerRegistryUpdates.emit({ revision: snapshot.manifest.revision, source: 'cache' });
