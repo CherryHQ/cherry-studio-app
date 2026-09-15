@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "engines": {
     "node": "24.x"
   },
