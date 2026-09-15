@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v0.0.1)'
+        description: 'Release tag (e.g. v0.1.0)'
         required: true
-        default: 'v0.0.1'
+        default: 'v0.1.0'
   push:
     tags:
       - 'v*.*.*'
@@ -59,7 +59,7 @@ jobs:
       # - name: Update package.json version
       #   run: |
       #     VERSION="${{ steps.version.outputs.tag }}"
-      #     # Remove 'v' prefix if present (e.g., v0.0.1 -> 0.0.1)
+      #     # Remove 'v' prefix if present (e.g., v0.1.0 -> 0.1.0)
       #     VERSION_NUMBER="${VERSION#v}"
       #     echo "Updating package.json version to $VERSION_NUMBER"
       #
