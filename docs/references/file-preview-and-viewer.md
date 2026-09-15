@@ -100,6 +100,10 @@ long press. Text query entries are discarded one minute after their last observe
 
 ### HTML
 
+The overflow menu also offers PNG and image-based PPTX conversion for complete HTML sources.
+See [HTML Conversion](./html-conversion.md) for pagination, limits, implementation selection and
+pending native acceptance.
+
 HTML uses `react-native-webview` with `source.html`, without a file URI or an application origin.
 Authored scripts and network resources may run so generated charts and interactive pages work.
 The page owns its colors and styling; a mobile viewport is added after loading only when absent.

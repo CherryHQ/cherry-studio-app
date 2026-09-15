@@ -15,3 +15,8 @@ cleanup covers the artifact directory; committed files outlive the session.
 
 See [Document Export](../../../../docs/references/document-export.md) for formats, limits, storage
 semantics and pending native acceptance.
+
+`convertHtml` handles the HTML viewer's direct PNG/PPTX conversions without normalizing authored
+HTML into document blocks. It consumes sequential frontend captures, streams image-only PPTX bytes,
+and persists one managed file. [HTML Conversion](../../../../docs/references/html-conversion.md)
+owns its limits, cancellation and rendering constraints.

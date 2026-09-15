@@ -1,12 +1,11 @@
 import { capturePng } from '../capturePng';
-import type { ImageCapturePlan } from '../imageCapturePlan';
 
 const mockCapture = jest.fn();
 const mockReleaseCapture = jest.fn();
 const mockReadBytes = jest.fn();
 const mockClose = jest.fn();
 const mockOpen = jest.fn();
-const plan: ImageCapturePlan = {
+const plan = {
   width: 720,
   height: 20000,
   scale: 2,
