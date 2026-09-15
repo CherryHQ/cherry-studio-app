@@ -5,12 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
-import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { PluginCatalogEntry, PluginInteractiveMethod } from '@/shared/data/types/plugin';
 
 import { PluginIdentity } from '../../components/PluginIdentity';
 import { PluginPage } from '../../components/PluginPage';
-import { ApplicationSetupHelp } from './ApplicationSetupHelp';
 import { CredentialFields, hasEveryField } from './CredentialFields';
 import { useInteractiveConnect } from './useInteractiveConnect';
 
@@ -44,7 +42,6 @@ export function InteractiveConnect({
   const name = t(`plugins.catalog.${entry.id}.name`);
   const textKey = `plugins.catalog.${entry.id}.authMethods.${method.id}`;
   const applicationFields = method.applicationFields;
-  const applicationSetup = method.applicationSetup;
   const waiting = state?.status === 'waiting' || state?.status === 'callback' ? state : null;
   const review = state?.status === 'review' ? state : null;
   const finalStatus =
@@ -68,9 +65,7 @@ export function InteractiveConnect({
     primaryAction = { label: progressTitle, disabled: true };
   } else if (isEditingApplication) {
     primaryAction = {
-      label: t(
-        applicationSetup ? `${textKey}.continue` : 'plugins.authorization.useExistingSubmit',
-      ),
+      label: t('plugins.authorization.useExistingSubmit'),
       onPress: () => void submitExistingApplication(),
       disabled: !hasEveryField(applicationFields!, existingApplication!.fields),
       testID: 'plugin-use-existing-submit',
@@ -121,19 +116,9 @@ export function InteractiveConnect({
             {!isBusy ? (
               <>
                 {isEditingApplication ? (
-                  applicationSetup ? (
-                    <Button
-                      variant="outline"
-                      onPress={() => void openExternalUrl(applicationSetup.createUrl)}
-                      testID="plugin-create-application"
-                    >
-                      {t(`${textKey}.createApplication`)}
-                    </Button>
-                  ) : (
-                    <Button variant="ghost" onPress={() => setExistingApplication(null)}>
-                      {t('plugins.authorization.useExistingCancel')}
-                    </Button>
-                  )
+                  <Button variant="ghost" onPress={() => setExistingApplication(null)}>
+                    {t('plugins.authorization.useExistingCancel')}
+                  </Button>
                 ) : (
                   <>
                     {waiting || review ? (
@@ -265,30 +250,10 @@ export function InteractiveConnect({
               })}
             />
           ) : (
-            <View className="gap-3">
-              {isEditingApplication && applicationSetup ? (
-                <Text className="text-base font-semibold text-foreground">
-                  {t(`${textKey}.useExisting`)}
-                </Text>
-              ) : null}
-              <Text className="text-base text-foreground">
-                {t(isEditingApplication ? `${textKey}.useExistingSetup` : `${textKey}.setup`)}
-              </Text>
-            </View>
+            <Text className="text-base text-foreground">
+              {t(isEditingApplication ? `${textKey}.useExistingSetup` : `${textKey}.setup`)}
+            </Text>
           )}
-          {isEditingApplication && applicationSetup ? (
-            <View className="items-start">
-              <Button
-                variant="link"
-                size="inline"
-                disabled={isBusy}
-                onPress={() => void openExternalUrl(entry.links.credentials)}
-                testID="plugin-existing-applications"
-              >
-                {t(`${textKey}.manageApplications`)}
-              </Button>
-            </View>
-          ) : null}
           {isEditingApplication && existingApplication && applicationFields ? (
             <CredentialFields
               pluginId={entry.id}
@@ -308,13 +273,6 @@ export function InteractiveConnect({
             />
           ) : null}
         </View>
-        {applicationSetup && state && !isBusy && !waiting && !review && state.status !== 'ready' ? (
-          <ApplicationSetupHelp
-            setup={applicationSetup}
-            textKey={textKey}
-            managementUrl={entry.links.credentials}
-          />
-        ) : null}
         <View className="gap-3">
           <Text accessibilityRole="header" className="text-base font-semibold text-foreground">
             {t('plugins.privacy')}

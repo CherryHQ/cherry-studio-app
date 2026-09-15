@@ -124,7 +124,6 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
                       stages: method.stages,
                       interaction: method.interaction,
                       applicationFields: method.applicationFields,
-                      applicationSetup: method.applicationSetup,
                     },
               ),
             }),

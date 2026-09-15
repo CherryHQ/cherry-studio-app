@@ -43,7 +43,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
   const [existingApplication, setExistingApplication] = useState<{
     fields: Record<string, string>;
     invalid: Set<string>;
-  } | null>(() => (method.applicationSetup ? { fields: {}, invalid: new Set() } : null));
+  } | null>(null);
   const finalization = useRef<Promise<void> | null>(null);
   const navigated = useRef(false);
   const browserAttempt = useRef<string | null>(null);
@@ -168,11 +168,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
   const begin = async (restart = false) => {
     const next = await act('starting', async () => {
       if (restart) await plugins.authorization.cancel(entry.id, method.id);
-      const next = await plugins.authorization.begin(entry.id, method.id);
-      if (next.status === 'idle' && applicationFields) {
-        setExistingApplication((previous) => previous ?? { fields: {}, invalid: new Set() });
-      }
-      return next;
+      return plugins.authorization.begin(entry.id, method.id);
     });
     if (next) void openConfirmation(next);
   };
@@ -214,7 +210,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     progress,
     isBusy,
     error,
-    existingApplication: state?.status === 'idle' ? existingApplication : null,
+    existingApplication,
     setExistingApplication,
     begin,
     submitExistingApplication,
@@ -230,10 +226,6 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
       state?.status === 'review' &&
       act('confirming', () => plugins.authorization.confirm(entry.id, method.id, state.attemptId)),
     resetApplication: () =>
-      act('starting', async () => {
-        const next = await plugins.authorization.resetApplication(entry.id, method.id);
-        setExistingApplication(method.applicationSetup ? { fields: {}, invalid: new Set() } : null);
-        return next;
-      }),
+      act('starting', () => plugins.authorization.resetApplication(entry.id, method.id)),
   };
 }

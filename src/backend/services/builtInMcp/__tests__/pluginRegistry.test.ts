@@ -38,11 +38,6 @@ function definition(id: string): PluginDefinition {
         interaction: 'polling',
         stages: ['consent'],
         applicationFields: [{ id: 'clientId', secret: false, maxLength: 128 }],
-        applicationSetup: {
-          createUrl: 'https://example.com/apps/new',
-          redirectUrls: ['cherrystudio://plugins/future/callback'],
-          scopes: ['content:read'],
-        },
         createRuntime: () => {
           throw new Error('Must not start from catalog reads');
         },
@@ -96,17 +91,6 @@ it('projects detached method metadata while retaining all executable factories o
   }
   expect(catalog.authMethods[0]).toMatchObject({ requiresDisconnect: true });
   expect(catalog.authMethods[1]).toMatchObject({ interaction: 'polling' });
-  const interactiveMethod = catalog.authMethods[1];
-  if (interactiveMethod.kind !== 'interactive') throw new Error('Expected interactive method');
-  expect(interactiveMethod.applicationSetup).toEqual({
-    createUrl: 'https://example.com/apps/new',
-    redirectUrls: ['cherrystudio://plugins/future/callback'],
-    scopes: ['content:read'],
-  });
-  Object.assign(interactiveMethod.applicationSetup!, { createUrl: 'https://modified.example' });
-  expect(registry.listCatalog()[0].authMethods[1]).toMatchObject({
-    applicationSetup: { createUrl: 'https://example.com/apps/new' },
-  });
   Object.assign(catalog.authMethods[1], { interaction: 'callback' });
   expect(registry.listCatalog()[0].authMethods[1]).toMatchObject({ interaction: 'polling' });
   Object.assign(catalog.links, { website: 'https://modified.example' });
@@ -364,10 +348,15 @@ it.each([
   },
 );
 
-it('exposes Slack sign-in without application creation or credential entry', () => {
+it('exposes Slack user-token entry without an interactive authorization method', () => {
   const slack = getBuiltInPluginCatalog().find(({ id }) => id === 'slack')!;
   expect(slack.authMethods).toEqual([
-    { id: 'slack_user', kind: 'interactive', interaction: 'callback', stages: ['user'] },
+    {
+      id: 'personal_token',
+      kind: 'credentials',
+      requiresDisconnect: true,
+      fields: [{ id: 'token', secret: true, maxLength: 16_384, pattern: '^xoxp-\\S+$' }],
+    },
   ]);
 });
 

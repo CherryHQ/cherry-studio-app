@@ -2,7 +2,6 @@ import * as mcp from '@ai-sdk/mcp';
 
 import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
 import { FEISHU_REQUESTED_TOOL_SCOPES } from '../../plugins/feishu/feishuTools';
-import { SLACK_REQUESTED_SCOPES } from '../../plugins/slack/slackCredentials';
 import { createBuiltInMcpClient as createClient } from '../createBuiltInMcpClient';
 import { validatePluginConnection } from '../validatePluginConnection';
 
@@ -157,25 +156,10 @@ const userCredential = {
   },
 };
 
-const slackCredential = {
-  version: 1,
-  application: {
-    version: 1,
-    clientId: '123.456',
-    redirectUrl: 'cherrystudio-dev://plugins/slack/callback',
-  },
-  tokens: {
-    accessToken: 'slack-access-token',
-    refreshToken: 'slack-refresh-token',
-    expiresAt: 7200000,
-    refreshExpiresAt: 86400000,
-    scope: SLACK_REQUESTED_SCOPES.join(','),
-  },
-  account: { id: 'T1:U1', label: 'Workspace · User' },
-};
+const slackCredential = { version: 1, token: 'xoxp-slack-user-token' };
 
 it('validates Slack through remote tool discovery without reading workspace content', async () => {
-  await expect(validatePluginConnection('slack', 'slack_user', slackCredential)).resolves.toBe(
+  await expect(validatePluginConnection('slack', 'personal_token', slackCredential)).resolves.toBe(
     'Official MCP',
   );
   expect(toolRequests()).toEqual([]);
@@ -184,10 +168,10 @@ it('validates Slack through remote tool discovery without reading workspace cont
     maxRetries: 0,
     transport: { type: 'http', url: 'https://mcp.slack.com/mcp', redirect: 'error' },
   });
-  expect(JSON.stringify(config)).not.toMatch(/slack-access-token|slack-refresh-token/);
+  expect(JSON.stringify(config)).not.toContain(slackCredential.token);
   for (const [url, init] of mockFetch.mock.calls as [string, RequestInit][]) {
     expect(url).toBe('https://mcp.slack.com/mcp');
-    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer slack-access-token');
+    expect(new Headers(init.headers).get('Authorization')).toBe(`Bearer ${slackCredential.token}`);
   }
 });
 
@@ -203,15 +187,19 @@ it('rejects Slack setup when discovery only offers write tools', async () => {
     return respond(url, init);
   });
   await expect(
-    validatePluginConnection('slack', 'slack_user', slackCredential),
+    validatePluginConnection('slack', 'personal_token', slackCredential),
   ).rejects.toMatchObject({ reason: 'request' });
   expect(toolRequests()).toEqual([]);
 });
 
 it('uses Slack remote schemas and arguments while rejecting retired and unadmitted tools', async () => {
-  mockGetGrant.mockResolvedValue({ id: 'slack-grant', authMethod: 'slack_user' });
-  mockResolveCredential.mockResolvedValue(slackCredential);
+  mockGetGrant.mockResolvedValue({
+    id: 'slack-grant',
+    authMethod: 'personal_token',
+    credential: slackCredential,
+  });
   const client = await createBuiltInMcpClient('slack', 'slack-grant', new AbortController().signal);
+  expect(authorizations.get).not.toHaveBeenCalled();
   try {
     const { tools } = await client.listTools();
     const name = 'slack_search_public_and_private';
@@ -247,11 +235,23 @@ it('uses Slack remote schemas and arguments while rejecting retired and unadmitt
   }
 });
 
+it('requires a new connection for the retired Slack OAuth method', async () => {
+  mockGetGrant.mockResolvedValue({ id: 'old-slack-grant', authMethod: 'slack_user' });
+  await expect(
+    createBuiltInMcpClient('slack', 'old-slack-grant', new AbortController().signal),
+  ).rejects.toMatchObject({ reason: 'authorization' });
+  expect(mockFetch).not.toHaveBeenCalled();
+  expect(authorizations.get).not.toHaveBeenCalled();
+});
+
 it.each(['slack_send_message', 'slack_update_canvas', 'slack_update_list_record'])(
   'does not replay Slack %s when the write outcome is unknown',
   async (name) => {
-    mockGetGrant.mockResolvedValue({ id: 'slack-grant', authMethod: 'slack_user' });
-    mockResolveCredential.mockResolvedValue(slackCredential);
+    mockGetGrant.mockResolvedValue({
+      id: 'slack-grant',
+      authMethod: 'personal_token',
+      credential: slackCredential,
+    });
     const client = await createBuiltInMcpClient(
       'slack',
       'slack-grant',

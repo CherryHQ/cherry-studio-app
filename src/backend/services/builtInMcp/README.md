@@ -19,7 +19,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `plugins/github/` | GitHub definition, workflow guide, OAuth App authorization with PKCE, account identity, token rotation and revocation |
 | `plugins/feishu/` | Feishu workflow guide, authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
 | `plugins/dingtalk/` | Official cloud device authorization, account review, token renewal, behavior authorization and service-bound tools |
-| `plugins/slack/` | Official remote MCP tool policy, publisher-owned app authorization with PKCE, workspace/user identity, token rotation and revocation |
+| `plugins/slack/` | Official remote MCP tool policy, internal-app setup link and manual user-token credentials |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
 internal responsibility groups; they do not add public barrels. Each plugin exposes only its
@@ -148,21 +148,18 @@ No local business API adapters or fixed 15-message page limit remain.
 
 File uploads are deferred: neither upload tool is admitted, and `files:write` is not requested.
 
-Slack retains the official [native PKCE flow](https://docs.slack.dev/authentication/using-pkce/)
-through `oauth.v2.access`. Its rotating user token authorizes MCP requests; `auth.test` binds the
-workspace/user during authorization and `auth.revoke` handles disconnect. Connection validation
-only discovers `slack_read_user_profile` without invoking it. The 29 configured user scopes come from
-the [official authorization metadata](https://mcp.slack.com/.well-known/oauth-authorization-server)
-and include granular search, profiles/email and the admitted write capabilities, excluding uploads.
-Former Web API and read-only MCP grants require disconnect and reauthorization; outdated tokens remain revocable.
-New authorization uses the publisher's `EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID` and the current native
-callback scheme. Users only authorize their account; there is no application form or creation link.
-Existing grants retain their issuing application for refresh and revocation. Missing publisher
-configuration makes new authorization unavailable without changing saved connections. See
-[Slack Plugin Authorization](../../../../docs/guides/slack-plugin-authorization.md) for publisher setup.
-The
-[official MCP service](https://docs.slack.dev/ai/slack-mcp-server/) requires an internal or
-Marketplace-published Slack app and remains subject to workspace approval and resource access.
+Slack uses the shared credential-entry flow with a manually supplied `xoxp-` user token from an
+internal app. The creation link prefills the 29 user scopes for admitted capabilities and leaves
+rotation disabled. Users enable the app's MCP feature, install it in their own workspace, and paste
+the user token into Cherry. No Client ID, client secret or callback configuration is needed in Cherry.
+See [Slack Plugin Setup](../../../../docs/guides/slack-plugin-authorization.md) for the complete steps.
+
+Connection validation only discovers `slack_read_user_profile`, without reading workspace content.
+Replacing the token requires disconnecting first. Local disconnect does not revoke the upstream
+Slack token; users manage that authorization in Slack. Earlier OAuth connections require disconnect
+and manual-token reconnection. OAuth, automatic token renewal and publisher Marketplace distribution
+are deferred. The [official MCP service](https://docs.slack.dev/ai/slack-mcp-server/) permits internal
+apps and remains subject to workspace approval and resource access.
 
 Interactive methods declare `polling` or `callback`. Polling retains the Feishu rules above;
 callback methods wait for a system authentication session and an exact redirect. A generic route
