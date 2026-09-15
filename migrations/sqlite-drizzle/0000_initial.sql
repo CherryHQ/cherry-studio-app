@@ -8,53 +8,114 @@ CREATE TABLE `app_state` (
 --> statement-breakpoint
 CREATE TABLE `file_entry` (
 	`id` text PRIMARY KEY NOT NULL,
-	`origin` text NOT NULL,
-	`name` text NOT NULL,
-	`ext` text,
-	`size` integer,
-	`content_hash` text,
-	`external_path` text,
-	`cleanup_policy` text DEFAULT 'manual' NOT NULL,
+	`filename` text NOT NULL,
+	`media_type` text NOT NULL,
+	`size` integer NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	`deleted_at` integer,
-	CONSTRAINT "fe_origin_check" CHECK("file_entry"."origin" IN ('internal', 'external')),
-	CONSTRAINT "fe_cleanup_policy_check" CHECK("file_entry"."cleanup_policy" IN ('manual', 'delete_when_unreferenced')),
-	CONSTRAINT "fe_origin_consistency" CHECK(("file_entry"."origin" = 'internal' AND "file_entry"."external_path" IS NULL) OR ("file_entry"."origin" = 'external' AND "file_entry"."external_path" IS NOT NULL)),
-	CONSTRAINT "fe_external_no_delete" CHECK("file_entry"."origin" != 'external' OR "file_entry"."deleted_at" IS NULL),
-	CONSTRAINT "fe_contenthash_external_null" CHECK("file_entry"."origin" != 'external' OR "file_entry"."content_hash" IS NULL),
-	CONSTRAINT "fe_size_internal_only" CHECK(("file_entry"."origin" = 'internal' AND "file_entry"."size" IS NOT NULL AND "file_entry"."size" >= 0) OR ("file_entry"."origin" = 'external' AND "file_entry"."size" IS NULL))
+	`provenance` text DEFAULT 'unknown' NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `fe_deleted_at_idx` ON `file_entry` (`deleted_at`);--> statement-breakpoint
 CREATE INDEX `fe_created_at_idx` ON `file_entry` (`created_at`);--> statement-breakpoint
-CREATE INDEX `fe_content_hash_idx` ON `file_entry` (`content_hash`);--> statement-breakpoint
-CREATE UNIQUE INDEX `fe_external_path_lower_unique_idx` ON `file_entry` (lower("external_path"));--> statement-breakpoint
-CREATE INDEX `fe_external_path_idx` ON `file_entry` (`external_path`);--> statement-breakpoint
 CREATE TABLE `preference` (
-	`key` text PRIMARY KEY NOT NULL,
+	`scope` text DEFAULT 'default' NOT NULL,
+	`key` text NOT NULL,
 	`value` text,
 	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL
+	`updated_at` integer NOT NULL,
+	PRIMARY KEY(`scope`, `key`)
 );
 --> statement-breakpoint
-CREATE TABLE `topic` (
+CREATE TABLE `agent` (
 	`id` text PRIMARY KEY NOT NULL,
-	`name` text DEFAULT '' NOT NULL,
-	`is_name_manually_edited` integer DEFAULT false NOT NULL,
-	`assistant_id` text,
-	`active_node_id` text,
-	`trace_id` text,
+	`name` text NOT NULL,
+	`instructions` text DEFAULT '' NOT NULL,
+	`avatar` text,
+	`model` text,
+	`tool_approval_mode` text DEFAULT 'default' NOT NULL,
+	`disabled_capabilities` text DEFAULT '[]' NOT NULL,
 	`order_key` text NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	`deleted_at` integer,
-	FOREIGN KEY (`assistant_id`) REFERENCES `assistant`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`model`) REFERENCES `user_model`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE INDEX `topic_updated_at_idx` ON `topic` (`updated_at`);--> statement-breakpoint
-CREATE INDEX `topic_order_key_idx` ON `topic` (`order_key`);--> statement-breakpoint
-CREATE INDEX `topic_assistant_id_idx` ON `topic` (`assistant_id`);--> statement-breakpoint
+CREATE INDEX `agent_created_at_idx` ON `agent` (`created_at`);--> statement-breakpoint
+CREATE INDEX `agent_order_key_idx` ON `agent` (`order_key`);--> statement-breakpoint
+CREATE TABLE `agent_tool_binding` (
+	`id` text PRIMARY KEY NOT NULL,
+	`agent_id` text NOT NULL,
+	`source` text NOT NULL,
+	`capability_id` text,
+	`mcp_server_id` text,
+	`raw_tool_name` text,
+	`enabled` integer DEFAULT true NOT NULL,
+	`approval` text DEFAULT 'ask' NOT NULL,
+	`display_name_snapshot` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`agent_id`) REFERENCES `agent`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "agent_tool_binding_identity_check" CHECK((
+        ("agent_tool_binding"."source" = 'builtin' AND "agent_tool_binding"."capability_id" IS NOT NULL AND length("agent_tool_binding"."capability_id") > 0 AND "agent_tool_binding"."mcp_server_id" IS NULL AND "agent_tool_binding"."raw_tool_name" IS NULL)
+        OR
+        ("agent_tool_binding"."source" = 'mcp' AND "agent_tool_binding"."capability_id" IS NULL AND "agent_tool_binding"."mcp_server_id" IS NOT NULL AND length("agent_tool_binding"."mcp_server_id") > 0 AND ("agent_tool_binding"."raw_tool_name" IS NULL OR length("agent_tool_binding"."raw_tool_name") > 0))
+      )),
+	CONSTRAINT "agent_tool_binding_approval_check" CHECK("agent_tool_binding"."approval" IN ('auto', 'ask', 'deny'))
+);
+--> statement-breakpoint
+CREATE INDEX `agent_tool_binding_agent_id_idx` ON `agent_tool_binding` (`agent_id`);--> statement-breakpoint
+CREATE INDEX `agent_tool_binding_mcp_server_id_idx` ON `agent_tool_binding` (`mcp_server_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `agent_tool_binding_builtin_uniq` ON `agent_tool_binding` (`agent_id`,`capability_id`) WHERE "agent_tool_binding"."source" = 'builtin';--> statement-breakpoint
+CREATE UNIQUE INDEX `agent_tool_binding_mcp_server_default_uniq` ON `agent_tool_binding` (`agent_id`,`mcp_server_id`) WHERE "agent_tool_binding"."source" = 'mcp' AND "agent_tool_binding"."raw_tool_name" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `agent_tool_binding_mcp_tool_uniq` ON `agent_tool_binding` (`agent_id`,`mcp_server_id`,`raw_tool_name`) WHERE "agent_tool_binding"."source" = 'mcp' AND "agent_tool_binding"."raw_tool_name" IS NOT NULL;--> statement-breakpoint
+CREATE TABLE `agent_session` (
+	`id` text PRIMARY KEY NOT NULL,
+	`agent_id` text NOT NULL,
+	`name` text DEFAULT '' NOT NULL,
+	`is_name_manually_edited` integer DEFAULT false NOT NULL,
+	`execution_target` text DEFAULT '{"kind":"local"}' NOT NULL,
+	`last_activity_at` integer NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`forked_from_session_id` text,
+	`fork_boundary_message_id` text,
+	FOREIGN KEY (`agent_id`) REFERENCES `agent`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`forked_from_session_id`) REFERENCES `agent_session`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE INDEX `agent_session_agent_id_idx` ON `agent_session` (`agent_id`);--> statement-breakpoint
+CREATE INDEX `agent_session_last_activity_at_idx` ON `agent_session` (`last_activity_at`);--> statement-breakpoint
+CREATE TABLE `agent_session_message` (
+	`id` text PRIMARY KEY NOT NULL,
+	`session_id` text NOT NULL,
+	`turn_id` text,
+	`role` text NOT NULL,
+	`data` text NOT NULL,
+	`status` text NOT NULL,
+	`usage` text,
+	`stats` text,
+	`error` text,
+	`context_checkpoint` text,
+	`model_id` text,
+	`message_snapshot` text,
+	`searchable_text` text DEFAULT '' NOT NULL,
+	`fts_rowid` integer,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`session_id`) REFERENCES `agent_session`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`model_id`) REFERENCES `user_model`(`id`) ON UPDATE no action ON DELETE set null,
+	CONSTRAINT "agent_session_message_role_check" CHECK("agent_session_message"."role" IN ('user', 'assistant', 'system')),
+	CONSTRAINT "agent_session_message_status_check" CHECK("agent_session_message"."status" IN ('pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted'))
+);
+--> statement-breakpoint
+CREATE INDEX `agent_session_message_session_created_idx` ON `agent_session_message` (`session_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `agent_session_message_created_id_idx` ON `agent_session_message` (`created_at`,`id`);--> statement-breakpoint
+CREATE INDEX `agent_session_message_turn_id_idx` ON `agent_session_message` (`turn_id`);--> statement-breakpoint
+CREATE INDEX `agent_session_message_status_idx` ON `agent_session_message` (`status`);--> statement-breakpoint
+CREATE UNIQUE INDEX `agent_session_message_active_turn_uniq` ON `agent_session_message` (`session_id`) WHERE "agent_session_message"."role" = 'assistant' and "agent_session_message"."status" in ('pending', 'streaming');--> statement-breakpoint
+CREATE UNIQUE INDEX `agent_session_message_fts_rowid_uniq` ON `agent_session_message` (`fts_rowid`);--> statement-breakpoint
 CREATE TABLE `ai_usage_record` (
 	`id` text PRIMARY KEY NOT NULL,
 	`request_id` text NOT NULL,
@@ -95,7 +156,7 @@ CREATE TABLE `ai_usage_record` (
 	`created_at` integer NOT NULL,
 	CONSTRAINT "ai_usage_record_record_kind_check" CHECK("ai_usage_record"."record_kind" IN ('invocation', 'legacy-aggregate')),
 	CONSTRAINT "ai_usage_record_message_kind_check" CHECK("ai_usage_record"."message_kind" IN ('chat', 'agent-session')),
-	CONSTRAINT "ai_usage_record_source_type_check" CHECK("ai_usage_record"."source_type" IN ('assistant', 'agent')),
+	CONSTRAINT "ai_usage_record_source_type_check" CHECK("ai_usage_record"."source_type" IN ('assistant', 'agent', 'mini-app')),
 	CONSTRAINT "ai_usage_record_modality_check" CHECK("ai_usage_record"."modality" IN ('language', 'embedding', 'image', 'rerank')),
 	CONSTRAINT "ai_usage_record_attribution_check" CHECK("ai_usage_record"."api_key_attribution" IN ('explicit', 'matched', 'auth', 'unknown')),
 	CONSTRAINT "ai_usage_record_auth_method_check" CHECK("ai_usage_record"."auth_method" IN ('oauth', 'external-cli', 'iam-aws', 'api-key-aws', 'iam-gcp', 'iam-azure')),
@@ -196,63 +257,18 @@ CREATE INDEX `ai_usage_record_provider_created_idx` ON `ai_usage_record` (`provi
 CREATE INDEX `ai_usage_record_model_created_idx` ON `ai_usage_record` (`model_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `ai_usage_record_api_key_created_idx` ON `ai_usage_record` (`api_key_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `ai_usage_record_source_created_idx` ON `ai_usage_record` (`source_type`,`source_id`,`created_at`);--> statement-breakpoint
-CREATE TABLE `assistant` (
+CREATE TABLE `desktop_connection` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
-	`prompt` text DEFAULT '' NOT NULL,
-	`emoji` text NOT NULL,
-	`description` text DEFAULT '' NOT NULL,
-	`model_id` text,
-	`settings` text NOT NULL,
-	`order_key` text NOT NULL,
+	`base_urls` text NOT NULL,
+	`active_base_url` text NOT NULL,
+	`desktop_version` text NOT NULL,
+	`status` text DEFAULT 'paired' NOT NULL,
+	`last_fetched_at` integer,
 	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL,
-	`deleted_at` integer,
-	FOREIGN KEY (`model_id`) REFERENCES `user_model`(`id`) ON UPDATE no action ON DELETE set null
+	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `assistant_created_at_idx` ON `assistant` (`created_at`);--> statement-breakpoint
-CREATE INDEX `assistant_order_key_idx` ON `assistant` (`order_key`);--> statement-breakpoint
-CREATE TABLE `assistant_mcp_server` (
-	`assistant_id` text NOT NULL,
-	`mcp_server_id` text NOT NULL,
-	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL,
-	PRIMARY KEY(`assistant_id`, `mcp_server_id`),
-	FOREIGN KEY (`assistant_id`) REFERENCES `assistant`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`mcp_server_id`) REFERENCES `mcp_server`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE TABLE `chat_message_file_ref` (
-	`id` text PRIMARY KEY NOT NULL,
-	`file_entry_id` text NOT NULL,
-	`source_id` text NOT NULL,
-	`role` text NOT NULL,
-	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL,
-	FOREIGN KEY (`file_entry_id`) REFERENCES `file_entry`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`source_id`) REFERENCES `message`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "cmfr_role_check" CHECK("chat_message_file_ref"."role" IN ('attachment'))
-);
---> statement-breakpoint
-CREATE INDEX `cmfr_entry_id_idx` ON `chat_message_file_ref` (`file_entry_id`);--> statement-breakpoint
-CREATE INDEX `cmfr_source_id_idx` ON `chat_message_file_ref` (`source_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `cmfr_unique_idx` ON `chat_message_file_ref` (`file_entry_id`,`source_id`,`role`);--> statement-breakpoint
-CREATE TABLE `painting_file_ref` (
-	`id` text PRIMARY KEY NOT NULL,
-	`file_entry_id` text NOT NULL,
-	`source_id` text NOT NULL,
-	`role` text NOT NULL,
-	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL,
-	FOREIGN KEY (`file_entry_id`) REFERENCES `file_entry`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`source_id`) REFERENCES `painting`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "pfr_role_check" CHECK("painting_file_ref"."role" IN ('output', 'input'))
-);
---> statement-breakpoint
-CREATE INDEX `pfr_entry_id_idx` ON `painting_file_ref` (`file_entry_id`);--> statement-breakpoint
-CREATE INDEX `pfr_source_id_idx` ON `painting_file_ref` (`source_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `pfr_unique_idx` ON `painting_file_ref` (`file_entry_id`,`source_id`,`role`);--> statement-breakpoint
 CREATE TABLE `job` (
 	`id` text PRIMARY KEY NOT NULL,
 	`type` text NOT NULL,
@@ -270,6 +286,7 @@ CREATE TABLE `job` (
 	`error` text,
 	`parent_id` text,
 	`cancel_requested` integer DEFAULT false NOT NULL,
+	`cancel_requested_at` integer,
 	`metadata` text DEFAULT '{}' NOT NULL,
 	`timeout_ms` integer,
 	`created_at` integer NOT NULL,
@@ -285,42 +302,21 @@ CREATE UNIQUE INDEX `job_idempotency_key_partial_uq` ON `job` (`idempotency_key`
 CREATE TABLE `mcp_server` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
-	`endpoint_url` text NOT NULL,
-	`is_enabled` integer DEFAULT false NOT NULL,
-	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL
-);
---> statement-breakpoint
-CREATE INDEX `mcp_server_is_enabled_idx` ON `mcp_server` (`is_enabled`);--> statement-breakpoint
-CREATE TABLE `message` (
-	`id` text PRIMARY KEY NOT NULL,
-	`parent_id` text,
-	`topic_id` text NOT NULL,
-	`role` text NOT NULL,
-	`data` text NOT NULL,
-	`searchable_text` text DEFAULT '' NOT NULL,
-	`status` text NOT NULL,
-	`siblings_group_id` integer DEFAULT 0 NOT NULL,
-	`model_id` text,
-	`message_snapshot` text,
-	`stats` text,
-	`fts_rowid` integer,
+	`base_url` text,
+	`origin` text DEFAULT 'remote' NOT NULL,
+	`builtin_id` text,
+	`authorization_id` text,
+	`headers` text,
+	`is_active` integer DEFAULT false NOT NULL,
+	`disabled_tools` text DEFAULT '[]' NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
-	`deleted_at` integer,
-	FOREIGN KEY (`topic_id`) REFERENCES `topic`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`model_id`) REFERENCES `user_model`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`parent_id`) REFERENCES `message`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "message_role_check" CHECK("message"."role" IN ('user', 'assistant', 'system', 'root')),
-	CONSTRAINT "message_status_check" CHECK("message"."status" IN ('pending', 'success', 'error', 'paused')),
-	CONSTRAINT "message_root_parent_check" CHECK(("message"."role" = 'root') = ("message"."parent_id" is null))
+	FOREIGN KEY (`authorization_id`) REFERENCES `plugin_authorization`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "mcp_server_origin_check" CHECK(("mcp_server"."origin" = 'remote' and "mcp_server"."base_url" is not null and "mcp_server"."builtin_id" is null and "mcp_server"."authorization_id" is null) or ("mcp_server"."origin" = 'builtin' and "mcp_server"."base_url" is null and "mcp_server"."headers" is null and "mcp_server"."builtin_id" is not null and "mcp_server"."authorization_id" is not null))
 );
 --> statement-breakpoint
-CREATE INDEX `message_parent_id_idx` ON `message` (`parent_id`);--> statement-breakpoint
-CREATE INDEX `message_topic_created_idx` ON `message` (`topic_id`,`created_at`);--> statement-breakpoint
-CREATE INDEX `message_status_idx` ON `message` (`status`);--> statement-breakpoint
-CREATE UNIQUE INDEX `message_topic_root_uniq` ON `message` (`topic_id`) WHERE "message"."parent_id" is null and "message"."deleted_at" is null;--> statement-breakpoint
-CREATE UNIQUE INDEX `message_fts_rowid_uniq` ON `message` (`fts_rowid`);--> statement-breakpoint
+CREATE INDEX `mcp_server_is_active_idx` ON `mcp_server` (`is_active`);--> statement-breakpoint
+CREATE UNIQUE INDEX `mcp_server_builtin_idx` ON `mcp_server` (`builtin_id`);--> statement-breakpoint
 CREATE TABLE `painting` (
 	`id` text PRIMARY KEY NOT NULL,
 	`provider_id` text NOT NULL,
@@ -328,10 +324,23 @@ CREATE TABLE `painting` (
 	`prompt` text NOT NULL,
 	`order_key` text NOT NULL,
 	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL
+	`updated_at` integer NOT NULL,
+	`files` text DEFAULT '{"input":[],"output":[]}' NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `painting_order_key_idx` ON `painting` (`order_key`);--> statement-breakpoint
+CREATE TABLE `plugin_authorization` (
+	`id` text PRIMARY KEY NOT NULL,
+	`plugin_id` text NOT NULL,
+	`auth_method` text NOT NULL,
+	`account_label` text NOT NULL,
+	`credential` text NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	CONSTRAINT "plugin_authorization_id_check" CHECK(length(trim("plugin_authorization"."plugin_id")) > 0),
+	CONSTRAINT "plugin_authorization_method_check" CHECK(length(trim("plugin_authorization"."auth_method")) > 0)
+);
+--> statement-breakpoint
 CREATE TABLE `user_model` (
 	`id` text PRIMARY KEY NOT NULL,
 	`provider_id` text NOT NULL,
@@ -342,6 +351,7 @@ CREATE TABLE `user_model` (
 	`group` text,
 	`capabilities` text,
 	`input_modalities` text,
+	`input_modalities_explicit` integer DEFAULT false NOT NULL,
 	`output_modalities` text,
 	`endpoint_types` text,
 	`context_window` integer,

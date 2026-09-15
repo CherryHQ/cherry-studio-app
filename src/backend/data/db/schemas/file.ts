@@ -43,8 +43,7 @@ export const fileEntryTable = sqliteTable(
     size: integer().notNull(),
 
     ...createUpdateDeleteTimestamps,
-    // Added after the timestamp columns to match SQLite's physical ADD COLUMN order.
-    // Unproven rows stay `unknown`; the upgrade only labels what it can prove.
+    // Writers supply the source when known; unspecified origins stay `unknown`.
     provenance: text().$type<FileEntryProvenance>().notNull().default('unknown'),
   },
   (t) => [index('fe_created_at_idx').on(t.createdAt)],

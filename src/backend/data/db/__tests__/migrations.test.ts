@@ -2,47 +2,15 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 type MigrationJournal = {
-  entries: { tag: string; when: number }[];
+  entries: { tag: string }[];
 };
 
 describe('bundled SQLite migrations', () => {
-  test('opens plugin identifiers and authorization methods while preserving referenced grants, servers and Agent settings', () => {
+  test('allows open plugin identifiers and methods while enforcing grant references', () => {
     const database = new DatabaseSync(':memory:');
     try {
       database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      const target = entries.findIndex(
-        ({ tag }) => tag === '0024_extensible-plugin-authorizations',
-      );
-      expect(target).toBeGreaterThan(0);
-      const journal = readMigrationJournal();
-      expect(journal.entries[target].when).toBeGreaterThan(journal.entries[target - 1].when);
-      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
-      database.exec(`
-        INSERT INTO agent (id, name, order_key, created_at, updated_at)
-        VALUES ('agent', 'Agent', 'a0', 1, 1);
-        INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
-        VALUES ('github-grant', 'github', 'personal_token', 'cherry', 'github-secret', 1, 1),
-               ('amap-grant', 'amap', 'api_key', 'Web Service', 'amap-secret', 1, 1);
-        INSERT INTO mcp_server (id, name, origin, builtin_id, authorization_id, disabled_tools, is_active, created_at, updated_at)
-        VALUES ('github-server', 'GitHub', 'builtin', 'github', 'github-grant', '["issue_write"]', 1, 1, 1),
-               ('amap-server', 'Amap', 'builtin', 'amap', 'amap-grant', '[]', 1, 1, 1);
-        INSERT INTO mcp_server (id, name, base_url, headers, is_active, created_at, updated_at)
-        VALUES ('custom', 'Custom', 'https://custom.example/mcp', '{"Authorization":"custom-secret"}', 1, 1, 1);
-        INSERT INTO agent_tool_binding (id, agent_id, source, mcp_server_id, enabled, approval, created_at, updated_at)
-        VALUES ('binding', 'agent', 'mcp', 'github-server', 1, 'ask', 1, 1);
-      `);
-      const grants = database.prepare('SELECT * FROM plugin_authorization ORDER BY id').all();
-      const servers = database.prepare('SELECT * FROM mcp_server ORDER BY id').all();
-      const bindings = database.prepare('SELECT * FROM agent_tool_binding').all();
-      database.exec('BEGIN IMMEDIATE');
-      applyMigrationSql(database, entries[target].sql);
-      database.exec('COMMIT');
-      expect(database.prepare('SELECT * FROM plugin_authorization ORDER BY id').all()).toEqual(
-        grants,
-      );
-      expect(database.prepare('SELECT * FROM mcp_server ORDER BY id').all()).toEqual(servers);
-      expect(database.prepare('SELECT * FROM agent_tool_binding').all()).toEqual(bindings);
+      applyMigrations(database);
       database.exec(`
         INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
         VALUES ('feishu-grant', 'feishu', 'feishu_user', 'Cherry (ou_cherry)', '{}', 1, 1),
@@ -53,154 +21,106 @@ describe('bundled SQLite migrations', () => {
       `);
       expect(() =>
         database.exec("DELETE FROM plugin_authorization WHERE id = 'feishu-grant'"),
-      ).toThrow();
+      ).toThrow(/FOREIGN KEY/);
       expect(() =>
         database.exec(
           "UPDATE plugin_authorization SET auth_method = ' ' WHERE id = 'future-grant'",
         ),
-      ).toThrow();
+      ).toThrow(/plugin_authorization_method_check/);
       expect(() =>
         database.exec("UPDATE plugin_authorization SET plugin_id = '' WHERE id = 'future-grant'"),
-      ).toThrow();
+      ).toThrow(/plugin_authorization_id_check/);
       expect(() =>
         database.exec(
           "UPDATE mcp_server SET authorization_id = 'missing' WHERE id = 'future-server'",
         ),
-      ).toThrow();
+      ).toThrow(/FOREIGN KEY/);
       expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect(database.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
     } finally {
       database.close();
     }
   });
 
-  test('requires renewed Agent consent for official cloud tools while retaining grants and custom MCP settings', () => {
+  test('initializes row defaults and keeps preferences isolated by scope', () => {
     const database = new DatabaseSync(':memory:');
     try {
       database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      const target = entries.findIndex(({ tag }) => tag === '0022_official-cloud-plugins');
-      expect(target).toBeGreaterThan(0);
-      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
+      applyMigrations(database);
       database.exec(`
+        INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+        VALUES ('provider', 'Provider', 'a0', 1, 1);
+        INSERT INTO user_model (id, provider_id, model_id, preset_model_id, order_key, created_at, updated_at)
+        VALUES ('provider::model', 'provider', 'model', 'model', 'a0', 1, 1);
         INSERT INTO agent (id, name, order_key, created_at, updated_at)
         VALUES ('agent', 'Agent', 'a0', 1, 1);
-        INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
-        VALUES ('github-grant', 'github', 'personal_token', 'cherry', 'github-secret', 1, 1),
-               ('amap-grant', 'amap', 'api_key', 'Web Service', 'amap-secret', 1, 1);
-        INSERT INTO mcp_server (id, name, origin, builtin_id, authorization_id, is_active, created_at, updated_at)
-        VALUES ('github-server', 'GitHub', 'builtin', 'github', 'github-grant', 1, 1, 1),
-               ('amap-server', 'Amap', 'builtin', 'amap', 'amap-grant', 1, 1, 1);
-        INSERT INTO mcp_server (id, name, base_url, headers, is_active, created_at, updated_at)
-        VALUES ('custom-server', 'Custom', 'https://custom.example/mcp', '{"Authorization":"custom-secret"}', 1, 1, 1);
-        INSERT INTO agent_tool_binding (id, agent_id, source, mcp_server_id, raw_tool_name, enabled, approval, created_at, updated_at)
-        VALUES ('github-default', 'agent', 'mcp', 'github-server', NULL, 1, 'auto', 1, 1),
-               ('github-tool', 'agent', 'mcp', 'github-server', 'create_issue', 0, 'deny', 1, 1),
-               ('amap-default', 'agent', 'mcp', 'amap-server', NULL, 1, 'ask', 1, 1),
-               ('custom-default', 'agent', 'mcp', 'custom-server', NULL, 1, 'auto', 1, 1);
+        INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+        VALUES ('session', 'agent', 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+        VALUES ('message', 'session', 'user', '{"version":1,"parts":[]}', 'success', 1, 1);
+        INSERT INTO mcp_server (id, name, base_url, created_at, updated_at)
+        VALUES ('remote', 'Remote', 'https://example.com/mcp', 1, 1);
+        INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at)
+        VALUES ('file', 'file.txt', 'text/plain', 1, 1, 1);
+        INSERT INTO job (id, type, status, queue, scheduled_at, input, created_at, updated_at)
+        VALUES ('job', 'test', 'pending', 'test', 1, '{}', 1, 1);
+        INSERT INTO ai_usage_record (
+          id, request_id, record_kind, request_count, provider_id, model_id,
+          source_type, source_id, modality, api_key_attribution, created_at
+        ) VALUES ('usage', 'request', 'invocation', 1, 'provider', 'model',
+          'mini-app', 'mini-app-1', 'language', 'unknown', 1);
+        INSERT INTO preference (key, value, created_at, updated_at)
+        VALUES ('ui.theme_mode', '"dark"', 1, 1);
+        INSERT INTO preference (scope, key, value, created_at, updated_at)
+        VALUES ('desktop', 'ui.theme_mode', '"light"', 1, 1);
       `);
-      const grants = database.prepare('SELECT * FROM plugin_authorization ORDER BY id').all();
-      const servers = database.prepare('SELECT * FROM mcp_server ORDER BY id').all();
-      const bindings = database.prepare('SELECT * FROM agent_tool_binding ORDER BY id').all();
-      database.exec('BEGIN IMMEDIATE');
-      applyMigrationSql(database, entries[target].sql);
-      database.exec('COMMIT');
-      expect(database.prepare('SELECT * FROM plugin_authorization ORDER BY id').all()).toEqual(
-        grants,
-      );
-      expect(database.prepare('SELECT * FROM mcp_server ORDER BY id').all()).toEqual(servers);
-      expect(database.prepare('SELECT * FROM agent_tool_binding ORDER BY id').all()).toEqual(
-        bindings.map((binding) =>
-          binding.mcp_server_id === 'custom-server'
-            ? binding
-            : {
-                ...binding,
-                enabled: 0,
-                updated_at: expect.any(Number),
-              },
-        ),
-      );
-      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      database.close();
-    }
-  });
-
-  test('adds plugin authorization inside a transaction without changing existing MCP credentials or bindings', () => {
-    const database = new DatabaseSync(':memory:');
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      const target = entries.findIndex(({ tag }) => tag === '0021_plugin-authorizations');
-      expect(target).toBeGreaterThan(0);
-      const journal = readMigrationJournal();
-      // Drizzle resumes by timestamp, so the appended migration must follow the merged base.
-      expect(journal.entries[target].when).toBeGreaterThan(journal.entries[target - 1].when);
-      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
-      database.exec(`
-        INSERT INTO mcp_server (id, name, base_url, headers, disabled_tools, is_active, created_at, updated_at)
-        VALUES ('legacy-server', 'Remote', 'https://example.com/mcp', '{"Authorization":"Bearer fixture"}', '["write"]', 1, 1, 2);
-        INSERT INTO agent (id, name, order_key, created_at, updated_at)
-        VALUES ('agent-1', 'Agent', 'a0', 1, 1);
-        INSERT INTO agent_tool_binding (id, agent_id, source, mcp_server_id, enabled, approval, created_at, updated_at)
-        VALUES ('binding-1', 'agent-1', 'mcp', 'legacy-server', 1, 'ask', 1, 1);
-      `);
-      const server = database.prepare('SELECT * FROM mcp_server').get();
-      const binding = database.prepare('SELECT * FROM agent_tool_binding').get();
-      database.exec('BEGIN IMMEDIATE');
-      applyMigrationSql(database, entries[target].sql);
-      database.exec('COMMIT');
-      expect(database.prepare('SELECT * FROM mcp_server').get()).toEqual({
-        ...server,
-        origin: 'remote',
-        builtin_id: null,
-        authorization_id: null,
+      expect(database.prepare('SELECT input_modalities_explicit FROM user_model').get()).toEqual({
+        input_modalities_explicit: 0,
       });
-      expect(database.prepare('SELECT * FROM agent_tool_binding').get()).toEqual(binding);
-      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(
+        database.prepare('SELECT tool_approval_mode, disabled_capabilities FROM agent').get(),
+      ).toEqual({
+        tool_approval_mode: 'default',
+        disabled_capabilities: '[]',
+      });
+      expect(
+        database
+          .prepare('SELECT forked_from_session_id, fork_boundary_message_id FROM agent_session')
+          .get(),
+      ).toEqual({
+        forked_from_session_id: null,
+        fork_boundary_message_id: null,
+      });
+      expect(
+        database.prepare('SELECT stats, context_checkpoint FROM agent_session_message').get(),
+      ).toEqual({
+        stats: null,
+        context_checkpoint: null,
+      });
+      expect(
+        database.prepare('SELECT origin, is_active, disabled_tools FROM mcp_server').get(),
+      ).toEqual({
+        origin: 'remote',
+        is_active: 0,
+        disabled_tools: '[]',
+      });
+      expect(database.prepare('SELECT provenance FROM file_entry').get()).toEqual({
+        provenance: 'unknown',
+      });
+      expect(database.prepare('SELECT cancel_requested_at FROM job').get()).toEqual({
+        cancel_requested_at: null,
+      });
+      expect(database.prepare('SELECT scope, value FROM preference ORDER BY scope').all()).toEqual([
+        { scope: 'default', value: '"dark"' },
+        { scope: 'desktop', value: '"light"' },
+      ]);
+      expect(() =>
+        database.exec(`INSERT INTO preference (key, value, created_at, updated_at)
+          VALUES ('ui.theme_mode', '"system"', 2, 2)`),
+      ).toThrow(/UNIQUE/);
     } finally {
       database.close();
     }
   });
-
-  test.each([1788949862518, 1788966000000])(
-    'adds the skipped desktop table after plugin development migration %i without replaying grants',
-    (lastAppliedAt) => {
-      const database = new DatabaseSync(':memory:');
-      try {
-        database.exec('PRAGMA foreign_keys = ON');
-        const entries = readMigrationEntries();
-        // These plugin heads predated the merge of v0.2's earlier-timestamped desktop migration.
-        applyMigrationsAsDrizzleWould(
-          database,
-          entries.filter(
-            ({ tag, when }) => when <= lastAppliedAt && tag !== '0020_desktop-connection',
-          ),
-        );
-        database.exec(`
-          INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
-          VALUES ('github-grant', 'github', 'personal_token', 'cherry', 'fixture-secret', 1, 1);
-          INSERT INTO mcp_server (id, name, origin, builtin_id, authorization_id, is_active, created_at, updated_at)
-          VALUES ('github-server', 'GitHub', 'builtin', 'github', 'github-grant', 1, 1, 1);
-        `);
-        const grants = database.prepare('SELECT * FROM plugin_authorization').all();
-        const servers = database.prepare('SELECT * FROM mcp_server').all();
-        expect(columnNames(database, 'desktop_connection')).toEqual([]);
-
-        applyMigrationsAsDrizzleWould(
-          database,
-          entries.filter(({ when }) => when > lastAppliedAt),
-        );
-
-        expect(columnNames(database, 'desktop_connection')).toContain('active_base_url');
-        expect(database.prepare('SELECT * FROM plugin_authorization').all()).toEqual(grants);
-        expect(database.prepare('SELECT * FROM mcp_server').all()).toEqual(servers);
-        expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      } finally {
-        database.close();
-      }
-    },
-  );
 
   test('registers every journal entry in the Expo runtime bundle', () => {
     const journal = readMigrationJournal();
@@ -215,94 +135,12 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
-  test('marks historical turn aggregates as estimated without rewriting their usage or cost', () => {
-    const database = new DatabaseSync(':memory:');
-    try {
-      const entries = readMigrationEntries();
-      const target = entries.findIndex(({ tag }) => tag === '0018_usage-invocation-semantics');
-      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
-      const insert = database.prepare(`INSERT INTO ai_usage_record
-        (id, request_id, record_kind, request_count, message_kind, message_id, provider_id, model_id,
-         modality, api_key_attribution, input_tokens, output_tokens, total_tokens, cost, cost_currency, cost_source, created_at)
-        VALUES (?, ?, 'invocation', 1, 'agent-session', 'message-1', 'provider-1', 'model-1', 'language', 'unknown', 100, 20, 120, 0.25, 'USD', 'computed', 1000)`);
-      insert.run('old', 'agent-session-turn:old-turn');
-      insert.run('new', 'pi-agent:new-turn:call-0:model-1');
-      const before = database.prepare('SELECT * FROM ai_usage_record ORDER BY id').all();
-      applyMigrationSql(database, entries[target]!.sql);
-      const after = database.prepare('SELECT * FROM ai_usage_record ORDER BY id').all();
-      expect(after).toEqual(
-        before.map((row) => ({
-          ...row,
-          record_kind: row.id === 'old' ? 'legacy-aggregate' : 'invocation',
-        })),
-      );
-    } finally {
-      database.close();
-    }
-  });
-
-  test.each([16, 19])(
-    'preserves paired desktops from the former %i development migration',
-    (migrationIndex) => {
-      const database = new DatabaseSync(':memory:');
-
-      try {
-        database.exec('PRAGMA foreign_keys = ON');
-        const entries = readMigrationEntries();
-        applyMigrationsAsDrizzleWould(database, entries.slice(0, migrationIndex));
-        // Both former development migrations installed this same table.
-        database.exec(`
-        CREATE TABLE desktop_connection (
-          id text PRIMARY KEY NOT NULL,
-          name text NOT NULL,
-          base_urls text NOT NULL,
-          active_base_url text NOT NULL,
-          desktop_version text NOT NULL,
-          status text DEFAULT 'paired' NOT NULL,
-          last_fetched_at integer,
-          created_at integer NOT NULL,
-          updated_at integer NOT NULL
-        );
-        INSERT INTO desktop_connection
-          (id, name, base_urls, active_base_url, desktop_version, last_fetched_at, created_at, updated_at)
-        VALUES
-          ('desktop-1', 'My Desktop', '["http://desktop.local:23333"]',
-           'http://desktop.local:23333', '1.0.0', 2, 1, 2);
-      `);
-        const before = database.prepare('SELECT * FROM desktop_connection').all();
-
-        const lastAppliedAt = migrationIndex === 19 ? 1788769828081 : entries[15]!.when;
-        applyMigrationsAsDrizzleWould(
-          database,
-          entries.filter(({ when }) => when > lastAppliedAt),
-        );
-
-        expect(database.prepare('SELECT * FROM desktop_connection').all()).toEqual(before);
-        expect(columnNames(database, 'agent_session_message')).toContain('stats');
-        expect(columnNames(database, 'job')).toContain('cancel_requested_at');
-        expect(indexNames(database, 'agent_session_message')).toContain(
-          'agent_session_message_created_id_idx',
-        );
-        expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      } finally {
-        database.close();
-      }
-    },
-  );
-
-  test('replays the journal into the schema the services are typed against', () => {
+  test('initializes the current schema in one transaction with foreign keys enabled', () => {
     const database = new DatabaseSync(':memory:');
 
     try {
       database.exec('PRAGMA foreign_keys = ON');
-      // The baseline was re-squashed once, deliberately, while the table set was
-      // still shrinking. From here it is frozen: every schema change is a new
-      // appended migration, because re-squashing replays CREATE TABLE against a
-      // database that already has those tables (drizzle applies any entry whose
-      // folderMillis exceeds the last one an install recorded).
-      for (const migrationSql of readMigrationSqlFiles()) {
-        applyMigrationSql(database, migrationSql);
-      }
+      applyMigrations(database);
 
       // The persisted table set is the contract this file guards: mobile stores
       // what mobile reads, so a table appearing here without a service behind it
@@ -409,12 +247,12 @@ describe('bundled SQLite migrations', () => {
         'instructions',
         'avatar',
         'model',
+        'tool_approval_mode',
+        'disabled_capabilities',
         'order_key',
         'created_at',
         'updated_at',
         'deleted_at',
-        'tool_approval_mode',
-        'disabled_capabilities',
       ]);
       expect(columnNames(database, 'agent_session')).toEqual([
         'id',
@@ -436,15 +274,15 @@ describe('bundled SQLite migrations', () => {
         'data',
         'status',
         'usage',
+        'stats',
         'error',
+        'context_checkpoint',
         'model_id',
         'message_snapshot',
         'searchable_text',
         'fts_rowid',
         'created_at',
         'updated_at',
-        'context_checkpoint',
-        'stats',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',
@@ -491,25 +329,6 @@ describe('bundled SQLite migrations', () => {
       // external-path / cleanup-policy / content-hash invariants have nothing
       // left to constrain.
       expect(fileEntryTableSql).not.toContain('CHECK');
-      for (const retiredTable of ['assistant', 'assistant_mcp_server', 'message', 'topic']) {
-        expect(
-          database
-            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-            .get(retiredTable),
-        ).toBeUndefined();
-      }
-      for (const retiredTrigger of ['message_ai', 'message_ad', 'message_au']) {
-        expect(
-          database
-            .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = ?")
-            .get(retiredTrigger),
-        ).toBeUndefined();
-      }
-      expect(
-        database
-          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'message_fts'")
-          .get(),
-      ).toBeUndefined();
       // No association table remains: a painting owns its file ids in `files`,
       // so deleting a file cannot rewrite the receipt that points at it.
       expect(getForeignKeys(database, 'painting')).toEqual([]);
@@ -682,366 +501,19 @@ describe('bundled SQLite migrations', () => {
           VALUES ('missing-size', 'bad.txt', 'text/plain', NULL, 1, 1);
         `),
       ).toThrow();
-    } finally {
-      database.close();
-    }
-  });
-
-  test('foreign_keys pragma inside a transaction is ignored', () => {
-    // Standing constraint on every migration added after the baseline: drizzle
-    // replays them inside one transaction, and SQLite silently ignores this
-    // pragma mid-transaction, so a table rebuild cannot turn foreign keys off
-    // the way the twelve-step rebuild recipe assumes.
-    const database = new DatabaseSync(':memory:');
-
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      database.exec('BEGIN');
-      database.exec('PRAGMA foreign_keys = OFF');
-
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
       expect(database.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
-
-      database.exec('COMMIT');
     } finally {
       database.close();
     }
   });
-
-  test('backfills the tool rules of servers stored before the column existed', () => {
-    const database = new DatabaseSync(':memory:');
-
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      for (const { sql } of entries.slice(0, 1)) {
-        applyMigrationSql(database, sql);
-      }
-      database.exec(`
-        INSERT INTO mcp_server (id, name, endpoint_url, is_enabled, created_at, updated_at)
-        VALUES ('legacy', 'Legacy', 'https://example.com/mcp', 1, 1, 1);
-      `);
-
-      applyMigrationsAsDrizzleWould(database, entries.slice(1));
-
-      // McpServerService hands this column to the JSON codec unguarded, so a
-      // NULL left behind here would throw on the first read of an upgraded row.
-      expect(
-        database.prepare("SELECT disabled_tools FROM mcp_server WHERE id = 'legacy'").get(),
-      ).toEqual({ disabled_tools: '[]' });
-    } finally {
-      database.close();
-    }
-  });
-
-  test('preserves existing values while aligning desktop-compatible fields', () => {
-    const database = new DatabaseSync(':memory:');
-
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      const alignmentMigrationIndex = entries.findIndex(
-        ({ tag }) => tag === '0017_desktop-compatible-fields',
-      );
-      expect(alignmentMigrationIndex).toBeGreaterThan(0);
-
-      for (const { sql } of entries.slice(0, alignmentMigrationIndex)) {
-        applyMigrationSql(database, sql);
-      }
-      database.exec(`
-        INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
-        VALUES ('provider', 'Provider', 'a0', 1, 1);
-        INSERT INTO user_model (
-          id, provider_id, model_id, preset_model_id, order_key, created_at, updated_at
-        ) VALUES ('provider::model', 'provider', 'model', 'model', 'a0', 1, 1);
-        INSERT INTO agent (id, name, model_id, order_key, created_at, updated_at)
-        VALUES ('agent-1', 'Agent', 'provider::model', 'a0', 1, 1);
-        INSERT INTO agent_session (
-          id, agent_id, title, title_is_manual, last_activity_at, created_at, updated_at
-        ) VALUES ('session-1', 'agent-1', 'Retained title', 1, 1, 1, 1);
-        INSERT INTO mcp_server (id, name, endpoint_url, is_enabled, created_at, updated_at)
-        VALUES ('server-1', 'Server', 'https://example.com/mcp', 1, 1, 1);
-        INSERT INTO preference (key, value, created_at, updated_at)
-        VALUES ('ui.theme_mode', '"dark"', 1, 1);
-        INSERT INTO job (id, type, status, queue, scheduled_at, input, created_at, updated_at)
-        VALUES ('job-1', 'test', 'running', 'test', 1, '{}', 1, 1);
-      `);
-
-      applyMigrationsAsDrizzleWould(database, entries.slice(alignmentMigrationIndex));
-
-      expect(database.prepare("SELECT model FROM agent WHERE id = 'agent-1'").get()).toEqual({
-        model: 'provider::model',
-      });
-      expect(
-        database
-          .prepare("SELECT name, is_name_manually_edited FROM agent_session WHERE id = 'session-1'")
-          .get(),
-      ).toEqual({ is_name_manually_edited: 1, name: 'Retained title' });
-      expect(
-        database.prepare("SELECT base_url, is_active FROM mcp_server WHERE id = 'server-1'").get(),
-      ).toEqual({ base_url: 'https://example.com/mcp', is_active: 1 });
-      expect(
-        database.prepare("SELECT scope, value FROM preference WHERE key = 'ui.theme_mode'").get(),
-      ).toEqual({ scope: 'default', value: '"dark"' });
-      expect(
-        database.prepare("SELECT cancel_requested_at FROM job WHERE id = 'job-1'").get(),
-      ).toEqual({ cancel_requested_at: null });
-      expect(
-        database
-          .prepare("SELECT input_modalities_explicit FROM user_model WHERE id = 'provider::model'")
-          .get(),
-      ).toEqual({ input_modalities_explicit: 0 });
-
-      database.exec(`
-        INSERT INTO preference (scope, key, value, created_at, updated_at)
-        VALUES ('desktop', 'ui.theme_mode', '"light"', 2, 2);
-        INSERT INTO ai_usage_record (
-          id, request_id, record_kind, request_count, provider_id, model_id,
-          source_type, source_id, modality, api_key_attribution, created_at
-        ) VALUES (
-          'usage-1', 'request-1', 'invocation', 1, 'provider', 'model',
-          'mini-app', 'mini-app-1', 'language', 'unknown', 2
-        );
-      `);
-      expect(
-        database
-          .prepare("SELECT count(*) AS count FROM preference WHERE key = 'ui.theme_mode'")
-          .get(),
-      ).toEqual({ count: 2 });
-      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      database.close();
-    }
-  });
-
-  test('labels only provable origins and leaves the rest unknown', () => {
-    const database = new DatabaseSync(':memory:');
-
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      const provenanceMigrationIndex = entries.findIndex(
-        ({ tag }) => tag === '0011_file-provenance',
-      );
-      expect(provenanceMigrationIndex).toBeGreaterThan(0);
-
-      for (const { sql } of entries.slice(0, provenanceMigrationIndex)) {
-        applyMigrationSql(database, sql);
-      }
-      database.exec(`
-        INSERT INTO agent (id, name, order_key, created_at, updated_at)
-        VALUES ('agent-1', 'Agent', 'a0', 1, 1);
-        INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
-        VALUES ('session-1', 'agent-1', 1, 1, 1);
-        INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at)
-        VALUES
-          ('orphan-file', 'brief.pdf', 'application/pdf', 1, 1, 1),
-          ('message-artifact', 'report.md', 'text/markdown', 1, 1, 1),
-          ('tool-artifact', 'legacy.txt', 'text/plain', 1, 1, 1),
-          ('painting-output', 'painting.png', 'image/png', 1, 1, 1),
-          ('painting-input', 'source.png', 'image/png', 1, 1, 1),
-          ('attachment', 'notes.txt', 'text/plain', 1, 1, 1),
-          ('reattached-artifact', 'chart.png', 'image/png', 1, 1, 1);
-        INSERT INTO agent_session_message (
-          id, session_id, role, data, status, created_at, updated_at
-        ) VALUES (
-          'message-1',
-          'session-1',
-          'assistant',
-          '{"version":1,"parts":[{"id":"artifact-1","type":"file","fileEntryId":"message-artifact","mediaType":"text/markdown","name":"report.md","purpose":"artifact"},{"id":"artifact-2","type":"file","fileEntryId":"reattached-artifact","mediaType":"image/png","name":"chart.png","purpose":"artifact"},{"id":"tool-1","type":"tool","toolCallId":"call-1","toolRef":{"source":"builtin","capabilityId":"write_file"},"providerName":"write_file","displayName":"Write file","state":"output-available","output":{"value":{"status":"created","fileEntryId":"tool-artifact"},"artifacts":[]}}]}',
-          'success',
-          1,
-          1
-        ), (
-          'message-2',
-          'session-1',
-          'user',
-          '{"version":1,"parts":[{"id":"input-0","type":"file","fileEntryId":"attachment","mediaType":"text/plain","name":"notes.txt","purpose":"input-attachment"},{"id":"input-1","type":"file","fileEntryId":"reattached-artifact","mediaType":"image/png","name":"chart.png","purpose":"input-attachment"}]}',
-          'success',
-          1,
-          1
-        );
-        INSERT INTO painting (
-          id, provider_id, prompt, order_key, created_at, updated_at, files
-        ) VALUES (
-          'painting-1',
-          'provider-1',
-          'prompt',
-          'a0',
-          1,
-          1,
-          '{"input":["painting-input"],"output":["painting-output"]}'
-        );
-      `);
-
-      applyMigrationSql(database, entries[provenanceMigrationIndex]?.sql ?? '');
-
-      expect(database.prepare('SELECT id, provenance FROM file_entry ORDER BY id').all()).toEqual([
-        { id: 'attachment', provenance: 'imported' },
-        { id: 'message-artifact', provenance: 'generated' },
-        // No owner proves anything about it, and inventing an origin would be worse.
-        { id: 'orphan-file', provenance: 'unknown' },
-        { id: 'painting-input', provenance: 'imported' },
-        { id: 'painting-output', provenance: 'generated' },
-        // Sent back as an attachment later, but it was still generated here.
-        { id: 'reattached-artifact', provenance: 'generated' },
-        { id: 'tool-artifact', provenance: 'generated' },
-      ]);
-    } finally {
-      database.close();
-    }
-  });
-
-  test('leaves Sessions written before fork lineage existed readable and unforked', () => {
-    const database = new DatabaseSync(':memory:');
-
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      const lineageMigrationIndex = entries.findIndex(
-        ({ tag }) => tag === '0013_agent-session-fork-lineage',
-      );
-      expect(lineageMigrationIndex).toBeGreaterThan(0);
-
-      for (const { sql } of entries.slice(0, lineageMigrationIndex)) {
-        applyMigrationSql(database, sql);
-      }
-      database.exec(`
-        INSERT INTO agent (id, name, order_key, created_at, updated_at)
-        VALUES ('agent-1', 'Agent', 'a0', 1, 1);
-        INSERT INTO agent_session (id, agent_id, title, last_activity_at, created_at, updated_at)
-        VALUES ('legacy-session', 'agent-1', 'Arithmetic drills', 1, 1, 1);
-        INSERT INTO agent_session_message (
-          id, session_id, role, data, status, created_at, updated_at
-        ) VALUES ('legacy-message', 'legacy-session', 'user', '{"version":1,"parts":[]}', 'success', 1, 1);
-      `);
-
-      applyMigrationsAsDrizzleWould(database, entries.slice(lineageMigrationIndex));
-
-      // ADD COLUMN backfills NULL, which is exactly "this Session is not a
-      // fork" — the view schema reads the column unguarded, so a value here
-      // that is neither NULL nor an existing id would fail on the first read.
-      expect(
-        database
-          .prepare(
-            "SELECT name, forked_from_session_id FROM agent_session WHERE id = 'legacy-session'",
-          )
-          .get(),
-      ).toEqual({ forked_from_session_id: null, name: 'Arithmetic drills' });
-      expect(database.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual(
-        { count: 1 },
-      );
-
-      // And an upgraded install can still be forked from.
-      database.exec(`
-        INSERT INTO agent_session (
-          id, agent_id, last_activity_at, created_at, updated_at, forked_from_session_id
-        ) VALUES ('fork-session', 'agent-1', 2, 2, 2, 'legacy-session');
-      `);
-      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      database.close();
-    }
-  });
-
-  test('converts message activity into desktop-aligned runtime timing', () => {
-    const database = new DatabaseSync(':memory:');
-
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      const activityMigrationIndex = entries.findIndex(
-        ({ tag }) => tag === '0015_agent-session-activity-and-fork-boundary',
-      );
-      expect(activityMigrationIndex).toBeGreaterThan(0);
-
-      for (const { sql } of entries.slice(0, activityMigrationIndex)) {
-        applyMigrationSql(database, sql);
-      }
-      database.exec(`
-        INSERT INTO agent (id, name, order_key, created_at, updated_at)
-        VALUES ('agent-1', 'Agent', 'a0', 1, 1);
-        INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
-        VALUES ('source-session', 'agent-1', 8, 1, 8);
-        INSERT INTO agent_session (
-          id, agent_id, last_activity_at, created_at, updated_at, forked_from_session_id
-        ) VALUES ('fork-session', 'agent-1', 10, 10, 10, 'source-session');
-        INSERT INTO agent_session_message (
-          id, session_id, role, data, status, created_at, updated_at
-        ) VALUES
-          ('normal-terminal', 'source-session', 'assistant', '{"version":1,"parts":[]}', 'success', 2, 5),
-          ('recovered-terminal', 'source-session', 'assistant', '{"version":1,"parts":[]}', 'interrupted', 3, 8),
-          ('copied-terminal', 'fork-session', 'assistant', '{"version":1,"parts":[]}', 'success', 2, 10);
-      `);
-
-      applyMigrationsAsDrizzleWould(database, entries.slice(activityMigrationIndex));
-
-      const migrated = database
-        .prepare('SELECT id, stats FROM agent_session_message ORDER BY id')
-        .all() as { id: string; stats: string }[];
-      expect(migrated.map(({ id, stats }) => ({ id, stats: JSON.parse(stats) }))).toEqual([
-        {
-          id: 'copied-terminal',
-          stats: { runtimeTiming: { startedAt: 2, completedAt: 2, spans: [] } },
-        },
-        {
-          id: 'normal-terminal',
-          stats: { runtimeTiming: { startedAt: 2, completedAt: 5, spans: [] } },
-        },
-        {
-          id: 'recovered-terminal',
-          stats: { runtimeTiming: { startedAt: 3, completedAt: 3, spans: [] } },
-        },
-      ]);
-      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      const columns = database.prepare("PRAGMA table_info('agent_session_message')").all() as {
-        name: string;
-      }[];
-      expect(columns).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'stats' })]));
-      expect(columns).not.toEqual(
-        expect.arrayContaining([expect.objectContaining({ name: 'activity_at' })]),
-      );
-    } finally {
-      database.close();
-    }
-  });
-
-  test.each(readMigrationEntries().map((entry, index) => [index, entry.tag]))(
-    'upgrading from %i (%s) commits in one transaction with foreign keys intact',
-    (resumeIndex) => {
-      // Every install resumes from wherever it last stopped, and drizzle replays
-      // the whole tail inside one transaction with foreign keys on. Looping over
-      // resume points means the next table-rebuild migration is checked here by
-      // construction, instead of only if someone remembers to add a case.
-      const database = new DatabaseSync(':memory:');
-
-      try {
-        database.exec('PRAGMA foreign_keys = ON');
-        const entries = readMigrationEntries();
-        for (const { sql } of entries.slice(0, resumeIndex)) {
-          applyMigrationSql(database, sql);
-        }
-
-        expect(() => {
-          applyMigrationsAsDrizzleWould(database, entries.slice(resumeIndex));
-        }).not.toThrow();
-        expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      } finally {
-        database.close();
-      }
-    },
-  );
 });
 
-/**
- * Mirrors drizzle's migrator, which wraps every pending migration in one
- * transaction (`SQLiteSyncDialect.migrate`). Replaying statements bare instead
- * lets a migration's `PRAGMA foreign_keys=OFF` take effect, which hides exactly
- * the constraint violations an upgrade would hit on device.
- */
-function applyMigrationsAsDrizzleWould(database: DatabaseSync, entries: { sql: string }[]): void {
+// Drizzle runs all pending SQL in one transaction with foreign keys enabled.
+function applyMigrations(database: DatabaseSync): void {
   database.exec('BEGIN');
   try {
-    for (const { sql } of entries) {
+    for (const sql of readMigrationSqlFiles()) {
       applyMigrationSql(database, sql);
     }
     database.exec('COMMIT');
@@ -1102,18 +574,10 @@ function getForeignKeys(database: DatabaseSync, table: string) {
 }
 
 function readMigrationSqlFiles(): string[] {
-  return readMigrationEntries().map(({ sql }) => sql);
-}
-
-function readMigrationEntries(): { sql: string; tag: string; when: number }[] {
   const migrationDirectory = `${process.cwd()}/migrations/sqlite-drizzle`;
-  const journal = readMigrationJournal();
-
-  return journal.entries.map(({ tag, when }) => ({
-    sql: readFileSync(`${migrationDirectory}/${tag}.sql`, 'utf8'),
-    tag,
-    when,
-  }));
+  return readMigrationJournal().entries.map(({ tag }) =>
+    readFileSync(`${migrationDirectory}/${tag}.sql`, 'utf8'),
+  );
 }
 
 function readMigrationJournal(): MigrationJournal {

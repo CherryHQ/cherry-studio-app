@@ -41,8 +41,7 @@ export const agentSessionTable = sqliteTable(
     ...createUpdateTimestamps,
     // Fork provenance (agent-protocol.md "Branching" rule 2). SET NULL, not
     // CASCADE: deleting the source must drop the lineage claim, never the
-    // forked Session. Fork metadata stays after the common timestamps so its
-    // order matches the physical ADD COLUMN migrations.
+    // forked Session.
     forkedFromSessionId: text().references((): AnySQLiteColumn => agentSessionTable.id, {
       onDelete: 'set null',
     }),

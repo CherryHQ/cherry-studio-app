@@ -209,10 +209,8 @@ the current turn's availability instructions rather than silently disappearing.
 New upstream tools are not automatically admitted: discovery and invocation both enforce the
 allowlist. The existing runtime validates discovered input schemas and applies result-size limits.
 
-Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings for review,
-preserving credentials, server IDs, approval settings and history. Migration
-`0024_extensible-plugin-authorizations` removes the former provider enumeration. `pluginId` and `authMethod` are open durable strings. Keep IDs stable
-and version objects inside each method.
+The initial database schema stores `pluginId` and `authMethod` as open, nonempty durable strings.
+Keep IDs stable and version objects inside each method.
 
 The current version supports one connection per bundled provider. Feishu combines nine hosted
 document/people tools with nineteen curated wiki, Base, task and calendar operations. Existing

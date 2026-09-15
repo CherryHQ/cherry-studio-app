@@ -16,6 +16,9 @@ Mobile Drizzle schemas migrated from the desktop `src/main/data/db/schemas` dire
 
 ## Migration Flow
 
+The unreleased app uses one initial schema baseline. See
+[Database Migrations](../../../../../migrations/README.md) for development database resets.
+
 After changing a schema file, run `pnpm db:generate` and add the generated SQL import to
 `src/backend/data/db/migrations.ts` so Expo can bundle the migration.
 
