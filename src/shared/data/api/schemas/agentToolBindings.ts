@@ -1,27 +1,11 @@
 import * as z from 'zod';
 
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
-import {
-  AgentToolApprovalSchema,
-  AgentToolBindingSchema,
-} from '@/shared/data/types/agentToolBinding';
+import { AgentToolBindingSchema } from '@/shared/data/types/agentToolBinding';
 
-const WRITE_BASE = {
+export const WriteAgentToolBindingSchema = z.strictObject({
   displayNameSnapshot: z.string().min(1).nullable().optional(),
   enabled: z.boolean().default(true),
-} as const;
-
-const BuiltinAgentToolBindingInputSchema = z.strictObject({
-  // Backward-compatible wire shape only. The Agent editor no longer creates it
-  // and the Host does not use it to authorize system capabilities.
-  ...WRITE_BASE,
-  approval: AgentToolApprovalSchema.default('ask'),
-  capabilityId: z.string().min(1),
-  source: z.literal('builtin'),
-});
-
-const McpAgentToolBindingInputSchema = z.strictObject({
-  ...WRITE_BASE,
   // Third-party MCP cannot promote itself to auto approval through this API.
   approval: z.enum(['ask', 'deny']).default('ask'),
   rawToolName: z.string().min(1).optional(),
@@ -29,10 +13,6 @@ const McpAgentToolBindingInputSchema = z.strictObject({
   source: z.literal('mcp'),
 });
 
-export const WriteAgentToolBindingSchema = z.discriminatedUnion('source', [
-  BuiltinAgentToolBindingInputSchema,
-  McpAgentToolBindingInputSchema,
-]);
 export type WriteAgentToolBindingInput = z.input<typeof WriteAgentToolBindingSchema>;
 export type WriteAgentToolBinding = z.output<typeof WriteAgentToolBindingSchema>;
 

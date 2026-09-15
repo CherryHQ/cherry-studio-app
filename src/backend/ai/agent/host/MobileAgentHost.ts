@@ -1269,6 +1269,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       'Agent Host entered a fatal state after terminal persistence failed',
       failure as Error,
       {
+        operation: 'chat.terminal.persist',
         assistantMessageId: state.assistantMessage.id,
         sessionId,
         turnId: state.turn.id,

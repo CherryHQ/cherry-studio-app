@@ -24,7 +24,8 @@ pairing and configuration import.
 - `GET` requests carry no body; `DELETE` may carry one when required by an API, such as GitHub token
   revocation. Timeouts must be positive milliseconds. These rules
   are enforced at the type level and revalidated after interceptors run.
-- Domains that download text artifacts can request `responseType: 'text'` and impose a positive
+- Domains that download artifacts can request `responseType: 'text'` or `'arraybuffer'` for binary
+  bytes and impose a positive
   `maxResponseBytes` cap. The fetch adapter rejects an oversized declared `Content-Length` before
   reading and also counts streamed bytes when the server omits or misreports that header.
 - Responses expose app-owned `data`, `status`, and lowercase `headers`. Cancellation, timeout,

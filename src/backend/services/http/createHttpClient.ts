@@ -28,7 +28,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const HTTP_ROUTE = Symbol('httpRoute');
 const HTTP_REQUEST = Symbol('httpRequest');
 const HTTP_METHODS = new Set<HttpMethod>(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
-const HTTP_RESPONSE_TYPES = new Set(['json', 'text']);
+const HTTP_RESPONSE_TYPES = new Set(['json', 'text', 'arraybuffer']);
 
 type AxiosFetch = NonNullable<NonNullable<CreateAxiosDefaults['env']>['fetch']>;
 

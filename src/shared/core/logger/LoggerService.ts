@@ -4,6 +4,8 @@ type LogContext = Record<string, unknown>;
 type NullableObject = LogContext | undefined | null;
 type LogContextData = [] | [Error | NullableObject] | [Error | NullableObject, ...NullableObject[]];
 
+type ErrorReporter = (error: Error, context: { module: string; operation: string }) => void;
+
 const LEVEL = {
   ERROR: 'error',
   WARN: 'warn',
@@ -31,6 +33,16 @@ export class LoggerService {
   private level: LogLevel = DEFAULT_LEVEL;
   private module = '';
   private context: LogContext = {};
+  private readonly reporting: { reporter?: ErrorReporter; isReporting: boolean } = {
+    isReporting: false,
+  };
+
+  public setErrorReporter(reporter: ErrorReporter): () => void {
+    this.reporting.reporter = reporter;
+    return () => {
+      if (this.reporting.reporter === reporter) this.reporting.reporter = undefined;
+    };
+  }
 
   public withContext(module: string, context?: LogContext): LoggerService {
     const logger = Object.create(this) as LoggerService;
@@ -79,9 +91,30 @@ export class LoggerService {
   }
 
   private processLog(level: LogLevel, message: string, data: LogContextData): void {
-    if (!isDevelopment() || LEVEL_MAP[level] < LEVEL_MAP[this.level]) {
+    if (LEVEL_MAP[level] < LEVEL_MAP[this.level]) {
       return;
     }
+
+    const error = data[0];
+    // Only error logs that carry a real stack and name a fixed operation opt into reporting.
+    const operation =
+      level === LEVEL.ERROR && error instanceof Error && error.stack
+        ? [this.context, ...data.slice(1)]
+            .map((entry) => (entry && !(entry instanceof Error) ? entry.operation : undefined))
+            .find((value): value is string => typeof value === 'string')
+        : undefined;
+    if (operation !== undefined && this.reporting.reporter && !this.reporting.isReporting) {
+      this.reporting.isReporting = true;
+      try {
+        this.reporting.reporter(error as Error, { module: this.module, operation });
+      } catch {
+        // Diagnostics must never break the operation being logged or recursively report itself.
+      } finally {
+        this.reporting.isReporting = false;
+      }
+    }
+
+    if (!isDevelopment()) return;
 
     const logMessage = this.module ? `[${this.module}] ${message}` : message;
     const contextData = Object.keys(this.context).length > 0 ? [this.context] : [];

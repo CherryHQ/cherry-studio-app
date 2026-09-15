@@ -73,13 +73,10 @@ Implementation ownership:
 - Existing Agent bindings, approval, cancellation and result-size limits remain authoritative.
   Connecting does not enable the plugin for every Agent.
 
-Migration `0024_extensible-plugin-authorizations` removes the old provider/method enumerations.
-The backend registry now owns availability and credential compatibility; its safe projection drives
-the catalog and generic credential form. Adding a platform no longer changes SQL. Drizzle's generated parent
-table replacement was reconciled to rebuild the referencing MCP table first, because foreign-key
-disabling does not work inside the runtime migration transaction. It preserves grants, server IDs,
-disabled tools and Agent bindings. Its journal timestamp is later than the preceding reconciliation
-migration, whose timestamp was ahead of the local generation clock.
+The initial database schema stores plugin identifiers and authorization methods as open, nonempty
+strings. The backend registry owns availability and credential compatibility; its safe projection
+drives the catalog and generic credential form. Adding a platform does not change SQL. MCP server
+references prevent deleting an authorization while it is connected.
 
 ## Can The Feishu CLI Be Rewritten In JavaScript?
 
@@ -124,8 +121,8 @@ alone. Reviewed source revision: `4fddd6bc3763f2105a2e31f0a992f19554aa350f`.
 4. Assess Yuque's curated API slice using its official server as protocol/workflow evidence.
 
 Regression cases cover open identifiers, synthetic plugin registration, shared field rules,
-unknown-plugin refusal/disconnect, Feishu input/storage contracts, migration preservation under foreign
-keys, grant revocation during credential resolution, user-token expiry/cancellation, redirect rejection,
+unknown-plugin refusal/disconnect, Feishu input/storage contracts, database grant references,
+grant revocation during credential resolution, user-token expiry/cancellation, redirect rejection,
 write non-replay, existing-application authorization, native credential storage, caller-independent
 renewal and observer-driven polling/completion. New cases cover composite discovery, Base requests,
 task patch masks, calendar time constraints, OpenAPI failure redaction and client-close cancellation.

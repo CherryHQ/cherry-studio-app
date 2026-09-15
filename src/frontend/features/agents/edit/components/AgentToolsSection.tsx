@@ -46,8 +46,7 @@ export function AgentToolsSection({
   const perToolBindings = useMemo(
     () =>
       bindings.filter(
-        (binding): binding is McpToolBindingDraft =>
-          binding.source === 'mcp' &&
+        (binding) =>
           binding.rawToolName !== undefined &&
           !servers.some((server) => server.id === binding.serverId && server.origin === 'builtin'),
       ),
