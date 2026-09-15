@@ -20,7 +20,10 @@ import {
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
 import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
-import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
+import {
+  generatedImageExtension,
+  resolveImageImportMediaType,
+} from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
 const DATA_DIRECTORY_NAME = 'Data';
@@ -133,7 +136,10 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
     filename = projectFilename(input.name ?? source.name, source.name);
     mediaType = resolveTextImportMediaType(
       filename,
-      resolveDocumentImportMediaType(filename, resolveMediaType(input.mediaType, source.type)),
+      resolveDocumentImportMediaType(
+        filename,
+        resolveImageImportMediaType(filename, resolveMediaType(input.mediaType, source.type)),
+      ),
     );
     write = (destination) => source.copy(destination);
   } else if (input.source === 'base64') {

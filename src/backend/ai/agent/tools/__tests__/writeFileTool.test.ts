@@ -80,6 +80,7 @@ describe('writeFileTool', () => {
     ['csv', 'text/csv'],
     ['html', 'text/html'],
     ['json', 'application/json'],
+    ['svg', 'image/svg+xml'],
     ['yml', 'application/yaml'],
     // Source code stays text/plain: `ts` is video/mp2t in the IANA registry.
     ['ts', 'text/plain'],

@@ -9,10 +9,12 @@ import { fileDisplayStem, fileVisualPreset } from '../utils/file-presentation';
 export function FileCardPreview({
   badge,
   file,
+  thumbnail,
   variant,
 }: {
   badge?: ReactNode;
   file: FilePreviewFile;
+  thumbnail?: ReactNode;
   variant: Exclude<FilePreviewVariant, 'thumbnail'>;
 }) {
   const { icon: Icon, iconClassName } = fileVisualPreset(file);
@@ -34,14 +36,18 @@ export function FileCardPreview({
     <Text
       className={cn('w-full shrink text-foreground', variant === 'card' ? 'text-base' : 'text-sm')}
       ellipsizeMode="tail"
-      numberOfLines={3}
+      numberOfLines={thumbnail ? 2 : 3}
     >
       {variant === 'card' ? file.displayName : fileDisplayStem(file.displayName)}
     </Text>
   );
   const icon = (
     <View className="w-full shrink-0 flex-row items-center justify-between gap-2">
-      <Icon className={cn('shrink-0', iconClassName, variant === 'card' ? 'size-7' : 'size-6')} />
+      {thumbnail ? (
+        <View className="size-12 overflow-hidden rounded-lg">{thumbnail}</View>
+      ) : (
+        <Icon className={cn('shrink-0', iconClassName, variant === 'card' ? 'size-7' : 'size-6')} />
+      )}
       {badge ? <View className="min-w-0 shrink">{badge}</View> : null}
     </View>
   );

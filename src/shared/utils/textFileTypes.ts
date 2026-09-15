@@ -38,6 +38,8 @@ export function isSupportedTextAttachment(file: { mediaType: string; name: strin
   if (!extension) {
     return false;
   }
+  // SVG remains readable XML when attached, even though its preview is an image.
+  if (mediaType === 'image/svg+xml') return extension === 'svg';
   const allowedExtensions =
     APPLICATION_TEXT_ATTACHMENT_EXTENSIONS.get(mediaType) ??
     (mediaType.startsWith('application/') && mediaType.endsWith('+json')

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FileEntrySchema } from '@/shared/data/types/file';
@@ -49,22 +50,30 @@ beforeEach(() => {
 });
 afterEach(() => act(() => renderer.unmount()));
 
-it.each(['image/png', 'text/markdown', 'text/plain', 'text/html', 'application/yaml'])(
-  'opens %s in-app with only the entry identity',
-  (mediaType) => {
-    act(() => actions.openFileEntry({ ...file, entry: { ...entry, mediaType } }));
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/files/[fileEntryId]',
-      params: { fileEntryId: entry.id },
-    });
-    expect(mockOpen).not.toHaveBeenCalled();
-  },
-);
+it.each([
+  'image/png',
+  'image/svg+xml',
+  'application/pdf',
+  'text/markdown',
+  'text/plain',
+  'text/html',
+  'application/yaml',
+])('opens %s in-app with only the entry identity', (mediaType) => {
+  act(() => actions.openFileEntry({ ...file, entry: { ...entry, mediaType } }));
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/files/[fileEntryId]',
+    params: { fileEntryId: entry.id },
+  });
+  expect(mockOpen).not.toHaveBeenCalled();
+});
 
-it('hands unsupported documents to the platform with the original URI', async () => {
-  await act(async () =>
-    actions.openFileEntry({ ...file, entry: { ...entry, mediaType: 'application/pdf' } }),
-  );
+it.each([
+  'application/msword',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/zip',
+])('hands %s to the platform with the original URI', async (mediaType) => {
+  await act(async () => actions.openFileEntry({ ...file, entry: { ...entry, mediaType } }));
   expect(mockPush).not.toHaveBeenCalled();
   expect(mockOpen).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -79,4 +88,33 @@ it('allows an explicit system open for an in-app kind and reports failures once'
   expect(mockPush).not.toHaveBeenCalled();
   expect(mockToast).toHaveBeenCalledTimes(1);
   expect(mockToast).toHaveBeenCalledWith({ label: 'filePreview.openFailed', variant: 'danger' });
+});
+
+const officeTypes = [
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+
+it.each(officeTypes)('opens %s in the same in-app route on Android and iOS', async (mediaType) => {
+  const originalPlatform = Platform.OS;
+  try {
+    Platform.OS = 'android';
+    act(() => actions.openFileEntry({ ...file, entry: { ...entry, mediaType } }));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/files/[fileEntryId]',
+      params: { fileEntryId: entry.id },
+    });
+    expect(mockOpen).not.toHaveBeenCalled();
+    mockPush.mockClear();
+    Platform.OS = 'ios';
+    await act(async () => actions.openFileEntry({ ...file, entry: { ...entry, mediaType } }));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/files/[fileEntryId]',
+      params: { fileEntryId: entry.id },
+    });
+    expect(mockOpen).not.toHaveBeenCalled();
+  } finally {
+    Platform.OS = originalPlatform;
+  }
 });
