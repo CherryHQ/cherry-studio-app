@@ -192,7 +192,7 @@ jest.mock('../PaintingAssistantMessage', () => ({
   },
 }));
 
-jest.mock('../PaintingInput', () => ({
+jest.mock('@/frontend/components/PaintingInput', () => ({
   PaintingInput: (props: PaintingInputProps) => {
     mockInputProps = props;
     return null;

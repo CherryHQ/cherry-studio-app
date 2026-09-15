@@ -298,6 +298,10 @@ export function toAgentMessageListItem(
     createdAt: message.createdAt,
     data: toDisplayParts(message.parts, cache),
     id: message.id,
+    ...(message.inferenceSnapshot?.status === 'supported' &&
+    message.inferenceSnapshot.snapshot.imageGeneration
+      ? { imageGeneration: message.inferenceSnapshot.snapshot.imageGeneration }
+      : {}),
     ...(model ? { model } : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
@@ -309,7 +313,10 @@ export function toAgentMessageListItem(
 
 /** Immediate display of a send, using the same row IDs that persistence will receive. */
 export function createPendingChatMessages(
-  input: Pick<AgentSubmitMessageInput, 'parts' | 'userMessageId' | 'assistantMessageId'>,
+  input: Pick<
+    AgentSubmitMessageInput,
+    'parts' | 'userMessageId' | 'assistantMessageId' | 'imageGeneration'
+  >,
 ): readonly [MessageListItem, MessageListItem] {
   const createdAt = new Date().toISOString();
   const parts = input.parts.map(
@@ -330,6 +337,7 @@ export function createPendingChatMessages(
       createdAt,
       data: { parts: [] },
       id: input.assistantMessageId,
+      ...(input.imageGeneration ? { imageGeneration: input.imageGeneration } : {}),
       role: 'assistant',
       status: 'pending',
     },

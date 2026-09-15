@@ -1,5 +1,5 @@
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
-import { type ImageGenerationMode } from '@cherrystudio/provider-registry';
+import { type ImageGenerationMode, type ParamValues } from '@cherrystudio/provider-registry';
 import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import {
   useComposerPresentationActions,
   useComposerState,
 } from '@/frontend/components/Composer';
+import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
@@ -30,36 +31,53 @@ import {
   reconcileImageParamDraft,
   resolveImageGenerationMode,
 } from '@/frontend/data/paintings/imageGenerationParams';
-import type { PaintingGenerationStart } from '@/shared/contracts';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
+import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
 import {
   resolvePaintingGenerationMode,
   supportsPaintingGenerationMode,
 } from '@/shared/utils/paintingModelSupport';
 
-import type {
-  PaintingGenerationInput,
-  PaintingGenerationStatus,
-} from '../hooks/usePaintingGeneration';
-import { imageParamSummary } from '../utils/imageGenerationLabels';
+import { imageParamSummary } from './imageGenerationLabels';
 import { PaintingSettingsBottomSheet } from './PaintingSettingsBottomSheet';
 
+export type PaintingInputSubmission = {
+  attachments: readonly ComposerAttachmentReady[];
+  mode: ImageGenerationMode;
+  modelId: UniqueModelId;
+  modelName: string;
+  paramValues: ParamValues;
+  prompt: string;
+};
+
+type PaintingModelSelection = {
+  modelId: UniqueModelId | null;
+  onSelect: (modelId: UniqueModelId) => void;
+  providerSetupReturnTo: string;
+};
+
 type PaintingInputProps = {
+  canSend?: boolean;
+  dismissKeyboardOnSend?: boolean;
   /**
    * Params to restore rather than derive — either an interrupted attempt's
    * ledger values or a one-shot handoff such as an AI expansion ratio. They can
    * arrive after mount, so they override model defaults once.
    */
   initialParamValues?: ImageParamDraft;
+  modelSelection?: PaintingModelSelection;
   onCancel: () => void;
-  onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationStart | null>;
+  onGenerate: (input: PaintingInputSubmission) => Promise<unknown>;
   painting?: Painting;
-  status: PaintingGenerationStatus;
+  status: 'idle' | 'generating';
 };
 
 export function PaintingInput({
+  canSend,
+  dismissKeyboardOnSend,
   initialParamValues,
+  modelSelection,
   onCancel,
   onGenerate,
   painting,
@@ -73,10 +91,12 @@ export function PaintingInput({
       : isUniqueModelId(defaultPaintingModelId)
         ? defaultPaintingModelId
         : null;
-  const [selectedModelId, setSelectedModelId] = useState<UniqueModelId | null>(initialModelId);
+  const [localModelId, setLocalModelId] = useState<UniqueModelId | null>(initialModelId);
+  const selectedModelId = modelSelection ? modelSelection.modelId : localModelId;
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const openProviderSetup = useOpenProviderSetup(
-    painting ? `/paintings?paintingId=${encodeURIComponent(painting.id)}` : '/paintings',
+    modelSelection?.providerSetupReturnTo ??
+      (painting ? `/paintings?paintingId=${encodeURIComponent(painting.id)}` : '/paintings'),
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [paramState, setParamState] = useState<{
@@ -86,7 +106,7 @@ export function PaintingInput({
   } | null>(null);
   const [seedApplied, setSeedApplied] = useState(false);
   const { attachments, draft } = useComposerState();
-  const modelPickerData = useModelPickerData({ modelType: 'image' });
+  const modelPickerData = useModelPickerData({ modelType: modelSelection ? 'all' : 'image' });
   const selectedModelItem = modelPickerData.getModelItem(selectedModelId);
   const selectedModel = selectedModelItem?.model;
   const selectedProvider = selectedModelItem?.provider;
@@ -138,13 +158,22 @@ export function PaintingInput({
   }
 
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
-  const handleModelSelect = useCallback((item: ModelPickerModelItem) => {
-    setSelectedModelId(item.modelId);
-    setIsModelPickerOpen(false);
-  }, []);
+  const handleModelSelect = useCallback(
+    (item: ModelPickerModelItem) => {
+      if (modelSelection) {
+        modelSelection.onSelect(item.modelId);
+      } else {
+        setLocalModelId(item.modelId);
+      }
+      setIsModelPickerOpen(false);
+    },
+    [modelSelection],
+  );
   const isModelVisible = useCallback(
-    (item: ModelPickerModelItem) => supportsPaintingGenerationMode(item.model, requestedMode),
-    [requestedMode],
+    (item: ModelPickerModelItem) =>
+      (Boolean(modelSelection) && isTextGenerationModel(item.model)) ||
+      supportsPaintingGenerationMode(item.model, requestedMode),
+    [modelSelection, requestedMode],
   );
   const handleAddProvider = useCallback(() => {
     setIsModelPickerOpen(false);
@@ -221,8 +250,13 @@ export function PaintingInput({
         // Submission owns attachment compatibility; the button checks only
         // model selection, prompt readiness, and in-flight work.
         canSend={
-          Boolean(selectedModelId) && isSelectedModelAvailable && isPromptValid && status === 'idle'
+          canSend !== false &&
+          Boolean(selectedModelId) &&
+          isSelectedModelAvailable &&
+          isPromptValid &&
+          status === 'idle'
         }
+        dismissKeyboardOnSend={dismissKeyboardOnSend}
         getSendErrorLabel={getSendErrorLabel}
         labels={{
           send: t('painting.input.generate'),
@@ -278,13 +312,13 @@ export function PaintingInput({
         <ModelPickerDrawer
           emptyText={t('painting.input.noCompatibleModels')}
           isModelVisible={isModelVisible}
-          modelType="image"
+          modelType={modelSelection ? 'all' : 'image'}
           open
           onAddProvider={handleAddProvider}
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}
-          title={t('settings.model.painting.title')}
+          title={modelSelection ? undefined : t('settings.model.painting.title')}
         />
       ) : null}
     </>

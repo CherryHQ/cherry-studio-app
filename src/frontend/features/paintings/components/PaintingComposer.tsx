@@ -14,6 +14,7 @@ import {
 } from '@/frontend/components/Composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
+import { PaintingInput } from '@/frontend/components/PaintingInput';
 import {
   type ImageParamDraft,
   imageParamsResolutionLabel,
@@ -27,7 +28,6 @@ import {
   usePaintingGeneration,
 } from '../hooks/usePaintingGeneration';
 import { createPaintingMessages } from '../utils/paintingMessages';
-import { PaintingInput } from './PaintingInput';
 import { PaintingMessage, type PaintingMessageState } from './PaintingMessage';
 
 type ActivePaintingTurn = {
