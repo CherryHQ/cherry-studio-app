@@ -11,16 +11,19 @@ reads the frozen in-memory document without creating a file.
 It renders leaf prose with the existing Markdown component and composes the actual CherryUI
 `MessagePart.Process` and `MessagePart.Reasoning` components for disclosures. Both start collapsed
 and retain independent toggles; the source snapshot has no live chat reads.
+Its final brand row uses a Markdown separator, bold brand name and the same frozen export time as
+HTML and PNG. The preview and exported `.md` file share that formatter; no logo image is embedded.
 HTML or PNG is generated when that format is selected, including the initial preview. A source
 may supply one initially unchecked option and its alternate document; changing it refreshes only the
 selected format.
 
-HTML and PNG receive resolved semantic colors and the accessibility typography scale. HTML keeps
-the source's bubble/message hints. For images, the frontend supplies an optional `imageFrame`
-presentation: theme-aware margins, content and text, numbered message headings and a compact Cherry
-signature. Its 44-point baseline footer grows only when text needs more room. The brand name sits
-on the left; a cropped original Cherry logo embedded as PNG bytes, a fine divider and the local
-export time sit on the right. The timestamp uses `YYYY.MM.DD HH:mm` and is frozen when the layer
+HTML and PNG receive resolved semantic colors, the accessibility typography scale and a shared
+Cherry `signature` at the end of the document. HTML keeps the source's bubble/message hints. For
+images, the frontend also supplies an optional `imageFrame` presentation with theme-aware margins
+and numbered message headings. The signature's 44-point baseline footer grows only when text needs
+more room. The brand name sits on the left; a cropped original Cherry logo embedded as PNG bytes,
+a fine divider and the local export time sit on the right. The timestamp uses `YYYY.MM.DD HH:mm`
+and is frozen when the layer
 opens, including across format, theme and thinking-option changes. Colors follow theme changes;
 only active saving/delivery holds its current presentation until the share sheet finishes. The backend lays out this frame inside
 the captured document; it acquires no chat or frontend dependency. The preview displays that exact artifact with outer canvas space;
@@ -49,8 +52,8 @@ session finishes copying it, with no full-file read, image decoding or second en
 native lease remains held through late cleanup. Capture has a 60-second timeout. The image preview
 uses disk-only caching and scrolls through the single output image.
 
-Image generation or display failures automatically prepare HTML. Image resource limits and HTML
-failures fall back to the complete in-memory Markdown preview. The menu and Share action describe
+Image generation or display failures automatically prepare HTML with the same signature. Image
+resource limits and HTML failures fall back to the complete in-memory Markdown preview. The menu and Share action describe
 the actual format, accompanied by a document-ready note for conversion fallbacks. Cancellation and
 backgrounding pause work instead of starting another conversion.
 

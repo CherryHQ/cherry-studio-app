@@ -40,13 +40,15 @@ export type DocumentExportInput =
   | { kind: 'markdown'; source: string; title?: string };
 
 export type ExportFormat = 'markdown' | 'html' | 'image';
-/** Optional print treatment supplied by the frontend; content and branding remain separate. */
+/** Optional print treatment supplied by the frontend, independent of the shared signature. */
 export type ExportImageFrame = {
   background: string;
+  label: string;
+};
+export type ExportSignature = {
   foreground: string;
   logoDataUrl: string;
   brandName: string;
-  label: string;
   timestamp: string;
 };
 export type ExportPresentation = {
@@ -67,6 +69,7 @@ export type ExportPresentation = {
     inlineCodeForeground: string;
   };
   imageFrame?: ExportImageFrame;
+  signature?: ExportSignature;
 };
 export type DocumentExportIssue = { code: 'image-unavailable' | 'formula-fallback'; label: string };
 export type ExportFile = { uri: string; filename: string; mediaType: string };
@@ -93,7 +96,7 @@ export type CaptureExportHtml = (input: {
 }>;
 
 export type DocumentExportTarget =
-  | { format: 'markdown' }
+  | { format: 'markdown'; signature?: Pick<ExportSignature, 'brandName' | 'timestamp'> }
   | { format: 'html'; presentation: ExportPresentation }
   | { format: 'image'; presentation: ExportPresentation; capture: CaptureExportHtml };
 export type DocumentExportProgress = 'rendering' | 'resolving-assets' | 'capturing' | 'writing';
@@ -119,7 +122,7 @@ export class DocumentExportError extends Error {
 export interface DocumentExportSession {
   /** Frozen source snapshot for structured previews; does not resolve assets or create files. */
   readonly document: ExportDocument;
-  /** Portable Markdown text; reading it never creates files or resolves assets. */
+  /** Portable source Markdown without presentation signatures; no files or resource reads. */
   readonly markdown: string;
   render(
     target: DocumentExportTarget,

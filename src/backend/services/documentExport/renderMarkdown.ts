@@ -1,6 +1,7 @@
 import type { ExportBlock, ExportDocument } from '@/shared/contracts/documentExport';
+import { escapeMarkdown } from '@/shared/utils/documentExportMarkdown';
 
-import { escapeHtml, escapeMarkdown, safeExportUrl } from './normalizeDocument';
+import { escapeHtml, safeExportUrl } from './normalizeDocument';
 
 export function renderMarkdown(document: ExportDocument): string {
   const renderBlocks = (blocks: readonly ExportBlock[]): string =>
