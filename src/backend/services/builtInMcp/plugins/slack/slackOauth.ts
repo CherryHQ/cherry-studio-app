@@ -11,7 +11,7 @@ import { PluginError } from '@/shared/contracts/plugins';
 
 import { readSlackIdentity, slackRequest } from './slackApi';
 import {
-  SLACK_READ_SCOPES,
+  SLACK_REQUESTED_SCOPES,
   SlackApplicationSchema,
   SlackScopeSchema,
   type SlackApplication,
@@ -31,6 +31,7 @@ async function exchange(
   signal: AbortSignal,
 ): Promise<SlackTokens> {
   const startedAt = Date.now();
+  // Slack's documented native PKCE flow issues user tokens that also authorize its hosted MCP.
   const value = await slackRequest(
     'oauth.v2.access',
     { ...fields, client_id: application.clientId },
@@ -42,7 +43,7 @@ async function exchange(
   if (!parsed.success)
     throw new PluginError(
       'access',
-      'Slack must grant rotating user tokens with exactly the configured read-only scopes.',
+      'Slack must grant rotating user tokens with exactly the configured MCP scopes.',
     );
   const token = parsed.data;
   return {
@@ -65,12 +66,12 @@ export function getSlackApplicationSetupUrl() {
     'manifest_json',
     JSON.stringify({
       display_information: {
-        name: 'Cherry personal reader',
-        description: 'Read Slack in your own Cherry Studio app',
+        name: 'Cherry Studio for Slack',
+        description: 'Search and collaborate in Slack from Cherry Studio',
       },
       oauth_config: {
         redirect_urls: SlackApplicationSchema.shape.redirectUrl.options,
-        scopes: { user: SLACK_READ_SCOPES },
+        scopes: { user: SLACK_REQUESTED_SCOPES },
         pkce_enabled: true,
       },
       settings: {
@@ -109,7 +110,7 @@ export const slackOauth = {
       client_id: application.clientId,
       redirect_uri: application.redirectUrl,
       scope: '',
-      user_scope: SLACK_READ_SCOPES.join(','),
+      user_scope: SLACK_REQUESTED_SCOPES.join(','),
       state,
       code_challenge: challenge,
       code_challenge_method: 'S256',

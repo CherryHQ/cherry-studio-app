@@ -1,16 +1,36 @@
 import * as z from 'zod';
 
-export const SLACK_READ_SCOPES = [
-  'search:read',
+// User scopes supported by https://mcp.slack.com/.well-known/oauth-authorization-server
+export const SLACK_REQUESTED_SCOPES = [
+  'search:read.public',
+  'search:read.private',
+  'search:read.im',
+  'search:read.mpim',
+  'search:read.files',
+  'search:read.users',
   'channels:read',
   'channels:history',
+  'channels:write',
   'groups:read',
   'groups:history',
+  'groups:write',
   'im:read',
   'im:history',
+  'im:write',
   'mpim:read',
   'mpim:history',
+  'mpim:write',
   'users:read',
+  'users:read.email',
+  'files:read',
+  'chat:write',
+  'emoji:read',
+  'reactions:read',
+  'reactions:write',
+  'canvases:read',
+  'canvases:write',
+  'lists:read',
+  'lists:write',
 ] as const;
 const secret = z.string().min(1).max(16_384).regex(/^\S+$/);
 export const SlackScopeSchema = z
@@ -19,9 +39,9 @@ export const SlackScopeSchema = z
   .refine((value) => {
     const scopes = value.split(',').map((scope) => scope.trim());
     return (
-      scopes.length === SLACK_READ_SCOPES.length &&
+      scopes.length === SLACK_REQUESTED_SCOPES.length &&
       new Set(scopes).size === scopes.length &&
-      SLACK_READ_SCOPES.every((scope) => scopes.includes(scope))
+      SLACK_REQUESTED_SCOPES.every((scope) => scopes.includes(scope))
     );
   });
 export const SlackApplicationSchema = z.object({

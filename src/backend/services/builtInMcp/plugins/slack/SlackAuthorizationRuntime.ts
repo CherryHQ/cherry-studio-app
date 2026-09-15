@@ -456,7 +456,10 @@ export class SlackAuthorizationRuntime implements PluginAuthorizationRuntime {
   }
 
   async prepareRevocation(id: string) {
-    const credential = SlackUserCredentialSchema.parse((await this.store.getGrant(id))?.credential);
+    // Old scope bundles cannot execute tools, but disconnect must still revoke their tokens.
+    const credential = SlackUserCredentialSchema.extend({
+      tokens: SlackUserCredentialSchema.shape.tokens.omit({ scope: true }),
+    }).parse((await this.store.getGrant(id))?.credential);
     return {
       managementUrl: 'https://slack.com/apps/manage',
       revoke: (signal: AbortSignal) => slackOauth.revoke(credential.tokens.accessToken, signal),

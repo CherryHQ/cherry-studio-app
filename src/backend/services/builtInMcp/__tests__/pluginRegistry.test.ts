@@ -363,6 +363,36 @@ it.each([
   },
 );
 
+it('keeps Slack mutation workflows out of a read-only selection', () => {
+  const slack = getPluginDefinition('slack')!;
+  const selections = Object.entries(slack.tools).map(([rawToolName, effect]) => ({
+    pluginId: 'slack',
+    serverId: 'slack-connection',
+    rawToolName,
+    effect,
+  }));
+  const [readOnly] = resolveBuiltInPluginGuides(
+    selections.filter(({ effect }) => effect === 'read'),
+  );
+  const [complete] = resolveBuiltInPluginGuides(selections);
+  expect(readOnly.content).toContain('## Search with context');
+  for (const heading of [
+    'Create a conversation',
+    'Send a message',
+    'Draft a message',
+    'Schedule a message',
+    'React to a message',
+    'Choose a document or list',
+    'Update a canvas',
+    'Update a list schema',
+    'Add a list record',
+    'Update a list record',
+  ]) {
+    expect(readOnly.content).not.toContain(`## ${heading}`);
+    expect(complete.content).toContain(`## ${heading}`);
+  }
+});
+
 it('keeps DingTalk mutation workflows out of a read-only connection', () => {
   const dingtalk = getPluginDefinition('dingtalk')!;
   const selections = Object.entries(dingtalk.tools).map(([rawToolName, effect]) => ({

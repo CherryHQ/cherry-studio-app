@@ -1,12 +1,11 @@
 import { PluginError } from '@/shared/contracts/plugins';
 
 import type { PluginDefinition } from '../../pluginDefinition';
-import { createSlackClient } from './createSlackClient';
+import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
 import { slackGuide } from './guide';
-import { readSlackIdentity } from './slackApi';
 import { SlackAuthorizationRuntime } from './SlackAuthorizationRuntime';
 import {
-  SLACK_READ_SCOPES,
+  SLACK_REQUESTED_SCOPES,
   SlackApplicationSchema,
   SlackUserCredentialSchema,
 } from './slackCredentials';
@@ -39,23 +38,20 @@ export const slackPlugin: PluginDefinition = {
       applicationSetup: {
         createUrl: getSlackApplicationSetupUrl(),
         redirectUrls: SlackApplicationSchema.shape.redirectUrl.options,
-        scopes: SLACK_READ_SCOPES,
+        scopes: SLACK_REQUESTED_SCOPES,
       },
       createRuntime: (store) => new SlackAuthorizationRuntime(store),
       createRequestAuthorization: () => ({
         apply(credential, { headers }) {
           const parsed = SlackUserCredentialSchema.safeParse(credential);
           if (!parsed.success || parsed.data.rejected)
-            throw new PluginError('authorization', 'Slack read-only authorization is unavailable.');
+            throw new PluginError('authorization', 'Slack authorization is unavailable.');
           headers.set('Authorization', `Bearer ${parsed.data.tokens.accessToken}`);
         },
       }),
     },
   ],
-  createClient: createSlackClient,
-  validation: {
-    tool: 'slack_get_identity',
-    args: {},
-    accountLabel: (value) => readSlackIdentity(value).label,
-  },
+  createClient: (context) => createOfficialMcpClient(context, { url: 'https://mcp.slack.com/mcp' }),
+  // OAuth binds the workspace and user; setup only discovers this read tool, without calling it.
+  validation: { tool: 'slack_read_user_profile', accountLabel: () => 'Official MCP' },
 };

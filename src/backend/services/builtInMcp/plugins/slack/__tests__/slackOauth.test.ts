@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto';
 
 import { readSlackIdentity, slackRequest } from '../slackApi';
-import { SLACK_READ_SCOPES, SlackApplicationSchema, SlackScopeSchema } from '../slackCredentials';
+import {
+  SLACK_REQUESTED_SCOPES,
+  SlackApplicationSchema,
+  SlackScopeSchema,
+} from '../slackCredentials';
 import { getSlackApplicationSetupUrl, slackOauth } from '../slackOauth';
-import { SLACK_TOOLS } from '../slackTools';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -27,19 +30,19 @@ const token = {
   access_token: 'access',
   refresh_token: 'refresh',
   token_type: 'user',
-  scope: SLACK_READ_SCOPES.join(','),
+  scope: SLACK_REQUESTED_SCOPES.join(','),
   expires_in: 43200,
 };
 beforeEach(() => mockRequest.mockReset());
 
-it('prefills the official Slack creation page with read-only scopes and native authorization settings', () => {
+it('prefills the official Slack creation page with MCP scopes and native authorization settings', () => {
   const url = new URL(getSlackApplicationSetupUrl());
   expect(url.origin + url.pathname).toBe('https://api.slack.com/apps');
   expect(url.searchParams.get('new_app')).toBe('1');
   const manifest = JSON.parse(url.searchParams.get('manifest_json')!);
   expect(manifest.oauth_config).toEqual({
     redirect_urls: SlackApplicationSchema.shape.redirectUrl.options,
-    scopes: { user: [...SLACK_READ_SCOPES] },
+    scopes: { user: [...SLACK_REQUESTED_SCOPES] },
     pkce_enabled: true,
   });
   expect(manifest.settings.token_rotation_enabled).toBe(true);
@@ -73,8 +76,32 @@ it('refuses bot tokens and broader or incomplete scopes', async () => {
   await expect(slackOauth.exchangeCode(application, 'code', 'proof', signal)).rejects.toMatchObject(
     { reason: 'access' },
   );
+  expect(SlackScopeSchema.safeParse(token.scope + ',admin.users:write').success).toBe(false);
+  expect(SlackScopeSchema.safeParse(token.scope + ',files:write').success).toBe(false);
+  expect(
+    SlackScopeSchema.safeParse(
+      SLACK_REQUESTED_SCOPES.filter((scope) => scope !== 'chat:write').join(','),
+    ).success,
+  ).toBe(false);
   expect(SlackScopeSchema.safeParse(token.scope + ',chat:write').success).toBe(false);
   expect(SlackScopeSchema.safeParse('search:read').success).toBe(false);
+});
+
+it('requires reauthorization for credentials issued to the former Web API tools', () => {
+  const legacyScopes = [
+    'search:read',
+    'channels:read',
+    'channels:history',
+    'groups:read',
+    'groups:history',
+    'im:read',
+    'im:history',
+    'mpim:read',
+    'mpim:history',
+    'users:read',
+  ];
+  expect(SlackScopeSchema.safeParse(legacyScopes.join(',')).success).toBe(false);
+  expect(SlackScopeSchema.safeParse(token.scope).success).toBe(true);
 });
 
 it('classifies Slack HTTP-200 API failures without leaking upstream details or retrying', async () => {
@@ -86,21 +113,13 @@ it('classifies Slack HTTP-200 API failures without leaking upstream details or r
   });
   expect(mockRequest).toHaveBeenCalledTimes(1);
   mockRequest.mockResolvedValue({ data: { ok: false, error: 'ratelimited' } });
-  await expect(slackRequest('conversations.history', {}, signal, 'token')).rejects.toMatchObject({
+  await expect(slackRequest('auth.test', {}, signal, 'token')).rejects.toMatchObject({
     reason: 'quota',
   });
 });
 
-it('distinguishes workspaces and validates bounded read routes', () => {
+it('distinguishes the same user in different workspaces', () => {
   const first = readSlackIdentity({ team_id: 'T1', user_id: 'U1', team: 'Work', user: 'me' });
   const second = readSlackIdentity({ team_id: 'T2', user_id: 'U1', team: 'Other', user: 'me' });
   expect(first.id).not.toBe(second.id);
-  const history = SLACK_TOOLS.get('slack_get_history')!;
-  expect(history.request({ channel: 'C123' })).toEqual({
-    method: 'conversations.history',
-    fields: { channel: 'C123', limit: '15' },
-  });
-  expect(() => history.request({ channel: 'C123', limit: 100 })).toThrow();
-  expect(() => history.request({ channel: '../chat.postMessage' })).toThrow();
-  expect(() => history.request({ channel: 'C123', text: 'send this' })).toThrow();
 });

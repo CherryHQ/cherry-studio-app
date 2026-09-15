@@ -2,6 +2,7 @@ import * as mcp from '@ai-sdk/mcp';
 
 import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
 import { FEISHU_REQUESTED_TOOL_SCOPES } from '../../plugins/feishu/feishuTools';
+import { SLACK_REQUESTED_SCOPES } from '../../plugins/slack/slackCredentials';
 import { createBuiltInMcpClient as createClient } from '../createBuiltInMcpClient';
 import { validatePluginConnection } from '../validatePluginConnection';
 
@@ -61,6 +62,27 @@ const definitions = [
   },
   { name: 'fetch-doc', inputSchema: { type: 'object', properties: {} } },
   { name: 'create-doc', inputSchema: { type: 'object', properties: {} } },
+  { name: 'slack_read_user_profile', inputSchema: { type: 'object', properties: {} } },
+  {
+    name: 'slack_send_message',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channel_id: { type: 'string' },
+        text: { type: 'string' },
+        thread_ts: { type: 'string' },
+      },
+      required: ['channel_id', 'text'],
+    },
+  },
+  {
+    name: 'slack_search_public_and_private',
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string' }, content_types: { type: 'string' } },
+      required: ['query'],
+    },
+  },
 ];
 
 function reply(request: RpcRequest, result: unknown): Response {
@@ -134,6 +156,123 @@ const userCredential = {
     scope: FEISHU_REQUESTED_TOOL_SCOPES.join(' '),
   },
 };
+
+const slackCredential = {
+  version: 1,
+  application: {
+    version: 1,
+    clientId: '123.456',
+    redirectUrl: 'cherrystudio-dev://plugins/slack/callback',
+  },
+  tokens: {
+    accessToken: 'slack-access-token',
+    refreshToken: 'slack-refresh-token',
+    expiresAt: 7200000,
+    refreshExpiresAt: 86400000,
+    scope: SLACK_REQUESTED_SCOPES.join(','),
+  },
+  account: { id: 'T1:U1', label: 'Workspace · User' },
+};
+
+it('validates Slack through remote tool discovery without reading workspace content', async () => {
+  await expect(validatePluginConnection('slack', 'slack_user', slackCredential)).resolves.toBe(
+    'Official MCP',
+  );
+  expect(toolRequests()).toEqual([]);
+  const config = jest.mocked(mcp.createMCPClient).mock.calls[0][0];
+  expect(config).toMatchObject({
+    maxRetries: 0,
+    transport: { type: 'http', url: 'https://mcp.slack.com/mcp', redirect: 'error' },
+  });
+  expect(JSON.stringify(config)).not.toMatch(/slack-access-token|slack-refresh-token/);
+  for (const [url, init] of mockFetch.mock.calls as [string, RequestInit][]) {
+    expect(url).toBe('https://mcp.slack.com/mcp');
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer slack-access-token');
+  }
+});
+
+it('rejects Slack setup when discovery only offers write tools', async () => {
+  mockFetch.mockImplementation((url, init) => {
+    if (init?.body) {
+      const request: RpcRequest = JSON.parse(init.body);
+      if (request.method === 'tools/list')
+        return reply(request, {
+          tools: definitions.filter((tool) => tool.name === 'slack_send_message'),
+        });
+    }
+    return respond(url, init);
+  });
+  await expect(
+    validatePluginConnection('slack', 'slack_user', slackCredential),
+  ).rejects.toMatchObject({ reason: 'request' });
+  expect(toolRequests()).toEqual([]);
+});
+
+it('uses Slack remote schemas and arguments while rejecting retired and unadmitted tools', async () => {
+  mockGetGrant.mockResolvedValue({ id: 'slack-grant', authMethod: 'slack_user' });
+  mockResolveCredential.mockResolvedValue(slackCredential);
+  const client = await createBuiltInMcpClient('slack', 'slack-grant', new AbortController().signal);
+  try {
+    const { tools } = await client.listTools();
+    const name = 'slack_search_public_and_private';
+    expect(tools.find((tool) => tool.name === name)?.inputSchema.properties).toHaveProperty(
+      'content_types',
+    );
+    await client.callTool({ name, args: { query: 'roadmap', content_types: 'files' } });
+    expect(toolRequests()).toEqual([
+      expect.objectContaining({
+        params: { name, arguments: { query: 'roadmap', content_types: 'files' } },
+      }),
+    ]);
+    const message = { channel_id: 'C1', text: 'Project update', thread_ts: '123.456' };
+    await client.callTool({ name: 'slack_send_message', args: message });
+    expect(toolRequests()[1]).toMatchObject({
+      params: { name: 'slack_send_message', arguments: message },
+    });
+    for (const tool of [
+      'slack_get_history',
+      'slack_search_messages',
+      'slack_delete_message',
+      'slack_get_file_upload_url',
+      'slack_complete_file_upload',
+    ]) {
+      expect(isBuiltInMcpToolAllowed('slack', tool)).toBe(false);
+      await expect(client.callTool({ name: tool, args: {} })).rejects.toMatchObject({
+        reason: 'access',
+      });
+    }
+    expect(toolRequests()).toHaveLength(2);
+  } finally {
+    await client.close();
+  }
+});
+
+it.each(['slack_send_message', 'slack_update_canvas', 'slack_update_list_record'])(
+  'does not replay Slack %s when the write outcome is unknown',
+  async (name) => {
+    mockGetGrant.mockResolvedValue({ id: 'slack-grant', authMethod: 'slack_user' });
+    mockResolveCredential.mockResolvedValue(slackCredential);
+    const client = await createBuiltInMcpClient(
+      'slack',
+      'slack-grant',
+      new AbortController().signal,
+    );
+    try {
+      await client.listTools();
+      mockFetch.mockImplementation((url, init) => {
+        if (init?.body && JSON.parse(init.body).method === 'tools/call')
+          return new Response('private Slack response', { status: 500 });
+        return respond(url, init);
+      });
+      const error = await client.callTool({ name, args: {} }).catch((value: unknown) => value);
+      expect(error).toMatchObject({ reason: 'unknown-write' });
+      expect(JSON.stringify(error)).not.toContain('private Slack response');
+      expect(toolRequests()).toHaveLength(1);
+    } finally {
+      await client.close();
+    }
+  },
+);
 
 it('rotates user tokens behind a stable grant reference without rejecting the grant', async () => {
   mockGetGrant.mockResolvedValue({

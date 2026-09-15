@@ -25,9 +25,9 @@ const ACCESS_ERRORS = new Set([
   'org_login_required',
 ]);
 
-/** All calls use reviewed Slack methods, and upstream messages never become application errors. */
+/** Web API access is limited to authorization; business tools run on Slack's hosted MCP. */
 export async function slackRequest(
-  method: string,
+  method: 'oauth.v2.access' | 'auth.test' | 'auth.revoke',
   fields: Record<string, string>,
   signal: AbortSignal,
   token?: string,

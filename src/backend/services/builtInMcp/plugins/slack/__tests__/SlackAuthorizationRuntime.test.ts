@@ -1,7 +1,7 @@
 import { authorizationStoreFixture } from '../../../authorization/__tests__/_authorizationStoreFixture';
 import type { PluginCredential } from '../../../authorization/pluginCredential';
 import { SlackAuthorizationRuntime } from '../SlackAuthorizationRuntime';
-import { SLACK_READ_SCOPES, type SlackUserCredential } from '../slackCredentials';
+import { SLACK_REQUESTED_SCOPES, type SlackUserCredential } from '../slackCredentials';
 import { slackOauth } from '../slackOauth';
 
 jest.mock('expo-crypto', () => ({
@@ -12,6 +12,7 @@ jest.mock('../slackOauth', () => ({
     challenge: jest.fn(),
     exchangeCode: jest.fn(),
     getAccount: jest.fn(),
+    revoke: jest.fn(),
   },
 }));
 
@@ -25,7 +26,7 @@ const tokens = {
   refreshToken: 'private-refresh',
   expiresAt: 3_601_000,
   refreshExpiresAt: 86_401_000,
-  scope: SLACK_READ_SCOPES.join(','),
+  scope: SLACK_REQUESTED_SCOPES.join(','),
 };
 const account = { id: 'T1:U1', label: 'Workspace · User' };
 const credential: SlackUserCredential = { version: 1, application, tokens, account };
@@ -124,3 +125,27 @@ it('consumes duplicate callbacks once before automatic completion', async () => 
   expect(results.map((result) => result.status)).toEqual(['ready', 'ready']);
   expect(slackOauth.exchangeCode).toHaveBeenCalledTimes(1);
 });
+
+it.each([
+  'search:read',
+  'search:read.public,search:read.private,search:read.im,search:read.mpim,search:read.files,search:read.users,channels:read,channels:history,groups:read,groups:history,im:read,im:history,mpim:read,mpim:history,users:read,users:read.email,files:read',
+])(
+  'blocks outdated scope bundle %s while still allowing its token to be revoked',
+  async (scope) => {
+    fixture.data.grant = {
+      id: 'legacy-grant',
+      credential: saved({ ...credential, tokens: { ...tokens, scope } }),
+    };
+    expect(await runtime.describeConnection('legacy-grant')).toMatchObject({
+      status: 'needs-reauthorization',
+      reason: 'authorization',
+    });
+    await expect(runtime.resolveCredential('legacy-grant')).rejects.toMatchObject({
+      reason: 'authorization',
+    });
+    const revocation = await runtime.prepareRevocation('legacy-grant');
+    const signal = new AbortController().signal;
+    await revocation.revoke(signal);
+    expect(slackOauth.revoke).toHaveBeenCalledWith(tokens.accessToken, signal);
+  },
+);

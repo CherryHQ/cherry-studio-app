@@ -1,7 +1,7 @@
 # Built-In MCP Plugins
 
 This module owns bundled plugin clients and the connect/disconnect workflow for **Plugins**.
-GitHub, Amap, Feishu and DingTalk are implemented. Current behavior is documented in the
+GitHub, Amap, Feishu, DingTalk, Notion and Slack are implemented. Current behavior is documented in the
 [integration reference](../../../../docs/references/agent/built-in-mcp-design.md); proposed designs
 are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 
@@ -19,6 +19,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `plugins/github/` | GitHub definition, workflow guide, OAuth App authorization with PKCE, account identity, token rotation and revocation |
 | `plugins/feishu/` | Feishu workflow guide, authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
 | `plugins/dingtalk/` | Official cloud device authorization, account review, token renewal, behavior authorization and service-bound tools |
+| `plugins/slack/` | Official remote MCP tool policy, personal app authorization with PKCE, workspace/user identity, token rotation and revocation |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
 internal responsibility groups; they do not add public barrels. Each plugin exposes only its
@@ -137,6 +138,26 @@ own this user-facing copy independently of Agent guide content.
   the complete native token bundle after checking the grant ID.
 - Pending authorization stays in memory. Errors and process interruption require a new flow;
   reusable applications survive. No legacy imports, recovery journals or automatic cleanup retries.
+
+Slack connects to `https://mcp.slack.com/mcp` through `createOfficialMcpClient`, like GitHub,
+Notion and Amap. Its explicit catalog admits 25 remote tools: 14 reads and 11 writes covering
+search, conversations, messages/drafts/scheduling, reactions, canvases and lists.
+Slack owns their schemas, pagination and results; only admitted tools returned by discovery become
+available. Local read/write policy controls the shared approval and uncertain-write behavior.
+No local business API adapters or fixed 15-message page limit remain.
+
+File uploads are deferred: neither upload tool is admitted, and `files:write` is not requested.
+
+Slack retains the official [native PKCE flow](https://docs.slack.dev/authentication/using-pkce/)
+through `oauth.v2.access`. Its rotating user token authorizes MCP requests; `auth.test` binds the
+workspace/user during authorization and `auth.revoke` handles disconnect. Connection validation
+only discovers `slack_read_user_profile` without invoking it. The 29 configured user scopes come from
+the [official authorization metadata](https://mcp.slack.com/.well-known/oauth-authorization-server)
+and include granular search, profiles/email and the admitted write capabilities, excluding uploads.
+Former Web API and read-only MCP grants require disconnect and reauthorization; outdated tokens remain revocable.
+App settings remain saved. The
+[official MCP service](https://docs.slack.dev/ai/slack-mcp-server/) requires an internal or
+Marketplace-published Slack app and remains subject to workspace approval and resource access.
 
 Interactive methods declare `polling` or `callback`. Polling retains the Feishu rules above;
 callback methods wait for a system authentication session and an exact redirect. A generic route
