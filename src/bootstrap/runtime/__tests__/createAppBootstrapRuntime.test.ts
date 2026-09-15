@@ -13,6 +13,7 @@ const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
 const mockDocumentExport = { kind: 'document-export' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
+const mockDiagnostics = { kind: 'diagnostics' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
 const mockPreference = { kind: 'preference' };
@@ -89,6 +90,7 @@ const createRuntime = () =>
     CacheService: mockCache,
     DbService: mockDb,
     DesktopConnectionRuntime: mockDesktopConnections,
+    DiagnosticBundleService: mockDiagnostics,
     DocumentExportRuntime: mockDocumentExport,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
@@ -133,6 +135,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
+      diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
       languageServing: mockAgentRuntime,
       providerRegistryUpdater: mockProviderRegistryUpdater,

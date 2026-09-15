@@ -14,7 +14,7 @@ const githubUserMethod: PluginAuthorizationDefinition = {
   kind: 'interactive',
   interaction: 'callback',
   stages: ['user', 'account'],
-  createRuntime: (store) => new GithubAuthorizationRuntime(store),
+  createRuntime: (store, diagnostics) => new GithubAuthorizationRuntime(store, diagnostics),
   createRequestAuthorization: (tools) => ({
     apply(credential, { headers }) {
       const parsed = GithubUserCredentialSchema.safeParse(credential);

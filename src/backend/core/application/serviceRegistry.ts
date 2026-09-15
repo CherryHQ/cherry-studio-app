@@ -13,6 +13,7 @@ import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActi
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -54,8 +55,9 @@ export const services = {
   BackgroundReplyRuntime,
   WebSearchService,
   ProviderRegistryUpdaterService,
-  McpRuntimeService,
   TraceStorageService,
+  DiagnosticBundleService,
+  McpRuntimeService,
   AiService,
   AgentSessionStore: SqliteAgentSessionStore,
   AgentRuntime: PiRuntimeService,
