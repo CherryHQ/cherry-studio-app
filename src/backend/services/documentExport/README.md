@@ -3,7 +3,9 @@
 Application-owned conversion and artifact lifetime. `DocumentExportRuntime` implements
 `Backend.documentExport`; composition injects managed-file access tied to the originating database.
 Sessions own immutable source snapshots, prepared assets, cancellation, current temporary output
-and explicit persistence. `session.markdown` needs no file or resource reads.
+and explicit persistence. `session.markdown` needs no file or resource reads and remains unbranded.
+Markdown rendering appends the optional target signature; reuse requires matching complete text.
+HTML and image rendering share the presentation signature independently of the image-only frame.
 
 Markdown/HTML artifacts contain one immutable file descriptor and source text. Image artifacts
 contain ordered immutable pages, each with its PNG file and dimensions. The frontend capture

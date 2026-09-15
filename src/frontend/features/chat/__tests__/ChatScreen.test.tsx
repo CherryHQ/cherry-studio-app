@@ -246,7 +246,7 @@ describe('ChatScreen composer dock wiring', () => {
     expect(chatWorkspaceProps).toMatchObject({ sessionId: 'session-1' });
   });
 
-  it('restores the latest Session when the requested Session is missing', () => {
+  it('resolves a draft when the requested Session is missing', () => {
     mockSessionData = undefined;
     mockSessionError = DataApiErrorFactory.notFound('AgentSession', 'session-1');
 

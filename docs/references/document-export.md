@@ -74,7 +74,7 @@ try {
 total. HTML/image targets receive validated logical width, resolved typography and semantic colors.
 The page freezes typography/time at opening. Images always use a 360-logical-pixel width; HTML
 retains its window-derived width. Theme changes regenerate the preview except during delivery.
-The image-only frame includes numbered messages, theme surfaces, Cherry branding and the local
+Image output includes numbered messages, theme surfaces, Cherry branding and the local
 `YYYY.MM.DD HH:mm` timestamp inside the captured document.
 
 Markdown/HTML artifacts hold one file and source text. Image artifacts hold a layout (`pages` or
@@ -86,7 +86,15 @@ A session admits one operation at a time. Capture delivers each page through awa
 the surface releases the native PNG only after the backend copy settles. Delivery must be ordered
 and match the declared total. Only a complete batch replaces the current artifact. Failure cleans
 the incomplete directory and retains the previous artifact. `save` accepts only the current artifact.
-Repeated Markdown rendering reuses the current file when available.
+Repeated Markdown rendering reuses the current file when available and its complete text, including
+the signature, matches.
+
+HTML and image presentation share an optional `signature` containing the resolved foreground color,
+embedded Cherry logo, brand name and frozen timestamp. The image-only `imageFrame` supplies its
+background and localized label. Image-to-HTML fallbacks retain the signature. Markdown uses the same
+brand name and timestamp in a separated text footer; preview and saved text share its formatter.
+`session.markdown` remains the unbranded source. The signature ends the document and is not repeated
+on every PNG page; each PNG page has its own ordinal footer.
 
 ## Content Behavior
 

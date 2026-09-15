@@ -111,7 +111,3 @@ export function safeExportUrl(value: string): string | undefined {
     return undefined;
   }
 }
-
-export function escapeMarkdown(value: string): string {
-  return value.replace(/[\\`*_{}[\]()#+.!<>|~-]/g, '\\$&').replace(/\r?\n/g, ' ');
-}

@@ -138,6 +138,31 @@ test('Markdown preview stays in memory and repeated sharing reuses its persisten
   await expect(session.render({ format: 'markdown' })).rejects.toMatchObject({ code: 'disposed' });
 });
 
+test('Markdown materialization preserves the signature and reuses only matching signed text', async () => {
+  const session = createDocumentExportSession(
+    { kind: 'markdown', source: 'Content' },
+    { readManagedImage: jest.fn(), saveFile: jest.fn() },
+    () => {},
+    () => {},
+  );
+  const signature = { brandName: 'Cherry Studio', timestamp: '2026/09/15 12:00' };
+  const first = await session.render({ format: 'markdown', signature });
+  if (first.format !== 'markdown') throw new Error('Expected Markdown');
+  expect(first.text).toBe('Content\n\n---\n\n**Cherry Studio** · 2026/09/15 12:00\n');
+  expect(mockFiles.get(first.file.uri)).toBe(first.text);
+  expect(session.markdown).toBe('Content\n');
+  await expect(session.render({ format: 'markdown', signature })).resolves.toBe(first);
+  const second = await session.render({
+    format: 'markdown',
+    signature: { ...signature, timestamp: '2026/09/15 12:01' },
+  });
+  if (second.format !== 'markdown') throw new Error('Expected Markdown');
+  expect(second.text).toContain('2026/09/15 12:01');
+  expect(mockFiles.get(second.file.uri)).toBe(second.text);
+  expect(mockFiles.has(first.file.uri)).toBe(false);
+  await session.dispose();
+});
+
 test('replacing a preview discards its file and rejects stale publication requests', async () => {
   const session = createDocumentExportSession(
     { kind: 'markdown', source: 'Content' },

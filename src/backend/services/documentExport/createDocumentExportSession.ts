@@ -13,6 +13,7 @@ import {
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { readableFilename } from '@/shared/data/types/file';
+import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
 import { normalizeDocument } from './normalizeDocument';
 import { renderMarkdown } from './renderMarkdown';
@@ -70,9 +71,14 @@ export function createDocumentExportSession(
     onProgress?: (progress: DocumentExportProgress) => void,
   ): Promise<DocumentExportArtifact> {
     signal.throwIfAborted();
+    const markdownText =
+      target.format === 'markdown'
+        ? markdown + renderMarkdownSignature(target.signature)
+        : markdown;
     if (
       target.format === 'markdown' &&
       current?.format === 'markdown' &&
+      current.text === markdownText &&
       new File(current.file.uri).exists
     )
       return current;
@@ -95,11 +101,11 @@ export function createDocumentExportSession(
         });
         const file = new File(outputDirectory, filename);
         progress('writing');
-        file.write(markdown);
+        file.write(markdownText);
         artifact = {
           id,
           format: 'markdown',
-          text: markdown,
+          text: markdownText,
           issues: [],
           file: { uri: file.uri, filename, mediaType: 'text/markdown' },
         };

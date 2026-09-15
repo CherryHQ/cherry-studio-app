@@ -34,7 +34,7 @@ import { useDocumentExportHtmlCapture } from './components/DocumentExportHtmlSur
 import { DocumentExportImagePreview } from './components/DocumentExportImagePreview';
 import { DocumentExportTextPreview } from './components/DocumentExportTextPreview';
 import { useDocumentExportPreview } from './hooks/useDocumentExportPreview';
-import { IMAGE_FRAME_BRAND } from './utils/imageFrameBrand';
+import { EXPORT_BRAND } from './utils/exportBrand';
 import { IMAGE_LAYOUT_WIDTH } from './utils/imagePagePlan';
 
 export function DocumentExportScreen() {
@@ -150,9 +150,15 @@ function DocumentExportBody({
       typography: { base, sm, lg, xl },
     };
   });
+  const [timestamp] = useState(() => {
+    const date = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  });
   const presentation = useMemo(
     () => ({
       ...layout,
+      signature: { ...EXPORT_BRAND, foreground, timestamp },
       colors: {
         background,
         foreground,
@@ -182,13 +188,9 @@ function DocumentExportBody({
       codeBlock,
       inlineCode,
       inlineCodeForeground,
+      timestamp,
     ],
   );
-  const [timestamp] = useState(() => {
-    const date = new Date();
-    const pad = (value: number) => String(value).padStart(2, '0');
-    return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  });
   const imagePresentations = useMemo(() => {
     const frameDocument = (document: ExportDocument) => {
       const isConversation = document.sections.some((section) => section.presentation);
@@ -196,11 +198,8 @@ function DocumentExportBody({
         ...presentation,
         width: IMAGE_LAYOUT_WIDTH,
         imageFrame: {
-          ...IMAGE_FRAME_BRAND,
           background: secondary,
-          foreground,
           label: t(isConversation ? 'documentExport.conversation' : 'documentExport.document'),
-          timestamp,
         },
       };
     };
@@ -208,7 +207,7 @@ function DocumentExportBody({
       checked: frameDocument(checkedSession.document),
       unchecked: option ? frameDocument(option.uncheckedSession.document) : undefined,
     };
-  }, [checkedSession.document, foreground, option, presentation, secondary, t, timestamp]);
+  }, [checkedSession.document, option, presentation, secondary, t]);
   const imagePresentation =
     !isOptionChecked && imagePresentations.unchecked
       ? imagePresentations.unchecked
@@ -293,7 +292,11 @@ function DocumentExportBody({
     <View className="min-h-0 flex-1">
       {state.status === 'markdown' ? (
         <ScrollView className="flex-1" contentContainerClassName="px-6 py-4">
-          <DocumentExportTextPreview key={revision} document={session.document} />
+          <DocumentExportTextPreview
+            key={revision}
+            document={session.document}
+            signature={previewPresentation.signature}
+          />
         </ScrollView>
       ) : artifact ? (
         <ArtifactPreview

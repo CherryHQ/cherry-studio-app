@@ -15,6 +15,11 @@ Typography follows the frozen accessibility step; semantic colors follow the the
 starts. The existing numbered message treatment, Cherry signature and frozen local timestamp stay
 inside the export. HTML retains its document presentation and window-derived width.
 
+The frontend supplies one shared `signature` for HTML and images, preserved during format fallback;
+the image-only `imageFrame` controls margins and the document label. Markdown preview and saved text
+use the same separated brand/time footer without logo bytes. The signature appears at the end of
+the document, while every PNG page receives an ordinal footer.
+
 ## Image Capture
 
 The controlled WebView waits for decoded assets, fonts and stable layout. Paged capture measures

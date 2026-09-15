@@ -27,6 +27,7 @@ export async function renderHtml(
   const presentation = {
     ...inputPresentation,
     imageFrame: inputPresentation.imageFrame ? { ...inputPresentation.imageFrame } : undefined,
+    signature: inputPresentation.signature ? { ...inputPresentation.signature } : undefined,
     colors: { ...inputPresentation.colors },
     typography: Object.fromEntries(
       Object.entries(inputPresentation.typography).map(([key, value]) => [key, { ...value }]),
@@ -145,12 +146,15 @@ export async function renderHtml(
     })
     .join('\n');
   const isConversation = document.sections.some((section) => section.presentation);
-  const { colors, typography, width, imageFrame } = presentation;
+  const { colors, typography, width, imageFrame, signature } = presentation;
   const { base, sm, lg, xl } = typography;
   const title = document.title && !isConversation ? `<h1>${escapeHtml(document.title)}</h1>` : '';
   const content = imageFrame
-    ? `<article class="print-content"><header class="print-caption"><span>${escapeHtml(imageFrame.label)}</span><span class="print-index">01—${String(document.sections.length).padStart(2, '0')}</span></header>${title}${body}</article><footer class="print-signature"><strong class="print-brand">${escapeHtml(imageFrame.brandName)}</strong><div class="print-metadata"><img class="print-logo" src="${imageFrame.logoDataUrl}" alt=""><span class="print-divider" aria-hidden="true"></span><time class="print-timestamp">${escapeHtml(imageFrame.timestamp)}</time></div></footer>`
-    : `${title}${body}`;
+    ? `<article class="print-content"><header class="print-caption"><span>${escapeHtml(imageFrame.label)}</span><span class="print-index">01—${String(document.sections.length).padStart(2, '0')}</span></header>${title}${body}</article>`
+    : `<article>${title}${body}</article>`;
+  const footer = signature
+    ? `<footer class="print-signature"><strong class="print-brand">${escapeHtml(signature.brandName)}</strong><div class="print-metadata"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><span class="print-divider" aria-hidden="true"></span><time class="print-timestamp">${escapeHtml(signature.timestamp)}</time></div></footer>`
+    : '';
   // Match the native message rows and CherryUI Markdown rhythm. The page supplies the
   // same resolved color tokens and accessibility type scale used by those components.
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>
@@ -158,6 +162,7 @@ export async function renderHtml(
 html,body{margin:0;padding:0;background:${colors.background};color:${colors.foreground}}
 body{font:${base.fontSize}px/${base.lineHeight + 2}px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;overflow-wrap:anywhere;-webkit-text-size-adjust:100%}
 main{width:100%;max-width:${width}px;margin:0 auto;padding:12px 16px 24px}
+main.html-document{display:flex;flex-direction:column;gap:24px}
 h1,h2,h3,h4,h5,h6,p,ul,ol,pre,blockquote,table,hr{margin:0 0 12px}
 h1,h2,h3,h4,h5,h6,strong,b,th{font-weight:600}
 h1{font-size:${xl.fontSize}px;line-height:${xl.lineHeight}px;margin-bottom:10px}
@@ -211,8 +216,12 @@ ${
 .print-section{padding-top:24px}.print-section+.print-section{margin-top:24px;border-top:1px solid ${colors.subtleBorder}}
 .print-heading{display:flex;align-items:baseline;gap:12px;margin-bottom:16px;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;color:${colors.muted}}
 .print-index{font-family:"SFMono-Regular",Consolas,monospace;font-size:${Math.max(12, sm.fontSize - 1)}px;white-space:nowrap}
-.print-content img,.print-content pre,.print-content table,.print-content .attachment{border-radius:0}
-.print-signature{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;min-height:44px;padding:8px 0;color:${imageFrame.foreground}}
+.print-content img,.print-content pre,.print-content table,.print-content .attachment{border-radius:0}`
+    : ''
+}
+${
+  signature
+    ? `.print-signature{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;min-height:44px;padding:8px 0;color:${signature.foreground}}
 .print-brand{min-width:0;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;letter-spacing:.02em;text-transform:uppercase}
 .print-metadata{display:flex;align-items:center;gap:8px;margin-left:auto;max-width:100%}
 img.print-logo{width:20px;height:20px;flex-shrink:0;object-fit:contain;border-radius:0;margin:0}
@@ -220,16 +229,17 @@ img.print-logo{width:20px;height:20px;flex-shrink:0;object-fit:contain;border-ra
 .print-timestamp{font-family:"SFMono-Regular",Consolas,monospace;font-size:${Math.max(12, sm.fontSize - 1)}px;line-height:${sm.lineHeight - 2}px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}`
     : ''
 }
-</style></head><body><main${imageFrame ? ' class="image-print"' : ''}>${content}</main></body></html>`;
+</style></head><body><main class="${imageFrame ? 'image-print' : 'html-document'}">${content}${footer}</main></body></html>`;
   signal.throwIfAborted();
   return { html, issues };
 }
 
 function validatePresentation(value: ExportPresentation) {
   const frame = value.imageFrame;
-  const colors = frame
-    ? [...Object.values(value.colors), frame.background, frame.foreground]
-    : Object.values(value.colors);
+  const signature = value.signature;
+  const colors = Object.values(value.colors);
+  if (frame) colors.push(frame.background);
+  if (signature) colors.push(signature.foreground);
   if (
     !Number.isFinite(value.width) ||
     value.width < 280 ||
@@ -247,13 +257,14 @@ function validatePresentation(value: ExportPresentation) {
       );
     }) ||
     colors.some((color) => !/^(#[a-f\d]{3,8}|rgba?\([\d\s.,%]+\))$/i.test(color)) ||
-    (frame &&
-      ([frame.brandName, frame.label, frame.timestamp].some(
+    (frame && (typeof frame.label !== 'string' || frame.label.length > 256)) ||
+    (signature &&
+      ([signature.brandName, signature.timestamp].some(
         (text) => typeof text !== 'string' || text.length > 256,
       ) ||
-        typeof frame.logoDataUrl !== 'string' ||
-        frame.logoDataUrl.length > 32_768 ||
-        !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(frame.logoDataUrl)))
+        typeof signature.logoDataUrl !== 'string' ||
+        signature.logoDataUrl.length > 32_768 ||
+        !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(signature.logoDataUrl)))
   )
     throw new DocumentExportError('invalid-input');
 }

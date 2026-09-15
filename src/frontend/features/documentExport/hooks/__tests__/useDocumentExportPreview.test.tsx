@@ -109,10 +109,46 @@ test('default Markdown and its unchecked snapshot stay in memory until sharing',
     markdownArtifact,
   );
   expect(unchecked.render).toHaveBeenCalledWith(
-    { format: 'markdown' },
+    { format: 'markdown', signature: undefined },
     { signal: expect.any(AbortSignal) },
   );
   expect(checked.render).not.toHaveBeenCalled();
+});
+
+test('image fallback retains the same brand signature in Markdown preview and delivery', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  const signature = {
+    brandName: 'Cherry Studio',
+    timestamp: '2026/09/15 12:00',
+    foreground: '#111111',
+    logoDataUrl: 'data:image/png;base64,AA==',
+  };
+  session.render.mockImplementation(async (target) => {
+    if (target.format === 'markdown') return markdownArtifact;
+    throw new DocumentExportError('capture-failed');
+  });
+  await act(async () => {
+    renderer = create(
+      <Probe
+        ref={ref}
+        session={session}
+        format="image"
+        revision={0}
+        currentPresentation={{ ...presentation, signature }}
+      />,
+    );
+  });
+  expect(ref.current?.state).toEqual({
+    status: 'markdown',
+    text: 'Content\n---\n\n**Cherry Studio** · 2026/09/15 12:00\n',
+    fallback: true,
+  });
+  await ref.current!.getArtifact(new AbortController().signal);
+  expect(session.render).toHaveBeenLastCalledWith(
+    { format: 'markdown', signature },
+    { signal: expect.any(AbortSignal) },
+  );
 });
 
 test('sharing Markdown waits for the cancelled conversion and never starts an image render', async () => {
