@@ -1,7 +1,7 @@
 # Built-In MCP Plugins
 
 This module owns bundled plugin clients and the connect/disconnect workflow for **Plugins**.
-GitHub, Amap, Feishu, DingTalk, Notion and WeCom are implemented. Current behavior is documented in the
+GitHub, Amap, Feishu, DingTalk, Notion, Slack and WeCom are implemented. Current behavior is documented in the
 [integration reference](../../../../docs/references/agent/built-in-mcp-design.md); proposed designs
 are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 
@@ -19,6 +19,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `plugins/github/` | GitHub definition, workflow guide, OAuth App authorization with PKCE, account identity, token rotation and revocation |
 | `plugins/feishu/` | Feishu workflow guide, authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
 | `plugins/dingtalk/` | Official cloud device authorization, account review, token renewal, behavior authorization and service-bound tools |
+| `plugins/slack/` | Official remote MCP tool policy, internal-app setup link and manual user-token credentials |
 | `plugins/wecom/` | Official bot authorization, CLI gateway requests, discovered service schemas, native file transfer and workflow guide |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
@@ -138,6 +139,28 @@ own this user-facing copy independently of Agent guide content.
   the complete native token bundle after checking the grant ID.
 - Pending authorization stays in memory. Errors and process interruption require a new flow;
   reusable applications survive. No legacy imports, recovery journals or automatic cleanup retries.
+
+Slack connects to `https://mcp.slack.com/mcp` through `createOfficialMcpClient`, like GitHub,
+Notion and Amap. Its explicit catalog admits 25 remote tools: 14 reads and 11 writes covering
+search, conversations, messages/drafts/scheduling, reactions, canvases and lists.
+Slack owns their schemas, pagination and results; only admitted tools returned by discovery become
+available. Local read/write policy controls the shared approval and uncertain-write behavior.
+No local business API adapters or fixed 15-message page limit remain.
+
+File uploads are deferred: neither upload tool is admitted, and `files:write` is not requested.
+
+Slack uses the shared credential-entry flow with a manually supplied `xoxp-` user token from an
+internal app. The creation link prefills the 29 user scopes for admitted capabilities and leaves
+rotation disabled. Users enable the app's MCP feature, install it in their own workspace, and paste
+the user token into Cherry. No Client ID, client secret or callback configuration is needed in Cherry.
+See [Slack Plugin Setup](../../../../docs/guides/slack-plugin-authorization.md) for the complete steps.
+
+Connection validation only discovers `slack_read_user_profile`, without reading workspace content.
+Replacing the token requires disconnecting first. Local disconnect does not revoke the upstream
+Slack token; users manage that authorization in Slack. Earlier OAuth connections require disconnect
+and manual-token reconnection. OAuth, automatic token renewal and publisher Marketplace distribution
+are deferred. The [official MCP service](https://docs.slack.dev/ai/slack-mcp-server/) permits internal
+apps and remains subject to workspace approval and resource access.
 
 Interactive methods declare `polling` or `callback`. Polling retains the Feishu rules above;
 callback methods wait for a system authentication session and an exact redirect. A generic route
