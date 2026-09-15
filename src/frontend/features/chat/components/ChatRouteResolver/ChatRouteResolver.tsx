@@ -6,24 +6,16 @@ import { View } from 'react-native';
 
 import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { resolveChatRestoreState } from '@/frontend/appShell/navigation/chat/chatRestore';
-import { useAgentsApi, useLatestAgentSession } from '@/frontend/hooks/agent';
+import { useAgentsApi } from '@/frontend/hooks/agent';
 
 import { ChatEmptyState } from '../ChatWorkspace';
 
 export function ChatRouteResolver() {
   const { t } = useTranslation();
   const router = useRouter();
-  const latestSession = useLatestAgentSession();
-  const isLatestSessionLoading = latestSession.isLoading || latestSession.isRefreshing;
-  const shouldLoadAgentFallback =
-    !isLatestSessionLoading && !latestSession.error && !latestSession.session;
-  const agents = useAgentsApi({ enabled: shouldLoadAgentFallback });
+  const agents = useAgentsApi();
   const restoreState = resolveChatRestoreState({
     agents: { error: agents.error, isLoading: agents.isLoading, items: agents.agents },
-    latestSession: {
-      ...latestSession,
-      isLoading: isLatestSessionLoading,
-    },
   });
 
   useEffect(() => {
@@ -49,13 +41,7 @@ export function ChatRouteResolver() {
           <ContentState.Error
             primaryAction={{
               children: t('agent.actions.retry'),
-              onPress: () => {
-                const requests: Promise<unknown>[] = [latestSession.refetch()];
-                if (shouldLoadAgentFallback) {
-                  requests.push(agents.refetch());
-                }
-                void Promise.all(requests);
-              },
+              onPress: () => void agents.refetch(),
             }}
             title={t('navigation.chatsLoadFailed')}
           />
@@ -72,5 +58,5 @@ export function ChatRouteResolver() {
 }
 
 function ChatRouteResolverLayout({ children }: { children: ReactNode }) {
-  return <View className="flex-1">{children}</View>;
+  return <View className="flex-1 justify-center">{children}</View>;
 }

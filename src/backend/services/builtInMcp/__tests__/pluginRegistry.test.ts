@@ -1,6 +1,10 @@
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
-import type { PluginAuthorizationDefinition, PluginDefinition } from '../pluginDefinition';
+import {
+  getPluginToolEffect,
+  type PluginAuthorizationDefinition,
+  type PluginDefinition,
+} from '../pluginDefinition';
 import {
   createPluginRegistry,
   getBuiltInPluginCatalog,
@@ -129,6 +133,36 @@ it('rejects duplicate plugins, duplicate methods and setup checks that invoke a 
   expect(() =>
     createPluginRegistry([{ ...plugin, validation: { accountLabel: () => 'Account' } }]),
   ).not.toThrow();
+});
+
+it('requires explicit discovery admission and assigns new tools write approval with the common guide', () => {
+  const fixed = definition('fixed');
+  const dynamic = {
+    ...definition('dynamic'),
+    acceptsDiscoveredTool: (name: string) => name.startsWith('official__'),
+    guide: {
+      revision: 1,
+      sections: [{ requiredTools: [], content: 'Use the current tool schema.' }],
+    },
+  };
+  const registry = createPluginRegistry([fixed, dynamic]);
+  expect(getPluginToolEffect(fixed, 'official__new_tool')).toBeUndefined();
+  expect(getPluginToolEffect(dynamic, 'unadmitted')).toBeUndefined();
+  expect(getPluginToolEffect(dynamic, 'read')).toBe('read');
+  expect(getPluginToolEffect(dynamic, 'official__new_tool')).toBe('write');
+  expect(
+    registry.resolveGuides([
+      { pluginId: 'dynamic', serverId: 'connection', rawToolName: 'official__new_tool' },
+    ]),
+  ).toEqual([
+    {
+      pluginId: 'dynamic',
+      serverId: 'connection',
+      revision: 1,
+      content: 'Use the current tool schema.',
+    },
+  ]);
+  expect(registry.listCatalog()[1]).not.toHaveProperty('acceptsDiscoveredTool');
 });
 
 it('rejects unsafe, repeated and malformed credential fields before exposing any form', () => {

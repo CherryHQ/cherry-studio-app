@@ -6,6 +6,7 @@ import { View } from 'react-native';
 
 import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import { RouteHeader } from '@/frontend/appShell/header';
+import { ReadingContentFrame } from '@/frontend/appShell/layout';
 import { usePainting, useResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import { consumePaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -75,7 +76,7 @@ export function PaintingScreen() {
   const initialDraft = handoff?.draft ?? '';
 
   return (
-    <View className="flex-1">
+    <ReadingContentFrame>
       <RouteHeader />
       {openState === 'loading' ? (
         <View className="flex-1 justify-center">
@@ -109,6 +110,6 @@ export function PaintingScreen() {
           />
         </View>
       )}
-    </View>
+    </ReadingContentFrame>
   );
 }

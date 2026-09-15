@@ -17,15 +17,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import {
@@ -46,6 +38,7 @@ import {
   usePaintingGalleryEntries,
   usePaintings,
 } from '@/frontend/data/paintings/usePaintings';
+import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
@@ -65,6 +58,7 @@ import {
 
 const recentPhotoLimit = 12;
 const galleryGap = 6;
+const MIN_COLUMN_WIDTH = 180;
 const pageEdge = 16;
 const galleryContentEdge = pageEdge - galleryGap / 2;
 
@@ -79,7 +73,7 @@ export function DrawingList() {
   const selectionSource = usePaintingSelectionSource(isEditing);
   useRegisterSelectionSource('drawings', selectionSource);
   const bottomInset = useListBottomInset();
-  const { width: windowWidth } = useWindowDimensions();
+  const { onLayout, width: listWidth } = useLayoutWidth();
   // Mounted means visible now that the gallery owns a whole screen. The hook
   // reads existing access immediately, but only requests new access after the
   // user presses the photo placeholder.
@@ -87,7 +81,14 @@ export function DrawingList() {
   const requestPhotoAccess = recentPhotos.requestAccess;
   const paintings = usePaintings();
   const gallery = usePaintingGalleryEntries(paintings.paintings);
-  const columnWidth = (windowWidth - pageEdge * 2 - galleryGap) / 2;
+  const columns = Math.max(
+    2,
+    Math.floor((listWidth - pageEdge * 2 + galleryGap) / (MIN_COLUMN_WIDTH + galleryGap)),
+  );
+  const columnWidth =
+    listWidth > 0
+      ? Math.max(1, (listWidth - pageEdge * 2 - galleryGap * (columns - 1)) / columns)
+      : MIN_COLUMN_WIDTH;
   const visibleGalleryItems = useMemo(
     () =>
       pendingDeletionIds.size === 0
@@ -291,7 +292,8 @@ export function DrawingList() {
         ListHeaderComponent={listHeader}
         ListHeaderComponentStyle={styles.header}
         masonry
-        numColumns={2}
+        numColumns={columns}
+        onLayout={onLayout}
         onEndReached={paintings.loadMore}
         onEndReachedThreshold={0.7}
         optimizeItemArrangement

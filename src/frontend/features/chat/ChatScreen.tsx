@@ -11,6 +11,7 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MainHeader } from '@/frontend/appShell/header';
+import { ReadingContentFrame } from '@/frontend/appShell/layout';
 import {
   type ChatRouteParamsInput,
   type ChatTarget,
@@ -46,7 +47,9 @@ export function ChatScreen() {
         {/* Android samples the target's children, so paint the chat background
             inside it even when the draft or loading state has no message list. */}
         <View className="flex-1 bg-chat-background">
-          <ChatRouteContent />
+          <ReadingContentFrame>
+            <ChatRouteContent />
+          </ReadingContentFrame>
         </View>
       </BlurTargetView>
       <MainHeader blurTarget={blurTargetRef} />

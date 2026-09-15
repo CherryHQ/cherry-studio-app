@@ -86,18 +86,21 @@ resolved semantic colors, including user bubbles, code surfaces and secondary te
 page freezes width, typography and export time at opening. Theme changes regenerate the preview;
 the active presentation is held while saving or delivering so the current file cannot be replaced. Programmatic input presentation is validated and copied by the HTML renderer.
 
-Image presentation may also supply an `imageFrame` with resolved frame/text colors, an embedded PNG
-logo, brand name, localized label and timestamp. These are presentation data, independent of the source
-document. The renderer copies and validates them, escapes text, and includes the complete frame
-inside the measured and captured `main` element. The frontend supplies this treatment only for the
-image target; Markdown and HTML retain their existing document representations.
+HTML and image presentation may supply a shared `signature` with a resolved text color, embedded PNG
+logo, brand name and timestamp. Images may also supply an `imageFrame` with a resolved background
+color and localized label. These are presentation data, independent of the source document. The
+renderer copies and validates them, escapes text, and includes the signature after the content
+inside `main`. The frontend supplies the signature for both HTML and images, including image-to-HTML
+fallbacks; the frame is image-only. HTML keeps its conversation hierarchy. Markdown targets accept
+the same brand name and timestamp for a separated text signature, without theme colors or logo bytes.
 
 Every artifact contains one file descriptor. Markdown/HTML artifacts also contain their source
 text; image artifacts contain their width and height. Artifacts also contain structured
 image/formula issues. Artifacts and file descriptors are frozen.
 The session admits one operation at a time, including saving, and accepts only its current artifact
 for persistence. A new completed render replaces the previous temporary output. Rendering Markdown
-again reuses its current file and saved entry while they remain available.
+again reuses its current file and saved entry while they remain available and the complete text,
+including the signature, matches.
 
 ## Output Behavior
 
@@ -121,6 +124,10 @@ protocol and blocks navigation, file access, cookies and new windows.
 Markdown is source text rather than a reconstruction of rendered HTML. Authored Markdown remains
 unchanged; generated metadata and structured blocks are escaped. Managed image/attachment blocks
 do not expose sandbox paths.
+The export page appends a horizontal rule and one row with the bold brand name and frozen export
+time. Its native preview and `.md` artifact share the same Markdown signature formatter, including
+when another format falls back to Markdown. `session.markdown` remains the unbranded source text;
+the optional target signature is applied when the artifact is rendered.
 
 Chat HTML follows the native message hierarchy: 16-point gutters, an 88%-width user column,
 question attachments above the bubble, compact assistant labels, and full-width answers. They omit
@@ -252,9 +259,9 @@ delivered or cancelled, so both outcomes return to the chat. The preview is an i
 fullscreen modal using the application theme and its own close action.
 Two or more selected messages default to HTML and offer only HTML and Markdown in the format menu.
 A single selected message defaults to PNG and offers all three formats. The request preserves this
-format policy when thinking content is toggled. Images include straight
-theme-aware margins, conversation content and a compact signature: the Cherry Studio name on the left,
-with the Cherry logo, a fine vertical divider and local export time on the right. The timestamp uses
+format policy when thinking content is toggled. Images include straight theme-aware margins and
+conversation content. Both HTML and images end with a compact signature: the Cherry Studio name on
+the left, with the Cherry logo, a fine vertical divider and local export time on the right. The timestamp uses
 `YYYY.MM.DD HH:mm` and is frozen at opening across both document snapshots and format changes.
 The baseline signature area is 44 logical points and can grow for larger or wrapped text. The displayed
 preview uses the generated image, including the selected message and branding, and scrolls

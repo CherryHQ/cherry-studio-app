@@ -33,15 +33,13 @@ export function DocumentParserSetting() {
 
   return (
     <>
-      <Section>
-        <Section.SelectItem
-          label={t('settings.documentParser.title')}
-          leading={<FileTextIcon className="size-4 text-foreground" />}
-          onPress={() => setIsPickerOpen(true)}
-          testID="settings-document-parser"
-          value={t(`settings.documentParser.${mode}`)}
-        />
-      </Section>
+      <Section.SelectItem
+        label={t('settings.documentParser.title')}
+        leading={<FileTextIcon className="size-4 text-foreground" />}
+        onPress={() => setIsPickerOpen(true)}
+        testID="settings-document-parser"
+        value={t(`settings.documentParser.${mode}`)}
+      />
       <OptionPickerBottomSheet<DocumentParserMode>
         onClose={() => setIsPickerOpen(false)}
         onValueChange={changeMode}

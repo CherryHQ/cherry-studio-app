@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 
 import { headerScreenOptions } from '@/frontend/appShell/header';
+import { FormContentFrame } from '@/frontend/appShell/layout';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 export default function OnboardingLayout() {
@@ -8,6 +9,7 @@ export default function OnboardingLayout() {
 
   return (
     <Stack
+      screenLayout={FormContentFrame}
       screenOptions={{
         ...headerScreenOptions,
         headerTintColor: foregroundColor,

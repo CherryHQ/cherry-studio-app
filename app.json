@@ -2,12 +2,14 @@
   "expo": {
     "name": "Cherry Studio",
     "slug": "cherry-studio",
-    "version": "0.0.1",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "cherrystudio",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "supportsTablet": true,
+      "requireFullScreen": false,
       "icon": "./assets/icon.png",
       "bundleIdentifier": "com.cherryai.cherrystudio-app",
       "appleTeamId": "87242QY66T",
@@ -59,6 +61,12 @@
         "com.apple.security.application-groups": ["group.com.cherryai.cherrystudio-app"]
       },
       "infoPlist": {
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
         "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add calendar events when you ask the assistant.",
         "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant.",
         "NSHealthUpdateUsageDescription": "Cherry Studio reads selected Apple Health data to answer your health and fitness questions. It does not save or modify data in Apple Health.",
@@ -116,6 +124,7 @@
         }
       ],
       "./scripts/withAndroidBackgroundGeneration.js",
+      "./scripts/withTabletOrientation.js",
       [
         "@sentry/react-native/expo",
         {

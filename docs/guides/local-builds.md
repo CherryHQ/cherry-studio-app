@@ -99,6 +99,14 @@ removing a plugin from app config does not clean its hooks out of an existing na
 Successful compilation alone does not verify production Sentry event delivery or source-map
 matching; those require a separate runtime check.
 
+## Tablet Device Configuration
+
+`app.json` enables iPad support and all iPad orientations while retaining iPhone portrait behavior.
+`scripts/withTabletOrientation.js` writes Android orientation resources during native generation:
+phones use portrait, while `values-sw600dp` lets the system choose; the activity remains resizable.
+Rebuild the development client to receive these native changes. They cannot be delivered by a
+JavaScript update alone.
+
 ## Expo 57 Dependency Baseline
 
 The project uses Expo 57.0.21 and React Native 0.86.3, which includes Hermes V1
