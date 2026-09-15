@@ -1,9 +1,8 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { ActionMenu, ContentState, type MenuItem } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
-import { Link, useGlobalSearchParams, usePathname } from 'expo-router';
+import { useGlobalSearchParams, usePathname } from 'expo-router';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -314,63 +313,44 @@ function SidebarAgentRow({
   agent: Agent;
   isDefaultExpanded: boolean;
 }) {
-  const { t } = useTranslation();
   // The current Agent can resolve after mount; explicit toggles take precedence over that default.
   const [isExpandedOverride, setIsExpandedOverride] = useState<boolean>();
   const isExpanded = isExpandedOverride ?? isDefaultExpanded;
-  const { closeDrawer } = useSidebarActions('Sidebar agent row');
-  const href = chatHref({ agentId: agent.id, kind: 'draft' });
 
   return (
     <View testID={`sidebar-agent-group-${agent.id}`}>
-      <View className="flex-row items-center px-2">
-        {/* Native Views own geometry: RNGH's raw button does not resolve className layout. */}
-        <View className="min-w-0 flex-1">
-          <Pressable
-            accessibilityLabel={agent.name}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: isExpanded }}
-            className="active:bg-sidebar-accent"
-            onPress={() => setIsExpandedOverride((current) => !(current ?? isDefaultExpanded))}
-            testID={`sidebar-agent-${agent.id}`}
+      <View className="px-2">
+        <Pressable
+          accessibilityLabel={agent.name}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: isExpanded }}
+          className="active:bg-sidebar-accent"
+          onPress={() => setIsExpandedOverride((current) => !(current ?? isDefaultExpanded))}
+          testID={`sidebar-agent-${agent.id}`}
+        >
+          <SidebarRowContent
+            leading={
+              <SidebarAgentIconSlot>
+                <AgentAvatar
+                  accessibilityLabel={agent.name}
+                  avatar={agent.avatar}
+                  name={agent.name}
+                  size={SIDEBAR_LEADING_SIZE}
+                  uri={agent.avatarUri}
+                />
+              </SidebarAgentIconSlot>
+            }
           >
-            <SidebarRowContent
-              leading={
-                <SidebarAgentIconSlot>
-                  <AgentAvatar
-                    accessibilityLabel={agent.name}
-                    avatar={agent.avatar}
-                    name={agent.name}
-                    size={SIDEBAR_LEADING_SIZE}
-                    uri={agent.avatarUri}
-                  />
-                </SidebarAgentIconSlot>
-              }
-            >
-              <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-                {agent.name}
-              </Text>
-              {isExpanded ? (
-                <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
-              ) : (
-                <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
-              )}
-            </SidebarRowContent>
-          </Pressable>
-        </View>
-        <Link asChild href={href}>
-          <Pressable
-            accessibilityLabel={`${agent.name}: ${t('navigation.newChat')}`}
-            accessibilityRole="link"
-            className="active:bg-sidebar-accent"
-            onPress={closeDrawer}
-            testID={`sidebar-agent-new-chat-${agent.id}`}
-          >
-            <View className="size-11 items-center justify-center">
-              <PlusIcon className="size-4 text-muted-foreground" />
-            </View>
-          </Pressable>
-        </Link>
+            <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+              {agent.name}
+            </Text>
+            {isExpanded ? (
+              <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+            )}
+          </SidebarRowContent>
+        </Pressable>
       </View>
       {isExpanded ? (
         <SessionListProvider agentId={agent.id}>
