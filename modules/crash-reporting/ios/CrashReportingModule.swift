@@ -5,7 +5,8 @@ import Sentry
 public class CrashReportingModule: Module {
   public func definition() -> ModuleDefinition {
     Name("CrashReporting")
-    Function("configure") {
+    // Consent lookup, cache cleanup, and SDK startup do disk work; keep them off the JS thread.
+    AsyncFunction("configure") {
       (dsn: String, isProduction: Bool, version: String) throws -> [String: Bool] in
       try CrashReportingState.shared.configure(
         dsn: dsn, isProduction: isProduction, version: version)
@@ -20,19 +21,22 @@ public class CrashReportingModule: Module {
 private final class CrashReportingState {
   static let shared = CrashReportingState()
   private let controlLock = NSLock()
-  private let lock = NSLock()
-  private var consentVersion = ""
-  private var consentToken = ""
-  private var activeToken = ""
+  private let gateLock = NSLock()
   private var configured = false
-  private var session: URLSession?
+  private var consentVersion = ""
+  private var dsn = ""
+  private var canCapture = false
+  // Read by SDK callbacks under gateLock; written only while holding controlLock.
+  private var granted = false
+  private var active = false
 
   func configure(dsn: String, isProduction: Bool, version: String) throws -> [String: Bool] {
     controlLock.lock()
     defer { controlLock.unlock() }
-    let canCapture = isProduction && !dsn.isEmpty
+    self.dsn = dsn
+    canCapture = isProduction && !dsn.isEmpty
     if configured {
-      if version != consentVersion || (!canCapture && status()["active"] == true) {
+      if version != consentVersion || (!canCapture && isActive) {
         consentVersion = version
         try revoke()
       }
@@ -40,15 +44,15 @@ private final class CrashReportingState {
     }
     configured = true
     consentVersion = version
-    let saved =
-      (try? String(contentsOf: consentFile(), encoding: .utf8))?.components(
-        separatedBy: "\n") ?? []
-    if saved.count == 2, saved[0] == version, UUID(uuidString: saved[1]) != nil {
-      lock.withLock { consentToken = saved[1] }
+    if (try? String(contentsOf: consentFile(), encoding: .utf8)) == version {
+      setGate(granted: true, active: false)
+    } else {
+      // Nothing recorded without a grant for this disclosure may be sent, including legacy reports.
+      try removeConsentFile()
+      try cleanCaches()
     }
-    try cleanCaches(keeping: canCapture ? consentToken : "")
-    if canCapture && !consentToken.isEmpty {
-      start(dsn: dsn, token: consentToken)
+    if isGranted && canCapture {
+      start()
     }
     return status()
   }
@@ -56,42 +60,39 @@ private final class CrashReportingState {
   func setConsent(_ enabled: Bool) throws -> [String: Bool] {
     controlLock.lock()
     defer { controlLock.unlock() }
-    if enabled {
-      if lock.withLock({ consentToken.isEmpty }) {
-        let token = UUID().uuidString
-        try "\(consentVersion)\n\(token)".write(
-          to: consentFile(), atomically: true, encoding: .utf8)
-        lock.withLock { consentToken = token }
-      }
-    } else {
+    if !enabled {
       try revoke()
+      return status()
     }
-    // Enabling never restarts the SDK in this process. Old callbacks cannot inherit new consent.
+    if !isGranted {
+      try consentVersion.write(to: consentFile(), atomically: true, encoding: .utf8)
+      setGate(granted: true, active: isActive)
+    }
+    if canCapture && !isActive {
+      start()
+    }
     return status()
   }
 
   private func revoke() throws {
-    lock.withLock {
-      consentToken = ""
-      activeToken = ""
-    }
-    // Invalidating the dedicated session also cancels requests already queued by Sentry.
-    session?.invalidateAndCancel()
-    session = nil
+    // The gates close before SDK shutdown and disk cleanup.
+    setGate(granted: false, active: false)
     SentrySDK.close()
-    let file = try consentFile()
-    if FileManager.default.fileExists(atPath: file.path) {
-      try FileManager.default.removeItem(at: file)
-    }
-    try cleanCaches(keeping: "")
+    try removeConsentFile()
+    try cleanCaches()
   }
 
   func status() -> [String: Bool] {
-    lock.withLock {
-      [
-        "enabled": !consentToken.isEmpty,
-        "active": !activeToken.isEmpty && activeToken == consentToken,
-      ]
+    gateLock.withLock { ["enabled": granted, "active": active && granted] }
+  }
+
+  private var isGranted: Bool { gateLock.withLock { granted } }
+  private var isActive: Bool { gateLock.withLock { active } }
+
+  private func setGate(granted: Bool, active: Bool) {
+    gateLock.withLock {
+      self.granted = granted
+      self.active = active
     }
   }
 
@@ -107,38 +108,35 @@ private final class CrashReportingState {
     return directory.appendingPathComponent("consent")
   }
 
+  private func removeConsentFile() throws {
+    let file = try consentFile()
+    if FileManager.default.fileExists(atPath: file.path) {
+      try FileManager.default.removeItem(at: file)
+    }
+  }
+
   private var caches: URL {
     FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
   }
 
-  private func cleanCaches(keeping token: String) throws {
-    let root = caches.appendingPathComponent("cherry-crash-reporting", isDirectory: true)
-    if FileManager.default.fileExists(atPath: root.path) {
-      for item in try FileManager.default.contentsOfDirectory(
-        at: root, includingPropertiesForKeys: nil) where item.lastPathComponent != token
-      {
-        try FileManager.default.removeItem(at: item)
-      }
-    }
-    // Reports from the old, unconditional initialization have no recorded consent.
-    for name in ["io.sentry", "SentryCrash"] {
-      let legacy = caches.appendingPathComponent(name)
-      if FileManager.default.fileExists(atPath: legacy.path) {
-        try FileManager.default.removeItem(at: legacy)
-      }
+  private var cacheDirectory: URL {
+    caches.appendingPathComponent("cherry-crash-reporting", isDirectory: true)
+  }
+
+  private func cleanCaches() throws {
+    // io.sentry and SentryCrash hold reports from the old, unconditional initialization.
+    let directories = [cacheDirectory] + ["io.sentry", "SentryCrash"].map(caches.appendingPathComponent)
+    for directory in directories where FileManager.default.fileExists(atPath: directory.path) {
+      try FileManager.default.removeItem(at: directory)
     }
   }
 
-  private func start(dsn: String, token: String) {
-    let transportSession = URLSession(configuration: .ephemeral)
-    session = transportSession
-    lock.withLock { activeToken = token }
+  private func start() {
+    setGate(granted: true, active: true)
     SentrySDK.start { options in
-      options.dsn = dsn
+      options.dsn = self.dsn
       options.environment = "production"
-      options.cacheDirectoryPath =
-        self.caches.appendingPathComponent("cherry-crash-reporting/\(token)").path
-      options.urlSession = transportSession
+      options.cacheDirectoryPath = self.cacheDirectory.path
       options.sendDefaultPii = false
       options.experimental.enableLogs = false
       options.sendClientReports = false
@@ -154,16 +152,12 @@ private final class CrashReportingState {
       options.attachScreenshot = false
       options.attachViewHierarchy = false
       options.beforeSend = { [weak self] event in
-        guard let self,
-          self.lock.withLock({ self.activeToken == token && self.consentToken == token })
-        else { return nil }
+        guard let self, self.gateLock.withLock({ self.active && self.granted }) else { return nil }
         return sanitizeCrashEvent(event)
       }
     }
     if !SentrySDK.isEnabled {
-      lock.withLock { activeToken = "" }
-      transportSession.invalidateAndCancel()
-      session = nil
+      setGate(granted: true, active: false)
     }
   }
 }

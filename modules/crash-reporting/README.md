@@ -7,26 +7,28 @@ implement its own crash recorder or upload protocol.
 
 ## Native ownership
 
-- `configure` receives the production/DSN gate and disclosure version at root-layout startup.
-  Only an existing grant for that version enables native initialization. Android manifest auto-init
-  and React Native's JS-driven native initialization are disabled.
+- `configure` receives the production/DSN gate and disclosure version at root-layout startup and
+  runs asynchronously off the JS thread, because it reads consent, removes stale caches, and may
+  start the SDK. Only an existing grant for that version enables native initialization. Android
+  manifest auto-init and React Native's JS-driven native initialization are disabled.
+- JavaScript envelopes arrive through React Native's `captureEnvelope` and go straight to the
+  transport on both platforms; the native `beforeSend` filters below only see native events. The
+  Android transport gate still applies to them; on iOS, stopping the SDK on revocation drops them.
 - A process-wide owner survives Expo module recreation during JS reloads. A running grant is
   revoked if a reload changes the disclosure version or removes the production/DSN gate.
-- `setConsent(true)` atomically persists the version and a new UUID. It does not initialize or
-  restart the SDK; the next launch does that. The UUID only selects a local cache directory.
-- `setConsent(false)` closes capture/sending gates before shutdown, removes the grant and pending
-  caches, and never reactivates the SDK during the current process. A version change during a JS
-  reload also revokes the running SDK.
+- `setConsent(true)` persists the disclosure version (Android also persists the grant time) and, in
+  production builds, starts the SDK at once. `setConsent(false)` closes the capture and transport
+  gates, stops the SDK, deletes the grant, and removes the report cache. Both may repeat within one
+  process; the gates are plain flags read by every SDK callback.
 - iOS stores the grant in an Application Support directory excluded from backups. Android uses an
   `AtomicFile` under `noBackupFilesDir`. Neither depends on app SQLite, preference hydration, or
   exported app data.
-- Native caches are isolated by grant. Startup removes other grant directories and pre-consent
-  legacy Sentry caches. A write arriving after revocation cannot be replayed under a new grant.
-- Android also persists when capture first became active for the grant and rejects older events.
-  This prevents Android's system ANR history from backfilling an interval when Sentry was disabled.
-- iOS owns a dedicated ephemeral `URLSession` that is invalidated on revocation. Android combines
-  consent with Sentry's connection-status provider at the transport gate. In-flight Android network
-  requests can finish; already transmitted data cannot be withdrawn.
+- The SDK cache lives in one app-owned directory. Startup without a current grant deletes it along
+  with pre-consent legacy Sentry caches, so nothing written while revoked can be replayed later.
+- Android persists when the grant began and rejects older events. This prevents Android's system
+  ANR history from backfilling an interval when reporting was disabled.
+- Android combines consent with Sentry's connection-status provider at the transport gate. Requests
+  already handed to the network can finish; already transmitted data cannot be withdrawn.
 
 Sentry React Native 7.11.0 uses Cocoa 8.58.0 and Android 8.31.0. The podspec and Gradle dependency
 match those versions. Recheck the native APIs and update the version guard when upgrading Sentry.
@@ -34,10 +36,11 @@ Use a newly built native client after changing this module; Metro/OTA cannot ins
 
 ## Data boundaries
 
-Both native filters construct a new structured event containing stack/symbolication information,
-error classification, release/environment, and selected OS/device categories. Free-form messages,
-request data, user identity, arbitrary metadata, source context, locals, and thread names are
-discarded. JavaScript duplicate exceptions emitted by React Native's native bridge are excluded.
+Both native filters delete free-form fields from the structured event in place: messages, request
+data, user identity, extras, breadcrumbs, modules, fingerprints, source context, locals, thread
+names, and every context except selected OS/device fields. Exception types, stack symbols,
+release/environment, and debug images stay as the SDK produced them. JavaScript duplicate exceptions
+emitted by React Native's native bridge are excluded.
 
 Android NDK minidumps are retained to preserve native crash reporting. They can contain portions of
 process memory, outside the reach of structured `beforeSend` filtering. The user-facing disclosure

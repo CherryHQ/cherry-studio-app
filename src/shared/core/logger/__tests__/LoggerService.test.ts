@@ -32,25 +32,46 @@ describe('LoggerService error reporting', () => {
       operation: 'job.recover',
     });
     expect(consoleError).not.toHaveBeenCalled();
-    child.error('context only', { error, responseBody: 'private-response' });
-    child.warn('warning', error);
+    child.error('context only', { error, operation: 'job.recover', responseBody: 'private' });
+    child.warn('warning', error, { operation: 'job.recover' });
     expect(reporter).toHaveBeenCalledTimes(1);
 
     dispose();
-    child.error('after disposal', error);
+    child.error('after disposal', error, { operation: 'job.recover' });
     expect(reporter).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps error logs local unless the call site names a fixed operation', () => {
+    const root = new LoggerService();
+    const reporter = jest.fn();
+    root.setErrorReporter(reporter);
+    const error = new Error('provider request failed');
+
+    root.withContext('ProviderClient').error('request failed', error);
+    root.withContext('ProviderClient').error('request failed', error, { status: 500 });
+    root.withContext('ProviderClient').error('request failed', error, { operation: 42 });
+    expect(reporter).not.toHaveBeenCalled();
+
+    root.withContext('Startup', { operation: 'app.initialize' }).error('boot failed', error);
+    expect(reporter).toHaveBeenCalledWith(error, {
+      module: 'Startup',
+      operation: 'app.initialize',
+    });
   });
 
   test('isolates reporting failures and prevents recursive reporting', () => {
     const root = new LoggerService();
+    const context = { operation: 'job.finalize.persist' };
     const reporter = jest.fn(() => {
-      root.error('reporter failed', new Error('nested error'));
+      root.error('reporter failed', new Error('nested error'), context);
       throw new Error('reporting failed');
     });
     root.setErrorReporter(reporter);
-    expect(() => root.error('original operation', new Error('original error'))).not.toThrow();
+    expect(() =>
+      root.error('original operation', new Error('original error'), context),
+    ).not.toThrow();
     expect(reporter).toHaveBeenCalledTimes(1);
-    root.error('next operation', new Error('next error'));
+    root.error('next operation', new Error('next error'), context);
     expect(reporter).toHaveBeenCalledTimes(2);
   });
 });

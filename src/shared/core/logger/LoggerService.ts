@@ -4,7 +4,7 @@ type LogContext = Record<string, unknown>;
 type NullableObject = LogContext | undefined | null;
 type LogContextData = [] | [Error | NullableObject] | [Error | NullableObject, ...NullableObject[]];
 
-type ErrorReporter = (error: Error, context: { module: string; operation?: string }) => void;
+type ErrorReporter = (error: Error, context: { module: string; operation: string }) => void;
 
 const LEVEL = {
   ERROR: 'error',
@@ -96,22 +96,17 @@ export class LoggerService {
     }
 
     const error = data[0];
-    if (
-      level === LEVEL.ERROR &&
-      error instanceof Error &&
-      error.stack &&
-      this.reporting.reporter &&
-      !this.reporting.isReporting
-    ) {
-      const operation = [this.context, ...data.slice(1)]
-        .map((entry) => (entry && !(entry instanceof Error) ? entry.operation : undefined))
-        .find((value) => typeof value === 'string');
+    // Only error logs that carry a real stack and name a fixed operation opt into reporting.
+    const operation =
+      level === LEVEL.ERROR && error instanceof Error && error.stack
+        ? [this.context, ...data.slice(1)]
+            .map((entry) => (entry && !(entry instanceof Error) ? entry.operation : undefined))
+            .find((value): value is string => typeof value === 'string')
+        : undefined;
+    if (operation !== undefined && this.reporting.reporter && !this.reporting.isReporting) {
       this.reporting.isReporting = true;
       try {
-        this.reporting.reporter?.(error, {
-          module: this.module,
-          operation: typeof operation === 'string' ? operation : undefined,
-        });
+        this.reporting.reporter(error as Error, { module: this.module, operation });
       } catch {
         // Diagnostics must never break the operation being logged or recursively report itself.
       } finally {

@@ -1562,12 +1562,12 @@
   "documentExport.resume": "Continue generation",
   "settings.privacy.title": "Error and crash reports",
   "settings.privacy.sendReports": "Send error and crash reports",
-  "settings.privacy.description": "When enabled, error types, stack traces, app versions, and system and device types are sent to Sentry to help diagnose problems. Chat content, model requests or responses, tool arguments, and credentials are not intentionally attached. Enabling takes effect on the next launch. Disabling stops subsequent reporting and clears pending reports.",
+  "settings.privacy.description": "When enabled, error types, stack traces, app versions, and system and device types are sent to Sentry to help diagnose problems. Chat content, model requests or responses, tool arguments, and credentials are not intentionally attached. Disabling stops subsequent reporting and clears pending reports.",
   "settings.privacy.nativeDisclosure": "Native crash reports include threads and low-level diagnostics. Android native dumps can also include parts of process memory, so complete anonymity cannot be guaranteed. Reports are sent to the third-party Sentry service. This switch only controls error and crash reports, not performance metrics from the app update service.",
   "settings.privacy.status": "Reporting status",
   "settings.privacy.active": "Active for this launch",
   "settings.privacy.disabled": "Disabled",
-  "settings.privacy.restartRequired": "Consented; effective on next launch (production builds only)",
+  "settings.privacy.productionOnly": "Consented; reports are only sent from production builds",
   "settings.privacy.unavailable": "This installed version does not support this setting",
   "settings.privacy.saveFailed": "Could not save your choice. Please retry."
 }

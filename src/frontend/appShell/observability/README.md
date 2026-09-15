@@ -20,39 +20,45 @@ session tracking, breadcrumbs, screenshots, view hierarchies, and log streaming 
 ### Consent
 
 Settings → Error and crash reports owns the disclosure and user choice. New installs and upgrades
-without a matching grant default to off. A grant consists of `SENTRY_CONSENT_VERSION` plus a random
-local cache identifier; neither value is sent as user identity. The native module stores this
-outside SQLite and excludes it from backups, so database startup failures do not prevent reading
-an existing grant. This is consent to the displayed diagnostics scope, not acceptance of a complete
+without a matching grant default to off. A grant is the stored `SENTRY_CONSENT_VERSION`; Android
+also stores when the grant began so older system ANR history is rejected. The native module stores
+this outside SQLite and excludes it from backups, so database startup failures do not prevent
+reading an existing grant. This is consent to the displayed diagnostics scope, not acceptance of a complete
 legal privacy policy. Bump the version when that scope changes.
 
-Enabling takes effect on the next app launch. Disabling closes the JS gate immediately, revokes the
-native gate, stops the SDK, and removes pending native reports. Each new grant gets a new cache
-directory. Old requests and caches cannot acquire a later grant in the same process. iOS cancels
-its dedicated URL session; Android checks consent before each queued send. Data already transmitted
-cannot be recalled, and an Android request already in flight may finish. Persistence/cleanup
-failures are shown in settings. Native revocation closes its gate before disk operations; if the
+Enabling starts native and JavaScript reporting immediately in production builds; other builds only
+record the choice. Disabling closes the JS gate immediately, revokes the native gate, stops the SDK,
+deletes the grant, and removes the pending report cache. Android also checks consent before each
+queued send. A request already handed to the network may finish, and data already transmitted
+cannot be recalled. Startup without a current grant deletes any cache left behind, so a report
+written after revocation is never replayed under a later grant. Persistence/cleanup failures are
+shown in settings. Native revocation closes its gate before disk operations; if the
 bridge call rejects, JS stays paused and the switch restores the last saved choice for retrying.
 
 JavaScript uses `autoInitializeNativeSdk: false`: only the native module may initialize the native
-SDKs. A JS `beforeSend` cannot filter native crashes. Native SDK initialization still happens at the
-root layout's module-scope call, as before; failures before JavaScript reaches that call are outside
-this capture window. Missing native code or unreadable consent fails closed.
+SDKs. A JS `beforeSend` cannot filter native crashes, and JavaScript envelopes reach the native
+transport on both platforms without passing the native `beforeSend`, so `sentryEvent.ts` is the only
+filter for JS events. The root layout's module-scope call starts native configuration, but consent
+lookup, cache cleanup, and native SDK startup run off the JS thread; JavaScript reporting begins when
+they resolve, and the settings switch stays unavailable until then. Failures before that point are
+outside this capture window. Missing native code or unreadable consent fails closed.
 
 ### Payload and error logs
 
-`sentryEvent.ts` constructs JavaScript payloads from allowed fields. Native filters do the same for
-structured crash events. Reports retain error type, stack positions and symbols, build information,
+`sentryEvent.ts` constructs JavaScript payloads from allowed fields. Native filters delete the
+free-form fields from structured crash events instead. Reports retain error type, stack positions and symbols, build information,
 and selected OS/device categories. Free-form exception messages are replaced. Request details,
 user identity, arbitrary contexts, source snippets, locals, log messages, and raw error properties
 are excluded. JS envelopes retain event items only; attachments do not bypass the event filter.
 
-`LoggerService` has a disposable error reporter without a Sentry dependency. Production error logs
-with an actual `Error` and stack can be reported. Only fixed `module` and `operation` tags cross
-that boundary; cancellation errors are excluded. Startup, service initialization, task recovery,
-task finalization, and chat terminal persistence have fixed operation names. Existing service
-initialization errors include database migration failures through their call stacks. Ordinary
-warnings and context-only logs are not uploaded.
+`LoggerService` has a disposable error reporter without a Sentry dependency. Only production error
+logs that pass an actual `Error` with a stack and name a fixed `operation` are reported; every other
+error log stays local. Only the fixed `module` and `operation` tags cross that boundary, and
+cancellation errors are excluded. Startup, service initialization, task recovery, task
+finalization, and chat terminal persistence name their operations today. Existing service
+initialization errors include database migration failures through their call stacks. Adding a call
+site to the upload set means adding an `operation` to its log context; keep the settings disclosure
+accurate when the set grows.
 
 Android NDK minidumps remain necessary for native crash diagnosis and may contain process memory;
 structured event filtering cannot scrub that binary content. Do not claim these reports are fully

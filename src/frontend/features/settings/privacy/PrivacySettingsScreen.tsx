@@ -49,7 +49,7 @@ export default function PrivacySettingsScreen() {
               : active
                 ? 'settings.privacy.active'
                 : enabled
-                  ? 'settings.privacy.restartRequired'
+                  ? 'settings.privacy.productionOnly'
                   : 'settings.privacy.disabled',
           )}
         />
