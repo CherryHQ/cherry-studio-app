@@ -4,7 +4,6 @@
 > ### Branch strategy
 >
 > - Active development targets `main`.
-> - Only CherryHQ internal team members may merge pull requests into `main`.
 
 ### What this PR does
 
