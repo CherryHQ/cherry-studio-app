@@ -224,11 +224,15 @@ export class LifecycleManager {
     const strategy = this.container.getMetadata(serviceName)?.errorStrategy ?? 'graceful';
 
     if (strategy === 'fail-fast') {
-      logger.error(`Service '${serviceName}' failed to initialize (fail-fast)`, error);
+      logger.error(`Service '${serviceName}' failed to initialize (fail-fast)`, error, {
+        operation: 'service.initialize',
+      });
       throw new ServiceInitError(serviceName, error);
     }
 
-    logger.error(`Service '${serviceName}' failed to initialize (continuing)`, error);
+    logger.error(`Service '${serviceName}' failed to initialize (continuing)`, error, {
+      operation: 'service.initialize',
+    });
   }
 
   private async stopService(serviceName: string): Promise<TeardownOutcome> {

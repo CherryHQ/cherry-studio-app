@@ -97,6 +97,11 @@ export default function SettingsScreen() {
               />
             ) : null}
             <Section.Item
+              label={t('settings.privacy.title')}
+              leading={<LockIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/privacy')}
+            />
+            <Section.Item
               label={t('settings.items.permissions')}
               leading={<LockIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/permissions')}
