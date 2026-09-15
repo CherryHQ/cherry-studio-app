@@ -308,18 +308,11 @@
           "notNull": true,
           "autoincrement": false
         },
-        "capability_id": {
-          "name": "capability_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "mcp_server_id": {
           "name": "mcp_server_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "raw_tool_name": {
@@ -378,23 +371,17 @@
           "columns": ["mcp_server_id"],
           "isUnique": false
         },
-        "agent_tool_binding_builtin_uniq": {
-          "name": "agent_tool_binding_builtin_uniq",
-          "columns": ["agent_id", "capability_id"],
-          "isUnique": true,
-          "where": "\"agent_tool_binding\".\"source\" = 'builtin'"
-        },
         "agent_tool_binding_mcp_server_default_uniq": {
           "name": "agent_tool_binding_mcp_server_default_uniq",
           "columns": ["agent_id", "mcp_server_id"],
           "isUnique": true,
-          "where": "\"agent_tool_binding\".\"source\" = 'mcp' AND \"agent_tool_binding\".\"raw_tool_name\" IS NULL"
+          "where": "\"agent_tool_binding\".\"raw_tool_name\" IS NULL"
         },
         "agent_tool_binding_mcp_tool_uniq": {
           "name": "agent_tool_binding_mcp_tool_uniq",
           "columns": ["agent_id", "mcp_server_id", "raw_tool_name"],
           "isUnique": true,
-          "where": "\"agent_tool_binding\".\"source\" = 'mcp' AND \"agent_tool_binding\".\"raw_tool_name\" IS NOT NULL"
+          "where": "\"agent_tool_binding\".\"raw_tool_name\" IS NOT NULL"
         }
       },
       "foreignKeys": {
@@ -413,7 +400,7 @@
       "checkConstraints": {
         "agent_tool_binding_identity_check": {
           "name": "agent_tool_binding_identity_check",
-          "value": "(\n        (\"agent_tool_binding\".\"source\" = 'builtin' AND \"agent_tool_binding\".\"capability_id\" IS NOT NULL AND length(\"agent_tool_binding\".\"capability_id\") > 0 AND \"agent_tool_binding\".\"mcp_server_id\" IS NULL AND \"agent_tool_binding\".\"raw_tool_name\" IS NULL)\n        OR\n        (\"agent_tool_binding\".\"source\" = 'mcp' AND \"agent_tool_binding\".\"capability_id\" IS NULL AND \"agent_tool_binding\".\"mcp_server_id\" IS NOT NULL AND length(\"agent_tool_binding\".\"mcp_server_id\") > 0 AND (\"agent_tool_binding\".\"raw_tool_name\" IS NULL OR length(\"agent_tool_binding\".\"raw_tool_name\") > 0))\n      )"
+          "value": "\"agent_tool_binding\".\"source\" = 'mcp' AND length(\"agent_tool_binding\".\"mcp_server_id\") > 0 AND (\"agent_tool_binding\".\"raw_tool_name\" IS NULL OR length(\"agent_tool_binding\".\"raw_tool_name\") > 0)"
         },
         "agent_tool_binding_approval_check": {
           "name": "agent_tool_binding_approval_check",

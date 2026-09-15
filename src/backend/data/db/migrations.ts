@@ -3,6 +3,7 @@ import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
 // process, mobile runtime cannot read the Drizzle migration folder directly.
+// The initial schema stores only MCP tool bindings.
 // Keep this module in the dependency graph when editing imported `.sql` files:
 // Metro/Babel inline-import can otherwise serve stale inlined SQL from cache.
 export const migrations = {

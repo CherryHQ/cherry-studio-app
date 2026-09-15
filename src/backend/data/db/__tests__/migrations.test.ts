@@ -288,7 +288,6 @@ describe('bundled SQLite migrations', () => {
         'id',
         'agent_id',
         'source',
-        'capability_id',
         'mcp_server_id',
         'raw_tool_name',
         'enabled',
@@ -317,7 +316,6 @@ describe('bundled SQLite migrations', () => {
       expect(indexNames(database, 'agent_tool_binding')).toEqual(
         expect.arrayContaining([
           'agent_tool_binding_agent_id_idx',
-          'agent_tool_binding_builtin_uniq',
           'agent_tool_binding_mcp_server_default_uniq',
           'agent_tool_binding_mcp_server_id_idx',
           'agent_tool_binding_mcp_tool_uniq',
@@ -378,9 +376,6 @@ describe('bundled SQLite migrations', () => {
         INSERT INTO agent (id, name, order_key, created_at, updated_at)
         VALUES ('agent-1', 'Agent', 'a0', 1, 1);
         INSERT INTO agent_tool_binding (
-          id, agent_id, source, capability_id, enabled, approval, created_at, updated_at
-        ) VALUES ('binding-builtin', 'agent-1', 'builtin', 'calendar.read', 1, 'auto', 1, 1);
-        INSERT INTO agent_tool_binding (
           id, agent_id, source, mcp_server_id, enabled, approval, created_at, updated_at
         ) VALUES ('binding-default', 'agent-1', 'mcp', 'server-1', 1, 'ask', 1, 1);
         INSERT INTO agent_tool_binding (
@@ -406,15 +401,43 @@ describe('bundled SQLite migrations', () => {
       expect(() =>
         database.exec(`
           INSERT INTO agent_tool_binding (
-            id, agent_id, source, capability_id, mcp_server_id, enabled, approval, created_at, updated_at
-          ) VALUES ('binding-mixed', 'agent-1', 'builtin', 'calendar.write', 'server-1', 1, 'ask', 1, 1);
+            id, agent_id, source, mcp_server_id, raw_tool_name, enabled, approval, created_at, updated_at
+          ) VALUES ('binding-tool-duplicate', 'agent-1', 'mcp', 'server-1', 'write', 1, 'ask', 1, 1);
+        `),
+      ).toThrow(/UNIQUE/);
+      expect(() =>
+        database.exec(`
+          INSERT INTO agent_tool_binding (
+            id, agent_id, source, enabled, approval, created_at, updated_at
+          ) VALUES ('binding-missing-server', 'agent-1', 'mcp', 1, 'ask', 1, 1);
+        `),
+      ).toThrow(/NOT NULL/);
+      for (const [serverId, rawToolName] of [
+        ['', null],
+        ['server-2', ''],
+      ] as const) {
+        expect(() =>
+          database
+            .prepare(`
+            INSERT INTO agent_tool_binding (
+              id, agent_id, source, mcp_server_id, raw_tool_name, enabled, approval, created_at, updated_at
+            ) VALUES ('binding-empty-identity', 'agent-1', 'mcp', ?, ?, 1, 'ask', 1, 1)
+          `)
+            .run(serverId, rawToolName),
+        ).toThrow(/agent_tool_binding_identity_check/);
+      }
+      expect(() =>
+        database.exec(`
+          INSERT INTO agent_tool_binding (
+            id, agent_id, source, mcp_server_id, enabled, approval, created_at, updated_at
+          ) VALUES ('binding-builtin', 'agent-1', 'builtin', 'server-2', 1, 'ask', 1, 1);
         `),
       ).toThrow(/agent_tool_binding_identity_check/);
       expect(() =>
         database.exec(`
           INSERT INTO agent_tool_binding (
-            id, agent_id, source, capability_id, enabled, approval, created_at, updated_at
-          ) VALUES ('binding-unsafe', 'agent-1', 'builtin', 'calendar.write', 1, 'always', 1, 1);
+            id, agent_id, source, mcp_server_id, enabled, approval, created_at, updated_at
+          ) VALUES ('binding-unsafe', 'agent-1', 'mcp', 'server-2', 1, 'always', 1, 1);
         `),
       ).toThrow(/agent_tool_binding_approval_check/);
       // A second unsettled assistant row in the same session is the reservation

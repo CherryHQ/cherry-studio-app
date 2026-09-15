@@ -221,8 +221,7 @@ initial download fails.
 
 Complete, validated snapshots occupy two alternating files in persistent document storage. Writes
 replace the inactive slot, preserving the active snapshot even when the filesystem's overwrite/move
-is interrupted. Startup can fall back to the previous valid slot. Legacy cache snapshots migrate
-after validation, without depending on the old bundled catalog version. Mounted model projections
+is interrupted. Startup can fall back to the previous valid slot. Mounted model projections
 refresh after activation. User-model overrides and custom records are never rewritten by catalog
 updates; unset preset fields inherit the current snapshot.
 
