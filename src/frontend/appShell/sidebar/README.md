@@ -27,6 +27,7 @@ can stay open, and explicit toggles take precedence over the default. Only expan
 Sessions by their Agent id, show ten initially, and own independent "Load more" actions.
 Conversation rows retain selection, status, navigation, rename, and deletion. The adjacent plus
 action opens a new chat for that Agent, including when the group is collapsed or has no Sessions.
-Agent names, conversation titles in both list modes, and pagination actions share one row layout
-and text column. Conversation and pagination rows keep the avatar column empty rather than adding
-group indentation; selection surfaces keep the same outer gutters across groups.
+Within Agent groups, Agent names, conversation titles, and pagination actions share one text
+column. Grouped conversation and pagination rows keep the avatar column empty; the ordinary
+conversation list has no avatar column and retains its original left gutter. Selection surfaces
+keep the same outer gutters across groups.
