@@ -2,11 +2,11 @@ import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import SquareArrowOutUpRightIcon from '@cherrystudio/app-icons/icons/square-arrow-out-up-right';
-import { ActionMenu, Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { useBackendModule } from '@/frontend/data';
@@ -14,7 +14,8 @@ import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { PluginDisconnectResult } from '@/shared/contracts/plugins';
 import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 
-import { PluginIcon } from '../components/PluginIcon';
+import { PluginIdentity } from '../components/PluginIdentity';
+import { PluginPage } from '../components/PluginPage';
 import { usePluginCatalog } from '../usePluginCatalog';
 import { usePluginConnections, useRefreshPluginConnections } from '../usePluginConnections';
 
@@ -42,6 +43,9 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
   const name = entry ? t(`plugins.catalog.${pluginId}.name`) : pluginId;
   const connectionStatus = connection?.authorization?.status ?? 'connected';
   const managementUrl = connection?.authorization?.managementUrl;
+  const isLoading = catalog.isLoading || connections.isLoading;
+  const hasLoadError =
+    (catalog.isError && !catalog.data) || (connections.isError && !connections.data);
 
   async function disconnect() {
     setIsDisconnecting(true);
@@ -58,197 +62,200 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
     }
   }
 
-  if (catalog.isLoading || connections.isLoading)
-    return <ContentState.Loading title={t('plugins.loading')} />;
-  if (catalog.isError || connections.isError)
-    return (
-      <ContentState.Error
-        title={t('plugins.loadFailed')}
-        primaryAction={{
-          children: t('common.retry'),
-          onPress: () => void Promise.all([catalog.refetch(), connections.refetch()]),
-        }}
-      />
-    );
-  if (!entry && !connection) return <ContentState.Empty title={t('plugins.notFound')} />;
-
   return (
     <>
-      <RouteHeader title={name} />
-      <ScrollView
-        className="flex-1 bg-background"
-        contentContainerClassName="gap-6 px-6 py-6"
-        contentInsetAdjustmentBehavior="automatic"
+      <RouteHeader
+        title={name}
+        rightActions={
+          connection
+            ? [
+                {
+                  key: 'connection-actions',
+                  type: 'menu',
+                  icon: EllipsisIcon,
+                  accessibilityLabel: t('common.more'),
+                  disabled: isDisconnecting,
+                  testID: 'plugin-connection-actions',
+                  items: [
+                    ...(managementUrl
+                      ? [
+                          {
+                            id: 'manage-authorization',
+                            label: t('plugins.authorization.manageAuthorization'),
+                            onPress: () => void openExternalUrl(managementUrl),
+                          },
+                        ]
+                      : []),
+                    {
+                      id: 'plugin-disconnect',
+                      label: t('plugins.disconnect'),
+                      destructive: true,
+                      disabled: isDisconnecting,
+                      onPress: () =>
+                        alert.confirm({
+                          title: t('plugins.disconnectTitle', { name }),
+                          description: t('plugins.disconnectMessage'),
+                          confirmLabel: t('plugins.disconnect'),
+                          role: 'destructive',
+                          onConfirm: () => void disconnect(),
+                        }),
+                    },
+                  ],
+                },
+              ]
+            : undefined
+        }
+      />
+      <PluginPage
         testID={`plugin-detail-${pluginId}`}
+        footer={
+          hasLoadError ? (
+            <Button
+              size="lg"
+              onPress={() => void Promise.all([catalog.refetch(), connections.refetch()])}
+            >
+              {t('common.retry')}
+            </Button>
+          ) : entry && !isLoading ? (
+            <Button
+              size="lg"
+              disabled={isDisconnecting}
+              onPress={() =>
+                router.push({ pathname: '/plugins/[pluginId]/connect', params: { pluginId } })
+              }
+              testID={connection ? 'plugin-reconnect' : 'plugin-add'}
+            >
+              {t(connection ? 'plugins.reconnect' : 'plugins.connect')}
+            </Button>
+          ) : null
+        }
       >
-        <View className="gap-3">
-          <View className="flex-row items-center gap-3">
-            <PluginIcon icon={entry?.icon} size="large" />
-            <Text className="flex-1 text-2xl font-semibold text-foreground">{name}</Text>
-          </View>
-          <Text className="text-sm text-muted-foreground">
-            {entry
-              ? t(`plugins.catalog.${pluginId}.description`)
-              : t('plugins.unavailableDescription')}
-          </Text>
-        </View>
-        {disconnectResult?.revocation === 'unconfirmed' && !connection ? (
-          <View className="gap-3">
-            <Text className="text-sm text-muted-foreground">
-              {t('plugins.authorization.revocationUnconfirmed')}
-            </Text>
-            {disconnectResult.managementUrl ? (
-              <Button
-                icon={<SquareArrowOutUpRightIcon />}
-                variant="outline"
-                onPress={() => void openExternalUrl(disconnectResult.managementUrl!)}
-              >
-                {t('plugins.authorization.manageAuthorization')}
-              </Button>
-            ) : null}
-          </View>
-        ) : null}
-        {connection ? (
-          <View className="gap-4">
-            <View className="flex-row items-center gap-3">
-              <View className="min-w-0 flex-1 gap-1">
+        {isLoading ? (
+          <ContentState.Loading title={t('plugins.loading')} />
+        ) : hasLoadError ? (
+          <ContentState.Error title={t('plugins.loadFailed')} />
+        ) : !entry && !connection ? (
+          <ContentState.Empty title={t('plugins.notFound')} />
+        ) : (
+          <>
+            {entry ? (
+              <PluginIdentity entry={entry} />
+            ) : (
+              <View className="gap-2">
+                <Text className="text-2xl font-semibold text-foreground">{name}</Text>
+                <Text className="text-sm text-muted-foreground">
+                  {t('plugins.unavailableDescription')}
+                </Text>
+              </View>
+            )}
+            {connection ? (
+              <View className="gap-3 rounded-2xl bg-secondary p-5">
                 <View className="flex-row items-center gap-2">
                   {connectionStatus === 'connected' ? (
                     <CheckIcon className="size-4 text-success" />
                   ) : (
-                    <CircleAlertIcon className="size-4 text-destructive" />
+                    <CircleAlertIcon className="size-4 text-error" />
                   )}
                   <Text
                     className={
                       connectionStatus === 'connected'
-                        ? 'flex-1 text-sm text-muted-foreground'
-                        : 'flex-1 text-sm text-destructive'
+                        ? 'text-sm font-medium text-success'
+                        : 'text-sm font-medium text-error'
                     }
                   >
                     {t(`plugins.connectionStatus.${connectionStatus}`)}
                   </Text>
                 </View>
-                <Text className="text-base font-medium text-foreground">
+                <Text className="text-lg font-semibold text-foreground">
                   {connection.accountLabel}
                 </Text>
-              </View>
-              <ActionMenu
-                items={[
-                  {
-                    id: 'plugin-disconnect',
-                    label: t('plugins.disconnect'),
-                    destructive: true,
-                    disabled: isDisconnecting,
-                    onPress: () =>
-                      alert.confirm({
-                        title: t('plugins.disconnectTitle', { name }),
-                        description: t('plugins.disconnectMessage'),
-                        confirmLabel: t('plugins.disconnect'),
-                        role: 'destructive',
-                        onConfirm: () => void disconnect(),
-                      }),
-                  },
-                ]}
-              >
-                <Button
-                  accessibilityLabel={t('common.more')}
-                  disabled={isDisconnecting}
-                  icon={<EllipsisIcon />}
-                  loading={isDisconnecting}
-                  testID="plugin-connection-actions"
-                  variant="ghost"
-                />
-              </ActionMenu>
-            </View>
-            {connection.authorization?.reason ? (
-              <Text className="text-sm text-muted-foreground">
-                {t(`plugins.errors.${connection.authorization.reason}`)}
-              </Text>
-            ) : null}
-            {entry || managementUrl ? (
-              <View className="gap-3">
-                {entry ? (
-                  <Button
-                    disabled={isDisconnecting}
-                    onPress={() =>
-                      router.push({ pathname: '/plugins/[pluginId]/connect', params: { pluginId } })
-                    }
-                  >
-                    {t('plugins.reconnect')}
-                  </Button>
+                {connection.authorization?.reason ? (
+                  <Text className="text-sm text-muted-foreground">
+                    {t(`plugins.errors.${connection.authorization.reason}`)}
+                  </Text>
                 ) : null}
-                {managementUrl ? (
+              </View>
+            ) : null}
+            {disconnectResult?.revocation === 'unconfirmed' && !connection ? (
+              <View className="gap-3">
+                <Text className="text-sm text-muted-foreground">
+                  {t('plugins.authorization.revocationUnconfirmed')}
+                </Text>
+                {disconnectResult.managementUrl ? (
                   <Button
-                    disabled={isDisconnecting}
-                    icon={<SquareArrowOutUpRightIcon />}
                     variant="outline"
-                    onPress={() => void openExternalUrl(managementUrl)}
+                    onPress={() => void openExternalUrl(disconnectResult.managementUrl!)}
                   >
                     {t('plugins.authorization.manageAuthorization')}
                   </Button>
                 ) : null}
               </View>
             ) : null}
-          </View>
-        ) : (
-          <Button
-            size="lg"
-            onPress={() =>
-              router.push({ pathname: '/plugins/[pluginId]/connect', params: { pluginId } })
-            }
-            testID="plugin-add"
-          >
-            {t('plugins.connect')}
-          </Button>
+            {entry ? (
+              <>
+                <View className="gap-3">
+                  <Text
+                    accessibilityRole="header"
+                    className="text-base font-semibold text-foreground"
+                  >
+                    {t('plugins.capabilities')}
+                  </Text>
+                  <Text className="text-base text-foreground">
+                    {t(`plugins.catalog.${pluginId}.description`)}
+                  </Text>
+                </View>
+                <View className="gap-4">
+                  <Text
+                    accessibilityRole="header"
+                    className="text-base font-semibold text-foreground"
+                  >
+                    {t('plugins.examples.title')}
+                  </Text>
+                  <Text className="text-base text-foreground">
+                    {t(`plugins.catalog.${pluginId}.examples.first`)}
+                  </Text>
+                  <Text className="text-base text-foreground">
+                    {t(`plugins.catalog.${pluginId}.examples.second`)}
+                  </Text>
+                  <Text className="text-sm text-muted-foreground">{t('plugins.usage')}</Text>
+                </View>
+                <View className="gap-3">
+                  <Text
+                    accessibilityRole="header"
+                    className="text-base font-semibold text-foreground"
+                  >
+                    {t('plugins.privacy')}
+                  </Text>
+                  <Text className="text-sm text-muted-foreground">
+                    {t(`plugins.catalog.${pluginId}.access`)}
+                  </Text>
+                  <Text className="text-sm text-muted-foreground">
+                    {t('plugins.privacyDescription')}
+                  </Text>
+                  <View className="flex-row flex-wrap items-start gap-4">
+                    <Button
+                      size="inline"
+                      icon={<SquareArrowOutUpRightIcon />}
+                      variant="link"
+                      onPress={() => void openExternalUrl(entry.links.website)}
+                    >
+                      {t('plugins.website')}
+                    </Button>
+                    <Button
+                      size="inline"
+                      icon={<SquareArrowOutUpRightIcon />}
+                      variant="link"
+                      onPress={() => void openExternalUrl(entry.links.privacy)}
+                    >
+                      {t('plugins.privacyPolicy')}
+                    </Button>
+                  </View>
+                </View>
+              </>
+            ) : null}
+          </>
         )}
-        {entry ? (
-          <View className="gap-3">
-            <Text accessibilityRole="header" className="text-base font-medium text-foreground">
-              {t('plugins.examples.title')}
-            </Text>
-            <View className="gap-2">
-              <Text className="text-sm text-foreground">
-                {t(`plugins.catalog.${pluginId}.examples.first`)}
-              </Text>
-              <Text className="text-sm text-foreground">
-                {t(`plugins.catalog.${pluginId}.examples.second`)}
-              </Text>
-            </View>
-            <Text className="text-sm text-muted-foreground">{t('plugins.usage')}</Text>
-          </View>
-        ) : null}
-        {entry ? (
-          <View className="gap-3">
-            <Text accessibilityRole="header" className="text-base font-medium text-foreground">
-              {t('plugins.privacy')}
-            </Text>
-            <Text className="text-sm text-muted-foreground">
-              {t(`plugins.catalog.${pluginId}.access`)}
-            </Text>
-            <Text className="text-sm text-muted-foreground">{t('plugins.privacyDescription')}</Text>
-            <View className="flex-row items-start gap-3">
-              <View className="min-w-0 flex-1">
-                <Button
-                  icon={<SquareArrowOutUpRightIcon />}
-                  variant="ghost"
-                  onPress={() => void openExternalUrl(entry.links.website)}
-                >
-                  {t('plugins.website')}
-                </Button>
-              </View>
-              <View className="min-w-0 flex-1">
-                <Button
-                  icon={<SquareArrowOutUpRightIcon />}
-                  variant="ghost"
-                  onPress={() => void openExternalUrl(entry.links.privacy)}
-                >
-                  {t('plugins.privacyPolicy')}
-                </Button>
-              </View>
-            </View>
-          </View>
-        ) : null}
-      </ScrollView>
+      </PluginPage>
     </>
   );
 }

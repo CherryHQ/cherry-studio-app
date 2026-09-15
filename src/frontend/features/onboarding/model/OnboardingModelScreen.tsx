@@ -18,17 +18,31 @@ import { useCompleteOnboarding } from './useCompleteOnboarding';
 import { useOnboardingModels } from './useOnboardingModels';
 
 export function OnboardingModelScreen() {
-  const params = useLocalSearchParams<{ providerId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    connectionId?: string | string[];
+    providerId?: string | string[];
+  }>();
+  const connectionId = getSingleRouteParam(params.connectionId);
   const providerId = getSingleRouteParam(params.providerId);
-  // Changing providers discards the previous provider's selection and manual draft.
+  // Changing the setup source discards its selection and manual draft.
   return (
     <ModelRegistryGate>
-      <OnboardingModelSelection key={providerId ?? 'all'} providerId={providerId} />
+      <OnboardingModelSelection
+        connectionId={connectionId}
+        key={`${providerId ?? 'all'}:${connectionId ?? 'manual'}`}
+        providerId={providerId}
+      />
     </ModelRegistryGate>
   );
 }
 
-function OnboardingModelSelection({ providerId }: { providerId?: string }) {
+function OnboardingModelSelection({
+  connectionId,
+  providerId,
+}: {
+  connectionId?: string;
+  providerId?: string;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const { bottom } = useSafeAreaInsets();
@@ -37,6 +51,8 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
   const { complete, phase, cancel } = useCompleteOnboarding();
   const isBusy = phase !== 'idle';
   const openProviderSetup = () => router.push('/onboarding/provider');
+  const syncAgain = () =>
+    router.replace({ pathname: '/onboarding/provider-sync', params: { connectionId } });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState<'catalog' | 'manual'>('catalog');
   const [manualId, setManualId] = useState('');
@@ -55,7 +71,12 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
 
   const editConnection = () => {
     cancel();
-    if (router.canGoBack()) router.back();
+    if (connectionId && selectedModel) {
+      router.push({
+        pathname: '/onboarding/connection',
+        params: { providerId: selectedModel.providerId },
+      });
+    } else if (router.canGoBack()) router.back();
     else
       router.replace({
         pathname: '/onboarding/connection',
@@ -88,7 +109,8 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
       <RouteHeader
         title={t('onboarding.model.title')}
         rightActions={
-          providerId && !(isShowingLoadError && shouldEditConnection)
+          (providerId || (connectionId && selectedModel)) &&
+          !(isShowingLoadError && shouldEditConnection)
             ? [
                 {
                   key: 'edit-connection',
@@ -101,8 +123,14 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
             : undefined
         }
       />
-      {selectionMode === 'catalog' && data.items.length > 0 ? (
-        <InlineSearch onChangeText={setQuery} value={query} />
+      {/* Keep search beside the header; loading only replaces the content below. */}
+      {selectionMode === 'catalog' ? <InlineSearch onChangeText={setQuery} value={query} /> : null}
+      {providerId || connectionId ? (
+        <View className="px-4 pt-4 pb-2">
+          <Text className="text-xs text-muted-foreground">
+            {t('onboarding.step', { current: 3 })}
+          </Text>
+        </View>
       ) : null}
       <KeyboardAvoidingView
         behavior="padding"
@@ -110,21 +138,6 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
         style={{ flex: 1 }}
         testID="onboarding-model"
       >
-        <View className="gap-2 px-4 pt-5 pb-4">
-          {providerId ? (
-            <Text className="text-xs text-muted-foreground">
-              {t('onboarding.step', { current: 3 })}
-            </Text>
-          ) : null}
-          {selectionMode === 'manual' ||
-          (!data.isLoading &&
-            !data.isRefreshing &&
-            !data.loadError &&
-            !data.pullError &&
-            data.items.length > 0) ? (
-            <Text className="text-base text-foreground">{t('onboarding.model.description')}</Text>
-          ) : null}
-        </View>
         {selectionMode === 'manual' && data.provider ? (
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -167,15 +180,27 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
         ) : data.items.length === 0 ? (
           <View className="flex-1 justify-center px-6">
             <ContentState.Empty
-              title={t(providerId ? 'onboarding.model.empty' : 'onboarding.model.noProvider')}
+              description={connectionId ? t('onboarding.device.noChatModels') : undefined}
+              title={t(
+                providerId || connectionId
+                  ? 'onboarding.model.empty'
+                  : 'onboarding.model.noProvider',
+              )}
               primaryAction={
-                providerId
-                  ? {
-                      children: t('onboarding.model.manual'),
-                      onPress: () => setSelectionMode('manual'),
-                      disabled: !data.provider,
-                    }
-                  : { children: t('onboarding.welcome.connect'), onPress: openProviderSetup }
+                connectionId
+                  ? { children: t('onboarding.device.syncAgain'), onPress: syncAgain }
+                  : providerId
+                    ? {
+                        children: t('onboarding.model.manual'),
+                        onPress: () => setSelectionMode('manual'),
+                        disabled: !data.provider,
+                      }
+                    : { children: t('onboarding.welcome.connect'), onPress: openProviderSetup }
+              }
+              secondaryAction={
+                connectionId
+                  ? { children: t('onboarding.welcome.connect'), onPress: openProviderSetup }
+                  : undefined
               }
             />
           </View>
@@ -211,6 +236,8 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
               </View>
             ) : null}
             <FlatList
+              className="min-h-0 flex-1"
+              contentInsetAdjustmentBehavior="automatic"
               data={results}
               extraData={{ isBusy, selectedId: selectedModel?.id }}
               keyExtractor={(model) => model.id}

@@ -12,6 +12,7 @@ import {
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { readableFilename } from '@/shared/data/types/file';
+import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
 import { normalizeDocument } from './normalizeDocument';
 import { renderMarkdown } from './renderMarkdown';
@@ -69,9 +70,14 @@ export function createDocumentExportSession(
     onProgress?: (progress: DocumentExportProgress) => void,
   ): Promise<DocumentExportArtifact> {
     signal.throwIfAborted();
+    const markdownText =
+      target.format === 'markdown'
+        ? markdown + renderMarkdownSignature(target.signature)
+        : undefined;
     if (
       target.format === 'markdown' &&
       current?.format === 'markdown' &&
+      current.text === markdownText &&
       new File(current.file.uri).exists
     )
       return current;
@@ -100,7 +106,7 @@ export function createDocumentExportSession(
             : 'image/png';
       const filename = readableFilename(document.title ?? '', { extension, fallback: 'document' });
       if (target.format === 'markdown') {
-        text = markdown;
+        text = markdownText;
         content = { format: 'markdown', issues: [] };
       } else {
         progress('resolving-assets');

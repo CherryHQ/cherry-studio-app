@@ -1,4 +1,4 @@
-// Metro resolves the iOS or Android boundary; tests use the Android implementation.
+// Metro resolves the iOS or Android boundary; tooling falls back to Android.
 export {
   ContextMenuScrollBoundary,
   useContextMenuInteraction,

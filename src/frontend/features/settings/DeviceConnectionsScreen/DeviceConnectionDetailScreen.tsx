@@ -87,6 +87,21 @@ export function DeviceConnectionDetailScreen() {
         />
       </Section>
 
+      {connection.status === 'paired' ? (
+        <Section>
+          <Section.Item
+            description={t('settings.deviceConnections.syncGuide.entryDescription')}
+            label={t('settings.deviceConnections.syncGuide.entry')}
+            onPress={() =>
+              router.push({
+                params: { connectionId: connection.id },
+                pathname: '/settings/device-connections/sync-guide',
+              })
+            }
+          />
+        </Section>
+      ) : null}
+
       <Button
         onPress={() =>
           router.push({

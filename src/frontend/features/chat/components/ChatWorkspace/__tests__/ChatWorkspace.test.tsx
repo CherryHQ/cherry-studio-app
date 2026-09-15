@@ -35,6 +35,10 @@ let mockAgentChatSession: {
   status: 'ready';
 };
 
+jest.mock('../hooks/useIsScreenReaderEnabled', () => ({
+  useIsScreenReaderEnabled: () => false,
+}));
+
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));
@@ -70,6 +74,7 @@ jest.mock('@cherrystudio/ui/components', () => {
       Error: (props: object) => createElement('ContentState.Error', props),
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,
+    ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });

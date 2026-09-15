@@ -27,6 +27,7 @@ import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
+import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
 import {
   shouldWaitForInitialHistoryLayout,
   useMessageListInitialRenderGate,
@@ -89,6 +90,7 @@ export function ChatWorkspace({
   const { top: safeAreaTop } = useSafeAreaInsets();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const isScreenReaderEnabled = useIsScreenReaderEnabled();
   useEffect(() => {
     if (sessionId) {
       client.reconcilePersistedMessages(sessionId, messages);
@@ -177,16 +179,22 @@ export function ChatWorkspace({
         <ChatMessage
           assistantPresentation={assistantPresentation}
           isMessageActionsEnabled={isAssistantToolbarEnabled}
+          isScreenReaderEnabled={isScreenReaderEnabled}
           message={message}
           shouldShowTimestamp={timestampMessageIds.has(message.id)}
         />
       );
     },
-    [assistantPresentation, isAssistantToolbarEnabled, timestampMessageIds],
+    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, timestampMessageIds],
   );
   const messageListExtraData = useMemo(
-    () => ({ assistantPresentation, isAssistantToolbarEnabled, timestampMessageIds }),
-    [assistantPresentation, isAssistantToolbarEnabled, timestampMessageIds],
+    () => ({
+      assistantPresentation,
+      isAssistantToolbarEnabled,
+      isScreenReaderEnabled,
+      timestampMessageIds,
+    }),
+    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, timestampMessageIds],
   );
   const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
     () =>

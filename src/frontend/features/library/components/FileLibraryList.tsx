@@ -6,7 +6,7 @@ import {
 } from '@legendapp/list/react-native';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import {
   fileEntryPreviewKind,
@@ -23,6 +23,7 @@ import {
   useSelectionState,
 } from '@/frontend/components/Selection';
 import { useBackendModule } from '@/frontend/data';
+import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 
 import {
   type FileLibraryEntry,
@@ -79,7 +80,7 @@ export function FileLibraryList({
   const pendingDeletionIds = usePendingDeletionIds(fileLibrarySelectionScope);
   const { enterEditing, toggleId } = useSelectionActions();
   const { isDeletionPending, isEditing, selectedIds } = useSelectionState();
-  const { width: windowWidth } = useWindowDimensions();
+  const { onLayout, width: listWidth } = useLayoutWidth();
   const { entries, error, isLoading, isLoadingMore, loadMore, refresh } = useFileEntries(filter, {
     enabled: isDataLoadEnabled,
   });
@@ -112,9 +113,21 @@ export function FileLibraryList({
   );
   useRegisterSelectionSource(fileLibrarySelectionScope, selectionSource);
   const listRef = useRef<LegendListRef>(null);
+  const columns = Math.max(
+    2,
+    Math.floor(
+      (listWidth - fileLibraryGrid.pageEdge * 2 + fileLibraryGrid.tileGap) /
+        (fileLibraryGrid.minTileSize + fileLibraryGrid.tileGap),
+    ),
+  );
   const tileSize =
-    (windowWidth - fileLibraryGrid.pageEdge * 2 - fileLibraryGrid.tileGap) /
-    fileLibraryGrid.columns;
+    listWidth > 0
+      ? Math.max(
+          1,
+          (listWidth - fileLibraryGrid.pageEdge * 2 - fileLibraryGrid.tileGap * (columns - 1)) /
+            columns,
+        )
+      : fileLibraryGrid.minTileSize;
   const estimatedItemSize =
     viewMode === 'grid' ? tileSize + fileLibraryGrid.tileGap : FILE_LIBRARY_ROW_ESTIMATED_SIZE;
   const locale = i18n.resolvedLanguage ?? i18n.language;
@@ -189,7 +202,7 @@ export function FileLibraryList({
           </View>
         ) : isLoading || isLoadingMore ? (
           <FileLibrarySkeleton
-            count={fileLibraryGrid.skeletonTiles}
+            count={viewMode === 'grid' ? columns * 3 : fileLibraryGrid.skeletonTiles}
             tileSize={tileSize}
             viewMode={viewMode}
           />
@@ -200,7 +213,7 @@ export function FileLibraryList({
         )}
       </View>
     ),
-    [error, isLoading, isLoadingMore, refresh, t, tileSize, viewMode],
+    [columns, error, isLoading, isLoadingMore, refresh, t, tileSize, viewMode],
   );
   const listFooter = useMemo(
     () =>
@@ -213,12 +226,12 @@ export function FileLibraryList({
         </View>
       ) : isLoadingMore ? (
         <FileLibrarySkeleton
-          count={fileLibraryGrid.columns}
+          count={viewMode === 'grid' ? columns : 2}
           tileSize={tileSize}
           viewMode={viewMode}
         />
       ) : null,
-    [error, isLoadingMore, refresh, t, tileSize, viewMode, visibleEntries.length],
+    [columns, error, isLoadingMore, refresh, t, tileSize, viewMode, visibleEntries.length],
   );
 
   return (
@@ -239,12 +252,14 @@ export function FileLibraryList({
       // Reflowing every file is a new layout, not a size change to compensate
       // by shifting the scroll container and its header.
       maintainVisibleContentPosition={false}
-      numColumns={viewMode === 'grid' ? fileLibraryGrid.columns : 1}
+      numColumns={viewMode === 'grid' ? columns : 1}
+      onLayout={onLayout}
       onEndReached={loadMore}
       onEndReachedThreshold={0.7}
       recycleItems
       renderItem={renderFileItem}
       showsVerticalScrollIndicator={false}
+      style={viewMode === 'list' ? styles.boundedList : styles.list}
       testID={viewMode === 'grid' ? 'file-library-grid' : 'file-library-list'}
     />
   );
@@ -359,6 +374,13 @@ const FileTile = memo(function FileTile({
 });
 
 const styles = StyleSheet.create({
+  boundedList: {
+    alignSelf: 'center',
+    flex: 1,
+    maxWidth: 800,
+    width: '100%',
+  },
+  list: { flex: 1 },
   empty: {
     flexGrow: 1,
   },

@@ -1,8 +1,9 @@
-import { useComposerDockLayout } from '@cherrystudio/ui/components';
+import { composerContentGap, getComposerKeyboardStickyOffset } from '@cherrystudio/ui/components';
 import * as Crypto from 'expo-crypto';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 import {
@@ -58,6 +59,8 @@ export function PaintingComposer({
     sendFailedLabel: t('painting.input.generateFailed'),
   });
   const headerHeight = useHeaderHeight();
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const keyboardOffset = getComposerKeyboardStickyOffset(bottomInset);
   const isSubmittingRef = useRef(false);
   const [activeTurn, setActiveTurn] = useState<ActivePaintingTurn | null>(null);
   const [showPersistedTurn, setShowPersistedTurn] = useState(!isHandoff);
@@ -198,8 +201,6 @@ export function PaintingComposer({
     (message: MessageListItem) => <PaintingMessage message={message} state={messageRenderState} />,
     [messageRenderState],
   );
-  const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
-    useComposerDockLayout();
   // Results belong to the message list. Only an explicit handoff or an
   // unfinished receipt seeds the draft; finishing a job must not remount it.
   const composerInitialAttachments =
@@ -213,8 +214,7 @@ export function PaintingComposer({
     >
       <ComposerDismissArea>
         <MessageList
-          bottomAccessoryHeight={inputHeightShared}
-          contentBottomInset={contentBottomInset}
+          contentBottomInset={composerContentGap}
           contentTopInset={resolveHeaderContentInset(headerHeight)}
           enteringMessageId={activeTurn?.userMessageId}
           extraData={messageRenderState}
@@ -224,7 +224,7 @@ export function PaintingComposer({
           renderMessage={renderMessage}
         />
       </ComposerDismissArea>
-      <ComposerDock onHeightChange={handleInputHeightChange}>
+      <ComposerDock layoutMode="flow">
         <PaintingInput
           initialParamValues={seededParamValues}
           onCancel={handleCancel}

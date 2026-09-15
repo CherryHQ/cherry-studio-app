@@ -17,7 +17,7 @@ The native and React Native surfaces use the same desktop-aligned `assets/icon.p
 `#FFFFFF` in Light appearance and `#000000` in Dark appearance. The brand artwork remains fixed in
 both modes. The native surface contains no attribution or animation.
 
-The React Native cover adds a two-line `from` / `Cherry Studio` attribution 48 dp above the bottom
+The React Native cover adds a single-line `Cherry Studio` attribution 48 dp above the bottom
 safe area. The centered logo stays fixed across the native-to-React handoff, while the attribution
 fades in over 260 ms after the React Native cover is confirmed visible. After the application
 renders behind the opaque cover, the entire cover fades out over 220 ms. The application tree

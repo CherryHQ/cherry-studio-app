@@ -62,6 +62,7 @@ export function createPluginsModule(
     methodId: string,
     action: () => Promise<PluginAuthorizationState>,
   ) {
+    observer(pluginId, methodId).clearError();
     try {
       return await action();
     } finally {

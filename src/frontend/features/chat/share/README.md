@@ -1,8 +1,8 @@
 # Chat Sharing
 
-The assistant toolbar opens `/chat-share` with the session and clicked message IDs. The separate
-page initially selects that answer and loads a paginated history window around it. User and
-assistant rows show their role, time and up to four lines from a 240-character excerpt, with an
+The assistant toolbar and user/assistant message context menus open `/chat-share` with the session
+and clicked message IDs. The separate page initially selects that message and loads a paginated
+history window around it. User and assistant rows show their role, time and up to four lines from a 240-character excerpt, with an
 attachment-name fallback. Pending/streaming messages cannot be selected. Whole-row presses select;
 scrolling retains ordinary native press cancellation. Excerpts do not render Markdown, media,
 tools or reasoning. The exported document still contains the complete selected messages.
@@ -35,8 +35,9 @@ the document. The export page receives only a source-owned label and documents; 
 
 The adapter preserves plain user text and supplies bubble/message presentation hints. HTML uses
 the chat hierarchy: right-aligned questions and full-width answers. Framed PNG uses numbered
-message sections with theme-aware branding. The conversation title remains the exported filename
-and document title without adding an article heading above the exchange.
+message sections. Both include the same theme-aware Cherry signature at the bottom. The conversation
+title remains the exported filename and document title without adding an article heading above the exchange.
+Markdown ends with a separated brand-name and export-time row using the same signature data.
 
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
 `chat.process.duration` and `chat.reasoningStatus.thought` translations, and elapsed time uses the

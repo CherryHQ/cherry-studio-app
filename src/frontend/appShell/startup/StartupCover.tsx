@@ -22,11 +22,9 @@ const ATTRIBUTION_SAFE_AREA_GAP = 48;
 const colors = {
   dark: {
     background: '#000000',
-    secondaryText: '#A1A1AA',
   },
   light: {
     background: '#FFFFFF',
-    secondaryText: '#6B7280',
   },
 } as const;
 
@@ -135,13 +133,6 @@ export function StartupCover({
           attributionStyle,
         ]}
       >
-        <Text
-          accessible={false}
-          allowFontScaling={false}
-          style={[styles.fromText, { color: palette.secondaryText }]}
-        >
-          from
-        </Text>
         <Text accessible={false} allowFontScaling={false} style={styles.brandText}>
           Cherry Studio
         </Text>
@@ -172,11 +163,6 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 1_000,
-  },
-  fromText: {
-    fontSize: 12,
-    letterSpacing: 0,
-    lineHeight: 16,
   },
   logo: {
     height: LOGO_SIZE,

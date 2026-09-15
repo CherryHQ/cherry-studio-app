@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import {
   type AccessibilityActionEvent,
   type GestureResponderEvent,
@@ -8,9 +8,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import type { LongPressGestureHandlerEventPayload } from 'react-native-gesture-handler';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { NativeCherryMenuRef } from '../../use-native-menu';
+import { ContextMenuExclusion } from '../context-menu-exclusion';
 import { ContextMenuScrollBoundary } from '../context-menu-scroll-boundary.android';
 import { ContextMenu } from '../context-menu.android';
 
@@ -23,12 +25,14 @@ type NativeMenuProps = {
 };
 
 type MockLongPressGesture = {
+  enabled: (value: boolean) => MockLongPressGesture;
+  isEnabled?: boolean;
   maxDistance: (value: number) => MockLongPressGesture;
   maxDistanceValue?: number;
   minDuration: (value: number) => MockLongPressGesture;
   minDurationValue?: number;
-  onStart: (callback: () => void) => MockLongPressGesture;
-  onStartCallback?: () => void;
+  onStart: (callback: (event: LongPressGestureHandlerEventPayload) => void) => MockLongPressGesture;
+  onStartCallback?: (event: LongPressGestureHandlerEventPayload) => void;
   runOnJS: () => MockLongPressGesture;
 };
 
@@ -41,9 +45,6 @@ jest.mock('../../menu-content', () => {
   };
 });
 
-// The preset renders View as a class, so its measurement lives on the
-// instance prototype rather than a host node supplied by createNodeMock.
-const viewPrototype = View.prototype as View;
 const mockGetLongPressMaxDistance = jest.fn(() => 16);
 const mockGetLongPressMinDuration = jest.fn(() => 625);
 const mockNativeMenuRef = {
@@ -58,6 +59,10 @@ jest.mock('react-native-gesture-handler', () => {
     Gesture: {
       LongPress: () => {
         const gesture: MockLongPressGesture = {
+          enabled(value) {
+            gesture.isEnabled = value;
+            return gesture;
+          },
           maxDistance(value) {
             gesture.maxDistanceValue = value;
             return gesture;
@@ -110,17 +115,20 @@ function scrollEvent(): NativeSyntheticEvent<NativeScrollEvent> {
   return { nativeEvent: {} } as NativeSyntheticEvent<NativeScrollEvent>;
 }
 
-function touchEvent(): GestureResponderEvent {
-  return { nativeEvent: {} } as GestureResponderEvent;
+function longPressEvent(absoluteX = 120, absoluteY = 240): LongPressGestureHandlerEventPayload {
+  return { absoluteX, absoluteY, duration: 625, x: 12, y: 24 };
+}
+
+function touchEvent(touchCount = 1): GestureResponderEvent {
+  return {
+    nativeEvent: { touches: Array.from({ length: touchCount }, () => ({})) },
+  } as GestureResponderEvent;
 }
 
 describe('ContextMenu.android', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
-    jest
-      .spyOn(viewPrototype, 'measureInWindow')
-      .mockImplementation((callback) => callback(16, 120, 200, 48));
     mockShowMenu.mockClear();
     mockGetLongPressMaxDistance.mockClear();
     mockGetLongPressMinDuration.mockClear();
@@ -133,35 +141,43 @@ describe('ContextMenu.android', () => {
     jest.restoreAllMocks();
   });
 
-  it('uses system long-press configuration to open the Cherry menu at its anchor', () => {
-    const onRename = jest.fn();
+  it.each([
+    [82, 211],
+    [274, 509],
+  ])(
+    'opens at the window touch coordinates (%i, %i) using system timing',
+    (absoluteX, absoluteY) => {
+      const onRename = jest.fn();
 
-    act(() => {
-      renderer = create(
-        <ContextMenu items={[{ id: 'rename', label: 'Rename', onPress: onRename }]}>
-          <Text>Row</Text>
-        </ContextMenu>,
+      act(() => {
+        renderer = create(
+          <ContextMenu items={[{ id: 'rename', label: 'Rename', onPress: onRename }]}>
+            <Text>Row</Text>
+          </ContextMenu>,
+        );
+      });
+
+      const menu = renderer!.root.findByProps({ mockComponent: 'native-menu' });
+      expect(menu.props.trigger).toBe('longPress');
+      expect(menu.props.items).toEqual([]);
+      expect(mockLatestLongPressGesture?.minDurationValue).toBe(625);
+      expect(mockLatestLongPressGesture?.maxDistanceValue).toBe(16);
+
+      act(() =>
+        mockLatestLongPressGesture?.onStartCallback?.(longPressEvent(absoluteX, absoluteY)),
       );
-    });
+      expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
+      expect(mockShowMenu).not.toHaveBeenCalled();
 
-    const menu = renderer!.root.findByProps({ mockComponent: 'native-menu' });
-    expect(menu.props.trigger).toBe('longPress');
-    expect(menu.props.items).toEqual([]);
-    expect(mockLatestLongPressGesture?.minDurationValue).toBe(625);
-    expect(mockLatestLongPressGesture?.maxDistanceValue).toBe(16);
-
-    act(() => mockLatestLongPressGesture?.onStartCallback?.());
-    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
-    expect(mockShowMenu).not.toHaveBeenCalled();
-
-    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.anchor).toEqual({
-      height: 48,
-      pageX: 16,
-      pageY: 120,
-      width: 200,
-    });
-    expect(onRename).not.toHaveBeenCalled();
-  });
+      expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.anchor).toEqual({
+        height: 0,
+        pageX: absoluteX,
+        pageY: absoluteY,
+        width: 0,
+      });
+      expect(onRename).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps a touch that stops momentum blocked for its complete sequence', () => {
     act(() => {
@@ -185,13 +201,19 @@ describe('ContextMenu.android', () => {
       scrollOwner.props.onMomentumScrollBegin(scrollEvent());
       scrollOwner.props.onTouchStart(touchEvent());
       scrollOwner.props.onMomentumScrollEnd(scrollEvent());
-      mockLatestLongPressGesture?.onStartCallback?.();
+      mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
     });
     expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
 
     act(() => {
       scrollOwner.props.onTouchEnd(touchEvent());
-      mockLatestLongPressGesture?.onStartCallback?.();
+      mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
+    });
+    expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
+
+    act(() => {
+      scrollOwner.props.onTouchStart(touchEvent());
+      mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
     });
     expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
     expect(mockShowMenu).not.toHaveBeenCalled();
@@ -267,7 +289,7 @@ describe('ContextMenu.android', () => {
     expect(onChildAction).toHaveBeenCalledTimes(1);
   });
 
-  it('renders its child directly when no items are available', () => {
+  it('disables long press when no items are available', () => {
     act(() => {
       renderer = create(
         <ContextMenu items={[]}>
@@ -277,6 +299,155 @@ describe('ContextMenu.android', () => {
     });
 
     expect(renderer!.root.findByProps({ testID: 'row' })).toBeDefined();
-    expect(renderer!.root.findAllByProps({ mockComponent: 'native-menu' })).toHaveLength(0);
+    expect(mockLatestLongPressGesture?.isEnabled).toBe(false);
+    expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
+  });
+});
+
+describe('ContextMenu.android interaction ownership', () => {
+  let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    mockLatestLongPressGesture = undefined;
+  });
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+    jest.restoreAllMocks();
+  });
+
+  it('lets an excluded control own its touch and rearms the next ordinary long press', () => {
+    const onControlTouch = jest.fn();
+    act(() => {
+      renderer = create(
+        <ContextMenu items={[{ id: 'copy', label: 'Copy', onPress: jest.fn() }]}>
+          <View>
+            <ContextMenuExclusion onTouchStart={onControlTouch} testID="control">
+              <Text>Open details</Text>
+            </ContextMenuExclusion>
+          </View>
+        </ContextMenu>,
+      );
+    });
+    const anchor = renderer!.root.find(
+      (node) => node.type === View && node.props.collapsable === false,
+    );
+    const control = renderer!.root.find(
+      (node) => node.type === View && node.props.testID === 'control',
+    );
+    const event = touchEvent();
+    const pendingLongPress = mockLatestLongPressGesture?.onStartCallback;
+    act(() => {
+      control.props.onTouchStart(event);
+      anchor.props.onTouchStart(event);
+    });
+    expect(onControlTouch).toHaveBeenCalledWith(event);
+    expect(mockLatestLongPressGesture?.isEnabled).toBe(false);
+    act(() => {
+      anchor.props.onTouchCancel(touchEvent());
+      pendingLongPress?.(longPressEvent());
+    });
+    expect(mockLatestLongPressGesture?.isEnabled).toBe(true);
+    expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
+    act(() => {
+      anchor.props.onTouchStart(touchEvent());
+      mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
+    });
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
+  });
+
+  it('does not mistake native long-press takeover for a scroll cancellation', () => {
+    act(() => {
+      renderer = create(
+        <ContextMenuScrollBoundary>
+          {(handlers) => (
+            <View {...handlers} testID="scroll-owner">
+              <ContextMenu items={[{ id: 'copy', label: 'Copy', onPress: jest.fn() }]}>
+                <Text>Answer</Text>
+              </ContextMenu>
+            </View>
+          )}
+        </ContextMenuScrollBoundary>,
+      );
+    });
+    const scrollOwner = renderer!.root.findByProps({ testID: 'scroll-owner' });
+    act(() => {
+      scrollOwner.props.onTouchStart(touchEvent());
+      scrollOwner.props.onTouchCancel(touchEvent());
+      mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
+    });
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
+  });
+
+  it('recognizes the system hold and dispatches the menu action', () => {
+    const onCopy = jest.fn();
+    act(() => {
+      renderer = create(
+        <ContextMenu items={[{ id: 'copy', label: 'Copy', onPress: onCopy }]}>
+          <View testID="row" />
+        </ContextMenu>,
+      );
+    });
+    expect(mockLatestLongPressGesture?.minDurationValue).toBe(625);
+    expect(mockLatestLongPressGesture?.isEnabled).toBe(true);
+    act(() => mockLatestLongPressGesture?.onStartCallback?.(longPressEvent()));
+    const menu = renderer!.root.findByProps({ testID: 'menu-content' });
+    expect(menu.props.isOpen).toBe(true);
+    act(() => menu.props.items[0].onPress());
+    expect(onCopy).toHaveBeenCalledTimes(1);
+  });
+
+  it('enables actions without remounting streamed content when the message settles', () => {
+    const onMount = jest.fn();
+    function Content() {
+      useEffect(onMount, []);
+      return <Text>Answer</Text>;
+    }
+    const content = <Content />;
+    act(() => {
+      renderer = create(<ContextMenu items={[]}>{content}</ContextMenu>);
+    });
+    expect(mockLatestLongPressGesture?.isEnabled).toBe(false);
+    act(() => {
+      renderer?.update(
+        <ContextMenu items={[{ id: 'copy', label: 'Copy', onPress: jest.fn() }]}>
+          {content}
+        </ContextMenu>,
+      );
+    });
+    expect(mockLatestLongPressGesture?.isEnabled).toBe(true);
+    expect(onMount).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a cancelled drag ineligible until the next touch starts', () => {
+    act(() => {
+      renderer = create(
+        <ContextMenuScrollBoundary>
+          {(handlers) => (
+            <View {...handlers} testID="scroll-owner">
+              <ContextMenu items={[{ id: 'copy', label: 'Copy', onPress: jest.fn() }]}>
+                <View />
+              </ContextMenu>
+            </View>
+          )}
+        </ContextMenuScrollBoundary>,
+      );
+    });
+    const scrollOwner = renderer!.root.findByProps({ testID: 'scroll-owner' });
+    act(() => {
+      scrollOwner.props.onTouchStart(touchEvent());
+      scrollOwner.props.onScrollBeginDrag(scrollEvent());
+      scrollOwner.props.onScrollEndDrag(scrollEvent());
+      mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
+      scrollOwner.props.onTouchCancel(touchEvent());
+      mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
+    });
+    expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
+    act(() => {
+      scrollOwner.props.onTouchStart(touchEvent());
+      mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
+    });
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
   });
 });

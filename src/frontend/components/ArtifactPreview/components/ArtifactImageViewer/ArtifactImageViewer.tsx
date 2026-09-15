@@ -1,7 +1,7 @@
 import { ContentState } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useWindowDimensions, View } from 'react-native';
+import { View } from 'react-native';
 
 import { ArtifactPreviewTarget } from '../ArtifactPreviewTransition/ArtifactPreviewTransition';
 import { ZoomableImage } from './ZoomableImage';
@@ -19,12 +19,20 @@ export function ArtifactImageViewer({
 }) {
   const { t } = useTranslation();
   const [failedUri, setFailedUri] = useState<string | null>(null);
-  const { width } = useWindowDimensions();
-  const [height, setHeight] = useState(0);
+  const [{ height, width }, setSize] = useState({ height: 0, width: 0 });
 
   return (
     <ArtifactPreviewTarget>
-      <View className="flex-1" onLayout={({ nativeEvent }) => setHeight(nativeEvent.layout.height)}>
+      <View
+        className="flex-1"
+        onLayout={({ nativeEvent: { layout } }) =>
+          setSize((current) =>
+            current.width === layout.width && current.height === layout.height
+              ? current
+              : { height: layout.height, width: layout.width },
+          )
+        }
+      >
         {failedUri === uri ? (
           <View className="flex-1 items-center justify-center p-6">
             <View className="w-full rounded-2xl bg-background p-6">
@@ -35,7 +43,7 @@ export function ArtifactImageViewer({
               />
             </View>
           </View>
-        ) : height > 0 ? (
+        ) : height > 0 && width > 0 ? (
           <ZoomableImage
             accessibilityLabel={accessibilityLabel}
             height={height}

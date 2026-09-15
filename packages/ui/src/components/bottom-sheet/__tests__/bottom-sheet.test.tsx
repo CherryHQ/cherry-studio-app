@@ -296,7 +296,7 @@ describe('BottomSheet', () => {
     expect(mockBottomSheetProps.index).toBe(2);
   });
 
-  test('uses a caller-provided fixed height on a full-width sheet with only top corners rounded', () => {
+  test('uses a caller-provided fixed height on a bounded sheet with only top corners rounded', () => {
     act(() => {
       renderer = create(
         <BottomSheet height={420} onClose={jest.fn()} open testID="fixed-height" title="Approval">
@@ -314,7 +314,7 @@ describe('BottomSheet', () => {
       borderTopLeftRadius: 32,
       borderTopRightRadius: 32,
       height: 420,
-      width: Dimensions.get('window').width,
+      width: Math.min(720, Dimensions.get('window').width),
     });
     expect(cardStyle.borderBottomLeftRadius ?? cardStyle.borderRadius ?? 0).toBe(0);
     expect(cardStyle.borderBottomRightRadius ?? cardStyle.borderRadius ?? 0).toBe(0);

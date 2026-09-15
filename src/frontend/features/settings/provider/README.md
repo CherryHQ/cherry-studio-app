@@ -56,7 +56,12 @@ returns to the requesting surface, or to the provider list when settings opened 
 ## Desktop Provider Synchronization
 
 The provider list's overflow menu owns the collection-level entry for synchronizing from a paired
-PC. Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
+PC. Device details and the post-pairing guide open the same sync page with a connection ID, skipping
+source selection. Dedicated onboarding routes also reuse this page with a route-owned
+`setupIntent="chat"`; successful import then opens onboarding's chat-model selection without marking
+setup complete. Settings synchronization still returns to the provider list.
+
+Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
 only selects a paired source, fetches the providers enabled on that PC, lets the user choose which
 ones to synchronize, and refreshes provider/model queries after the import transaction succeeds.
 Selected providers receive the PC configuration and are enabled, including already installed

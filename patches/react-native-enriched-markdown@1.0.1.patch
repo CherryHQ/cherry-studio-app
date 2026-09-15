@@ -177,7 +177,7 @@ diff --git a/ios/views/TableContainerView.m b/ios/views/TableContainerView.m
  #else
    CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
-index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42469161eb 100644
+index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29db25fa97f 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
 @@ -17,10 +17,12 @@ import android.text.StaticLayout
@@ -272,7 +272,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42
    }
  
    override fun onLayout(
-@@ -230,7 +256,7 @@ class CodeBlockContainerView(
+@@ -230,15 +256,14 @@ class CodeBlockContainerView(
        buttonTop + copyButton.measuredHeight,
      )
  
@@ -280,8 +280,28 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42
 +    verticalScrollView.layout(borderW, headerH, width - borderW, bottom - top - borderW)
    }
  
-   // Divider between the header and the code, centered in the gap the code
-@@ -305,6 +331,12 @@ class CodeBlockContainerView(
+-  // Divider between the header and the code, centered in the gap the code
+-  // text's top inset creates, so it adds no height of its own.
++  // Keep the divider above the code viewport so scrolling text cannot cross it.
+   override fun onDraw(canvas: Canvas) {
+     super.onDraw(canvas)
+     val borderWidth = borderW.toFloat()
+-    val y = headerH + inset / 2f
++    val y = headerH - dividerPaint.strokeWidth / 2f
+     canvas.drawLine(borderWidth, y, width - borderWidth, y, dividerPaint)
+   }
+ 
+@@ -246,6 +271,9 @@ class CodeBlockContainerView(
+   // the event when there is one (a pending block has no menu yet).
+   private fun showContextMenu(anchor: View): Boolean {
+     if (pending) return false
++    // A popup only takes window focus; it does not cancel an ancestor's long press.
++    // Commit this native gesture before presenting, including for non-scrolling blocks.
++    anchor.parent?.requestDisallowInterceptTouchEvent(true)
+     ContextMenuPopup.show(anchor, this) {
+       item(ContextMenuPopup.Icon.COPY, copyLabel) { copyCode() }
+       item(ContextMenuPopup.Icon.DOCUMENT, copyAsMarkdownLabel) { copyFencedMarkdown() }
+@@ -305,6 +333,12 @@ class CodeBlockContainerView(
    }
  
    companion object {
@@ -294,7 +314,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42
      private const val HEADER_LABEL_SCALE = 0.85f
  
      // Drawable box for the copy glyph, as a multiple of the code font size.
-@@ -366,7 +398,7 @@ class CodeBlockContainerView(
+@@ -366,7 +400,7 @@ class CodeBlockContainerView(
        val inset = contentInset(style)
        val headerH = headerHeight(style)
        val text = buildCodeText(CodeBlockNode.extractCode(node), style)
@@ -303,7 +323,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42
        val paint = createCodePaint(style, context)
        val contentWidth = ceil(Layout.getDesiredWidth(text, paint)).toInt().coerceAtLeast(1)
        val layout =
-@@ -377,7 +409,7 @@ class CodeBlockContainerView(
+@@ -377,7 +411,7 @@ class CodeBlockContainerView(
            .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
            .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
            .build()
@@ -313,7 +333,7 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42
    }
  }
 diff --git a/ios/views/ENRMCodeBlockContainerView.m b/ios/views/ENRMCodeBlockContainerView.m
-index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..4bde9011cd8ff93c614b6401a5468691db008eb9 100644
+index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1ef4eb6ed 100644
 --- a/ios/views/ENRMCodeBlockContainerView.m
 +++ b/ios/views/ENRMCodeBlockContainerView.m
 @@ -8,8 +8,8 @@
@@ -388,6 +408,20 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..4bde9011cd8ff93c614b6401a5468691
  }
  
  - (void)drawRect:(CGRect)rect
+@@ -446,11 +452,10 @@ - (void)drawRect:(CGRect)rect
+   CGFloat inset = [self contentInset];
+   CGFloat headerH = [self headerHeight];
+ 
+-  // Divider between the header and the code, centered in the gap the code
+-  // text's top inset creates, so it adds no height of its own.
++  // Keep the divider above the code viewport so scrolling text cannot cross it.
+   RCTUIColor *dividerColor = [[_config codeBlockColor] colorWithAlphaComponent:kENRMHeaderDividerAlpha];
+   if (dividerColor) {
+-    CGRect dividerRect = CGRectMake(borderWidth, headerH + inset / 2, self.bounds.size.width - borderWidth * 2, 1);
++    CGRect dividerRect = CGRectMake(borderWidth, headerH - 1, self.bounds.size.width - borderWidth * 2, 1);
+     [dividerColor setFill];
+ #if !TARGET_OS_OSX
+     [[UIBezierPath bezierPathWithRect:dividerRect] fill];
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
 index 8e3fc760ea1b6ff2c5ccc0911b0801b87da84aec..c2ce8ce4ea42211d67b0bd0088b91ba1ae433476 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt

@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { ContextMenuExclusion } from '@cherrystudio/ui/components';
 
 import { MessageFileStrip } from '../parts/MessageFileStrip';
 import type { UserMessageAttachmentPart } from './partitionUserMessageParts';
@@ -10,8 +10,8 @@ type UserMessageAttachmentsProps = {
 /** Attached files sit above the user's bubble. */
 export function UserMessageAttachments({ attachments }: UserMessageAttachmentsProps) {
   return (
-    <View className="w-full self-end">
+    <ContextMenuExclusion className="w-full self-end">
       <MessageFileStrip parts={attachments.map(({ part }) => part)} />
-    </View>
+    </ContextMenuExclusion>
   );
 }

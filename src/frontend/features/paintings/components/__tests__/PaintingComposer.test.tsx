@@ -135,13 +135,13 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/frontend/utils/constants', () => ({ isIOS: false }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  composerContentGap: 8,
+  getComposerKeyboardStickyOffset: () => 26,
   useAlert: () => ({ alert: { show: mockAlertShow } }),
-  useComposerDockLayout: () => ({
-    contentBottomInset: 88,
-    handleInputHeightChange: jest.fn(),
-    inputHeightShared: { value: 88 },
-    keyboardOffset: 26,
-  }),
+}));
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 0 }),
 }));
 
 jest.mock('@/frontend/components/Composer', () => ({
