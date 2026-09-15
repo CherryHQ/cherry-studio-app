@@ -217,14 +217,18 @@ discovered input schemas and applies result-size limits.
 WeCom business operations use the official Streamable HTTP MCP services through
 `createOfficialMcpClient`. Cherry does not bundle or run the desktop CLI, convert its HTTP service
 descriptions into schemas, or implement business request envelopes. `wecomBotApi.ts` owns only the
-official confirmation-link, polling and signed MCP-configuration exchange. This is personal bot
+official confirmation-link, polling and signed MCP-configuration exchange. This is bot
 authorization, not a standard OAuth authorization-code flow.
 
 The default `wecom_bot` method copies a link for confirmation inside WeCom. The alternative
 `wecom_mcp` method imports an official MCP URL or `mcpServers` JSON export from the bot's permission
-page. Both accept only HTTPS `qyapi.weixin.qq.com/mcp/bot/<category>` endpoints. Native credential
-storage holds the private query parameters; SDK endpoint metadata excludes them. The import method
-does not accept executable commands, arbitrary hosts or custom headers.
+page. Both accept only HTTPS endpoints under `qyapi.weixin.qq.com/mcp/`. Signed configuration uses
+the official `biz_type` independently of the service's URL path. Imports infer categories for known
+personal and enterprise document paths; other paths receive neutral `service_<index>` names and
+default write approval. Native credential storage holds private query parameters; SDK endpoint
+metadata excludes them. Each MCP session receives only its own service's query parameters, even
+when multiple services share a path. The import method rejects executable commands, arbitrary hosts
+and custom headers.
 
 `createWecomClient` discovers tools across authorized categories and qualifies their names as
 `wecom_<category>__<upstream-name>`. Official schemas, descriptions, arguments and results stay intact.
@@ -241,11 +245,18 @@ MCP configuration. There is no automatic credential conversion.
 
 The signed configuration exchange follows the official CLI's
 [MCP implementation at 9eb7898](https://github.com/WecomTeam/wecom-cli/blob/9eb7898b959861af879495e211e37431fa908f19/src/mcp/config.rs).
-The latest CLI uses a different business transport, so continued availability of this historical
-bootstrap still needs live-account acceptance. The independently supported manual import path follows
-the [current official MCP setup guide](https://open.work.weixin.qq.com/help2/pc/21676).
-Neither connection path has been accepted with a live account in this change; related regression
+The latest CLI uses a different business transport; this integration retains the pinned MCP
+bootstrap. The user confirmed successful bot connection in the development app on 2026-09-15 after
+removing the category/path coupling. The independent import path follows the
+[current official MCP setup guide](https://open.work.weixin.qq.com/help2/pc/21676).
+Configuration import and business tool calls still need live-account acceptance; related regression
 suites were updated but not run.
+
+Enterprise document bots can have their own document permissions rather than inherit the user's;
+see the [official CLI discussion](https://github.com/WecomTeam/wecom-cli/issues/64). Authorization
+response failures log the stage and schema locations through `WecomAuthorization`, without response
+values, URL query credentials or bot secrets. Development builds expose safe authorization diagnostics
+through the connection screen's explicit Error details action.
 
 ## Compatibility And Verification
 

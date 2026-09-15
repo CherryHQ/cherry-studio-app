@@ -12,21 +12,29 @@ export const WecomCategorySchema = z
   .max(64)
   .regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/);
 
-/** Official permission pages export /mcp/bot/<category> URLs with private query credentials. */
+/** The official service owns its MCP paths; category is separate configuration metadata. */
 function parseMcpUrl(value: string): URL | undefined {
   try {
     const url = new URL(value);
-    const category = url.pathname.match(/^\/mcp\/bot\/([^/]+)$/)?.[1];
     if (
       url.origin === 'https://qyapi.weixin.qq.com' &&
+      url.pathname.startsWith('/mcp/') &&
+      url.pathname.length > '/mcp/'.length &&
       !url.username &&
       !url.password &&
-      !url.hash &&
-      WecomCategorySchema.safeParse(category).success
+      !url.hash
     )
       return url;
   } catch {}
   return undefined;
+}
+
+/** Only known imported paths imply reviewed categories. Other imports receive neutral names. */
+function inferMcpCategory(value: string): string | undefined {
+  const path = parseMcpUrl(value)?.pathname;
+  // Enterprise endpoint: https://github.com/WecomTeam/wecom-cli/issues/64
+  const category = path === '/mcp/robot-doc' ? 'doc' : path?.match(/^\/mcp\/bot\/([^/]+)$/)?.[1];
+  return WecomCategorySchema.safeParse(category).success ? category : undefined;
 }
 
 export const WecomMcpUrlSchema = z
@@ -34,12 +42,10 @@ export const WecomMcpUrlSchema = z
   .trim()
   .max(8192)
   .refine((value) => !!parseMcpUrl(value));
-export const WecomMcpConnectionSchema = z
-  .object({
-    category: WecomCategorySchema,
-    url: WecomMcpUrlSchema,
-  })
-  .refine(({ category, url }) => new URL(url).pathname === `/mcp/bot/${category}`);
+export const WecomMcpConnectionSchema = z.object({
+  category: WecomCategorySchema,
+  url: WecomMcpUrlSchema,
+});
 const ConnectionsSchema = z
   .array(WecomMcpConnectionSchema)
   .min(1)
@@ -104,8 +110,8 @@ export function importWecomMcpConfig(value: string): WecomCredential {
     return ImportedCredentialSchema.parse({
       version: 3,
       kind: 'mcp',
-      connections: servers.map(({ url }) => ({
-        category: new URL(url).pathname.split('/').at(-1),
+      connections: servers.map(({ url }, index) => ({
+        category: inferMcpCategory(url) ?? `service_${index + 1}`,
         url,
       })),
     });

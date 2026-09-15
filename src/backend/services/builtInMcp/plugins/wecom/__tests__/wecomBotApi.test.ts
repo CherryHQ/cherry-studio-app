@@ -1,3 +1,4 @@
+import { loggerService } from '@logger';
 import { digestStringAsync } from 'expo-crypto';
 
 import { wecomBotApi } from '../wecomBotApi';
@@ -14,6 +15,11 @@ jest.mock('expo-crypto', () => ({
   digestStringAsync: jest.fn(async () => 'signed-digest'),
   randomUUID: () => '12345678-1234-4000-8000-123456789012',
 }));
+jest.mock('@logger', () => {
+  const logger = { warn: jest.fn() };
+  return { loggerService: { withContext: () => logger } };
+});
+const logger = jest.mocked(loggerService.withContext('WecomAuthorization'));
 const signal = new AbortController().signal;
 const bot = { botId: 'bot-1', secret: 'private-secret' };
 const config = {
@@ -24,6 +30,7 @@ const config = {
 };
 beforeEach(() => {
   mockRequest.mockReset();
+  logger.warn.mockClear();
   jest.spyOn(Date, 'now').mockReturnValue(123000);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -112,12 +119,55 @@ it('retains newly authorized categories and omits explicitly unauthorized or uns
   expect(credential.connections.map(({ category }) => category)).toEqual(['doc', 'mail']);
 });
 
+it('accepts an existing enterprise bot whose doc service uses the official robot-doc endpoint', async () => {
+  const url = 'https://qyapi.weixin.qq.com/mcp/robot-doc?apikey=private-enterprise-key';
+  mockRequest.mockResolvedValue({ data: { errcode: 0, list: [{ ...config, url }] } });
+  await expect(wecomBotApi.exchange(bot, 2, signal)).resolves.toMatchObject({
+    version: 3,
+    kind: 'bot',
+    ...bot,
+    connections: [{ category: 'doc', url }],
+  });
+});
+
+it('keeps all signed categories when the second MCP path does not encode its biz_type', async () => {
+  const url = 'https://qyapi.weixin.qq.com/mcp/services/calendar?key=private-schedule-key';
+  mockRequest.mockResolvedValue({
+    data: {
+      errcode: 0,
+      list: [config, { ...config, biz_type: 'schedule', url }],
+    },
+  });
+  await expect(wecomBotApi.exchange(bot, 2, signal)).resolves.toMatchObject({
+    connections: [
+      { category: 'doc', url: config.url },
+      { category: 'schedule', url },
+    ],
+  });
+});
+
+it('logs the failing authorization stage and schema locations without response values', async () => {
+  mockRequest.mockResolvedValue({
+    data: { list: [{ ...config, url: 'https://attacker.test?secret=private-secret' }] },
+  });
+  const error = await wecomBotApi.exchange(bot, 2, signal).catch((error: unknown) => error);
+  expect(error).toMatchObject({
+    reason: 'request',
+    message: expect.stringContaining('mcp-config; connections.0.url'),
+  });
+  expect((error as Error).message).not.toContain('private-secret');
+  expect(logger.warn).toHaveBeenCalledWith('Invalid Wecom authorization response.', {
+    step: 'mcp-config',
+    issues: expect.arrayContaining([expect.objectContaining({ path: ['connections', 0, 'url'] })]),
+  });
+  expect(JSON.stringify(logger.warn.mock.calls)).not.toMatch(/private-|attacker/);
+});
+
 it.each([
   {
     errcode: 0,
     list: [{ ...config, url: 'https://attacker.test/mcp/bot/doc?secret=private-secret' }],
   },
-  { errcode: 0, list: [{ ...config, biz_type: 'mail' }] },
   { errcode: 0, list: [config, config] },
   { errcode: 0, list: [] },
   { errcode: 853001, errmsg: 'private-upstream-message' },

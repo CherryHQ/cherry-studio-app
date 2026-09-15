@@ -1,3 +1,4 @@
+import { loggerService } from '@logger';
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 
@@ -13,6 +14,7 @@ import {
 
 // Official MCP bootstrap: WecomTeam/wecom-cli at 9eb7898b959861af879495e211e37431fa908f19,
 // src/auth/qrcode.rs, src/mcp/config.rs and src/constants.rs. Business calls use MCP directly.
+const logger = loggerService.withContext('WecomAuthorization');
 const authorization = createHttpClient({
   baseUrl: 'https://work.weixin.qq.com',
   timeoutMs: 15_000,
@@ -24,9 +26,23 @@ const secret = z
   .max(16_384)
   .regex(/^[^\r\n\0]+$/);
 
-function parseResponse<T>(schema: z.ZodType<T>, value: unknown): T {
+function parseResponse<T>(schema: z.ZodType<T>, value: unknown, step: string): T {
   const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new PluginError('request', 'Invalid Wecom authorization response.');
+  if (!parsed.success) {
+    // Schema locations identify compatibility failures without logging upstream values or secrets.
+    logger.warn('Invalid Wecom authorization response.', {
+      step,
+      issues: parsed.error.issues.map(({ code, path }) => ({ code, path })),
+    });
+    const locations = parsed.error.issues
+      .slice(0, 3)
+      .map(({ code, path }) => `${path.join('.') || 'response'} (${code})`)
+      .join(', ');
+    throw new PluginError(
+      'request',
+      `Invalid Wecom authorization response: ${step}; ${locations}.`,
+    );
+  }
   return parsed.data;
 }
 
@@ -49,9 +65,18 @@ async function request(
         : { method: 'GET', query: options.query }),
     });
     signal.throwIfAborted();
-    const data = parseResponse(z.looseObject({ errcode: z.number().optional() }), response.data);
-    if (data.errcode)
-      throw new PluginError('authorization', 'Wecom rejected the authorization request.');
+    const data = parseResponse(
+      z.looseObject({ errcode: z.number().optional() }),
+      response.data,
+      path,
+    );
+    if (data.errcode) {
+      logger.warn('Wecom rejected authorization.', { step: path, errcode: data.errcode });
+      throw new PluginError(
+        'authorization',
+        `Wecom rejected the authorization request (${data.errcode}).`,
+      );
+    }
     return data;
   } catch (error) {
     if (signal.aborted) throw new PluginError('cancelled', 'Wecom authorization cancelled.');
@@ -78,6 +103,7 @@ export const wecomBotApi = {
     const data = parseResponse(
       z.object({ scode: secret, auth_url: z.string().url().max(8192) }),
       response.data,
+      'authorization-link',
     );
     const url = new URL(data.auth_url);
     if (
@@ -104,10 +130,15 @@ export const wecomBotApi = {
     const data = parseResponse(
       z.looseObject({ status: z.string().optional() }),
       response.data ?? {},
+      'authorization-poll',
     );
     if (data.status !== 'success') return undefined;
-    const bot = parseResponse(z.object({ botid: secret, secret }), data.bot_info);
-    return parseResponse(WecomBotSchema, { botId: bot.botid, secret: bot.secret });
+    const bot = parseResponse(z.object({ botid: secret, secret }), data.bot_info, 'bot-identity');
+    return parseResponse(
+      WecomBotSchema,
+      { botId: bot.botid, secret: bot.secret },
+      'bot-credential',
+    );
   },
 
   async exchange(
@@ -145,6 +176,7 @@ export const wecomBotApi = {
           .max(32),
       }),
       response,
+      'mcp-config-list',
     );
     const connections = list
       .filter(
@@ -156,12 +188,16 @@ export const wecomBotApi = {
       .map((item) => ({ category: item.biz_type, url: item.url }));
     if (!connections.length)
       throw new PluginError('access', 'Authorize at least one Wecom capability before connecting.');
-    return parseResponse(WecomBotCredentialSchema, {
-      version: 3,
-      kind: 'bot',
-      ...bot,
-      configId: randomUUID(),
-      connections,
-    });
+    return parseResponse(
+      WecomBotCredentialSchema,
+      {
+        version: 3,
+        kind: 'bot',
+        ...bot,
+        configId: randomUUID(),
+        connections,
+      },
+      'mcp-config',
+    );
   },
 };

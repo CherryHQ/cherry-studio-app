@@ -1,3 +1,4 @@
+import { loggerService } from '@logger';
 import * as z from 'zod';
 
 import { PluginError } from '@/shared/contracts/plugins';
@@ -8,6 +9,7 @@ import { getPluginToolEffect, type PluginClient } from '../pluginDefinition';
 import { requirePluginAuthMethod, requirePluginDefinition } from '../pluginRegistry';
 
 const CONNECTION_TIMEOUT_MS = 15_000;
+const logger = loggerService.withContext('PluginConnection');
 
 /** Verify new credentials through read-only connection checks before committing them. */
 export async function validatePluginConnection(
@@ -22,6 +24,7 @@ export async function validatePluginConnection(
   const timer = setTimeout(() => deadline.abort(), CONNECTION_TIMEOUT_MS);
   const operationSignal = signal ? AbortSignal.any([signal, deadline.signal]) : deadline.signal;
   let client: PluginClient | undefined;
+  let phase = 'initialization';
   try {
     operationSignal.throwIfAborted();
     client = await plugin.createClient({
@@ -38,6 +41,7 @@ export async function validatePluginConnection(
     const cursors = new Set<string>();
     let cursor: string | undefined;
     while (true) {
+      phase = 'discovery';
       const page = await client.listTools({
         options: { signal: operationSignal },
         ...(cursor ? { params: { cursor } } : {}),
@@ -50,6 +54,7 @@ export async function validatePluginConnection(
           operationSignal.throwIfAborted();
           return plugin.validation.accountLabel(undefined);
         }
+        phase = 'validation';
         const output = await client.callTool({
           name: definition.name,
           args: plugin.validation.args,
@@ -82,6 +87,23 @@ export async function validatePluginConnection(
       cursor = page.nextCursor;
     }
   } catch (error) {
+    logger.warn('Plugin connection check failed.', {
+      pluginId,
+      authMethod,
+      phase,
+      ...(error instanceof PluginError
+        ? { reason: error.reason, message: error.message }
+        : {
+            errorName: error instanceof Error ? error.name : typeof error,
+            frames:
+              error instanceof Error
+                ? error.stack
+                    ?.split('\n')
+                    .filter((line) => /^\s+at /.test(line))
+                    .slice(0, 6)
+                : undefined,
+          }),
+    });
     if (signal?.aborted) throw new PluginError('cancelled', 'Plugin connection cancelled.');
     if (deadline.signal.aborted) throw new PluginError('network', 'Plugin connection timed out.');
     if (error instanceof PluginError) throw error;

@@ -4,7 +4,7 @@ import type { PluginGuideDefinition } from '../../pluginGuide';
 // https://github.com/WecomTeam/wecom-cli/tree/9eb7898b959861af879495e211e37431fa908f19/skills
 // Current capabilities: https://open.work.weixin.qq.com/help2/pc/21714
 export const wecomGuide = {
-  revision: 4,
+  revision: 5,
   sections: [
     {
       requiredTools: [],
@@ -18,6 +18,9 @@ WeCom permissions belong to the authorizing user and bot. Discovery does not imp
 data access. A service may have creation permission without search/read permission. When access is
 denied, direct the user to the bot's permission page in WeCom; some data access requires administrator
 approval. After changing authorization, refresh tools or reconnect if the service is still missing.
+Some document connections act as an independent enterprise bot rather than the authorizing user.
+That bot does not automatically inherit the user's existing document permissions. An object-access
+denial can require granting the bot access to that document, even when its document capability is authorized.
 
 ## Documents and tables
 Use the URL to distinguish document types: /doc/ is a text document, /sheet/ a spreadsheet,

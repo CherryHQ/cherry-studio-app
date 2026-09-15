@@ -29,6 +29,7 @@ export function InteractiveConnect({
     progress,
     isBusy,
     error,
+    diagnostic,
     existingApplication,
     setExistingApplication,
     begin,
@@ -199,11 +200,27 @@ export function InteractiveConnect({
           {progress ? (
             <Text className="text-lg font-semibold text-foreground">{progressTitle}</Text>
           ) : error ? (
-            <ContentState.Error
-              layout="leading"
-              title={t(`plugins.errors.${error}`)}
-              description={t(`${textKey}.recovery`)}
-            />
+            <>
+              <ContentState.Error
+                layout="leading"
+                title={t(`plugins.errors.${error}`)}
+                description={t(`${textKey}.recovery`)}
+              />
+              {__DEV__ && diagnostic ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onPress={() =>
+                    alert.show({
+                      title: t('plugins.authorization.errorDetails'),
+                      description: diagnostic,
+                    })
+                  }
+                >
+                  {t('plugins.authorization.errorDetails')}
+                </Button>
+              ) : null}
+            </>
           ) : finalStatus ? (
             <ContentState.Error
               layout="leading"

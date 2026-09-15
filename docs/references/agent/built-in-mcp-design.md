@@ -311,9 +311,12 @@ authorized MCP connections. It is bot authorization rather than standard OAuth. 
 accepts a URL or `mcpServers` JSON copied from a bot permission's detail page. Both methods verify
 that at least one admitted tool is discoverable without executing a business operation.
 
-MCP connections are restricted to HTTPS `qyapi.weixin.qq.com/mcp/bot/<category>`. Private URL query
-parameters live in native credential storage and are applied only to their matching service's
-outgoing requests. Redirects, custom hosts, custom headers and executable configurations are rejected.
+MCP connections are restricted to HTTPS endpoints under `qyapi.weixin.qq.com/mcp/`. Signed
+configuration owns each service's `biz_type` and URL independently; paths need not encode categories.
+Imports infer known personal and enterprise document categories, assigning other endpoints neutral
+`service_<index>` names with default write approval. Private query parameters live in native storage
+and are applied only to the corresponding MCP session, including when categories share a path.
+Redirects, custom hosts, custom headers and executable configurations are rejected.
 The app qualifies tool names as `wecom_<category>__<upstream-name>` to bind calls and reviewed read
 policy to a specific service. Input schemas, descriptions, arguments and results remain official.
 Every newly discovered tool is available under the existing write approval policy; upstream
@@ -330,13 +333,16 @@ The workflow guide uses the live catalog as the capability authority and covers 
 table metadata, people/task/calendar dependencies, mail/message targets, file inputs, pagination and
 asynchronous completion. A desktop CLI file path does not imply a remote MCP tool can access local
 device files. Enterprise data permissions and any required administrator approval remain upstream.
+An enterprise document bot may act under its own identity and does not automatically inherit the
+authorizing user's existing document access; see the [official CLI discussion](https://github.com/WecomTeam/wecom-cli/issues/64).
 
 Sources: [official MCP setup](https://open.work.weixin.qq.com/help2/pc/21676),
 [official capability comparison](https://open.work.weixin.qq.com/help2/pc/21714), and
 [the CLI's signed MCP bootstrap](https://github.com/WecomTeam/wecom-cli/blob/9eb7898b959861af879495e211e37431fa908f19/src/mcp/config.rs).
-The latest CLI changed its business transport; the signed bootstrap is based on the pinned earlier
-MCP implementation. Its continued availability, both connection paths and real tool calls still
-require live-account acceptance. Regression suites were updated but not run.
+The latest CLI changed its business transport; the signed bootstrap uses the pinned earlier MCP
+implementation. The user confirmed successful bot connection in the development app on 2026-09-15
+after removing category/path coupling. Configuration import and business tool calls still require
+live-account acceptance. Regression suites were updated but not run.
 
 ## Extensible Plugin Definitions
 

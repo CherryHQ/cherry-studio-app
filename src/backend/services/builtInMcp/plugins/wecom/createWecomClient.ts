@@ -83,7 +83,8 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
                   'access',
                   'Wecom configuration changed. Refresh the tool list.',
                 );
-              await context.authorization.apply(value, request);
+              // Different categories may share a path with distinct private query parameters.
+              await context.authorization.apply({ ...current, connections: [target] }, request);
             },
           },
         },

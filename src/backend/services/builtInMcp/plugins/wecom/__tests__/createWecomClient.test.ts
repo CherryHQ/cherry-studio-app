@@ -130,6 +130,35 @@ it('retains other services after partial discovery failures and handles tool pag
   expect(JSON.stringify(client.discoveryWarnings)).not.toContain('private-upstream');
 });
 
+it('binds each category to its own credential even when official MCP paths are shared', async () => {
+  const endpoint = 'https://qyapi.weixin.qq.com/mcp/services';
+  credential = {
+    ...makeCredential(),
+    connections: ['doc', 'mail'].map((category) => ({
+      category,
+      url: `${endpoint}?key=private-${category}`,
+    })),
+  };
+  jest.mocked(createOfficialMcpClient).mockResolvedValueOnce(doc).mockResolvedValueOnce(mail);
+  client = await createWecomClient(context);
+  const page = await client.listTools();
+  expect(page.tools.map(({ name }) => name)).toContain('wecom_mail__send_mail');
+  for (const [index, [transport, connection]] of jest
+    .mocked(createOfficialMcpClient)
+    .mock.calls.entries()) {
+    expect(connection.url).toBe(endpoint);
+    const url = new URL(connection.url);
+    await transport.authorization.apply(credential, { url, headers: new Headers() });
+    expect(url.href).toBe(credential.connections[index].url);
+    await expect(
+      transport.authorization.apply(credential, {
+        url: new URL(`${endpoint}/other`),
+        headers: new Headers(),
+      }),
+    ).rejects.toMatchObject({ reason: 'access' });
+  }
+});
+
 it('replaces sessions after MCP credential rotation and rejects an old session using a new grant', async () => {
   client = await createWecomClient(context);
   await client.listTools();
