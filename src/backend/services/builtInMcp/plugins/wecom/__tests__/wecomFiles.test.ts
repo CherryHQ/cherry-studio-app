@@ -1,5 +1,6 @@
 import type { createWecomApi } from '../wecomApi';
 import { prepareWecomFiles, saveWecomResult } from '../wecomFiles';
+import { resolveWecomSchema } from '../wecomSchema';
 
 const mockGetFileUri = jest.fn();
 jest.mock('@/backend/data/services/FileEntryService', () => ({ fileEntryService: {} }));
@@ -225,4 +226,61 @@ it('preserves an oversized JSON result in a local file instead of truncating it'
     file_path: 'file:///cache/WecomFiles/unique-id-result.json',
   });
   expect(JSON.parse(testState.writes[0].data as string)).toEqual(value);
+});
+
+function recursiveFiles(directive: Record<string, unknown>) {
+  return resolveWecomSchema(
+    { $ref: 'Node' },
+    {
+      Node: {
+        type: 'object',
+        properties: {
+          children: { type: 'array', items: { type: 'object', $ref: 'Node' } },
+          files: { type: 'object', additionalProperties: { $ref: 'File' } },
+        },
+      },
+      File: { type: 'string', ...directive },
+    },
+  );
+}
+
+it('uploads files inside recursive children and dictionaries without changing caller arguments', async () => {
+  const args = { children: [{ children: [{ files: { report: uri } }] }] };
+  const prepared = await prepareWecomFiles(api, recursiveFiles(upload), args, signal());
+  expect(prepared.payload).toEqual({
+    children: [{ children: [{ files: { report: 'media-1' } }] }],
+  });
+  expect(args.children[0].children[0].files.report).toBe(uri);
+  expect(call).toHaveBeenCalledTimes(1);
+});
+
+it('uses multipart for recursive file fields even when the optional files are absent', async () => {
+  const schema = recursiveFiles(octet);
+  const append = jest.spyOn(FormData.prototype, 'append').mockImplementation(() => {});
+  const prepared = await prepareWecomFiles(
+    api,
+    schema,
+    { children: [{ files: { report: uri } }] },
+    signal(),
+  );
+  prepared.form!();
+  expect(append.mock.calls).toEqual([
+    ['children[0].files.report', expect.objectContaining({ uri }), 'report.pdf'],
+  ]);
+  expect(call).not.toHaveBeenCalled();
+  expect((await prepareWecomFiles(api, schema, { children: [{}] }, signal())).form).toBeDefined();
+});
+
+it('saves file results in recursive response nodes', () => {
+  const output = saveWecomResult(
+    recursiveFiles({ 'x-wecom-file-save': { fileName: 'nested.txt' } }),
+    { children: [{ children: [{ files: { content: 'Nested text' } }] }] },
+    signal(),
+  );
+  expect(output).toEqual({
+    children: [
+      { children: [{ files: { content: 'file:///cache/WecomFiles/unique-id-nested.txt' } }] },
+    ],
+  });
+  expect(testState.writes[0].data).toBe('Nested text');
 });

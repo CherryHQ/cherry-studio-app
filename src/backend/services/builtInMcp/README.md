@@ -221,8 +221,9 @@ and the signed `get_cli_config` exchange. Native credentials store bot identity,
 resulting bearer token. The single `wecom_bot` authorization method retains confirmation inside WeCom.
 
 `createWecomClient` queries `/service/discovery` for the catalog and each service schema. It resolves
-named request/response references and nested resources, hides upstream internal input fields, and
-qualifies names as `wecom_<service>__<resource>__<method>` (with additional resource segments when
+named request/response references into local `$defs`/`$ref`, preserving recursive document trees and
+formula-field definitions without dropping their tools. It resolves nested resources, hides internal
+input fields, and qualifies names as `wecom_<service>__<resource>__<method>` (with additional segments when
 needed). Only discovered routes can be called. Reviewed service/resource/method names have read
 policy; new names receive the existing write approval policy. A reviewed read that acquires upload
 or confirmation directives is omitted. Unsupported definitions produce safe warnings alongside
@@ -238,8 +239,9 @@ unknown outcome. Long tasks use the returned task ID through `/task/query` or th
 with `X-Long-Poll-TaskId` and an empty payload; original write content is not resubmitted for polling.
 
 `wecomFiles.ts` resolves attachment/file-tool `file_entry_id` values through the existing file
-service and applies official file directives to native files. Media uploads replace local paths
-with media IDs; octet-stream methods use multipart fields. Uploads are limited to Cherry attachment,
+service and follows schema references along actual data, including recursive fields, to apply
+official file directives to native files. Media uploads replace local paths with media IDs;
+octet-stream methods use multipart fields. Uploads are limited to Cherry attachment,
 document-export and WeCom-download directories, with a 100 MiB file/multipart limit. Binary/range
 downloads are bounded at 64 MiB. File-save fields become actual paths under the app cache, with safe
 unique filenames; large JSON results are saved intact instead of being silently truncated. File

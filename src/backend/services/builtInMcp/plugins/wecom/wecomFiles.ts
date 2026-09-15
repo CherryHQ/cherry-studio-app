@@ -7,18 +7,29 @@ import { PluginError } from '@/shared/contracts/plugins';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { readWecomResult, type createWecomApi } from './wecomApi';
-import { hasWecomDirective, isWecomDirective, type WecomJsonSchema } from './wecomSchema';
+import {
+  dereferenceWecomSchema,
+  hasWecomDirective,
+  isWecomDirective,
+  type WecomJsonSchema,
+} from './wecomSchema';
 
 type FieldPath = (string | number)[];
 type Field = { path: FieldPath; schema: WecomJsonSchema; value: unknown };
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 const outputDirectory = () => new Directory(Paths.cache, 'WecomFiles');
 
-function fields(schema: WecomJsonSchema, value: unknown, path: FieldPath = []): Field[] {
+function fields(
+  schema: WecomJsonSchema,
+  value: unknown,
+  path: FieldPath = [],
+  root = schema,
+): Field[] {
+  schema = dereferenceWecomSchema(schema, root);
   const result: Field[] = [{ path, schema, value }];
   if (Array.isArray(value) && schema.items && typeof schema.items === 'object')
     value.forEach((item, index) =>
-      result.push(...fields(schema.items as WecomJsonSchema, item, [...path, index])),
+      result.push(...fields(schema.items as WecomJsonSchema, item, [...path, index], root)),
     );
   else if (value && typeof value === 'object' && !Array.isArray(value)) {
     const properties = schema.properties as Record<string, WecomJsonSchema> | undefined;
@@ -28,7 +39,7 @@ function fields(schema: WecomJsonSchema, value: unknown, path: FieldPath = []): 
           ? properties[key]
           : schema.additionalProperties;
       if (child && typeof child === 'object')
-        result.push(...fields(child as WecomJsonSchema, item, [...path, key]));
+        result.push(...fields(child as WecomJsonSchema, item, [...path, key], root));
     }
   }
   return result;
