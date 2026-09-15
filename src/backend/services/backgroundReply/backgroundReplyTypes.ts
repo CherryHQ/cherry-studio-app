@@ -1,3 +1,4 @@
+import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { BackgroundReplyPhase } from '@/shared/backgroundActivity/chatReply';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
@@ -37,9 +38,12 @@ export type BackgroundReplyTurnInput = {
   agentName: string;
   sessionId: string;
   sessionTitle: string;
+  onInterrupt?: (reason: Error) => void | Promise<void>;
 };
 
 export type BackgroundReplyLifecycle = {
+  /** Protect submission preparation until the turn acquires its own execution lease. */
+  acquirePreparation: (onInterrupt: (reason: Error) => void) => KeepAliveLease;
   clearSession: (sessionId: string) => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
   updateSessionTitle: (sessionId: string, title: string) => void;

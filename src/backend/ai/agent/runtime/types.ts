@@ -240,7 +240,7 @@ export interface MessageRuntimeTimingSink {
 
 export type RuntimeExecutionRequest = {
   turnId: string;
-  /** Host-prepared application prompt: mobile Runtime rules, App language, and Agent instructions. */
+  /** Host-prepared application prompt: Runtime rules, language, selected guides and Agent instructions. */
   instructions: string;
   model: RuntimeModel;
   history: RuntimeHistoryTurn[];

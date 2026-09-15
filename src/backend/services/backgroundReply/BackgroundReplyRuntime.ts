@@ -1,6 +1,5 @@
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import { resolveScheme } from 'expo-linking';
-import { Platform } from 'react-native';
 
 import {
   type Activatable,
@@ -17,10 +16,15 @@ import type {
   BackgroundActivitySessionInput,
 } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type {
+  KeepAliveLease,
+  KeepAliveSource,
+} from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type {
   BackgroundReplyActivityProps,
   BackgroundReplyContent,
   BackgroundReplyPhase,
 } from '@/shared/backgroundActivity/chatReply';
+import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type {
@@ -53,6 +57,7 @@ type TurnRecord = {
   generation: number;
   key: string;
   latestMessage?: BackgroundReplyMessage;
+  onInterrupt?: (reason: Error) => void | Promise<void>;
   session?: ChatActivitySession;
   startedAtEpochMs: number;
   updateTimer?: ReturnType<typeof setTimeout>;
@@ -78,12 +83,18 @@ type EnvironmentPort = {
  * Chat's domain adapter over the background-activity mechanism: it owns the
  * per-session turn state machine, derives presentable content from chat
  * messages, and maps generating phases onto the session's keepAlive bit.
- * Throttling, AppState handling, orphan sweeps, and keep-alive audio all live
- * behind the injected session manager.
+ * Throttling, AppState handling, orphan sweeps, and platform keep-alive all live
+ * behind the injected session manager. Platform availability is a presenter
+ * and lease-source concern; this runtime never branches on it.
  */
 @Injectable('BackgroundReplyRuntime')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['BackgroundActivityManager', 'PreferenceService', 'BackgroundActivityEnvironment'])
+@DependsOn([
+  'BackgroundActivityManager',
+  'PreferenceService',
+  'BackgroundActivityEnvironment',
+  'KeepAliveCoordinator',
+])
 @AppStatePolicy('background-presentation')
 export class BackgroundReplyRuntime
   extends BaseService
@@ -92,28 +103,26 @@ export class BackgroundReplyRuntime
   private disposed = false;
   private generation = 0;
   private operationTail: Promise<void> = Promise.resolve();
+  private readonly preparationLeases = new Set<KeepAliveLease>();
   private turns = new Map<string, TurnRecord>();
 
   constructor(
     private readonly activities: BackgroundActivityPort,
     private readonly preference: PreferencePort,
     private readonly environment: EnvironmentPort,
+    private readonly keepAlive: KeepAliveSource,
   ) {
     super();
   }
 
   protected onInit(): void {
-    if (Platform.OS !== 'ios') return;
-
     this.registerDisposable(
       this.preference.subscribeChange(PREFERENCE_KEY)(() => this.handlePreferenceChange()),
     );
   }
 
   protected async onReady(): Promise<void> {
-    if (Platform.OS === 'ios' && this.preference.readCached(PREFERENCE_KEY)) {
-      await this.activate();
-    }
+    if (this.preference.readCached(PREFERENCE_KEY)) await this.activate();
   }
 
   onActivate(): void {
@@ -133,6 +142,8 @@ export class BackgroundReplyRuntime
   }
 
   private cancelSessions(): void {
+    for (const lease of this.preparationLeases) lease.release();
+    this.preparationLeases.clear();
     for (const record of this.turns.values()) {
       this.clearUpdateTimer(record);
       record.session?.cancel();
@@ -140,8 +151,19 @@ export class BackgroundReplyRuntime
     }
   }
 
+  acquirePreparation = (onInterrupt: (reason: Error) => void): KeepAliveLease => {
+    if (!this.isActivated || this.disposed) return { release() {} };
+    const lease = this.keepAlive.acquire('chat.preparation', onInterrupt);
+    this.preparationLeases.add(lease);
+    return {
+      release: () => {
+        if (this.preparationLeases.delete(lease)) lease.release();
+      },
+    };
+  };
+
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
-    if (Platform.OS !== 'ios' || !this.isActivated || this.disposed) return noOpTurn;
+    if (!this.isActivated || this.disposed) return noOpTurn;
 
     const normalized = normalizeTurnInput(input);
     const existing = this.turns.get(normalized.key);
@@ -157,6 +179,7 @@ export class BackgroundReplyRuntime
       deepLinkUrl: normalized.deepLinkUrl,
       generation,
       key: normalized.key,
+      onInterrupt: input.onInterrupt,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
       ...(existing?.session ? { session: existing.session } : {}),
     };
@@ -230,13 +253,8 @@ export class BackgroundReplyRuntime
     if (this.disposed) return;
     this.disposed = true;
 
-    const records = [...this.turns.values()];
+    this.cancelSessions();
     this.turns.clear();
-    for (const record of records) {
-      this.clearUpdateTimer(record);
-      record.session?.cancel();
-      record.session = undefined;
-    }
     await this.operationTail;
   }
 
@@ -338,8 +356,9 @@ export class BackgroundReplyRuntime
     // A continuation that supersedes this generation inherits the live session.
     await this.enqueue(async () => {
       if (!this.isRecordCurrent(record)) return;
-      record.session?.finish(this.toActivityProps(record));
+      const session = record.session;
       record.session = undefined;
+      await session?.finish(this.toActivityProps(record));
       if (this.turns.get(key) === record) this.turns.delete(key);
     });
   }
@@ -381,6 +400,7 @@ export class BackgroundReplyRuntime
     record.session = this.activities.startSession({
       deepLinkUrl: record.deepLinkUrl,
       keepAlive,
+      onInterrupt: (reason) => this.turns.get(record.key)?.onInterrupt?.(reason),
       presenter: this.environment.assistantPresenter,
       props: this.toActivityProps(record),
       tag: SESSION_TAG,
@@ -440,7 +460,10 @@ function normalizeTurnInput(input: BackgroundReplyTurnInput): {
   return {
     actorName: input.agentName,
     conversationTitle: input.sessionTitle,
-    deepLinkUrl: `${resolveScheme({})}:///?agentId=${encodeURIComponent(input.agentId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), {
+      kind: 'chat',
+      sessionId: input.sessionId,
+    }),
     key: input.sessionId,
   };
 }

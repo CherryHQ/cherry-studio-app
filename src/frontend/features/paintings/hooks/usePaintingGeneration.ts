@@ -15,8 +15,10 @@ import { useDeletePaintings, useSyncPaintingQueries } from '@/frontend/data/pain
 import type {
   PaintingGenerationResult as BackendPaintingGenerationResult,
   PaintingGenerationOutput,
+  PaintingGenerationStart,
 } from '@/shared/contracts';
-import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
+import { AiFailureSnapshotSchema, type AiFailureSnapshot } from '@/shared/contracts/aiFailure';
+import type { JobError } from '@/shared/data/api/schemas/jobs';
 import { isTerminalStatus } from '@/shared/data/api/schemas/jobs';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -26,9 +28,23 @@ export type PaintingGenerationStatus = 'idle' | 'generating';
  * The receipt exists but holds no images and nothing is running for it — the
  * previous attempt died with the app, timed out, or the provider refused.
  * The closed reason selects localized recovery copy while provider diagnostics
- * remain available only through the persisted job ledger.
+ * are available in the detail sheet the user opens explicitly.
  */
-export type PaintingInterruption = { reason: PaintingJobInterruptionReason };
+export type PaintingFailure = { message: string; failure?: AiFailureSnapshot };
+
+function readPaintingFailure(error: JobError | null): PaintingFailure {
+  const failure = AiFailureSnapshotSchema.safeParse(error?.params?.failure);
+  return {
+    message: error?.message ?? 'Painting generation failed',
+    ...(failure.success ? { failure: failure.data } : {}),
+  };
+}
+
+export type PaintingInterruption = {
+  failure?: AiFailureSnapshot;
+  message?: string;
+  reason: PaintingJobInterruptionReason;
+};
 
 export type PaintingOutput = PaintingGenerationOutput;
 
@@ -44,11 +60,6 @@ export type PaintingGenerationInput = {
 export type PaintingGenerationResult = BackendPaintingGenerationResult;
 
 const JOB_POLL_INTERVAL_MS = 1000;
-
-type PendingSettle = {
-  reject: (error: Error) => void;
-  resolve: (result: PaintingGenerationResult | null) => void;
-};
 
 /**
  * Drives painting generation through the job ledger: `startGeneration` enqueues
@@ -83,11 +94,13 @@ export function usePaintingGeneration({
   const deletePaintings = useDeletePaintings();
   const jobs = usePaintingJobs();
   const [displayParamValues, setDisplayParamValues] = useState<ParamValues | null>(null);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<PaintingFailure | null>(null);
   const [outputs, setOutputs] = useState<PaintingOutput[]>(() => [...initialOutputs]);
   const [status, setStatus] = useState<PaintingGenerationStatus>('idle');
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const pendingSettleRef = useRef<PendingSettle | null>(null);
+  const isGenerationInFlightRef = useRef(false);
+  const retryReceiptIdRef = useRef<string | undefined>(undefined);
+  const [settledInterruption, setSettledInterruption] = useState<PaintingInterruption | null>(null);
   const cancelPromiseRef = useRef<Promise<boolean> | null>(null);
   const cancelRequestedRef = useRef(false);
   // A job stays in the active list for up to one poll after its terminal row
@@ -120,8 +133,15 @@ export function usePaintingGeneration({
     outputs.length === 0;
   const interruptedJob = paintingId ? jobs.interruptedByPaintingId.get(paintingId) : undefined;
   const interruption: PaintingInterruption | null = useMemo(
-    () => (isInterrupted ? { reason: paintingJobInterruptionReason(interruptedJob) } : null),
-    [interruptedJob, isInterrupted],
+    () =>
+      settledInterruption ??
+      (isInterrupted
+        ? {
+            ...(interruptedJob?.error ? readPaintingFailure(interruptedJob.error) : {}),
+            reason: paintingJobInterruptionReason(interruptedJob),
+          }
+        : null),
+    [interruptedJob, isInterrupted, settledInterruption],
   );
 
   const jobQuery = useQuery('/jobs/:id', {
@@ -133,10 +153,9 @@ export function usePaintingGeneration({
 
   const job = jobQuery.data;
   // This subscribes to an external store (the job ledger, via the poll query)
-  // rather than deriving a value: the terminal snapshot must settle the
-  // in-flight `generate` promise exactly once — a side effect that cannot run
-  // during render — and the state collapse must happen in the same step, since
-  // clearing `activeJobId` disables the query that carries the snapshot.
+  // rather than deriving a value: completion refreshes persisted outputs and
+  // clears the active query together. Submission has already been accepted;
+  // execution failures belong to the result, not the composer's draft recovery.
   /* eslint-disable react-hooks/set-state-in-effect -- see above */
   useEffect(() => {
     if (
@@ -147,27 +166,30 @@ export function usePaintingGeneration({
     ) {
       return;
     }
-    const settle = pendingSettleRef.current;
-    pendingSettleRef.current = null;
     setSettledJobIds((current) => new Set(current).add(job.id));
     setActiveJobId(null);
     cancelRequestedRef.current = false;
+    isGenerationInFlightRef.current = false;
     if (job.status === 'completed') {
+      setError(null);
+      retryReceiptIdRef.current = undefined;
       const result = job.output as PaintingGenerationResult;
       setOutputs(result.outputs);
       setStatus('idle');
       void syncPaintingQueries(result.painting);
-      settle?.resolve(result);
       return;
     }
-    const failure = new Error(job.error?.message ?? 'Painting generation failed');
-    setStatus('idle');
-    if (settle) {
-      // `generate`'s catch records the error for its caller's throw path.
-      settle.reject(failure);
-    } else {
-      setError(failure);
+    if (job.status === 'cancelled') {
+      retryReceiptIdRef.current = receiptIdRef.current;
+      setStatus('idle');
+      setError(null);
+      setSettledInterruption({ ...readPaintingFailure(job.error), reason: 'interrupted' });
+      return;
     }
+    retryReceiptIdRef.current = receiptIdRef.current;
+    const failure = readPaintingFailure(job.error);
+    setStatus('idle');
+    setError(failure);
   }, [activeJobId, job, syncPaintingQueries]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -186,14 +208,14 @@ export function usePaintingGeneration({
             onReceipt?.(undefined);
           }
 
-          const settle = pendingSettleRef.current;
-          pendingSettleRef.current = null;
           setSettledJobIds((current) => new Set(current).add(jobId));
           setActiveJobId(null);
           setError(null);
+          setSettledInterruption(null);
+          retryReceiptIdRef.current = undefined;
+          isGenerationInFlightRef.current = false;
           setStatus('idle');
           cancelRequestedRef.current = false;
-          settle?.resolve(null);
           return true;
         } catch (cancelError) {
           cancelRequestedRef.current = false;
@@ -211,16 +233,20 @@ export function usePaintingGeneration({
   );
 
   const generate = useCallback(
-    async (input: PaintingGenerationInput): Promise<PaintingGenerationResult | null> => {
-      if (pendingSettleRef.current || activeJobId !== null) {
+    async (input: PaintingGenerationInput): Promise<PaintingGenerationStart | null> => {
+      if (isGenerationInFlightRef.current || activeJobId !== null) {
         throw new Error('Painting generation is already in progress');
       }
+      isGenerationInFlightRef.current = true;
       cancelRequestedRef.current = false;
       setError(null);
+      setSettledInterruption(null);
       setDisplayParamValues(input.paramValues);
       setStatus('generating');
 
+      let accepted = false;
       try {
+        const retryReceiptId = retryReceiptIdRef.current ?? (interruption ? paintingId : undefined);
         const started = await paintings.startGeneration({
           fileEntryIds: input.attachments.map((attachment) => attachment.fileEntryId),
           mode: input.mode,
@@ -229,7 +255,7 @@ export function usePaintingGeneration({
           // Retrying reuses the interrupted receipt so its gallery tile flips in
           // place; a receipt that already holds images is never passed here, and
           // the backend rejects it if one ever is.
-          ...(interruption ? { paintingId } : {}),
+          ...(retryReceiptId ? { paintingId: retryReceiptId } : {}),
           paramValues: input.paramValues,
           prompt: input.prompt,
         });
@@ -244,22 +270,20 @@ export function usePaintingGeneration({
         // The gallery's active-job poll stops once nothing is running, so a
         // fresh enqueue has to wake it explicitly.
         void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-        return await new Promise<PaintingGenerationResult | null>((resolve, reject) => {
-          pendingSettleRef.current = { reject, resolve };
-          setActiveJobId(started.jobId);
-        });
+        setActiveJobId(started.jobId);
+        accepted = true;
+        return started;
       } catch (generationError) {
         const normalized =
           generationError instanceof Error ? generationError : new Error(String(generationError));
-        if (normalized instanceof FileAttachmentError) {
-          // Admission failed before a job existed; preserve the previous canvas.
-          setError(error);
-          setDisplayParamValues(displayParamValues);
-        } else {
-          setError(normalized);
-        }
+        // A rejected submission leaves the previous result and draft intact.
+        setError(error);
+        setSettledInterruption(settledInterruption);
+        setDisplayParamValues(displayParamValues);
         setStatus('idle');
         throw normalized;
+      } finally {
+        if (!accepted) isGenerationInFlightRef.current = false;
       }
     },
     [
@@ -272,16 +296,17 @@ export function usePaintingGeneration({
       paintingId,
       paintings,
       queryClient,
+      settledInterruption,
     ],
   );
 
   const cancel = useCallback(() => {
     cancelRequestedRef.current = true;
     if (activeJobId === null) {
-      return;
+      return Promise.resolve(false);
     }
     const receiptId = receiptIdRef.current ?? paintingId;
-    void cancelStartedGeneration(activeJobId, receiptId);
+    return cancelStartedGeneration(activeJobId, receiptId);
   }, [activeJobId, cancelStartedGeneration, paintingId]);
   return {
     aspectRatio,

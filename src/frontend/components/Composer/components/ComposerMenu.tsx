@@ -3,7 +3,7 @@ import ImagesIcon from '@cherrystudio/app-icons/icons/images';
 import PaperclipIcon from '@cherrystudio/app-icons/icons/paperclip';
 import { Composer } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
-import { type PropsWithChildren, useCallback } from 'react';
+import { type PropsWithChildren, type RefObject, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -33,20 +33,22 @@ const logger = loggerService.withContext('ComposerMenu');
  * closes the menu, dismisses and blurs the field, then opens its picker;
  * caller-owned tool rows only close the menu and keep the input context live.
  *
- * The menu used to take the keyboard down when it opened so
- * the panel could grow into that space, but the panel is portalled and anchored
- * to where the trigger was measured *before* the dismissal — so the composer
- * dropped ~290pt while the panel stayed put, and the menu ended up floating in
- * the middle of the screen with nothing under it. The panel grows upward out of
- * the ＋ button and clears the keyboard on its own, so it never needed that
- * space.
+ * The keyboard-preserving overlay follows the live ＋ position through input
+ * layout and keyboard motion. It grows upward within the available space,
+ * scrolling its contents when needed instead of dismissing the keyboard.
  */
 type ComposerMenuProps = PropsWithChildren<{
   media?: 'all' | 'images';
   onPickFiles?: () => void;
+  triggerRef?: RefObject<View | null>;
 }>;
 
-export function ComposerMenu({ children, media = 'all', onPickFiles }: ComposerMenuProps) {
+export function ComposerMenu({
+  children,
+  media = 'all',
+  onPickFiles,
+  triggerRef,
+}: ComposerMenuProps) {
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
@@ -117,7 +119,11 @@ export function ComposerMenu({ children, media = 'all', onPickFiles }: ComposerM
   }, []);
 
   return (
-    <Composer.Menu accessibilityLabel={t('chat.media.attach')} testID="composer-menu">
+    <Composer.Menu
+      accessibilityLabel={t('chat.media.attach')}
+      testID="composer-menu"
+      triggerRef={triggerRef}
+    >
       <Composer.Menu.Item
         icon={<CameraIcon className="size-5 text-foreground" />}
         label={t('chat.media.camera')}
@@ -137,7 +143,7 @@ export function ComposerMenu({ children, media = 'all', onPickFiles }: ComposerM
       ) : null}
       {children ? (
         <>
-          <View className="my-1 h-px bg-border" />
+          <View className="my-1 h-px bg-border-subtle" />
           {children}
         </>
       ) : null}

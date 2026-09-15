@@ -361,36 +361,58 @@ function buildWanxImageEditBody(
   };
 }
 
-function buildRequestBody(
-  input: ImageGenerationSubmitInput,
-  descriptor: DashScopeModelDescriptor,
-): Record<string, unknown> {
-  const bag = (input.providerParams ?? {}) as DashScopeProviderParams;
-  switch (descriptor.id) {
+function resolveBodyBuilder(modelId: string) {
+  switch (modelId) {
     case 'z-image-turbo':
+    case 'qwen-image-3.0':
+    case 'qwen-image-3.0-pro':
     case 'qwen-image-edit':
     case 'qwen-image-edit-plus':
     case 'wan2.6-image':
     case 'wan2.7-image':
     case 'wan2.7-image-pro':
-      return buildChatLikeBody(input, bag);
+      return buildChatLikeBody;
     case 'qwen-image':
     case 'qwen-image-plus':
     case 'wanx2.1-t2i-turbo':
     case 'wanx2.1-t2i-plus':
     case 'wanx2.0-t2i-turbo':
-      return buildText2ImageBody(input, bag);
+      return buildText2ImageBody;
     case 'wanx-v1':
-      return buildWanxV1Body(input, bag);
+      return buildWanxV1Body;
     case 'wan2.5-i2i-preview':
-      return buildWan25I2IBody(input, bag);
+      return buildWan25I2IBody;
     case 'qwen-mt-image':
-      return buildQwenMtImageBody(input, bag);
+      return buildQwenMtImageBody;
     case 'wanx2.1-imageedit':
-      return buildWanxImageEditBody(input, bag);
+      return buildWanxImageEditBody;
     default:
-      throw new Error(`Unsupported DashScope image model: ${descriptor.id}`);
+      return undefined;
   }
+}
+
+export function isDashScopeImageDescriptorSupported(
+  descriptor: DashScopeModelDescriptor | undefined,
+): boolean {
+  return (
+    descriptor !== undefined &&
+    resolveBodyBuilder(descriptor.id) !== undefined &&
+    [
+      '/api/v1/services/aigc/text2image/image-synthesis',
+      '/api/v1/services/aigc/multimodal-generation/generation',
+      '/api/v1/services/aigc/image-generation/generation',
+      '/api/v1/services/aigc/image2image/image-synthesis',
+    ].includes(descriptor.endpoint)
+  );
+}
+
+function buildRequestBody(
+  input: ImageGenerationSubmitInput,
+  descriptor: DashScopeModelDescriptor,
+): Record<string, unknown> {
+  const build = resolveBodyBuilder(descriptor.id);
+  if (!build) throw new Error(`Unsupported DashScope image model: ${descriptor.id}`);
+  return build(input, (input.providerParams ?? {}) as DashScopeProviderParams);
 }
 
 class DashScopeTransport implements ImageGenerationTransport {

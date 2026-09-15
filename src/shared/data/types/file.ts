@@ -42,8 +42,15 @@ export const FALLBACK_MEDIA_TYPE = 'application/octet-stream';
  * this field existed, and rows that will arrive from a peer with no provenance
  * concept of its own, genuinely have no proven origin. Presenting those as
  * `imported` would state something the data does not support.
+ * `document-export` identifies new files produced by document conversion;
+ * sharing an existing file never changes its provenance.
  */
-export const FileEntryProvenanceSchema = z.enum(['generated', 'imported', 'unknown']);
+export const FileEntryProvenanceSchema = z.enum([
+  'generated',
+  'imported',
+  'document-export',
+  'unknown',
+]);
 export type FileEntryProvenance = z.infer<typeof FileEntryProvenanceSchema>;
 
 export const FileEntryIdSchema = z.uuid();
@@ -56,7 +63,7 @@ export const FileEntrySchema = z
     filename: SafeNameSchema,
     id: FileEntryIdSchema,
     mediaType: MediaTypeSchema,
-    /** How the bytes came to exist: imported by the user, or produced for them. */
+    /** How the bytes came to exist: imported, generated, exported, or unproven. */
     provenance: FileEntryProvenanceSchema,
     /** File size in bytes. */
     size: z.int().nonnegative(),

@@ -6,7 +6,6 @@ import {
   ModalBottomSheet,
   programmatic,
 } from '@swmansion/react-native-bottom-sheet';
-import { getCornerRadiusSync } from 'expo-screen-corner-radius';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -24,9 +23,8 @@ import { cn } from '../../utils';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
-const OUTER_INSET = 4;
 const TOP_INSET = 12;
-const BOTTOM_CORNER_RADIUS = 28;
+const MAX_CARD_WIDTH = 720;
 const TOP_CORNER_RADIUS = 32;
 const HEIGHT_RATIOS = {
   compact: 0.4,
@@ -99,19 +97,16 @@ export function BottomSheet(props: BottomSheetProps) {
   } = props;
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const screenCornerRadius = getCornerRadiusSync() ?? 0;
+  const cardWidth = Math.max(0, Math.min(MAX_CARD_WIDTH, windowWidth - insets.left - insets.right));
   const scrimStyle = useResolveClassNames('bg-scrim');
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
-  const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET - OUTER_INSET);
+  const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET);
   const { height, size, sizes } = props;
   const { cardHeight, detents } = useMemo(
     () => resolveSheetHeights(availableCardHeight, dismissible, height, size, sizes),
     [availableCardHeight, dismissible, height, size, sizes],
   );
-  const cardWidth = Math.max(0, windowWidth - OUTER_INSET * 2);
-  const detentHeight = cardHeight + OUTER_INSET;
-  const bottomCornerRadius = Math.max(BOTTOM_CORNER_RADIUS, screenCornerRadius - OUTER_INSET);
   const hasFooter = footer != null;
   const isCloseActionVisible = Boolean(closeAction && !backAction);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
@@ -182,7 +177,27 @@ export function BottomSheet(props: BottomSheetProps) {
       onSettle={handleSettle}
       scrimColor={scrimColor}
     >
-      <View style={[styles.layout, { height: detentHeight, width: '100%' }]}>
+      <View
+        style={[
+          styles.layout,
+          {
+            height: cardHeight,
+            width: '100%',
+            paddingLeft: insets.left,
+            paddingRight: insets.right,
+          },
+        ]}
+      >
+        {/* The native host keeps its full-window scrim. The transparent space
+            beside a bounded card must dismiss just like the scrim above it. */}
+        <Pressable
+          accessibilityElementsHidden
+          accessible={false}
+          disabled={!open || !dismissible}
+          importantForAccessibility="no-hide-descendants"
+          onPress={requestClose}
+          style={StyleSheet.absoluteFill}
+        />
         <View
           accessibilityElementsHidden={!open}
           accessibilityViewIsModal
@@ -192,8 +207,6 @@ export function BottomSheet(props: BottomSheetProps) {
           style={[
             styles.card,
             {
-              borderBottomLeftRadius: bottomCornerRadius,
-              borderBottomRightRadius: bottomCornerRadius,
               height: cardHeight,
               width: cardWidth,
             },
@@ -259,7 +272,6 @@ export function BottomSheet(props: BottomSheetProps) {
             </View>
           ) : null}
         </View>
-        <View style={styles.bottomGap} />
       </View>
     </ModalBottomSheet>
   );
@@ -286,15 +298,12 @@ function resolveSheetHeights(
     .filter((height, index, heights) => index === 0 || height !== heights[index - 1]);
   const cardHeight = cardHeights.at(-1) ?? 0;
   const closedDetent = dismissible ? 0 : programmatic(0);
-  const detents: Detent[] = [closedDetent, ...cardHeights.map((height) => height + OUTER_INSET)];
+  const detents: Detent[] = [closedDetent, ...cardHeights];
 
   return { cardHeight, detents };
 }
 
 const styles = StyleSheet.create({
-  bottomGap: {
-    height: OUTER_INSET,
-  },
   card: {
     borderCurve: 'continuous',
     borderTopLeftRadius: TOP_CORNER_RADIUS,

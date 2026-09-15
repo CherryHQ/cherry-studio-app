@@ -203,7 +203,7 @@
       --error-border: var(--red-400);
       --code-block: var(--gray-100);
       --inline-code: var(--gray-alpha-100);
-      --inline-code-foreground: var(--red-900);
+      --inline-code-foreground: var(--primary);
       --brand: #ff5757;
       --chat-user: var(--gray-alpha-100);
       --chat-background: #f9f9f9;
@@ -326,7 +326,7 @@
       --error-border: var(--red-400);
       --code-block: var(--gray-100);
       --inline-code: var(--gray-alpha-100);
-      --inline-code-foreground: var(--red-900);
+      --inline-code-foreground: var(--primary);
       --brand: #ff5757;
       --chat-user: var(--gray-alpha-100);
       --chat-background: var(--background);

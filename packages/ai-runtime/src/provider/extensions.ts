@@ -67,6 +67,10 @@ import {
   createSiliconProvider,
   type SiliconProviderSettings,
 } from './custom/silicon/siliconProvider';
+import {
+  createTokenhubProvider,
+  type TokenhubProviderSettings,
+} from './custom/tokenhub/tokenhub-provider';
 import { createZhipuProvider, type ZhipuProviderSettings } from './custom/zhipuProvider';
 
 export const GoogleVertexExtension = ProviderExtension.create({
@@ -286,6 +290,12 @@ export const PpioExtension = ProviderExtension.create({
   create: createPpioProvider,
 } as const satisfies ProviderExtensionConfig<PpioProviderSettings, ProviderV3, 'ppio'>);
 
+export const TokenhubExtension = ProviderExtension.create({
+  name: 'tokenhub',
+  supportsImageGeneration: true,
+  create: createTokenhubProvider,
+} as const satisfies ProviderExtensionConfig<TokenhubProviderSettings, ProviderV3, 'tokenhub'>);
+
 /**
  * DMXAPI Extension - unified chat + embedding + image (single-shot for painting)
  */
@@ -394,6 +404,7 @@ export const extensions = [
   AiHubMixExtension,
   NewApiExtension,
   PpioExtension,
+  TokenhubExtension,
   DmxapiExtension,
   SiliconExtension,
   ZhipuExtension,

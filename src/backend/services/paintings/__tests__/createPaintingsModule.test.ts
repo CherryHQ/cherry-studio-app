@@ -231,6 +231,40 @@ describe('createPaintingsModule', () => {
     expect(dependencies.db.withWriteTx).toHaveBeenCalledTimes(1);
   });
 
+  it('enqueues reference-image generation with the generate mode and its own image limit', async () => {
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.getModel).mockResolvedValue({
+      id: modelId,
+      inputModalities: ['text', 'image'],
+      imageGeneration: { modes: { generate: { maxInputImages: 3, supports: {} } } },
+    } as Model);
+
+    await backend.startGeneration({ ...generationInput, mode: 'generate' });
+
+    expect(dependencies.files.prepareAttachments).toHaveBeenCalledWith({
+      fileEntryIds: [inputFileId],
+      target: { purpose: 'painting', acceptsImages: true, maxImages: 3 },
+    });
+    expect(dependencies.jobs.enqueueGenerateTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        mode: 'generate',
+        images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///managed.png' }],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('rejects a stale mode before creating a painting receipt', async () => {
+    const { backend, dependencies } = createSubject();
+    await expect(
+      backend.startGeneration({ ...generationInput, mode: 'generate' }),
+    ).rejects.toMatchObject({
+      issue: { code: 'model-unsupported' },
+    });
+    expect(dependencies.db.withWriteTx).not.toHaveBeenCalled();
+  });
+
   it('delegates cancellation to the job port', async () => {
     const { backend, dependencies } = createSubject();
 

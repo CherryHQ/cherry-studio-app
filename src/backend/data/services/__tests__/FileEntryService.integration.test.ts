@@ -64,6 +64,22 @@ describe('FileEntryService integration', () => {
     });
   });
 
+  it('preserves an export source through creation, listing and reads', async () => {
+    const entry = await service.create({
+      id: id(99),
+      filename: 'conversation.html',
+      mediaType: 'text/html',
+      size: 12,
+      provenance: 'document-export',
+    });
+    expect(entry.provenance).toBe('document-export');
+    expect((await service.getById(entry.id)).provenance).toBe('document-export');
+    expect((await service.listByCursor()).items).toEqual([entry]);
+    expect(testDatabase.sqlite.prepare('SELECT provenance FROM file_entry').get()).toEqual({
+      provenance: 'document-export',
+    });
+  });
+
   it('rejects an unsafe filename without writing a row', async () => {
     await expect(
       createImported({
@@ -77,6 +93,63 @@ describe('FileEntryService integration', () => {
     expect(testDatabase.sqlite.prepare('SELECT COUNT(*) AS count FROM file_entry').get()).toEqual({
       count: 0,
     });
+  });
+
+  it('does not insert an entry cancelled while waiting for its write transaction', async () => {
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    let releaseQueue!: () => void;
+    const queued = new Promise<void>((resolve) => {
+      releaseQueue = resolve;
+    });
+    const withWriteTx = testDatabase.dbService.withWriteTx.bind(testDatabase.dbService);
+    jest.spyOn(testDatabase.dbService, 'withWriteTx').mockImplementation(async (callback) => {
+      await queued;
+      return withWriteTx(callback);
+    });
+    const insert = jest.spyOn(service, 'createTx');
+    const creating = service.create(
+      {
+        filename: 'draft.txt',
+        id: id(4),
+        mediaType: 'text/plain',
+        provenance: 'generated',
+        size: 5,
+      },
+      controller.signal,
+    );
+
+    controller.abort(cancelled);
+    releaseQueue();
+
+    await expect(creating).rejects.toBe(cancelled);
+    expect(insert).not.toHaveBeenCalled();
+    await expect(service.findById(id(4))).resolves.toBeNull();
+  });
+
+  it('rolls back a new entry when cancellation arrives during its insert', async () => {
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    const createTx = service.createTx.bind(service);
+    jest.spyOn(service, 'createTx').mockImplementation(async (tx, values) => {
+      const entry = await createTx(tx, values);
+      controller.abort(cancelled);
+      return entry;
+    });
+
+    await expect(
+      service.create(
+        {
+          filename: 'draft.txt',
+          id: id(4),
+          mediaType: 'text/plain',
+          provenance: 'generated',
+          size: 5,
+        },
+        controller.signal,
+      ),
+    ).rejects.toBe(cancelled);
+    await expect(service.findById(id(4))).resolves.toBeNull();
   });
 
   it('distinguishes the nullable lookup from the throwing lookup for a missing id', async () => {

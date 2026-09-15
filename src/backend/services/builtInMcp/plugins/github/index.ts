@@ -1,0 +1,1 @@
+export { githubPlugin } from './githubPlugin';

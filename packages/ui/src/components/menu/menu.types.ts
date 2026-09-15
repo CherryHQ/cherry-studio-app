@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 
-/** Private window-space geometry shared by menu trigger and layout owners. */
+/** Private window-space geometry. Zero width and height represent a pointer anchor. */
 export type MenuAnchor = { height: number; pageX: number; pageY: number; width: number };
 
 /** Semantic leading glyph; the menu implementation owns its artwork. */

@@ -1,0 +1,1 @@
+export { amapPlugin } from './amapPlugin';

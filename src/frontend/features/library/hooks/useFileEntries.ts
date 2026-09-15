@@ -6,16 +6,16 @@ import type { FileEntry } from '@/shared/data/types/file';
 
 import { fileLibraryMinVisibleTiles } from '../utils/constants';
 
-export type FileLibraryFilter = 'all' | 'document' | 'image';
+export type FileLibraryFilter = 'all' | 'document' | 'image' | 'sharing';
 export type FileLibraryEntry = ResolvedFileEntry;
 
 /**
- * One cursor walk over every file, partitioned by the kind tabs client-side.
+ * One cursor walk over every file, filtered by kind or provenance client-side.
  *
- * The tabs are a filter over what is already on screen, not three separate
+ * The tabs are a filter over what is already on screen, not separate
  * lists: switching them must not re-query, must not blank the grid, and must
  * carry the pages the previous tab already paged in. That rules out putting the
- * kind in the DataApi query — it would key three independent page stacks that
+ * filter in the DataApi query — it would key independent page stacks that
  * cannot share a thing.
  */
 export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled: boolean }) {
@@ -25,7 +25,11 @@ export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled
     () =>
       filter === 'all'
         ? query.entries
-        : query.entries.filter((item) => entryKind(item.entry) === filter),
+        : query.entries.filter((item) =>
+            filter === 'sharing'
+              ? item.entry.provenance === 'document-export'
+              : entryKind(item.entry) === filter,
+          ),
     [filter, query.entries],
   );
 

@@ -227,7 +227,8 @@ describe('usePaintingGeneration', () => {
       paramValues: {},
       prompt: 'draw a cherry',
     });
-    expect(result).toEqual({ outputs: [output], painting });
+    expect(result).toEqual({ jobId: 'job-1', paintingId: 'painting-1' });
+    await waitForCondition(() => api?.outputs[0]?.fileEntryId === output.fileEntryId);
     expect(api?.outputs).toEqual([output]);
     expect(api?.paramValues).toEqual({});
     expect(api?.status).toBe('idle');
@@ -245,6 +246,7 @@ describe('usePaintingGeneration', () => {
       await api?.generate({ ...request, paramValues: { aspectRatio: '3:4' } });
     });
 
+    await waitForCondition(() => api?.status === 'idle');
     expect(api?.aspectRatio).toBeCloseTo(3 / 4);
     expect(api?.status).toBe('idle');
   });
@@ -265,8 +267,9 @@ describe('usePaintingGeneration', () => {
     await act(async () => {
       settled = await api?.generate(request).catch((error: unknown) => error);
     });
-    expect(settled).toEqual(new Error('network failed'));
-    expect(api?.error).toEqual(new Error('network failed'));
+    expect(settled).toEqual({ jobId: 'job-fail', paintingId: 'painting-1' });
+    await waitForCondition(() => api?.error?.message === 'network failed');
+    expect(api?.error).toEqual({ message: 'network failed' });
     expect(api?.status).toBe('idle');
 
     mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-2', paintingId: 'painting-1' });
@@ -274,9 +277,7 @@ describe('usePaintingGeneration', () => {
       'job-2',
       jobSnapshot({ id: 'job-2', output: { outputs: [output], painting }, status: 'completed' }),
     );
-    // Two act passes: the first lets `startGeneration` resolve and exits so act
-    // flushes the enqueue render (the poll query only subscribes then); awaiting
-    // the result inside that same act would deadlock on its own flush.
+    // Acceptance resolves before the ledger publishes the result.
     let retry: Promise<unknown> | undefined;
     await act(async () => {
       retry = api?.generate(request);
@@ -285,8 +286,12 @@ describe('usePaintingGeneration', () => {
     await act(async () => {
       await retry;
     });
+    await waitForCondition(() => api?.status === 'idle');
     expect(api?.status).toBe('idle');
     expect(mockStartGeneration).toHaveBeenCalledTimes(2);
+    expect(mockStartGeneration).toHaveBeenLastCalledWith(
+      expect.objectContaining({ paintingId: 'painting-1' }),
+    );
   });
 
   it('rejects the enqueue failure without touching the ledger', async () => {
@@ -298,7 +303,7 @@ describe('usePaintingGeneration', () => {
       settled = await api?.generate(request).catch((error: unknown) => error);
     });
     expect(settled).toEqual(new Error('validation failed'));
-    expect(api?.error).toEqual(new Error('validation failed'));
+    expect(api?.error).toBeNull();
     expect(api?.status).toBe('idle');
   });
 
@@ -315,13 +320,13 @@ describe('usePaintingGeneration', () => {
 
     let result: unknown;
     await act(async () => {
-      api?.cancel();
-      result = await settled;
+      result = await api?.cancel();
     });
 
     expect(mockCancelGeneration).toHaveBeenCalledWith('job-1');
     expect(mockDeletePaintings).toHaveBeenCalledWith(['painting-1']);
-    expect(result).toBeNull();
+    expect(result).toBe(true);
+    await expect(settled).resolves.toEqual({ jobId: 'job-1', paintingId: 'painting-1' });
     expect(api?.error).toBeNull();
     expect(api?.status).toBe('idle');
   });
@@ -380,8 +385,10 @@ describe('usePaintingGeneration', () => {
       await settled;
     });
 
+    await waitForCondition(() => api?.outputs[0]?.fileEntryId === output.fileEntryId);
     expect(api?.outputs).toEqual([output]);
     expect(api?.status).toBe('idle');
+    expect(api?.error).toBeNull();
   });
 
   it("adopts this painting's still-active generation on mount and displays its result", async () => {
@@ -411,6 +418,7 @@ describe('usePaintingGeneration', () => {
     });
     await waitForCondition(() => api?.status === 'idle');
 
+    await waitForCondition(() => api?.outputs[0]?.fileEntryId === output.fileEntryId);
     expect(api?.outputs).toEqual([output]);
     expect(api?.aspectRatio).toBeCloseTo(3 / 4);
     expect(mockSyncPaintingQueries).toHaveBeenCalledWith(painting);
@@ -434,7 +442,7 @@ describe('usePaintingGeneration', () => {
     expect(api?.status).toBe('idle');
   });
 
-  it('reports a failed image-less receipt without projecting provider diagnostics', async () => {
+  it('preserves the failed receipt diagnostic for the user-opened detail sheet', async () => {
     interruptedJobs = [
       jobSnapshot({
         error: { code: 'JOB_HANDLER_THREW', message: 'Invalid JSON response', retryable: true },
@@ -445,7 +453,7 @@ describe('usePaintingGeneration', () => {
     await mountProbe('painting-1');
     await waitForCondition(() => api?.interruption !== null);
 
-    expect(api?.interruption).toEqual({ reason: 'failed' });
+    expect(api?.interruption).toEqual({ message: 'Invalid JSON response', reason: 'failed' });
   });
 
   it('reports a cancelled recovery as an interruption', async () => {
@@ -463,7 +471,10 @@ describe('usePaintingGeneration', () => {
     await mountProbe('painting-1');
     await waitForCondition(() => api?.interruption !== null);
 
-    expect(api?.interruption).toEqual({ reason: 'interrupted' });
+    expect(api?.interruption).toEqual({
+      message: 'Cancelled by startup recovery',
+      reason: 'interrupted',
+    });
   });
 
   it('retries into the interrupted receipt instead of minting a second painting', async () => {

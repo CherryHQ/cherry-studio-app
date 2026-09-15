@@ -60,12 +60,15 @@ export const writeFileInputSchema = z.strictObject({
 
 /** The slice of the managed-file port this tool needs. */
 export type WriteFileFiles = {
-  createTextEntry(input: {
-    data: string;
-    mediaType: string;
-    name: string;
-    provenance: FileEntryProvenance;
-  }): Promise<FileEntry>;
+  createTextEntry(
+    input: {
+      data: string;
+      mediaType: string;
+      name: string;
+      provenance: FileEntryProvenance;
+    },
+    signal: AbortSignal,
+  ): Promise<FileEntry>;
 };
 
 export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
@@ -99,14 +102,17 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
         );
       }
 
-      // A cancelled turn must not add entries to the library.
+      // Storage checks again after async work and before committing the entry.
       signal.throwIfAborted();
-      const entry = await files.createTextEntry({
-        data: parsed.data.content,
-        mediaType: mediaTypeForFilename(filename),
-        name: filename,
-        provenance: 'generated',
-      });
+      const entry = await files.createTextEntry(
+        {
+          data: parsed.data.content,
+          mediaType: mediaTypeForFilename(filename),
+          name: filename,
+          provenance: 'generated',
+        },
+        signal,
+      );
 
       return {
         value: {

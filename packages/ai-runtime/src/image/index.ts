@@ -7,6 +7,7 @@ export {
 } from '../provider/custom/imageGenerationModel';
 export {
   hasImageTransport,
+  isImageTransportDescriptorSupported,
   resolveImageTransport,
 } from '../provider/custom/imageTransportRegistry';
 export {

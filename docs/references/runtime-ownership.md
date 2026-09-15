@@ -38,6 +38,13 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
 - Backgrounding is not a reliable execution window for chat or painting generation.
+- `KeepAliveCoordinator` is the only execution-lease facade that business services and the
+  background-activity manager use. It selects one registered platform source when constructed:
+  `AudioKeepAliveSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
+  elsewhere. Business services never branch on platform; a platform without a mechanism degrades
+  through no-op sources and presenters.
+- Android uses task-scoped foreground-service and Headless JS lifetimes within OS limits; see
+  [Android Background Generation](./android-background-generation.md).
 - Backend modules report events/results; frontend owners perform navigation, translation, toast,
   and React Query invalidation.
 
@@ -128,6 +135,9 @@ resource-deletion contract.
 - `WebSearchService` owns API-key rotation state; the host stops it.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, request cancellation, and fallback to bundled data; the host stops it.
+- `AudioKeepAliveSource` owns the iOS silent audio session; `AndroidBackgroundActivityRuntime`
+  owns the Android foreground service, local notifications, and background budget. The host stops
+  both after their lease consumers have released.
 - Backend `CacheService` owns Provider API-key rotation state and backend-only MMKV persistence;
   the host initializes and stops it.
 - Frontend cache owns subscriptions and MMKV-backed UI persistence.

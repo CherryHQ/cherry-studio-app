@@ -1,8 +1,8 @@
 import type { HttpError, HttpErrorDetails } from './HttpError';
 
-export type HttpBodylessMethod = 'DELETE' | 'GET';
+export type HttpBodylessMethod = 'GET';
 
-export type HttpBodyMethod = 'PATCH' | 'POST' | 'PUT';
+export type HttpBodyMethod = 'DELETE' | 'PATCH' | 'POST' | 'PUT';
 
 export type HttpMethod = HttpBodylessMethod | HttpBodyMethod;
 
@@ -34,6 +34,8 @@ export interface DecodedHttpError {
 export type HttpErrorDecoder = (response: HttpErrorResponse) => DecodedHttpError | undefined;
 
 interface HttpRequestBase {
+  /** Reject redirects for credential exchanges bound to one official endpoint. */
+  readonly redirect?: 'error';
   readonly errorDecoder?: HttpErrorDecoder;
   readonly headers?: HttpHeaders;
   /** Positive response-size limit in bytes. Omit when the domain has no explicit cap. */
@@ -48,7 +50,7 @@ interface HttpRequestBase {
   readonly timeoutMs?: number;
 }
 
-/** `GET` and `DELETE` requests carry no body, matching REST semantics and the fetch transport. */
+/** GET is bodyless; DELETE may carry a body when required by the upstream API. */
 export type HttpRequest<TBody = unknown> =
   | (HttpRequestBase & { readonly body?: never; readonly method: HttpBodylessMethod })
   | (HttpRequestBase & { readonly body?: TBody; readonly method: HttpBodyMethod });

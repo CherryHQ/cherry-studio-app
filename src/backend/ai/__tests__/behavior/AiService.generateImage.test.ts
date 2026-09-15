@@ -4,6 +4,7 @@ import { MockImageModelV3 } from 'ai/test';
 import * as Crypto from 'expo-crypto';
 
 import { AiService } from '@/backend/ai/AiService';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
 
 import { projectContractValue, projectImageCall } from '../_harness/contracts';
 import { installMockProvider } from '../_harness/mockProvider';
@@ -133,9 +134,12 @@ describe('AiService.generateImage AI SDK contract', () => {
     });
   });
 
-  test('preserves image-model failures unchanged', async () => {
+  test('preserves status and provider facts while redacting image-model failure details', async () => {
     const fixture = imageFixture();
-    const modelError = new Error('image model failed');
+    const modelError = Object.assign(new Error('HTTP 401: contract-key rejected'), {
+      statusCode: 401,
+      responseBody: 'Invalid api_key=contract-key',
+    });
     const imageModel = new MockImageModelV3({
       doGenerate: async () => {
         throw modelError;
@@ -154,7 +158,23 @@ describe('AiService.generateImage AI SDK contract', () => {
       }),
     );
 
-    expect(error).toBe(modelError);
+    expect(error).toBeInstanceOf(AiRequestError);
+    expect(error).toMatchObject({
+      message: 'HTTP 401: [REDACTED] rejected',
+      detail: {
+        retryable: false,
+        failure: {
+          reasonCode: 'auth',
+          context: {
+            statusCode: 401,
+            providerId: fixture.provider.id,
+            modelId: fixture.model.modelId,
+            responseBody: 'Invalid api_key=[REDACTED]',
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(error)).not.toContain('contract-key');
   });
 
   test('forwards aborts to the image model and preserves the abort reason', async () => {

@@ -198,7 +198,12 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
 
   return {
     data,
+    error: resolvedFiles.error,
     isLoading: resolvedFiles.isLoading || outputAspectRatio.isLoading,
+    refetch: async () => {
+      await resolvedFiles.refetch();
+      if (primaryOutput) await outputAspectRatio.refetch();
+    },
   };
 }
 

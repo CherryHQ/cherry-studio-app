@@ -6,6 +6,10 @@ import type { MessageStatus } from '@/shared/data/types/message';
 import type { MessageListItem } from '../../types';
 import { MessageParts } from '../MessageParts';
 
+jest.mock('@cherrystudio/ui/components', () => ({
+  ContextMenuExclusion: (props: object) => jest.requireActual('react').createElement('View', props),
+}));
+
 jest.mock('../MessagePartRenderer', () => {
   const { createElement } = jest.requireActual('react');
 

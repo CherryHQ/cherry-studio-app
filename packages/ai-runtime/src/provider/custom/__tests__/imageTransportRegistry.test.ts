@@ -29,6 +29,15 @@ describe('resolveImageTransport', () => {
     }
   });
 
+  it('resolves the registered TokenHub transport for catalog image routes', () => {
+    expect(hasImageTransport('tokenhub', 'hy-image-v3')).toBe(true);
+    const transport = resolveImageTransport('tokenhub', 'hy-image-v3', {
+      baseURL: 'https://tokenhub.tencentmaas.com/v1',
+    });
+    expect(typeof transport?.submit).toBe('function');
+    expect(typeof transport?.poll).toBe('function');
+  });
+
   it('returns null for dmxapi native / openai-flat models (in-SDK path)', () => {
     const settings = { baseURL: 'https://www.dmxapi.cn/v1' };
     for (const modelId of [

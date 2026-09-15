@@ -9,8 +9,10 @@ import {
   type McpServerMutations,
 } from '@/backend/data/api/handlers/mcpServers';
 import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/models';
+import type { PluginCatalogReader } from '@/backend/data/api/handlers/pluginCatalog';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
@@ -18,8 +20,12 @@ import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
-import { createPluginsModule } from '@/backend/services/builtInMcp';
+import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import {
+  createDocumentExportDependencies,
+  type DocumentExportRuntime,
+} from '@/backend/services/documentExport';
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
@@ -48,6 +54,7 @@ export type BackendComposition = {
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
+    pluginCatalog: PluginCatalogReader;
     systemModelSupport: SystemModelSupportFilter;
   };
 };
@@ -56,6 +63,7 @@ export function createBackend(
   services: BackendServices,
   infrastructure: {
     dbService: DbService;
+    documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
     diagnostics: DiagnosticsModule;
     languageServing: LanguageServingSupport & AgentRuntime;
@@ -63,7 +71,12 @@ export function createBackend(
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
-  infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService));
+  // Capture this host's database; late work never resolves a replacement host.
+  const exportFiles = new FileEntryService(dbService);
+  infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
+  infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService), () =>
+    infrastructure.providerRegistryUpdater.ensureReady(),
+  );
   const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(
     infrastructure.languageServing,
   );
@@ -185,6 +198,7 @@ export function createBackend(
       agent: services.agent,
       desktopConnections: infrastructure.desktopConnections,
       diagnostics: infrastructure.diagnostics,
+      documentExport: infrastructure.documentExport,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         delete: services.fileContent.delete,
@@ -198,7 +212,7 @@ export function createBackend(
       models,
       paintings,
       permissions: services.devicePermissions,
-      plugins: createPluginsModule(services.mcpRuntime),
+      plugins: createPluginsModule(services.mcpRuntime, services.mcpRuntime.pluginAuthorizations),
       profile,
       providers,
       webSearch: services.webSearch,
@@ -206,6 +220,7 @@ export function createBackend(
     dataApiDependencies: {
       agentAvatars,
       mcpServerMutations,
+      pluginCatalog: getBuiltInPluginCatalog,
       systemModelSupport,
     },
   };

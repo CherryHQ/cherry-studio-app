@@ -6,6 +6,7 @@ import {
 } from '@cherrystudio/ai-core';
 import {
   buildImageProviderOptions,
+  isImageTransportDescriptorSupported,
   mergeImageProviderOptions,
   splitImageParamValues,
 } from '@cherrystudio/ai-runtime/image';
@@ -28,16 +29,19 @@ import {
   type ProviderRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
+import { createAiFailure } from '@/shared/utils/createAiFailure';
 
 import { AiSdkGenerator, buildAgentParams } from './generation';
 import { createAiUsagePlugin } from './generation/aiUsagePlugin';
 import type { BuildAgentParamsDependencies } from './generation/buildAgentParams';
 import { listModels as listProviderModels } from './generation/listModels';
 import { VertexAuthClient } from './generation/VertexAuthClient';
+import { normalizeAiError } from './normalizeAiError';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -295,19 +299,23 @@ export class AiService extends BaseService {
       registryProviderId,
       model.apiModelId ?? model.modelId,
     )?.modes?.[request.mode]?.vendorTransport;
+    const modelDescriptor = vendorTransport?.endpoint
+      ? { ...vendorTransport, id: sdkConfig.modelId, mode: request.mode }
+      : undefined;
+    if (!isImageTransportDescriptorSupported(sdkConfig.providerId, modelDescriptor)) {
+      throw new Error(
+        `Unsupported image generation route for ${registryProviderId}: ${sdkConfig.modelId}`,
+      );
+    }
     const transportVendorBag = vendorTransport?.endpoint
       ? {
           ...vendorBag,
-          modelDescriptor: {
-            endpoint: vendorTransport.endpoint,
-            id: sdkConfig.modelId,
-            mode: request.mode,
-            ...(vendorTransport.isSync !== undefined && { isSync: vendorTransport.isSync }),
-          },
+          modelDescriptor,
         }
       : vendorBag;
     const imageProviderOptions = buildImageProviderOptions({
       aiSdkProviderId: sdkConfig.providerId,
+      modelId: sdkConfig.modelId,
       paramValues: request.paramValues,
       provider,
       vendorBag: transportVendorBag,
@@ -347,7 +355,21 @@ export class AiService extends BaseService {
         }),
         onProviderCall: createProviderCallHandler(usageCaptureContext, this.services.aiUsageRecord),
       },
-    );
+    ).catch((error: unknown) => {
+      if (signal?.aborted) throw error;
+      const apiKey =
+        sdkConfig.providerSettings && 'apiKey' in sdkConfig.providerSettings
+          ? sdkConfig.providerSettings.apiKey
+          : undefined;
+      throw new AiRequestError(
+        createAiFailure(
+          normalizeAiError(error, typeof apiKey === 'string' ? [apiKey] : [], {
+            providerId: provider.id,
+            modelId: model.apiModelId ?? model.modelId,
+          }),
+        ),
+      );
+    });
 
     return {
       images: result.images.map((image) => ({

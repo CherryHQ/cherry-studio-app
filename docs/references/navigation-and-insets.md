@@ -79,6 +79,23 @@ Before enabling it, verify:
   the frontend observation but does not cancel the Host's active turn.
 - Route files stay thin and re-export exact page boundaries from `src/frontend/features`.
 
+## Window Sizes
+
+The first tablet adaptation keeps the same single-scene navigation and chat-only drawer. The drawer
+leaves at least 64 points of chat visible and is capped at 400 points on wider windows.
+
+The app-shell [page frames](../../src/frontend/appShell/layout/README.md) constrain reading/composer
+content to 800 points and form/management content to 720, inside the horizontal safe area. They
+retain the same mounted page tree during rotation and resizing. Galleries measure their own list
+viewport and grow their column count from two as space permits; image previews and picker grids
+also measure their own region instead of assuming it fills the window.
+
+The iPad device family supports all four orientations and does not require full screen. iPhone
+keeps its existing portrait policy. The Android `withTabletOrientation` config plugin supplies a
+portrait orientation resource for phones and an unspecified orientation in `values-sw600dp`, with
+resizing enabled. These native declarations require a rebuilt development client. Android 16 may
+override orientation restrictions on large displays; layout follows the actual available region.
+
 ## Page Identity And Cached Data
 
 Every route-bound entity or semantic selection defines a complete page identity, such as a
@@ -90,6 +107,12 @@ and other entity-owned state reset through a keyed component boundary. Data from
 identity must not be used as placeholder data. Cached data for the same identity may render while it
 refreshes in the background when that product surface permits stale-while-revalidate behavior.
 
+The `/paintings` route distinguishes an existing task from a new editing draft. A task is identified
+by `paintingId`; an edit or resize is identified by its unique `handoff` token, with `paintingId`
+only selecting the source painting/model. When generation is admitted, the route clears `handoff`
+and adopts the new task's `paintingId` without remounting its composer. Task notification navigation
+can then reuse that page, while another edit always owns a fresh draft.
+
 ## Chat Identity Contract
 
 The chat route has two complete identities:
@@ -100,21 +123,18 @@ The chat route has two complete identities:
 Every in-app entry constructs one of these targets through `chatHref` or `chatRouteParams`. A
 Session link identifies its conversation by `sessionId`; the destination reads the Session entity to derive its Agent
 for presentation and composer behavior. Drafts have no Session entity yet, so `agentId` is their
-complete route identity. If a Session no longer exists, the destination shows a loading state while
-it requests the globally most recently active Session, then replaces the missing identity with that
-result. If no Session remains, it uses the same draft or no-Agent fallbacks as an identity-free
-launch.
+complete route identity. If a Session no longer exists, the destination uses the same draft or
+no-Agent fallbacks as an identity-free launch.
 
 A message search result additionally carries `messageId` and `messageRequestId`. These describe a
 one-time viewport destination, not another conversation/composer identity. The message window
 loads the target and its neighbors directly, pages both older and newer, and gives the list an
 explicit initial scroll target. A fresh request id permits selecting the same result again.
 
-Opening `/` without an identity restores the globally most recently active Session ordered by its
-persisted `lastActivityAt`. If no Session exists, it opens a draft for the first available Agent,
-then the no-Agent empty state. Restoration renders a loading state, never a previous identity's
-content or the no-Agent empty state as a loading placeholder. Every restoration performs a fresh
-one-row Session request; an earlier result is never used to choose the destination.
+Opening `/` without an identity opens a draft for the first available Agent, or the no-Agent empty
+state if none exists. Existing Sessions do not select the launch destination. Resolution renders a
+loading state while Agents load, never a previous identity's content or the no-Agent empty state as
+a loading placeholder. Explicit Session links still open the requested conversation.
 
 | Entry | Destination |
 | --- | --- |
@@ -149,9 +169,12 @@ scrim, card geometry, safe areas, swipe/scrim dismissal, Android back, and acces
 Feature-level picker components pass their content into this shell, while screen callers only pass
 open/close and selection state.
 
-The card keeps a four-point inset from both screen edges and the bottom edge. Its bottom corners use
-the larger of the 28-point card radius or the display radius minus that inset, keeping rounded-screen
-geometry concentric without exposing device geometry to feature code.
+The sheet fills the horizontal safe area up to a 720-point maximum and stays centered at the window's
+bottom edge without a bottom gap or bottom corner radii. Only its exposed top corners use a 32-point
+radius. The native host retains the full-window scrim; tapping the transparent space beside the card
+uses the same guarded close action as the scrim above it. The background extends behind the bottom
+system UI, while the shell applies bottom safe-area padding to its content. Its maximum height stays
+12 points below the top safe area. Resizing changes card geometry within the same mounted sheet.
 
 Component sheets use the shared `compact`, `medium`, `large`, and `full` height specs (40%, 60%,
 80%, and 100% of available height). Features choose or dynamically switch the semantic size; they

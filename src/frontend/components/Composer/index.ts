@@ -19,5 +19,9 @@ export {
   useComposerActions,
   useComposerMeta,
   useComposerPresentationActions,
+  useComposerPresentationState,
   useComposerState,
 } from './context/ComposerProvider';
+
+export { useComposerSendError } from './hooks/useComposerSendError';
+export { ComposerDismissArea } from './components/ComposerDismissArea';

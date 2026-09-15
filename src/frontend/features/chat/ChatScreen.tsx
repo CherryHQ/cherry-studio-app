@@ -7,16 +7,21 @@ import { BlurTargetView } from 'expo-blur';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MainHeader } from '@/frontend/appShell/header';
+import { ReadingContentFrame } from '@/frontend/appShell/layout';
 import {
   type ChatRouteParamsInput,
   type ChatTarget,
   parseChatRoute,
 } from '@/frontend/appShell/navigation/chat';
-import { ComposerDock, ComposerSessionProvider } from '@/frontend/components/Composer';
+import {
+  ComposerDismissArea,
+  ComposerDock,
+  ComposerSessionProvider,
+} from '@/frontend/components/Composer';
 import {
   useAgentApiById,
   useAgentMessageHistoryWindow,
@@ -39,7 +44,13 @@ export function ChatScreen() {
   return (
     <>
       <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
-        <ChatRouteContent />
+        {/* Android samples the target's children, so paint the chat background
+            inside it even when the draft or loading state has no message list. */}
+        <View className="flex-1 bg-chat-background">
+          <ReadingContentFrame>
+            <ChatRouteContent />
+          </ReadingContentFrame>
+        </View>
       </BlurTargetView>
       <MainHeader blurTarget={blurTargetRef} />
     </>
@@ -91,7 +102,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   }
 
   return (
-    <>
+    <ComposerSessionProvider key={composerSession.key}>
       {!isPreview &&
       sessionId &&
       session.data &&
@@ -100,9 +111,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       !messageWindow.error ? (
         <SessionReadReceipt sessionId={sessionId} />
       ) : null}
-      {/* Dismiss after the outside touch ends so the keyboard cannot move a
-          message action before release. The composer is outside this boundary. */}
-      <View className="flex-1" onTouchEnd={Keyboard.dismiss}>
+      <ComposerDismissArea disabled testID="chat-background">
         {sessionId && session.error ? (
           <View className="flex-1 justify-center px-8 py-16">
             <ContentState.Error
@@ -133,20 +142,18 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
         ) : (
           <ChatEmptyState contentBottomInset={contentBottomInset} />
         )}
-      </View>
+      </ComposerDismissArea>
       {hasComposer ? (
-        <ComposerSessionProvider key={composerSession.key}>
-          <ComposerDock layoutMode="flow">
-            <ChatInput
-              agentId={resolvedAgentId}
-              controls={controls}
-              dismissKeyboardOnSend={false}
-              sessionId={sessionId}
-            />
-          </ComposerDock>
-        </ComposerSessionProvider>
+        <ComposerDock layoutMode="flow">
+          <ChatInput
+            agentId={resolvedAgentId}
+            controls={controls}
+            dismissKeyboardOnSend
+            sessionId={sessionId}
+          />
+        </ComposerDock>
       ) : null}
-    </>
+    </ComposerSessionProvider>
   );
 }
 

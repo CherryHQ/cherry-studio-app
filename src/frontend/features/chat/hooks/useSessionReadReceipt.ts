@@ -3,12 +3,14 @@ import { useDrawerStatus } from 'expo-router/drawer';
 import { useCallback } from 'react';
 import { AppState } from 'react-native';
 
+import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import { useAgentSessionStatus } from '@/frontend/hooks/agent';
 
 /** Only the visible chat acknowledges completion; drawers and background routes do not. */
 export function useSessionReadReceipt(sessionId: string) {
   const { markSeen } = useAgentSessionStatus(sessionId);
   const drawerStatus = useDrawerStatus();
+  useBackgroundTaskNotifications({ kind: 'chat', sessionId }, drawerStatus === 'closed');
 
   useFocusEffect(
     useCallback(() => {

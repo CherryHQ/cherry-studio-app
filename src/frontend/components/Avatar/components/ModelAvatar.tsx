@@ -1,5 +1,3 @@
-import { useUniwind } from 'uniwind';
-
 import { resolveModelIconSources } from '@/frontend/utils/modelIcons';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -22,8 +20,6 @@ type ModelAvatarProps = {
  * than becoming one component with a shape switch.
  */
 export function ModelAvatar({ model, provider, size }: ModelAvatarProps) {
-  const { theme } = useUniwind();
-  const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const providerIconId = provider?.presetProviderId ?? provider?.id ?? model.providerId;
   const { iconSource, modelIconSource } = resolveModelIconSources(model.modelId, providerIconId);
   const frameProps = { label: model.name, ...(size !== undefined && { size }) };
@@ -36,9 +32,8 @@ export function ModelAvatar({ model, provider, size }: ModelAvatarProps) {
     <BrandAvatar {...frameProps}>
       <BrandAvatarIcon
         displayContext={modelIconSource ? undefined : 'provider'}
-        iconId={providerIconId}
         recyclingKey={model.id}
-        source={iconSource[iconTheme]}
+        source={iconSource}
       />
     </BrandAvatar>
   );

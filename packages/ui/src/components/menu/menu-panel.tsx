@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react';
-import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
+import type { ComponentProps, ReactNode } from 'react';
+import type { LayoutChangeEvent } from 'react-native';
 import { ScrollView } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useResolveClassNames } from 'uniwind';
 
-import { SurfaceFrame } from '../surface/surface-frame';
 import { menuBlurRadius, menuRestingScale, menuSlideDistance } from './menu-motion';
+import { MenuSurface } from './menu-surface';
 
 export function useMenuPanelRadius() {
   const { borderRadius } = useResolveClassNames('rounded-4xl');
@@ -16,6 +16,7 @@ export function useMenuPanelRadius() {
 export function MenuPanel({
   children,
   contentStyle,
+  elevated = true,
   isOpen,
   maxHeight,
   onLayout,
@@ -24,7 +25,8 @@ export function MenuPanel({
   testID,
 }: {
   children: ReactNode;
-  contentStyle?: StyleProp<ViewStyle>;
+  contentStyle?: ComponentProps<typeof Animated.View>['style'];
+  elevated?: boolean;
   isOpen: boolean;
   maxHeight?: number;
   onLayout: (event: LayoutChangeEvent) => void;
@@ -32,8 +34,6 @@ export function MenuPanel({
   surfaceClassName?: string;
   testID?: string;
 }) {
-  const surfaceFill = useResolveClassNames(surfaceClassName);
-  const cornerRadius = useMenuPanelRadius();
   const panelStyle = useAnimatedStyle(() => ({
     filter: [{ blur: Math.max(0, 1 - progress.value) * menuBlurRadius }],
     opacity: progress.value,
@@ -44,20 +44,18 @@ export function MenuPanel({
   }));
 
   return (
-    <SurfaceFrame
+    <MenuSurface
       className={surfaceClassName}
-      cornerRadius={cornerRadius}
+      contentStyle={fillStyle}
+      elevated={elevated}
       style={fillStyle}
-      tintColor={
-        typeof surfaceFill.backgroundColor === 'string' ? surfaceFill.backgroundColor : undefined
-      }
     >
       <Animated.View
         accessibilityElementsHidden={!isOpen}
         importantForAccessibility={isOpen ? 'auto' : 'no-hide-descendants'}
         onLayout={onLayout}
         pointerEvents={isOpen ? 'auto' : 'none'}
-        style={[contentStyle, { maxHeight }, panelStyle]}
+        style={[contentStyle, maxHeight === undefined ? undefined : { maxHeight }, panelStyle]}
         testID={testID}
       >
         <ScrollView
@@ -68,7 +66,7 @@ export function MenuPanel({
           {children}
         </ScrollView>
       </Animated.View>
-    </SurfaceFrame>
+    </MenuSurface>
   );
 }
 

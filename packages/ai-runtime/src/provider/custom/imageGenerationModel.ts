@@ -63,6 +63,7 @@ export interface ImageGenerationSubmitInput {
 }
 
 export interface CreateImageGenerationModelOptions {
+  maxImagesPerCall?: number;
   provider: string;
   transport: ImageGenerationTransport;
 }
@@ -95,13 +96,13 @@ function readModelDescriptor(value: unknown): ImageTransportDescriptor | undefin
  */
 export function createImageGenerationModel(
   modelId: string,
-  { provider, transport }: CreateImageGenerationModelOptions,
+  { maxImagesPerCall = 1, provider, transport }: CreateImageGenerationModelOptions,
 ): ImageModelV3 {
   return {
     specificationVersion: 'v3',
     provider,
     modelId,
-    maxImagesPerCall: 1,
+    maxImagesPerCall,
     async doGenerate(options: ImageModelV3CallOptions) {
       const { abortSignal } = options;
 

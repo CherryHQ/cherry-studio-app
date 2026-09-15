@@ -83,3 +83,15 @@ and [Runtime Ownership](./runtime-ownership.md) for long-lived resources.
 
 When choosing between `Module`, `Runtime`, `Session`, `Client`, `Adapter`, or `Manager`, use
 [Runtime Ownership](./runtime-ownership.md#role-names).
+
+## Import Paths
+
+- Use `@/frontend/...`, `@/backend/...`, `@/shared/...`, and `@/bootstrap/...` for imports across
+  app modules, respecting the layer direction and public surfaces above.
+- Use `@/assets/...` for repository-root assets, including JSON catalogs and static image
+  `require()` calls. Do not traverse parent directories to reach these assets from app code,
+  tests, or Storybook stories.
+- Keep relative imports for leaf files within the same module or page tree and for local
+  re-exports. Import workspace packages through their `@cherrystudio/...` public surfaces.
+- `tsconfig.json` owns app aliases; Expo reads these paths automatically. Keep Jest's
+  `moduleNameMapper` in sync, with `@/assets/*` before the general `@/*` mapping.

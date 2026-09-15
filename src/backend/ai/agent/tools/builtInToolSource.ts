@@ -20,7 +20,6 @@ import { Platform } from 'react-native';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import type { ModelService } from '@/backend/data/services/ModelService';
-import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
@@ -373,7 +372,7 @@ function productionPaintingDependencies(
       resolve: fileContent.resolve,
     },
     preference: services.preference,
-    providerRegistry: providerRegistryService,
+    models: services.model,
   };
 }
 

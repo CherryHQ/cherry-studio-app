@@ -22,23 +22,27 @@ async function getMiddleware(): Promise<LanguageModelMiddleware> {
   return context.middlewares[0];
 }
 
-async function runStream(deltas: string[]) {
-  const middleware = await getMiddleware();
+async function runStream(deltas: string[], type: 'text' | 'reasoning' = 'text') {
   const parts: LanguageModelV3StreamPart[] = [
     { type: 'stream-start', warnings: [] },
-    { type: 'text-start', id: 'text-1' },
+    { type: `${type}-start`, id: 'text-1' },
     ...deltas.map<LanguageModelV3StreamPart>((delta) => ({
-      type: 'text-delta',
+      type: `${type}-delta`,
       id: 'text-1',
       delta,
     })),
-    { type: 'text-end', id: 'text-1' },
+    { type: `${type}-end`, id: 'text-1' },
     {
       type: 'finish',
       finishReason: { unified: 'stop', raw: 'stop' },
       usage: {} as never,
     },
   ];
+  return runParts(parts);
+}
+
+async function runParts(parts: LanguageModelV3StreamPart[]) {
+  const middleware = await getMiddleware();
   const source = new ReadableStream<LanguageModelV3StreamPart>({
     start(controller) {
       for (const part of parts) controller.enqueue(part);
@@ -63,12 +67,12 @@ async function runStream(deltas: string[]) {
   return events;
 }
 
-async function runGenerate(text: string) {
+async function runGenerate(text: string, type: 'text' | 'reasoning' = 'text') {
   const middleware = await getMiddleware();
   const result = await middleware.wrapGenerate?.({
     doGenerate: async () =>
       ({
-        content: [{ type: 'text', text }],
+        content: [{ type, text }],
         finishReason: { unified: 'stop', raw: 'stop' },
         request: { body: {} },
         usage: {} as never,
@@ -123,12 +127,16 @@ describe('deepseekDsmlParser', () => {
     expect(streamText(events)).toBe('before  after');
   });
 
-  test('preserves malformed and unclosed DSML as text', async () => {
+  test('reports malformed and unclosed DSML instead of leaking it as successful text', async () => {
     const malformed = `before ${OPEN}not an invoke${CLOSE} after`;
-    expect(streamText(await runStream([malformed]))).toBe(malformed);
+    await expect(runStream([malformed])).rejects.toMatchObject({
+      code: 'deepseek_dsml_parse_error',
+    });
 
     const unclosed = `${OPEN}${invoke('web_search', parameter('query', 'query'))}`;
-    expect(streamText(await runStream([unclosed]))).toBe(unclosed);
+    await expect(runStream([unclosed])).rejects.toMatchObject({
+      code: 'deepseek_dsml_parse_error',
+    });
   });
 
   test('passes ordinary text through without changing the finish reason', async () => {
@@ -162,12 +170,73 @@ describe('deepseekDsmlParser', () => {
     expect(result.finishReason.unified).toBe('tool-calls');
   });
 
-  test('preserves malformed non-streaming blocks', async () => {
+  test('reports malformed non-streaming blocks', async () => {
     const text = `before ${OPEN}garbage${CLOSE} after`;
-    const result = await runGenerate(text);
+    await expect(runGenerate(text)).rejects.toMatchObject({ code: 'deepseek_dsml_parse_error' });
+  });
 
-    expect(result.content).toEqual([expect.objectContaining({ type: 'text', text })]);
-    expect(result.finishReason.unified).toBe('stop');
+  test('closes reasoning before emitting recovered calls and keeps both channels free of markup', async () => {
+    const source =
+      'thinking ' +
+      `${OPEN}${invoke('lookup', parameter('query', 'notes'))}${CLOSE}`.replaceAll('｜｜', '｜');
+    const events = await runStream([...source], 'reasoning');
+    expect(events.findIndex((event) => event.type === 'reasoning-end')).toBeLessThan(
+      events.findIndex((event) => event.type === 'tool-input-start'),
+    );
+    expect(
+      events
+        .filter((event) => event.type === 'reasoning-delta')
+        .map((event) => event.delta)
+        .join(''),
+    ).toBe('thinking ');
+    expect(events.filter((event) => event.type === 'tool-call')).toEqual([
+      expect.objectContaining({ toolName: 'lookup', input: '{"query":"notes"}' }),
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      type: 'finish',
+      finishReason: { unified: 'tool-calls' },
+    });
+  });
+
+  test('also recovers calls in non-streaming reasoning', async () => {
+    const result = await runGenerate(
+      `think ${OPEN}${invoke('lookup', parameter('query', 'notes'))}${CLOSE}`,
+      'reasoning',
+    );
+    expect(result.content).toEqual([
+      { type: 'reasoning', text: 'think ' },
+      expect.objectContaining({
+        type: 'tool-call',
+        toolName: 'lookup',
+        input: '{"query":"notes"}',
+      }),
+    ]);
+    expect(result.finishReason.unified).toBe('tool-calls');
+  });
+
+  test('isolates interleaved content and flushes recovered calls before a terminal finish', async () => {
+    const source = `${OPEN}${invoke('lookup', parameter('query', 'notes'))}${CLOSE}`;
+    const events = await runParts([
+      { type: 'reasoning-start', id: 'shared-id' },
+      { type: 'reasoning-delta', id: 'shared-id', delta: source.slice(0, 10) },
+      { type: 'text-start', id: 'shared-id' },
+      { type: 'text-delta', id: 'shared-id', delta: 'visible' },
+      { type: 'text-end', id: 'shared-id', providerMetadata: { vendor: { tag: 'keep' } } },
+      { type: 'reasoning-delta', id: 'shared-id', delta: source.slice(10) },
+      { type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, usage: {} as never },
+    ]);
+    expect(streamText(events)).toBe('visible');
+    expect(events.find((event) => event.type === 'text-end')).toMatchObject({
+      providerMetadata: { vendor: { tag: 'keep' } },
+    });
+    expect(events.filter((event) => event.type === 'tool-call')).toHaveLength(1);
+    expect(events.at(-1)).toMatchObject({
+      type: 'finish',
+      finishReason: { unified: 'tool-calls' },
+    });
+    expect(events.findIndex((event) => event.type === 'reasoning-end')).toBeLessThan(
+      events.findIndex((event) => event.type === 'tool-call'),
+    );
   });
 });
 

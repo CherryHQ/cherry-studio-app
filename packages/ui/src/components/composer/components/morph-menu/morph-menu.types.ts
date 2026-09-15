@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { ReactNode, RefObject } from 'react';
+import type { StyleProp, View, ViewStyle } from 'react-native';
 
 export type MorphMenuProps = {
   /** `Composer.Menu.Item`s. They lay out at full size from the first frame — the closed button is a clip window over them, not a smaller version of them. */
@@ -14,6 +14,8 @@ export type MorphMenuProps = {
   width?: number;
   /** The closed circle, and the footprint it reserves in the parent's flow. Defaults to the toolbar's button size. */
   triggerSize?: number;
+  /** The native trigger, for restoring focus after a composed picker closes. */
+  triggerRef?: RefObject<View | null>;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };
@@ -22,7 +24,7 @@ export type MorphMenuItemProps = {
   /** Rendered before the label; size it via className on the icon itself. */
   icon?: ReactNode;
   label: string;
-  /** Runs once after the menu's native dismissal, so it can open another surface safely. */
+  /** Runs once after the menu overlay is removed, so it can open another surface safely. */
   onPress: () => void;
   /** Announced to assistive tech. What it looks like selected is the caller's, via `icon` and `trailing`. */
   selected?: boolean;

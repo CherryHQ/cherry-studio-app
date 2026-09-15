@@ -37,11 +37,6 @@ jest.mock('expo-observe', () => ({
   useObserve: () => ({ markInteractive: jest.fn() }),
 }));
 
-// expo-screen-corner-radius resolves its native module at import time, so any
-// suite reaching BottomSheet throws without this. `null` is the library's own
-// "display radius unknown" answer, which every caller already handles.
-jest.mock('expo-screen-corner-radius', () => ({ getCornerRadiusSync: () => null }));
-
 // expo-media-library subclasses its native module's `Asset`/`Query` at import
 // time, and jest-expo's native stub has neither, so any suite reaching
 // DevicePermissions (through the service registry) throws without this. The

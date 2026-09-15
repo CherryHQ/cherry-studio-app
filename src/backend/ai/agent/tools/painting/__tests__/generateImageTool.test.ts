@@ -1,10 +1,14 @@
 import type { AiUsageAttribution } from '@/backend/ai/AiService';
 import { FileEntrySchema } from '@/shared/data/types/file';
-import { createUniqueModelId } from '@/shared/data/types/model';
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
 import type { TurnFileScope } from '../../../resources/managedFileResolver';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../../../runtime';
-import type { ConfiguredPaintingModel, PaintingToolDependencies } from '../generateImage';
+import {
+  resolveConfiguredPaintingModel,
+  type ConfiguredPaintingModel,
+  type PaintingToolDependencies,
+} from '../generateImage';
 import { createGenerateImageTool } from '../generateImageTool';
 
 const ENTRY = FileEntrySchema.parse({
@@ -29,6 +33,24 @@ const EDIT_MODEL: ConfiguredPaintingModel = {
 const TURN_FILES: TurnFileScope = { fileEntryIds: new Set([ENTRY.id]) };
 
 describe('createGenerateImageTool', () => {
+  test('resolves editing support from the configured model, including copied provider metadata', async () => {
+    const uniqueModelId = createUniqueModelId('copied-aihubmix', 'ernie-irag-edit');
+    const getById = jest.fn(async () => ({ imageGeneration: EDIT_MODEL.support }) as Model | null);
+    const dependencies = {
+      models: { getById },
+      preference: {
+        get: jest.fn(async () => uniqueModelId),
+      } as unknown as PaintingToolDependencies['preference'],
+    };
+    await expect(resolveConfiguredPaintingModel(dependencies)).resolves.toEqual({
+      uniqueModelId,
+      support: EDIT_MODEL.support,
+    });
+    expect(getById).toHaveBeenCalledWith(uniqueModelId);
+    getById.mockResolvedValueOnce(null);
+    await expect(resolveConfiguredPaintingModel(dependencies)).resolves.toBeNull();
+  });
+
   test('imports generated images before reporting them as artifacts', async () => {
     const deps = createDependencies();
     const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
@@ -168,7 +190,7 @@ function createDependencies(overrides: { generateImage?: () => Promise<never> } 
       resolve: jest.fn(async () => null),
     },
     preference: { get: jest.fn(async () => null) },
-    providerRegistry: { getImageGenerationSupport: jest.fn(() => null) },
+    models: { getById: jest.fn(async () => null) },
   } as unknown as PaintingToolDependencies & {
     ai: { generateImage: jest.Mock };
     files: { createInternalEntry: jest.Mock; discard: jest.Mock };

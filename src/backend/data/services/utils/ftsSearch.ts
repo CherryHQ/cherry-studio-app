@@ -93,9 +93,23 @@ export async function searchWithCursor<Row, PublicItem>({
   // Short words and literal SQL wildcards cannot use this LIKE index safely.
   // Scan them in bounded chronological batches and apply literal matching below.
   const indexedTerms = terms.filter((term) => Array.from(term).length >= 3 && !/[%_]/.test(term));
-  const ftsConditions = indexedTerms.map(
-    (term) => sql`fts.searchable_text LIKE ${buildFtsLikePattern(term)}`,
-  );
+  // The index contains source Markdown. Formatting can interrupt a visible match,
+  // so admit those rows for the exact plain-text check too, including old history.
+  // This broadens SQL scanning; the candidate/page budget below still bounds JS work.
+  const ftsConditions =
+    indexedTerms.length > 0
+      ? [
+          sql`((${sql.join(
+            indexedTerms.map((term) => sql`fts.searchable_text LIKE ${buildFtsLikePattern(term)}`),
+            sql` AND `,
+          )}) OR ${sql.join(
+            ['*', '[', '<', '#', '`', '~', '\r'].map(
+              (marker) => sql`instr(fts.searchable_text, ${marker}) > 0`,
+            ),
+            sql` OR `,
+          )})`,
+        ]
+      : [];
   let cursor = rawCursor !== undefined ? decodeSearchCursor(rawCursor, cursorConfig) : undefined;
   const createdAtFromMs = getCreatedAtFromMs(createdAtFrom);
   const results: SearchMappedItem<PublicItem>[] = [];

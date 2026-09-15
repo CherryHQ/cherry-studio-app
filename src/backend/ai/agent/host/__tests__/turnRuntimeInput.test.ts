@@ -6,6 +6,62 @@ const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
 describe('Turn Runtime input assembly', () => {
+  test('preserves explicit plugin intent in model input and user history without display metadata', () => {
+    const part = {
+      type: 'text' as const,
+      text: '飞书 查找文档',
+      pluginReferences: [{ type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 }],
+    };
+    const input = toRuntimeInputParts([part]);
+    expect(input).toEqual([
+      {
+        type: 'text',
+        text: `${part.text}\n\nFor this message, use the plugins explicitly selected in the composer: ["feishu"]. Other connected plugins remain available if needed.`,
+      },
+    ]);
+    expect(toRuntimeInputParts([{ type: 'text', text: part.text }])).toEqual([
+      { type: 'text', text: part.text },
+    ]);
+    const message: AgentMessageView = {
+      id: 'user-1',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'user',
+      status: 'success',
+      parts: [{ ...part, id: 'input-0', state: 'done' }],
+      usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      stats: null,
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+    };
+    expect(toRuntimeHistory([message])).toEqual([
+      { turnId: 'turn-1', messages: [{ role: 'user', parts: input }] },
+    ]);
+    expect(toRuntimeHistory([{ ...message, role: 'assistant' }])[0]?.messages[0]?.parts).toEqual([
+      { type: 'text', text: part.text },
+    ]);
+    expect(message.parts[0]).toEqual({ ...part, id: 'input-0', state: 'done' });
+  });
+
+  test('deduplicates repeated plugin mentions while preserving all selected plugins', () => {
+    const input = toRuntimeInputParts([
+      {
+        type: 'text',
+        text: '飞书 GitHub 飞书',
+        pluginReferences: [
+          { type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 0 },
+          { type: 'plugin', pluginId: 'github', label: 'GitHub', offset: 3 },
+          { type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 10 },
+        ],
+      },
+    ]);
+    expect(input[0]).toEqual({
+      type: 'text',
+      text: expect.stringContaining('["feishu","github"]'),
+    });
+  });
   test('projects only ledger-authorized managed image content into Runtime input', () => {
     const fileEntryId = '00000000-0000-7000-8000-000000000001';
     const image = {

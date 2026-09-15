@@ -109,7 +109,7 @@ compatibility adapter or generic frontend selector for persistence services.
 - App shutdown closes Agent Runtime sessions and awaits tracked Agent turns before disposing lower
   infrastructure.
 - Navigation, translation, toast, and React Query invalidation stay in frontend owners.
-- `expo-screen-corner-radius` remains the bottom-sheet device adapter; context menus use Expo UI directly.
+- Bottom sheets own their card shape and safe-area spacing; context menus use Expo UI directly.
 
 Simple persistence classes sit behind Data API handlers. A workflow contract is introduced only
 when it hides meaningful orchestration, lifetime, platform, or third-party complexity.

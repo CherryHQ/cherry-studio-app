@@ -19,6 +19,11 @@ import {
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
+// 快速模型和翻译模型暂无功能接入，暂时隐藏设置入口，待功能接通后恢复。
+const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter(
+  (kind) => kind !== 'fast' && kind !== 'translate',
+);
+
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -101,7 +106,7 @@ export default function ModelSettingsScreen() {
   );
   const items = useMemo(
     () =>
-      MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => {
+      VISIBLE_MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => {
         const item =
           kind === 'painting'
             ? imageModelPickerData.getModelItem(draft[kind])

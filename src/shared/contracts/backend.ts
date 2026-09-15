@@ -1,6 +1,7 @@
 import type { AgentProtocol } from './agent';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DiagnosticsModule } from './diagnostics';
+import type { DocumentExportModule } from './documentExport';
 import type { FileModule } from './file';
 import type { McpModule } from './mcp';
 import type { ModelsModule } from './models';
@@ -15,6 +16,7 @@ export interface Backend {
   readonly agent: AgentProtocol;
   readonly desktopConnections: DesktopConnectionsModule;
   readonly diagnostics: DiagnosticsModule;
+  readonly documentExport: DocumentExportModule;
   readonly file: FileModule;
   readonly mcp: McpModule;
   readonly models: ModelsModule;

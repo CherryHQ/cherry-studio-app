@@ -1,8 +1,13 @@
 # Bottom Sheet
 
 `BottomSheet` is Cherry Studio's only mobile sheet shell. It uses the same regulated card heights,
-four-point side and bottom insets, display-concentric bottom corners, drag handle, scrim, safe-area
+bottom-attached surface, rounded top corners, drag handle, scrim, safe-area
 handling, gestures, Android back behavior, and accessibility behavior on iOS and Android.
+
+The card fills the horizontal safe area up to 720 logical points and remains centered on wider
+windows. Its native host and scrim still span the window; the transparent space beside the card
+dismisses through the same guarded close action. Geometry updates do not replace the sheet or its
+content. Picker content measures its own available region instead of using the window width.
 
 ```tsx
 <BottomSheet onClose={close} open={isOpen} size="large" title="Models">

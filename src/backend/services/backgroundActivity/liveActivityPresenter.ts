@@ -15,12 +15,19 @@ export function createLiveActivityPresenter<Props extends BackgroundActivityBase
   if (!factory) return noopBackgroundActivityPresenter();
 
   return {
+    // Live Activities start in the foreground. Preserve the existing iOS
+    // behavior: ending generation can release audio before widget delivery.
+    canStartInBackground: false,
+    shouldHoldLeaseUntilDelivery: false,
     clearOrphans: async () => {
       const activities = factory.getInstances();
       await Promise.all(activities.map((activity) => activity.end('immediate')));
       return activities.length;
     },
     start: (props, deepLinkUrl) => {
+      // expo-widgets prunes ended native handles only when enumerating instances.
+      // Sweep before each start so a long-lived factory cannot accumulate them.
+      factory.getInstances();
       const activity = factory.start(props, deepLinkUrl);
       return {
         end: (policy, endProps) =>

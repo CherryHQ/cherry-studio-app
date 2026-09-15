@@ -1,0 +1,190 @@
+# Android Background Generation
+
+Android continues user-started chat and image generation with
+[`react-native-background-actions`](https://github.com/Rapsssito/react-native-background-actions)
+and delivers local completion/approval notifications with
+[`expo-notifications`](https://docs.expo.dev/versions/latest/sdk/notifications/).
+The app owns task counting, content, cancellation, and route selection. A scoped
+[`react-native-background-actions` patch](../../patches/react-native-background-actions@4.1.0.patch)
+adds native visibility handling to the library's existing service. The library still owns Headless
+JS and wake locks; the app adds no service or notification receiver. An
+[`expo-notifications` patch](../../patches/expo-notifications@57.0.17.patch) exposes Android's
+post-presentation event so task acknowledgement can follow asynchronous native delivery.
+
+## Ownership And Behavior
+
+- `KeepAliveCoordinator` selects `AndroidBackgroundActivityRuntime` as its lease source on Android.
+  Chat and painting keep acquiring leases through the coordinator and never branch on platform.
+  Concurrent chat and painting work share one execution service. It becomes a `dataSync` foreground
+  service only while the application is not visible. The last lease stops it.
+- Chat acquires a preference-gated preparation lease before its first asynchronous admission step.
+  The generated turn acquires its session lease before preparation releases, so leaving during
+  model/tool preparation does not defer the first service start until the app is already backgrounded.
+  A failed preparation releases its lease without creating a task surface or starting generation.
+- `react-native-background-actions` uses React Native's `HeadlessJsTaskService`, which owns the
+  Headless JS task and a partial wake lock. The lock supports CPU execution with the screen off;
+  it does not bypass Android Doze, vendor power management, process death, or user force-stop.
+- The library's ongoing notification is silent and shows task progress only outside the app. A
+  single task opens its task surface via `linkingURI`; an aggregate restores the app rather than
+  selecting an arbitrary task. Stopping a task uses its existing in-app control; Android also exposes its system
+  foreground-service stop control. There is no custom notification stop receiver.
+- Chat and painting share the existing presenter contract. Completion, failure, and pending tool
+  approval produce Expo local notifications in the background. Approval requires opening the app;
+  there is no notification action that approves a tool.
+- Foreground completion stays silent. Failure and approval use an injected presentation event;
+  App Shell shows a toast only when the corresponding task is not already visible. Neither path
+  schedules a foreground system notification. Delivery rechecks app state and preserves the state
+  at the event boundary, so queued foreground completion cannot become a background alert. Approval
+  and failure use the state at delivery: if the user has since left, they still receive a system
+  notification rather than losing both forms of attention.
+- A focused foreground chat or painting surface dismisses that task's presented notifications,
+  including deliveries racing foreground entry. Chat behind the drawer, unloaded surfaces, other
+  tasks, and unrelated notifications remain unacknowledged. In-flight reads are invalidated on blur.
+  The screen subscribes before reading presented notifications. Its second path listens to
+  `addNotificationPresentedListener`, emitted after Android's `notify()` call, including background
+  delivery that never emits a JavaScript receipt event.
+- `BackgroundActivitySession.finish()` resolves after queued platform delivery. Painting awaits
+  it before returning to `JobRuntime`, so execution protection includes the final notification.
+- Job execution retains its lease while the dispatcher claims queued successors, including after
+  forced cancellation. Serial painting requests therefore hand execution protection to the next
+  task without stopping and trying to restart the service in the background.
+- Platform interruption aborts domain work before asynchronous cancellation writes. Chat waits for
+  its current turn's persistence to finish; completed old updates and budget cancellation cannot
+  release execution protection owned by newer work.
+  Native service destruction also clears the library's running state before notifying this runtime
+  to interrupt its current leases. Expected stops and events from an older service generation do
+  not interrupt newer work. New foreground tasks can start protection after cancellation drains.
+- Each chat turn sends at most one terminal notification. Late title projection does not repost a
+  notice the user has dismissed.
+- Expo retains cold notification responses. App Shell uses `useLastNotificationResponse`, waits for
+  navigation to mount, consumes each response, and navigates only when its task is not already
+  visible. Opened notifications are dismissed. The task URL contract
+  lives in [`taskLink.ts`](../../src/shared/backgroundActivity/taskLink.ts): the backend builds
+  every task URL with it and App Shell maps its parsed links to routes. Chat links use session
+  identity; painting links open the composer/task page, which can show generating, failed, and
+  completed results without a selected image. Old chat links with `agentId` and old painting paths
+  remain readable. The image viewer redirects old task links lacking `fileEntryId` to the task page.
+  Task and draft route identities follow [Navigation And Insets](./navigation-and-insets.md).
+  An unsubmitted edit does not acknowledge the source painting's notifications.
+  No backend navigation callback or custom pending-link registry is needed.
+- iOS keeps its existing audio/Live Activity implementation. Shared session completion and job
+  handoff changes apply to both platforms. The background-actions native module is
+  excluded from iOS autolinking. Expo Notifications is installed through its standard Expo plugin;
+  this integration only sends Android local notifications and does not register for push tokens.
+
+## Shared iOS And Android Lifecycle
+
+Business services use the same session and execution-lease contracts on both platforms. Each
+[presenter](../../src/backend/services/backgroundActivity/presenter.ts) declares two requirements;
+the shared manager orders updates, completion, and lease release without platform-specific
+decisions in those paths.
+
+| Presenter requirement | iOS Live Activity | Android notification |
+| --- | --- | --- |
+| `canStartInBackground` | `false`: defer creation until foreground | `true`: represent a task already admitted by the execution runtime |
+| `shouldHoldLeaseUntilDelivery` | `false`: preserve immediate audio-lease release | `true`: retain an existing session lease until its latest update or end settles |
+
+Creating an Android surface does not authorize starting a foreground service from the background;
+the Android execution runtime still owns that restriction. A session never acquires an extra lease
+solely for presentation. Callers that own execution, such as painting jobs, await `finish()` before
+releasing their own lease on both platforms. `finish()` waits for the queued delivery attempt;
+presenter failures are logged and cannot retain the lease indefinitely. Manager shutdown releases
+all leases and ends its remaining surfaces.
+
+The manager's lifecycle suite covers both iOS and Android environments using presenter requirements
+independently of the OS. It describes foreground admission, approval and cancellation delivery,
+stale updates, repeated completion, and caller-owned execution. This shared contract coverage does
+not replace native device acceptance or change the existing iOS audio strategy.
+
+## Android Limits
+
+The service uses `dataSync` for active request/response transfer, image transfer, and related local
+result processing. This maps the feature to Android's documented fetching/cloud-transfer category;
+Google Play review still determines whether a distribution is accepted. See
+[foreground service types](https://developer.android.com/develop/background-work/services/fgs/service-types#data-sync).
+
+A new service starts only while the application is visible, using `startService` without a
+notification. The native service observes AndroidX `ProcessLifecycleOwner`: `ON_STOP` promotes the
+existing service using Android's visible-to-background exemption; `ON_START` removes foreground
+status and its notification. Both transitions retain the same Headless JS task and business
+requests. Process visibility also avoids treating notification-shade focus changes or activity
+recreation as a request to restart execution.
+
+Content updates go through the service's visibility gate; a delayed JavaScript update cannot repost
+the ongoing notification over a foreground screen. Update intents never start another Headless JS
+task, and a late update to a stopped service ends without reviving work. The service returns
+`START_NOT_STICKY` to prevent replay after process death. The patch also scopes ongoing notification
+intents to this package and reuses the existing Activity when tapped.
+
+There are no timer-triggered background restarts, battery exemptions, silent media
+playback, boot restarts, exact alarms, full-screen intents, or promoted Live Updates.
+
+Android 15+ limits `dataSync` background execution to six hours; bringing the app to the foreground
+resets its budget. The adapter interrupts work one minute before that boundary, drains normal
+cancellation, and stops the library service. More background jobs are interrupted until the app
+returns to the foreground. This timer is an application cutoff. If native `onTimeout` or a rejected
+foreground promotion stops the service first, the patched destruction event interrupts current work
+while JavaScript remains alive. It does not restart paid requests. Whole-process termination still
+requires reconciliation at the next process start.
+See [Android service timeouts](https://developer.android.com/develop/background-work/services/fgs/timeout).
+
+The notification permission is requested in context after a task's service admission attempt, even
+if admission failed. If the app leaves before the prompt, returning while the service runs requests
+it. A native request error permits a later attempt; a user's denial does not cause repeated prompts
+within the runtime. Denial does not prevent the foreground service, but Android hides its notification
+from the ordinary drawer. A rejected service start interrupts its unprotected callers instead of
+leaving them running with a lease that has no native execution protection.
+See [notification permission behavior](https://developer.android.com/develop/ui/compose/notifications/notification-permission).
+
+The app declares `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, `WAKE_LOCK`, and
+`POST_NOTIFICATIONS`. [The Expo config plugin](../../scripts/withAndroidBackgroundGeneration.js)
+only declares the existing library service as `dataSync`; Expo Notifications supplies the icon.
+The native patch explicitly depends on the same AndroidX lifecycle-process version as Expo
+Notifications, rather than relying on that dependency being transitively available.
+Unused boot-receiver permission is blocked. Before Play distribution, complete its
+[foreground-service declaration](https://support.google.com/googleplay/android-developer/answer/13392821).
+
+## Why This Combination
+
+Assessment date: 2026-09-10. The priority is a small application adapter over maintained open-source
+execution and Expo capabilities, with no application-owned Java/Kotlin service lifecycle.
+Expo Notifications is pinned to `57.0.17`, within the `~57.0.17` range recommended by Expo 57.0.21's
+`bundledNativeModules.json` and matching the version-specific native patch.
+
+| Option | Decision |
+| --- | --- |
+| `react-native-background-actions` + `expo-notifications` | Selected. Standard RN background execution owns the wake lock; Expo owns local alerts, permission requests, and notification responses. A scoped native patch separates service execution from foreground-notification visibility. |
+| `react-native-notify-kit` alone | Rejected for this integration. Its foreground-service Headless JS path does not hold a task-lifetime wake lock. Our prior approach also required three native corrections and a private timeout event mapping; all are removed. |
+| `expo-notifications` alone | Does not provide a long-running foreground execution service. |
+| `expo-background-task` / WorkManager | Useful for deferrable persistent work; does not directly preserve the in-progress interactive JS stream. |
+| Custom native service / Expo module | Would make the app own native lifecycle, wake locks, bridge compatibility, and notification delivery. Not needed for the selected scope. |
+| `expo-keep-awake` | Prevents screen sleep; it is not a background CPU wake-lock mechanism. |
+
+The app still needs its own domain cancellation and concurrent-task counting. Those are business
+rules, not capabilities an execution or notification library can infer. The Android background
+cutoff remains explicit; Android destruction uses the patched `stopped` event, separately from the
+library's iOS-only `expiration` event.
+
+## Verification And Development Client
+
+These native dependencies, both patches, and config plugins require a rebuilt development client. Metro reloads
+and EAS Updates cannot add native modules. Use [Local EAS Builds](../guides/local-builds.md) when a
+build is authorized. Compatibility with Cherry's Expo 57 / React Native 0.86 and device behavior
+must be verified in that client; source review and lint do not establish runtime compatibility.
+
+`package.json` opts `expo-notifications` into `expo.autolinking.android.buildFromSource`. Expo's
+bundled precompiled AAR does not contain our native presentation event; patching its Kotlin sources
+alone leaves that event absent from the installed app. Keep this opt-out while the native patch is
+required, and inspect the rebuilt APK as well as the installed source guards.
+
+Regression suites describe concurrent leases, foreground-only admission, permission denial,
+background-budget reset/cancellation, approval cleanup, single completion delivery, and awaiting
+painting notification delivery before task completion. Additional cases cover foreground event
+delivery races, post-presentation task cleanup, cold-start navigation, task-versus-draft route
+identity, and legacy task URLs. Library lifecycle coverage exercises stopped-event ordering and
+stale generation rejection. Installed-source guards protect both native patches against dependency upgrades; they do not prove
+Android runtime behavior. Device acceptance should cover foreground/background service transitions,
+notification-shade interaction, rapid return and exit, screen lock, concurrent chat/painting, denied
+notification permission, completion/approval taps from a cold app, and system termination without
+replaying paid requests. Follow
+[Testing And CI](../guides/testing-and-ci.md) and the active task's authorization before running checks.

@@ -118,6 +118,8 @@ export type AppStatePolicyValue =
   | 'background-presentation'
   /** Suspends ordinary work and checks for stale remote data on foreground entry. */
   | 'foreground-refresh'
+  /** Cancels interactive work and admits retries only while foregrounded. */
+  | 'foreground-only'
   /** Holds nothing that background transitions affect. */
   | 'not-applicable';
 

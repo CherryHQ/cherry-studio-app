@@ -1,15 +1,16 @@
+import * as z from 'zod';
 /**
  * Agent Protocol values: views of Agents, Sessions, turns, messages, approvals,
  * and failures. Every shape is JSON-safe and validated at the boundary; see
  * `./index.ts` for the protocol overview.
  */
 
-import * as z from 'zod';
-
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
+import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
 import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
+import { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
 import { FileAttachmentIssueSchema, FileAttachmentReportSchema } from '../fileAttachment';
 
 export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
@@ -150,50 +151,12 @@ export const AgentSessionViewSchema = z.strictObject({
 });
 export type AgentSessionView = z.infer<typeof AgentSessionViewSchema>;
 
-export const AgentFailureReasonSchema = z.enum([
-  'auth',
-  'permission',
-  'region',
-  'model_not_found',
-  'quota',
-  'rate_limit',
-  'context_length',
-  'payload_too_large',
-  'network',
-  'proxy_tls',
-  'stream_interrupted',
-  'content_filter',
-  'provider_unavailable',
-  'timeout',
-  'invalid_input',
-  'tool_limit',
-  'tool_failed',
-  'mcp',
-  'parse',
-  'internal',
-  'unknown',
-]);
-export type AgentFailureReason = z.infer<typeof AgentFailureReasonSchema>;
-
-export const AgentFailureSnapshotSchema = z.strictObject({
-  version: z.literal(1),
-  reasonCode: AgentFailureReasonSchema,
-  source: z.strictObject({
-    layer: z.enum(['provider', 'runtime', 'host', 'tool']),
-    name: z.string().max(256).optional(),
-    code: z.string().max(128).optional(),
-  }),
-  context: z
-    .strictObject({
-      statusCode: z.number().int().min(100).max(599).optional(),
-      providerId: z.string().max(256).optional(),
-      modelId: z.string().max(256).optional(),
-      finishReason: z.string().max(256).optional(),
-      responseBody: z.string().max(4_000).optional(),
-    })
-    .optional(),
-});
-export type AgentFailureSnapshot = z.infer<typeof AgentFailureSnapshotSchema>;
+export { AiFailureReasonSchema as AgentFailureReasonSchema } from '../aiFailure';
+export type {
+  AiFailureReason as AgentFailureReason,
+  AiFailureSnapshot as AgentFailureSnapshot,
+} from '../aiFailure';
+export { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
 
 export const AgentErrorViewSchema = z
   .strictObject({
@@ -356,6 +319,7 @@ export const AgentMessagePartSchema = z.union([
     id: z.string().min(1),
     type: z.enum(['text', 'reasoning']),
     text: z.string(),
+    pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     state: z.enum(['streaming', 'done']),
   }),
   z.strictObject({
@@ -400,7 +364,28 @@ export const AgentMessageViewSchema = z.strictObject({
 export type AgentMessageView = z.infer<typeof AgentMessageViewSchema>;
 
 export const AgentInputPartSchema = z.union([
-  z.strictObject({ type: z.literal('text'), text: z.string() }),
+  z
+    .strictObject({
+      type: z.literal('text'),
+      text: z.string(),
+      pluginReferences: z.array(PluginTextReferenceSchema).optional(),
+    })
+    .refine(
+      ({ text, pluginReferences }) => {
+        let end = 0;
+        return (pluginReferences ?? []).every((reference) => {
+          if (
+            reference.offset < end ||
+            text.slice(reference.offset, reference.offset + reference.label.length) !==
+              reference.label
+          )
+            return false;
+          end = reference.offset + reference.label.length;
+          return true;
+        });
+      },
+      { message: 'Plugin references must match non-overlapping text ranges.' },
+    ),
   z.strictObject({
     type: z.literal('file'),
     fileEntryId: z.string().min(1),

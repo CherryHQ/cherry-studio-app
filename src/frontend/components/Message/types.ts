@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { ScrollViewProps } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
@@ -41,6 +42,8 @@ export type MessageListProps = {
   /** The loaded window ends before the current conversation's live edge. */
   hasNewerMessages?: boolean;
   keyboardOffset: number;
+  /** Use 'always' when an outer press target owns background dismissal. */
+  keyboardShouldPersistTaps?: ScrollViewProps['keyboardShouldPersistTaps'];
   messages: readonly MessageListItem[];
   onLoadOlder?: () => Promise<void>;
   onLoadNewer?: () => Promise<void>;

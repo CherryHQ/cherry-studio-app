@@ -1,0 +1,39 @@
+diff --git a/ios/Requesters/CalendarPermissionsRequester.swift b/ios/Requesters/CalendarPermissionsRequester.swift
+index 5cba4627b..c03e01884 100644
+--- a/ios/Requesters/CalendarPermissionsRequester.swift
++++ b/ios/Requesters/CalendarPermissionsRequester.swift
+@@ -4,6 +4,7 @@ internal import React
+ 
+ public class CalendarPermissionsRequester: NSObject, EXPermissionsRequester {
+   private let eventStore: EKEventStore
++  private let fullAccessRequestedKey = "cherry.calendar.fullAccessRequested"
+ 
+   init(eventStore: EKEventStore) {
+     self.eventStore = eventStore
+@@ -31,9 +32,17 @@ public class CalendarPermissionsRequester: NSObject, EXPermissionsRequester {
+     }
+ 
+     switch permissions {
+-    case .restricted, .denied, .writeOnly:
++    case .restricted, .denied:
+       status = EXPermissionStatusDenied
++    case .writeOnly:
++      // Add-only access leaves one opportunity to ask for full access. EventKit
++      // keeps writeOnly after a refused upgrade, so retain that attempt across launches.
++      status = UserDefaults.standard.bool(forKey: fullAccessRequestedKey)
++        ? EXPermissionStatusDenied
++        : EXPermissionStatusUndetermined
+     case .notDetermined:
++      // A system privacy reset also resets the full-access inquiry.
++      UserDefaults.standard.removeObject(forKey: fullAccessRequestedKey)
+       status = EXPermissionStatusUndetermined
+     case .fullAccess:
+       status = EXPermissionStatusGranted
+@@ -53,6 +62,7 @@ public class CalendarPermissionsRequester: NSObject, EXPermissionsRequester {
+         if let error {
+           reject("E_CALENDAR_ERROR_UNKNOWN", error.localizedDescription, error)
+         } else {
++          UserDefaults.standard.set(true, forKey: self.fullAccessRequestedKey)
+           resolve(self.getPermissions())
+         }
+       }

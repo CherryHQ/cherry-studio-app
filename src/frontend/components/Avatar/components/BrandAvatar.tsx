@@ -1,5 +1,7 @@
-import { Avatar, Image } from '@cherrystudio/ui/components';
-import { type ComponentProps, type ReactNode } from 'react';
+import { Avatar } from '@cherrystudio/ui/components';
+import type { IconSource } from '@cherrystudio/ui/icons';
+import { createContext, type ReactNode, use } from 'react';
+import { useResolveClassNames, useUniwind } from 'uniwind';
 
 import {
   DEFAULT_BRAND_ICON_SCALE,
@@ -7,12 +9,9 @@ import {
   getBrandAvatarIconDisplayConfig,
 } from '../utils/brandAvatarStyles';
 
-type ImageSource = ComponentProps<typeof Image>['source'];
-
 const BRAND_AVATAR_SIZE = 26;
-const BRAND_AVATAR_FRAME_RADIUS = 6;
 const BRAND_AVATAR_INITIAL_FONT_SIZE = 14;
-const BRAND_AVATAR_FALLBACK_SCALE = 0.8125;
+const BrandAvatarShapeContext = createContext<'circle' | 'rounded'>('rounded');
 
 type BrandAvatarProps = {
   /**
@@ -43,63 +42,55 @@ export function BrandAvatar({
   size = BRAND_AVATAR_SIZE,
   testID,
 }: BrandAvatarProps) {
+  const { borderRadius } = useResolveClassNames('rounded-md');
   const fallback = children === undefined ? getBrandAvatarFallback(label) : undefined;
-  // Corner radius and the initial's type size are ratios of the default size,
-  // not constants: the same avatar is rendered at 26 in lists and at form-hero
-  // sizes in the provider form, and a fixed 6pt radius reads as a square there.
-  // At the default size these resolve to the plain 6/5/14 they replaced.
   const frameRadius =
-    shape === 'circle' ? size / 2 : (size * BRAND_AVATAR_FRAME_RADIUS) / BRAND_AVATAR_SIZE;
+    shape === 'circle' ? size / 2 : typeof borderRadius === 'number' ? borderRadius : 0;
 
   return (
-    <Avatar
-      accessibilityLabel={label}
-      radius={frameRadius}
-      shape={shape}
-      size={size}
-      testID={testID}
-    >
-      {fallback ? (
-        <Avatar.Fallback
-          scale={BRAND_AVATAR_FALLBACK_SCALE}
-          style={{ backgroundColor: fallback.backgroundColor, borderRadius: frameRadius - 1 }}
-          textProps={{
-            style: {
-              color: fallback.color,
-              fontSize: (size * BRAND_AVATAR_INITIAL_FONT_SIZE) / BRAND_AVATAR_SIZE,
-            },
-          }}
-        >
-          {fallback.initial}
-        </Avatar.Fallback>
-      ) : (
-        children
-      )}
-    </Avatar>
+    <BrandAvatarShapeContext value={shape}>
+      <Avatar
+        accessibilityLabel={label}
+        radius={frameRadius}
+        shape={shape}
+        size={size}
+        testID={testID}
+      >
+        {fallback ? (
+          <Avatar.Fallback
+            style={{ backgroundColor: fallback.backgroundColor }}
+            textProps={{
+              style: {
+                color: fallback.color,
+                fontSize: (size * BRAND_AVATAR_INITIAL_FONT_SIZE) / BRAND_AVATAR_SIZE,
+              },
+            }}
+          >
+            {fallback.initial}
+          </Avatar.Fallback>
+        ) : (
+          children
+        )}
+      </Avatar>
+    </BrandAvatarShapeContext>
   );
 }
 
 type BrandAvatarIconProps = {
   /**
-   * Provider or model id used to pick the inset — logos that already ship their
-   * own colored tile are inset further so they do not read as a frame in a frame.
+   * Provider artwork uses a full-frame tile or an inset mark. Model artwork
+   * keeps its original canvas when this context is omitted.
    */
-  displayContext?: 'provider' | 'provider-list';
-  iconId?: string;
+  displayContext?: 'provider';
   recyclingKey?: string;
-  source: ImageSource;
+  source: IconSource;
 };
 
-/** Built-in brand logo, inset within the frame. */
-export function BrandAvatarIcon({
-  displayContext,
-  iconId,
-  recyclingKey,
-  source,
-}: BrandAvatarIconProps) {
-  const displayConfig = displayContext
-    ? getBrandAvatarIconDisplayConfig(iconId, displayContext)
-    : undefined;
+/** Built-in brand artwork sized for its source canvas and enclosing shape. */
+export function BrandAvatarIcon({ displayContext, recyclingKey, source }: BrandAvatarIconProps) {
+  const shape = use(BrandAvatarShapeContext);
+  const { theme } = useUniwind();
+  const displayConfig = displayContext ? getBrandAvatarIconDisplayConfig(source, shape) : undefined;
 
   return (
     <Avatar.Image
@@ -107,8 +98,7 @@ export function BrandAvatarIcon({
       contentFit="contain"
       recyclingKey={recyclingKey}
       scale={displayConfig?.scale ?? DEFAULT_BRAND_ICON_SCALE}
-      source={source}
-      style={{ borderRadius: displayConfig?.borderRadius }}
+      source={source[theme === 'dark' ? 'dark' : 'light']}
     />
   );
 }

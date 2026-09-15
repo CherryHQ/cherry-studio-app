@@ -1,4 +1,4 @@
-import CirclePauseIcon from '@cherrystudio/app-icons/icons/circle-pause';
+import PauseIcon from '@cherrystudio/app-icons/icons/pause';
 import SendIcon from '@cherrystudio/app-icons/icons/send';
 
 import { cn } from '../../../utils';
@@ -11,7 +11,7 @@ import { ComposerAction } from './composer-action';
 const sendStyle = { marginLeft: 'auto' } as const;
 
 /**
- * The primary action: a send arrow that becomes a stop square while a reply
+ * The primary action: a send arrow that becomes a pause icon while a reply
  * streams in. It takes nothing — everything it needs is on the composer.
  */
 export function ComposerSend({ testID }: ComposerSendProps) {
@@ -19,7 +19,7 @@ export function ComposerSend({ testID }: ComposerSendProps) {
   const { send, stop } = useComposerActions('Composer.Send');
   const isStopping = streaming && stop !== undefined;
   const isActive = isStopping || canSend;
-  const Icon = isStopping ? CirclePauseIcon : SendIcon;
+  const Icon = isStopping ? PauseIcon : SendIcon;
 
   const handlePress = () => {
     if (isStopping) {
@@ -47,11 +47,8 @@ export function ComposerSend({ testID }: ComposerSendProps) {
     >
       <Icon
         className={cn(
-          isStopping
-            ? 'size-8 text-destructive'
-            : isActive
-              ? 'size-8 text-primary'
-              : 'size-8 text-foreground-disabled',
+          isStopping ? 'size-6' : 'size-8',
+          isActive ? 'text-foreground' : 'text-foreground-disabled',
         )}
       />
     </ComposerAction>

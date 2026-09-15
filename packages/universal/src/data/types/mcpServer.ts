@@ -9,6 +9,13 @@
 
 import * as z from 'zod';
 
+/** Durable identities survive app upgrades/downgrades; availability is a runtime registry concern. */
+export const BuiltInMcpIdSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$/);
+
 /**
  * Shared server identity and tool availability as stored on device.
  *
@@ -39,7 +46,7 @@ export const RemoteMcpServerSchema = McpServerBaseSchema.extend({
 
 export const BuiltInMcpServerSchema = McpServerBaseSchema.extend({
   origin: z.literal('builtin'),
-  builtinId: z.enum(['github', 'amap']),
+  builtinId: BuiltInMcpIdSchema,
   authorizationId: z.uuidv4(),
   endpointUrl: z.null(),
   headers: z.never().optional(),

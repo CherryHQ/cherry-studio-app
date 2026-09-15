@@ -269,7 +269,7 @@ describe('turn preparation', () => {
     expect(() =>
       plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
     ).toThrow('already bound');
-    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID);
+    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID, expect.any(Function));
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
 
@@ -347,6 +347,43 @@ describe('turn preparation', () => {
     expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
   });
 
+  test.each(['existing', 'initial'] as const)(
+    '%s messages preserve explicit plugin intent without restricting the tool snapshot',
+    async (kind) => {
+      const harness = createHarness();
+      harness.getSystemTools.mockResolvedValue([]);
+      const prepare = (input: AgentSubmitMessageInput) =>
+        kind === 'initial'
+          ? prepareInitialTurn(
+              harness.dependencies,
+              {
+                ...input,
+                agentId: AGENT_ID,
+                executionTarget: { kind: 'local' },
+              },
+              new AbortController().signal,
+            )
+          : prepareTurn(harness.dependencies, input, new AbortController().signal);
+
+      const pluginReferences = [
+        { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
+      ];
+      const selected = await prepare({
+        ...textInput(),
+        parts: [{ type: 'text', text: '飞书 查找文档', pluginReferences }],
+      });
+      const unselected = await prepare(textInput());
+      expect(selected.tools).toEqual([harness.configuredTool]);
+      expect(selected.inferenceSnapshot.tools).toHaveLength(1);
+      expect(unselected.tools).toEqual(selected.tools);
+      expect(unselected.inferenceSnapshot.tools).toEqual(selected.inferenceSnapshot.tools);
+      expect(selected.agent).toEqual(AGENT);
+      expect(selected.userParts).toEqual([
+        { id: 'input-0', type: 'text', text: '飞书 查找文档', pluginReferences, state: 'done' },
+      ]);
+    },
+  );
+
   test('stops at session admission when the session does not exist', async () => {
     const harness = createHarness();
     harness.getSession.mockResolvedValueOnce(null);
@@ -375,6 +412,21 @@ describe('turn preparation', () => {
 
     expect(harness.resolveInferenceModel).not.toHaveBeenCalled();
     expect(harness.preflightModel).not.toHaveBeenCalled();
+  });
+
+  test('retains discovery failures for the current turn while keeping other capabilities usable', async () => {
+    const harness = createHarness();
+    harness.resolveRuntimeTools.mockImplementationOnce(async (_agentId, onUnavailable) => {
+      onUnavailable?.('Feishu document tools could not be loaded (network).');
+      return { tools: [], pluginGuides: [] };
+    });
+    const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+    expect(plan.tools).toHaveLength(1);
+    expect(plan.toolDiscoveryWarnings).toEqual([
+      'Feishu document tools could not be loaded (network).',
+    ]);
+    const next = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+    expect(next.toolDiscoveryWarnings).toEqual([]);
   });
 
   test('replays full history when a valid checkpoint anchor is no longer present', async () => {
@@ -435,7 +487,12 @@ function createHarness() {
   const getSystemTools = jest.fn(
     async (_input: Parameters<SystemCapabilitySource['getTools']>[0]) => [systemTool],
   );
-  const resolveRuntimeTools = jest.fn(async (_agentId: string) => [configuredTool]);
+  const resolveRuntimeTools = jest.fn(
+    async (_agentId: string, _onUnavailable?: (warning: string) => void) => ({
+      tools: [configuredTool],
+      pluginGuides: [],
+    }),
+  );
   const resolveInferenceModel = jest.fn(
     async (model: RuntimeModel): Promise<AgentInferenceModelSnapshot> => ({
       uniqueModelId: createUniqueModelId(model.providerId, model.modelId),

@@ -16,17 +16,27 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 - The shared composer owns the draft, send recovery, keyboard behavior, and pasted attachment
   presentation. Draft and existing-Session composers use separate keyed sessions, so navigation
   cannot reuse one Session's draft in another.
+- Sending a message blurs the input, ends editing, and dismisses the keyboard immediately on
+  submission. The empty composer returns to one row; local-send scrolling does not dismiss again.
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
 - While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
-- When empty and unfocused, the composer is one row with the ＋ menu and send action always
-  reachable. Focus, draft text, or attachments keep it expanded into two rows: the field takes the
+- When empty and outside an editing interaction, the composer is one row with the ＋ menu and send
+  action always reachable. Editing, draft text, or attachments keep it expanded into two rows: the field takes the
   full width, the action row moves below it, and
   the model pill and reasoning-effort gauge slide and scale in without animating their glass
   opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
   it down.
+- Editing belongs to the whole composer. Focusing the field starts it; opening or closing the ＋
+  menu, model picker, file picker, or effort slider preserves it, including with an empty draft.
+  Native field blur and keyboard-hide notifications do not end editing. A completed background
+  press outside the composer calls `dismiss`, blurring the field and ending editing. List scrolling
+  and handled child actions do not count as background presses. Draft text and attachments still keep
+  the surface expanded. Closing an overlay by its backdrop only closes that overlay. The original
+  layout and motion remain in place; the [interaction contract](../../../../../../docs/references/chat/input-interaction.md)
+  limits this change to keyboard and selection side effects.
 - Native media pickers and model/settings Sheets replace the live input context: the shared
-  composer pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
+  composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
   It reconnects keyboard tracking only when the field receives focus again. Menu and effort
   overlays preserve the existing keyboard context instead.
 - Picking a model updates the current Agent's `modelId`. Submission also snapshots the visible
@@ -37,9 +47,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   current Agent composer and is snapshotted into each submission; it never updates Agent
   configuration. Switching models projects that pick to the closest supported stop. `default`
   bypasses the Agent effort for that turn; `auto` remains a separate provider-controlled mode.
-- The composer menu offers media only. Web search and create-image were removed from it, so the
-  composer no longer requests any turn-local capability; tool availability comes from Agent
-  configuration alone.
+- The composer menu offers media and connected plugins. Selecting a plugin inserts an inline
+  reference that expresses the user's intent for that message. Connected plugins remain available
+  to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
 - The menu's File row opens the full-height library picker. Its Recent list shares cursor pages
   and batched previews with the library screen. Selection stays local until Add is pressed; the
   action appears only for newly selected, available attachments. Already attached files are marked

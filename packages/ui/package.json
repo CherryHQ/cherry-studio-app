@@ -102,7 +102,6 @@
     "expo-image": "*",
     "expo-linear-gradient": "*",
     "expo-paste-input": "*",
-    "expo-screen-corner-radius": "*",
     "expo-widgets": "*",
     "heroui-native": "*",
     "@cherrystudio/app-icons": "workspace:*",

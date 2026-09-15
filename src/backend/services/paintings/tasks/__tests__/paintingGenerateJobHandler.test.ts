@@ -8,6 +8,7 @@ import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { createTestRuntime, type TestRuntime } from '@/backend/services/jobs/__tests__/_helpers';
 import { jobHandlerEntry } from '@/backend/services/jobs/JobHandlerRegistry';
 import type { JobContext } from '@/backend/services/jobs/types';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
 import { type FileEntry, type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
@@ -137,9 +138,29 @@ describe('createPaintingGenerateJobHandler', () => {
     expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'draw.png', provenance: 'generated', source: 'base64' }),
     );
-    expect(dependencies.paintings.replaceOutputs).toHaveBeenCalledWith('painting-1', [
-      outputFileId,
-    ]);
+    expect(dependencies.paintings.replaceOutputs).toHaveBeenCalledWith(
+      'painting-1',
+      [outputFileId],
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('preserves safe provider diagnostics in the job failure envelope', async () => {
+    const dependencies = createDependencies();
+    const failure = {
+      version: 1 as const,
+      reasonCode: 'network' as const,
+      source: { layer: 'provider' as const, name: 'TypeError' },
+      context: { providerId: 'openai', modelId: 'image-1' },
+    };
+    jest
+      .mocked(dependencies.ai.generateImage)
+      .mockRejectedValue(new AiRequestError({ message: 'fetch failed', retryable: true, failure }));
+    const handler = createPaintingGenerateJobHandler(dependencies);
+    await expect(handler.execute(createContext())).rejects.toMatchObject({
+      error: { message: 'fetch failed', retryable: true, params: { failure } },
+    });
+    expect(dependencies.storage.createInternalEntry).not.toHaveBeenCalled();
   });
 
   it('fails when the provider returns no image', async () => {
@@ -150,6 +171,23 @@ describe('createPaintingGenerateJobHandler', () => {
     await expect(handler.execute(createContext())).rejects.toThrow(
       'Image provider returned no image',
     );
+  });
+
+  it('discards files that finish saving after the attempt was cancelled instead of replacing retry outputs', async () => {
+    const dependencies = createDependencies();
+    const controller = new AbortController();
+    const timeout = new Error('Job timed out');
+    jest.mocked(dependencies.storage.createInternalEntry).mockImplementationOnce(async () => {
+      controller.abort(timeout);
+      return fileEntry(outputFileId);
+    });
+    const handler = createPaintingGenerateJobHandler(dependencies);
+
+    await expect(handler.execute(createContext({ signal: controller.signal }))).rejects.toBe(
+      timeout,
+    );
+    expect(dependencies.paintings.replaceOutputs).not.toHaveBeenCalled();
+    expect(dependencies.storage.discard).toHaveBeenCalledWith([fileEntry(outputFileId)]);
   });
 
   it('discards created outputs when output reference persistence fails', async () => {
@@ -236,7 +274,7 @@ describe('createPaintingGenerateJobHandler', () => {
 
         expect(startSession).toHaveBeenCalledWith(
           expect.objectContaining({
-            deepLinkUrl: `${scheme}://paintings/painting-1`,
+            deepLinkUrl: `${scheme}://paintings?paintingId=painting-1`,
             keepAlive: false,
             props: expect.objectContaining({
               attribution: 'GPT Image 2',
@@ -259,6 +297,43 @@ describe('createPaintingGenerateJobHandler', () => {
             phase: 'completed',
           }),
         );
+      },
+    );
+
+    it.each(['completed', 'failed'])(
+      'keeps execution pending until the %s notification has been delivered',
+      async (outcome) => {
+        const dependencies = createDependencies();
+        if (outcome === 'failed') {
+          jest.mocked(dependencies.ai.generateImage).mockRejectedValue(new Error('provider down'));
+        }
+        let deliver!: () => void;
+        const delivery = new Promise<void>((resolve) => {
+          deliver = resolve;
+        });
+        let beginDelivery!: () => void;
+        const delivering = new Promise<void>((resolve) => {
+          beginDelivery = resolve;
+        });
+        dependencies.activities = {
+          startSession: () => ({
+            cancel() {},
+            update() {},
+            finish() {
+              beginDelivery();
+              return delivery;
+            },
+          }),
+        };
+        const execution = createPaintingGenerateJobHandler(dependencies).execute(createContext());
+        const settled = jest.fn();
+        void execution.then(settled, settled);
+        await delivering;
+        await Promise.resolve();
+        expect(settled).not.toHaveBeenCalled();
+        deliver();
+        if (outcome === 'failed') await expect(execution).rejects.toThrow('provider down');
+        else await expect(execution).resolves.toHaveProperty('outputs');
       },
     );
 

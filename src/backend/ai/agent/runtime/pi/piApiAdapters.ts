@@ -16,7 +16,7 @@ type PiStreamFn = AgentOptions['streamFn'];
 
 type PiApiAdapter = {
   api: SupportedPiApi;
-  formatBaseUrl(baseUrl: string): string;
+  formatBaseUrl(baseUrl: string, appendApiVersion?: boolean): string;
   loadStreamSimple(): Promise<PiStreamFn>;
   supportsCustomFetch: boolean;
 };
@@ -40,7 +40,7 @@ const PI_API_ADAPTERS: Record<PiLanguageEndpointType, PiApiAdapter> = {
   },
   [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
     api: 'openai-completions',
-    formatBaseUrl: (baseUrl) => formatApiHost(baseUrl),
+    formatBaseUrl: (baseUrl, appendApiVersion = true) => formatApiHost(baseUrl, appendApiVersion),
     loadStreamSimple: async () =>
       (await import('@earendil-works/pi-ai/api/openai-completions'))
         .streamSimple as unknown as PiStreamFn,
@@ -48,7 +48,7 @@ const PI_API_ADAPTERS: Record<PiLanguageEndpointType, PiApiAdapter> = {
   },
   [ENDPOINT_TYPE.OPENAI_RESPONSES]: {
     api: 'openai-responses',
-    formatBaseUrl: (baseUrl) => formatApiHost(baseUrl),
+    formatBaseUrl: (baseUrl, appendApiVersion = true) => formatApiHost(baseUrl, appendApiVersion),
     loadStreamSimple: async () =>
       (await import('@earendil-works/pi-ai/api/openai-responses'))
         .streamSimple as unknown as PiStreamFn,

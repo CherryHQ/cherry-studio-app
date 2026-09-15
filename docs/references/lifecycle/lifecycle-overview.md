@@ -142,8 +142,9 @@ export class JobRuntime extends BaseService {
 // src/backend/core/application/serviceRegistry.ts
 export const services = {
   ResourceScopeCoordinator, CacheService, DbService, PreferenceService,
-  BackgroundActivityEnvironment, KeepAliveCoordinator, BackgroundActivityManager,
-  BackgroundReplyRuntime, WebSearchService, McpRuntimeService,
+  BackgroundActivityEnvironment, AndroidBackgroundActivityRuntime, AudioKeepAliveSource,
+  KeepAliveCoordinator, BackgroundActivityManager, BackgroundReplyRuntime, WebSearchService,
+  McpRuntimeService,
   AiService, AgentSessionStore, MobileAgentHost, JobHandlerRegistry, JobRuntime,
 } as const
 
@@ -171,7 +172,7 @@ onto `getOptional()` and forces the container to transitively exclude dependents
 every service unconditionally and selects a no-op implementation instead:
 
 ```typescript
-// Android and web resolve the same key; the instance simply does nothing.
+// Web resolves the same key; the coordinator's selected source simply does nothing there.
 const lease = application.get('KeepAliveCoordinator').acquire('job.painting.generate')
 ```
 

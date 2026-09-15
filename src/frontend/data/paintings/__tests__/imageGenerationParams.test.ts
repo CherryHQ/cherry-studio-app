@@ -6,7 +6,10 @@ import {
 } from '@cherrystudio/provider-registry';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
-import { supportsPaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
+import {
+  resolvePaintingGenerationMode,
+  supportsPaintingGenerationMode,
+} from '@/shared/utils/paintingModelSupport';
 
 import {
   imageParamsAspectRatio,
@@ -51,17 +54,55 @@ const support = {
 
 describe('image generation parameter resolution', () => {
   it('prefers generate without inputs and edit with inputs', () => {
-    expect(resolveImageGenerationMode(support, false)?.mode).toBe('generate');
-    expect(resolveImageGenerationMode(support, true)?.mode).toBe('edit');
+    const selected = model({ imageGeneration: support });
+    expect(resolvePaintingGenerationMode(selected, false)).toBe('generate');
+    expect(resolvePaintingGenerationMode(selected, true)).toBe('edit');
+    expect(resolveImageGenerationMode(support, 'edit')?.definition).toBe(support.modes.edit);
   });
 
-  it('falls back to the first declared mode when the preferred mode is unavailable', () => {
+  it('does not offer edit-only models without an input image', () => {
     const editOnly = {
       modes: { edit: { supports: {} } },
     } satisfies ImageGenerationSupport;
 
-    expect(resolveImageGenerationMode(editOnly, false)?.mode).toBe('edit');
-    expect(resolveImageGenerationMode(undefined, false)).toBeUndefined();
+    expect(
+      resolvePaintingGenerationMode(model({ imageGeneration: editOnly }), false),
+    ).toBeUndefined();
+    expect(resolveImageGenerationMode(editOnly, 'generate')).toBeUndefined();
+    expect(resolveImageGenerationMode(undefined, 'generate')).toBeUndefined();
+  });
+
+  it('keeps generate mode and its parameters for models accepting reference images', () => {
+    const selected = model({
+      inputModalities: [MODALITY.TEXT, MODALITY.IMAGE],
+      imageGeneration: { modes: { generate: support.modes.generate } },
+    });
+    expect(supportsPaintingGenerationMode(selected, 'edit')).toBe(true);
+    const mode = resolvePaintingGenerationMode(selected, true);
+    expect(mode).toBe('generate');
+    expect(resolveImageGenerationMode(selected.imageGeneration, mode)?.definition).toBe(
+      support.modes.generate,
+    );
+  });
+
+  it('honors reference-image limits even when modality metadata is missing or disagrees', () => {
+    expect(
+      resolvePaintingGenerationMode(
+        model({
+          imageGeneration: { modes: { generate: { maxInputImages: 3, supports: {} } } },
+        }),
+        true,
+      ),
+    ).toBe('generate');
+    expect(
+      resolvePaintingGenerationMode(
+        model({
+          inputModalities: [MODALITY.IMAGE],
+          imageGeneration: { modes: { generate: { maxInputImages: 0, supports: {} } } },
+        }),
+        true,
+      ),
+    ).toBeUndefined();
   });
 
   it('filters models by the requested generate or edit interaction', () => {
@@ -106,7 +147,7 @@ describe('image generation parameter resolution', () => {
 });
 
 describe('image generation parameter drafts', () => {
-  const generateMode = resolveImageGenerationMode(support, false);
+  const generateMode = resolveImageGenerationMode(support, 'generate');
 
   it('applies defaults and preserves supported values', () => {
     expect(

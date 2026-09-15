@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSaveImageToPhotos } from '@/frontend/components/ArtifactPreview';
+import { useResolvedFile, useShareFile } from '@/frontend/components/FileEntryPreview';
 import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
@@ -25,6 +26,10 @@ export function usePaintingViewerActions({
   const { alert } = useAlert();
   const router = useRouter();
   const deletePaintings = useDeletePaintings();
+
+  const file = useResolvedFile(currentOutput.fileEntryId);
+  const { isSharing, share } = useShareFile(file.data);
+  const canShare = Boolean(file.data) && !isSharing;
 
   const download = useSaveImageToPhotos(currentOutput.uri);
 
@@ -86,5 +91,5 @@ export function usePaintingViewerActions({
     });
   }, [painting.id, router]);
 
-  return { download, edit, remove, resize, viewConversation };
+  return { canShare, download, edit, remove, resize, share, viewConversation };
 }

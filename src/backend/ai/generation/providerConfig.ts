@@ -34,6 +34,7 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import {
   resolveProviderConnection,
+  shouldAppendProviderApiVersion,
   type ResolvedProviderConnection,
 } from '@/backend/ai/provider/providerConnection';
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
@@ -110,18 +111,7 @@ function formatBaseURL(baseURL: string, provider: Provider, endpointType?: Endpo
   if (isGeminiProvider(provider)) return formatApiHost(baseURL, appendApiVersion, 'v1beta');
 
   // Providers that don't append API version
-  const noVersionProviders = new Set([
-    'github',
-    'copilot',
-    'perplexity',
-    'newapi',
-    'new-api',
-    'azure-openai',
-  ]);
-  if (
-    noVersionProviders.has(provider.id) ||
-    noVersionProviders.has(provider.presetProviderId ?? '')
-  ) {
+  if (!shouldAppendProviderApiVersion(provider)) {
     return formatApiHost(baseURL, false);
   }
 
@@ -260,7 +250,7 @@ export async function resolveProviderAiSdkConfig(
       match: (p, id) =>
         id === 'openai-compatible' &&
         isImageGenerationModel(model) &&
-        (['modelscope', 'ppio', 'silicon', 'doubao', 'ovms'].some((providerId) =>
+        (['modelscope', 'ppio', 'silicon', 'doubao', 'ovms', 'tokenhub'].some((providerId) =>
           isPreset(p, providerId),
         ) ||
           (isPreset(p, 'dmxapi') && dmxapiUsesCustomTransport(model.apiModelId ?? model.id))),
@@ -272,6 +262,7 @@ export async function resolveProviderAiSdkConfig(
           | 'silicon'
           | 'doubao'
           | 'ovms'
+          | 'tokenhub'
           | 'dmxapi',
         endpoint: builderContext.endpoint,
         providerSettings: {

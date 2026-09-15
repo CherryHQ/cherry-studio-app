@@ -50,6 +50,46 @@ describe('JobRuntime cancel & dispose', () => {
     ).rejects.toMatchObject({ code: JOB_ERROR_CODES.CANCEL_REASON_TOO_LONG });
   });
 
+  it('a platform lease interruption persists cancellation and prevents retries', async () => {
+    let interrupt: ((reason: Error) => void | Promise<void>) | undefined;
+    let signal: AbortSignal | undefined;
+    const held = makeHoldHandler(makeGate(), { executionClass: 'user-continued' });
+    const release = jest.fn();
+    const { jobService, runtime } = await setup(
+      [
+        [
+          'internal.hold',
+          {
+            ...held,
+            execute: (context) => {
+              signal = context.signal;
+              return held.execute(context);
+            },
+          },
+        ],
+      ],
+      {
+        keepAlive: {
+          acquire: (_tag, onInterrupt) => {
+            interrupt = onInterrupt;
+            return { release };
+          },
+        },
+      },
+    );
+    const handle = await enqueueTest(runtime, 'internal.hold', {}, { maxAttempts: 3 });
+    await waitFor(() => signal !== undefined);
+    const interruption = interrupt!(new Error('Android foreground service expired'));
+    expect(signal!.aborted).toBe(true);
+    await interruption;
+    const finished = await handle.finished;
+    expect(finished.status).toBe('cancelled');
+    expect(finished.error).toMatchObject({ code: JOB_ERROR_CODES.CANCELLED, retryable: false });
+    expect((await jobService.getById(handle.id))?.cancelRequested).toBe(true);
+    await waitFor(() => release.mock.calls.length === 1);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
   it('cancels a delayed job immediately without running it', async () => {
     let clock = 1_000_000;
     const { jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]], {

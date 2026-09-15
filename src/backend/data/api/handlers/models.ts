@@ -1,5 +1,4 @@
 import type { ModelService } from '@/backend/data/services/ModelService';
-import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   BulkUpdateModelsSchema,
@@ -103,16 +102,17 @@ export function createModelHandlers(
     '/providers/:providerId/models:resolve': {
       GET: async ({ params, query }) => {
         const parsed = ResolveProviderModelsQuerySchema.parse(query ?? {});
-        return providerRegistryService.resolveModels(
+        return service.resolveRegistryModels(
           params.providerId,
           Array.isArray(parsed.ids) ? parsed.ids : [parsed.ids],
         );
       },
     },
     '/providers/:providerId/models/:modelId*/image-generation-support': {
-      GET: async ({ params }) =>
-        providerRegistryService.getImageGenerationSupport(params.providerId, params.modelId) ??
-        null,
+      GET: async ({ params }) => {
+        const [model] = await service.resolveRegistryModels(params.providerId, [params.modelId]);
+        return model?.imageGeneration ?? null;
+      },
     },
   };
 }

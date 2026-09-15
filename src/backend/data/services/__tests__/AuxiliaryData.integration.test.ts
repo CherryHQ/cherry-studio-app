@@ -176,6 +176,10 @@ describe('auxiliary Data API integration', () => {
     ['List<T>', '`List<T>`'],
     ['100%_', 'progress: 100%_done'],
     ['计划', '今天的计划'],
+    ['支持多模态', '支持**多模态**输入'],
+    ['支持多模态', '支持[多模态](https://example.com)输入'],
+    ['CherryStudio', 'Cherry`Studio`'],
+    ['支持多模态', '支持<span>多模态</span>输入'],
   ])('finds literal visible content for %s', async (q, text) => {
     insertSearchMessages(sqlite, [
       { id: 'visible', text, createdAt: 1 },
@@ -184,6 +188,16 @@ describe('auxiliary Data API integration', () => {
     const result = await contentSearchService.search({ q });
     expect(result.items.map((item) => item.messageId)).toEqual(['visible']);
     expect(result.items[0]?.snippet).toContain(q);
+  });
+
+  test('still requires visible matches for every term after admitting Markdown candidates', async () => {
+    insertSearchMessages(sqlite, [
+      { id: 'visible', text: '支持**多模态**输入，结果准确', createdAt: 1 },
+      { id: 'missing-term', text: '支持**多模态**输入', createdAt: 2 },
+      { id: 'hidden-url', text: '[链接](https://example.com/支持多模态/结果准确)', createdAt: 3 },
+    ]);
+    const result = await contentSearchService.search({ q: '支持多模态 结果准确' });
+    expect(result.items.map((item) => item.messageId)).toEqual(['visible']);
   });
 
   test('continues a short-word search beyond a full batch with no matches', async () => {

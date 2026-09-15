@@ -1,10 +1,8 @@
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import { useUniwind } from 'uniwind';
 
 import { BrandAvatar, BrandAvatarIcon } from './BrandAvatar';
 
 type ProviderBrandAvatarProps = {
-  displayContext?: 'provider-list';
   presetProviderId?: string;
   providerId: string;
   providerName: string;
@@ -19,7 +17,6 @@ type ProviderBrandAvatarProps = {
  * settings data, while this presentation is shared by any provider surface.
  */
 export function ProviderBrandAvatar({
-  displayContext,
   presetProviderId,
   providerId,
   providerName,
@@ -27,8 +24,6 @@ export function ProviderBrandAvatar({
   size,
   testID,
 }: ProviderBrandAvatarProps) {
-  const { theme } = useUniwind();
-  const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const displayIconId = presetProviderId ?? providerId;
   const iconSource = resolveProviderIcon(displayIconId);
   const frameProps = {
@@ -41,12 +36,7 @@ export function ProviderBrandAvatar({
   if (iconSource) {
     return (
       <BrandAvatar {...frameProps}>
-        <BrandAvatarIcon
-          displayContext={displayContext ?? 'provider'}
-          iconId={displayIconId}
-          recyclingKey={providerId}
-          source={iconSource[iconTheme]}
-        />
+        <BrandAvatarIcon displayContext="provider" recyclingKey={providerId} source={iconSource} />
       </BrandAvatar>
     );
   }

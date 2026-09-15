@@ -2,7 +2,7 @@ import { Image } from '@cherrystudio/ui/components';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { PROVIDER_BRAND_ICON_SCALE } from '@/frontend/components/Avatar';
+import { getBrandAvatarIconDisplayConfig } from '@/frontend/components/Avatar';
 import { resolveModelIconSources } from '@/frontend/utils/modelIcons';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -21,10 +21,12 @@ export function ModelPickerIcon({ model, provider, size = 32 }: ModelPickerIconP
     model.modelId,
     provider?.presetProviderId ?? provider?.id,
   );
-  const imageSize = modelIconSource ? size : size * PROVIDER_BRAND_ICON_SCALE;
+  const imageSize =
+    !modelIconSource && iconSource
+      ? size * getBrandAvatarIconDisplayConfig(iconSource, 'circle').scale
+      : size;
   const avatarInitial = model.name.trim().charAt(0).toUpperCase() || 'M';
   const frameStyle = {
-    borderRadius: size / 2,
     height: size,
     width: size,
   };
@@ -32,7 +34,7 @@ export function ModelPickerIcon({ model, provider, size = 32 }: ModelPickerIconP
   if (iconSource) {
     return (
       <View
-        className="items-center justify-center overflow-hidden border-continuous"
+        className="items-center justify-center overflow-hidden rounded-full border-continuous"
         style={frameStyle}
       >
         <Image

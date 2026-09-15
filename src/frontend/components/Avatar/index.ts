@@ -4,7 +4,7 @@ export { AvatarPickerField } from './components/AvatarPickerField';
 export { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from './components/BrandAvatar';
 export { ModelAvatar } from './components/ModelAvatar';
 export { ProviderBrandAvatar } from './components/ProviderBrandAvatar';
-export { PROVIDER_BRAND_ICON_SCALE } from './utils/brandAvatarStyles';
+export { getBrandAvatarIconDisplayConfig } from './utils/brandAvatarStyles';
 export {
   ProfileAvatarImage,
   ProfileEditableAvatar,

@@ -3,6 +3,7 @@ import { createUniqueModelId } from '@/shared/data/types/model';
 
 import {
   createAgentMessageListProjectionCache,
+  createPendingChatMessages,
   mergeAgentMessageViews,
   toAgentMessageListItem,
   toAgentMessageListItems,
@@ -27,6 +28,33 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('keeps the same inline plugin snapshot in pending and persisted user messages', () => {
+    const pluginReferences = [
+      { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
+    ];
+    const input = { type: 'text' as const, text: '飞书 查找文档', pluginReferences };
+    const [pending] = createPendingChatMessages({
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [input],
+    });
+    const persisted = toAgentMessageListItem(
+      message('user-1', {
+        role: 'user',
+        status: 'success',
+        parts: [{ ...input, id: 'input-0', state: 'done' }],
+      }),
+    );
+    expect(persisted?.data.parts).toEqual(pending.data.parts);
+    expect(pending.data.parts).toEqual([
+      {
+        type: 'text',
+        text: input.text,
+        state: 'done',
+        providerMetadata: { cherry: { references: pluginReferences } },
+      },
+    ]);
+  });
   test('preserves the original tool failure code for localized correction hints', () => {
     const item = toAgentMessageListItem(
       message('tool-correction', {

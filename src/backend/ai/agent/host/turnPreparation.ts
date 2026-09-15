@@ -9,6 +9,7 @@
  */
 
 import type { AiUsageAttribution, AiUsageAttributionResolver } from '@/backend/ai/AiService';
+import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import {
   AgentProtocolError,
   type AgentErrorView,
@@ -95,6 +96,8 @@ export type TurnPlan = {
   sessionTitle: string;
   sessionTurnIds: readonly string[];
   tools: readonly RuntimeTool[];
+  pluginGuides: readonly PluginGuideSnapshot[];
+  toolDiscoveryWarnings: readonly string[];
   /** The user message parts to reserve, projected from the canonical input. */
   userParts: AgentMessagePart[];
   /** Source captured at admission; the Host binds the reserved message before execution. */
@@ -255,12 +258,14 @@ async function prepareResolvedTurn(
     availableFiles,
   );
 
-  // Freeze system capabilities and configured MCP tools for the turn so
+  // Freeze system capabilities, configured MCP tools, and connected plugins so
   // mid-turn changes cannot alter the active catalog. The catalog closes over
   // this turn's resource ledger, never a global file surface. System capability
   // resolution remains optional; configured MCP binding resolution fails closed.
   let systemTools: readonly RuntimeTool[] = [];
   let configuredTools: readonly RuntimeTool[] = [];
+  let pluginGuides: TurnPlan['pluginGuides'] = [];
+  const toolDiscoveryWarnings: string[] = [];
   if (runtime.descriptor.capabilities.tools) {
     try {
       systemTools = await raceAbort(
@@ -278,7 +283,14 @@ async function prepareResolvedTurn(
       logger.warn('Failed to resolve system capabilities; continuing without them', error as Error);
     }
     try {
-      configuredTools = await raceAbort(dependencies.runtimeTools.resolve(agent.id), signal);
+      const configured = await raceAbort(
+        dependencies.runtimeTools.resolve(agent.id, (warning) => {
+          if (!signal.aborted) toolDiscoveryWarnings.push(warning);
+        }),
+        signal,
+      );
+      configuredTools = configured.tools;
+      pluginGuides = configured.pluginGuides;
     } catch {
       signal.throwIfAborted();
       fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
@@ -332,8 +344,7 @@ async function prepareResolvedTurn(
   );
 
   const userParts: AgentMessagePart[] = parts.map((part, index) => {
-    if (part.type === 'text')
-      return { id: `input-${index}`, type: 'text', text: part.text, state: 'done' };
+    if (part.type === 'text') return { ...part, id: `input-${index}`, state: 'done' };
     const content = runtimeContentAttachments.get(part.fileEntryId);
     return {
       id: `input-${index}`,
@@ -364,7 +375,9 @@ async function prepareResolvedTurn(
     sessionTitle: session.title,
     sessionTurnIds: storedTurnContext.sessionTurnIds,
     tools,
+    toolDiscoveryWarnings,
     userParts,
+    pluginGuides,
     usageAttribution,
   };
 }

@@ -1,5 +1,4 @@
 import { type DrawerContentComponentProps, Drawer } from 'expo-router/drawer';
-import { getCornerRadiusSync } from 'expo-screen-corner-radius';
 import { useWindowDimensions } from 'react-native';
 import type { PanGesture } from 'react-native-gesture-handler';
 
@@ -26,7 +25,6 @@ function configureDrawerGesture(gesture: PanGesture) {
 }
 
 export default function DrawerLayout() {
-  // Also re-reads the corner radius when a foldable switches displays.
   const { width } = useWindowDimensions();
   const [backgroundColor, overlayColor] = useThemeColor(['background', 'scrim']);
 
@@ -39,7 +37,9 @@ export default function DrawerLayout() {
           // The sidebar stops short of the right edge so a dimmed strip of chat
           // stays visible: it tells the user where they came from and closes the
           // drawer on tap.
-          drawerStyle: { width: width - appSidebar.sceneRevealWidth },
+          drawerStyle: {
+            width: Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
+          },
           // The chat surface is stable context; the sidebar is a temporary
           // surface that slides over it as the only moving plane.
           drawerType: 'front',
@@ -51,10 +51,8 @@ export default function DrawerLayout() {
             // Keep the scene opaque where a screen leaves its own content style
             // transparent, including beneath the overlaid sidebar.
             backgroundColor,
-            // The device's own radius, so the surface is already screen-shaped at
-            // rest and its corners disappear into the bezel.
-            borderCurve: 'continuous',
-            borderRadius: getCornerRadiusSync() ?? appSidebar.fallbackCornerRadius,
+            // The full-screen scene reaches every window edge. Let the display
+            // handle physical corners without clipping the header's blur.
             overflow: 'hidden',
           },
           // Only chat belongs to this navigator, so the full-width gesture can

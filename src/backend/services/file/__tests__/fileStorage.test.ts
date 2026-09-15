@@ -175,13 +175,16 @@ describe('fileStorage', () => {
         updatedAt: 1,
       },
     ]);
-    expect(entries.create).toHaveBeenCalledWith({
-      filename: 'Quarterly Brief.pdf',
-      id: '00000000-0000-7000-8000-000000000001',
-      mediaType: 'application/pdf',
-      provenance: 'imported',
-      size: 42,
-    });
+    expect(entries.create).toHaveBeenCalledWith(
+      {
+        filename: 'Quarterly Brief.pdf',
+        id: '00000000-0000-7000-8000-000000000001',
+        mediaType: 'application/pdf',
+        provenance: 'imported',
+        size: 42,
+      },
+      undefined,
+    );
     expect(
       testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.pdf'),
     ).toBe(true);
@@ -208,6 +211,59 @@ describe('fileStorage', () => {
     expect(
       testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001'),
     ).toBe(true);
+  });
+
+  test('discards unregistered bytes when cancelled after writing a new file', async () => {
+    const entries = createEntryStore();
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    const creating = createInternalEntry(
+      entries,
+      {
+        data: 'draft',
+        mediaType: 'text/plain',
+        name: 'draft.txt',
+        provenance: 'generated',
+        source: 'text',
+      },
+      controller.signal,
+    );
+
+    expect(testState.writes).toHaveLength(1);
+    controller.abort(cancelled);
+
+    await expect(creating).rejects.toBe(cancelled);
+    expect(entries.create).not.toHaveBeenCalled();
+    expect(testState.files.size).toBe(0);
+    expect(onFileChange).not.toHaveBeenCalled();
+  });
+
+  test('cleans up bytes when entry creation rejects cancellation from its transaction', async () => {
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    const entries = {
+      create: async (_values: unknown, signal?: AbortSignal) => {
+        controller.abort(cancelled);
+        signal?.throwIfAborted();
+        return internalEntry();
+      },
+    };
+
+    await expect(
+      createInternalEntry(
+        entries,
+        {
+          data: 'draft',
+          mediaType: 'text/plain',
+          name: 'draft.txt',
+          provenance: 'generated',
+          source: 'text',
+        },
+        controller.signal,
+      ),
+    ).rejects.toBe(cancelled);
+    expect(testState.files.size).toBe(0);
+    expect(onFileChange).not.toHaveBeenCalled();
   });
 
   test('uses the source extension when a camera display name has none', async () => {
@@ -560,6 +616,67 @@ describe('fileStorage', () => {
     expect(onFileChange).not.toHaveBeenCalled();
   });
 
+  test('does not rewrite a draft when cancelled while its entry lookup is pending', async () => {
+    const entry = internalEntry();
+    const uri = `file:///documents/Data/Files/${entry.id}.txt`;
+    testState.files.set(uri, entry.size);
+    let finishLookup!: (value: FileEntry) => void;
+    const lookup = new Promise<FileEntry>((resolve) => {
+      finishLookup = resolve;
+    });
+    const entries = {
+      findById: jest.fn(() => lookup),
+      updateSizeTx: jest.fn(),
+      withWriteTx: jest.fn(),
+    };
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    const rewriting = rewriteInternalTextEntry(
+      entries,
+      { data: 'late edit', id: entry.id },
+      controller.signal,
+    );
+
+    expect(entries.findById).toHaveBeenCalled();
+    controller.abort(cancelled);
+    finishLookup(entry);
+
+    await expect(rewriting).rejects.toBe(cancelled);
+    expect(testState.writes).toEqual([]);
+    expect(testState.files.get(uri)).toBe(entry.size);
+    expect(entries.withWriteTx).not.toHaveBeenCalled();
+    expect(onFileChange).not.toHaveBeenCalled();
+  });
+
+  test('finishes recording a draft size when cancelled after its bytes were written', async () => {
+    const entry = internalEntry();
+    const uri = `file:///documents/Data/Files/${entry.id}.txt`;
+    testState.files.set(uri, entry.size);
+    const controller = new AbortController();
+    const entries = {
+      findById: jest.fn(async () => entry),
+      updateSizeTx: jest.fn(async (_tx: unknown, _id: string, size: number) => ({
+        ...entry,
+        size,
+      })),
+      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => {
+        expect(testState.writes).toHaveLength(1);
+        controller.abort();
+        return callback({});
+      }),
+    };
+
+    await expect(
+      rewriteInternalTextEntry(
+        entries as never,
+        { data: 'longer content', id: entry.id },
+        controller.signal,
+      ),
+    ).resolves.toMatchObject({ size: 14 });
+    expect(testState.files.get(uri)).toBe(14);
+    expect(onFileChange).toHaveBeenCalledWith(entry.id);
+  });
+
   test('reports a missing entry row without deleting anything', async () => {
     const entry = internalEntry();
     const entries = {
@@ -583,6 +700,7 @@ describe('fileStorage', () => {
     const persisting = new Promise<void>((resolve) => {
       started = resolve;
     });
+    const controller = new AbortController();
     const entries = {
       create: async () => {
         started();
@@ -590,18 +708,26 @@ describe('fileStorage', () => {
         return entry;
       },
     };
-    const creating = createInternalEntry(entries, {
-      data: 'text',
-      mediaType: 'text/plain',
-      name: entry.filename,
-      provenance: 'generated',
-      source: 'text',
-    });
+    const creating = createInternalEntry(
+      entries,
+      {
+        data: 'text',
+        mediaType: 'text/plain',
+        name: entry.filename,
+        provenance: 'generated',
+        source: 'text',
+      },
+      controller.signal,
+    );
 
     await persisting;
     expect(onFileChange).not.toHaveBeenCalled();
+    // Creation has passed its final check and is committing: cancellation
+    // must not make storage unlink bytes for a successfully registered entry.
+    controller.abort();
     commit();
     await creating;
+    expect(testState.files.has(`file:///documents/Data/Files/${entry.id}.txt`)).toBe(true);
     expect(onFileChange).toHaveBeenCalledTimes(1);
 
     unsubscribe();

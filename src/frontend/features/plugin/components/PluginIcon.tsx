@@ -1,26 +1,48 @@
-import GitHubIcon from '@cherrystudio/app-icons/icons/github';
-import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
+import { Image } from '@cherrystudio/ui/components';
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { View } from 'react-native';
 
-import type { PluginId } from '@/shared/data/types/plugin';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+
+const ICONS = {
+  feishu: { source: require('@/assets/plugins/feishu.jpeg'), tint: false },
+  github: { source: resolveProviderIcon('github')?.light, tint: true },
+  notion: { source: require('@/assets/plugins/notion.webp'), tint: true },
+} as const;
 
 export function PluginIcon({
-  pluginId,
+  icon,
   size = 'default',
 }: {
-  pluginId: PluginId;
-  size?: 'default' | 'large';
+  icon?: string;
+  size?: 'small' | 'default' | 'large';
 }) {
-  const Icon = pluginId === 'github' ? GitHubIcon : MapPinIcon;
+  const foreground = useThemeColor('foreground');
+  const artwork =
+    icon && Object.hasOwn(ICONS, icon) ? ICONS[icon as keyof typeof ICONS] : undefined;
+  const iconSize = size === 'small' ? 'size-5' : size === 'large' ? 'size-9' : 'size-7';
   return (
     <View
       className={
-        size === 'large'
-          ? 'size-12 items-center justify-center'
-          : 'size-10 items-center justify-center'
+        size === 'small'
+          ? 'size-6 items-center justify-center'
+          : size === 'large'
+            ? 'size-12 items-center justify-center'
+            : 'size-10 items-center justify-center'
       }
     >
-      <Icon className={size === 'large' ? 'size-9 text-foreground' : 'size-7 text-foreground'} />
+      {artwork ? (
+        <Image
+          accessibilityIgnoresInvertColors
+          className={iconSize}
+          contentFit="contain"
+          source={artwork.source}
+          tintColor={artwork.tint ? foreground : undefined}
+        />
+      ) : (
+        <FileTextIcon className={`${iconSize} text-foreground`} />
+      )}
     </View>
   );
 }

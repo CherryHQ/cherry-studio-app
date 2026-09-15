@@ -167,8 +167,13 @@ export class PaintingService {
     return rowToPainting(updated as PaintingRow);
   }
 
-  async replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting> {
-    await this.dbService.withWriteTx(async (tx) => {
+  async replaceOutputs(
+    id: string,
+    outputFileIds: readonly FileEntryId[],
+    signal?: AbortSignal,
+  ): Promise<Painting> {
+    return this.dbService.withWriteTx(async (tx) => {
+      signal?.throwIfAborted();
       const [painting] = await tx
         .select({ files: paintingTable.files, id: paintingTable.id })
         .from(paintingTable)
@@ -179,13 +184,16 @@ export class PaintingService {
       }
 
       const outputs = await assertFileEntriesExistTx(tx, outputFileIds);
-      await tx
+      signal?.throwIfAborted();
+      const [updated] = await tx
         .update(paintingTable)
         .set({ files: { ...painting.files, output: outputs }, updatedAt: Date.now() })
-        .where(eq(paintingTable.id, id));
+        .where(eq(paintingTable.id, id))
+        .returning();
+      // Roll back if cancellation arrived while SQLite was writing the references.
+      signal?.throwIfAborted();
+      return rowToPainting(updated as PaintingRow);
     });
-
-    return await this.getById(id);
   }
 
   async delete(id: string): Promise<void> {

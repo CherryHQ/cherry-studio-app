@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
@@ -14,7 +14,7 @@ import {
 import { toAgentMessageView } from './utils/agentSessionRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
-/** SQL-only paginated reads for the durable linear transcript. */
+/** SQL-only window and selected-ID reads for the durable linear transcript. */
 export class AgentSessionMessageService {
   private get db() {
     return application.get('DbService').getDb();
@@ -32,6 +32,20 @@ export class AgentSessionMessageService {
       .limit(1);
     if (!session) {
       throw DataApiErrorFactory.notFound('AgentSession', sessionId);
+    }
+
+    if (query.ids) {
+      const rows = await this.db
+        .select()
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, sessionId),
+            inArray(agentSessionMessageTable.id, query.ids),
+          ),
+        )
+        .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id));
+      return { items: rows.map(toAgentMessageView) };
     }
 
     const limit = query.limit ?? AGENT_SESSION_MESSAGES_DEFAULT_LIMIT;

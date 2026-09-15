@@ -2,314 +2,163 @@ import type { LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { definePlugin } from '@cherrystudio/ai-core';
 import type { LanguageModelMiddleware } from 'ai';
 
-const TOOL_CALLS_OPEN = '<｜｜DSML｜｜tool_calls>';
-const TOOL_CALLS_CLOSE = '</｜｜DSML｜｜tool_calls>';
-const SWALLOW_BUFFER_LIMIT = 64 * 1024;
-
-const INVOKE_RE = /<｜｜DSML｜｜invoke\s+name="([^"]+)">([\s\S]*?)<\/｜｜DSML｜｜invoke>/g;
-const PARAM_RE =
-  /<｜｜DSML｜｜parameter\s+name="([^"]+)"(?:\s+string="(true|false)")?>([\s\S]*?)<\/｜｜DSML｜｜parameter>/g;
-
-interface ParsedDsmlCall {
-  toolName: string;
-  args: Record<string, unknown>;
-}
-
-function parseInvokeBlocks(dsmlContent: string): ParsedDsmlCall[] {
-  const calls: ParsedDsmlCall[] = [];
-  INVOKE_RE.lastIndex = 0;
-  let invokeMatch: RegExpExecArray | null;
-  while ((invokeMatch = INVOKE_RE.exec(dsmlContent)) !== null) {
-    const toolName = invokeMatch[1];
-    const inner = invokeMatch[2];
-    const args: Record<string, unknown> = {};
-
-    PARAM_RE.lastIndex = 0;
-    let paramMatch: RegExpExecArray | null;
-    while ((paramMatch = PARAM_RE.exec(inner)) !== null) {
-      const paramName = paramMatch[1];
-      const isString = paramMatch[2] !== 'false';
-      const rawValue = paramMatch[3];
-      if (isString) {
-        args[paramName] = rawValue;
-      } else {
-        try {
-          args[paramName] = JSON.parse(rawValue);
-        } catch {
-          args[paramName] = rawValue;
-        }
-      }
-    }
-    calls.push({ toolName, args });
-  }
-  return calls;
-}
-
-function findPartialPrefix(buffer: string, target: string): number {
-  const maxLen = Math.min(buffer.length, target.length - 1);
-  for (let len = maxLen; len > 0; len -= 1) {
-    if (target.startsWith(buffer.slice(buffer.length - len))) {
-      return buffer.length - len;
-    }
-  }
-  return -1;
-}
-
-function generateToolCallId(): string {
-  return `dsml_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-}
+import {
+  createDeepseekDsmlParser,
+  type DeepseekDsmlCall,
+  type DeepseekDsmlPart,
+} from '../../../../provider/deepseek-dsml';
 
 function createDeepseekDsmlParserMiddleware(): LanguageModelMiddleware {
   return {
     specificationVersion: 'v3',
-
-    wrapStream: async ({ doStream }) => {
+    wrapStream: async ({ doStream, params }) => {
       const { stream, ...rest } = await doStream();
-
-      let textBuffer = '';
-      let dsmlBuffer = '';
-      let inDsml = false;
-      let activeTextId: string | null = null;
-      let extractedToolCalls = false;
-      let drainDsmlBuffer: (
-        controller: TransformStreamDefaultController<LanguageModelV3StreamPart>,
-        textId: string,
-      ) => void;
-
-      const enqueueRemainderText = (
-        controller: TransformStreamDefaultController<LanguageModelV3StreamPart>,
-        textId: string,
-      ) => {
-        const startIdx = textBuffer.indexOf(TOOL_CALLS_OPEN);
-        if (startIdx === -1) {
-          const partialIdx = findPartialPrefix(textBuffer, TOOL_CALLS_OPEN);
-          if (partialIdx >= 0) {
-            const safe = textBuffer.slice(0, partialIdx);
-            if (safe) controller.enqueue({ type: 'text-delta', id: textId, delta: safe });
-            textBuffer = textBuffer.slice(partialIdx);
-          } else {
-            if (textBuffer) {
-              controller.enqueue({ type: 'text-delta', id: textId, delta: textBuffer });
-            }
-            textBuffer = '';
-          }
-          return;
-        }
-        if (startIdx > 0) {
-          controller.enqueue({
-            type: 'text-delta',
-            id: textId,
-            delta: textBuffer.slice(0, startIdx),
-          });
-        }
-        dsmlBuffer = textBuffer.slice(startIdx + TOOL_CALLS_OPEN.length);
-        textBuffer = '';
-        inDsml = true;
-        drainDsmlBuffer(controller, textId);
+      type ContentState = {
+        id: string;
+        type: 'text' | 'reasoning';
+        parser: ReturnType<typeof createDeepseekDsmlParser>;
+        pendingCalls: DeepseekDsmlCall[];
       };
+      type Controller = TransformStreamDefaultController<LanguageModelV3StreamPart>;
+      const states = new Map<string, ContentState>();
+      let extracted = false;
 
-      drainDsmlBuffer = (controller, textId) => {
-        const closeIdx = dsmlBuffer.indexOf(TOOL_CALLS_CLOSE);
-        if (closeIdx === -1) {
-          if (dsmlBuffer.length > SWALLOW_BUFFER_LIMIT) {
-            controller.enqueue({
-              type: 'text-delta',
-              id: textId,
-              delta: TOOL_CALLS_OPEN + dsmlBuffer,
-            });
-            dsmlBuffer = '';
-            inDsml = false;
-          }
-          return;
+      const getState = (type: ContentState['type'], id: string): ContentState => {
+        const key = `${type}:${id}`;
+        let state = states.get(key);
+        if (!state) {
+          state = { type, id, parser: createDeepseekDsmlParser(params.tools), pendingCalls: [] };
+          states.set(key, state);
         }
-
-        const blockContent = dsmlBuffer.slice(0, closeIdx);
-        const remainder = dsmlBuffer.slice(closeIdx + TOOL_CALLS_CLOSE.length);
-        const calls = parseInvokeBlocks(blockContent);
-
-        if (calls.length === 0) {
-          controller.enqueue({
-            type: 'text-delta',
-            id: textId,
-            delta: TOOL_CALLS_OPEN + blockContent + TOOL_CALLS_CLOSE,
-          });
-        } else {
-          for (const call of calls) {
-            const id = generateToolCallId();
-            const inputJson = JSON.stringify(call.args);
-            controller.enqueue({ type: 'tool-input-start', id, toolName: call.toolName });
-            controller.enqueue({ type: 'tool-input-delta', id, delta: inputJson });
-            controller.enqueue({ type: 'tool-input-end', id });
-            controller.enqueue({
-              type: 'tool-call',
-              toolCallId: id,
-              toolName: call.toolName,
-              input: inputJson,
-            });
-          }
-          extractedToolCalls = true;
+        return state;
+      };
+      const emitCalls = (calls: DeepseekDsmlCall[], controller: Controller) => {
+        for (const call of calls) {
+          const { toolCallId: id, toolName } = call;
+          const input = JSON.stringify(call.input);
+          controller.enqueue({ type: 'tool-input-start', id, toolName });
+          controller.enqueue({ type: 'tool-input-delta', id, delta: input });
+          controller.enqueue({ type: 'tool-input-end', id });
+          controller.enqueue({ type: 'tool-call', toolCallId: id, toolName, input });
+          extracted = true;
         }
-
-        dsmlBuffer = '';
-        inDsml = false;
-        textBuffer = remainder;
-        if (textBuffer) enqueueRemainderText(controller, textId);
+      };
+      const emitParts = (
+        parts: DeepseekDsmlPart[],
+        state: ContentState,
+        controller: Controller,
+      ) => {
+        for (const part of parts) {
+          if (part.type === 'text') {
+            controller.enqueue({ type: `${state.type}-delta`, id: state.id, delta: part.text });
+          } else if (state.type === 'reasoning') {
+            state.pendingCalls.push(part);
+          } else {
+            emitCalls([part], controller);
+          }
+        }
+      };
+      const endContent = (
+        state: ContentState,
+        controller: Controller,
+        end?: LanguageModelV3StreamPart,
+      ) => {
+        emitParts(state.parser.finish(), state, controller);
+        controller.enqueue(end ?? { type: `${state.type}-end`, id: state.id });
+        // Reasoning must close before the recovered call reaches the tool loop.
+        emitCalls(state.pendingCalls, controller);
+        states.delete(`${state.type}:${state.id}`);
       };
 
       return {
+        ...rest,
         stream: stream.pipeThrough(
           new TransformStream<LanguageModelV3StreamPart, LanguageModelV3StreamPart>({
             transform(chunk, controller) {
-              if (chunk.type === 'text-start') {
-                activeTextId = chunk.id;
-                controller.enqueue(chunk);
-                return;
-              }
-
-              if (chunk.type === 'text-end') {
-                const textId = chunk.id;
-                if (inDsml) {
-                  controller.enqueue({
-                    type: 'text-delta',
-                    id: textId,
-                    delta: TOOL_CALLS_OPEN + dsmlBuffer,
-                  });
-                  dsmlBuffer = '';
-                  inDsml = false;
-                } else if (textBuffer) {
-                  controller.enqueue({ type: 'text-delta', id: textId, delta: textBuffer });
-                  textBuffer = '';
-                }
-                controller.enqueue(chunk);
-                activeTextId = null;
-                return;
-              }
-
-              if (chunk.type === 'finish') {
-                if (extractedToolCalls && chunk.finishReason.unified === 'stop') {
-                  controller.enqueue({
-                    ...chunk,
-                    finishReason: { ...chunk.finishReason, unified: 'tool-calls' },
-                  });
-                } else {
+              switch (chunk.type) {
+                case 'text-start':
+                case 'reasoning-start':
+                  getState(chunk.type === 'text-start' ? 'text' : 'reasoning', chunk.id);
                   controller.enqueue(chunk);
+                  return;
+                case 'text-delta':
+                case 'reasoning-delta': {
+                  const state = getState(
+                    chunk.type === 'text-delta' ? 'text' : 'reasoning',
+                    chunk.id,
+                  );
+                  emitParts(state.parser.push(chunk.delta), state, controller);
+                  return;
                 }
-                return;
+                case 'text-end':
+                case 'reasoning-end':
+                  endContent(
+                    getState(chunk.type === 'text-end' ? 'text' : 'reasoning', chunk.id),
+                    controller,
+                    chunk,
+                  );
+                  return;
+                case 'error':
+                  states.clear();
+                  controller.enqueue(chunk);
+                  return;
+                case 'finish':
+                  if (chunk.finishReason.unified === 'error') {
+                    states.clear();
+                  } else {
+                    for (const state of states.values()) endContent(state, controller);
+                  }
+                  controller.enqueue(
+                    extracted && chunk.finishReason.unified === 'stop'
+                      ? { ...chunk, finishReason: { ...chunk.finishReason, unified: 'tool-calls' } }
+                      : chunk,
+                  );
+                  return;
+                default:
+                  controller.enqueue(chunk);
               }
-
-              if (chunk.type !== 'text-delta') {
-                controller.enqueue(chunk);
-                return;
-              }
-
-              const textId = chunk.id;
-              if (!activeTextId) activeTextId = textId;
-
-              if (inDsml) {
-                dsmlBuffer += chunk.delta;
-                drainDsmlBuffer(controller, textId);
-                return;
-              }
-
-              textBuffer += chunk.delta;
-              enqueueRemainderText(controller, textId);
             },
             flush(controller) {
-              const textId = activeTextId ?? 'dsml-fallback';
-              if (inDsml) {
-                controller.enqueue({
-                  type: 'text-delta',
-                  id: textId,
-                  delta: TOOL_CALLS_OPEN + dsmlBuffer,
-                });
-              } else if (textBuffer) {
-                controller.enqueue({ type: 'text-delta', id: textId, delta: textBuffer });
-              }
-              textBuffer = '';
-              dsmlBuffer = '';
-              inDsml = false;
+              for (const state of states.values()) endContent(state, controller);
             },
           }),
         ),
-        ...rest,
       };
     },
-
-    wrapGenerate: async ({ doGenerate }) => {
+    wrapGenerate: async ({ doGenerate, params }) => {
       const result = await doGenerate();
-      const newContent: typeof result.content = [];
+      const content: typeof result.content = [];
       let extracted = false;
-
       for (const part of result.content) {
-        if (part.type !== 'text') {
-          newContent.push(part);
+        if (part.type !== 'text' && part.type !== 'reasoning') {
+          content.push(part);
           continue;
         }
-        const text = part.text;
-        const partsForText: typeof newContent = [];
-        let textAccum = '';
-        let cursor = 0;
-        let foundCallInPart = false;
-
-        while (cursor < text.length) {
-          const startIdx = text.indexOf(TOOL_CALLS_OPEN, cursor);
-          if (startIdx === -1) {
-            textAccum += text.slice(cursor);
-            break;
-          }
-          const closeIdx = text.indexOf(TOOL_CALLS_CLOSE, startIdx + TOOL_CALLS_OPEN.length);
-          if (closeIdx === -1) {
-            textAccum += text.slice(cursor);
-            break;
-          }
-
-          const blockEnd = closeIdx + TOOL_CALLS_CLOSE.length;
-          const blockContent = text.slice(startIdx + TOOL_CALLS_OPEN.length, closeIdx);
-          const calls = parseInvokeBlocks(blockContent);
-
-          if (calls.length === 0) {
-            textAccum += text.slice(cursor, blockEnd);
-            cursor = blockEnd;
-            continue;
-          }
-
-          textAccum += text.slice(cursor, startIdx);
-          if (textAccum) {
-            partsForText.push({ ...part, text: textAccum });
-            textAccum = '';
-          }
-          for (const call of calls) {
-            partsForText.push({
-              type: 'tool-call',
-              toolCallId: generateToolCallId(),
-              toolName: call.toolName,
-              input: JSON.stringify(call.args),
-            });
-          }
-          foundCallInPart = true;
-          cursor = blockEnd;
-        }
-
-        if (!foundCallInPart) {
-          newContent.push(part);
+        const parser = createDeepseekDsmlParser(params.tools);
+        const parts = [...parser.push(part.text), ...parser.finish()];
+        if (!parts.some((item) => item.type === 'tool-call')) {
+          content.push(part);
           continue;
         }
-
-        newContent.push(...partsForText);
-        if (textAccum) newContent.push({ ...part, text: textAccum });
         extracted = true;
+        for (const item of parts) {
+          content.push(
+            item.type === 'text'
+              ? { ...part, text: item.text }
+              : { ...item, input: JSON.stringify(item.input) },
+          );
+        }
       }
-
-      if (!extracted) return result;
-
-      return {
-        ...result,
-        content: newContent,
-        finishReason:
-          result.finishReason.unified === 'stop'
-            ? { ...result.finishReason, unified: 'tool-calls' }
-            : result.finishReason,
-      };
+      return extracted
+        ? {
+            ...result,
+            content,
+            finishReason:
+              result.finishReason.unified === 'stop'
+                ? { ...result.finishReason, unified: 'tool-calls' }
+                : result.finishReason,
+          }
+        : result;
     },
   };
 }

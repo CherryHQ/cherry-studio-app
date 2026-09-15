@@ -1,5 +1,4 @@
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
-import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round';
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
@@ -50,22 +49,10 @@ export default function SettingsScreen() {
         <View className="gap-6 px-2 pt-2">
           <Section>
             <Section.Item
-              label={t('settings.items.profile')}
-              leading={<CircleUserRoundIcon className="size-4 text-foreground" />}
-              onPress={openProfileSettings}
-            />
-          </Section>
-          <Section>
-            <Section.Item
               label={t('settings.items.modelService')}
               leading={<CloudIcon className="size-4 text-foreground" />}
               onPress={openProviderList}
               onPressIn={prepareProviderList}
-            />
-            <Section.Item
-              label={t('settings.items.deviceConnections')}
-              leading={<NetworkIcon className="size-4 text-foreground" />}
-              onPress={() => router.push('/settings/device-connections')}
             />
             <Section.Item
               label={t('settings.items.defaultModel')}
@@ -93,10 +80,16 @@ export default function SettingsScreen() {
               }
               onPress={() => router.push('/settings/mcp')}
             />
+            <DocumentParserSetting />
           </Section>
-          <DocumentParserSetting />
           <Section>
-            {Platform.OS === 'ios' ? (
+            <Section.Item
+              label={t('settings.appearance.title')}
+              leading={<PaletteIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/appearance')}
+              testID="settings-appearance"
+            />
+            {Platform.OS === 'ios' || Platform.OS === 'android' ? (
               <Section.Item
                 label={t('settings.items.notifications')}
                 leading={<BellIcon className="size-4 text-foreground" />}
@@ -108,13 +101,10 @@ export default function SettingsScreen() {
               leading={<LockIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/permissions')}
             />
-          </Section>
-          <Section>
             <Section.Item
-              label={t('settings.appearance.title')}
-              leading={<PaletteIcon className="size-4 text-foreground" />}
-              onPress={() => router.push('/settings/appearance')}
-              testID="settings-appearance"
+              label={t('settings.items.deviceConnections')}
+              leading={<NetworkIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/device-connections')}
             />
           </Section>
           <Section>

@@ -105,6 +105,7 @@ export function ProviderSetupPresetFields({
           presetProviderId={provider.presetProviderId}
           providerId={provider.id}
           providerName={provider.name}
+          shape="circle"
           size={40}
         />
         <Text className="flex-1 font-medium text-lg text-foreground">{provider.name}</Text>

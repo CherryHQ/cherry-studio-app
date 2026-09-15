@@ -6,7 +6,7 @@ The system catalog ships device calendar and reminders, health, location, web se
 image generation, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
 `{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and the Agent's capability-group deny-list, then combines it with
-the Agent's persisted executable MCP bindings. Capability groups (web, image, calendar, reminders,
+globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
 health, location) are enabled per Agent in the editor; the three file tools belong to every turn. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
@@ -22,7 +22,7 @@ side effect, credential, system permission, managed file, and provider-specific 
 ```text
 Mobile Agent Host
     ├─ resolves the shared system capability catalog
-    ├─ resolves Agent-specific MCP bindings
+    ├─ resolves globally connected plugins and Agent-specific remote MCP bindings
     ├─ creates a Host-owned turn resource ledger
     └─ builds an immutable RuntimeTool[] snapshot
             ↓
@@ -45,7 +45,7 @@ implementations behind those adapters; they never become a second conversation R
 
 The application owns two different representations:
 
-- A durable **tool binding** says which MCP source an Agent may use and its approval policy.
+- A durable **tool binding** says which remote MCP source an Agent may use and its approval policy.
 - A turn-local **Runtime tool** contains the provider-safe name, description, JSON Schema, approval
   mode, and execution callback Pi can use for one immutable turn.
 
@@ -108,7 +108,10 @@ only effective `ask` tools to `auto`; existing `auto` and hard `deny` policies r
 This preference lives on the Mobile Agent rather than on an execution target and applies from the
 next turn.
 
-For MCP, omitting `rawToolName` defines the server default and enables discovery subject to the
+Connected plugins are system-wide: permitted tools and their bundled guides are available to every
+Agent, independent of legacy plugin bindings or composer mentions. A mention adds message intent.
+
+For remote MCP, omitting `rawToolName` defines the server default and enables discovery subject to the
 server-level disabled-tool list; a specific `(serverId, rawToolName)` binding overrides that
 default. There is at most one MCP server default per `(agentId, serverId)` and one specific binding
 per `(agentId, serverId, rawToolName)`. A deleted server or tool leaves a disabled/dangling binding
@@ -137,7 +140,8 @@ Before admitting a turn, the Host resolves tools in this order:
 1. Create the turn resource ledger from controlled current-input and transcript managed-file facts.
 2. Read the Agent's capability-group deny-list from its definition.
 3. Project only system capabilities implemented and available on the current mobile platform.
-4. Read the current Agent's enabled MCP bindings and resolve their executable descriptors.
+4. Resolve executable descriptors for globally connected plugins and the current Agent's enabled
+   remote MCP bindings, then select plugin guide sections whose tool prerequisites are available.
 5. Apply system permission state, model tool-calling support, and application policy.
 6. Apply the Agent approval preference to the combined system and MCP catalog (`ask → auto` only in
    automatic mode; `deny` remains denied).
@@ -155,10 +159,20 @@ The Pi binding consumes the Host-prepared application prompt, exposes system cap
 and translates eligible MCP tools into three catalog tools for the active model loop. When that
 catalog is present, Pi also appends its binding-specific catalog workflow guidance to the prompt:
 
-- `tool_search` ranks frozen MCP names and descriptions with BM25 and returns at most 20 matches,
-  including bounded TypeScript call signatures. Its complete serialized model result is capped by
-  both a 32,000-character ceiling and the live model-context headroom; a result that drops matches
-  reports `truncated: true`.
+- `tool_search` ranks frozen MCP names and descriptions by the number of distinct query terms a
+  tool matches, then by BM25 inside that tier, and returns only the top tier, at most 20 matches
+  with bounded TypeScript call signatures. Because the MCP layer prefixes every description with its
+  service name, a service-name query browses that service and a domain word narrows it, without
+  plugin-specific search rules. Each result leads with `catalogTotal` (the frozen catalog size),
+  `matched` (the top-tier count before limits), and `returned` (the count actually included), and
+  lists whole query words that matched nothing as `unmatchedTerms`. Unmatched words describe lexical
+  coverage, not whether a capability exists. For service overviews, the prompt asks for one initial
+  service-name search rather than parallel subdomain searches. `returned === catalogTotal` means
+  the whole catalog is in hand; `returned === matched` without truncation means this query is
+  complete. A service-name search can still be truncated and require narrower queries. The model
+  should not repeat successful searches merely to confirm coverage. The complete serialized model
+  result is capped by both a 32,000-character ceiling and the live model-context headroom; a result
+  that drops matches reports `truncated: true`.
 - `tool_describe` returns one description and signature bounded by the same live headroom.
 - `tool_call` resolves an exact name only inside the frozen catalog and re-enters the target
   `RuntimeTool` approval, cancellation, call-limit, artifact, and event boundary before execution.
@@ -446,10 +460,12 @@ whole turn. Implementation: `src/backend/ai/agent/tools/`.
 
 ### Skill Boundary
 
-- Mobile Skill persistence, binding resolution, and prompt projection are not implemented.
+- General Mobile Skill persistence and binding resolution are not implemented. Bundled plugin
+  guides are selected with the current Agent's executable MCP tools and projected by the Host;
+  see the [plugin guide contract](../../../src/backend/services/builtInMcp/README.md#plugin-guides).
 - The target contract treats a Skill as instruction context, not a Runtime capability; it cannot add
   tools or change approval, permission, MCP, or managed-resource policy.
-- See [Agent Skills](./agent-skills.md) for that explicitly deferred boundary.
+- See [Agent Skills](./agent-skills.md) for the broader deferred boundary.
 
 ## Approval And Failure Policy
 

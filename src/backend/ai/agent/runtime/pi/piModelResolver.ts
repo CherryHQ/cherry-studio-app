@@ -1,9 +1,13 @@
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
+import {
+  resolveProviderConnection,
+  shouldAppendProviderApiVersion,
+} from '@/backend/ai/provider/providerConnection';
 import { modelService } from '@/backend/data/services/ModelService';
 import {
   projectRuntimeReasoning,
@@ -19,6 +23,7 @@ import {
 
 import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '..';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
+import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
 
@@ -68,7 +73,10 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         : model;
       const piModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
-        baseUrl: adapter.formatBaseUrl(connection.baseUrl.trim()),
+        baseUrl: adapter.formatBaseUrl(
+          connection.baseUrl.trim(),
+          shouldAppendProviderApiVersion(provider),
+        ),
         ...(adapter.api === 'openai-completions' || adapter.api === 'openai-responses'
           ? {
               compat: {
@@ -146,7 +154,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         maxInputTokens: model.maxInputTokens,
         model: piModel,
         redactionValues: collectRedactionValues(selectedApiKey.value, headers),
-        streamFn,
+        streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(streamFn) : streamFn,
         supportsTools: preflight.supportsTools,
         usageContext,
       };

@@ -40,10 +40,12 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   - `canSend` — omit for "there is text or there is an attachment". Pass a
     boolean when the screen has its own conditions, as painting does.
   - `getSendErrorLabel` — a message for a failure the caller recognises.
-  - `dismissKeyboardOnSend` — for screens whose list dismisses it already.
-- `ComposerField` — the text field, plus pasting images into attachments. It forwards the narrow
-  presentation controls (`style`, `onFocus`, `onBlur`) so a screen can arrange resting and active
-  states without replacing the native field or changing its editor mode.
+  - `dismissKeyboardOnSend` — defaults to blurring the input, ending editing, and dismissing the
+    keyboard with its native transition when submitting. The dock follows that transition, just
+    as it follows keyboard opening. Chat enables it; its list does not dismiss the keyboard again.
+- `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
+  shared editing state. It forwards `style`, `onFocus`, and `onBlur`; native blur alone does not
+  end editing, since a composer control may be taking over the interaction.
 - `ComposerAttachments` — the staged attachments, in a row that swells and
   shrinks with them.
 - `ComposerMenu` — the ＋ menu. `children` are extra `Composer.Menu.Item`s
@@ -56,19 +58,24 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 - `ComposerSessionProvider` / `useComposerState` / `useComposerActions` — one
   draft, its managed attachments, and the presentation transition for its
   input context.
-- `useComposerPresentationActions` — presents a Sheet or native picker that
-  replaces the live input context. The model pill and media menu already use
-  it; caller-owned replacement buttons, such as painting settings, use the
-  same action.
+- `useComposerPresentationState` — exposes `isEditing` independently of native field focus,
+  alongside dock keyboard tracking. Screens derive their expanded state from editing and content.
+- `useComposerPresentationActions` — activates editing on field focus, ends it on send or explicit
+  outside dismissal, and presents a Sheet or native picker while retaining the editing state. The model
+  pill and media menu already use the replacement action; caller-owned replacement buttons, such
+  as painting settings, use the same action.
 - `ComposerDock` — connects that input-context state to CherryUI's
   `Composer.Dock`. Chat keeps it in normal parent flow; floating surfaces can pair it with
   CherryUI's `useComposerDockLayout` measurement and content-inset primitive.
+- `ComposerDismissArea` — ends editing on a completed, unhandled background press. Scrolling and
+  child controls can cancel the press. Nested message lists use `keyboardShouldPersistTaps="always"`
+  so this boundary owns dismissal for both chat and painting.
 - `utils/composerAttachments` is deep-imported on purpose (see `index.ts`).
 
 ## What is deliberately *not* pluggable
 
 Sending. Trim, clear before awaiting, restore the draft *and* the attachments if
-it rejects, explain the outcome, log, and the un-animated keyboard dismissal — that is a
+it rejects, explain the outcome, log, and dismiss the input with its native keyboard transition — that is a
 protocol, not a part, and two screens assembling it separately would be two
 implementations of it. It lives in `ComposerSurface`, which is what renders the
 surface, so there is no way to compose a composer that skips it. A synchronous
@@ -101,6 +108,8 @@ walk to verify it.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
   field-ref contexts, plus the input-presentation transition. Its contexts are
   split so dispatch-only components and the dock skip keystroke re-renders.
+- `hooks/useComposerPresentation.ts`: the shared editing state and keyboard handoff.
+  Native keyboard-hide notifications do not dispatch composer blur or end editing.
 - `components/ComposerDock.tsx`: pins or reconnects CherryUI's keyboard-tracking
   dock according to the current input context.
 - `utils/composerAttachments.ts`: attachment drafts and the message parts they
@@ -111,11 +120,20 @@ walk to verify it.
 - Input surfaces have two policies. An overlay (the ＋ menu or chat effort
   slider) preserves field focus and the live keyboard. A replacement (model or
   settings Sheet, camera, photo library, or file picker) first disables dock
-  keyboard tracking, blurs the field, awaits keyboard dismissal, and leaves one
+  keyboard tracking, retains the editing state, blurs the field, awaits keyboard dismissal, and leaves one
   render frame for the closed UI to become inert before presenting. The dock
   stays at its resting bottom position after the replacement closes; the next
   real field focus reconnects keyboard tracking. Success and cancellation use
-  the same path.
+  the same path. Keyboard events from a replacement's own search field cannot end composer editing.
+- Only an explicit composer dismissal ends editing. Native blur and keyboard-hide notifications
+  do not collapse the surface. Dismissal does not clear draft text or attachments.
+- The ＋ menu opens in a keyboard-preserving overlay, without changing the field's
+  expanded/resting state or starting a keyboard transition. Cancelling only closes
+  the menu. Its measured trigger remains mounted and its screen position is followed
+  on the UI thread until dismissal completes, so opening during keyboard motion
+  does not leave a detached menu. Available height follows that position; long
+  menus scroll above the trigger. Viewport changes dismiss the menu, and media
+  actions wait for overlay removal before starting the replacement protocol.
 - Transient attachments render their own progress tile while they are imported
   into managed storage. Any importing attachment disables send; text editing,
   removal, and tools remain available. The send boundary rechecks readiness and

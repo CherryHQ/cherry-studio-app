@@ -1205,22 +1205,23 @@ describe('PiRuntime mapping', () => {
     );
   });
 
-  test('keeps short conversations on the full-history path without summarizing or checkpointing', async () => {
+  test('budgets replayed history by content instead of cumulative request usage', async () => {
     let summaryCalls = 0;
-    const runtime = createCompactionRuntime(
-      compactionOptions(
-        summaryCompletion('Unused summary.', () => {
-          summaryCalls += 1;
-        }),
-        { estimateHistoryTokens: () => 100 },
-      ),
-    );
+    const runtime = createCompactionRuntime({
+      completeSimple: summaryCompletion('Unused summary.', () => {
+        summaryCalls += 1;
+      }),
+    });
     const holder = arrange(runtime, (context) => emitText(context, 'Short answer.'));
     const session = await runtime.open();
 
-    const events = await collect(
-      session.execute(baseRequest('turn-short', { history: compactableHistory() })),
-    );
+    const history: RuntimeExecutionRequest['history'] = compactableHistory();
+    history[1].messages[1].usage = {
+      inputTokens: 125_000,
+      outputTokens: 1_000,
+      totalTokens: 126_000,
+    };
+    const events = await collect(session.execute(baseRequest('turn-short', { history })));
 
     expect(summaryCalls).toBe(0);
     expect(events.some((event) => event.type === 'context.checkpoint')).toBe(false);
@@ -1233,7 +1234,7 @@ describe('PiRuntime mapping', () => {
     ]);
     expect(holder.lastOptions?.initialState?.messages?.at(-1)).toMatchObject({
       role: 'assistant',
-      usage: { input: 120, output: 8, totalTokens: 128 },
+      usage: { input: 0, output: 0, totalTokens: 0 },
     });
     await session.close();
   });
@@ -2269,7 +2270,7 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('exposes MCP tools through deferred discovery and calls the target through its approval boundary', async () => {
+  test.each([3, 70_000])('discovers MCP tools after %i input tokens', async (inputTokens) => {
     const runtime = createTestRuntime();
     const preparedSystemPrompt = 'Host-prepared application system prompt.';
     let executedInput: unknown;
@@ -2331,6 +2332,7 @@ describe('PiRuntime mapping', () => {
           },
         ],
         stopReason: 'toolUse',
+        usage: usage(inputTokens, 100),
       });
       await context.emit({ type: 'message_start', message: discoveryMessage });
       for (const [contentIndex, toolCall] of discoveryMessage.content.entries()) {
@@ -2362,6 +2364,7 @@ describe('PiRuntime mapping', () => {
     const collecting = (async () => {
       for await (const event of session.execute(
         baseRequest('turn-deferred-discovery', {
+          input: [{ type: 'text', text: 'x'.repeat(inputTokens * 4) }],
           instructions: preparedSystemPrompt,
           tools: [builtInTool, targetTool, deniedTool],
         }),

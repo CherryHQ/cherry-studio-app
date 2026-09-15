@@ -220,7 +220,11 @@ export function createDmxapiProvider(settings: DmxapiProviderSettings = {}): Dmx
     // body, `extra.output.results[].url` async wrapper), so they go through
     // the custom transport.
     if (resolveDmxapiFamily(modelId) !== 'openai-flat') {
-      return createImageGenerationModel(modelId, { provider: DMXAPI_PROVIDER_NAME, transport });
+      return createImageGenerationModel(modelId, {
+        maxImagesPerCall: modelId === 'qwen-image' || modelId === 'wan2.6-t2i' ? 4 : 1,
+        provider: DMXAPI_PROVIDER_NAME,
+        transport,
+      });
     }
     // Fallback for unknown models — OpenAI-compat image model is the safest
     // assumption since DMXAPI's gateway translates the rest of its catalog

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { Uniwind } from 'uniwind';
 
 import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
@@ -13,16 +14,19 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import type { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
+import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
+import { publishForegroundActivityAttention } from '@/frontend/appShell/backgroundActivity';
 import AssistantActivity from '@/frontend/appShell/backgroundActivity/AssistantActivity/AssistantActivity';
 import PaintingActivity from '@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActivity';
 import i18n from '@/frontend/i18n';
@@ -52,10 +56,17 @@ export function createAppBootstrapRuntime(
   const backgroundActivityEnvironment = host.container.get<BackgroundActivityEnvironment>(
     'BackgroundActivityEnvironment',
   );
+  const androidActivities =
+    Platform.OS === 'android'
+      ? host.container.get<AndroidBackgroundActivityRuntime>('AndroidBackgroundActivityRuntime')
+      : undefined;
   backgroundActivityEnvironment.configure({
-    assistantPresenter: createLiveActivityPresenter(AssistantActivity),
+    assistantPresenter:
+      androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
-    paintingPresenter: createLiveActivityPresenter(PaintingActivity),
+    onForegroundAttention: publishForegroundActivityAttention,
+    paintingPresenter:
+      androidActivities?.createPresenter() ?? createLiveActivityPresenter(PaintingActivity),
     translate: (key) => i18n.t(key),
   });
   const agent = host.container.get<MobileAgentHost>('MobileAgentHost');
@@ -66,6 +77,7 @@ export function createAppBootstrapRuntime(
     'DesktopConnectionRuntime',
   );
   const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
+  const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
@@ -85,6 +97,7 @@ export function createAppBootstrapRuntime(
   });
   const { backend, dataApiDependencies } = createBackend(services, {
     dbService,
+    documentExport,
     desktopConnections,
     diagnostics,
     languageServing,
@@ -109,7 +122,10 @@ export function createAppBootstrapRuntime(
       mcpServers: services.mcpServer,
       models: services.model,
       paintings: services.painting,
-      pluginConnections: services.pluginAuthorization,
+      pluginCatalog: dataApiDependencies.pluginCatalog,
+      pluginConnections: {
+        listConnections: () => services.mcpRuntime.pluginAuthorizations.listConnections(),
+      },
       providers: services.provider,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),

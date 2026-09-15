@@ -186,10 +186,13 @@ function extSuffix(filename: string): string {
 export async function createInternalEntry(
   entries: Pick<FileEntryService, 'create'>,
   input: CreateInternalEntryInput,
+  signal?: AbortSignal,
 ): Promise<FileEntry> {
+  signal?.throwIfAborted();
   const written = await writeInternalFile(input);
   try {
-    const entry = await entries.create(written);
+    signal?.throwIfAborted();
+    const entry = await entries.create(written, signal);
     fileChanges.fire(entry.id);
     return entry;
   } catch (error) {
@@ -274,8 +277,11 @@ export async function discardInternalEntries(
 export async function rewriteInternalTextEntry(
   entries: Pick<FileEntryService, 'findById' | 'updateSizeTx' | 'withWriteTx'>,
   input: { data: string; id: FileEntryId },
+  signal?: AbortSignal,
 ): Promise<FileEntry> {
+  signal?.throwIfAborted();
   const entry = await entries.findById(input.id);
+  signal?.throwIfAborted();
   if (!entry) {
     throw new Error(`Draft file entry does not exist: ${input.id}`);
   }
@@ -283,7 +289,9 @@ export async function rewriteInternalTextEntry(
   if (!file.exists) {
     throw new Error(`Draft file bytes are missing: ${input.id}`);
   }
-  await file.write(input.data);
+  // Expo writes text synchronously. Once the bytes change, finish recording
+  // their size even if the turn is cancelled while its DB write is queued.
+  file.write(input.data);
   const size = file.size;
   if (!Number.isSafeInteger(size) || size < 0) {
     throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);

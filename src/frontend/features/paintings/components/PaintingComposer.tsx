@@ -1,12 +1,17 @@
-import { useAlert, useComposerDockLayout } from '@cherrystudio/ui/components';
+import { composerContentGap, getComposerKeyboardStickyOffset } from '@cherrystudio/ui/components';
 import * as Crypto from 'expo-crypto';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
-import { ComposerDock, ComposerSessionProvider } from '@/frontend/components/Composer';
+import {
+  ComposerDismissArea,
+  ComposerDock,
+  ComposerSessionProvider,
+  useComposerSendError,
+} from '@/frontend/components/Composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
 import {
@@ -15,10 +20,6 @@ import {
 } from '@/frontend/data/paintings/imageGenerationParams';
 import { paintingJobParamValues, usePaintingJobs } from '@/frontend/data/paintings/usePaintingJobs';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
-import {
-  fileAttachmentIssueDescription,
-  getFileAttachmentIssue,
-} from '@/frontend/utils/fileAttachmentFeedback';
 import type { Painting } from '@/shared/data/types/painting';
 
 import {
@@ -54,8 +55,13 @@ export function PaintingComposer({
   painting?: Painting;
 }) {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const reportSendError = useComposerSendError({
+    sendFailedLabel: t('painting.input.generateFailed'),
+  });
   const headerHeight = useHeaderHeight();
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const keyboardOffset = getComposerKeyboardStickyOffset(bottomInset);
+  const isSubmittingRef = useRef(false);
   const [activeTurn, setActiveTurn] = useState<ActivePaintingTurn | null>(null);
   const [showPersistedTurn, setShowPersistedTurn] = useState(!isHandoff);
   const receiptId = painting && painting.files.output.length === 0 ? painting.id : undefined;
@@ -112,6 +118,8 @@ export function PaintingComposer({
 
   const handleGenerate = useCallback(
     async (input: PaintingGenerationInput) => {
+      if (isSubmittingRef.current || generation.status === 'generating') return null;
+      isSubmittingRef.current = true;
       setShowPersistedTurn(false);
       setActiveTurn({
         assistantMessageId: Crypto.randomUUID(),
@@ -126,18 +134,18 @@ export function PaintingComposer({
           return null;
         }
         setActiveTurn((current) =>
-          current ? { ...current, paintingId: result.painting.id } : current,
+          current ? { ...current, paintingId: result.paintingId } : current,
         );
         return result;
       } catch (error) {
-        if (getFileAttachmentIssue(error)) {
-          setActiveTurn(activeTurn);
-          setShowPersistedTurn(showPersistedTurn);
-        }
+        setActiveTurn(activeTurn);
+        setShowPersistedTurn(showPersistedTurn);
         throw error;
+      } finally {
+        isSubmittingRef.current = false;
       }
     },
-    [activeTurn, generatePainting, showPersistedTurn],
+    [activeTurn, generatePainting, generation.status, showPersistedTurn],
   );
   const retryInput = activeTurn?.input;
   const canRetry = Boolean(failure && retryInput);
@@ -147,17 +155,16 @@ export function PaintingComposer({
       return;
     }
 
-    // Job failures belong inline. Admission failures need the same feedback
-    // as a composer submit, since retry has no ComposerSurface to present it.
-    void handleGenerate(retryInput).catch((error: unknown) => {
-      const issue = getFileAttachmentIssue(error);
-      if (issue)
-        alert.show({
-          title: t('attachments.sendRejected'),
-          description: fileAttachmentIssueDescription(issue, t),
-        });
+    void handleGenerate(retryInput).catch(reportSendError);
+  }, [handleGenerate, retryInput, reportSendError]);
+  const handleCancel = () => {
+    void generation.cancel().then((cancelled) => {
+      if (cancelled) {
+        setActiveTurn(null);
+        setShowPersistedTurn(false);
+      }
     });
-  }, [alert, handleGenerate, retryInput, t]);
+  };
   const messageRenderState = useMemo<PaintingMessageState>(
     () => ({
       animateOutput:
@@ -194,8 +201,6 @@ export function PaintingComposer({
     (message: MessageListItem) => <PaintingMessage message={message} state={messageRenderState} />,
     [messageRenderState],
   );
-  const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
-    useComposerDockLayout();
   // Results belong to the message list. Only an explicit handoff or an
   // unfinished receipt seeds the draft; finishing a job must not remount it.
   const composerInitialAttachments =
@@ -203,31 +208,31 @@ export function PaintingComposer({
   const composerInitialDraft = initialDraft || (receiptId ? (painting?.prompt ?? '') : '');
 
   return (
-    <View className="flex-1">
-      <MessageList
-        bottomAccessoryHeight={inputHeightShared}
-        contentBottomInset={contentBottomInset}
-        contentTopInset={resolveHeaderContentInset(headerHeight)}
-        enteringMessageId={activeTurn?.userMessageId}
-        extraData={messageRenderState}
-        keyboardOffset={keyboardOffset}
-        messages={messages}
-        renderMessage={renderMessage}
-      />
-      <ComposerSessionProvider
-        initialAttachments={composerInitialAttachments}
-        initialDraft={composerInitialDraft}
-      >
-        <ComposerDock onHeightChange={handleInputHeightChange}>
-          <PaintingInput
-            initialParamValues={seededParamValues}
-            onCancel={generation.cancel}
-            onGenerate={handleGenerate}
-            painting={painting}
-            status={generation.status}
-          />
-        </ComposerDock>
-      </ComposerSessionProvider>
-    </View>
+    <ComposerSessionProvider
+      initialAttachments={composerInitialAttachments}
+      initialDraft={composerInitialDraft}
+    >
+      <ComposerDismissArea>
+        <MessageList
+          contentBottomInset={composerContentGap}
+          contentTopInset={resolveHeaderContentInset(headerHeight)}
+          enteringMessageId={activeTurn?.userMessageId}
+          extraData={messageRenderState}
+          keyboardOffset={keyboardOffset}
+          keyboardShouldPersistTaps="always"
+          messages={messages}
+          renderMessage={renderMessage}
+        />
+      </ComposerDismissArea>
+      <ComposerDock layoutMode="flow">
+        <PaintingInput
+          initialParamValues={seededParamValues}
+          onCancel={handleCancel}
+          onGenerate={handleGenerate}
+          painting={painting}
+          status={generation.status}
+        />
+      </ComposerDock>
+    </ComposerSessionProvider>
   );
 }

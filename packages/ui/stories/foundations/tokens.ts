@@ -40,7 +40,7 @@ export const PALETTE_SCALES: PaletteScale[] = [
   { title: 'Blue', hint: 'info、reference', variables: scale('blue', hueSteps) },
   { title: 'Green', hint: 'primary、success', variables: scale('green', hueSteps) },
   { title: 'Amber', hint: 'warning、highlight', variables: scale('amber', hueSteps) },
-  { title: 'Red', hint: 'error、destructive、inline-code', variables: scale('red', hueSteps) },
+  { title: 'Red', hint: 'error、destructive', variables: scale('red', hueSteps) },
 ];
 
 export const SEMANTIC_GROUPS: SemanticGroup[] = [
@@ -109,7 +109,7 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
   },
   {
     title: '产品域',
-    hint: '代码块与行内代码用于 MarkdownText；chat-user 是 user 气泡底色，chat-background 是聊天业务覆盖的消息区底色。',
+    hint: '代码块与行内代码用于 MarkdownText，行内代码文字跟随 primary 主题强调色；chat-user 是 user 气泡底色，chat-background 是聊天业务覆盖的消息区底色。',
     kind: 'surface',
     variables: ['--code-block', '--inline-code', '--chat-user', '--chat-background'],
   },

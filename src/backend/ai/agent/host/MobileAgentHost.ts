@@ -413,6 +413,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.initialAdmissions.add(admission);
     let openedRuntimeSession: AgentRuntimeSession | undefined;
     let isRuntimeSessionInstalled = false;
+    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+      abortController.abort(reason),
+    );
 
     try {
       const plan = await prepareInitialTurn(this.turnPreparation, parsed, signal);
@@ -453,6 +456,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           );
       }
       this.initialAdmissions.delete(admission);
+      preparationLease.release();
       completion.resolve();
     }
   }
@@ -554,6 +558,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       abortController,
       completion: completion.promise,
     });
+    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+      abortController.abort(reason),
+    );
     try {
       // Every gate between admission and the first durable write lives in the
       // preparation stage; a failure there leaves nothing to reconcile.
@@ -584,6 +591,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
     } finally {
       this.admittingSessions.delete(sessionId);
+      preparationLease.release();
       completion.resolve();
     }
   }
@@ -719,6 +727,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         agentName: plan.agent.name,
         sessionId,
         sessionTitle,
+        onInterrupt: async (reason) => {
+          const run = this.runningTurnsBySession.get(sessionId);
+          abortController.abort(reason);
+          await this.cancelTurn({ sessionId, turnId: reserved.turnId });
+          await run;
+        },
       }),
       hasHistoryBeforeActiveTurn: plan.hasMessages,
       pendingApprovals: new Map(),
@@ -797,6 +811,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           agentInstructions: plan.agent.instructions,
           appLanguage: this.ports.appLanguage(),
           tools: plan.tools,
+          pluginGuides: plan.pluginGuides,
+          toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
         }),
         model: plan.agent.model,
         history: toRuntimeHistory(plan.history, runtimeAttachments),
@@ -1234,6 +1250,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     agentName: string;
     sessionId: string;
     sessionTitle: string;
+    onInterrupt?: (reason: Error) => void | Promise<void>;
   }): BackgroundReplyTurn {
     try {
       return this.backgroundReply.startTurn(input);

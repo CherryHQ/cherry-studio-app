@@ -93,6 +93,13 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
     });
   }
 
+  if (request.redirect !== undefined && request.redirect !== 'error') {
+    throw new HttpError('HTTP redirect policy is invalid.', {
+      code: 'INVALID_REDIRECT_POLICY',
+      kind: 'internal',
+    });
+  }
+
   if (
     typeof request.path !== 'string' ||
     !request.path.startsWith('/') ||
@@ -104,8 +111,8 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
     });
   }
 
-  if ((request.method === 'DELETE' || request.method === 'GET') && request.body !== undefined) {
-    throw new HttpError('HTTP GET and DELETE requests must not include a body.', {
+  if (request.method === 'GET' && request.body !== undefined) {
+    throw new HttpError('HTTP GET requests must not include a body.', {
       code: 'INVALID_REQUEST_BODY',
       kind: 'internal',
     });
@@ -229,6 +236,7 @@ const dispatchRequestInterceptors = async (
     config.params = request.query;
     config.responseType = request.responseType;
     config.signal = request.signal;
+    config.fetchOptions = { redirect: request.redirect };
     config.timeout = request.timeoutMs ?? context.route.timeoutMs;
     config.url = request.path;
     return config;

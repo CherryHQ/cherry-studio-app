@@ -35,6 +35,13 @@ pnpm dev
 Rebuild the development client after native dependency or native configuration changes. Use
 `pnpm dev:clear` when the Metro cache must be reset.
 
+To create installation packages with EAS on your machine, use `pnpm build:local --platform android`
+or `pnpm build:local --platform ios`. Both default to the development client and load `.env` and
+`.env.local` into the build process. See [Local EAS Builds](docs/guides/local-builds.md) for native
+tool requirements, Sentry credentials, build profiles, and artifact output options.
+Development and preview packages do not report to Sentry or upload build-time debug artifacts;
+Sentry credentials are only needed for production monitoring.
+
 ### App variants
 
 `app.json` holds the production defaults. `app.config.ts` selects the app identity using `PROFILE`,

@@ -12,6 +12,7 @@ const mockTraces = { kind: 'traces' };
 const mockEventTraces = { kind: 'event-traces' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
+const mockDocumentExport = { kind: 'document-export' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
 const mockDiagnostics = { kind: 'diagnostics' };
 const mockJobRuntime = { kind: 'job-runtime' };
@@ -43,6 +44,9 @@ jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
 }));
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
+}));
+jest.mock('@/frontend/appShell/backgroundActivity', () => ({
+  publishForegroundActivityAttention: jest.fn(),
 }));
 jest.mock('@/bootstrap/composition/createBackendServices', () => ({
   createBackendServices: (infrastructure: unknown) => mockCreateBackendServices(infrastructure),
@@ -89,6 +93,7 @@ const createRuntime = () =>
     DbService: mockDb,
     DesktopConnectionRuntime: mockDesktopConnections,
     DiagnosticBundleService: mockDiagnostics,
+    DocumentExportRuntime: mockDocumentExport,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
     MobileAgentHost: mockAgent,
@@ -125,6 +130,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockBackgroundActivityEnvironment.configure).toHaveBeenCalledWith({
       assistantPresenter: expect.any(Object),
       getColorScheme: expect.any(Function),
+      onForegroundAttention: expect.any(Function),
       paintingPresenter: expect.any(Object),
       translate: expect.any(Function),
     });
@@ -132,6 +138,7 @@ describe('createAppBootstrapRuntime', () => {
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
       diagnostics: mockDiagnostics,
+      documentExport: mockDocumentExport,
       languageServing: mockAgentRuntime,
       providerRegistryUpdater: mockProviderRegistryUpdater,
     });

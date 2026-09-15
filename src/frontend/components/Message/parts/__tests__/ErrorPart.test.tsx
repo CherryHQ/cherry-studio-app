@@ -12,6 +12,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
+    ContextMenuExclusion: (props: object) => createElement('View', props),
     MessagePart: {
       Detail: (props: object) => createElement('MessagePartDetail', props),
       Error: (props: object) => createElement('MessagePartError', props),

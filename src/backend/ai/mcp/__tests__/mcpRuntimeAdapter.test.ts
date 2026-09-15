@@ -8,6 +8,7 @@ import {
   MCP_TOOL_RESULT_MAX_BYTES,
   type McpExecutableToolDescriptor,
   type McpToolInvocationCapability,
+  McpRuntimeToolError,
 } from '../mcpRuntimeAdapter';
 
 const VALID_INPUT_SCHEMA: RuntimeJsonValue = {
@@ -93,7 +94,7 @@ describe('MCP Runtime adapter', () => {
       createTool(capability, { inputSchema: { properties: {}, type: 'unsupported' } }),
     ).toThrow('invalid JSON Schema');
 
-    const tool = createTool(capability);
+    const tool = createTool(capability, { effect: 'write' });
     await expect(
       tool.execute({
         input: { query: 42 },
@@ -168,35 +169,68 @@ describe('MCP Runtime adapter', () => {
     ]);
   });
 
-  it('terminates a stalled call at the fixed timeout', async () => {
-    jest.useFakeTimers();
-    try {
-      const { traces, records } = createTraceRecorder();
-      const capability = {
-        traces,
-        invoke: jest.fn(() => new Promise(() => undefined)),
-      } satisfies McpToolInvocationCapability;
-      const execution = createTool(capability).execute({
-        input: { query: 'cherry' },
-        signal: new AbortController().signal,
-        toolCallId: 'call-1',
-      });
+  it.each([undefined, 'read', 'write'] as const)(
+    'bounds a stalled %s call without inviting write retries',
+    async (effect) => {
+      jest.useFakeTimers();
+      try {
+        const { traces, records } = createTraceRecorder();
+        const capability = {
+          traces,
+          invoke: jest.fn(() => new Promise(() => undefined)),
+        } satisfies McpToolInvocationCapability;
+        const execution = createTool(capability, { effect }).execute({
+          input: { query: 'cherry' },
+          signal: new AbortController().signal,
+          toolCallId: 'call-1',
+        });
 
-      jest.advanceTimersByTime(MCP_TOOL_CALL_TIMEOUT_MS);
-      await expect(execution).rejects.toMatchObject({
-        code: 'mcp_tool_timeout',
-        retryable: true,
-      });
-      expect(records.at(-1)).toMatchObject({
-        status: 'error',
-        attributes: {
-          'error.category': 'timeout',
-        },
-      });
-    } finally {
-      jest.clearAllTimers();
-      jest.useRealTimers();
-    }
+        jest.advanceTimersByTime(MCP_TOOL_CALL_TIMEOUT_MS);
+        await expect(execution).rejects.toMatchObject({
+          code: effect === 'write' ? 'mcp_tool_write_outcome_unknown' : 'mcp_tool_timeout',
+          retryable: effect !== 'write',
+        });
+        expect(records.at(-1)).toMatchObject({
+          status: 'error',
+          attributes: {
+            'error.category': 'timeout',
+          },
+        });
+      } finally {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+      }
+    },
+  );
+
+  it('keeps a write cancelled before invocation distinct from an unknown outcome', async () => {
+    const invoke = jest.fn();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      createTool({ invoke }, { effect: 'write' }).execute({
+        input: { query: 'cherry' },
+        signal: controller.signal,
+        toolCallId: 'write',
+      }),
+    ).rejects.toMatchObject({ code: 'mcp_tool_cancelled', retryable: false });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('preserves a classified rejection thrown synchronously when invocation cancels', async () => {
+    const controller = new AbortController();
+    const rejection = new McpRuntimeToolError('mcp_tool_call_failed', 'Access denied.', false);
+    const invoke = jest.fn(() => {
+      controller.abort();
+      throw rejection;
+    });
+    await expect(
+      createTool({ invoke }, { effect: 'write' }).execute({
+        input: { query: 'cherry' },
+        signal: controller.signal,
+        toolCallId: 'write',
+      }),
+    ).rejects.toBe(rejection);
   });
 
   it.each([

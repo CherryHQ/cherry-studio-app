@@ -2,6 +2,7 @@ import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@cherrystudio/ui/background-activit
 import { File } from 'expo-file-system';
 
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import type { ForegroundActivityAttention } from '@/shared/backgroundActivity/attention';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -15,6 +16,7 @@ export type BackgroundActivityTranslate = (key: string) => string;
 export type BackgroundActivityEnvironmentConfig = {
   assistantPresenter: BackgroundActivityPresenter<BackgroundReplyActivityProps>;
   getColorScheme: () => 'dark' | 'light';
+  onForegroundAttention?: (attention: ForegroundActivityAttention) => void;
   paintingPresenter: BackgroundActivityPresenter<PaintingActivityProps>;
   translate: BackgroundActivityTranslate;
 };
@@ -54,6 +56,10 @@ export class BackgroundActivityEnvironment extends BaseService {
   }
 
   translate = (key: string): string => this.config.translate(key);
+
+  onForegroundAttention = (attention: ForegroundActivityAttention): void => {
+    this.config.onForegroundAttention?.(attention);
+  };
 
   get presenters(): readonly { clearOrphans(): Promise<number> }[] {
     return [this.config.assistantPresenter, this.config.paintingPresenter];

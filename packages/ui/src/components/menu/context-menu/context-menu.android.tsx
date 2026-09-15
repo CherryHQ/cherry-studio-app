@@ -1,12 +1,17 @@
 import { cloneElement, type ReactElement, useCallback, useMemo, useRef, useState } from 'react';
 import { type AccessibilityActionEvent, type AccessibilityActionInfo, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  Gesture,
+  GestureDetector,
+  type LongPressGestureHandlerEventPayload,
+} from 'react-native-gesture-handler';
 import { callback } from 'react-native-nitro-modules';
 
 import { MenuContent } from '../menu-content';
 import type { ContextMenuProps, MenuItem } from '../menu.types';
 import { useMenuState } from '../use-menu-state';
 import { type NativeCherryMenuRef, NativeCherryMenuView } from '../use-native-menu';
+import { ContextMenuExclusionContext, useContextMenuTouch } from './context-menu-exclusion';
 import { useContextMenuInteraction } from './context-menu-scroll-boundary.android';
 
 type AccessibilityInjectedProps = {
@@ -26,28 +31,18 @@ const IGNORE_NATIVE_ACTION = callback(() => {});
 /**
  * Android long-press recognition lives in the shared gesture arena: the
  * gesture-handler long press loses to committed scrolling, drawer pans, and
- * sibling recognizers, and only a committed long press opens the Cherry menu.
+ * sibling recognizers, and only a committed long press opens the Cherry menu
+ * at the pointer's window coordinates.
  * The native view supplies Android ViewConfiguration only: it has no items
  * and never presents a system popup. The child receives enabled items as
  * accessibility custom actions so the operations do not depend on long press.
  */
 export function ContextMenu({ children, items }: ContextMenuProps) {
-  if (items.length === 0) {
-    return children;
-  }
-
-  return <ContextMenuAnchor items={items}>{children}</ContextMenuAnchor>;
-}
-
-function ContextMenuAnchor({ children, items }: ContextMenuProps) {
   const anchorRef = useRef<View>(null);
-  const [anchorView, setAnchorView] = useState<View | null>(null);
-  const handleAnchor = useCallback((view: View | null) => {
-    anchorRef.current = view;
-    setAnchorView(view);
-  }, []);
   const { anchor, close, finishClose, isOpen, open } = useMenuState(anchorRef);
   const interaction = useContextMenuInteraction();
+  const touch = useContextMenuTouch();
+  const touchInteraction = touch.interaction;
   const [menuBinding, setMenuBinding] = useState<NativeMenuBinding | null>(null);
   const handleMenuView = useCallback((view: NativeCherryMenuRef) => {
     const nextBinding = {
@@ -58,39 +53,49 @@ function ContextMenuAnchor({ children, items }: ContextMenuProps) {
     setMenuBinding((current) => (current?.view === view ? current : nextBinding));
   }, []);
   const hybridRef = useMemo(() => callback(handleMenuView), [handleMenuView]);
-  const handleLongPress = useCallback(() => {
-    if (!interaction.isRecognitionBlocked()) {
-      anchorView?.measureInWindow((pageX, pageY, width, height) => {
-        open({ height, pageX, pageY, width });
-      });
-    }
-  }, [anchorView, interaction, open]);
+  const handleLongPress = useCallback(
+    ({ absoluteX, absoluteY }: LongPressGestureHandlerEventPayload) => {
+      if (!interaction.isRecognitionBlocked() && !touchInteraction.isRecognitionBlocked()) {
+        open({ height: 0, pageX: absoluteX, pageY: absoluteY, width: 0 });
+      }
+    },
+    [interaction, open, touchInteraction],
+  );
+  const isEnabled =
+    menuBinding !== null && !touch.isTouchExcluded && items.some((item) => !item.disabled);
   const longPress = useMemo(() => {
-    const gesture = Gesture.LongPress().runOnJS(true);
+    const gesture = Gesture.LongPress().enabled(isEnabled).runOnJS(true);
     if (menuBinding) {
       gesture
         .minDuration(menuBinding.minDuration)
         .maxDistance(menuBinding.maxDistance)
         .onStart(handleLongPress);
     }
-
     return gesture;
-  }, [handleLongPress, menuBinding]);
+  }, [handleLongPress, isEnabled, menuBinding]);
 
   return (
     <>
-      <GestureDetector gesture={longPress}>
+      <ContextMenuExclusionContext value={touch.excludeTouch}>
         <NativeCherryMenuView
           hybridRef={hybridRef}
           items={EMPTY_NATIVE_ITEMS}
           onAction={IGNORE_NATIVE_ACTION}
           trigger="longPress"
         >
-          <View collapsable={false} ref={handleAnchor}>
-            {withMenuAccessibilityActions(children, items)}
-          </View>
+          <GestureDetector gesture={longPress}>
+            <View
+              collapsable={false}
+              onTouchCancel={touch.onTouchCancel}
+              onTouchEnd={touch.onTouchFinish}
+              onTouchStart={touch.onTouchStart}
+              ref={anchorRef}
+            >
+              {withMenuAccessibilityActions(children, items)}
+            </View>
+          </GestureDetector>
         </NativeCherryMenuView>
-      </GestureDetector>
+      </ContextMenuExclusionContext>
       {anchor ? (
         <MenuContent
           anchor={anchor}

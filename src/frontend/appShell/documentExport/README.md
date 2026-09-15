@@ -1,0 +1,18 @@
+# Document Export Entry
+
+`useDocumentExport().open` creates a source-neutral export session and opens `/document-export`.
+Only a request ID enters navigation. This owner retains the transient handoff until the page closes,
+rejects overlapping requests, releases abandoned navigation, and waits for session cleanup before
+admitting the next request. The backend runtime remains the application-shutdown backstop.
+
+Image is the default format. A source can supply `allowedFormats` and `initialFormat`; the handoff
+replaces an unsupported initial format with the first allowed format. The preview offers only
+those formats. Chat selections with multiple messages allow HTML and Markdown and start with HTML.
+An optional source-owned checkbox label and alternate input create
+an unchecked session alongside the checked session; the checkbox starts unchecked. Creating either
+snapshot only prepares text; the page renders the selected format on opening. Route exit disposes
+both sessions. An optional `returnTo` href names where the page dismisses once the system share
+sheet closes; without it the page stays open.
+
+Conversion and persistence belong to `Backend.documentExport`; route UI and capture belong to
+`features/documentExport`.

@@ -18,6 +18,8 @@ import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 // region. Rendered from the screen so placement="bottom" is allowed.
 export function PaintingViewerChrome({
   aspectRatios,
+  canShare,
+  onShare,
   onDelete,
   onDownload,
   onEdit,
@@ -28,6 +30,7 @@ export function PaintingViewerChrome({
   const leadingAction = useRouteHeaderLeadingAction();
   const overflowMenuItems = useMemo<readonly MenuItem[]>(
     () => [
+      { id: 'share', disabled: !canShare, label: t('fileViewer.share'), onPress: onShare },
       {
         id: 'view-conversation',
         label: t('painting.viewer.viewConversation'),
@@ -40,7 +43,7 @@ export function PaintingViewerChrome({
         onPress: onDelete,
       },
     ],
-    [onDelete, onViewConversation, t],
+    [canShare, onDelete, onShare, onViewConversation, t],
   );
   const leftActions = useMemo<HeaderToolbarAction[]>(() => [leadingAction], [leadingAction]);
   const rightActions = useMemo<HeaderToolbarAction[]>(

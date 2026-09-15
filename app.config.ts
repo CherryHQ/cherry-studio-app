@@ -24,6 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     scheme: `cherrystudio${suffix.replace('.', '-')}`,
     ios: {
       ...config.ios,
+      buildNumber: process.env.EAS_BUILD_IOS_BUILD_NUMBER ?? config.ios?.buildNumber,
       bundleIdentifier,
       entitlements: {
         ...config.ios?.entitlements,
@@ -32,22 +33,28 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
     plugins: [
-      ...(config.plugins?.map<NonNullable<ExpoConfig['plugins']>[number]>((plugin) => {
-        if (plugin === 'expo-dev-client') {
-          return [plugin, { addGeneratedScheme: profile === 'development' }];
-        }
-        if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
-          return [
-            plugin[0],
-            { ...plugin[1], bundleIdentifier: widgetBundleIdentifier, groupIdentifier },
-          ];
-        }
-        return plugin;
-      }) ?? []),
+      ...(config.plugins
+        ?.filter((plugin) => {
+          const name = Array.isArray(plugin) ? plugin[0] : plugin;
+          return name !== '@sentry/react-native/expo' || profile === 'production';
+        })
+        .map<NonNullable<ExpoConfig['plugins']>[number]>((plugin) => {
+          if (plugin === 'expo-dev-client') {
+            return [plugin, { addGeneratedScheme: profile === 'development' }];
+          }
+          if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
+            return [
+              plugin[0],
+              { ...plugin[1], bundleIdentifier: widgetBundleIdentifier, groupIdentifier },
+            ];
+          }
+          return plugin;
+        }) ?? []),
       './plugins/withDiagnostics',
     ],
     extra: {
       ...config.extra,
+      sentryEnvironment: profile,
       eas: {
         ...eas,
         build: {

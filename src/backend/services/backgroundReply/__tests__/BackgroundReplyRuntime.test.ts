@@ -1,5 +1,4 @@
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
 import type { BackgroundActivitySessionInput } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
@@ -41,19 +40,67 @@ describe('BackgroundReplyRuntime', () => {
     return session;
   };
   const mockStartSession = jest.fn(createMockSession);
+  const preparationRelease = jest.fn();
+  const acquire = jest.fn(() => ({ release: preparationRelease }));
 
   beforeEach(() => {
     enabled = true;
     preferenceListener = undefined;
     mockSessions.length = 0;
     jest.clearAllMocks();
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
+
+  test.each([true, false])(
+    'preparation follows the background-reply preference: %s',
+    async (value) => {
+      enabled = value;
+      const runtime = await createRuntime();
+      const interrupt = jest.fn();
+      const lease = runtime.acquirePreparation(interrupt);
+      expect(acquire).toHaveBeenCalledTimes(value ? 1 : 0);
+      if (value) expect(acquire).toHaveBeenCalledWith('chat.preparation', interrupt);
+      expect(mockStartSession).not.toHaveBeenCalled();
+      lease.release();
+      expect(preparationRelease).toHaveBeenCalledTimes(value ? 1 : 0);
+      await runtime._doStop();
+    },
+  );
+
+  test.each(['disabled', 'stopped'] as const)(
+    'releases pending preparation leases once when background reply is %s',
+    async (transition) => {
+      const runtime = await createRuntime();
+      const interrupt = jest.fn();
+      const completed = runtime.acquirePreparation(interrupt);
+      const pending = [
+        runtime.acquirePreparation(interrupt),
+        runtime.acquirePreparation(interrupt),
+      ];
+      completed.release();
+      completed.release();
+      expect(preparationRelease).toHaveBeenCalledTimes(1);
+
+      if (transition === 'disabled') {
+        enabled = false;
+        preferenceListener?.();
+        await flushOperations();
+      } else {
+        await runtime._doStop();
+      }
+      expect(preparationRelease).toHaveBeenCalledTimes(3);
+      expect(interrupt).not.toHaveBeenCalled();
+
+      for (const lease of pending) lease.release();
+      completed.release();
+      await runtime._doStop();
+      expect(preparationRelease).toHaveBeenCalledTimes(3);
+    },
+  );
 
   test.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
     'opens chat activities with the current app scheme %s',
@@ -76,7 +123,7 @@ describe('BackgroundReplyRuntime', () => {
       expect(first).not.toBe(second);
       expect(mockStartSession).toHaveBeenCalledTimes(2);
       expect(mockSessions[0]?.input).toMatchObject({
-        deepLinkUrl: `${scheme}:///?agentId=agent-1&sessionId=session-1`,
+        deepLinkUrl: `${scheme}:///?sessionId=session-1`,
         keepAlive: true,
         props: expect.objectContaining({
           attribution: 'Alpha',
@@ -89,7 +136,7 @@ describe('BackgroundReplyRuntime', () => {
         tag: 'chat.backgroundReply',
       });
       expect(mockSessions[1]?.input).toMatchObject({
-        deepLinkUrl: `${scheme}:///?agentId=agent-2&sessionId=session-2`,
+        deepLinkUrl: `${scheme}:///?sessionId=session-2`,
         props: expect.objectContaining({
           attribution: 'Beta',
           detail: 'chat.backgroundReply.preparing',
@@ -442,19 +489,7 @@ describe('BackgroundReplyRuntime', () => {
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
   });
 
-  test('uses no-op turns on Android and when the preference is disabled at startup', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    const androidRuntime = await createRuntime();
-    androidRuntime.startTurn({
-      agentId: 'agent-1',
-      agentName: 'Alpha',
-      sessionId: 'session-1',
-      sessionTitle: 'First session',
-    });
-    expect(mockStartSession).not.toHaveBeenCalled();
-    await androidRuntime._doStop();
-
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+  test('uses no-op turns when the preference is disabled at startup', async () => {
     enabled = false;
     const translate = jest.fn((key: string) => key);
     const disabledRuntime = await createRuntime(translate);
@@ -470,6 +505,30 @@ describe('BackgroundReplyRuntime', () => {
     expect(mockStartSession).not.toHaveBeenCalled();
     expect(translate).not.toHaveBeenCalled();
     await disabledRuntime._doStop();
+  });
+
+  test('execution interruption targets the superseding turn of a shared session', async () => {
+    const runtime = await createRuntime();
+    const firstInterrupted = jest.fn();
+    const nextInterrupted = jest.fn();
+    const input = {
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'Chat',
+    };
+    runtime.startTurn({ ...input, onInterrupt: firstInterrupted });
+    runtime.startTurn({ ...input, onInterrupt: nextInterrupted });
+    expect(mockSessions).toHaveLength(1);
+    const reason = new Error('Android foreground service expired');
+    mockSessions[0]!.input.onInterrupt?.(reason);
+    expect(firstInterrupted).not.toHaveBeenCalled();
+    expect(nextInterrupted).toHaveBeenCalledWith(reason);
+    enabled = false;
+    preferenceListener?.();
+    await flushOperations();
+    expect(mockSessions[0]!.cancel).toHaveBeenCalledTimes(1);
+    await runtime._doStop();
   });
 
   test('keeps turn callbacks non-throwing when content derivation fails', async () => {
@@ -527,6 +586,7 @@ describe('BackgroundReplyRuntime', () => {
         assistantPresenter: undefined as never,
         translate,
       },
+      { acquire },
     );
     await runtime._doInit();
     return runtime;

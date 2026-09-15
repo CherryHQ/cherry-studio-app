@@ -5,7 +5,20 @@ const patch = readFileSync(
   'utf8',
 );
 
-// Native-source patch guards; gesture behavior still needs device acceptance.
+// Native-source patch guards; rendering and gestures still need device acceptance.
+describe('native Markdown code-block menu patch', () => {
+  test('cancels ancestor recognizers before either code target presents its menu', () => {
+    const codeBlockPatch = patch
+      .split(
+        '+++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt',
+      )[1]
+      ?.split('diff --git ')[0];
+    expect(codeBlockPatch).toMatch(
+      /private fun showContextMenu\(anchor: View\): Boolean \{\n     if \(pending\) return false\n(?:\+[^\n]*\n)*\+    anchor\.parent\?\.requestDisallowInterceptTouchEvent\(true\)\n     ContextMenuPopup\.show\(anchor, this\)/,
+    );
+  });
+});
+
 describe('native Markdown table interaction patch', () => {
   test('removes the iOS table copy menu recognizer', () => {
     expect(patch).toContain('-  [_gridContainer addInteraction:contextMenu];');
@@ -76,5 +89,17 @@ describe('native Markdown code-block height patch', () => {
     );
     expect(patch).toContain('+          parent?.requestDisallowInterceptTouchEvent(true)');
     expect(patch).toContain('+          parent?.requestDisallowInterceptTouchEvent(false)');
+  });
+});
+
+describe('native Markdown code-block divider patch', () => {
+  test('keeps the iOS divider above the code viewport', () => {
+    expect(patch).toContain(
+      '+    CGRect dividerRect = CGRectMake(borderWidth, headerH - 1, self.bounds.size.width - borderWidth * 2, 1);',
+    );
+  });
+
+  test('keeps the full Android divider stroke above the code viewport', () => {
+    expect(patch).toContain('+    val y = headerH - dividerPaint.strokeWidth / 2f');
   });
 });

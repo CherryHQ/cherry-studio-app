@@ -6,6 +6,7 @@
 
 import { v7 as uuidv7 } from 'uuid';
 
+import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply/backgroundReplyTypes';
 import {
   AgentEventSchema,
   AgentProtocolError,
@@ -30,6 +31,7 @@ import {
 } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
+import type { AgentRuntimeToolResolver } from '../../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
@@ -92,8 +94,11 @@ const backgroundReplyTurn = {
   update: jest.fn(),
 };
 const backgroundReply = {
+  acquirePreparation: jest.fn((_onInterrupt: (reason: Error) => void) => ({
+    release: jest.fn(),
+  })),
   clearSession: jest.fn(),
-  startTurn: jest.fn(() => backgroundReplyTurn),
+  startTurn: jest.fn((_input: BackgroundReplyTurnInput) => backgroundReplyTurn),
   updateSessionTitle: jest.fn(),
 };
 const usage = {
@@ -133,7 +138,7 @@ type HostOverrides = {
   traces?: TraceRecorder;
   agents?: AgentDefinitionSource;
   appLanguage?: () => 'en-US' | 'zh-CN';
-  resolveRuntimeTools?: () => Promise<RuntimeTool[]>;
+  resolveRuntimeTools?: AgentRuntimeToolResolver['resolve'];
 };
 
 function createHost(
@@ -154,7 +159,7 @@ function createHost(
       inferenceModel: resolveInferenceModel,
       naming: () => naming,
       runtimeTools: {
-        resolve: overrides.resolveRuntimeTools ?? (async () => []),
+        resolve: overrides.resolveRuntimeTools ?? (async () => ({ tools: [], pluginGuides: [] })),
       },
       usage,
       tools,
@@ -255,6 +260,79 @@ describe('MobileAgentHost', () => {
     jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
   });
+
+  test.each(['new', 'existing'] as const)(
+    'protects %s-session preparation before awaiting and hands off before releasing',
+    async (kind) => {
+      const prepared = createDeferred();
+      const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+        controller.emit({ type: 'completed' });
+      });
+      const host = createHost(runtime, noOpNaming, noFiles, noOpTools, async (model) => {
+        await prepared.promise;
+        return inferenceModel(model);
+      });
+      const sessionId = kind === 'new' ? uuidv7() : (await createStoredSession()).id;
+      const input = {
+        sessionId,
+        ...messageIds(),
+        parts: [{ type: 'text' as const, text: 'Background preparation' }],
+      };
+      const submitting =
+        kind === 'new'
+          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
+          : host.submitMessage(input);
+      const lease = backgroundReply.acquirePreparation.mock.results[0]!.value;
+      expect(backgroundReply.acquirePreparation).toHaveBeenCalledTimes(1);
+      expect(lease.release).not.toHaveBeenCalled();
+      expect(backgroundReply.startTurn).not.toHaveBeenCalled();
+
+      prepared.resolve();
+      await submitting;
+      expect(lease.release).toHaveBeenCalledTimes(1);
+      expect(backgroundReply.startTurn.mock.invocationCallOrder[0]).toBeLessThan(
+        lease.release.mock.invocationCallOrder[0],
+      );
+      await host._doStop();
+    },
+  );
+
+  test.each(['new', 'existing'] as const)(
+    'interrupting %s-session preparation releases protection without launching a turn',
+    async (kind) => {
+      const prepared = createDeferred();
+      const host = createHost(
+        new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+        noOpNaming,
+        noFiles,
+        noOpTools,
+        async (model) => {
+          await prepared.promise;
+          return inferenceModel(model);
+        },
+      );
+      const sessionId = kind === 'new' ? uuidv7() : (await createStoredSession()).id;
+      const input = {
+        sessionId,
+        ...messageIds(),
+        parts: [{ type: 'text' as const, text: 'Interrupted preparation' }],
+      };
+      const submitting =
+        kind === 'new'
+          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
+          : host.submitMessage(input);
+      const reason = new Error('Background service admission failed');
+      const rejected = expect(submitting).rejects.toThrow(reason);
+      backgroundReply.acquirePreparation.mock.calls[0]![0](reason);
+      prepared.resolve();
+      await rejected;
+      expect(
+        backgroundReply.acquirePreparation.mock.results[0]!.value.release,
+      ).toHaveBeenCalledTimes(1);
+      expect(backgroundReply.startTurn).not.toHaveBeenCalled();
+      await host._doStop();
+    },
+  );
 
   test('correlates Runtime spans with the durable turn and finishes tracing after persistence', async () => {
     const { traces, records } = createTraceRecorder();
@@ -567,6 +645,7 @@ describe('MobileAgentHost', () => {
     expect(backgroundReply.startTurn).toHaveBeenCalledWith({
       agentId: AGENT_ID,
       agentName: 'Test Agent',
+      onInterrupt: expect.any(Function),
       sessionId: session.id,
       sessionTitle: '',
     });
@@ -1625,7 +1704,7 @@ describe('MobileAgentHost', () => {
     await expect(store.listMessages(session.id)).resolves.toEqual([]);
   });
 
-  test('freezes configured tools into Runtime input and the persisted inference snapshot', async () => {
+  test('freezes tools and plugin guides per turn without retaining guides in chat history', async () => {
     const requests: RuntimeExecutionRequest[] = [];
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
       requests.push(controller.request);
@@ -1641,8 +1720,23 @@ describe('MobileAgentHost', () => {
       ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
     };
     let configuredTools = [tool];
+    let pluginGuides = [
+      {
+        pluginId: 'example',
+        serverId: 'server-1',
+        revision: 1,
+        content: 'A bundled workflow for this turn.',
+      },
+    ];
+    const discoveryWarning = 'Some configured tools could not be loaded.';
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
-      resolveRuntimeTools: async () => configuredTools.slice(),
+      resolveRuntimeTools: async (_agentId, onUnavailable) => {
+        if (pluginGuides.length > 0) onUnavailable?.(discoveryWarning);
+        return {
+          tools: configuredTools.slice(),
+          pluginGuides: pluginGuides.slice(),
+        };
+      },
     });
     const session = await createStoredSession();
     const events: AgentEvent[] = [];
@@ -1654,10 +1748,15 @@ describe('MobileAgentHost', () => {
       sessionId: session.id,
     });
     configuredTools = [];
+    pluginGuides = [];
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the tool snapshot turn');
 
     expect(requests[0]?.tools).toEqual([tool]);
+    expect(requests[0]?.instructions).toContain('A bundled workflow for this turn.');
+    expect(requests[0]?.instructions).toContain(discoveryWarning);
+    expect(requests[0]?.instructions.match(/Bundled plugin: example/g)).toHaveLength(1);
     const transcript = await store.listMessages(session.id);
+    expect(JSON.stringify(transcript)).not.toContain('A bundled workflow for this turn.');
     expect(transcript[1]?.inferenceSnapshot).toMatchObject({
       status: 'supported',
       snapshot: {
@@ -1671,6 +1770,22 @@ describe('MobileAgentHost', () => {
         ],
       },
     });
+
+    events.length = 0;
+    runtime.script((controller) => {
+      requests.push(controller.request);
+      controller.emit({ type: 'completed' });
+    });
+    await host.submitMessage({
+      ...messageIds(),
+      parts: [{ type: 'text', text: 'Continue without the plugin.' }],
+      sessionId: session.id,
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the next turn without guides');
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.instructions).not.toContain('## Plugin Guides');
+    expect(requests[1]?.instructions).not.toContain('## Tool Availability');
+    expect(JSON.stringify(requests[1]?.history)).not.toContain('A bundled workflow for this turn.');
   });
 
   test('auto approval promotes ask tools without overriding auto or deny policies', async () => {
@@ -1697,7 +1812,7 @@ describe('MobileAgentHost', () => {
     };
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
       agents: autoAgents,
-      resolveRuntimeTools: async () => tools,
+      resolveRuntimeTools: async () => ({ tools, pluginGuides: [] }),
     });
     const session = await createStoredSession();
     const events: AgentEvent[] = [];
@@ -1732,17 +1847,20 @@ describe('MobileAgentHost', () => {
       },
     });
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
-      resolveRuntimeTools: async () => [
-        {
-          approval: 'ask',
-          description: 'Search.',
-          displayName: 'Search',
-          execute: async () => ({ artifacts: [], value: null }),
-          inputSchema: { type: 'object' },
-          providerName: 'mcp_search_abc1234',
-          ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
-        },
-      ],
+      resolveRuntimeTools: async () => ({
+        tools: [
+          {
+            approval: 'ask',
+            description: 'Search.',
+            displayName: 'Search',
+            execute: async () => ({ artifacts: [], value: null }),
+            inputSchema: { type: 'object' },
+            providerName: 'mcp_search_abc1234',
+            ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+          },
+        ],
+        pluginGuides: [],
+      }),
     });
     const session = await createStoredSession();
 
@@ -1826,6 +1944,46 @@ describe('MobileAgentHost', () => {
     // The session is idle again.
     const observation = await host.observeSession(session.id, () => {});
     expect(observation.snapshot.activeTurn).toBeNull();
+  });
+
+  test('background interruption waits for cancelled turn persistence', async () => {
+    const started = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      started.resolve();
+      if (!controller.signal.aborted) {
+        await new Promise<void>((resolve) => {
+          controller.signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }
+    });
+    const persist = store.finalizeAssistantMessage.bind(store);
+    const persistence = createDeferred();
+    const finalize = jest
+      .spyOn(store, 'finalizeAssistantMessage')
+      .mockImplementation(async (input) => {
+        await persistence.promise;
+        return persist(input);
+      });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Keep working.' }],
+    });
+    await started.promise;
+
+    let drained = false;
+    const interrupt = backgroundReply.startTurn.mock.calls[0]![0].onInterrupt!;
+    const interrupted = Promise.resolve(interrupt(new Error('Background time limit'))).then(() => {
+      drained = true;
+    });
+    await waitFor(() => finalize.mock.calls.length > 0, 'cancelled message persistence to start');
+    expect(drained).toBe(false);
+    persistence.resolve();
+    await interrupted;
+    expect((await store.listMessages(session.id))[1]?.status).toBe('cancelled');
+    expect(host.getSessionStatus(session.id)?.status).toBe('cancelled');
   });
 
   test('stops active turns before draining Host-owned lifecycle work', async () => {

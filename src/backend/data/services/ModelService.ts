@@ -72,6 +72,10 @@ export type ReconcileProviderModelsResult = {
 
 export type ModelInputWithoutOrderKey = Omit<InsertUserModelRow, 'orderKey'>;
 type UpdateField = keyof UpdateModelDto;
+type ModelProviderConfig = {
+  defaultChatEndpoint?: EndpointType | null;
+  presetProviderId?: string | null;
+};
 
 export const UPDATE_MODEL_FIELD_MAP: Array<UpdateField | [UpdateField, keyof InsertUserModelRow]> =
   [
@@ -154,11 +158,27 @@ function applyStoredFields(baseline: Model, row: UserModelRow): Model {
   };
 }
 
-function enrichModelFromRegistry(row: UserModelRow): Model {
-  let registryData = providerRegistryService.lookupModel(row.providerId, row.modelId);
+function lookupStoredModel(
+  row: UserModelRow,
+  providerConfig?: ModelProviderConfig,
+): ModelRegistryLookup {
+  let registryData = providerRegistryService.lookupModel(
+    row.providerId,
+    row.modelId,
+    providerConfig,
+  );
   if (!registryData.presetModel && row.presetModelId) {
-    registryData = providerRegistryService.lookupModel(row.providerId, row.presetModelId);
+    registryData = providerRegistryService.lookupModel(
+      row.providerId,
+      row.presetModelId,
+      providerConfig,
+    );
   }
+  return registryData;
+}
+
+function enrichModelFromRegistry(row: UserModelRow, providerConfig?: ModelProviderConfig): Model {
+  const registryData = lookupStoredModel(row, providerConfig);
 
   const registryBaseline = registryData.presetModel
     ? mergePresetModel(
@@ -368,6 +388,41 @@ export class ModelService {
     return this.dbService.getDb();
   }
 
+  private async getProviderConfigs(
+    providerIds: readonly string[],
+    db?: Database,
+  ): Promise<Map<string, ModelProviderConfig>> {
+    // Bundled ids already identify their catalog. Copies need the stored preset identity;
+    // load those in batches so a model list never introduces one read per model.
+    const customIds = [...new Set(providerIds)].filter(
+      (id) => !providerRegistryService.isRegistryProvider(id),
+    );
+    const configs = new Map<string, ModelProviderConfig>();
+    for (const ids of chunks(customIds, sqliteBatchSize)) {
+      // react-doctor-disable-next-line async-await-in-loop -- chunks respect SQLite's variable limit
+      const rows = await (db ?? this.db)
+        .select({
+          providerId: userProviderTable.providerId,
+          presetProviderId: userProviderTable.presetProviderId,
+          defaultChatEndpoint: userProviderTable.defaultChatEndpoint,
+        })
+        .from(userProviderTable)
+        .where(inArray(userProviderTable.providerId, ids));
+      for (const row of rows) configs.set(row.providerId, row);
+    }
+    return configs;
+  }
+
+  private async enrichModels(rows: UserModelRow[]): Promise<Model[]> {
+    const configs = await this.getProviderConfigs(rows.map((row) => row.providerId));
+    return rows.map((row) => enrichModelFromRegistry(row, configs.get(row.providerId)));
+  }
+
+  async resolveRegistryModels(providerId: string, modelIds: string[]): Promise<Model[]> {
+    const config = (await this.getProviderConfigs([providerId])).get(providerId);
+    return providerRegistryService.resolveModels(providerId, modelIds, config);
+  }
+
   async list(query: ModelListQuery = {}): Promise<Model[]> {
     const conditions: SQL[] = [];
     if (query.providerId) {
@@ -382,7 +437,7 @@ export class ModelService {
       .from(userModelTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(asc(userModelTable.providerId), asc(userModelTable.orderKey));
-    const models = rows.map(enrichModelFromRegistry);
+    const models = await this.enrichModels(rows);
     return query.capability
       ? models.filter((model) => model.capabilities.includes(query.capability as never))
       : models;
@@ -394,7 +449,7 @@ export class ModelService {
       .from(userModelTable)
       .where(eq(userModelTable.id, id))
       .limit(1);
-    return row ? enrichModelFromRegistry(row) : null;
+    return row ? (await this.enrichModels([row]))[0] : null;
   }
 
   async getByKey(providerId: string, modelId: string): Promise<Model> {
@@ -406,7 +461,7 @@ export class ModelService {
     if (!row) {
       throw DataApiErrorFactory.notFound('Model', `${providerId}/${modelId}`);
     }
-    return enrichModelFromRegistry(row);
+    return (await this.enrichModels([row]))[0];
   }
 
   async create(input: CreateModelInput): Promise<Model> {
@@ -418,7 +473,7 @@ export class ModelService {
         scope: eq(userModelTable.providerId, input.providerId),
       });
     })) as UserModelRow;
-    return enrichModelFromRegistry(row);
+    return (await this.enrichModels([row]))[0];
   }
 
   async batchCreate(inputs: CreateModelInput[]): Promise<Model[]> {
@@ -441,12 +496,20 @@ export class ModelService {
       }
       return result;
     });
-    return rows.map(enrichModelFromRegistry);
+    return this.enrichModels(rows);
   }
 
   async createDtos(dtos: CreateModelDto[]): Promise<Model[]> {
+    const configs = await this.getProviderConfigs(dtos.map((dto) => dto.providerId));
     const inputs = dtos.map((dto) =>
-      dtoToCreateInput(dto, providerRegistryService.lookupModel(dto.providerId, dto.modelId)),
+      dtoToCreateInput(
+        dto,
+        providerRegistryService.lookupModel(
+          dto.providerId,
+          dto.modelId,
+          configs.get(dto.providerId),
+        ),
+      ),
     );
     return this.batchCreate(inputs);
   }
@@ -465,16 +528,17 @@ export class ModelService {
 
       await assertModelEndpointWrites(tx, [{ endpointTypes: dto.endpointTypes, providerId }]);
 
-      const updates = this.buildUpdates(existing, dto);
+      const config = (await this.getProviderConfigs([providerId], tx)).get(providerId);
+      const updates = this.buildUpdates(existing, dto, config);
       if (Object.keys(updates).length === 0) {
-        return enrichModelFromRegistry(existing);
+        return enrichModelFromRegistry(existing, config);
       }
       const [row] = await tx
         .update(userModelTable)
         .set(updates)
         .where(and(eq(userModelTable.providerId, providerId), eq(userModelTable.modelId, modelId)))
         .returning();
-      return enrichModelFromRegistry(row);
+      return enrichModelFromRegistry(row, config);
     });
   }
 
@@ -494,6 +558,10 @@ export class ModelService {
         })),
       );
       const result: UserModelRow[] = [];
+      const configs = await this.getProviderConfigs(
+        items.map((item) => item.providerId),
+        tx,
+      );
       for (const { modelId, patch, providerId } of items) {
         // react-doctor-disable-next-line async-await-in-loop -- the transaction must preserve request order and atomicity
         const [existing] = await tx
@@ -506,7 +574,7 @@ export class ModelService {
         if (!existing) {
           throw DataApiErrorFactory.notFound('Model', `${providerId}/${modelId}`);
         }
-        const updates = this.buildUpdates(existing, patch);
+        const updates = this.buildUpdates(existing, patch, configs.get(providerId));
         if (Object.keys(updates).length === 0) {
           result.push(existing);
           continue;
@@ -523,7 +591,7 @@ export class ModelService {
       }
       return result;
     });
-    return rows.map(enrichModelFromRegistry);
+    return this.enrichModels(rows);
   }
 
   /** Compatibility method used by the mobile workflow backend. */
@@ -612,7 +680,7 @@ export class ModelService {
   ): Promise<ReconcileProviderModelsResult> {
     const result = await this.applyReconcile(providerId, input, providerConfig, false);
     return {
-      added: result.inserted.map(enrichModelFromRegistry),
+      added: await this.enrichModels(result.inserted),
       removedIds: result.removedIds,
     };
   }
@@ -621,16 +689,17 @@ export class ModelService {
     providerId: string,
     input: { toAdd: CreateModelDto[]; toRemove: string[] },
   ): Promise<Model[]> {
+    const config = (await this.getProviderConfigs([providerId])).get(providerId);
     const toAdd = input.toAdd.map((dto) =>
-      dtoToCreateInput(dto, providerRegistryService.lookupModel(providerId, dto.modelId)),
+      dtoToCreateInput(dto, providerRegistryService.lookupModel(providerId, dto.modelId, config)),
     );
     const result = await this.applyReconcile(
       providerId,
       { toAdd, toRemove: input.toRemove },
-      undefined,
+      config,
       true,
     );
-    return (result.allRows ?? []).map(enrichModelFromRegistry);
+    return (result.allRows ?? []).map((row) => enrichModelFromRegistry(row, config));
   }
 
   async createFromRegistry(
@@ -643,7 +712,7 @@ export class ModelService {
     const registryData = providerRegistryService.lookupModel(
       input.providerId,
       input.modelId,
-      providerConfig,
+      providerConfig ?? (await this.getProviderConfigs([input.providerId])).get(input.providerId),
     );
     return this.create({ ...input, registryData });
   }
@@ -659,21 +728,28 @@ export class ModelService {
       return result;
     }
     const rows = await this.db.select().from(userModelTable).where(inArray(userModelTable.id, ids));
+    const configs = providerRegistryService.isReady()
+      ? await this.getProviderConfigs(rows.map((row) => row.providerId))
+      : new Map<string, ModelProviderConfig>();
     for (const row of rows) {
       // History can display stored names before the first catalog download completes.
       const name = providerRegistryService.isReady()
-        ? enrichModelFromRegistry(row).name
+        ? enrichModelFromRegistry(row, configs.get(row.providerId)).name
         : (row.name ?? row.modelId);
       if (name) result.set(row.id, name);
     }
     return result;
   }
 
-  private buildUpdates(existing: UserModelRow, dto: UpdateModelDto): Partial<InsertUserModelRow> {
+  private buildUpdates(
+    existing: UserModelRow,
+    dto: UpdateModelDto,
+    providerConfig?: ModelProviderConfig,
+  ): Partial<InsertUserModelRow> {
     const updates: Partial<InsertUserModelRow> = {};
     let baseline: Model | null = null;
     if (existing.presetModelId) {
-      const lookup = providerRegistryService.lookupModel(existing.providerId, existing.modelId);
+      const lookup = lookupStoredModel(existing, providerConfig);
       if (lookup.presetModel) {
         baseline = mergePresetModel(
           lookup.presetModel,
@@ -725,10 +801,11 @@ export class ModelService {
       return { inserted: [], removedIds: [] };
     }
 
+    const config = providerConfig ?? (await this.getProviderConfigs([providerId])).get(providerId);
     const values = toAdd.map((model) => {
       const registryData =
         model.registryData ??
-        providerRegistryService.lookupModel(providerId, model.modelId, providerConfig);
+        providerRegistryService.lookupModel(providerId, model.modelId, config);
       return buildModelInsertValues({ ...model, providerId, registryData });
     });
     const defaultIds = await this.getUserDefaultModelIds();

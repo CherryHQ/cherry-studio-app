@@ -14,6 +14,12 @@ jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));
 
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+  useFocusEffect: (callback: () => (() => void) | void) =>
+    jest.requireActual<typeof import('react')>('react').useEffect(callback, [callback]),
+}));
+
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/git-fork', () => () => null);

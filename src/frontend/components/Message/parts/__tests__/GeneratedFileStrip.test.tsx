@@ -4,6 +4,10 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { GeneratedFileStrip } from '../GeneratedFileStrip';
 
+jest.mock('@cherrystudio/ui/components', () => ({
+  ContextMenuExclusion: (props: object) => jest.requireActual('react').createElement('View', props),
+}));
+
 jest.mock('@/frontend/components/FileEntryPreview', () => {
   const { createElement } = jest.requireActual('react');
   return {

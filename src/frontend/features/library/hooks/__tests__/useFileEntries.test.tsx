@@ -10,7 +10,7 @@ import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
 
-import { useFileEntries } from '../useFileEntries';
+import { useFileEntries, type FileLibraryFilter } from '../useFileEntries';
 
 // Exercise the real classifier without loading native preview components.
 jest.mock('@/frontend/components/FileEntryPreview', () =>
@@ -93,8 +93,8 @@ function Providers({ children }: { children: ReactNode }) {
   );
 }
 
-function Probe({ enabled }: { enabled: boolean }) {
-  const result = useFileEntries('all', { enabled });
+function Probe({ enabled, filter = 'all' }: { enabled: boolean; filter?: FileLibraryFilter }) {
+  const result = useFileEntries(filter, { enabled });
 
   useEffect(() => {
     latestResult = result;
@@ -117,6 +117,48 @@ describe('useFileEntries', () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
     queryClient.clear();
+  });
+
+  test('sharing partitions the same loaded pages by source while keeping exported images in the image tab', async () => {
+    const exportedImage = FileEntrySchema.parse({
+      ...entry,
+      id: '00000000-0000-4000-8000-000000000010',
+      provenance: 'document-export',
+    });
+    const exportedDocument = FileEntrySchema.parse({
+      ...documentEntry,
+      id: '00000000-0000-4000-8000-000000000011',
+      provenance: 'document-export',
+    });
+    dataApi.get.mockResolvedValueOnce({
+      items: [exportedImage, generatedEntry, exportedDocument, entry],
+    });
+    await act(async () => {
+      renderer = create(
+        <Providers>
+          <Probe enabled filter="sharing" />
+        </Providers>,
+      );
+    });
+    await flushQueryNotifications();
+    await flushQueryNotifications();
+    expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([
+      exportedImage.id,
+      exportedDocument.id,
+    ]);
+    await act(async () => {
+      renderer?.update(
+        <Providers>
+          <Probe enabled filter="image" />
+        </Providers>,
+      );
+    });
+    await flushQueryNotifications();
+    expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([
+      exportedImage.id,
+      entry.id,
+    ]);
+    expect(dataApi.get).toHaveBeenCalledTimes(1);
   });
 
   test('keeps the loading state without fetching until data loading is enabled', async () => {

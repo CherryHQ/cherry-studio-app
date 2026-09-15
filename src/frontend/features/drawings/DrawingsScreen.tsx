@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import {
@@ -26,6 +27,7 @@ const paintingSelectionScope = 'drawings';
 function DrawingsScreenBody() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { left, right } = useSafeAreaInsets();
   const { exitEditing } = useSelectionActions();
   const { isDeletionPending, isEditing } = useSelectionState();
   const openNewPainting = useCallback(() => {
@@ -65,7 +67,7 @@ function DrawingsScreenBody() {
         rightActions={isEditing ? doneActions : createActions}
         title={t('painting.history.title')}
       />
-      <View className="flex-1">
+      <View className="flex-1" style={{ paddingLeft: left, paddingRight: right }}>
         <DrawingList />
         <SelectionControls scope={paintingSelectionScope} />
       </View>

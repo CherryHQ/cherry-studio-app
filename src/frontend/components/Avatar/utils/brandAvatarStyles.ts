@@ -1,41 +1,69 @@
+import { type IconSource, resolveProviderIcon } from '@cherrystudio/ui/icons';
+
 export interface BrandAvatarDisplayConfig {
-  borderRadius?: number;
   scale: number;
 }
 
 export const DEFAULT_BRAND_ICON_SCALE = 1;
 // Provider WebPs are cropped to their visible bounds during generation. This
 // shared inset restores breathing room after that asset-level normalization.
-export const PROVIDER_BRAND_ICON_SCALE = 0.8125;
+const PROVIDER_BRAND_ICON_SCALE = 0.8125;
+// Keep a square mark inside the circle, including its corner details.
+const CIRCULAR_PROVIDER_BRAND_ICON_SCALE = 0.7;
 
-const CONTAINED_BRAND_ICON: Readonly<BrandAvatarDisplayConfig> = {
-  borderRadius: 5,
-  scale: PROVIDER_BRAND_ICON_SCALE,
-};
-const PROVIDER_BRAND_ICON: Readonly<BrandAvatarDisplayConfig> = {
-  scale: PROVIDER_BRAND_ICON_SCALE,
-};
-const CONTAINED_BRAND_ICON_IDS = new Set([
-  'aihubmix',
-  'anthropic',
-  'aws-bedrock',
-  'cherryin',
-  'groq',
-  'lmstudio',
-  'yi',
-]);
+// Key by the resolved asset pair: aliases and model-to-provider fallbacks must
+// use the layout of the image actually displayed, not the configured provider.
+const FULL_FRAME_PROVIDER_ICONS = new Set(
+  [
+    '3min-top',
+    'abacus',
+    'aihubmix',
+    'aionlabs',
+    'anthropic',
+    'aws-bedrock',
+    'cherryin',
+    'coze',
+    'felo',
+    'groq',
+    'higress',
+    'lmstudio',
+    'mcpso',
+    'minimax-agent',
+    'netease-youdao',
+    'paddleocr',
+    'radeon-cloud',
+    'tesseract-js',
+    'zero-one',
+  ].flatMap((id) => {
+    const icon = resolveProviderIcon(id);
+    return icon ? [icon] : [];
+  }),
+);
+
+// These provider fallbacks use untrimmed general/model canvases. Compensate
+// their existing 72px canvas at display time without changing the image files.
+const PROVIDER_CANVAS_SCALES = new Map<IconSource, number>(
+  (
+    [
+      ['opencode', 72 / 46],
+      ['mimo', 72 / 48],
+    ] as const
+  ).flatMap(([id, scale]) => {
+    const icon = resolveProviderIcon(id);
+    return icon ? [[icon, scale] as const] : [];
+  }),
+);
 
 export function getBrandAvatarIconDisplayConfig(
-  iconId: string | undefined,
-  displayContext: 'provider' | 'provider-list' = 'provider-list',
-): BrandAvatarDisplayConfig | undefined {
-  if (!iconId) {
-    return undefined;
+  icon: IconSource,
+  shape: 'circle' | 'rounded' = 'rounded',
+): BrandAvatarDisplayConfig {
+  if (FULL_FRAME_PROVIDER_ICONS.has(icon)) {
+    return { scale: 1 };
   }
 
-  return displayContext === 'provider-list' && CONTAINED_BRAND_ICON_IDS.has(iconId.toLowerCase())
-    ? CONTAINED_BRAND_ICON
-    : PROVIDER_BRAND_ICON;
+  const inset = shape === 'circle' ? CIRCULAR_PROVIDER_BRAND_ICON_SCALE : PROVIDER_BRAND_ICON_SCALE;
+  return { scale: inset * (PROVIDER_CANVAS_SCALES.get(icon) ?? 1) };
 }
 
 export function getBrandAvatarFallback(label: string) {
