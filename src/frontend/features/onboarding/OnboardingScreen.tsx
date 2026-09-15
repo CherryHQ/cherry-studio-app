@@ -15,8 +15,7 @@ export function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [, setStatus] = usePreference('app.onboarding.status');
-  const [isSkipping, setIsSkipping] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'provider' | 'desktop' | 'skip' | null>(null);
   const isFocused = useRef(false);
   const isSaving = useRef(false);
   useFocusEffect(
@@ -27,33 +26,24 @@ export function OnboardingScreen() {
       };
     }, []),
   );
-  const connect = async () => {
+  const start = async (action: 'provider' | 'desktop' | 'skip') => {
     if (isSaving.current) return;
     isSaving.current = true;
-    setIsStarting(true);
+    setPendingAction(action);
     try {
-      await setStatus('pending', { optimistic: false });
-      if (isFocused.current) router.push('/onboarding/provider');
+      await setStatus(action === 'skip' ? 'skipped' : 'pending', { optimistic: false });
+      if (isFocused.current) {
+        if (action === 'skip') router.replace('/');
+        else
+          router.push(
+            action === 'desktop' ? '/onboarding/device-connections' : '/onboarding/provider',
+          );
+      }
     } catch {
       toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
     } finally {
       isSaving.current = false;
-      setIsStarting(false);
-    }
-  };
-
-  const skip = async () => {
-    if (isSaving.current) return;
-    isSaving.current = true;
-    setIsSkipping(true);
-    try {
-      await setStatus('skipped', { optimistic: false });
-      if (isFocused.current) router.replace('/');
-    } catch {
-      toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
-    } finally {
-      isSaving.current = false;
-      setIsSkipping(false);
+      setPendingAction(null);
     }
   };
 
@@ -64,10 +54,10 @@ export function OnboardingScreen() {
       testID="onboarding-welcome"
     >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+        contentContainerClassName="flex-grow justify-between gap-8 pb-4"
         showsVerticalScrollIndicator={false}
       >
-        <View className="items-center gap-8 px-8 py-12">
+        <View className="flex-grow items-center justify-center gap-8 px-8 py-12">
           <LogoDrawAnimation size={104} />
           <View className="items-center gap-3">
             <Text
@@ -81,30 +71,42 @@ export function OnboardingScreen() {
             </Text>
           </View>
         </View>
+        <View className="gap-3 px-6">
+          <View className="gap-3">
+            <Button
+              disabled={pendingAction !== null}
+              loading={pendingAction === 'provider'}
+              onPress={() => void start('provider')}
+              size="lg"
+              testID="onboarding-connect"
+            >
+              {t('onboarding.welcome.connect')}
+            </Button>
+            <Button
+              disabled={pendingAction !== null}
+              loading={pendingAction === 'desktop'}
+              onPress={() => void start('desktop')}
+              size="lg"
+              testID="onboarding-desktop-sync"
+              variant="outline"
+            >
+              {t('onboarding.welcome.desktopSync')}
+            </Button>
+          </View>
+          <View className="min-h-12 items-center justify-center">
+            <Button
+              disabled={pendingAction !== null}
+              loading={pendingAction === 'skip'}
+              onPress={() => void start('skip')}
+              size="xs"
+              testID="onboarding-skip"
+              variant="ghost"
+            >
+              {t('onboarding.welcome.skip')}
+            </Button>
+          </View>
+        </View>
       </ScrollView>
-      <View className="gap-3 px-6 pb-4">
-        <Button
-          disabled={isSkipping}
-          loading={isStarting}
-          onPress={connect}
-          size="lg"
-          testID="onboarding-connect"
-        >
-          {t('onboarding.welcome.connect')}
-        </Button>
-        <Button
-          disabled={isStarting}
-          loading={isSkipping}
-          onPress={skip}
-          testID="onboarding-skip"
-          variant="ghost"
-        >
-          {t('onboarding.welcome.skip')}
-        </Button>
-        <Text className="text-center text-xs text-muted-foreground">
-          {t('onboarding.welcome.hint')}
-        </Text>
-      </View>
     </View>
   );
 }
