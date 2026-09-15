@@ -6,7 +6,7 @@ export type HttpBodyMethod = 'DELETE' | 'PATCH' | 'POST' | 'PUT';
 
 export type HttpMethod = HttpBodylessMethod | HttpBodyMethod;
 
-export type HttpResponseType = 'json' | 'text';
+export type HttpResponseType = 'json' | 'text' | 'arraybuffer';
 
 export type HttpHeaders = Readonly<Record<string, string>>;
 
