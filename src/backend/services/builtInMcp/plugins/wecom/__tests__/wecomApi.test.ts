@@ -15,8 +15,7 @@ const encoded = (data: unknown) => ({
 const result = (value: unknown) =>
   encoded({ errcode: 0, results_json: JSON.stringify({ result: JSON.stringify(value) }) });
 let credential = {
-  version: 4,
-  kind: 'bot',
+  version: 1,
   botId: 'bot-1',
   secret: 'private-secret',
   token: 'private-token',
@@ -24,7 +23,7 @@ let credential = {
 let context: PluginClientContext;
 let api: ReturnType<typeof createWecomApi>;
 const input = (effect: 'read' | 'write' = 'read'): WecomApiRequest => ({
-  endpoint: { path: '/cli/todo/list', method: 'POST' },
+  endpoint: { path: '/cli/todo/list' },
   payload: { limit: 2 },
   signal: new AbortController().signal,
   effect,
@@ -66,7 +65,7 @@ it('uses the CLI gateway envelope, token header and native response-size boundar
   expect(JSON.stringify(mockRequest.mock.calls)).not.toContain('private-secret');
 });
 
-it('renews and retries a definitely rejected read only once', async () => {
+it('retries a rejected read with the refreshed token', async () => {
   mockRequest
     .mockResolvedValueOnce(encoded({ errcode: 853004 }))
     .mockResolvedValueOnce(result({ ok: true }));
@@ -76,6 +75,15 @@ it('renews and retries a definitely rejected read only once', async () => {
     'Bearer private-token',
     'Bearer renewed-token',
   ]);
+});
+
+it('stops after the refreshed read is rejected without making a third request', async () => {
+  mockRequest
+    .mockResolvedValueOnce(encoded({ errcode: 853004 }))
+    .mockResolvedValueOnce(encoded({ errcode: 853004 }))
+    .mockResolvedValue(result({ ok: true }));
+  await expect(api.call(input())).rejects.toMatchObject({ reason: 'authorization' });
+  expect(mockRequest).toHaveBeenCalledTimes(2);
 });
 
 it('refreshes an expired write credential without replaying the write', async () => {
@@ -158,7 +166,7 @@ it('assembles declared range downloads and preserves binary bytes', async () => 
     });
   const output = await api.call({
     ...input(),
-    endpoint: { path: '/cli/disk/download', method: 'POST', rangeSize: 2 },
+    endpoint: { path: '/cli/disk/download', rangeSize: 2 },
   });
   expect(output).toMatchObject({
     kind: 'file',
@@ -199,7 +207,7 @@ it('does not send after identity replacement, revoked access, cancellation or an
   await expect(
     api.call({
       ...input(),
-      endpoint: { path: 'https://attacker.test/cli/todo/list', method: 'POST' },
+      endpoint: { path: 'https://attacker.test/cli/todo/list' },
     }),
   ).rejects.toMatchObject({ reason: 'access' });
   jest.mocked(context.assertAuthorized).mockRejectedValueOnce(new Error('revoked'));

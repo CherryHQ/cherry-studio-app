@@ -217,10 +217,8 @@ discovered input schemas and applies result-size limits.
 WeCom business operations use the current official CLI HTTP gateway under
 `https://qyapi.weixin.qq.com/cli`. Cherry implements the protocol in native TypeScript; it does not
 bundle a CLI executable. `wecomBotApi.ts` owns confirmation-link creation, polling for bot identity
-and the signed `get_cli_config` exchange. Version 4 native credentials store bot identity, secret
-and the resulting bearer token. The single `wecom_bot` authorization method retains confirmation
-inside WeCom. Old CLI/MCP credentials require disconnecting and reconnecting; MCP URL/JSON import
-and the obsolete `get_mcp_config` transport are removed.
+and the signed `get_cli_config` exchange. Native credentials store bot identity, secret and the
+resulting bearer token. The single `wecom_bot` authorization method retains confirmation inside WeCom.
 
 `createWecomClient` queries `/service/discovery` for the catalog and each service schema. It resolves
 named request/response references and nested resources, hides upstream internal input fields, and

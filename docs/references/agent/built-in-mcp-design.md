@@ -12,11 +12,6 @@
 > live in [Built-In MCP Roadmap](./built-in-mcp-roadmap.md); availability research is in
 > [Plugin Expansion Research](./plugin-expansion-research.md).
 
-> WeCom update (2026-09-15): business tools use the current official CLI HTTP gateway with bot
-> authorization, discovered service schemas and native file handling. Old MCP transport and
-> configuration import are removed. New names require write approval. Live-account acceptance and
-> the updated regression suites remain pending.
-
 ## Plugins
 
 The chat drawer's **Plugins** page manages connected accounts and authorization. Connecting a plugin
@@ -308,9 +303,7 @@ execution. No CLI executable or app-hosted MCP server is required.
 
 The single `wecom_bot` method copies an official confirmation link for opening inside WeCom, polls
 for bot identity and secret, and signs `get_cli_config` to obtain a bearer token. Setup validates
-authorized service discovery without executing a business operation. Version 4 credentials replace
-old CLI/MCP records through explicit disconnect/reconnection. The obsolete `get_mcp_config` exchange
-and `wecom_mcp` URL/JSON import method are removed.
+authorized service discovery without executing a business operation.
 
 Business traffic stays under `https://qyapi.weixin.qq.com/cli`, using the shared non-streaming HTTP
 client. `/service/discovery` supplies the service catalog and named schemas, with a 60-second cache.

@@ -160,8 +160,7 @@ export const wecomBotApi = {
     return parseResponse(
       WecomCredentialSchema,
       {
-        version: 4,
-        kind: 'bot',
+        version: 1,
         ...bot,
         token: response.token,
       },

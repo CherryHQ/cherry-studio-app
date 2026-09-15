@@ -130,7 +130,7 @@ export async function prepareWecomFiles(
     if (!mediaId) {
       const result = readWecomResult(
         await api.call({
-          endpoint: { path: '/cli/file/upload', method: 'POST' },
+          endpoint: { path: '/cli/file/upload' },
           payload: {},
           signal,
           effect: 'write',

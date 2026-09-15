@@ -2,7 +2,7 @@ import type { PluginGuideDefinition } from '../../pluginGuide';
 
 // Official CLI 1.2.1 workflows at WecomTeam/wecom-cli, commit 1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08.
 export const wecomGuide = {
-  revision: 6,
+  revision: 1,
   sections: [
     {
       requiredTools: [],
@@ -10,7 +10,7 @@ export const wecomGuide = {
 Cherry calls the current official WeCom CLI gateway directly. Tools are discovered from the
 authorizing user's service catalog. Names follow wecom_<service>__<resource>__<method>; use the
 exact available tool name, description and input schema. No shell or local CLI executable is
-available. Older MCP names and arguments are obsolete; never guess replacements.
+available.
 
 ## Authorization and capability boundaries
 Discovery does not imply access to all enterprise data. Operations remain subject to the bot,
@@ -31,9 +31,9 @@ Read the original email before replying/forwarding and preserve its official rec
 fields. Inspect per-item failures before reporting a batch as successful.
 
 ## Tasks, calendars and meetings
-Current todo list returns the authorizing user's created and participating tasks within its
-documented filters; do not apply the old bot-created-only restriction. Query exact status and time
-filters, use the user's timezone, and preserve participants and unmodified fields during updates.
+Todo list returns the authorizing user's created and participating tasks within its documented
+filters. Query exact status and time filters, use the user's timezone, and preserve participants
+and unmodified fields during updates.
 Distinguish completing a user's part from completing an entire task, and deleting from leaving.
 Check availability and meeting rooms using current tools. Meeting IDs and schedule IDs are distinct.
 Follow the official limitations on repeating events and use meeting tools for meeting changes.

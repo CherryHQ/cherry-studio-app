@@ -25,7 +25,7 @@ it('resolves official named schemas, hides internal fields and retains nested to
   expect(warnings).toEqual([]);
   expect(tools[0]).toMatchObject({
     effect: 'read',
-    endpoint: { path: '/cli/users/search', method: 'POST' },
+    endpoint: { path: '/cli/users/search' },
     definition: {
       name: 'wecom_contact__users__search',
       description: 'Official member search',
@@ -47,7 +47,6 @@ it('admits newly discovered methods with write approval without guessing read be
   });
   expect(tools[0].effect).toBe('write');
   expect(getWecomToolEffect(tools[0].definition.name)).toBe('write');
-  expect(getWecomToolEffect('wecom_contact__get_userlist')).toBe('write');
 });
 
 it.each([

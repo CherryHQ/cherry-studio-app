@@ -114,8 +114,7 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
     return this.serialize(async () => {
       signal.throwIfAborted();
       const pending = this.requireReady(attemptId);
-      // Preserve approved bot credentials if the exchange or setup discovery needs a retry.
-      pending.credential ??= await wecomBotApi.exchange(pending.bot, 2, signal);
+      pending.credential = await wecomBotApi.exchange(pending.bot, 2, signal);
       signal.throwIfAborted();
       return {
         credential: pending.credential,

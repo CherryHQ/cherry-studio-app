@@ -47,7 +47,6 @@ export function CredentialConnect({
   const [isConnected, setIsConnected] = useState(false);
   const [invalidFields, setInvalidFields] = useState<Set<string>>(() => new Set());
   const name = t(`plugins.catalog.${entry.id}.name`);
-  const credentialUrl = entry.links.credentials;
   const needsConnectionCheck = method.requiresDisconnect === true && !isConnecting && !isConnected;
   const requiresDisconnect =
     needsConnectionCheck &&
@@ -177,18 +176,16 @@ export function CredentialConnect({
                 }}
                 onSubmit={() => void connect()}
               />
-              {credentialUrl ? (
-                <View className="items-start">
-                  <Button
-                    variant="link"
-                    size="inline"
-                    disabled={isConnecting}
-                    onPress={() => void openExternalUrl(credentialUrl)}
-                  >
-                    {t(`plugins.catalog.${entry.id}.credentialLink`)}
-                  </Button>
-                </View>
-              ) : null}
+              <View className="items-start">
+                <Button
+                  variant="link"
+                  size="inline"
+                  disabled={isConnecting}
+                  onPress={() => void openExternalUrl(entry.links.credentials)}
+                >
+                  {t(`plugins.catalog.${entry.id}.credentialLink`)}
+                </Button>
+              </View>
             </View>
             <Text className="text-sm text-muted-foreground">{t('plugins.credentialPrivacy')}</Text>
           </View>

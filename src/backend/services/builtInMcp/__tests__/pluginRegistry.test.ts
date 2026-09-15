@@ -85,7 +85,7 @@ it('projects detached method metadata while retaining all executable factories o
     },
   ]);
   const [catalog] = registry.listCatalog();
-  for (const key of ['createClient', 'tools', 'acceptsDiscoveredTool', 'validation', 'serverName'])
+  for (const key of ['createClient', 'tools', 'validation', 'serverName'])
     expect(catalog).not.toHaveProperty(key);
   for (const method of catalog.authMethods) {
     for (const key of ['createRuntime', 'encodeCredentials', 'createRequestAuthorization'])

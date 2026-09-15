@@ -6,7 +6,7 @@ import { PluginError } from '@/shared/contracts/plugins';
 import { getWecomToolEffect } from './wecomTools';
 
 export type WecomJsonSchema = Record<string, unknown>;
-export type WecomEndpoint = { path: string; method: 'POST'; rangeSize?: number };
+export type WecomEndpoint = { path: string; rangeSize?: number };
 export type WecomTool = {
   definition: ListToolsResult['tools'][number];
   endpoint: WecomEndpoint;
@@ -61,8 +61,7 @@ function endpoint(base: string, path: string, rangeSize?: number): WecomEndpoint
     throw new PluginError('request', 'Invalid Wecom service path.');
   const url = new URL(raw);
   if (!isWecomApiUrl(url)) throw new PluginError('access', 'Untrusted Wecom service endpoint.');
-  // CLI gateway invocation always POSTs, including methods described as reads in the schema.
-  return { path: url.pathname, method: 'POST', rangeSize: rangeSize || undefined };
+  return { path: url.pathname, rangeSize: rangeSize || undefined };
 }
 
 export function isWecomDirective(value: unknown): boolean {

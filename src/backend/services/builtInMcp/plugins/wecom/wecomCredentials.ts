@@ -17,10 +17,8 @@ export const WecomBotSchema = z.object({
   secret,
 });
 
-// Version 4 uses the official CLI gateway. Old MCP grants require reconnection.
 export const WecomCredentialSchema = WecomBotSchema.extend({
-  version: z.literal(4),
-  kind: z.literal('bot'),
+  version: z.literal(1),
   token: secret,
 });
 
@@ -29,7 +27,6 @@ export type WecomCredential = z.infer<typeof WecomCredentialSchema>;
 
 export function readWecomCredential(value: unknown): WecomCredential {
   const parsed = WecomCredentialSchema.safeParse(value);
-  if (!parsed.success)
-    throw new PluginError('authorization', 'Reconnect Wecom to authorize its current services.');
+  if (!parsed.success) throw new PluginError('authorization', 'Wecom credentials are unavailable.');
   return parsed.data;
 }

@@ -9,8 +9,7 @@ jest.mock('../wecomBotApi', () => ({
 
 const bot = { botId: 'bot-1', secret: 'private-secret' };
 const credential = {
-  version: 4 as const,
-  kind: 'bot' as const,
+  version: 1 as const,
   ...bot,
   token: 'private-token',
 };

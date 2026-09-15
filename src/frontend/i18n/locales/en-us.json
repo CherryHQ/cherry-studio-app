@@ -1545,7 +1545,7 @@
   "plugins.catalog.wecom.authMethods.wecom_bot.label": "Authorize in WeCom",
   "plugins.catalog.wecom.authMethods.wecom_bot.setup": "Copy the authorization link, paste it into File Transfer in WeCom, and open it. Follow the page to connect a bot, then return to Cherry. The link is valid for 5 minutes.",
   "plugins.catalog.wecom.authMethods.wecom_bot.permissions": "Authorize the capabilities you need on the WeCom page. Cherry calls official tools within your authorization and organization permissions.",
-  "plugins.catalog.wecom.authMethods.wecom_bot.recovery": "Confirm that the bot has the required permissions, then disconnect and reconnect WeCom. Connections from earlier versions require fresh authorization.",
+  "plugins.catalog.wecom.authMethods.wecom_bot.recovery": "Confirm that the bot has the required permissions, then start authorization again.",
   "plugins.catalog.wecom.authMethods.wecom_bot.start": "Create and copy authorization link",
   "plugins.catalog.wecom.authMethods.wecom_bot.stages.bot.title": "Connect a bot in WeCom",
   "plugins.catalog.wecom.authMethods.wecom_bot.stages.bot.waiting": "Waiting for confirmation in WeCom",

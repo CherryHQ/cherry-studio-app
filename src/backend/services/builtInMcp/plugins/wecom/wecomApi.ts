@@ -33,8 +33,8 @@ const envelopeSchema = z.object({
   results_json: z.string().optional(),
 });
 
-export type WecomResponse = z.infer<typeof responseSchema>;
-export type WecomApiResult =
+type WecomResponse = z.infer<typeof responseSchema>;
+type WecomApiResult =
   | { kind: 'json'; value: WecomResponse }
   | {
       kind: 'file';
@@ -90,7 +90,7 @@ export function createWecomApi(context: PluginClientContext, botId: string) {
         'Wecom request is too large. Use smaller values or upload a file.',
       );
 
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; ; attempt++) {
       let submitted = false;
       let decoded = false;
       try {
@@ -108,6 +108,7 @@ export function createWecomApi(context: PluginClientContext, botId: string) {
         submitted = true;
         const response = await api.request<ArrayBuffer>({
           path: endpoint.path,
+          // The CLI gateway always POSTs, including operations described as GET in discovery.
           method: 'POST',
           body,
           headers: Object.fromEntries(headers),
@@ -194,7 +195,6 @@ export function createWecomApi(context: PluginClientContext, botId: string) {
         throw invalidResponse();
       }
     }
-    throw new PluginError('authorization', 'Reconnect Wecom to renew authorization.');
   }
 
   async function call(input: WecomApiRequest): Promise<WecomApiResult> {
@@ -260,10 +260,7 @@ export function createWecomApi(context: PluginClientContext, botId: string) {
         if (Date.now() - started >= timeout)
           throw new PluginError('network', 'Wecom task polling timed out.');
         response = await request({
-          endpoint:
-            mode === 1
-              ? { ...input.endpoint, method: 'POST' }
-              : { path: '/cli/task/query', method: 'POST' },
+          endpoint: mode === 1 ? input.endpoint : { path: '/cli/task/query' },
           payload:
             mode === 1 ? {} : { method: 'PollClawLongTask', payload: JSON.stringify({ taskid }) },
           headers: mode === 1 ? { 'X-Long-Poll-TaskId': taskid } : undefined,
@@ -280,10 +277,10 @@ export function createWecomApi(context: PluginClientContext, botId: string) {
       throw error;
     }
   }
-  return { request, call };
+  return { call };
 }
 
-export function waitWecomPoll(ms: number, signal: AbortSignal): Promise<void> {
+function waitWecomPoll(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     signal.throwIfAborted();
     const abort = () => {

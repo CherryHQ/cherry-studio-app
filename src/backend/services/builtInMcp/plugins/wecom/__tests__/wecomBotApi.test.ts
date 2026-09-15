@@ -69,8 +69,7 @@ it('reads bot identity from the current official polling response', async () => 
 it('signs get_cli_config and stores the returned token without sending the bot secret', async () => {
   mockRequest.mockResolvedValue({ data: { errcode: 0, token: 'private-token' } });
   await expect(wecomBotApi.exchange(bot, 2, signal)).resolves.toEqual({
-    version: 4,
-    kind: 'bot',
+    version: 1,
     ...bot,
     token: 'private-token',
   });

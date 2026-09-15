@@ -27,7 +27,7 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
     const catalog = WecomCatalogSchema.parse(
       readWecomResult(
         await api.call({
-          endpoint: { path: '/cli/service/discovery', method: 'POST' },
+          endpoint: { path: '/cli/service/discovery' },
           payload: {},
           effect: 'read',
           signal,
@@ -50,7 +50,7 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
         batch.map(async ({ name }) => {
           const value = readWecomResult(
             await api.call({
-              endpoint: { path: '/cli/service/discovery', method: 'POST' },
+              endpoint: { path: '/cli/service/discovery' },
               payload: { service: name },
               effect: 'read',
               signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]),
@@ -92,7 +92,7 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
   }
 
   return {
-    serverInfo: { name: 'WeCom', version: '4' },
+    serverInfo: { name: 'WeCom', version: '1' },
     get discoveryWarnings() {
       return warnings;
     },

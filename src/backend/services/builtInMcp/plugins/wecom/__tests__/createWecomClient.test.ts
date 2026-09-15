@@ -31,8 +31,7 @@ const service = (methods: Record<string, unknown>) => ({
 });
 let context: PluginClientContext;
 let credential = {
-  version: 4,
-  kind: 'bot',
+  version: 1,
   botId: 'bot-1',
   secret: 'private-secret',
   token: 'private-token',
