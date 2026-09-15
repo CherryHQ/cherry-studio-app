@@ -29,9 +29,10 @@ surfaces.
 - Calendar, reminders, health, location, and file capabilities are injected uniformly by the Host
   when their system gates pass. The frontend keeps web search as a Session-scoped composer
   selection; image generation is selected for one submission. Neither is saved on the Agent.
-- Tool approval defaults to preserving each tool's application policy. Automatic approval promotes
-  only interactive `ask` tools for future turns; it cannot enable a missing/disabled tool or bypass
-  system permission and managed-resource checks.
+- New agents, including the initial Cherry Agent, default to automatic tool approval. Automatic
+  approval promotes only eligible interactive `ask` tools for future turns; it cannot enable a
+  missing/disabled tool or bypass system permission and managed-resource checks. Existing agents
+  keep their saved approval mode.
 - Uploaded avatars are managed files with their own endpoint
   (`PUT /agents/:id/avatar`) and is written after the record lands — on create, only once the POST
   returns an id. Picking one saves immediately when editing; on create, Save commits the draft.

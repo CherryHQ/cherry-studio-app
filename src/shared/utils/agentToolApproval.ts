@@ -9,7 +9,7 @@ import type { AgentToolApproval } from '@/shared/data/types/agentToolBinding';
  *   persisted row -> clampMcpToolApproval -> applyToolApprovalMode -> snapshot
  *
  * so on its own a third-party MCP tool is never `auto`, and the only sanctioned
- * promotion from `ask` to `auto` is the Agent's explicitly confirmed mode.
+ * promotion from `ask` to `auto` is the Agent's configured mode.
  */
 
 export type McpInteractiveApproval = Extract<AgentToolApproval, 'ask' | 'deny'>;
