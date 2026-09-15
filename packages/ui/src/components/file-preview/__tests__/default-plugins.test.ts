@@ -19,6 +19,8 @@ describe('default file preview plugins', () => {
 
   it('falls back to the system thumbnail on iOS and the extension card on Android', () => {
     expect(ios.defaultFilePreviewFallback).toBe(QuickLookPreview);
+    expect(ios.defaultFileCardThumbnail).toBe(QuickLookPreview);
+    expect(android.defaultFileCardThumbnail).toBeUndefined();
     expect(android.defaultFilePreviewFallback).toBe(FallbackPreview);
   });
 });

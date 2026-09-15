@@ -14,7 +14,7 @@ export function QuickLookPreview({
   onError?: (error: Error, operation: FilePreviewOperation) => void;
   size: number;
 }) {
-  const thumbnailDisplaySize = Math.max(1, size - 24);
+  const thumbnailDisplaySize = Math.max(1, size - (size <= 64 ? 8 : 24));
   const thumbnailUri = useQuickLookThumbnail({ file, height: size, onError, width: size });
 
   if (!thumbnailUri) {
@@ -30,7 +30,7 @@ export function QuickLookPreview({
         source={thumbnailUri}
         style={{ height: thumbnailDisplaySize, width: thumbnailDisplaySize }}
       />
-      {file.extensionLabel ? (
+      {file.extensionLabel && size > 64 ? (
         <View pointerEvents="none" className="absolute right-0 bottom-2 left-0 items-center px-2">
           <View className="max-w-full rounded-full border border-constant-white/10 bg-constant-black/55 px-2 py-0.5">
             <Text className="text-base text-constant-white" numberOfLines={1}>

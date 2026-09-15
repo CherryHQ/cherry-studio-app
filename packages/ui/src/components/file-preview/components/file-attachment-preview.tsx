@@ -1,13 +1,16 @@
 import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
+import { createElement } from 'react';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
+import { defaultFileCardThumbnail } from '../default-plugins/default-plugins';
 import type { FileAttachmentPreviewProps } from '../file-preview.types';
 
 export function FileAttachmentPreview({
   categoryLabel,
   file,
   labels,
+  onError,
   onPress,
 }: FileAttachmentPreviewProps) {
   const handlePress = () => {
@@ -31,12 +34,18 @@ export function FileAttachmentPreview({
         style={{ borderCurve: 'continuous' }}
       >
         <View className="w-16 shrink-0 items-center justify-center overflow-hidden">
-          <View
-            className="size-10 items-center justify-center rounded-lg border border-border bg-background"
-            style={{ borderCurve: 'continuous', transform: [{ rotate: '-5deg' }] }}
-          >
-            <FileTextIcon className="size-5 text-foreground" />
-          </View>
+          {file && defaultFileCardThumbnail ? (
+            <View className="size-12 overflow-hidden rounded-lg">
+              {createElement(defaultFileCardThumbnail, { file, onError, size: 48 })}
+            </View>
+          ) : (
+            <View
+              className="size-10 items-center justify-center rounded-lg border border-border bg-background"
+              style={{ borderCurve: 'continuous', transform: [{ rotate: '-5deg' }] }}
+            >
+              <FileTextIcon className="size-5 text-foreground" />
+            </View>
+          )}
         </View>
         <View className="min-w-0 flex-1 justify-center gap-0.5 pr-3">
           <Text className="text-base text-foreground" numberOfLines={1}>
