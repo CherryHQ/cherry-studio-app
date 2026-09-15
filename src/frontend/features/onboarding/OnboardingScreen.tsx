@@ -5,7 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { usePreference } from '@/frontend/data';
+import { useAgentsApi } from '@/frontend/hooks/agent';
 
 import { LogoDrawAnimation } from './components/LogoDraw';
 
@@ -15,6 +17,7 @@ export function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [, setStatus] = usePreference('app.onboarding.status');
+  const agents = useAgentsApi();
   const [pendingAction, setPendingAction] = useState<'provider' | 'desktop' | 'skip' | null>(null);
   const isFocused = useRef(false);
   const isSaving = useRef(false);
@@ -31,10 +34,16 @@ export function OnboardingScreen() {
     isSaving.current = true;
     setPendingAction(action);
     try {
+      let agentId = agents.agents[0]?.id;
+      if (action === 'skip' && !agentId) {
+        const result = await agents.refetch({ throwOnError: true });
+        agentId = result.data?.items[0]?.id;
+      }
       await setStatus(action === 'skip' ? 'skipped' : 'pending', { optimistic: false });
       if (isFocused.current) {
-        if (action === 'skip') router.replace('/');
-        else
+        if (action === 'skip') {
+          router.replace(agentId ? chatHref({ agentId, kind: 'draft' }) : '/agents');
+        } else
           router.push(
             action === 'desktop' ? '/onboarding/device-connections' : '/onboarding/provider',
           );
