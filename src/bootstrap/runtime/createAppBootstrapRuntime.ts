@@ -20,6 +20,7 @@ import { createLiveActivityPresenter } from '@/backend/services/backgroundActivi
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
@@ -75,6 +76,7 @@ export function createAppBootstrapRuntime(
   const desktopConnections = host.container.get<DesktopConnectionRuntime>(
     'DesktopConnectionRuntime',
   );
+  const providerAccounts = host.container.get<ProviderAccountRuntime>('ProviderAccountRuntime');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
@@ -95,6 +97,7 @@ export function createAppBootstrapRuntime(
   });
   const { backend, dataApiDependencies } = createBackend(services, {
     dbService,
+    providerAccounts,
     documentExport,
     desktopConnections,
     languageServing,
@@ -124,6 +127,7 @@ export function createAppBootstrapRuntime(
         listConnections: () => services.mcpRuntime.pluginAuthorizations.listConnections(),
       },
       providers: services.provider,
+      providerAccounts,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),
   );

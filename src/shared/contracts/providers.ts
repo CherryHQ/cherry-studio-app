@@ -1,5 +1,7 @@
 import type { Provider } from '@/shared/data/types/provider';
 
+import type { ProviderAccountsModule } from './providerAccounts';
+
 export type ProviderCatalogEntry = {
   description?: string;
   id: string;
@@ -35,6 +37,7 @@ export class ProviderSetupError extends Error {
 }
 
 export interface ProvidersModule {
+  readonly accounts: ProviderAccountsModule;
   ensureRegistryReady(): Promise<void>;
   getSetupStatus(providerId: string): Promise<ProviderSetupStatus>;
   enable(providerId: string): Promise<Provider>;

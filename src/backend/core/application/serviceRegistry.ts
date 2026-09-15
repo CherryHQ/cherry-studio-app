@@ -18,6 +18,7 @@ import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { AudioKeepAliveSource } from '@/backend/services/keepAlive/AudioKeepAliveSource';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
@@ -44,6 +45,7 @@ export const services = {
   CacheService,
   DbService,
   DesktopConnectionRuntime,
+  ProviderAccountRuntime,
   DocumentExportRuntime,
   PreferenceService,
   BackgroundActivityEnvironment,

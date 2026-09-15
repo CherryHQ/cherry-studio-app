@@ -250,7 +250,10 @@ function ProviderSelection({
               description={
                 provider.unavailableReason
                   ? t('settings.provider.desktopSync.unsupportedAuth')
-                  : t('settings.provider.desktopSync.providerDescription', {
+                  : (provider.accountNotice
+                      ? t('settings.provider.desktopSync.accountNotice') + '\n'
+                      : '') +
+                    t('settings.provider.desktopSync.providerDescription', {
                       action: t(`settings.provider.desktopSync.action.${provider.action}`),
                       count: provider.models.filter((model) => model.action === 'add').length,
                       skipped: provider.models.filter((model) => model.action === 'skip').length,
