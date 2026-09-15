@@ -45,10 +45,7 @@ const remoteServers = {
   }),
 };
 
-function binding(
-  serverId: string,
-  overrides: Partial<Extract<AgentToolBinding, { source: 'mcp' }>> = {},
-): Extract<AgentToolBinding, { source: 'mcp' }> {
+function binding(serverId: string, overrides: Partial<AgentToolBinding> = {}): AgentToolBinding {
   return {
     agentId: AGENT_ID,
     approval: 'ask',

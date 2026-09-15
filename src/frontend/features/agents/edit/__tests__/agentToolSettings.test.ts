@@ -6,7 +6,6 @@ import {
   buildAgentMcpServerOptions,
   createAgentToolBindingDraft,
   getAgentMcpToolBindingStatus,
-  type McpToolBindingDraft,
   setAgentMcpServerEnabled,
 } from '../agentToolSettings';
 
@@ -89,32 +88,11 @@ describe('agent tool settings', () => {
         source: 'mcp',
       },
     ]);
-    const selectedServerBinding = selected.find(
-      (binding): binding is McpToolBindingDraft =>
-        binding.source === 'mcp' && binding.rawToolName === undefined,
-    );
+    const selectedServerBinding = selected.find((binding) => binding.rawToolName === undefined);
     expect(selectedServerBinding).toBeDefined();
     expect(
       setAgentMcpServerEnabled(selected, { ...option, binding: selectedServerBinding }, false),
     ).toEqual([toolBinding]);
-  });
-
-  it('drops legacy built-in bindings from the editable MCP draft', () => {
-    const builtin: AgentToolBinding = {
-      agentId: AGENT_ID,
-      approval: 'auto',
-      capabilityId: 'web_search',
-      createdAt: '2026-08-26T00:00:00.000Z',
-      displayNameSnapshot: null,
-      enabled: true,
-      id: '00000000-0000-4000-8000-000000000007',
-      source: 'builtin',
-      updatedAt: '2026-08-26T00:00:00.000Z',
-    };
-
-    expect(createAgentToolBindingDraft([builtin, makeStoredMcpBinding(HTTP_ID)])).toEqual([
-      expect.objectContaining({ serverId: HTTP_ID, source: 'mcp' }),
-    ]);
   });
 
   it('distinguishes globally disabled and missing discovered tools', () => {

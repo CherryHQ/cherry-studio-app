@@ -52,9 +52,7 @@ export function createAgentRuntimeToolResolver(input: {
         input.servers.list(),
       ]);
       const boundServerIds = new Set(
-        items.flatMap((binding) =>
-          binding.source === 'mcp' && binding.enabled ? [binding.serverId] : [],
-        ),
+        items.flatMap((binding) => (binding.enabled ? [binding.serverId] : [])),
       );
       const servers = connectedServers.filter(
         (server) =>

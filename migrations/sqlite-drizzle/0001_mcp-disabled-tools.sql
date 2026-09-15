@@ -1,1 +1,0 @@
-ALTER TABLE `mcp_server` ADD `disabled_tools` text DEFAULT '[]' NOT NULL;

@@ -79,19 +79,12 @@ catalogs own business behavior; Cherry does not translate old calls or duplicate
 Newly published GitHub and Amap tools require an explicit code admission decision. A missing or incompatible
 tool is unavailable, not an invitation to fall back to the deleted local implementation.
 
-Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings while retaining
-credentials, server UUIDs, old per-tool selections, approval settings, disabled tools and history.
-Old per-tool identities are not retargeted automatically. Custom MCP servers are unchanged. The
-plugin detail page explains that connected plugins are available globally and composer selection
+The plugin detail page explains that connected plugins are available globally and composer selection
 expresses an explicit request for one message.
 
-The merged sequence preserves v0.2's `0020_desktop-connection`, followed by
-`0021_plugin-authorizations`. Migration `0023_reconcile-desktop-connection` also creates the desktop
-table if absent: earlier plugin development installs can have a newer migration timestamp without
-that table. Migration `0024_extensible-plugin-authorizations` removes the old platform/method
-enumeration while preserving grants, server identities, disabled tools and Agent bindings, including
-when foreign keys stay enabled inside the migration transaction. Platform registration no longer
-changes SQL.
+The initial database schema includes desktop connections, plugin authorizations, and MCP server
+references. Plugin identifiers and authorization methods are open, nonempty strings; bundled
+definitions own availability and credential compatibility. Platform registration does not change SQL.
 
 Sources: [GitHub remote service](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md),
 [GitHub tools](https://github.com/github/github-mcp-server),
