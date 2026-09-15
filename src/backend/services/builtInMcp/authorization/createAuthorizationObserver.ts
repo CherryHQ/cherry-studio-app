@@ -1,4 +1,7 @@
+import { loggerService } from '@logger';
+
 import {
+  getPluginErrorDiagnostic,
   PluginError,
   type PluginAuthorizationObservation,
   type PluginAuthorizationState,
@@ -12,6 +15,7 @@ export type AuthorizationFlow = {
 };
 
 const MIN_DELAY_MS = 100;
+const logger = loggerService.withContext('PluginAuthorization');
 
 /**
  * Drives one interactive authorization while a screen observes it: polls at the server's
@@ -49,6 +53,7 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
     checkRequested = false;
     // Passive checks must not briefly erase a failure while the same failed step is re-read.
     emit({ busy: true });
+    let phase = 'state';
     try {
       let state = await flow.getState();
       if (
@@ -57,25 +62,46 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
         listeners.size &&
         Date.now() >= state.nextPollAt
       ) {
+        phase = 'poll';
         state = await flow.poll(state.attemptId);
-        emit({ state, error: undefined });
+        emit({ state, error: undefined, diagnostic: undefined });
       } else {
         emit({ state });
       }
       if (state.status === 'ready' && listeners.size) {
+        phase = 'complete';
         if (completion?.attemptId !== state.attemptId) {
           completion = { attemptId: state.attemptId, result: flow.complete(state.attemptId) };
         }
         const connection = await completion.result;
-        emit({ state: await flow.getState(), connection, error: undefined });
+        emit({ state: await flow.getState(), connection, error: undefined, diagnostic: undefined });
       } else if (state.status === 'callback') {
         schedule(state.expiresAt - Date.now());
       } else if (state.status === 'waiting') {
         schedule(Math.min(state.nextPollAt, state.expiresAt) - Date.now());
       }
     } catch (error) {
+      logger.warn('Plugin authorization failed.', {
+        phase,
+        ...(error instanceof PluginError
+          ? { reason: error.reason, message: error.message }
+          : {
+              errorName: error instanceof Error ? error.name : typeof error,
+              // Only code frames, never an upstream error's message, response or credential values.
+              frames:
+                error instanceof Error
+                  ? error.stack
+                      ?.split('\n')
+                      .filter((line) => /^\s+at /.test(line))
+                      .slice(0, 6)
+                  : undefined,
+            }),
+      });
       // A failed completion stays consumed until a new attempt. Do not repeat validation or saves on focus.
-      emit({ error: error instanceof PluginError ? error.reason : 'request' });
+      emit({
+        error: error instanceof PluginError ? error.reason : 'request',
+        diagnostic: getPluginErrorDiagnostic(error, phase),
+      });
     } finally {
       running = false;
       emit({ busy: false });
@@ -97,6 +123,7 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
           state: observation.state,
           busy: observation.busy,
           error: observation.error,
+          diagnostic: observation.diagnostic,
         };
       };
     },
@@ -104,7 +131,7 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
       void check();
     },
     clearError() {
-      emit({ error: undefined });
+      emit({ error: undefined, diagnostic: undefined });
     },
     stop() {
       stopped = true;

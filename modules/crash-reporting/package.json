@@ -1,0 +1,8 @@
+{
+  "name": "@cherrystudio/crash-reporting",
+  "version": "1.0.0",
+  "description": "Native crash reporting consent and privacy controls",
+  "main": "index.ts",
+  "private": true,
+  "license": "UNLICENSED"
+}

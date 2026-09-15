@@ -46,6 +46,7 @@ Plugin references and popover interactions still require device acceptance on bo
 | GitHub | Publisher-configured OAuth App authorization with account confirmation, or a personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
 | Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
 | Feishu | Browser-confirmed user authorization with a new or existing application. Setup checks account identity and discovery of at least one authorized tool without a business-tool call | Nine hosted document/people tools and nineteen curated wiki, Base, task and calendar operations; see [Feishu Business Tools](#feishu-business-tools) |
+| WeCom | Confirmation inside WeCom followed by signed CLI token exchange; discovery-only setup | Dynamically discovered official service schemas; see [WeCom Official API](#wecom-official-api) |
 
 ### Official Cloud Coverage
 
@@ -75,7 +76,7 @@ OpenAPI routes through the app's HTTP service, with a Bearer user token and no r
 
 This covers GitHub's previous workflows and eight of Amap's nine capability categories. The official
 catalogs own business behavior; Cherry does not translate old calls or duplicate their schemas.
-Newly published upstream tools require an explicit code admission decision. A missing or incompatible
+Newly published GitHub and Amap tools require an explicit code admission decision. A missing or incompatible
 tool is unavailable, not an invitation to fall back to the deleted local implementation.
 
 The plugin detail page explains that connected plugins are available globally and composer selection
@@ -286,10 +287,52 @@ Protocol references: [hosted tools](https://open.feishu.cn/document/mcp_open_too
 [calendar instances](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar-event/instance_view),
 [common error codes](https://open.feishu.cn/document/ukTMukTMukTM/ugjM14COyUjL4ITN).
 
+## WeCom Official API
+
+Cherry implements the current official CLI gateway protocol in native TypeScript. The plugin owns
+bot authorization, native credential storage, schema discovery, request envelopes, file handling,
+long-task polling and the AI workflow guide. Official services own business definitions and
+execution. No CLI executable or app-hosted MCP server is required.
+
+The single `wecom_bot` method copies an official confirmation link for opening inside WeCom, polls
+for bot identity and secret, and signs `get_cli_config` to obtain a bearer token. Setup validates
+authorized service discovery without executing a business operation.
+
+Business traffic stays under `https://qyapi.weixin.qq.com/cli`, using the shared non-streaming HTTP
+client. `/service/discovery` supplies the service catalog and named schemas, with a 60-second cache.
+Tool names follow `wecom_<service>__<resource>__<method>`, including deeper resource paths. The client
+resolves references, hides internal fields and invokes only discovered routes. Reviewed read paths
+retain read policy; every new name requires the existing write approval policy. Unsupported
+interfaces or unavailable services leave safe warnings alongside usable tools. An upstream hint
+cannot grant read approval to an unknown tool.
+
+Every JSON request uses POST and the official stringified `payload` envelope. Responses validate
+both gateway and nested business errors. Token rejection `853004` renews the token; only a rejected
+read can replay once. Failed writes require explicit retry, and uncertain outcomes must be checked
+in WeCom first. Long tasks poll by task ID, using `/task/query` or an empty original-endpoint request
+with `X-Long-Poll-TaskId`; polling does not resubmit original write content.
+
+Official file-upload directives resolve attachment/file-tool IDs or local export/download paths, upload media
+or create multipart fields. Uploads have a 100 MiB file/multipart cap. Binary/range downloads have a
+64 MiB cap; file-save directives create unique files under the app cache and return their actual
+paths. Large JSON results are saved intact, with guidance to request smaller pages for chat.
+Branch-dependent file directives are treated as unsupported definitions. Native file transfer
+still needs device acceptance.
+
+The workflow guide covers current document and table types, identity resolution, task/calendar
+semantics, mail/message targets, pagination and asynchronous completion. Message-session discovery
+does not imply access to unread messages or all chat history. Data access and administrator
+requirements remain controlled by WeCom; discovery is not proof of permission for every resource.
+
+Protocol source: [official CLI 1.2.1 at 1cd90a5](https://github.com/WecomTeam/wecom-cli/tree/1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08).
+See [the integration reference](../../../src/backend/services/builtInMcp/README.md#wecom-official-api)
+for module ownership, limits and source links. Regression suites were updated but not run; the new
+authorization and business transport still require live-account acceptance.
+
 ## Extensible Plugin Definitions
 
-`PluginDefinition` is the single bundled extension contract. `pluginRegistry.ts` registers the
-GitHub, Amap and Feishu definitions from `plugins/`. Each definition owns:
+`PluginDefinition` is the single bundled extension contract. `pluginRegistry.ts` registers bundled
+definitions from `plugins/`. Each definition owns:
 
 - A stable `catalog.id`, links, an optional icon name and the saved MCP
   server name. Display copy is not in the definition: every user-facing string for a plugin lives
@@ -300,6 +343,8 @@ GitHub, Amap and Feishu definitions from `plugins/`. Each definition owns:
 - `createClient`, which receives the credential resolver, grant recheck, method-owned request
   authorization, cancellation signal and admitted tool policy.
 - Reviewed tool names classified as `read` or `write`, plus a read-only connection validation rule.
+- Optional `acceptsDiscoveredTool` admission for additional upstream names, always classified as
+  `write`. The provider client must restrict invocation to its actual authorized discovery.
 
 The [module directory map](../../../src/backend/services/builtInMcp/README.md#file-ownership)
 defines implementation placement: common authorization lives in `authorization/`, client and
@@ -447,6 +492,7 @@ submitted remote operation cannot be rolled back merely by cancelling locally.
 All integrations retain the current base MCP `ask` policy and existing Agent approval-mode rules.
 Provider annotations are descriptive hints, not authorization. User-selected automatic approval
 can reduce routine prompts through the current mechanism; connecting an account does not itself
-grant automatic approval. Hosted tools use a reviewed subset of discovered upstream names and
-schemas. Feishu's local declarations provide the reviewed OpenAPI operations. Neither upstream
-discovery nor API availability admits tools without an explicit code change.
+grant automatic approval. Hosted tools normally use a reviewed subset of discovered upstream names
+and schemas. WeCom explicitly admits additional discovered names with write policy and binds their
+invocation to the authorized service. Feishu's local declarations provide the reviewed OpenAPI
+operations. A remote annotation alone cannot admit a tool or change its approval policy.

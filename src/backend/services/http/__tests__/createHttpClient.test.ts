@@ -157,6 +157,26 @@ describe('createHttpClient', () => {
     });
   });
 
+  it('preserves binary response bytes and applies the response-size boundary', async () => {
+    const bytes = new Uint8Array([0, 255, 128, 65]).buffer;
+    const adapter = mockAdapter(async (config) => {
+      expect(config.responseType).toBe('arraybuffer');
+      expect(config.maxContentLength).toBe(1024);
+      return response(config, 200, bytes, new AxiosHeaders({ 'Content-Type': 'application/pdf' }));
+    });
+    const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
+      baseUrl: 'https://api.cherry.example.com',
+    });
+    const result = await client.request<ArrayBuffer>({
+      method: 'POST',
+      path: '/download',
+      responseType: 'arraybuffer',
+      maxResponseBytes: 1024,
+    });
+    expect(new Uint8Array(result.data)).toEqual(new Uint8Array([0, 255, 128, 65]));
+    expect(result.headers['content-type']).toBe('application/pdf');
+  });
+
   it('routes each request through only its client interceptors on one transport', async () => {
     const adapter = mockAdapter(async (config) => {
       const source = config.baseURL?.includes('cloud') ? 'cloud' : 'desktop';
@@ -432,7 +452,7 @@ describe('createHttpClient', () => {
       client.request({
         method: 'GET',
         path: '/manifest.json',
-        responseType: 'arraybuffer',
+        responseType: 'stream',
       } as never),
     ).rejects.toMatchObject({ code: 'INVALID_RESPONSE_TYPE', kind: 'internal' });
     expect(adapter).not.toHaveBeenCalled();
