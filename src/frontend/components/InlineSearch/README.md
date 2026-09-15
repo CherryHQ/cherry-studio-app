@@ -17,6 +17,8 @@ it, and the one place that decides how each platform draws it.
 - The component is placed between the screen's `RouteHeader` and its content. iOS renders nothing
   there — the field lives in the native header — while Android draws a real row, so both platforms
   read the same at the call site.
+- Mount search with the header, outside the list's loading, error, and empty branches. Data arriving
+  or a query returning no matches must not add or remove the native search bar.
 - The query is controlled on both platforms. Parent updates, including an initial non-empty value
   and later clears or restores, are synchronized into the native iOS search bar.
 - A screen that hides search for a mode, such as multi-select editing, unmounts the component. There
@@ -29,7 +31,8 @@ it, and the one place that decides how each platform draws it.
 ## Organization
 
 - `InlineSearch.ios.tsx` mounts `Stack.SearchBar` with `placement="stacked"`, giving the field its
-  own row under the title.
+  own row under the title. It explicitly disables toolbar integration so search stays away from
+  bottom page actions on iOS 26.
 - `InlineSearch.android.tsx` draws CherryUI's `SearchField` in that same position. Android's native
   search bar exists, but it is a toolbar menu item with platform styling that lands right of the
   screen's own actions; drawing the field keeps both platforms aligned.

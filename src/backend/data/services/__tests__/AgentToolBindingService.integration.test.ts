@@ -110,17 +110,21 @@ describe('AgentToolBindingService', () => {
 
   it('rejects duplicate replacements and rolls the whole batch back on commit failure', async () => {
     const agent = await agentService.create({ name: 'Researcher' });
+    const server = await mcpServerService.create({
+      endpointUrl: 'https://example.com/mcp',
+      name: 'Example',
+    });
     const original = await bindingService.upsert(agent.id, {
-      approval: 'auto',
-      capabilityId: 'calendar.read',
-      source: 'builtin',
+      rawToolName: 'read',
+      serverId: server.id,
+      source: 'mcp',
     });
 
     await expect(
       bindingService.replace(agent.id, {
         bindings: [
-          { capabilityId: 'calendar.read', source: 'builtin' },
-          { capabilityId: 'calendar.read', source: 'builtin' },
+          { rawToolName: 'read', serverId: server.id, source: 'mcp' },
+          { rawToolName: 'read', serverId: server.id, source: 'mcp' },
         ],
       }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
@@ -131,16 +135,16 @@ describe('AgentToolBindingService', () => {
     testDb.failWriteTxCommit(new Error('commit failed'));
     await expect(
       bindingService.replace(agent.id, {
-        bindings: [{ approval: 'deny', capabilityId: 'files.read', source: 'builtin' }],
+        bindings: [{ rawToolName: 'write', serverId: server.id, source: 'mcp' }],
       }),
     ).rejects.toThrow('commit failed');
     expect((await bindingService.list(agent.id)).items).toEqual([original]);
 
     const replaced = await bindingService.replace(agent.id, {
-      bindings: [{ approval: 'deny', capabilityId: 'files.read', source: 'builtin' }],
+      bindings: [{ rawToolName: 'write', serverId: server.id, source: 'mcp' }],
     });
     expect(replaced.items).toHaveLength(1);
-    expect(replaced.items[0]).toMatchObject({ capabilityId: 'files.read' });
+    expect(replaced.items[0]).toMatchObject({ rawToolName: 'write', serverId: server.id });
     expect(replaced.items[0]?.id).not.toBe(original.id);
   });
 
@@ -252,9 +256,13 @@ describe('AgentToolBindingService', () => {
   it('keeps bindings through ordinary Agent edits and soft delete, then cascades hard cleanup', async () => {
     const first = await agentService.create({ name: 'First' });
     const second = await agentService.create({ name: 'Second' });
+    const server = await mcpServerService.create({
+      endpointUrl: 'https://example.com/mcp',
+      name: 'Example',
+    });
     const binding = await bindingService.upsert(first.id, {
-      capabilityId: 'calendar.read',
-      source: 'builtin',
+      serverId: server.id,
+      source: 'mcp',
     });
 
     await agentService.update(first.id, { name: 'Renamed' });
@@ -264,8 +272,9 @@ describe('AgentToolBindingService', () => {
     expect(readBinding(sqlite, binding.id)).toMatchObject({ agent_id: first.id });
     await expect(
       bindingService.upsert(first.id, {
-        capabilityId: 'calendar.write',
-        source: 'builtin',
+        rawToolName: 'write',
+        serverId: server.id,
+        source: 'mcp',
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     sqlite.prepare('DELETE FROM agent WHERE id = ?').run(first.id);

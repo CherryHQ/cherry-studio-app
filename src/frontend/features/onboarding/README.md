@@ -1,8 +1,11 @@
 # OnboardingScreen
 
-First-use setup lives in the `/onboarding` native stack: welcome → provider → connection →
-chat model. The welcome page is headerless; subsequent pages retain native back navigation.
-Buttons are available while the existing logo reveal runs.
+First-use setup lives in the `/onboarding` native stack. The welcome page offers manual provider
+setup, synchronization from a computer, and setup later. Manual setup continues through provider →
+connection → chat model. Computer setup continues through device preparation → scan → sync guide →
+provider selection/import → chat model. The welcome page is headerless; subsequent pages retain
+native back navigation. Buttons are available while the existing logo reveal runs, and the complete
+welcome content scrolls when larger text or a smaller window needs more room.
 
 ## Setup Ownership
 
@@ -14,9 +17,26 @@ Buttons are available while the existing logo reveal runs.
   state through an explicit route-owned `setupIntent` prop, not a URL parameter. Presets show the
   API key first and fold name/base URL into advanced settings. Custom services show one address
   and a protocol picker; saved custom services remain selectable after leaving setup.
+- `deviceConnections/` explains desktop pairing and lets users resume with a saved computer.
+  Dedicated onboarding routes reuse the settings scanner, sync guide, and `DesktopProviderSyncScreen`
+  through the same route-owned `setupIntent="chat"` contract. They stay in the onboarding stack;
+  an ordinary settings URL cannot opt into first-use behavior. Pairing replaces the scanner with
+  the guide, and provider import replaces the selection page with the existing chat-model page.
+  The paired connection ID follows the flow, so multiple computers never change the chosen source.
+- Pairing and provider import keep onboarding pending. Leaving the sync flow returns to the welcome
+  page and keeps the saved pairing/configuration. Empty provider previews can be reloaded; unsupported
+  providers cannot be selected. If an import has no supported chat models, users can sync again or
+  connect a provider manually. A selected imported model exposes its provider's connection editor.
+  Credentials never travel in route parameters.
 - `model/` combines saved models and a cancellable remote preview, filters to supported chat
   models, and accepts a manual model ID when listing is unavailable. Only the selected model
   is imported. It calls `models.checkChat`, not the AI SDK health check.
+  It mounts `InlineSearch` together with the page header, matching provider selection before model
+  data arrives; loading and empty results do not add or remove native search. Manual entry removes
+  search. Both selection pages place the step hint after search and before their content. The model
+  page keeps its header, search, and step hint outside the keyboard-avoiding content. The model list
+  adjusts its native content insets, while the start action stays in a separate bottom region from
+  search and scrolling results.
   Listing failures are separate from successful empty results: the screen shows a translated
   error category and recovery action, never raw provider errors. Saved models remain selectable.
 - Completion requires an actual response from the bound conversation Runtime. It then enables

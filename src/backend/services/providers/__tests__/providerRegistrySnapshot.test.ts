@@ -51,9 +51,8 @@ jest.mock('expo-file-system', () => {
     }
   }
   return {
-    Directory: MockDirectory,
     File: MockFile,
-    Paths: { cache: '/cache', document: '/documents' },
+    Paths: { document: '/documents' },
     testState: state,
   };
 });
@@ -97,30 +96,6 @@ it('reads the previous slot when the newer slot is truncated', async () => {
   const first = await writeProviderRegistrySnapshot(files, manifest(1));
   await writeProviderRegistrySnapshot(files, manifest(2), first);
   testState.files.set('/documents/provider-registry/snapshot-b.json', '{');
-  expect(await readProviderRegistrySnapshots()).toEqual([
-    { files, manifest: manifest(1), slot: 'a' },
-  ]);
-});
-
-it('reads legacy downloads independently of the old app bundle version', async () => {
-  testState.files.set(
-    '/cache/provider-registry-v2/snapshot.json',
-    JSON.stringify({
-      bundledVersions: { models: 'old', providerModels: 'old' },
-      manifest: manifest(1),
-    }),
-  );
-  testState.files.set('/cache/provider-registry-v2/models.json', files['models.json']);
-  testState.files.set(
-    '/cache/provider-registry-v2/provider-models.json',
-    files['provider-models.json'],
-  );
-  const [snapshot] = await readProviderRegistrySnapshots();
-  expect(snapshot).toEqual({ files, manifest: manifest(1), slot: 'legacy' });
-  await writeProviderRegistrySnapshot(snapshot.files, snapshot.manifest, snapshot.slot);
-  for (const path of [...testState.files.keys()]) {
-    if (path.startsWith('/cache/')) testState.files.delete(path);
-  }
   expect(await readProviderRegistrySnapshots()).toEqual([
     { files, manifest: manifest(1), slot: 'a' },
   ]);

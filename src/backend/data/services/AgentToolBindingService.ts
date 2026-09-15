@@ -139,10 +139,7 @@ export class AgentToolBindingService {
       .from(mcpServerTable)
       .where(eq(mcpServerTable.id, parsed.serverId))
       .limit(1);
-    const candidates = items.filter(
-      (binding): binding is Extract<AgentToolBinding, { source: 'mcp' }> =>
-        binding.source === 'mcp' && binding.serverId === parsed.serverId,
-    );
+    const candidates = items.filter((binding) => binding.serverId === parsed.serverId);
     const binding =
       candidates.find((candidate) => candidate.rawToolName === parsed.rawToolName) ??
       candidates.find((candidate) => candidate.rawToolName === undefined) ??
@@ -190,8 +187,7 @@ export class AgentToolBindingService {
     bindings: readonly WriteAgentToolBinding[],
     existingRows: readonly AgentToolBindingRow[],
   ): Promise<void> {
-    const mcpBindings = bindings.filter((binding) => binding.source === 'mcp');
-    const serverIds = [...new Set(mcpBindings.map((binding) => binding.serverId))];
+    const serverIds = [...new Set(bindings.map((binding) => binding.serverId))];
     if (serverIds.length === 0) {
       return;
     }
@@ -206,7 +202,6 @@ export class AgentToolBindingService {
 
     for (const [index, binding] of bindings.entries()) {
       if (
-        binding.source === 'mcp' &&
         !existingServerIds.has(binding.serverId) &&
         !existingIdentities.has(bindingIdentity(binding))
       ) {
@@ -247,7 +242,7 @@ export class AgentToolBindingService {
       return updated;
     }
 
-    if (binding.source === 'mcp' && binding.approval !== 'ask') {
+    if (binding.approval !== 'ask') {
       throw DataApiErrorFactory.validation(
         { approval: ['A new third-party MCP binding must start with ask approval'] },
         'Cannot create an MCP binding with elevated or denied approval',
@@ -259,11 +254,10 @@ export class AgentToolBindingService {
       .values({
         agentId,
         approval: binding.approval,
-        capabilityId: binding.source === 'builtin' ? binding.capabilityId : null,
         displayNameSnapshot: binding.displayNameSnapshot ?? null,
         enabled: binding.enabled,
-        mcpServerId: binding.source === 'mcp' ? binding.serverId : null,
-        rawToolName: binding.source === 'mcp' ? (binding.rawToolName ?? null) : null,
+        mcpServerId: binding.serverId,
+        rawToolName: binding.rawToolName ?? null,
         source: binding.source,
       })
       .returning();
@@ -313,15 +307,8 @@ function assertUniqueBindings(bindings: readonly WriteAgentToolBinding[]): void 
 }
 
 function bindingIdentity(binding: AgentToolBindingRow | WriteAgentToolBinding): string {
-  if ('mcpServerId' in binding) {
-    return binding.source === 'builtin'
-      ? JSON.stringify(['builtin', binding.capabilityId])
-      : JSON.stringify(['mcp', binding.mcpServerId, binding.rawToolName ?? null]);
-  }
-
-  return binding.source === 'builtin'
-    ? JSON.stringify(['builtin', binding.capabilityId])
-    : JSON.stringify(['mcp', binding.serverId, binding.rawToolName ?? null]);
+  const serverId = 'mcpServerId' in binding ? binding.mcpServerId : binding.serverId;
+  return JSON.stringify(['mcp', serverId, binding.rawToolName ?? null]);
 }
 
 function rowToBinding(row: AgentToolBindingRow): AgentToolBinding {
@@ -332,13 +319,9 @@ function rowToBinding(row: AgentToolBindingRow): AgentToolBinding {
     displayNameSnapshot: row.displayNameSnapshot,
     enabled: row.enabled,
     id: row.id,
-    ...(row.source === 'builtin'
-      ? { capabilityId: row.capabilityId, source: 'builtin' as const }
-      : {
-          ...(row.rawToolName === null ? {} : { rawToolName: row.rawToolName }),
-          serverId: row.mcpServerId,
-          source: 'mcp' as const,
-        }),
+    ...(row.rawToolName === null ? {} : { rawToolName: row.rawToolName }),
+    serverId: row.mcpServerId,
+    source: row.source,
     updatedAt: timestampToISO(row.updatedAt),
   });
 }

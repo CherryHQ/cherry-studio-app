@@ -142,10 +142,8 @@ unavailability without deleting or retargeting the row. Runtime projection is de
 The Agent row's separate `toolApprovalMode` may promote the resulting per-turn `ask` policy to
 `auto`; it does not rewrite bindings or make an unavailable tool executable.
 
-The physical table and typed Data API retain the `builtin` variant to read existing databases
-without a destructive migration. Those rows are legacy compatibility data: the Host ignores them,
-and the Agent editor omits them when replacing bindings. Built-in capability enablement lives on
-the Agent row's group-level deny-list, never in this per-tool relation.
+The physical table and typed Data API accept only MCP bindings. Built-in capability enablement
+lives on the Agent row's group-level deny-list, never in this per-tool relation.
 
 Skill configuration remains deferred. Pi reads neither tool nor Skill persistence directly.
 
@@ -191,18 +189,17 @@ Indexes: `orderKeyIndex('agent')`, `agent_created_at_idx`.
 | --- | --- | --- | --- |
 | `id` | text | PK, UUID v4 | Preserved across stable-identity upserts |
 | `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE CASCADE | Hard Agent cleanup removes bindings; soft delete does not |
-| `source` | text | NOT NULL, CHECK `builtin`/`mcp` identity shape | `builtin` is legacy compatibility data |
-| `capabilityId` | text | NULL | Retained only for legacy `builtin` rows |
-| `mcpServerId` | text | NULL, no FK | Required only for `mcp`; survives server deletion |
+| `source` | text | NOT NULL, CHECK `mcp` | MCP bindings only |
+| `mcpServerId` | text | NOT NULL, nonempty, no FK | Survives server deletion |
 | `rawToolName` | text | NULL | NULL is the MCP server default |
 | `enabled` | integer (bool) | NOT NULL DEFAULT `true` | Server deletion sets related rows false in the same transaction |
 | `approval` | text | NOT NULL DEFAULT `ask`, CHECK `auto`/`ask`/`deny` | MCP Data API writes admit only `ask`/`deny` |
 | `displayNameSnapshot` | text | NULL | Repair-only UI context; never authority |
 | `createdAt` / `updatedAt` | integer | helper defaults | Stable row timestamps |
 
-Partial unique indexes retain `(agentId, capabilityId)` for legacy built-ins and enforce
-`(agentId, mcpServerId)` for MCP server defaults plus `(agentId, mcpServerId, rawToolName)` for
-specific MCP tools. Plain indexes cover Agent listing/cascade and MCP server delete-time disabling.
+Partial unique indexes enforce `(agentId, mcpServerId)` for MCP server defaults plus
+`(agentId, mcpServerId, rawToolName)` for specific MCP tools. Plain indexes cover Agent
+listing/cascade and MCP server delete-time disabling.
 
 ### `agent_session`
 
