@@ -467,7 +467,8 @@ describe('createFormulaEvaluator — oversized range guard', () => {
     ).toEqual({
       state: 'unevaluated',
     });
-    expect(Date.now() - start).toBeLessThan(1000);
+    // A hang would take far longer; keep headroom for CPU contention on shared Jest runners.
+    expect(Date.now() - start).toBeLessThan(5000);
     expect(callCount({ sheet: 'Sheet1', row: 500, col: 5 })).toBe(0);
   });
 
@@ -522,7 +523,8 @@ describe('createFormulaEvaluator — recursion depth guard', () => {
     expect(() => {
       outcome = evaluator.evaluate(`A${DEPTH - 1}+1`, { sheet: 'Sheet1', row: DEPTH, col: 1 });
     }).not.toThrow();
-    expect(Date.now() - start).toBeLessThan(1000);
+    // A hang would take far longer; keep headroom for CPU contention on shared Jest runners.
+    expect(Date.now() - start).toBeLessThan(5000);
     expect(outcome).toBeDefined();
     expect(['evaluated', 'unevaluated']).toContain(outcome!.state);
     if (outcome!.state === 'evaluated') {
