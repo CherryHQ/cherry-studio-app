@@ -4,19 +4,34 @@ import { Text, View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import type { ExportBlock, ExportDocument } from '@/shared/contracts/documentExport';
+import type {
+  ExportBlock,
+  ExportDocument,
+  ExportSignature,
+} from '@/shared/contracts/documentExport';
+import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
 /** Keep disclosure structure intact; Markdown is only the renderer for leaf prose. */
-export function DocumentExportTextPreview({ document }: { document: ExportDocument }) {
+export function DocumentExportTextPreview({
+  document,
+  signature,
+}: {
+  document: ExportDocument;
+  signature?: Pick<ExportSignature, 'brandName' | 'timestamp'>;
+}) {
   const isConversation = document.sections.some((section) => section.presentation);
+  const footer = renderMarkdownSignature(signature);
   return (
-    <View>
-      {document.title && !isConversation ? (
-        <Text className="font-semibold text-foreground text-xl">{document.title}</Text>
-      ) : null}
-      {document.sections.map((section) => (
-        <ExportSectionPreview key={section.id} section={section} />
-      ))}
+    <View className="gap-6">
+      <View>
+        {document.title && !isConversation ? (
+          <Text className="font-semibold text-foreground text-xl">{document.title}</Text>
+        ) : null}
+        {document.sections.map((section) => (
+          <ExportSectionPreview key={section.id} section={section} />
+        ))}
+      </View>
+      {footer ? <MarkdownText markdown={footer} /> : null}
     </View>
   );
 }
