@@ -4,6 +4,8 @@ type LogContext = Record<string, unknown>;
 type NullableObject = LogContext | undefined | null;
 type LogContextData = [] | [Error | NullableObject] | [Error | NullableObject, ...NullableObject[]];
 
+type ErrorReporter = (error: Error, context: { module: string; operation: string }) => void;
+
 export type LogRecord = Record<string, unknown> & {
   timestamp: string;
   level: LogLevel;
@@ -64,6 +66,16 @@ export class LoggerService {
   private level: LogLevel = DEFAULT_LEVEL;
   private module = '';
   private context: LogContext = {};
+  private readonly reporting: { reporter?: ErrorReporter; isReporting: boolean } = {
+    isReporting: false,
+  };
+
+  public setErrorReporter(reporter: ErrorReporter): () => void {
+    this.reporting.reporter = reporter;
+    return () => {
+      if (this.reporting.reporter === reporter) this.reporting.reporter = undefined;
+    };
+  }
 
   public withContext(module: string, context?: LogContext): LoggerService {
     const logger = Object.create(this) as LoggerService;
@@ -121,6 +133,26 @@ export class LoggerService {
     } catch {
       // A failed log transport must not change the operation being recorded.
     }
+
+    const error = data[0];
+    // Only error logs that carry a real stack and name a fixed operation opt into reporting.
+    const operation =
+      level === LEVEL.ERROR && error instanceof Error && error.stack
+        ? [this.context, ...data.slice(1)]
+            .map((entry) => (entry && !(entry instanceof Error) ? entry.operation : undefined))
+            .find((value): value is string => typeof value === 'string')
+        : undefined;
+    if (operation !== undefined && this.reporting.reporter && !this.reporting.isReporting) {
+      this.reporting.isReporting = true;
+      try {
+        this.reporting.reporter(error as Error, { module: this.module, operation });
+      } catch {
+        // Diagnostics must never break the operation being logged or recursively report itself.
+      } finally {
+        this.reporting.isReporting = false;
+      }
+    }
+
     if (!isDevelopment()) return;
 
     const logMessage = this.module ? `[${this.module}] ${message}` : message;

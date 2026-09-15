@@ -66,6 +66,8 @@ export interface PluginDefinition {
   readonly serverName: string;
   readonly authMethods: readonly PluginAuthorizationDefinition[];
   readonly tools: PluginToolPolicy;
+  /** Additional discovered tools require write approval. Clients must bind them to discovery. */
+  readonly acceptsDiscoveredTool?: (name: string) => boolean;
   readonly guide?: PluginGuideDefinition;
   createClient(context: PluginClientContext): Promise<PluginClient>;
   readonly validation: {
@@ -75,4 +77,15 @@ export interface PluginDefinition {
     readonly args?: Record<string, unknown>;
     accountLabel(output: unknown): string;
   };
+}
+
+export function getPluginToolEffect(
+  plugin: PluginDefinition,
+  name: string,
+): 'read' | 'write' | undefined {
+  return Object.hasOwn(plugin.tools, name)
+    ? plugin.tools[name]
+    : plugin.acceptsDiscoveredTool?.(name)
+      ? 'write'
+      : undefined;
 }

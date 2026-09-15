@@ -117,14 +117,12 @@ default. There is at most one MCP server default per `(agentId, serverId)` and o
 per `(agentId, serverId, rawToolName)`. A deleted server or tool leaves a disabled/dangling binding
 for explicit user repair; it never retargets by display name.
 
-The physical SQLite shape and typed Data API are implemented in `agent_tool_binding`. They retain
-the `builtin` variant to read existing databases without a destructive migration, but the Host
-ignores those legacy rows and the Agent editor drops them on its next binding replacement. MCP
-server ids intentionally have no foreign key: deleting a server disables its rows without erasing
-their stable identity, display snapshot, or approval. Upsert and replace preserve the row id for a
-stable identity, reject duplicates atomically, and cannot create authorization for a missing server
-unless that exact dangling identity already exists. Bindings belong to Cherry persistence, the Host
-resolves them, and Pi must never read them directly.
+The physical SQLite shape and typed Data API are implemented in `agent_tool_binding` and accept
+only MCP bindings. MCP server ids intentionally have no foreign key: deleting a server disables its
+rows without erasing their stable identity, display snapshot, or approval. Upsert and replace preserve
+the row id for a stable identity, reject duplicates atomically, and cannot create authorization for
+a missing server unless that exact dangling identity already exists. Bindings belong to Cherry
+persistence, the Host resolves them, and Pi must never read them directly.
 
 The data resolver chooses a specific tool row before its server default, then combines that policy
 with the current stored Server state and caller-supplied discovery fact. It reports `unbound`,

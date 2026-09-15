@@ -6,9 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { useBackendModule } from '@/frontend/data';
 import { useDesktopConnectionActions } from '@/frontend/hooks/useDesktopConnections';
 import { useDevicePermissionStatuses } from '@/frontend/hooks/useDevicePermissionStatuses';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
 import {
   type DesktopPairingQr,
@@ -19,8 +21,11 @@ import { desktopConnectionErrorMessage } from '../desktopConnectionError';
 
 const CAMERA_PERMISSION_SCOPES = ['camera.read'] as const;
 
-export function DeviceConnectionScannerScreen() {
-  const { connectionId } = useLocalSearchParams<{ connectionId?: string }>();
+export function DeviceConnectionScannerScreen({
+  setupIntent,
+}: { setupIntent?: FirstUseSetupIntent } = {}) {
+  const params = useLocalSearchParams<{ connectionId?: string | string[] }>();
+  const connectionId = getSingleRouteParam(params.connectionId);
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
@@ -63,18 +68,20 @@ export function DeviceConnectionScannerScreen() {
       try {
         const connection = await pair({ ...qr, ...(connectionId ? { connectionId } : {}) });
         if (!connection) return;
-        toast.show({
-          label: t('settings.deviceConnections.scan.connected', { name: connection.name }),
-          variant: 'success',
+        router.replace({
+          params: { connectionId: connection.id },
+          pathname:
+            setupIntent === 'chat'
+              ? '/onboarding/device-connections/sync-guide'
+              : '/settings/device-connections/sync-guide',
         });
-        router.dismissTo('/settings/device-connections');
       } catch (error) {
         scanInFlight.current = false;
         alert.show({ title: desktopConnectionErrorMessage(error, t) });
         setHasScanned(false);
       }
     },
-    [alert, connectionId, pair, router, t, toast],
+    [alert, connectionId, pair, router, setupIntent, t],
   );
 
   const parseAndSubmit = useCallback(

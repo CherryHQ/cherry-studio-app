@@ -1,3 +1,5 @@
+import { loggerService } from '@logger';
+
 import {
   PluginError,
   type PluginAuthorizationObservation,
@@ -5,6 +7,12 @@ import {
 } from '@/shared/contracts/plugins';
 
 import { createAuthorizationObserver } from '../createAuthorizationObserver';
+
+jest.mock('@logger', () => {
+  const logger = { warn: jest.fn() };
+  return { loggerService: { withContext: () => logger } };
+});
+const logger = jest.mocked(loggerService.withContext('PluginAuthorization'));
 
 const connection = {
   pluginId: 'feishu',
@@ -109,6 +117,28 @@ it('does not repeat a failed completion until a new attempt is authorized', asyn
   expect(seen.at(-1)).toMatchObject({ error: undefined, connection });
 });
 
+it('logs the failing phase and code location without exposing raw exception messages', async () => {
+  state = { status: 'ready', attemptId: 'attempt-1' };
+  const error = new TypeError('private-token in upstream response');
+  error.stack =
+    'TypeError: private-token in upstream response\n    at prepare (authorization.ts:10:2)';
+  flow.complete.mockRejectedValueOnce(error);
+  const { seen } = observe();
+  await flush();
+  expect(seen.at(-1)).toMatchObject({
+    error: 'request',
+    diagnostic: 'complete: TypeError',
+    busy: false,
+  });
+  expect(JSON.stringify(seen)).not.toContain('private-token');
+  expect(logger.warn).toHaveBeenCalledWith('Plugin authorization failed.', {
+    phase: 'complete',
+    errorName: 'TypeError',
+    frames: ['    at prepare (authorization.ts:10:2)'],
+  });
+  expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('private-token');
+});
+
 it('retains a failed completion throughout passive checks and foreground reattachment', async () => {
   state = { status: 'ready', attemptId: 'attempt-1' };
   flow.complete.mockRejectedValueOnce(new PluginError('storage', 'safe'));
@@ -125,10 +155,12 @@ it('retains a failed completion throughout passive checks and foreground reattac
   observer.observe((item) => resumed.push(item));
   await flush();
   expect(resumed.every((item) => item.error === 'storage')).toBe(true);
+  expect(resumed.every((item) => item.diagnostic === 'complete: safe')).toBe(true);
   expect(flow.complete).toHaveBeenCalledTimes(1);
 
   observer.clearError();
   expect(resumed.at(-1)?.error).toBeUndefined();
+  expect(resumed.at(-1)?.diagnostic).toBeUndefined();
 });
 
 it('drops session progress when the last observer detaches so a later visit starts clean', async () => {

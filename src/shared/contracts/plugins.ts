@@ -45,6 +45,18 @@ export class PluginError extends Error {
   }
 }
 
+/** Development diagnostics use app-owned messages; raw upstream error messages stay private. */
+export function getPluginErrorDiagnostic(error: unknown, phase: string): string | undefined {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined;
+  const detail =
+    error instanceof PluginError
+      ? error.message
+      : error instanceof Error
+        ? error.name
+        : 'Unknown error';
+  return `${phase}: ${detail}`;
+}
+
 /** Route-local projection only. Device codes, client secrets and tokens never cross this boundary. */
 export type PluginAuthorizationState =
   | { status: 'idle' }
@@ -54,6 +66,8 @@ export type PluginAuthorizationState =
       attemptId: string;
       stage: string;
       verificationUrl: string;
+      /** Some providers require this link to be opened inside their own app. */
+      verificationAction?: 'copy';
       userCode?: string;
       expiresAt: number;
       nextPollAt: number;
@@ -82,6 +96,8 @@ export type PluginAuthorizationObservation = {
   busy: boolean;
   /** Retained across passive reads and focus changes; cleared by an explicit step or successful work. */
   error?: PluginErrorReason;
+  /** Development-only safe detail, shown only when the user opens error details. */
+  diagnostic?: string;
   /** Set once the grant is committed as a connection. */
   connection?: PluginConnection;
 };
