@@ -16,14 +16,14 @@ export function FirstUseGate({ children }: PropsWithChildren) {
     query: { enabled: true, isSystemSupported: true },
     retry: false,
   });
-  // Chat restoration shares this key, so both readers must use the same paginated cache shape.
+  // Existing conversations also identify an installation that should skip onboarding.
   const latestSession = useLatestAgentSession({
     enabled: status === 'unseen',
   });
 
   if (status === 'pending') return <Redirect href="/onboarding" />;
   if (status !== 'unseen') return children;
-  // A background refresh must not unmount chat, whose latest-session reader refreshes on mount.
+  // A background refresh must not unmount an already admitted chat.
   if (models.isPending || latestSession.isLoading) {
     return (
       <View className="flex-1 justify-center">

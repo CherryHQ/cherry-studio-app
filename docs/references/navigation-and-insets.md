@@ -123,21 +123,18 @@ The chat route has two complete identities:
 Every in-app entry constructs one of these targets through `chatHref` or `chatRouteParams`. A
 Session link identifies its conversation by `sessionId`; the destination reads the Session entity to derive its Agent
 for presentation and composer behavior. Drafts have no Session entity yet, so `agentId` is their
-complete route identity. If a Session no longer exists, the destination shows a loading state while
-it requests the globally most recently active Session, then replaces the missing identity with that
-result. If no Session remains, it uses the same draft or no-Agent fallbacks as an identity-free
-launch.
+complete route identity. If a Session no longer exists, the destination uses the same draft or
+no-Agent fallbacks as an identity-free launch.
 
 A message search result additionally carries `messageId` and `messageRequestId`. These describe a
 one-time viewport destination, not another conversation/composer identity. The message window
 loads the target and its neighbors directly, pages both older and newer, and gives the list an
 explicit initial scroll target. A fresh request id permits selecting the same result again.
 
-Opening `/` without an identity restores the globally most recently active Session ordered by its
-persisted `lastActivityAt`. If no Session exists, it opens a draft for the first available Agent,
-then the no-Agent empty state. Restoration renders a loading state, never a previous identity's
-content or the no-Agent empty state as a loading placeholder. Every restoration performs a fresh
-one-row Session request; an earlier result is never used to choose the destination.
+Opening `/` without an identity opens a draft for the first available Agent, or the no-Agent empty
+state if none exists. Existing Sessions do not select the launch destination. Resolution renders a
+loading state while Agents load, never a previous identity's content or the no-Agent empty state as
+a loading placeholder. Explicit Session links still open the requested conversation.
 
 | Entry | Destination |
 | --- | --- |
