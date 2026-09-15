@@ -1,12 +1,10 @@
 import { createHash } from 'node:crypto';
 
+import Constants from 'expo-constants';
+
 import { readSlackIdentity, slackRequest } from '../slackApi';
-import {
-  SLACK_REQUESTED_SCOPES,
-  SlackApplicationSchema,
-  SlackScopeSchema,
-} from '../slackCredentials';
-import { getSlackApplicationSetupUrl, slackOauth } from '../slackOauth';
+import { SLACK_REQUESTED_SCOPES, SlackScopeSchema } from '../slackCredentials';
+import { getSlackApplication, slackOauth } from '../slackOauth';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -24,7 +22,12 @@ jest.mock('@/backend/services/http', () => ({
   createHttpClient: () => ({ request: (request: unknown) => mockRequest(request) }),
   isHttpError: () => false,
 }));
-const application = slackOauth.application({ clientId: '123.456' });
+const application = {
+  version: 1 as const,
+  clientId: '123.456',
+  redirectUrl: 'cherrystudio-dev://plugins/slack/callback' as const,
+};
+const originalClientId = process.env.EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID;
 const signal = new AbortController().signal;
 const token = {
   access_token: 'access',
@@ -34,23 +37,42 @@ const token = {
   expires_in: 43200,
 };
 beforeEach(() => mockRequest.mockReset());
+afterEach(() => {
+  jest.restoreAllMocks();
+  if (originalClientId === undefined) delete process.env.EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID;
+  else process.env.EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID = originalClientId;
+});
 
-it('prefills the official Slack creation page with MCP scopes and native authorization settings', () => {
-  const url = new URL(getSlackApplicationSetupUrl());
-  expect(url.origin + url.pathname).toBe('https://api.slack.com/apps');
-  expect(url.searchParams.get('new_app')).toBe('1');
-  const manifest = JSON.parse(url.searchParams.get('manifest_json')!);
-  expect(manifest.oauth_config).toEqual({
-    redirect_urls: SlackApplicationSchema.shape.redirectUrl.options,
-    scopes: { user: [...SLACK_REQUESTED_SCOPES] },
-    pkce_enabled: true,
+it.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
+  'uses the publisher client ID and the registered %s callback',
+  (scheme) => {
+    process.env.EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID = application.clientId;
+    jest.replaceProperty(Constants, 'expoConfig', { ...Constants.expoConfig!, scheme });
+    expect(getSlackApplication()).toEqual({
+      ...application,
+      redirectUrl: `${scheme}://plugins/slack/callback`,
+    });
+  },
+);
+
+it('rejects missing or invalid publisher configuration and unknown callbacks', () => {
+  delete process.env.EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID;
+  expect(getSlackApplication()).toBeUndefined();
+  process.env.EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID = 'invalid';
+  expect(getSlackApplication()).toBeUndefined();
+  process.env.EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID = application.clientId;
+  jest.replaceProperty(Constants, 'expoConfig', {
+    ...Constants.expoConfig!,
+    scheme: 'unregistered',
   });
-  expect(manifest.settings.token_rotation_enabled).toBe(true);
+  expect(getSlackApplication()).toBeUndefined();
 });
 
 it('requests user scopes with S256 PKCE and no client secret', async () => {
   const challenge = await slackOauth.challenge(application);
   const params = new URL(challenge.authorizationUrl).searchParams;
+  expect(params.get('client_id')).toBe(application.clientId);
+  expect(params.get('redirect_uri')).toBe(application.redirectUrl);
   expect(params.get('scope')).toBe('');
   expect(params.get('user_scope')).toBe(token.scope);
   expect(params.get('code_challenge')).toBe(

@@ -3,6 +3,7 @@ import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials'
 import type { PluginAuthorizationDefinition, PluginDefinition } from '../pluginDefinition';
 import {
   createPluginRegistry,
+  getBuiltInPluginCatalog,
   getPluginDefinition,
   resolveBuiltInPluginGuides,
 } from '../pluginRegistry';
@@ -362,6 +363,13 @@ it.each([
     expect(guide.content).toContain(`## ${heading}`);
   },
 );
+
+it('exposes Slack sign-in without application creation or credential entry', () => {
+  const slack = getBuiltInPluginCatalog().find(({ id }) => id === 'slack')!;
+  expect(slack.authMethods).toEqual([
+    { id: 'slack_user', kind: 'interactive', interaction: 'callback', stages: ['user'] },
+  ]);
+});
 
 it('keeps Slack mutation workflows out of a read-only selection', () => {
   const slack = getPluginDefinition('slack')!;

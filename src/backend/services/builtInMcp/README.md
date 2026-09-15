@@ -19,7 +19,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `plugins/github/` | GitHub definition, workflow guide, OAuth App authorization with PKCE, account identity, token rotation and revocation |
 | `plugins/feishu/` | Feishu workflow guide, authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
 | `plugins/dingtalk/` | Official cloud device authorization, account review, token renewal, behavior authorization and service-bound tools |
-| `plugins/slack/` | Official remote MCP tool policy, personal app authorization with PKCE, workspace/user identity, token rotation and revocation |
+| `plugins/slack/` | Official remote MCP tool policy, publisher-owned app authorization with PKCE, workspace/user identity, token rotation and revocation |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
 internal responsibility groups; they do not add public barrels. Each plugin exposes only its
@@ -155,7 +155,12 @@ only discovers `slack_read_user_profile` without invoking it. The 29 configured 
 the [official authorization metadata](https://mcp.slack.com/.well-known/oauth-authorization-server)
 and include granular search, profiles/email and the admitted write capabilities, excluding uploads.
 Former Web API and read-only MCP grants require disconnect and reauthorization; outdated tokens remain revocable.
-App settings remain saved. The
+New authorization uses the publisher's `EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID` and the current native
+callback scheme. Users only authorize their account; there is no application form or creation link.
+Existing grants retain their issuing application for refresh and revocation. Missing publisher
+configuration makes new authorization unavailable without changing saved connections. See
+[Slack Plugin Authorization](../../../../docs/guides/slack-plugin-authorization.md) for publisher setup.
+The
 [official MCP service](https://docs.slack.dev/ai/slack-mcp-server/) requires an internal or
 Marketplace-published Slack app and remains subject to workspace approval and resource access.
 

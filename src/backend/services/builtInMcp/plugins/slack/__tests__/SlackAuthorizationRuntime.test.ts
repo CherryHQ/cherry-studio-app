@@ -2,17 +2,19 @@ import { authorizationStoreFixture } from '../../../authorization/__tests__/_aut
 import type { PluginCredential } from '../../../authorization/pluginCredential';
 import { SlackAuthorizationRuntime } from '../SlackAuthorizationRuntime';
 import { SLACK_REQUESTED_SCOPES, type SlackUserCredential } from '../slackCredentials';
-import { slackOauth } from '../slackOauth';
+import { getSlackApplication, slackOauth } from '../slackOauth';
 
 jest.mock('expo-crypto', () => ({
   randomUUID: () => jest.requireActual('node:crypto').randomUUID(),
 }));
 jest.mock('../slackOauth', () => ({
+  getSlackApplication: jest.fn(),
   slackOauth: {
     challenge: jest.fn(),
     exchangeCode: jest.fn(),
     getAccount: jest.fn(),
     revoke: jest.fn(),
+    refresh: jest.fn(),
   },
 }));
 
@@ -40,7 +42,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   jest.spyOn(Date, 'now').mockReturnValue(1000);
   fixture = authorizationStoreFixture();
-  fixture.data.application = application;
+  jest.mocked(getSlackApplication).mockReturnValue(application);
   runtime = new SlackAuthorizationRuntime(fixture.store);
   jest.mocked(slackOauth.challenge).mockResolvedValue({
     state: 'private-state',
@@ -61,6 +63,51 @@ async function begin() {
   if (state.status !== 'callback') throw new Error('Expected a callback challenge');
   return state;
 }
+
+it('opens publisher authorization directly even when a personal application was saved before', async () => {
+  fixture.data.application = { ...application, clientId: '987.654' };
+  expect(await runtime.getState()).toEqual({ status: 'idle' });
+  const state = await begin();
+  expect(state).toMatchObject({ stage: 'user', redirectUrl: application.redirectUrl });
+  expect(slackOauth.challenge).toHaveBeenCalledWith(application);
+  expect(fixture.store.readApplication).not.toHaveBeenCalled();
+  expect(fixture.store.writeApplication).not.toHaveBeenCalled();
+});
+
+it('leaves the existing grant intact when publisher authorization is not configured', async () => {
+  jest.mocked(getSlackApplication).mockReturnValue(undefined);
+  fixture.data.application = application;
+  fixture.data.grant = { id: 'existing-grant', credential: saved(credential) };
+  await expect(runtime.begin()).rejects.toMatchObject({ reason: 'unavailable' });
+  expect(await runtime.getState()).toEqual({ status: 'idle' });
+  expect(slackOauth.challenge).not.toHaveBeenCalled();
+  expect(fixture.data.grant).toEqual({ id: 'existing-grant', credential: saved(credential) });
+});
+
+it('refreshes existing grants with the application that issued them', async () => {
+  const previous = {
+    ...credential,
+    application: { ...application, clientId: '987.654' },
+    tokens: { ...tokens, expiresAt: 1000 },
+  };
+  fixture.data.grant = { id: 'existing-grant', credential: saved(previous) };
+  jest.mocked(slackOauth.refresh).mockResolvedValue({
+    ...tokens,
+    accessToken: 'renewed-access',
+    refreshToken: 'renewed-refresh',
+  });
+  const renewed = await runtime.resolveCredential('existing-grant');
+  expect(slackOauth.refresh).toHaveBeenCalledWith(
+    previous.application,
+    previous.tokens,
+    expect.any(AbortSignal),
+  );
+  expect(renewed).toMatchObject({
+    application: previous.application,
+    tokens: { accessToken: 'renewed-access', refreshToken: 'renewed-refresh' },
+  });
+  expect(fixture.data.grant?.credential).toEqual(renewed);
+});
 
 it.each([false, true])(
   'completes without another confirmation for an existing account: %s',

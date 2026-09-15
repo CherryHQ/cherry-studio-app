@@ -58,45 +58,19 @@ const base64Url = (value: string) =>
   value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const randomValue = () => base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
 
-/** Slack's official manifest link prefills app settings without a configuration token. */
-export function getSlackApplicationSetupUrl() {
-  const url = new URL('https://api.slack.com/apps');
-  url.searchParams.set('new_app', '1');
-  url.searchParams.set(
-    'manifest_json',
-    JSON.stringify({
-      display_information: {
-        name: 'Cherry Studio for Slack',
-        description: 'Search and collaborate in Slack from Cherry Studio',
-      },
-      oauth_config: {
-        redirect_urls: SlackApplicationSchema.shape.redirectUrl.options,
-        scopes: { user: SLACK_REQUESTED_SCOPES },
-        pkce_enabled: true,
-      },
-      settings: {
-        org_deploy_enabled: false,
-        socket_mode_enabled: false,
-        token_rotation_enabled: true,
-      },
-    }),
-  );
-  return url.href;
+/** The publisher supplies a public client ID; native PKCE does not use a client secret. */
+export function getSlackApplication(): SlackApplication | undefined {
+  const schemes = Constants.expoConfig?.scheme;
+  const scheme = Array.isArray(schemes) ? schemes[0] : schemes;
+  const parsed = SlackApplicationSchema.safeParse({
+    version: 1,
+    clientId: process.env.EXPO_PUBLIC_SLACK_OAUTH_CLIENT_ID,
+    redirectUrl: `${scheme}://plugins/slack/callback`,
+  });
+  return parsed.success ? parsed.data : undefined;
 }
 
 export const slackOauth = {
-  application(fields: Record<string, string>): SlackApplication {
-    const schemes = Constants.expoConfig?.scheme;
-    const scheme = Array.isArray(schemes) ? schemes[0] : schemes;
-    const parsed = SlackApplicationSchema.safeParse({
-      version: 1,
-      clientId: fields.clientId,
-      redirectUrl: `${scheme}://plugins/slack/callback`,
-    });
-    if (!parsed.success)
-      throw new PluginError('request', 'Enter your Slack application client ID and enable PKCE.');
-    return parsed.data;
-  },
   async challenge(application: SlackApplication) {
     const state = randomValue();
     const verifier = randomValue();

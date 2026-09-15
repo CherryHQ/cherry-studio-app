@@ -4,12 +4,7 @@ import type { PluginDefinition } from '../../pluginDefinition';
 import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
 import { slackGuide } from './guide';
 import { SlackAuthorizationRuntime } from './SlackAuthorizationRuntime';
-import {
-  SLACK_REQUESTED_SCOPES,
-  SlackApplicationSchema,
-  SlackUserCredentialSchema,
-} from './slackCredentials';
-import { getSlackApplicationSetupUrl } from './slackOauth';
+import { SlackUserCredentialSchema } from './slackCredentials';
 import { SLACK_TOOL_POLICY } from './slackTools';
 
 export const slackPlugin: PluginDefinition = {
@@ -19,7 +14,7 @@ export const slackPlugin: PluginDefinition = {
     id: 'slack',
     icon: 'file-text',
     links: {
-      credentials: 'https://api.slack.com/apps',
+      credentials: 'https://slack.com/apps/manage',
       website: 'https://slack.com',
       privacy: 'https://slack.com/trust/privacy/privacy-policy',
       authorizationManagement: 'https://slack.com/apps/manage',
@@ -31,15 +26,7 @@ export const slackPlugin: PluginDefinition = {
       id: 'slack_user',
       kind: 'interactive',
       interaction: 'callback',
-      stages: ['application', 'user'],
-      applicationFields: [
-        { id: 'clientId', secret: false, maxLength: 256, pattern: '^\\d+\\.\\d+$' },
-      ],
-      applicationSetup: {
-        createUrl: getSlackApplicationSetupUrl(),
-        redirectUrls: SlackApplicationSchema.shape.redirectUrl.options,
-        scopes: SLACK_REQUESTED_SCOPES,
-      },
+      stages: ['user'],
       createRuntime: (store) => new SlackAuthorizationRuntime(store),
       createRequestAuthorization: () => ({
         apply(credential, { headers }) {

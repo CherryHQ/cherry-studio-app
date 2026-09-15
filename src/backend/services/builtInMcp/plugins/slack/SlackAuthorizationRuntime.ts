@@ -13,12 +13,11 @@ import type {
 } from '../../authorization/pluginAuthorization';
 import type { PluginCredential } from '../../authorization/pluginCredential';
 import {
-  SlackApplicationSchema,
   SlackUserCredentialSchema,
   type SlackApplication,
   type SlackUserCredential,
 } from './slackCredentials';
-import { slackOauth } from './slackOauth';
+import { getSlackApplication, slackOauth } from './slackOauth';
 
 type Pending =
   | {
@@ -51,7 +50,6 @@ export class SlackAuthorizationRuntime implements PluginAuthorizationRuntime {
   private attempt = new AbortController();
   private renewal = new AbortController();
   private pending?: Pending;
-  private application?: SlackApplication;
   private readonly resolutions = new Map<string, Promise<PluginCredential>>();
   private readonly failures = new Map<string, PluginErrorReason>();
 
@@ -84,10 +82,7 @@ export class SlackAuthorizationRuntime implements PluginAuthorizationRuntime {
     let pending = this.pending;
     if (pending?.status === 'callback' && Date.now() >= pending.expiresAt)
       this.pending = pending = { status: 'expired', id: pending.id };
-    if (!pending)
-      return this.application
-        ? { status: 'application-ready', applicationId: this.application.clientId }
-        : { status: 'idle' };
+    if (!pending) return { status: 'idle' };
     if (pending.status === 'callback')
       return {
         status: 'callback',
@@ -108,10 +103,7 @@ export class SlackAuthorizationRuntime implements PluginAuthorizationRuntime {
   }
 
   getState() {
-    return this.serialize(async () => {
-      await this.loadApplication();
-      return this.project();
-    });
+    return this.serialize(async () => this.project());
   }
   get attemptSignal() {
     return AbortSignal.any([this.lifetime.signal, this.attempt.signal]);
@@ -124,8 +116,9 @@ export class SlackAuthorizationRuntime implements PluginAuthorizationRuntime {
       this.project();
       if (this.pending && ['callback', 'review', 'ready'].includes(this.pending.status))
         return this.project();
-      const application = await this.loadApplication();
-      if (!application) return this.project();
+      const application = getSlackApplication();
+      if (!application)
+        throw new PluginError('unavailable', 'Slack application is not configured in this app.');
       const previousId = await this.store.getCurrentAuthorizationId();
       const challenge = await slackOauth.challenge(application);
       signal.throwIfAborted();
@@ -137,43 +130,6 @@ export class SlackAuthorizationRuntime implements PluginAuthorizationRuntime {
         ...challenge,
         expiresAt: Date.now() + 10 * 60_000,
       };
-      return this.project();
-    });
-  }
-
-  private async loadApplication() {
-    if (!this.application) {
-      const value = await this.store.readApplication();
-      if (value) {
-        const parsed = SlackApplicationSchema.safeParse(value);
-        if (!parsed.success)
-          throw new PluginError('authorization', 'Enter the Slack application settings again.');
-        this.application = parsed.data;
-      }
-    }
-    return this.application;
-  }
-
-  useApplication(fields: Record<string, string>) {
-    this.interrupt();
-    const signal = this.attemptSignal;
-    return this.serialize(async () => {
-      signal.throwIfAborted();
-      const application = slackOauth.application(fields);
-      await this.store.writeApplication(application);
-      signal.throwIfAborted();
-      this.application = application;
-      this.pending = undefined;
-      return this.project();
-    });
-  }
-
-  resetApplication() {
-    this.interrupt();
-    return this.serialize(async () => {
-      this.pending = undefined;
-      await this.store.writeApplication(undefined);
-      this.application = undefined;
       return this.project();
     });
   }
