@@ -4,7 +4,7 @@ import { PluginError } from '@/shared/contracts/plugins';
 import type { PluginId } from '@/shared/data/types/plugin';
 
 import type { PluginCredential } from '../authorization/pluginCredential';
-import type { PluginClient } from '../pluginDefinition';
+import { getPluginToolEffect, type PluginClient } from '../pluginDefinition';
 import { requirePluginAuthMethod, requirePluginDefinition } from '../pluginRegistry';
 
 const CONNECTION_TIMEOUT_MS = 15_000;
@@ -43,7 +43,7 @@ export async function validatePluginConnection(
         ...(cursor ? { params: { cursor } } : {}),
       });
       const definition = page.tools.find((tool) =>
-        name ? tool.name === name : Object.hasOwn(plugin.tools, tool.name),
+        name ? tool.name === name : getPluginToolEffect(plugin, tool.name) !== undefined,
       );
       if (definition) {
         if (!plugin.validation.args) {

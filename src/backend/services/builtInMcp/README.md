@@ -1,7 +1,7 @@
 # Built-In MCP Plugins
 
 This module owns bundled plugin clients and the connect/disconnect workflow for **Plugins**.
-GitHub, Amap, Feishu and DingTalk are implemented. Current behavior is documented in the
+GitHub, Amap, Feishu, DingTalk, Notion and WeCom are implemented. Current behavior is documented in the
 [integration reference](../../../../docs/references/agent/built-in-mcp-design.md); proposed designs
 are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 
@@ -19,6 +19,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `plugins/github/` | GitHub definition, workflow guide, OAuth App authorization with PKCE, account identity, token rotation and revocation |
 | `plugins/feishu/` | Feishu workflow guide, authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
 | `plugins/dingtalk/` | Official cloud device authorization, account review, token renewal, behavior authorization and service-bound tools |
+| `plugins/wecom/` | Official bot authorization, imported MCP configurations, service-bound MCP sessions, discovered tool policy and workflow guide |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
 internal responsibility groups; they do not add public barrels. Each plugin exposes only its
@@ -206,8 +207,47 @@ Executable catalog descriptions include the saved server name and builtin id so 
 can find tools by platform names such as `GitHub`, `github`, `高德地图`, and `amap`. Chinese domain
 descriptions and character-pair matching also support `飞书日历`. Partial discovery failures reach
 the current turn's availability instructions rather than silently disappearing.
-New upstream tools are not automatically admitted: discovery and invocation both enforce the
-allowlist. The existing runtime validates discovered input schemas and applies result-size limits.
+Definitions normally admit a fixed tool list. A provider can explicitly accept additional discovered
+names through `acceptsDiscoveredTool`; those names always receive `write` policy. Its client must bind
+invocation to tools actually discovered on that authorized service. The existing runtime validates
+discovered input schemas and applies result-size limits.
+
+## WeCom Official MCP
+
+WeCom business operations use the official Streamable HTTP MCP services through
+`createOfficialMcpClient`. Cherry does not bundle or run the desktop CLI, convert its HTTP service
+descriptions into schemas, or implement business request envelopes. `wecomBotApi.ts` owns only the
+official confirmation-link, polling and signed MCP-configuration exchange. This is personal bot
+authorization, not a standard OAuth authorization-code flow.
+
+The default `wecom_bot` method copies a link for confirmation inside WeCom. The alternative
+`wecom_mcp` method imports an official MCP URL or `mcpServers` JSON export from the bot's permission
+page. Both accept only HTTPS `qyapi.weixin.qq.com/mcp/bot/<category>` endpoints. Native credential
+storage holds the private query parameters; SDK endpoint metadata excludes them. The import method
+does not accept executable commands, arbitrary hosts or custom headers.
+
+`createWecomClient` discovers tools across authorized categories and qualifies their names as
+`wecom_<category>__<upstream-name>`. Official schemas, descriptions, arguments and results stay intact.
+Reviewed service/name pairs have read policy; all other discovered names require the existing write
+approval policy even if the server advertises `readOnlyHint`. Partial discovery retains usable tools
+and safe warnings. The bundled guide explains how to use the current catalog, including documents,
+tables, mail, messages, files and asynchronous results; actual availability follows the grant.
+
+HTTP 401 or official JSON-RPC configuration errors request bot-configuration renewal without
+replaying the failed operation. Changed configurations replace MCP sessions. Imported configurations
+require reimporting after expiration or a permission change. Version 2 CLI credentials require
+disconnecting and reconnecting; version 3 stores bot identity plus MCP configuration, or an imported
+MCP configuration. There is no automatic credential conversion.
+
+The signed configuration exchange follows the official CLI's
+[MCP implementation at 9eb7898](https://github.com/WecomTeam/wecom-cli/blob/9eb7898b959861af879495e211e37431fa908f19/src/mcp/config.rs).
+The latest CLI uses a different business transport, so continued availability of this historical
+bootstrap still needs live-account acceptance. The independently supported manual import path follows
+the [current official MCP setup guide](https://open.work.weixin.qq.com/help2/pc/21676).
+Neither connection path has been accepted with a live account in this change; related regression
+suites were updated but not run.
+
+## Compatibility And Verification
 
 Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings for review,
 preserving credentials, server IDs, approval settings and history. Migration

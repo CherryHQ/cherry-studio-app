@@ -1,11 +1,23 @@
-import * as z from 'zod';
+import { PluginError } from '@/shared/contracts/plugins';
 
-import type { PluginDefinition } from '../../pluginDefinition';
+import type { PluginDefinition, PluginRequestAuthorization } from '../../pluginDefinition';
 import { createWecomClient } from './createWecomClient';
 import { wecomGuide } from './guide';
 import { WecomAuthorizationRuntime } from './WecomAuthorizationRuntime';
-import { parseWecomResponse } from './wecomBotApi';
-import { WECOM_TOOL_POLICY } from './wecomTools';
+import { importWecomMcpConfig, readWecomCredential } from './wecomCredentials';
+import { acceptsWecomTool, WECOM_TOOL_POLICY } from './wecomTools';
+
+const authorization: PluginRequestAuthorization = {
+  apply(value, { url }) {
+    const credential = readWecomCredential(value);
+    const connection = credential.connections.find(({ url: target }) => {
+      const endpoint = new URL(target);
+      return endpoint.origin === url.origin && endpoint.pathname === url.pathname;
+    });
+    if (!connection) throw new PluginError('access', 'The Wecom MCP service is not authorized.');
+    url.search = new URL(connection.url).search;
+  },
+};
 
 export const wecomPlugin: PluginDefinition = {
   serverName: '企业微信',
@@ -14,11 +26,13 @@ export const wecomPlugin: PluginDefinition = {
     id: 'wecom',
     icon: 'file-text',
     links: {
+      credentials: 'https://open.work.weixin.qq.com/help2/pc/21676',
       website: 'https://work.weixin.qq.com',
       privacy: 'https://work.weixin.qq.com/nl/privacy',
     },
   },
   tools: WECOM_TOOL_POLICY,
+  acceptsDiscoveredTool: acceptsWecomTool,
   authMethods: [
     {
       id: 'wecom_bot',
@@ -26,18 +40,20 @@ export const wecomPlugin: PluginDefinition = {
       interaction: 'polling',
       stages: ['bot'],
       createRuntime: (store) => new WecomAuthorizationRuntime(store),
-      // The local bot client binds credentials to the official CLI gateway.
-      createRequestAuthorization: () => ({ apply() {} }),
+      createRequestAuthorization: () => authorization,
+    },
+    {
+      id: 'wecom_mcp',
+      kind: 'credentials',
+      requiresDisconnect: true,
+      fields: [{ id: 'mcpConfig', secret: true, maxLength: 16_384 }],
+      encodeCredentials: (fields) => importWecomMcpConfig(fields.mcpConfig),
+      createRequestAuthorization: () => authorization,
     },
   ],
   createClient: createWecomClient,
-  // The public tool directory is not proof that a credential works. Read the session identity.
+  // The signed bootstrap establishes bot authorization; MCP setup only discovers tools.
   validation: {
-    tool: 'wecom_identity_whoami',
-    args: {},
-    accountLabel(output) {
-      parseWecomResponse(z.object({ extra_identity_context: z.string().trim().min(1) }), output);
-      return 'WeCom';
-    },
+    accountLabel: () => 'WeCom',
   },
 };

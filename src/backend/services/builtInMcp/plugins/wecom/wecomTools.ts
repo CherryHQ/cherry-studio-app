@@ -1,102 +1,35 @@
 import type { PluginToolPolicy } from '../../pluginDefinition';
 
-// Official non-file command paths from WecomTeam/wecom-cli at
-// 1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08. Effects are owned locally, never by discovery.
-export const WECOM_SERVICES = {
-  identity: { whoami: 'read' },
-  contact: { 'users search': 'read' },
-  doc: {
-    create: 'write',
-    search: 'read',
-    'contents get': 'read',
-    'contents append': 'write',
-    'contents overwrite': 'write',
-    'names update': 'write',
-    'members update': 'write',
-    'rules update': 'write',
-  },
-  smartpage: {
-    create: 'write',
-    'pages get': 'read',
-    'pages update': 'write',
-    'blocks update': 'write',
-    'databases get': 'read',
-  },
-  sheet: {
-    create: 'write',
-    get: 'read',
-    'ranges get': 'read',
-    'contents update': 'write',
-    'rows append': 'write',
-    'subsheets add': 'write',
-    'subsheets delete': 'write',
-  },
-  smartsheet: {
-    create: 'write',
-    get: 'read',
-    'sheets list': 'read',
-    'sheets add': 'write',
-    'sheets update': 'write',
-    'sheets delete': 'write',
-    'fields list': 'read',
-    'fields add': 'write',
-    'fields update': 'write',
-    'fields delete': 'write',
-    'records list': 'read',
-    'records query': 'read',
-    'records add': 'write',
-    'records update': 'write',
-    'records delete': 'write',
-    'views list': 'read',
-    'views add': 'write',
-    'views update': 'write',
-    'views delete': 'write',
-    'charts list': 'read',
-    'charts add': 'write',
-    'charts update': 'write',
-    'charts delete': 'write',
-  },
-  todo: {
-    list: 'read',
-    get: 'read',
-    create: 'write',
-    update: 'write',
-    finish: 'write',
-    delete: 'write',
-  },
-  calendar: {
-    'schedules list': 'read',
-    'schedules get': 'read',
-    'schedules search': 'read',
-    'schedules create': 'write',
-    'schedules update': 'write',
-    'schedules cancel': 'write',
-    'schedules free list': 'read',
-  },
-  meeting: {
-    list: 'read',
-    get: 'read',
-    search: 'read',
-    'original get': 'read',
-    'rooms buildings list': 'read',
-    'rooms search': 'read',
-    create: 'write',
-    update: 'write',
-    cancel: 'write',
-  },
-  mail: { search: 'read', get: 'read', send: 'write' },
-  message: { 'aibot sessions list': 'read', 'aibot send': 'write' },
-} satisfies Record<string, PluginToolPolicy>;
+// Read effects reviewed against WecomTeam/wecom-cli at 9eb7898b959861af879495e211e37431fa908f19.
+// Everything else discovered from the official service remains available with write approval.
+const READ_TOOLS = {
+  contact: ['get_userlist'],
+  doc: [
+    'get_doc_content',
+    'sheet_get_info',
+    'smartsheet_get_sheet',
+    'smartsheet_get_fields',
+    'smartsheet_get_records',
+    'smartpage_get_export_result',
+  ],
+  meeting: ['get_meeting_info', 'list_user_meetings'],
+  msg: ['get_message', 'get_msg_chat_list', 'get_msg_media'],
+  schedule: ['get_schedule_detail', 'get_schedule_list_by_range', 'check_availability'],
+  todo: ['get_todo_detail', 'get_todo_list', 'search_todo_userid'],
+} as const;
 
-export const WECOM_BOT_METHODS = Object.fromEntries(
-  Object.entries(WECOM_SERVICES).flatMap(([service, methods]) =>
-    Object.entries(methods).map(([method, effect]) => {
-      const path = [service, ...method.split(' ')];
-      return [`wecom_${path.join('_')}`, { path, effect }];
-    }),
-  ),
-) as Record<string, { path: string[]; effect: 'read' | 'write' }>;
-
+/** Category-qualified names prevent an identically named tool in another service gaining read access. */
 export const WECOM_TOOL_POLICY: PluginToolPolicy = Object.fromEntries(
-  Object.entries(WECOM_BOT_METHODS).map(([name, method]) => [name, method.effect]),
+  Object.entries(READ_TOOLS).flatMap(([category, tools]) =>
+    tools.map((name) => [`wecom_${category}__${name}`, 'read']),
+  ),
 );
+
+export function acceptsWecomTool(name: string): boolean {
+  return /^wecom_[a-z][a-z0-9]*(?:_[a-z0-9]+)*__[A-Za-z0-9_.-]{1,128}$/.test(name);
+}
+
+export function getWecomToolEffect(name: string): 'read' | 'write' | undefined {
+  if (!acceptsWecomTool(name)) return undefined;
+  return Object.hasOwn(WECOM_TOOL_POLICY, name) ? WECOM_TOOL_POLICY[name] : 'write';
+}

@@ -8,19 +8,19 @@ import type {
   PluginAuthorizationStore,
 } from '../../authorization/pluginAuthorization';
 import type { PluginCredential } from '../../authorization/pluginCredential';
+import { wecomBotApi } from './wecomBotApi';
 import {
-  wecomBotApi,
   WecomBotCredentialSchema,
   type WecomBot,
   type WecomBotCredential,
-} from './wecomBotApi';
+} from './wecomCredentials';
 
 type Pending =
   | ({ status: 'waiting'; id: string } & Awaited<ReturnType<typeof wecomBotApi.begin>>)
   | { status: 'ready'; id: string; bot: WecomBot; credential?: WecomBotCredential }
   | { status: 'expired'; id: string };
 
-/** Owns one in-memory phone authorization attempt and serialized, grant-bound token renewal. */
+/** Owns phone authorization and serialized renewal of official MCP connection credentials. */
 export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
   private pending?: Pending;
   private operations: Promise<unknown> = Promise.resolve();
@@ -123,7 +123,7 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
       signal.throwIfAborted();
       return {
         credential: pending.credential,
-        accountLabel: `WeCom bot ${pending.bot.botId}`,
+        accountLabel: 'WeCom',
         signal,
       };
     });
@@ -169,8 +169,8 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
       );
       if (!sent.success || !current.success)
         throw new PluginError('authorization', 'Wecom authorization is unavailable.');
-      // Concurrent 853004 responses reuse the first successful renewal.
-      if (sent.data.token !== current.data.token) return;
+      // Concurrent rejections of the same configuration share the first successful renewal.
+      if (sent.data.configId !== current.data.configId) return;
       const renewed = await wecomBotApi.exchange(current.data, 1, signal);
       signal.throwIfAborted();
       if (!(await this.store.updateCredential(authorizationId, renewed, signal)))

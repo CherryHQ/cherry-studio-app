@@ -12,6 +12,11 @@
 > live in [Built-In MCP Roadmap](./built-in-mcp-roadmap.md); availability research is in
 > [Plugin Expansion Research](./plugin-expansion-research.md).
 
+> WeCom update (2026-09-15): business tools now use official hosted MCP with bot authorization or
+> imported official configuration. Discovery includes authorized upstream tools with conservative
+> write approval for new names. The automatic bootstrap follows an earlier official CLI revision;
+> live-account acceptance and the updated regression suites remain pending.
+
 ## Plugins
 
 The chat drawer's **Plugins** page manages connected accounts and authorization. Connecting a plugin
@@ -46,6 +51,7 @@ Plugin references and popover interactions still require device acceptance on bo
 | GitHub | Publisher-configured OAuth App authorization with account confirmation, or a personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
 | Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
 | Feishu | Browser-confirmed user authorization with a new or existing application. Setup checks account identity and discovery of at least one authorized tool without a business-tool call | Nine hosted document/people tools and nineteen curated wiki, Base, task and calendar operations; see [Feishu Business Tools](#feishu-business-tools) |
+| WeCom | Confirmation inside WeCom followed by signed MCP configuration exchange, or imported official MCP URL/JSON; discovery-only setup | Dynamically discovered official tools for authorized categories; see [WeCom Official MCP](#wecom-official-mcp) |
 
 ### Official Cloud Coverage
 
@@ -75,7 +81,7 @@ OpenAPI routes through the app's HTTP service, with a Bearer user token and no r
 
 This covers GitHub's previous workflows and eight of Amap's nine capability categories. The official
 catalogs own business behavior; Cherry does not translate old calls or duplicate their schemas.
-Newly published upstream tools require an explicit code admission decision. A missing or incompatible
+Newly published GitHub and Amap tools require an explicit code admission decision. A missing or incompatible
 tool is unavailable, not an invitation to fall back to the deleted local implementation.
 
 Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings while retaining
@@ -293,10 +299,49 @@ Protocol references: [hosted tools](https://open.feishu.cn/document/mcp_open_too
 [calendar instances](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar-event/instance_view),
 [common error codes](https://open.feishu.cn/document/ukTMukTMukTM/ugjM14COyUjL4ITN).
 
+## WeCom Official MCP
+
+Cherry owns bot authorization, native credential storage, MCP session routing and the bundled AI
+workflow guide. The official service owns business tool definitions and execution. No local CLI
+executable, CLI schema conversion, business HTTP wrapper or app-hosted MCP server is involved.
+
+The default `wecom_bot` method copies an official confirmation link for opening in WeCom's File
+Transfer conversation, polls for bot identity and secret, then signs `get_mcp_config` to obtain
+authorized MCP connections. It is bot authorization rather than standard OAuth. `wecom_mcp` instead
+accepts a URL or `mcpServers` JSON copied from a bot permission's detail page. Both methods verify
+that at least one admitted tool is discoverable without executing a business operation.
+
+MCP connections are restricted to HTTPS `qyapi.weixin.qq.com/mcp/bot/<category>`. Private URL query
+parameters live in native credential storage and are applied only to their matching service's
+outgoing requests. Redirects, custom hosts, custom headers and executable configurations are rejected.
+The app qualifies tool names as `wecom_<category>__<upstream-name>` to bind calls and reviewed read
+policy to a specific service. Input schemas, descriptions, arguments and results remain official.
+Every newly discovered tool is available under the existing write approval policy; upstream
+`readOnlyHint` cannot give it read approval. The client invokes only names from its actual discovery.
+Failed categories retain safe warnings alongside surviving tools.
+
+Bot configurations renew after HTTP 401 or official JSON-RPC configuration errors, and session
+replacement follows configuration changes. Failed business calls are never replayed automatically.
+Imported URLs require reimporting when no longer valid; newly granted categories can require
+reconnection. Earlier version 2 CLI credentials require an explicit disconnect and reconnection.
+Version 3 distinguishes bot-backed and imported configurations without changing database identities.
+
+The workflow guide uses the live catalog as the capability authority and covers document types,
+table metadata, people/task/calendar dependencies, mail/message targets, file inputs, pagination and
+asynchronous completion. A desktop CLI file path does not imply a remote MCP tool can access local
+device files. Enterprise data permissions and any required administrator approval remain upstream.
+
+Sources: [official MCP setup](https://open.work.weixin.qq.com/help2/pc/21676),
+[official capability comparison](https://open.work.weixin.qq.com/help2/pc/21714), and
+[the CLI's signed MCP bootstrap](https://github.com/WecomTeam/wecom-cli/blob/9eb7898b959861af879495e211e37431fa908f19/src/mcp/config.rs).
+The latest CLI changed its business transport; the signed bootstrap is based on the pinned earlier
+MCP implementation. Its continued availability, both connection paths and real tool calls still
+require live-account acceptance. Regression suites were updated but not run.
+
 ## Extensible Plugin Definitions
 
-`PluginDefinition` is the single bundled extension contract. `pluginRegistry.ts` registers the
-GitHub, Amap and Feishu definitions from `plugins/`. Each definition owns:
+`PluginDefinition` is the single bundled extension contract. `pluginRegistry.ts` registers bundled
+definitions from `plugins/`. Each definition owns:
 
 - A stable `catalog.id`, links, an optional icon name and the saved MCP
   server name. Display copy is not in the definition: every user-facing string for a plugin lives
@@ -307,6 +352,8 @@ GitHub, Amap and Feishu definitions from `plugins/`. Each definition owns:
 - `createClient`, which receives the credential resolver, grant recheck, method-owned request
   authorization, cancellation signal and admitted tool policy.
 - Reviewed tool names classified as `read` or `write`, plus a read-only connection validation rule.
+- Optional `acceptsDiscoveredTool` admission for additional upstream names, always classified as
+  `write`. The provider client must restrict invocation to its actual authorized discovery.
 
 The [module directory map](../../../src/backend/services/builtInMcp/README.md#file-ownership)
 defines implementation placement: common authorization lives in `authorization/`, client and
@@ -454,6 +501,7 @@ submitted remote operation cannot be rolled back merely by cancelling locally.
 All integrations retain the current base MCP `ask` policy and existing Agent approval-mode rules.
 Provider annotations are descriptive hints, not authorization. User-selected automatic approval
 can reduce routine prompts through the current mechanism; connecting an account does not itself
-grant automatic approval. Hosted tools use a reviewed subset of discovered upstream names and
-schemas. Feishu's local declarations provide the reviewed OpenAPI operations. Neither upstream
-discovery nor API availability admits tools without an explicit code change.
+grant automatic approval. Hosted tools normally use a reviewed subset of discovered upstream names
+and schemas. WeCom explicitly admits additional discovered names with write policy and binds their
+invocation to the authorized service. Feishu's local declarations provide the reviewed OpenAPI
+operations. A remote annotation alone cannot admit a tool or change its approval policy.
