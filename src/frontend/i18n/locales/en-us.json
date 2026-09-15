@@ -1595,5 +1595,8 @@
   "documentExport.errors.image-size-limit": "This message exceeds one image. Use HTML or Markdown to keep all content.",
   "documentExport.documentReady": "Your selected content is ready to share as a document.",
   "documentExport.paused": "Preview paused",
-  "documentExport.resume": "Continue generation"
+  "documentExport.resume": "Continue generation",
+  "settings.privacy.title": "Privacy settings",
+  "settings.privacy.sendReports": "Send anonymous error reports",
+  "settings.privacy.saveFailed": "Could not save your choice. Please retry."
 }
