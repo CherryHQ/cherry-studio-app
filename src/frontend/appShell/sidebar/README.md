@@ -19,3 +19,14 @@ Search uses the shared transient selection contract and closes before opening th
 
 The sidebar owns conversation browsing, rename, and individual deletion. There is no separate
 Session history/management route or chat-header history action.
+
+The recent-list menu switches between a flat conversation list and conversations grouped by Agent.
+Only the current chat's Agent starts expanded, falling back to the first Agent when no chat is
+selected. Tapping an Agent's header toggles its conversations without navigating; multiple groups
+can stay open, and explicit toggles take precedence over the default. Only expanded groups query
+Sessions by their Agent id, show ten initially, and own independent "Load more" actions.
+Conversation rows retain selection, status, navigation, rename, and deletion. The adjacent plus
+action opens a new chat for that Agent, including when the group is collapsed or has no Sessions.
+Agent names, conversation titles in both list modes, and pagination actions share one row layout
+and text column. Conversation and pagination rows keep the avatar column empty rather than adding
+group indentation; selection surfaces keep the same outer gutters across groups.
