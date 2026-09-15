@@ -12,3 +12,7 @@ The independent `/drawings` history page lives in `src/frontend/features/drawing
 and job observation shared by both pages live in `src/frontend/data/paintings`; draft handoff lives
 in `src/frontend/utils/paintingDraftHandoff.ts`; preview transitions shared by both pages live in
 `src/frontend/components/ArtifactPreview`.
+
+`PaintingComposer` uses `@/frontend/components/PaintingInput` for the image prompt, attachments,
+model picker, and parameter sheet. Agent chat shares those controls but submits through the Agent
+Host. Only this standalone painting workflow creates painting history entries and painting jobs.

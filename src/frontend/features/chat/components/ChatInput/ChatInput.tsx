@@ -1,6 +1,6 @@
 import { Composer } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
 import Animated, {
@@ -30,9 +30,12 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/ModelPicker';
+import { PaintingInput, type PaintingInputSubmission } from '@/frontend/components/PaintingInput';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/features/plugin';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { UniqueModelId } from '@/shared/data/types/model';
+import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import type { useAgentChatControls } from '../../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
@@ -66,17 +69,15 @@ const activeTransitionMotion = {
 } as const;
 
 export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
-  const { t } = useTranslation();
-  const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
+  const { cancel, canSend, isBusy, sendMessage } = controls;
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
-  const modelPickerData = useModelPickerData({ modelType: 'text' });
+  const modelPickerData = useModelPickerData({ modelType: 'all' });
   const providerSetupReturnTo = sessionId
     ? chatReturnToHref({ kind: 'session', sessionId })
     : agentId
       ? chatReturnToHref({ agentId, kind: 'draft' })
       : '/';
-  const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const persistModel = useCallback(
     (targetAgentId: string, modelId: ModelPickerModelItem['modelId']) =>
       updateAgent(targetAgentId, { modelId }),
@@ -98,6 +99,69 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
     handleModelPersistenceError,
   );
   const selectedModelItem = modelPickerData.getModelItem(selectedModelId);
+  const modelSelection = useMemo(
+    () => ({
+      modelId: selectedModelId,
+      onSelect: selectModel,
+      providerSetupReturnTo,
+    }),
+    [providerSetupReturnTo, selectModel, selectedModelId],
+  );
+  const generateImage = useCallback(
+    (input: PaintingInputSubmission) =>
+      sendMessage({
+        parts: toAgentInputParts({ attachments: input.attachments, text: input.prompt }),
+        modelId: input.modelId,
+        imageGeneration: { mode: input.mode, paramValues: input.paramValues },
+      }),
+    [sendMessage],
+  );
+  const cancelGeneration = useCallback(() => {
+    void cancel();
+  }, [cancel]);
+
+  if (selectedModelItem && isImageGenerationModel(selectedModelItem.model)) {
+    return (
+      <PaintingInput
+        canSend={canSend}
+        dismissKeyboardOnSend={dismissKeyboardOnSend}
+        modelSelection={modelSelection}
+        onCancel={cancelGeneration}
+        onGenerate={generateImage}
+        status={isBusy ? 'generating' : 'idle'}
+      />
+    );
+  }
+  return (
+    <TextChatInput
+      agentId={agentId}
+      controls={controls}
+      dismissKeyboardOnSend={dismissKeyboardOnSend}
+      providerSetupReturnTo={providerSetupReturnTo}
+      selectedModelId={selectedModelId}
+      selectedModelItem={selectedModelItem}
+      selectModel={selectModel}
+    />
+  );
+}
+
+function TextChatInput({
+  agentId,
+  controls,
+  dismissKeyboardOnSend,
+  providerSetupReturnTo,
+  selectedModelId,
+  selectedModelItem,
+  selectModel,
+}: Omit<ChatInputProps, 'sessionId'> & {
+  providerSetupReturnTo: string;
+  selectedModelId: UniqueModelId | null;
+  selectedModelItem?: ModelPickerModelItem;
+  selectModel: (modelId: UniqueModelId) => void;
+}) {
+  const { t } = useTranslation();
+  const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
+  const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const selectedModel = selectedModelItem?.model;
   const selectedModelLabel = selectedModel?.name;
   const reasoningEfforts = useChatInputReasoningEfforts(selectedModel);
@@ -267,7 +331,7 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
           >
             {(effortGauge) => (
               <ComposerSurface
-                canSend={canSend}
+                canSend={selectedModelItem ? canSend : false}
                 dismissKeyboardOnSend={dismissKeyboardOnSend}
                 getSendErrorLabel={getSendErrorLabel}
                 onSend={handleSendPress}
@@ -349,7 +413,7 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
       </ChatInputPluginPopover>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
-          modelType="text"
+          modelType="all"
           open
           onAddProvider={handleAddProvider}
           onClose={closeModelPicker}

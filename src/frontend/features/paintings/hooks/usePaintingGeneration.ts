@@ -1,8 +1,8 @@
-import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
+import type { ParamValues } from '@cherrystudio/provider-registry';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import { imageParamsAspectRatio } from '@/frontend/data/paintings/imageGenerationParams';
 import {
@@ -20,7 +20,6 @@ import type {
 import { AiFailureSnapshotSchema, type AiFailureSnapshot } from '@/shared/contracts/aiFailure';
 import type { JobError } from '@/shared/data/api/schemas/jobs';
 import { isTerminalStatus } from '@/shared/data/api/schemas/jobs';
-import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type PaintingGenerationStatus = 'idle' | 'generating';
 
@@ -48,14 +47,7 @@ export type PaintingInterruption = {
 
 export type PaintingOutput = PaintingGenerationOutput;
 
-export type PaintingGenerationInput = {
-  attachments: readonly ComposerAttachmentReady[];
-  mode: ImageGenerationMode;
-  modelId: UniqueModelId;
-  modelName: string;
-  paramValues: ParamValues;
-  prompt: string;
-};
+export type PaintingGenerationInput = PaintingInputSubmission;
 
 export type PaintingGenerationResult = BackendPaintingGenerationResult;
 

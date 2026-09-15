@@ -22,7 +22,7 @@ import type {
 import { getImageParamFields } from '@/frontend/data/paintings/imageGenerationParams';
 import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 
-import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
+import { imageParamLabel, imageParamOptionLabel } from './imageGenerationLabels';
 
 const FIELD_GAP = 8;
 // 固定 5 列等宽网格，超出自动换行；cell 恒定方形保证选中态切换时兄弟选项不挪位。

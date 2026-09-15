@@ -336,6 +336,11 @@ the turn and commits the final value together with the terminal message state, s
 `message.finalized` and later transcript reads both carry it. While the message is streaming,
 `usage` is `null`; there is no dedicated usage event.
 
+Image-model submissions may include `imageGeneration: { mode, paramValues }` on both
+`startSession` and `submitMessage`. The Host resolves the selected model, validates the image mode
+and attachments, and captures these settings in the ordinary assistant inference snapshot. Image
+results are assistant artifact file parts in the same Session; they do not enter painting history.
+
 Every accepted assistant placeholder carries the selected `modelId` and a versioned inference
 snapshot committed in the same reservation transaction. The snapshot is Agent-owned and does not
 reuse the Chat `MessageSnapshot`: it records only request model facts, explicit inference options,

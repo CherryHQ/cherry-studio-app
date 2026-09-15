@@ -28,6 +28,38 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('keeps image request settings on pending and reopened assistant messages', () => {
+    const imageGeneration = { mode: 'generate' as const, paramValues: { aspectRatio: '16:9' } };
+    const [, pending] = createPendingChatMessages({
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ type: 'text', text: 'Draw a cherry' }],
+      imageGeneration,
+    });
+    const restored = toAgentMessageListItem(
+      message('assistant-1', {
+        inferenceSnapshot: {
+          status: 'supported',
+          snapshot: {
+            version: 1,
+            model: {
+              uniqueModelId: createUniqueModelId('provider', 'image'),
+              providerId: 'provider',
+              modelId: 'image',
+              name: 'Image',
+            },
+            parameters: {},
+            tools: [],
+            imageGeneration,
+          },
+        },
+      }),
+    );
+    expect(pending.imageGeneration).toEqual(imageGeneration);
+    expect(restored?.imageGeneration).toEqual(pending.imageGeneration);
+    expect(restored?.status).toBe('pending');
+  });
+
   test('keeps the same inline plugin snapshot in pending and persisted user messages', () => {
     const pluginReferences = [
       { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },

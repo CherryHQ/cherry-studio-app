@@ -17,6 +17,8 @@ history, message rows and parts, viewport following, and scroll restoration.
   identity, bottom-accessory inputs, the feature renderer, and optional `extraData` for rendered
   state that is not carried by message items.
 - `AssistantMessage` owns standard assistant content: the pending placeholder and structured parts.
+  Optional per-message `imageGeneration` settings select the shared image loader and its dimensions;
+  completed generated images use the same managed file renderer as other assistant artifacts.
   Its `children` render after the message body, so a feature composes its own
   accessory (a toolbar, for example) without teaching this module about that feature's state. The
   slot is unconditional, including while the placeholder is up; an accessory holds the message and
