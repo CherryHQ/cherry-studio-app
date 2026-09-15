@@ -29,11 +29,11 @@ export type PluginCredentialMethod = {
   readonly requiresDisconnect?: boolean;
 };
 
-/** Browser interaction is explicit; application entry is optional. */
+/** Interactive authorization declares who owns the consent UI; application entry is optional. */
 export type PluginInteractiveMethod = {
   readonly id: string;
   readonly kind: 'interactive';
-  readonly interaction: 'polling' | 'callback';
+  readonly interaction: 'polling' | 'callback' | 'native';
   readonly stages: readonly string[];
   readonly applicationFields?: readonly PluginCredentialField[];
 };
