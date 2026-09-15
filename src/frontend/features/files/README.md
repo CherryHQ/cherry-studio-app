@@ -5,6 +5,11 @@ The route carries identity only. `FileEntryPreview` owns classification and the 
 this page and system opening, and shares file export actions with the painting viewer.
 This page owns reading, rendering, and copying.
 
+Complete HTML also offers PNG and image-based PPTX conversion. `useHtmlConversion` owns progress,
+cancellation and the resulting file actions; `HtmlConversionSurface` supplies sequential native
+captures to `Backend.documentExport.convertHtml`. See [HTML Conversion](../../../../docs/references/html-conversion.md)
+for format behavior, limits, selection evidence and pending acceptance.
+
 - `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. The header offers
   sharing, saving to Photos, and system opening.
 - `FileTextViewer` reads at most 1 MiB plus one truncation-detection byte. Truncated HTML stays

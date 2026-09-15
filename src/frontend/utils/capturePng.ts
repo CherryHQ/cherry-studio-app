@@ -3,11 +3,9 @@ import { captureRef, releaseCapture } from 'react-native-view-shot';
 
 import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/documentExport';
 
-import type { ImageCapturePlan } from './imageCapturePlan';
-
 export async function capturePng(
   view: Parameters<typeof captureRef>[0],
-  plan: ImageCapturePlan,
+  plan: { width: number; height: number },
   signal: AbortSignal,
 ): Promise<Awaited<ReturnType<CaptureExportHtml>>> {
   let screenshotUri: string | undefined;
