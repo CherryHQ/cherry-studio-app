@@ -6,15 +6,17 @@ import {
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 
+import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import {
   useDesktopConnectionActions,
   useDesktopConnections,
 } from '@/frontend/hooks/useDesktopConnections';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { DesktopImportPreview } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
@@ -27,7 +29,28 @@ type LoadedPreview = {
   preview: DesktopImportPreview;
 };
 
-export default function DesktopProviderSyncScreen() {
+export default function DesktopProviderSyncScreen({
+  setupIntent,
+}: { setupIntent?: FirstUseSetupIntent } = {}) {
+  const params = useLocalSearchParams<{ connectionId?: string | string[] }>();
+  const connectionId = getSingleRouteParam(params.connectionId);
+
+  return (
+    <DesktopProviderSync
+      connectionId={connectionId}
+      key={`${setupIntent ?? 'settings'}:${connectionId ?? 'choose-device'}`}
+      setupIntent={setupIntent}
+    />
+  );
+}
+
+function DesktopProviderSync({
+  connectionId,
+  setupIntent,
+}: {
+  connectionId?: string;
+  setupIntent?: FirstUseSetupIntent;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
@@ -35,8 +58,12 @@ export default function DesktopProviderSyncScreen() {
   const { connections, error, isLoading, refetch } = useDesktopConnections();
   const { importSelected, isImporting, isPreviewing, preview } = useDesktopConnectionActions();
   const availableConnections = useMemo(
-    () => connections.filter((connection) => connection.status === 'paired'),
-    [connections],
+    () =>
+      connections.filter(
+        (connection) =>
+          connection.status === 'paired' && (!connectionId || connection.id === connectionId),
+      ),
+    [connectionId, connections],
   );
   const [selectedConnectionId, setSelectedConnectionId] = useState<string>();
   const [loadedPreview, setLoadedPreview] = useState<LoadedPreview>();
@@ -86,8 +113,9 @@ export default function DesktopProviderSyncScreen() {
   }, [availableConnections, isLoading, loadPreview, loadedPreview, previewError]);
 
   const openDeviceConnections = useCallback(() => {
-    router.push('/settings/device-connections');
-  }, [router]);
+    if (setupIntent === 'chat') router.dismissTo('/onboarding/device-connections');
+    else router.push('/settings/device-connections');
+  }, [router, setupIntent]);
   const continueWithSelectedConnection = useCallback(() => {
     const connection = availableConnections.find((item) => item.id === selectedConnectionId);
     if (connection) {
@@ -133,22 +161,34 @@ export default function DesktopProviderSyncScreen() {
         }),
         variant: 'success',
       });
-      router.dismissTo('/settings/provider');
+      if (setupIntent === 'chat') {
+        router.replace({
+          params: { connectionId: loadedPreview.connection.id },
+          pathname: '/onboarding/model',
+        });
+      } else {
+        router.dismissTo('/settings/provider');
+      }
     } catch (syncError) {
       alert.show({ title: desktopConnectionErrorMessage(syncError, t) });
     }
-  }, [alert, importSelected, loadedPreview, router, selectedProviderIds, t, toast]);
+  }, [alert, importSelected, loadedPreview, router, selectedProviderIds, setupIntent, t, toast]);
 
   return (
     <SettingsScrollPage
-      contentClassName="flex-grow gap-6"
+      contentClassName="flex-grow gap-4"
       headerProps={{ title: t('settings.provider.desktopSync.title') }}
     >
+      {setupIntent === 'chat' ? (
+        <Text className="px-3 text-xs text-muted-foreground">
+          {t('onboarding.step', { current: 2 })}
+        </Text>
+      ) : null}
       {isLoading ? (
         <ContentState.Loading title={t('settings.provider.desktopSync.loadingDevices')} />
       ) : error ? (
         <ContentState.Error
-          description={error.message}
+          description={desktopConnectionErrorMessage(error, t)}
           primaryAction={{
             children: t('settings.provider.desktopSync.retry'),
             onPress: () => void refetch(),
@@ -157,12 +197,20 @@ export default function DesktopProviderSyncScreen() {
         />
       ) : availableConnections.length === 0 ? (
         <ContentState.Empty
-          description={t('settings.provider.desktopSync.noDeviceDescription')}
+          description={t(
+            connectionId
+              ? 'settings.provider.desktopSync.deviceUnavailableDescription'
+              : 'settings.provider.desktopSync.noDeviceDescription',
+          )}
           primaryAction={{
             children: t('settings.provider.desktopSync.openDeviceConnections'),
             onPress: openDeviceConnections,
           }}
-          title={t('settings.provider.desktopSync.noDevice')}
+          title={t(
+            connectionId
+              ? 'settings.provider.desktopSync.deviceUnavailable'
+              : 'settings.provider.desktopSync.noDevice',
+          )}
         />
       ) : (availableConnections.length === 1 && !loadedPreview && !previewError) ||
         (isPreviewing && !loadedPreview) ? (
@@ -181,7 +229,9 @@ export default function DesktopProviderSyncScreen() {
           loadedPreview={loadedPreview}
           selectedProviderIds={selectedProviderIds}
           isImporting={isImporting}
+          isPreviewing={isPreviewing}
           onApply={() => void applySync()}
+          onReload={retryPreview}
           onToggleProvider={toggleProvider}
         />
       ) : (
@@ -204,20 +254,36 @@ export default function DesktopProviderSyncScreen() {
           </Button>
         </>
       )}
+      {setupIntent === 'chat' ? (
+        <View className="min-h-12 items-center justify-center">
+          <Button
+            disabled={isImporting}
+            onPress={() => router.dismissTo('/onboarding')}
+            size="xs"
+            variant="ghost"
+          >
+            {t('onboarding.device.chooseAnotherWay')}
+          </Button>
+        </View>
+      ) : null}
     </SettingsScrollPage>
   );
 }
 
 function ProviderSelection({
   isImporting,
+  isPreviewing,
   loadedPreview,
   onApply,
+  onReload,
   onToggleProvider,
   selectedProviderIds,
 }: {
   isImporting: boolean;
+  isPreviewing: boolean;
   loadedPreview: LoadedPreview;
   onApply: () => void;
+  onReload: () => void;
   onToggleProvider: (providerId: string) => void;
   selectedProviderIds: ReadonlySet<string>;
 }) {
@@ -227,6 +293,11 @@ function ProviderSelection({
     return (
       <ContentState.Empty
         description={t('settings.provider.desktopSync.emptyDescription')}
+        primaryAction={{
+          children: t('settings.provider.desktopSync.retry'),
+          loading: isPreviewing,
+          onPress: onReload,
+        }}
         title={t('settings.provider.desktopSync.empty')}
       />
     );
@@ -234,12 +305,12 @@ function ProviderSelection({
 
   return (
     <>
-      <Section
-        footer={t('settings.provider.desktopSync.notice')}
-        title={t('settings.provider.desktopSync.source', {
+      <Text className="px-3 text-sm text-muted-foreground">
+        {t('settings.provider.desktopSync.source', {
           name: loadedPreview.connection.name,
         })}
-      >
+      </Text>
+      <Section>
         {loadedPreview.preview.providers.map((provider) => {
           const isUnavailable = Boolean(provider.unavailableReason);
           const isSelected = selectedProviderIds.has(provider.id);
@@ -251,9 +322,7 @@ function ProviderSelection({
                 provider.unavailableReason
                   ? t('settings.provider.desktopSync.unsupportedAuth')
                   : t('settings.provider.desktopSync.providerDescription', {
-                      action: t(`settings.provider.desktopSync.action.${provider.action}`),
-                      count: provider.models.filter((model) => model.action === 'add').length,
-                      skipped: provider.models.filter((model) => model.action === 'skip').length,
+                      count: provider.models.length,
                     })
               }
               disabled={isUnavailable}
@@ -267,12 +336,14 @@ function ProviderSelection({
           );
         })}
       </Section>
-      <Button disabled={selectedProviderIds.size === 0} loading={isImporting} onPress={onApply}>
-        {t('settings.provider.desktopSync.apply', { count: selectedProviderIds.size })}
-      </Button>
-      <Text className="px-3 text-sm text-muted-foreground">
-        {t('settings.provider.desktopSync.credentialsNotice')}
-      </Text>
+      <View className="gap-3">
+        <Text className="px-3 text-center text-xs text-muted-foreground">
+          {t('settings.provider.desktopSync.credentialsNotice')}
+        </Text>
+        <Button disabled={selectedProviderIds.size === 0} loading={isImporting} onPress={onApply}>
+          {t('settings.provider.desktopSync.apply', { count: selectedProviderIds.size })}
+        </Button>
+      </View>
     </>
   );
 }

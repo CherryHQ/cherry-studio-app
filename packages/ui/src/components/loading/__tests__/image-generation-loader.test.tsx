@@ -117,19 +117,9 @@ describe('ImageGenerationLoader', () => {
     const preview = renderer!.root
       .findAllByType(View)
       .find((node) => node.props.pointerEvents === 'none');
-    const resolutionBadge = renderer!.root
-      .findAllByType(View)
-      .find((node) => node.props.className?.includes('absolute right-2 top-2'));
-    const resolutionText = renderer!.root
-      .findAllByType(Text)
-      .find((node) => flattenText(node.props.children) === '1536 \u00d7 1024');
 
     expect(root.props.accessibilityLabel).toBe('Rendering cover image');
     expect(root.props.accessibilityState).toEqual({ busy: false });
-    expect(preview?.props.className).toContain('border border-border');
-    expect(preview?.props.className).toContain('bg-card');
-    expect(resolutionBadge?.props.className).toContain('border border-border');
-    expect(resolutionText?.props.className).toBe('font-mono text-xs text-foreground');
     expect(StyleSheet.flatten(preview?.props.style)).toMatchObject({ height: 160, width: 160 });
     expect(collectText(renderer!)).toEqual(
       expect.arrayContaining(['Rendering', '1536 \u00d7 1024']),
@@ -148,7 +138,7 @@ describe('ImageGenerationLoader', () => {
     expect(mockSetFrameActive).toHaveBeenLastCalledWith(false);
   });
 
-  it('drops the size badge when the request never named a size', () => {
+  it('omits resolution text when the request never named a size', () => {
     act(() => {
       renderer = create(<ImageGenerationLoader label="Rendering" size={96} testID="loader" />);
     });
@@ -157,11 +147,11 @@ describe('ImageGenerationLoader', () => {
     const preview = renderer!.root
       .findAllByType(View)
       .find((node) => node.props.pointerEvents === 'none');
-    const resolutionBadge = renderer!.root
+    const resolutionLabel = renderer!.root
       .findAllByType(View)
-      .find((node) => node.props.className?.includes('absolute right-2 top-2'));
+      .find((node) => node.props.className === 'absolute right-3 top-3');
 
-    expect(resolutionBadge).toBeUndefined();
+    expect(resolutionLabel).toBeUndefined();
     expect(root.props.accessibilityLabel).toBe('Rendering');
     expect(StyleSheet.flatten(preview?.props.style)).toMatchObject({ height: 96, width: 96 });
     // The status text still speaks for the loader on its own.
@@ -201,7 +191,7 @@ describe('ImageGenerationLoader', () => {
     expect(
       renderer!.root
         .findAllByType(View)
-        .find((node) => node.props.className === 'absolute bottom-2 left-2'),
+        .find((node) => node.props.className === 'absolute bottom-3 left-3'),
     ).toBeDefined();
     expect(
       renderer!.root.findAll((node) => {

@@ -12,7 +12,7 @@ import {
 import type { TFunction } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type {
   ImageParamDraft,
@@ -20,6 +20,7 @@ import type {
   ResolvedImageGenerationMode,
 } from '@/frontend/data/paintings/imageGenerationParams';
 import { getImageParamFields } from '@/frontend/data/paintings/imageGenerationParams';
+import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 
 import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
 
@@ -100,9 +101,6 @@ function PaintingSettingsRootPage({
   onValueChange: (key: string, value: unknown) => void;
   values: ImageParamDraft;
 }) {
-  const { width: windowWidth } = useWindowDimensions();
-  const fieldWidth = Math.max(0, windowWidth - 64);
-
   return (
     <ScrollView
       contentContainerStyle={styles.content}
@@ -113,7 +111,6 @@ function PaintingSettingsRootPage({
       {fields.map((field) => (
         <PaintingSettingField
           field={field}
-          fieldWidth={fieldWidth}
           fields={fields}
           key={field.key}
           onEnumPress={onEnumPress}
@@ -127,14 +124,12 @@ function PaintingSettingsRootPage({
 
 function PaintingSettingField({
   field,
-  fieldWidth,
   fields,
   onEnumPress,
   onValueChange,
   values,
 }: {
   field: ImageParamField;
-  fieldWidth: number;
   fields: readonly ImageParamField[];
   onEnumPress: (key: CanonicalParamKey) => void;
   onValueChange: (key: string, value: unknown) => void;
@@ -172,7 +167,6 @@ function PaintingSettingField({
       return options.filter((option) => parseRatio(option)).length >= 2 ? (
         <AspectRatioField
           field={{ key: field.key, spec: field.spec }}
-          fieldWidth={fieldWidth}
           onValueChange={onValueChange}
           options={options}
           values={values}
@@ -180,7 +174,6 @@ function PaintingSettingField({
       ) : (
         <EnumChipsField
           field={{ key: field.key, spec: field.spec }}
-          fieldWidth={fieldWidth}
           fields={fields}
           onValueChange={onValueChange}
           values={values}
@@ -242,13 +235,11 @@ function PaintingSettingField({
 
 function AspectRatioField({
   field,
-  fieldWidth,
   onValueChange,
   options,
   values,
 }: {
   field: ImageParamField & { spec: Extract<ImageParamField['spec'], { type: 'enum' }> };
-  fieldWidth: number;
   onValueChange: (key: string, value: unknown) => void;
   options: readonly string[];
   values: ImageParamDraft;
@@ -256,11 +247,12 @@ function AspectRatioField({
   const { t } = useTranslation();
   const selectedValue = values[field.key];
   const selectedOption = typeof selectedValue === 'string' ? selectedValue : undefined;
+  const { onLayout, width: gridWidth } = useLayoutWidth();
   // 右侧始终原样显示选中比例（auto/custom 显示选项名）。
   const headerText = selectedOption ? ratioOptionLabel(t, field.key, selectedOption) : '';
   const cellWidth = Math.max(
     48,
-    (fieldWidth - 32 - FIELD_GAP * (RATIO_GRID_COLUMNS - 1)) / RATIO_GRID_COLUMNS,
+    (gridWidth - FIELD_GAP * (RATIO_GRID_COLUMNS - 1)) / RATIO_GRID_COLUMNS,
   );
   return (
     <View className="gap-2">
@@ -273,7 +265,7 @@ function AspectRatioField({
       </View>
       <Section>
         <Section.Item density="comfortable">
-          <View className="flex-row flex-wrap" style={styles.chipGrid}>
+          <View className="flex-row flex-wrap" onLayout={onLayout} style={styles.chipGrid}>
             {options.map((option) => (
               <AspectRatioOption
                 cellWidth={cellWidth}
@@ -370,25 +362,24 @@ function AspectRatioOption({
 
 function EnumChipsField({
   field,
-  fieldWidth,
   fields,
   onValueChange,
   values,
 }: {
   field: ImageParamField & { spec: Extract<ImageParamField['spec'], { type: 'enum' }> };
-  fieldWidth: number;
   fields: readonly ImageParamField[];
   onValueChange: (key: string, value: unknown) => void;
   values: ImageParamDraft;
 }) {
   const { t } = useTranslation();
   const options = enumOptions(field, fields);
+  const { onLayout, width: gridWidth } = useLayoutWidth();
   const columns = Math.min(field.spec.columns ?? 3, Math.max(1, options.length));
-  const chipWidth = Math.max(72, (fieldWidth - FIELD_GAP * (columns - 1)) / columns);
+  const chipWidth = Math.max(72, (gridWidth - FIELD_GAP * (columns - 1)) / columns);
   return (
     <View className="gap-2">
       <Text className="font-medium text-foreground text-sm">{imageParamLabel(t, field.key)}</Text>
-      <View className="flex-row flex-wrap" style={styles.chipGrid}>
+      <View className="flex-row flex-wrap" onLayout={onLayout} style={styles.chipGrid}>
         {options.map((option) => {
           const isSelected = values[field.key] === option;
           return (

@@ -9,6 +9,7 @@ import {
   type ExportFormat,
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
+import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
 type PreviewState =
   | { status: 'loading'; progress: DocumentExportProgress }
@@ -33,6 +34,7 @@ export function useDocumentExportPreview(
   }>();
   const [attempt, setAttempt] = useState(0);
   const tail = useRef<Promise<unknown>>(Promise.resolve());
+  const markdown = session.markdown + renderMarkdownSignature(presentation.signature);
   useEffect(() => {
     if (format === 'markdown') return;
     const controller = new AbortController();
@@ -86,14 +88,14 @@ export function useDocumentExportPreview(
             }
           }
           // A complete source preview needs neither image allocation nor temporary files.
-          publish({ status: 'markdown', text: session.markdown, fallback: true });
+          publish({ status: 'markdown', text: markdown, fallback: true });
         }
       });
     return () => controller.abort();
-  }, [attempt, capture, format, presentation, revision, session]);
+  }, [attempt, capture, format, markdown, presentation, revision, session]);
   const state: PreviewState =
     format === 'markdown'
-      ? { status: 'markdown', text: session.markdown }
+      ? { status: 'markdown', text: markdown }
       : result?.session === session &&
           result.format === format &&
           result.presentation === presentation &&
@@ -111,7 +113,10 @@ export function useDocumentExportPreview(
       .catch(() => {})
       .then(() => {
         signal.throwIfAborted();
-        return session.render({ format: 'markdown' }, { signal });
+        return session.render(
+          { format: 'markdown', signature: presentation.signature },
+          { signal },
+        );
       });
     tail.current = rendering;
     return rendering;

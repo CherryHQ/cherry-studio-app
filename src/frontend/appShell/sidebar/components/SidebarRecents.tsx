@@ -1,8 +1,9 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { ActionMenu, ContentState, type MenuItem } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
-import { Link, useGlobalSearchParams, usePathname } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useGlobalSearchParams, usePathname } from 'expo-router';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
@@ -22,7 +23,7 @@ import {
   useSessionActionAlerts,
   useSessionListSessions,
 } from '@/frontend/components/SessionList';
-import { useAgentsApi, useLatestAgentSession } from '@/frontend/hooks/agent';
+import { useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
 import { appSidebar } from '@/frontend/utils/constants';
 import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
 import type { Agent } from '@/shared/data/types/agent';
@@ -33,15 +34,43 @@ type SidebarRecentsProps = {
   registerEndReachedHandler: (handler?: () => void) => void;
 };
 
-export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
+const SIDEBAR_LEADING_SIZE = 28;
+
+function useSidebarChatTarget() {
+  // The drawer sits outside the chat screen's local route context.
+  const params = useGlobalSearchParams<ChatRouteParamsInput>();
+  const pathname = usePathname();
+  const route = parseChatRoute(params);
+  return pathname === '/' && route.status === 'ready' ? route.target : undefined;
+}
+
+/** Only Agent groups reserve an icon column; ordinary conversation rows have no leading slot. */
+function SidebarAgentIconSlot({ children }: { children?: ReactNode }) {
   return (
-    <SessionListProvider>
-      <SidebarRecentsView registerEndReachedHandler={registerEndReachedHandler} />
-    </SessionListProvider>
+    <View className="shrink-0 items-center" style={{ width: SIDEBAR_LEADING_SIZE }}>
+      {children}
+    </View>
   );
 }
 
-function SidebarRecentsView({ registerEndReachedHandler }: SidebarRecentsProps) {
+function SidebarRowContent({
+  children,
+  className,
+  leading,
+}: {
+  children: ReactNode;
+  className?: string;
+  leading?: ReactNode;
+}) {
+  return (
+    <View className={cn('flex-row items-center gap-3 rounded-xl px-3 py-2.5', className)}>
+      {leading}
+      <View className="min-w-0 flex-1 flex-row items-center gap-2">{children}</View>
+    </View>
+  );
+}
+
+export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<SessionViewMode>('sessions');
   const isSessionMode = mode === 'sessions';
@@ -80,7 +109,9 @@ function SidebarRecentsView({ registerEndReachedHandler }: SidebarRecentsProps) 
         </ActionMenu>
       </View>
       {isSessionMode ? (
-        <SidebarRecentSessionList registerEndReachedHandler={registerEndReachedHandler} />
+        <SessionListProvider>
+          <SidebarRecentSessionList registerEndReachedHandler={registerEndReachedHandler} />
+        </SessionListProvider>
       ) : (
         <SidebarAgentSessionList />
       )}
@@ -88,16 +119,16 @@ function SidebarRecentsView({ registerEndReachedHandler }: SidebarRecentsProps) 
   );
 }
 
-function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsProps) {
+function SidebarRecentSessionList({
+  leading,
+  registerEndReachedHandler,
+}: {
+  leading?: ReactNode;
+  registerEndReachedHandler?: SidebarRecentsProps['registerEndReachedHandler'];
+}) {
   const { t } = useTranslation();
-  // The drawer sits outside the chat screen's local route context.
-  const params = useGlobalSearchParams<ChatRouteParamsInput>();
-  const pathname = usePathname();
-  const route = parseChatRoute(params);
-  const selectedSessionId =
-    pathname === '/' && route.status === 'ready' && route.target.kind === 'session'
-      ? route.target.sessionId
-      : undefined;
+  const target = useSidebarChatTarget();
+  const selectedSessionId = target?.kind === 'session' ? target.sessionId : undefined;
   const [isShowingAllSessions, setIsShowingAllSessions] = useState(false);
   const [visibleSessionLimit, setVisibleSessionLimit] = useState<number>(
     appSidebar.recentSessionLimit,
@@ -113,8 +144,13 @@ function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsP
   const { requestDelete, requestRename } = useSessionActionAlerts();
   const { closeDrawer } = useSidebarActions('Sidebar recent sessions');
   const visibleSessions = sessions.slice(0, visibleSessionLimit);
-  const canShowAllSessions =
-    !isShowingAllSessions && (sessions.length > appSidebar.recentSessionLimit || hasMoreSessions);
+  // Agent groups page independently; only the flat list owns the drawer's end-reached handler.
+  const canShowMoreSessions =
+    (!isShowingAllSessions || !registerEndReachedHandler) &&
+    (sessions.length > visibleSessionLimit || hasMoreSessions);
+  const showMoreLabel = t(
+    registerEndReachedHandler ? 'session.list.viewAll' : 'session.list.loadMore',
+  );
 
   const revealNextSessionBatch = useCallback(() => {
     if (
@@ -146,8 +182,8 @@ function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsP
   }, [isShowingAllSessions, revealNextSessionBatch]);
 
   useEffect(() => {
-    registerEndReachedHandler(handleEndReached);
-    return () => registerEndReachedHandler();
+    registerEndReachedHandler?.(handleEndReached);
+    return () => registerEndReachedHandler?.();
   }, [handleEndReached, registerEndReachedHandler]);
 
   const handleViewAllPress = () => {
@@ -186,6 +222,7 @@ function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsP
           <SidebarSessionRow
             key={session.id}
             isSelected={session.id === selectedSessionId}
+            leading={leading}
             onCloseDrawer={closeDrawer}
             onDelete={requestDelete}
             onRename={requestRename}
@@ -193,23 +230,31 @@ function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsP
           />
         ))}
       </View>
-      {canShowAllSessions ? (
-        <Pressable
-          accessibilityLabel={t('session.list.viewAll')}
-          accessibilityRole="button"
-          className="w-full active:bg-sidebar-accent"
-          onPress={handleViewAllPress}
-          testID="sidebar-sessions-view-all"
-        >
-          <Text className="px-5 py-2.5 text-muted-foreground text-sm">
-            {t('session.list.viewAll')}
-          </Text>
-        </Pressable>
+      {canShowMoreSessions ? (
+        <View className="px-2">
+          <Pressable
+            accessibilityLabel={showMoreLabel}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isLoadingMoreSessions }}
+            className="w-full active:bg-sidebar-accent"
+            disabled={isLoadingMoreSessions}
+            onPress={handleViewAllPress}
+            testID="sidebar-sessions-view-all"
+          >
+            <SidebarRowContent leading={leading}>
+              <Text className="min-w-0 flex-1 text-muted-foreground text-sm">{showMoreLabel}</Text>
+            </SidebarRowContent>
+          </Pressable>
+        </View>
       ) : null}
       {isShowingAllSessions && isLoadingMoreSessions ? (
-        <Text className="px-5 py-2.5 text-muted-foreground text-sm">
-          {t('session.list.loading')}
-        </Text>
+        <View className="px-2">
+          <SidebarRowContent leading={leading}>
+            <Text className="min-w-0 flex-1 text-muted-foreground text-sm">
+              {t('session.list.loading')}
+            </Text>
+          </SidebarRowContent>
+        </View>
       ) : null}
     </>
   );
@@ -218,6 +263,11 @@ function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsP
 function SidebarAgentSessionList() {
   const { t } = useTranslation();
   const { agents, error, isLoading } = useAgentsApi();
+  const target = useSidebarChatTarget();
+  const currentSession = useAgentSession(target?.kind === 'session' ? target.sessionId : undefined);
+  const currentAgentId = target?.kind === 'draft' ? target.agentId : currentSession.data?.agentId;
+  const defaultExpandedAgentId =
+    currentAgentId ?? (currentSession.isLoading ? undefined : agents[0]?.id);
 
   if (isLoading) {
     return (
@@ -243,49 +293,77 @@ function SidebarAgentSessionList() {
     );
   }
 
-  return agents.map((agent) => <SidebarAgentRow key={agent.id} agent={agent} />);
+  return (
+    <View className="gap-2">
+      {agents.map((agent) => (
+        <SidebarAgentRow
+          key={agent.id}
+          agent={agent}
+          isDefaultExpanded={agent.id === defaultExpandedAgentId}
+        />
+      ))}
+    </View>
+  );
 }
 
-function SidebarAgentRow({ agent }: { agent: Agent }) {
-  const { closeDrawer } = useSidebarActions('Sidebar agent row');
-  const latestSession = useLatestAgentSession({ agentId: agent.id });
-  const isResolvingSession = latestSession.isLoading || latestSession.isRefreshing;
-  const href = chatHref(
-    latestSession.session
-      ? { kind: 'session', sessionId: latestSession.session.id }
-      : { agentId: agent.id, kind: 'draft' },
-  );
+function SidebarAgentRow({
+  agent,
+  isDefaultExpanded,
+}: {
+  agent: Agent;
+  isDefaultExpanded: boolean;
+}) {
+  // The current Agent can resolve after mount; explicit toggles take precedence over that default.
+  const [isExpandedOverride, setIsExpandedOverride] = useState<boolean>();
+  const isExpanded = isExpandedOverride ?? isDefaultExpanded;
 
   return (
-    <Link asChild href={href}>
-      <Pressable
-        accessibilityLabel={agent.name}
-        accessibilityRole="link"
-        accessibilityState={{ disabled: isResolvingSession }}
-        className="w-full active:bg-sidebar-accent"
-        disabled={isResolvingSession}
-        onPress={closeDrawer}
-        testID={`sidebar-agent-${agent.id}`}
-      >
-        <View className="flex-row items-center gap-3 px-5 py-2.5">
-          <AgentAvatar
-            accessibilityLabel={agent.name}
-            avatar={agent.avatar}
-            name={agent.name}
-            size={28}
-            uri={agent.avatarUri}
-          />
-          <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-            {agent.name}
-          </Text>
-        </View>
-      </Pressable>
-    </Link>
+    <View testID={`sidebar-agent-group-${agent.id}`}>
+      <View className="px-2">
+        <Pressable
+          accessibilityLabel={agent.name}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: isExpanded }}
+          className="active:bg-sidebar-accent"
+          onPress={() => setIsExpandedOverride((current) => !(current ?? isDefaultExpanded))}
+          testID={`sidebar-agent-${agent.id}`}
+        >
+          <SidebarRowContent
+            leading={
+              <SidebarAgentIconSlot>
+                <AgentAvatar
+                  accessibilityLabel={agent.name}
+                  avatar={agent.avatar}
+                  name={agent.name}
+                  size={SIDEBAR_LEADING_SIZE}
+                  uri={agent.avatarUri}
+                />
+              </SidebarAgentIconSlot>
+            }
+          >
+            <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+              {agent.name}
+            </Text>
+            {isExpanded ? (
+              <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+            )}
+          </SidebarRowContent>
+        </Pressable>
+      </View>
+      {isExpanded ? (
+        <SessionListProvider agentId={agent.id}>
+          <SidebarRecentSessionList leading={<SidebarAgentIconSlot />} />
+        </SessionListProvider>
+      ) : null}
+    </View>
   );
 }
 
 type SidebarSessionRowProps = {
   isSelected: boolean;
+  leading?: ReactNode;
   onCloseDrawer: () => void;
   onDelete: (session: AgentSessionEntity) => void;
   onRename: (session: AgentSessionEntity) => void;
@@ -294,6 +372,7 @@ type SidebarSessionRowProps = {
 
 function SidebarSessionRow({
   isSelected,
+  leading,
   onCloseDrawer,
   onDelete,
   onRename,
@@ -324,12 +403,7 @@ function SidebarSessionRow({
         onPress={onCloseDrawer}
         testID={`sidebar-session-${session.id}`}
       >
-        <View
-          className={cn(
-            'flex-row items-center gap-2 rounded-xl px-3 py-2.5',
-            isSelected && 'bg-secondary/70',
-          )}
-        >
+        <SidebarRowContent className={cn(isSelected && 'bg-secondary/70')} leading={leading}>
           <Text
             className={cn(
               'min-w-0 flex-1 text-base text-sidebar-foreground',
@@ -340,7 +414,7 @@ function SidebarSessionRow({
             {session.title || t('session.list.untitled')}
           </Text>
           <SessionStatus sessionId={session.id} />
-        </View>
+        </SidebarRowContent>
       </Pressable>
     </ContextMenuLink>
   );

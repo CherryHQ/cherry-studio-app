@@ -25,7 +25,7 @@ export function Alert({
     <HeroDialog isOpen={isOpen} onOpenChange={onOpenChange} testID={testID}>
       <HeroDialog.Portal unstable_accessibilityContainerViewIsModal>
         <HeroDialog.Overlay isCloseOnPress={false} />
-        <HeroDialog.Content isSwipeable={false}>
+        <HeroDialog.Content className="w-full max-w-[480px] self-center" isSwipeable={false}>
           <View className="gap-3">
             <View className="gap-1.5">
               <HeroDialog.Title>{title}</HeroDialog.Title>

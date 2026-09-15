@@ -7,7 +7,7 @@ import {
 } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
-import type { PluginDefinition } from './pluginDefinition';
+import { getPluginToolEffect, type PluginDefinition } from './pluginDefinition';
 import { validatePluginGuide, type PluginGuideSnapshot } from './pluginGuide';
 import { amapPlugin } from './plugins/amap';
 import { dingtalkPlugin } from './plugins/dingtalk';
@@ -15,6 +15,7 @@ import { feishuPlugin } from './plugins/feishu';
 import { githubPlugin } from './plugins/github';
 import { gmailPlugin } from './plugins/gmail';
 import { notionPlugin } from './plugins/notion';
+import { wecomPlugin } from './plugins/wecom';
 
 /** Registration is a bundled-code decision; there is no runtime installation or code loading. */
 export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
@@ -56,7 +57,7 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
       for (const tool of tools) {
         if (!tool.pluginId) continue;
         const plugin = plugins.get(tool.pluginId);
-        if (!plugin?.guide || !Object.hasOwn(plugin.tools, tool.rawToolName)) continue;
+        if (!plugin?.guide || !getPluginToolEffect(plugin, tool.rawToolName)) continue;
         const connection = connections.get(tool.serverId);
         if (connection) {
           if (connection.pluginId !== tool.pluginId)
@@ -155,6 +156,7 @@ const registry = createPluginRegistry([
   gmailPlugin,
   dingtalkPlugin,
   notionPlugin,
+  wecomPlugin,
 ]);
 
 export const getPluginDefinition = registry.get;
@@ -187,5 +189,5 @@ export function getBuiltInMcpToolEffect(
   name: string,
 ): 'read' | 'write' | undefined {
   const plugin = getPluginDefinition(pluginId);
-  return plugin && Object.hasOwn(plugin.tools, name) ? plugin.tools[name] : undefined;
+  return plugin ? getPluginToolEffect(plugin, name) : undefined;
 }

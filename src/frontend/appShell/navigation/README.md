@@ -15,8 +15,8 @@ domains.
   setup presentation explicitly; URL parameters cannot activate it from ordinary settings.
 - `FirstUseGate` owns first-use admission before restoring a chat target. It preserves existing
   installations and lets skipped/completed users enter chat normally.
-  It reuses `useLatestAgentSession` so admission and chat restoration share the same paginated
-  cache shape. Background refreshes do not unmount the admitted chat.
+  It uses `useLatestAgentSession` to recognize existing conversations, without selecting the chat
+  destination. Background refreshes do not unmount the admitted chat.
 - `getRootHeaderStyle`, `getTransparentHeaderStyle`, and `paintingViewerHeaderShown` expose the
   platform policy consumed by root stack configuration.
 - `nativeIntent/` is a separate entry point for system URLs before React mounts. It leaves Google

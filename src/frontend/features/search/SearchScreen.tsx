@@ -8,6 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ReadingContentFrame } from '@/frontend/appShell/layout';
 import {
   cancelScheduledAppSearchFinish,
   finishAppSearchSession,
@@ -75,7 +76,11 @@ export default function SearchScreen() {
     return null;
   }
 
-  return <AppSearchRoutePage request={session.request} searchSessionId={searchSessionId} />;
+  return (
+    <ReadingContentFrame>
+      <AppSearchRoutePage request={session.request} searchSessionId={searchSessionId} />
+    </ReadingContentFrame>
+  );
 }
 
 function AppSearchRoutePage({

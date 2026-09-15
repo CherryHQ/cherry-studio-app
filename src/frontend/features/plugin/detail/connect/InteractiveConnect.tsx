@@ -30,6 +30,7 @@ export function InteractiveConnect({
     progress,
     isBusy,
     error,
+    diagnostic,
     existingApplication,
     setExistingApplication,
     begin,
@@ -130,7 +131,11 @@ export function InteractiveConnect({
                             size="sm"
                             onPress={() => void openConfirmation(waiting)}
                           >
-                            {t('plugins.authorization.openAgain')}
+                            {t(
+                              waiting.verificationAction === 'copy'
+                                ? 'plugins.authorization.copyLink'
+                                : 'plugins.authorization.openAgain',
+                            )}
                           </Button>
                         ) : null}
                         <Button variant="ghost" size="sm" onPress={() => void cancel()}>
@@ -196,11 +201,27 @@ export function InteractiveConnect({
           {progress ? (
             <Text className="text-lg font-semibold text-foreground">{progressTitle}</Text>
           ) : error ? (
-            <ContentState.Error
-              layout="leading"
-              title={t(`plugins.errors.${error}`)}
-              description={t(`${textKey}.recovery`)}
-            />
+            <>
+              <ContentState.Error
+                layout="leading"
+                title={t(`plugins.errors.${error}`)}
+                description={t(`${textKey}.recovery`)}
+              />
+              {__DEV__ && diagnostic ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onPress={() =>
+                    alert.show({
+                      title: t('plugins.authorization.errorDetails'),
+                      description: diagnostic,
+                    })
+                  }
+                >
+                  {t('plugins.authorization.errorDetails')}
+                </Button>
+              ) : null}
+            </>
           ) : finalStatus ? (
             <ContentState.Error
               layout="leading"
@@ -230,9 +251,11 @@ export function InteractiveConnect({
               </Text>
               <Text className="text-sm text-muted-foreground">
                 {t(
-                  waiting.status === 'callback'
-                    ? 'plugins.authorization.returnFromCallback'
-                    : 'plugins.authorization.returnToCherry',
+                  waiting.status === 'waiting' && waiting.verificationAction === 'copy'
+                    ? 'plugins.authorization.returnFromApp'
+                    : waiting.status === 'callback'
+                      ? 'plugins.authorization.returnFromCallback'
+                      : 'plugins.authorization.returnToCherry',
                   { name },
                 )}
               </Text>

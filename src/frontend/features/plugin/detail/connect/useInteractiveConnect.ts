@@ -1,4 +1,5 @@
 import { useToast } from '@cherrystudio/ui/components';
+import * as Clipboard from 'expo-clipboard';
 import { clearInitialURL } from 'expo-linking';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -8,6 +9,7 @@ import { AppState, Keyboard, Linking, Platform } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
 import {
+  getPluginErrorDiagnostic,
   PluginError,
   type PluginAuthorizationObservation,
   type PluginAuthorizationState,
@@ -34,7 +36,10 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
   const { toast } = useToast();
   const refresh = useRefreshPluginConnections();
   const [observation, setObservation] = useState<PluginAuthorizationObservation | null>(null);
-  const [actionError, setActionError] = useState<PluginErrorReason | null>(null);
+  const [actionError, setActionError] = useState<{
+    reason: PluginErrorReason;
+    diagnostic?: string;
+  } | null>(null);
   const [operation, setOperation] = useState<InteractiveConnectOperation | null>(null);
   const acting = useRef(false);
   const [isChecking, setIsChecking] = useState(false);
@@ -112,6 +117,11 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     if (browserAttempt.current) return;
     browserAttempt.current = state.attemptId;
     try {
+      if (state.status === 'waiting' && state.verificationAction === 'copy') {
+        await Clipboard.setStringAsync(state.verificationUrl);
+        toast.show({ label: t('plugins.authorization.linkCopied'), variant: 'success' });
+        return;
+      }
       if (state.status === 'callback') {
         const result = await WebBrowser.openAuthSessionAsync(
           state.authorizationUrl,
@@ -134,7 +144,10 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
         Linking.openURL(state.verificationUrl),
       );
     } catch (error) {
-      setActionError(error instanceof PluginError ? error.reason : 'request');
+      setActionError({
+        reason: error instanceof PluginError ? error.reason : 'request',
+        diagnostic: getPluginErrorDiagnostic(error, 'open-confirmation'),
+      });
     } finally {
       browserAttempt.current = null;
       plugins.authorization.check(entry.id, method.id);
@@ -157,7 +170,10 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
       }
       return next;
     } catch (error) {
-      setActionError(error instanceof PluginError ? error.reason : 'request');
+      setActionError({
+        reason: error instanceof PluginError ? error.reason : 'request',
+        diagnostic: getPluginErrorDiagnostic(error, phase),
+      });
       return undefined;
     } finally {
       acting.current = false;
@@ -200,7 +216,8 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
   };
 
   const state = observation?.state ?? null;
-  const error = actionError ?? observation?.error ?? null;
+  const error = actionError?.reason ?? observation?.error ?? null;
+  const diagnostic = actionError ? actionError.diagnostic : observation?.diagnostic;
   const progress = getInteractiveConnectProgress({
     state,
     connected: connection !== null,
@@ -214,6 +231,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     progress,
     isBusy,
     error,
+    diagnostic,
     existingApplication,
     setExistingApplication,
     begin,

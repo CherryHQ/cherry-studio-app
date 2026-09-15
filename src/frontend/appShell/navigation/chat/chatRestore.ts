@@ -4,28 +4,13 @@ export type ChatRestoreState =
   | { status: 'empty' }
   | { error: Error; status: 'error' }
   | { status: 'loading' }
-  | { status: 'ready'; target: ChatTarget };
+  | { status: 'ready'; target: Extract<ChatTarget, { kind: 'draft' }> };
 
 export function resolveChatRestoreState({
   agents,
-  latestSession,
 }: {
   agents: { error?: Error; isLoading: boolean; items: readonly { id: string }[] };
-  latestSession: { error?: Error; isLoading: boolean; session?: { id: string } };
 }): ChatRestoreState {
-  if (latestSession.isLoading) {
-    return { status: 'loading' };
-  }
-  if (latestSession.error) {
-    return { error: latestSession.error, status: 'error' };
-  }
-  if (latestSession.session) {
-    return {
-      status: 'ready',
-      target: { kind: 'session', sessionId: latestSession.session.id },
-    };
-  }
-
   if (agents.isLoading) {
     return { status: 'loading' };
   }

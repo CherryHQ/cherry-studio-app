@@ -4,8 +4,9 @@ Application-owned conversion and artifact lifetime. `DocumentExportRuntime` impl
 `Backend.documentExport`; composition injects managed-file access tied to the originating database.
 Sessions own source snapshots, prepared image bytes, cancellation, current temporary output and
 idempotent explicit persistence. `session.markdown` is prepared in memory without files or resource
-reads; `render` materializes a requested file, reusing the current Markdown artifact when available. The frontend supplies native HTML capture through the shared
-callback contract; backend code never imports UI.
+reads; `render` adds an optional Markdown brand signature and materializes a requested file, reusing
+the current Markdown artifact when its complete text matches. The frontend supplies native HTML
+capture through the shared callback contract; backend code never imports UI.
 
 Every artifact contains one immutable file descriptor. Image artifacts also contain the captured
 width and height. A capture is published only after the image has been copied and validated.

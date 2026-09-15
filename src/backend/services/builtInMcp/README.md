@@ -1,7 +1,7 @@
 # Built-In MCP Plugins
 
 This module owns bundled plugin clients and the connect/disconnect workflow for **Plugins**.
-GitHub, Amap, Feishu and DingTalk are implemented. Current behavior is documented in the
+GitHub, Amap, Feishu, DingTalk, Notion and WeCom are implemented. Current behavior is documented in the
 [integration reference](../../../../docs/references/agent/built-in-mcp-design.md); proposed designs
 are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 
@@ -19,6 +19,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `plugins/github/` | GitHub definition, workflow guide, OAuth App authorization with PKCE, account identity, token rotation and revocation |
 | `plugins/feishu/` | Feishu workflow guide, authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
 | `plugins/dingtalk/` | Official cloud device authorization, account review, token renewal, behavior authorization and service-bound tools |
+| `plugins/wecom/` | Official bot authorization, CLI gateway requests, discovered service schemas, native file transfer and workflow guide |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
 internal responsibility groups; they do not add public barrels. Each plugin exposes only its
@@ -212,8 +213,61 @@ Executable catalog descriptions include the saved server name and builtin id so 
 can find tools by platform names such as `GitHub`, `github`, `高德地图`, and `amap`. Chinese domain
 descriptions and character-pair matching also support `飞书日历`. Partial discovery failures reach
 the current turn's availability instructions rather than silently disappearing.
-New upstream tools are not automatically admitted: discovery and invocation both enforce the
-allowlist. The existing runtime validates discovered input schemas and applies result-size limits.
+Definitions normally admit a fixed tool list. A provider can explicitly accept additional discovered
+names through `acceptsDiscoveredTool`; those names always receive `write` policy. Its client must bind
+invocation to tools actually discovered on that authorized service. The existing runtime validates
+discovered input schemas and applies result-size limits.
+
+## WeCom Official API
+
+WeCom business operations use the current official CLI HTTP gateway under
+`https://qyapi.weixin.qq.com/cli`. Cherry implements the protocol in native TypeScript; it does not
+bundle a CLI executable. `wecomBotApi.ts` owns confirmation-link creation, polling for bot identity
+and the signed `get_cli_config` exchange. Native credentials store bot identity, secret and the
+resulting bearer token. The single `wecom_bot` authorization method retains confirmation inside WeCom.
+
+`createWecomClient` queries `/service/discovery` for the catalog and each service schema. It resolves
+named request/response references into local `$defs`/`$ref`, preserving recursive document trees and
+formula-field definitions without dropping their tools. It resolves nested resources, hides internal
+input fields, and qualifies names as `wecom_<service>__<resource>__<method>` (with additional segments when
+needed). Only discovered routes can be called. Reviewed service/resource/method names have read
+policy; new names receive the existing write approval policy. A reviewed read that acquires upload
+or confirmation directives is omitted. Unsupported definitions produce safe warnings alongside
+usable tools. Successful discovery is cached for 60 seconds; partial results refresh on the next
+request. Schema endpoints must stay under the fixed official HTTPS gateway, without redirects or
+credential-bearing query strings.
+
+`wecomApi.ts` uses the shared HTTP client and always POSTs the official stringified `payload`
+envelope, including methods whose schema describes a GET. It decodes both gateway and business
+errors. Explicit token rejection (`853004`) serializes renewal; a rejected read can replay once,
+while a write requires an explicit retry. Network failures and interrupted long writes report an
+unknown outcome. Long tasks use the returned task ID through `/task/query` or the original endpoint
+with `X-Long-Poll-TaskId` and an empty payload; original write content is not resubmitted for polling.
+
+`wecomFiles.ts` resolves attachment/file-tool `file_entry_id` values through the existing file
+service and follows schema references along actual data, including recursive fields, to apply
+official file directives to native files. Media uploads replace local paths with media IDs;
+octet-stream methods use multipart fields. Uploads are limited to Cherry attachment,
+document-export and WeCom-download directories, with a 100 MiB file/multipart limit. Binary/range
+downloads are bounded at 64 MiB. File-save fields become actual paths under the app cache, with safe
+unique filenames; large JSON results are saved intact instead of being silently truncated. File
+directives inside schema unions are omitted as unsupported rather than forwarding unprocessed
+paths. The shared runtime continues to validate arguments and apply tool-result limits.
+
+The bundled guide follows current document, table, people, task, calendar, mail, message and file
+workflows. Availability and data access still depend on the official service and authorization.
+Message-session discovery does not imply unread-message or full chat-history access. Authorization
+errors log safe stages and schema locations through `WecomAuthorization`; private values and bot
+secrets are excluded from diagnostics.
+
+Protocol reference: official CLI 1.2.1 at
+[1cd90a5](https://github.com/WecomTeam/wecom-cli/tree/1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08),
+including its [token bootstrap](https://github.com/WecomTeam/wecom-cli/blob/1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08/crates/wecom-cli/src/auth/bootstrap.rs)
+and [HTTP transport](https://github.com/WecomTeam/wecom-cli/tree/1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08/crates/wecom-transport/src/http).
+Regression suites were updated but not run. New authorization, business calls and native file
+transfer still require device and live-account acceptance.
+
+## Compatibility And Verification
 
 Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings for review,
 preserving credentials, server IDs, approval settings and history. Migration
