@@ -106,8 +106,11 @@ const MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set
 
 /** Presets hidden from new-provider setup while Mobile lacks the required support. */
 const MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
-  // Local LM Studio connections are not supported by Mobile yet.
+  // Local-server presets are hidden from Mobile setup.
   'lmstudio',
+  'ollama',
+  'ovms',
+  'new-api',
   // Requires the external Claude Code CLI runtime.
   'claude-code',
   // Require credential fields and adapters that Mobile does not support yet.
