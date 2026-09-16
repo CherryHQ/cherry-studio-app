@@ -4,6 +4,7 @@ import type { Provider } from '@/shared/data/types/provider';
 import { matchesModelTypeFilter, type ModelTypeFilter } from './modelTypeFilter';
 
 export type ModelPickerModelItem = {
+  description?: string;
   key: string;
   model: Model;
   modelId: UniqueModelId;

@@ -6,7 +6,7 @@ import { type LayoutChangeEvent, View } from 'react-native';
 import {
   imageParamsAspectRatio,
   imageParamsResolutionLabel,
-} from '@/frontend/data/paintings/imageGenerationParams';
+} from '@/shared/utils/imageGenerationParams';
 
 import { MessageParts } from '../parts/MessageParts';
 import type { MessageListItem } from '../types';

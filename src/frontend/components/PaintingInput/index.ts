@@ -1,6 +1,3 @@
 export { PaintingInput, type PaintingInputSubmission } from './PaintingInput';
-export {
-  usePaintingReference,
-  type PaintingReference,
-  type PaintingReferenceImage,
-} from './usePaintingReference';
+export { PaintingInputProvider } from './PaintingInputProvider';
+export { type PaintingInputResult } from './usePaintingReference';

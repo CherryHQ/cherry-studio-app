@@ -9,7 +9,7 @@ import type { PaintingReference } from './usePaintingReference';
 export function PaintingReferencePicker({ reference }: { reference: PaintingReference }) {
   const { t } = useTranslation();
 
-  if (!reference.needsSelection) return null;
+  if (!reference.isPickerOpen) return null;
 
   return (
     <View className="gap-2 pb-2">
@@ -20,7 +20,7 @@ export function PaintingReferencePicker({ reference }: { reference: PaintingRefe
             <FileEntryPreview entryId={image.fileEntryId} variant="attachment" />
             <Button
               accessibilityLabel={t('painting.input.useReferenceNumber', { number: index + 1 })}
-              onPress={() => reference.select(image.fileEntryId)}
+              onPress={() => reference.select(image)}
               size="sm"
               variant="secondary"
             >
@@ -29,8 +29,8 @@ export function PaintingReferencePicker({ reference }: { reference: PaintingRefe
           </View>
         ))}
       </ScrollView>
-      <Button onPress={reference.clear} size="sm" variant="ghost">
-        <Button.Label>{t('painting.input.newImage')}</Button.Label>
+      <Button onPress={reference.choose} size="sm" variant="ghost">
+        <Button.Label>{t('common.close')}</Button.Label>
       </Button>
     </View>
   );

@@ -27,7 +27,17 @@ const MODEL: Model = {
   isEnabled: true,
   isHidden: false,
   supportsStreaming: false,
-  imageGeneration: { modes: { generate: { supports: {}, maxInputImages: 2 } } },
+  imageGeneration: {
+    modes: {
+      generate: {
+        supports: {
+          aspectRatio: { type: 'enum', options: ['16:9'] },
+          numImages: { type: 'range', min: 1, max: 4 },
+        },
+        maxInputImages: 2,
+      },
+    },
+  },
 };
 const ATTRIBUTION = { source: null, messageRef: null };
 
@@ -134,6 +144,18 @@ describe('Agent image generation', () => {
     const plan = await capability.prepare(input());
     await expect(plan?.execute(controller.signal, ATTRIBUTION)).rejects.toThrow('Cancelled');
     expect(storage.discard).toHaveBeenCalledWith([ENTRY]);
+  });
+
+  test('rejects invalid parameters during admission without executing or creating files', async () => {
+    const { capability, ai, storage } = harness();
+    await expect(
+      capability.prepare({
+        ...input(),
+        settings: { mode: 'generate', paramValues: { numImages: 20 } },
+      }),
+    ).rejects.toMatchObject({ issue: { code: 'invalid-parameters' } });
+    expect(ai.generateImage).not.toHaveBeenCalled();
+    expect(storage.createInternalEntry).not.toHaveBeenCalled();
   });
 
   test('cancellation settles even when the provider ignores its signal', async () => {

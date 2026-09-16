@@ -14,13 +14,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 import type {
   ImageParamDraft,
   ImageParamField,
   ResolvedImageGenerationMode,
-} from '@/frontend/data/paintings/imageGenerationParams';
-import { getImageParamFields } from '@/frontend/data/paintings/imageGenerationParams';
-import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
+} from '@/shared/utils/imageGenerationParams';
+import { getImageParamFields } from '@/shared/utils/imageGenerationParams';
 
 import { imageParamLabel, imageParamOptionLabel } from './imageGenerationLabels';
 

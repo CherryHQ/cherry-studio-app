@@ -13,19 +13,16 @@ import {
   ComposerSessionProvider,
   useComposerSendError,
 } from '@/frontend/components/Composer';
-import {
-  type ComposerInitialAttachment,
-  isComposerAttachmentReady,
-} from '@/frontend/components/Composer/utils/composerAttachments';
+import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
-import { PaintingInput, usePaintingReference } from '@/frontend/components/PaintingInput';
-import {
-  type ImageParamDraft,
-  imageParamsResolutionLabel,
-} from '@/frontend/data/paintings/imageGenerationParams';
+import { PaintingInput, PaintingInputProvider } from '@/frontend/components/PaintingInput';
 import { paintingJobParamValues, usePaintingJobs } from '@/frontend/data/paintings/usePaintingJobs';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { Painting } from '@/shared/data/types/painting';
+import {
+  type ImageParamDraft,
+  imageParamsResolutionLabel,
+} from '@/shared/utils/imageGenerationParams';
 
 import {
   type PaintingGenerationInput,
@@ -99,13 +96,6 @@ export function PaintingComposer({
     imageParamsResolutionLabel(generation.paramValues ?? seededParamValues) ??
     t('painting.settings.option.auto');
   const outputs = generation.outputs.length > 0 ? generation.outputs : initialFiles.outputs;
-  const handoffReference =
-    initialAttachments.length === 1 &&
-    isComposerAttachmentReady(initialAttachments[0]) &&
-    initialAttachments[0].kind === 'image'
-      ? [initialAttachments[0]]
-      : [];
-  const reference = usePaintingReference(outputs.length > 0 ? outputs : handoffReference);
   const firstOutput = outputs[0];
   const failure = generation.error ?? generation.interruption;
   const assistantStatus =
@@ -272,28 +262,38 @@ export function PaintingComposer({
       initialAttachments={composerInitialAttachments}
       initialDraft={composerInitialDraft}
     >
-      <ComposerDismissArea>
-        <MessageList
-          contentBottomInset={composerContentGap}
-          contentTopInset={resolveHeaderContentInset(headerHeight)}
-          enteringMessageId={activeTurn?.userMessageId}
-          extraData={messageRenderState}
-          keyboardOffset={keyboardOffset}
-          keyboardShouldPersistTaps="always"
-          messages={messages}
-          renderMessage={renderMessage}
-        />
-      </ComposerDismissArea>
-      <ComposerDock layoutMode="flow">
-        <PaintingInput
-          initialParamValues={seededParamValues}
-          onCancel={handleCancel}
-          onGenerate={handleGenerate}
-          painting={painting}
-          reference={reference}
-          status={generation.status}
-        />
-      </ComposerDock>
+      <PaintingInputProvider
+        result={
+          outputs.length > 0
+            ? {
+                id: JSON.stringify(outputs.map((output) => output.fileEntryId)),
+                images: outputs,
+              }
+            : undefined
+        }
+      >
+        <ComposerDismissArea>
+          <MessageList
+            contentBottomInset={composerContentGap}
+            contentTopInset={resolveHeaderContentInset(headerHeight)}
+            enteringMessageId={activeTurn?.userMessageId}
+            extraData={messageRenderState}
+            keyboardOffset={keyboardOffset}
+            keyboardShouldPersistTaps="always"
+            messages={messages}
+            renderMessage={renderMessage}
+          />
+        </ComposerDismissArea>
+        <ComposerDock layoutMode="flow">
+          <PaintingInput
+            initialParamValues={seededParamValues}
+            onCancel={handleCancel}
+            onGenerate={handleGenerate}
+            painting={painting}
+            status={generation.status}
+          />
+        </ComposerDock>
+      </PaintingInputProvider>
     </ComposerSessionProvider>
   );
 }

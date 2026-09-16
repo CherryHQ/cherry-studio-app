@@ -33,7 +33,7 @@ import {
 import {
   PaintingInput,
   type PaintingInputSubmission,
-  usePaintingReference,
+  PaintingInputProvider,
 } from '@/frontend/components/PaintingInput';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/features/plugin';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
@@ -84,19 +84,22 @@ export function ChatInput({
 }: ChatInputProps) {
   const { cancel, canSend, isBusy, sendMessage } = controls;
   const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
-  const reference = usePaintingReference(
-    latestImageResult?.parts.flatMap((part) =>
-      part.type === 'file' && part.purpose === 'artifact' && part.mediaType.startsWith('image/')
-        ? [
-            {
-              fileEntryId: part.fileEntryId,
-              mediaType: part.mediaType,
-              name: part.name ?? part.fileEntryId,
-            },
-          ]
-        : [],
-    ) ?? [],
-  );
+  const paintingResult = latestImageResult
+    ? {
+        id: latestImageResult.id,
+        images: latestImageResult.parts.flatMap((part) =>
+          part.type === 'file' && part.purpose === 'artifact' && part.mediaType.startsWith('image/')
+            ? [
+                {
+                  fileEntryId: part.fileEntryId,
+                  mediaType: part.mediaType,
+                  name: part.name ?? part.fileEntryId,
+                },
+              ]
+            : [],
+        ),
+      }
+    : undefined;
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'all' });
@@ -147,29 +150,29 @@ export function ChatInput({
     void cancel();
   }, [cancel]);
 
-  if (selectedModelItem && isImageGenerationModel(selectedModelItem.model)) {
-    return (
-      <PaintingInput
-        canSend={canSend}
-        dismissKeyboardOnSend={dismissKeyboardOnSend}
-        modelSelection={modelSelection}
-        onCancel={cancelGeneration}
-        onGenerate={generateImage}
-        reference={reference}
-        status={isBusy ? 'generating' : 'idle'}
-      />
-    );
-  }
   return (
-    <TextChatInput
-      agentId={agentId}
-      controls={controls}
-      dismissKeyboardOnSend={dismissKeyboardOnSend}
-      providerSetupReturnTo={providerSetupReturnTo}
-      selectedModelId={selectedModelId}
-      selectedModelItem={selectedModelItem}
-      selectModel={selectModel}
-    />
+    <PaintingInputProvider result={paintingResult}>
+      {selectedModelItem && isImageGenerationModel(selectedModelItem.model) ? (
+        <PaintingInput
+          canSend={canSend}
+          dismissKeyboardOnSend={dismissKeyboardOnSend}
+          modelSelection={modelSelection}
+          onCancel={cancelGeneration}
+          onGenerate={generateImage}
+          status={isBusy ? 'generating' : 'idle'}
+        />
+      ) : (
+        <TextChatInput
+          agentId={agentId}
+          controls={controls}
+          dismissKeyboardOnSend={dismissKeyboardOnSend}
+          providerSetupReturnTo={providerSetupReturnTo}
+          selectedModelId={selectedModelId}
+          selectedModelItem={selectedModelItem}
+          selectModel={selectModel}
+        />
+      )}
+    </PaintingInputProvider>
   );
 }
 

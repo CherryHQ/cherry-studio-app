@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
-import { imageParamsAspectRatio } from '@/frontend/data/paintings/imageGenerationParams';
 import {
   type PaintingJobInterruptionReason,
   paintingJobInterruptionReason,
@@ -20,6 +19,7 @@ import type {
 import { AiFailureSnapshotSchema, type AiFailureSnapshot } from '@/shared/contracts/aiFailure';
 import type { JobError } from '@/shared/data/api/schemas/jobs';
 import { isTerminalStatus } from '@/shared/data/api/schemas/jobs';
+import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 export type PaintingGenerationStatus = 'idle' | 'generating';
 

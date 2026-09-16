@@ -10,10 +10,9 @@ import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type FileEntry, readableFilename } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
-import { validateFileAttachments } from '@/shared/utils/fileAttachmentPolicy';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
-import { resolvePaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
+import { createPaintingGenerationStrategy } from '@/shared/utils/paintingGenerationStrategy';
 
 import type { ManagedFileResolver, TurnResourceLedger } from '../resources/managedFileResolver';
 import { raceAbort, type RuntimeModel } from '../runtime';
@@ -58,21 +57,14 @@ export function createAgentImageGeneration(dependencies: {
       }
 
       const files = [...resources.inputFiles.values()];
-      const mode = resolvePaintingGenerationMode(selectedModel, files.length > 0);
-      const modeDefinition = mode ? selectedModel.imageGeneration?.modes[mode] : undefined;
-      validateFileAttachments(files, {
-        purpose: 'painting',
-        acceptsImages: mode !== undefined,
-        maxImages: modeDefinition?.maxInputImages,
-      });
-      if (!mode || (settings && settings.mode !== mode)) {
-        reject('The selected model does not support these image inputs.');
-      }
       const prompt = parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n');
-      if (!prompt.trim() && modeDefinition?.requirePrompt !== false) {
-        reject('Image prompt is required.');
-      }
-      const capturedSettings = { mode, paramValues: settings?.paramValues ?? {} };
+      const prepared = createPaintingGenerationStrategy(selectedModel).prepare({
+        images: files,
+        prompt,
+        mode: settings?.mode,
+        paramValues: settings?.paramValues ?? {},
+      });
+      const capturedSettings = { mode: prepared.mode, paramValues: prepared.paramValues };
       return {
         settings: capturedSettings,
         async execute(turnSignal, usageAttribution) {

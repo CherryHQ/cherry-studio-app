@@ -1,12 +1,12 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/Message';
-import type { PaintingReference } from '@/frontend/components/PaintingInput';
-import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
+import type { PaintingReference } from '@/frontend/components/PaintingInput/usePaintingReference';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { PaintingGenerationStart } from '@/shared/contracts';
 import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { Painting } from '@/shared/data/types/painting';
+import type { ImageParamDraft } from '@/shared/utils/imageGenerationParams';
 
 import type {
   PaintingGenerationInput,
@@ -149,6 +149,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerDismissArea: ({ children }: { children: React.ReactNode }) => children,
   useComposerSendError: () => mockAlertShow,
+  useComposerState: () => ({ attachments: [], draft: '' }),
   ComposerDock: ({ children }: { children: React.ReactNode }) => children,
   ComposerSessionProvider: ({ children, ...props }: { children: React.ReactNode }) => {
     const { useEffect } = jest.requireActual('react');
@@ -195,11 +196,14 @@ jest.mock('../PaintingAssistantMessage', () => ({
 }));
 
 jest.mock('@/frontend/components/PaintingInput', () => ({
-  usePaintingReference: jest.requireActual(
-    '@/frontend/components/PaintingInput/usePaintingReference',
-  ).usePaintingReference,
+  PaintingInputProvider: jest.requireActual(
+    '@/frontend/components/PaintingInput/PaintingInputProvider',
+  ).PaintingInputProvider,
   PaintingInput: (props: PaintingInputProps) => {
-    mockInputProps = props;
+    const { usePaintingInputSession } = jest.requireActual(
+      '@/frontend/components/PaintingInput/PaintingInputProvider',
+    );
+    mockInputProps = { ...props, reference: usePaintingInputSession().reference };
     return null;
   },
 }));
@@ -403,14 +407,14 @@ describe('PaintingComposer', () => {
 
   it('keeps the selected editing target when a follow-up is cancelled', async () => {
     renderComposer();
-    act(() => mockInputProps?.reference.select('output-1b'));
+    act(() => mockInputProps?.reference.select(files.outputs[1]));
     await act(async () => {
       await mockInputProps?.onGenerate(input);
     });
     await act(async () => {
       mockInputProps?.onCancel();
     });
-    expect(mockInputProps?.reference.selected?.fileEntryId).toBe('output-1b');
+    expect(mockInputProps?.reference.selection?.image.fileEntryId).toBe('output-1b');
     expect(mockAssistantProps).toMatchObject({ outputs: files.outputs, paintingId: painting.id });
   });
 

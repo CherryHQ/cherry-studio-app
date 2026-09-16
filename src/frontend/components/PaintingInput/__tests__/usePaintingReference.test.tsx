@@ -1,5 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
+
 import { type PaintingReferenceImage, usePaintingReference } from '../usePaintingReference';
 
 const image = (id: string): PaintingReferenceImage => ({
@@ -7,60 +9,102 @@ const image = (id: string): PaintingReferenceImage => ({
   mediaType: 'image/png',
   name: `${id}.png`,
 });
+const attachment = (id: string): ComposerAttachmentReady => ({
+  ...image(id),
+  id,
+  kind: 'image',
+  status: 'ready',
+  uri: `file:///${id}.png`,
+});
+type Props = { ids: string[]; draft?: string; attachments?: ComposerAttachmentReady[] };
+const noAttachments: ComposerAttachmentReady[] = [];
 
-describe('usePaintingReference', () => {
+describe('painting reference intent', () => {
   let renderer: ReactTestRenderer;
   let reference: ReturnType<typeof usePaintingReference>;
-  function Probe({ images }: { images: PaintingReferenceImage[] }) {
-    reference = usePaintingReference(images);
+  function Probe({ ids, draft = '', attachments = noAttachments }: Props) {
+    reference = usePaintingReference(
+      { id: ids.join(','), images: ids.map(image) },
+      draft,
+      attachments,
+    );
     return null;
   }
-  const update = (images: PaintingReferenceImage[], key = 'session-1') => {
-    act(() => renderer.update(<Probe images={images} key={key} />));
-  };
-
+  const update = (props: Props, key = 'session-1') =>
+    act(() => renderer.update(<Probe {...props} key={key} />));
   beforeEach(() => {
     act(() => {
-      renderer = create(<Probe images={[]} key="session-1" />);
+      renderer = create(<Probe ids={[]} key="session-1" />);
     });
   });
   afterEach(() => act(() => renderer.unmount()));
 
-  it('advances to a new single result but never reattaches a removed result on refresh', () => {
-    update([image('first')]);
-    expect(reference.selected?.fileEntryId).toBe('first');
+  it('preserves dismissal across refresh and adopts a new result', () => {
+    update({ ids: ['first'] });
+    expect(reference.selection?.image.fileEntryId).toBe('first');
     act(() => reference.clear());
-    update([image('first')]);
-    expect(reference.selected).toBeUndefined();
-    expect(reference.needsSelection).toBe(false);
-    update([image('second')]);
-    expect(reference.selected?.fileEntryId).toBe('second');
+    update({ ids: ['first'] });
+    expect(reference.selection).toBeUndefined();
+    update({ ids: ['second'] });
+    expect(reference.selection?.image.fileEntryId).toBe('second');
   });
 
-  it('requires an explicit choice for multiple results and preserves it on refresh', () => {
-    update([image('first'), image('second')]);
-    expect(reference.selected).toBeUndefined();
-    expect(reference.needsSelection).toBe(true);
-    act(() => reference.select('second'));
-    update([image('first'), image('second')]);
-    expect(reference.selected?.fileEntryId).toBe('second');
-    expect(reference.needsSelection).toBe(false);
+  it('leaves multiple results as optional candidates until explicitly selected', () => {
+    update({ ids: ['first', 'second'] });
+    expect(reference.selection).toBeUndefined();
     act(() => reference.choose());
-    expect(reference.needsSelection).toBe(true);
-    act(() => reference.select('first'));
-    expect(reference.selected?.fileEntryId).toBe('first');
-    act(() => reference.clear());
-    update([image('first'), image('second')]);
-    expect(reference.selected).toBeUndefined();
-    expect(reference.needsSelection).toBe(false);
+    expect(reference.isPickerOpen).toBe(true);
+    act(() => reference.select(image('second')));
+    update({ ids: ['first', 'second'] });
+    expect(reference.selection).toEqual({ image: image('second'), origin: 'explicit' });
+    expect(reference.isPickerOpen).toBe(false);
   });
 
-  it('does not carry a reference or its dismissal into another composer session', () => {
-    update([image('first')]);
-    act(() => reference.clear());
-    update([], 'session-2');
-    expect(reference.selected).toBeUndefined();
-    update([image('first')], 'session-2');
-    expect(reference.selected?.fileEntryId).toBe('first');
+  it('lets manual attachments replace automatic references without resurrecting them on removal', () => {
+    update({ ids: ['first'] });
+    update({ ids: ['first'], attachments: [attachment('manual')] });
+    expect(reference.selection).toBeUndefined();
+    update({ ids: ['first'] });
+    expect(reference.selection).toBeUndefined();
+  });
+
+  it('keeps explicit reference choices when extra manual images arrive', () => {
+    update({ ids: ['first'] });
+    act(() => reference.select(image('first')));
+    update({ ids: ['first'], attachments: [attachment('manual')] });
+    expect(reference.selection?.image.fileEntryId).toBe('first');
+  });
+
+  it('does not replace the editing target when the next draft was edited during generation', () => {
+    update({ ids: ['first'] });
+    act(() => reference.beginSubmission([attachment('first')]));
+    update({ ids: ['first'], draft: 'Next edit' });
+    update({ ids: ['second'], draft: 'Next edit' });
+    expect(reference.selection?.image.fileEntryId).toBe('first');
+    expect(reference.images[0].fileEntryId).toBe('second');
+  });
+
+  it('preserves input intent even when the user clears the next draft before completion', () => {
+    update({ ids: ['first'] });
+    act(() => reference.beginSubmission([attachment('first')]));
+    update({ ids: ['first'], draft: 'Next edit' });
+    update({ ids: ['first'] });
+    update({ ids: ['second'] });
+    expect(reference.selection?.image.fileEntryId).toBe('first');
+  });
+
+  it('adopts a successful result when the next input was untouched', () => {
+    update({ ids: ['first'] });
+    act(() => reference.beginSubmission([attachment('first')]));
+    update({ ids: ['second'] });
+    expect(reference.selection?.image.fileEntryId).toBe('second');
+  });
+
+  it('keeps a submitted manual reference on failure and isolates a different composer', () => {
+    act(() => reference.beginSubmission([attachment('manual')]));
+    act(() => reference.rejectSubmission());
+    expect(reference.selection?.image.fileEntryId).toBe('manual');
+    update({ ids: [] }, 'session-2');
+    expect(reference.selection).toBeUndefined();
   });
 });

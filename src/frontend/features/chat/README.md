@@ -55,7 +55,8 @@ selected model while its Agent update settles. It renders the text controls or t
 `Backend.agent.startSession` / `submitMessage`, just like text sends; they never create painting
 history. The Host stores outputs as assistant file parts, and the drawer opens the same Session.
 Per-message image settings drive the generation placeholder even if the Agent later changes models.
-The latest successful image result supplies a visible editing reference: one image is selected
-automatically, while multiple images require a choice. Users can replace or clear the reference.
-It is submitted as an explicit attachment and stays separate from the text draft, so switching to
-a text model does not attach it. Reference selection belongs to the current composer session.
+`PaintingInputProvider` retains reference intent and parameter drafts in the current composer session.
+Compatible models can automatically use a single successful output when next-turn input is untouched;
+multiple outputs remain optional candidates. Generate-only models pause automatic references and
+block incompatible explicit images. The shared input strategy owns these rules. Effective references
+are submitted as file parts and stay separate from the text draft; text controls do not attach them.

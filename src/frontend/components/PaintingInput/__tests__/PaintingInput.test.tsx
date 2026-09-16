@@ -1,20 +1,40 @@
-import type { ComponentProps, ReactNode } from 'react';
+import type { ImageGenerationSupport } from '@cherrystudio/provider-registry';
+import { useEffect, type ComponentProps, type ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ComposerSurface } from '@/frontend/components/Composer';
+import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { Model } from '@/shared/data/types/model';
 
 import { PaintingInput } from '../PaintingInput';
-import { usePaintingReference } from '../usePaintingReference';
+import { PaintingInputProvider, usePaintingInputSession } from '../PaintingInputProvider';
 
 let mockSurfaceProps: ComponentProps<typeof ComposerSurface>;
-const mockGetUri = jest.fn(async () => 'file:///first.png');
+let mockSession: ReturnType<typeof usePaintingInputSession>;
+let mockComposerState: { attachments: ComposerAttachmentReady[]; draft: string };
+let mockModel: Model;
 const mockGenerate = jest.fn(async (_input: unknown) => undefined);
-const mockModelItem = {
-  model: {
-    name: 'Image model',
-    imageGeneration: { modes: { generate: { supports: {} }, edit: { supports: {} } } },
-  },
+const mockPrepareAttachments = jest.fn(
+  async ({ fileEntryIds }: { fileEntryIds: readonly string[] }) => fileEntryIds.map(mockFile),
+);
+function mockFile(id: string) {
+  return {
+    entry: { id, filename: `${id}.png`, size: 100, mediaType: 'image/png' },
+    uri: `file:///${id}.png`,
+  };
+}
+const image = (id: string) => ({ fileEntryId: id, mediaType: 'image/png', name: `${id}.png` });
+const attachment = (id: string): ComposerAttachmentReady => ({
+  ...image(id),
+  id,
+  kind: 'image',
+  status: 'ready',
+  uri: `file:///${id}.png`,
+  size: 100,
+});
+const support: ImageGenerationSupport = {
+  modes: { generate: { supports: {} }, edit: { supports: {}, maxInputImages: 1 } },
 };
 
 jest.mock('@cherrystudio/app-icons/icons/settings-2', () => () => null);
@@ -27,14 +47,22 @@ jest.mock('@cherrystudio/ui/components', () => {
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () => jest.fn() }));
-jest.mock('@/frontend/data', () => ({ useBackendModule: () => ({ getUri: mockGetUri }) }));
+jest.mock('@/frontend/data', () => ({
+  useBackendModule: () => ({ prepareAttachments: mockPrepareAttachments }),
+}));
 jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => ['provider::image'] }));
 jest.mock('@/frontend/components/ModelPicker', () => ({
   ModelPickerDrawer: () => null,
   ModelPickerIcon: () => null,
-  useModelPickerData: () => ({ getModelItem: () => mockModelItem }),
+  useModelPickerData: () => ({ getModelItem: () => ({ model: mockModel }), isLoading: false }),
 }));
-jest.mock('@/frontend/components/FileEntryPreview', () => ({ FileEntryPreview: () => null }));
+jest.mock('@/frontend/components/FileEntryPreview', () => ({
+  FileEntryPreview: () => null,
+  useResolvedFile: (id: string | undefined) => ({
+    data: id ? mockFile(id) : null,
+    isLoading: false,
+  }),
+}));
 jest.mock('../PaintingSettingsBottomSheet', () => ({ PaintingSettingsBottomSheet: () => null }));
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerAttachmentStrip: (props: Record<string, unknown>) =>
@@ -48,101 +76,226 @@ jest.mock('@/frontend/components/Composer', () => ({
     mockSurfaceProps = props;
     return props.children;
   },
-  useComposerActions: () => ({ removeAttachment: jest.fn() }),
+  useComposerActions: () => ({ removeAttachment: jest.fn(), clearAttachments: jest.fn() }),
   useComposerPresentationActions: () => ({ runInputReplacement: jest.fn() }),
-  useComposerState: () => ({ attachments: [], draft: 'Make it blue' }),
+  useComposerState: () => mockComposerState,
 }));
 
-type HarnessProps = { canSend?: boolean; output?: string; status?: 'idle' | 'generating' };
-
-function Harness({ canSend, output = 'first', status = 'idle' }: HarnessProps) {
-  const reference = usePaintingReference([
-    { fileEntryId: output, mediaType: 'image/png', name: `${output}.png` },
-  ]);
-  return (
+type HarnessProps = {
+  canSend?: boolean;
+  outputs?: string[];
+  status?: 'idle' | 'generating';
+  showText?: boolean;
+};
+function Probe({ canSend, status = 'idle', showText }: HarnessProps) {
+  const session = usePaintingInputSession();
+  useEffect(() => {
+    mockSession = session;
+  }, [session]);
+  return showText ? null : (
     <PaintingInput
       canSend={canSend}
       onCancel={() => undefined}
       onGenerate={mockGenerate}
-      reference={reference}
       status={status}
     />
   );
 }
+const initialOutputs = ['first'];
+function Harness({ outputs = initialOutputs, ...props }: HarnessProps) {
+  return (
+    <PaintingInputProvider result={{ id: outputs.join(','), images: outputs.map(image) }}>
+      <Probe {...props} />
+    </PaintingInputProvider>
+  );
+}
 
-describe('PaintingInput reference preview', () => {
+describe('capability-aware painting input', () => {
   let renderer: ReactTestRenderer;
-  const update = (props: HarnessProps) => act(() => renderer.update(<Harness {...props} />));
+  const update = (props: HarnessProps = {}) => act(() => renderer.update(<Harness {...props} />));
   const referenceIds = () =>
     renderer.root
       .findAllByProps({ testID: 'painting-input-attachments' })
       .flatMap((strip) =>
-        strip.props.attachments.map(
-          (attachment: { fileEntryId: string }) => attachment.fileEntryId,
-        ),
+        strip.props.attachments.map((item: { fileEntryId: string }) => item.fileEntryId),
       );
-  const hasReferenceLabel = () =>
-    renderer.root
-      .findAllByType(Text)
-      .some((text) => text.props.children === 'painting.input.editReference');
-
+  const labels = () => renderer.root.findAllByType(Text).map((text) => text.props.children);
+  const send = async (text = 'Make it blue') => {
+    const attachments = mockComposerState.attachments;
+    mockComposerState = { attachments: [], draft: '' };
+    await act(async () => {
+      await mockSurfaceProps.onSend({ attachments, text });
+    });
+  };
   beforeEach(() => {
     jest.clearAllMocks();
+    mockComposerState = { attachments: [], draft: 'Make it blue' };
+    mockModel = {
+      id: 'provider::image',
+      providerId: 'provider',
+      modelId: 'image',
+      name: 'Image model',
+      capabilities: ['image-generation'],
+      isEnabled: true,
+      isHidden: false,
+      supportsStreaming: false,
+      imageGeneration: support,
+    };
     act(() => {
       renderer = create(<Harness />);
     });
   });
   afterEach(() => act(() => renderer.unmount()));
 
-  it('clears the old preview immediately, submits its frozen reference, and shows the next completed image', async () => {
-    const file = deferred<string>();
-    mockGetUri.mockReturnValueOnce(file.promise);
+  it('hides the old reference immediately and submits the frozen image before adopting the next success', async () => {
+    const preparation = deferred<ReturnType<typeof mockFile>[]>();
+    mockPrepareAttachments.mockReturnValueOnce(preparation.promise);
     expect(referenceIds()).toEqual(['first']);
-    expect(hasReferenceLabel()).toBe(true);
     let sending!: Promise<void>;
+    mockComposerState = { attachments: [], draft: '' };
     act(() => {
       sending = mockSurfaceProps.onSend({ attachments: [], text: 'Make it blue' });
     });
     expect(referenceIds()).toEqual([]);
-    expect(hasReferenceLabel()).toBe(false);
     expect(mockSurfaceProps.canSend).toBe(false);
-
-    update({ canSend: false });
     await act(async () => {
-      file.resolve('file:///first.png');
+      preparation.resolve([mockFile('first')]);
       await sending;
     });
     expect(mockGenerate).toHaveBeenCalledWith(
       expect.objectContaining({
-        attachments: [expect.objectContaining({ fileEntryId: 'first', uri: 'file:///first.png' })],
         mode: 'edit',
+        attachments: [expect.objectContaining({ fileEntryId: 'first' })],
       }),
     );
-    expect(referenceIds()).toEqual([]);
     update({ status: 'generating' });
     expect(referenceIds()).toEqual([]);
-    update({ status: 'idle', output: 'second' });
+    update({ outputs: ['second'] });
     expect(referenceIds()).toEqual(['second']);
-    expect(hasReferenceLabel()).toBe(true);
   });
 
-  it('restores the old reference when submission is rejected', async () => {
-    mockGetUri.mockRejectedValueOnce(new Error('file unavailable'));
-    await act(async () => {
-      await expect(
-        mockSurfaceProps.onSend({ attachments: [], text: 'Make it blue' }),
-      ).rejects.toThrow('file unavailable');
-    });
+  it('preserves the previous reference after a rejected submission or a cancelled follow-up', async () => {
+    mockPrepareAttachments.mockRejectedValueOnce(new Error('file unavailable'));
+    await expect(send()).rejects.toThrow('file unavailable');
     expect(referenceIds()).toEqual(['first']);
-    expect(hasReferenceLabel()).toBe(true);
-  });
-
-  it('restores the previous selection when generation fails or is cancelled without a new output', () => {
     update({ status: 'generating' });
-    expect(referenceIds()).toEqual([]);
-    update({ status: 'idle' });
+    update();
     expect(referenceIds()).toEqual(['first']);
-    expect(hasReferenceLabel()).toBe(true);
+  });
+
+  it('keeps generate-only models usable without submitting the automatic candidate', async () => {
+    mockModel = {
+      ...mockModel,
+      imageGeneration: { modes: { generate: { supports: {} } } },
+      inputModalities: ['text'],
+    };
+    update();
+    expect(referenceIds()).toEqual([]);
+    expect(mockSurfaceProps.canSend).toBe(true);
+    await send('Draw a dog');
+    expect(mockGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'generate', attachments: [], prompt: 'Draw a dog' }),
+    );
+  });
+
+  it('pauses automatic references across incompatible models but blocks explicit references', () => {
+    mockModel = { ...mockModel, imageGeneration: { modes: { generate: { supports: {} } } } };
+    update();
+    expect(mockSurfaceProps.canSend).toBe(true);
+    mockModel = { ...mockModel, imageGeneration: support };
+    update();
+    expect(referenceIds()).toEqual(['first']);
+    act(() => mockSession.reference.select(image('first')));
+    mockModel = { ...mockModel, imageGeneration: { modes: { generate: { supports: {} } } } };
+    update();
+    expect(mockSurfaceProps.canSend).toBe(false);
+    expect(labels()).toContain('painting.input.imagesUnsupported');
+  });
+
+  it('gives manual images priority without exceeding a single-image model limit', async () => {
+    mockComposerState = { draft: 'Make it blue', attachments: [attachment('manual')] };
+    update();
+    expect(referenceIds()).toEqual(['manual']);
+    expect(mockSurfaceProps.canSend).toBe(true);
+    await send();
+    expect(mockGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [expect.objectContaining({ fileEntryId: 'manual' })],
+      }),
+    );
+  });
+
+  it('allows new generation from multiple candidates without forcing a selection', () => {
+    mockComposerState = { attachments: [], draft: '' };
+    update({ outputs: ['first', 'second'] });
+    mockComposerState = { attachments: [], draft: 'Draw another image' };
+    update({ outputs: ['first', 'second'] });
+    expect(referenceIds()).toEqual([]);
+    expect(mockSurfaceProps.canSend).toBe(true);
+  });
+
+  it('permits a promptless image operation and blocks an edit-only operation without an image', async () => {
+    mockModel = {
+      ...mockModel,
+      imageGeneration: { modes: { edit: { supports: {}, requirePrompt: false } } },
+    };
+    mockComposerState = { draft: '', attachments: [] };
+    update();
+    expect(mockSurfaceProps.canSend).toBe(true);
+    await send('');
+    expect(mockGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'edit', prompt: '' }),
+    );
+    act(() => mockSession.reference.clear());
+    expect(mockSurfaceProps.canSend).toBe(false);
+    expect(labels()).toContain('painting.input.referenceRequired');
+  });
+
+  it('keeps parameter drafts across text controls and preserves invalid input for correction', () => {
+    mockModel = {
+      ...mockModel,
+      imageGeneration: {
+        modes: { edit: { supports: { numImages: { type: 'range', min: 1, max: 4 } } } },
+      },
+    };
+    update();
+    const key = JSON.stringify([mockModel.id, 'edit']);
+    act(() =>
+      mockSession.setParameterDraft(key, { modelId: mockModel.id, values: { numImages: 20 } }),
+    );
+    expect(mockSurfaceProps.canSend).toBe(false);
+    expect(labels()).toContain('painting.input.invalidParameters');
+    update({ showText: true });
+    update();
+    expect(mockSession.parameterDrafts[key].values).toEqual({ numImages: 20 });
+    expect(mockSurfaceProps.canSend).toBe(false);
+  });
+
+  it('restores a visited mode default after editing the other mode', () => {
+    mockModel = {
+      ...mockModel,
+      id: 'provider::parameters',
+      imageGeneration: {
+        modes: {
+          generate: { supports: { numImages: { type: 'range', min: 1, max: 4, default: 1 } } },
+          edit: { supports: { numImages: { type: 'range', min: 1, max: 4, default: 2 } } },
+        },
+      },
+    };
+    update();
+    const editKey = JSON.stringify([mockModel.id, 'edit']);
+    const generateKey = JSON.stringify([mockModel.id, 'generate']);
+    expect(mockSession.parameterDrafts[editKey].values).toEqual({ numImages: 2 });
+    act(() => mockSession.reference.clear());
+    act(() =>
+      mockSession.setParameterDraft(generateKey, {
+        modelId: mockModel.id,
+        values: { numImages: 3 },
+      }),
+    );
+    act(() => mockSession.reference.select(image('first')));
+    expect(mockSession.parameterDrafts[editKey].values).toEqual({ numImages: 2 });
+    expect(mockSession.lastParameterDraft?.values).toEqual({ numImages: 2 });
   });
 });
 

@@ -17,7 +17,9 @@ in `src/frontend/utils/paintingDraftHandoff.ts`; preview transitions shared by b
 model picker, and parameter sheet. Agent chat shares those controls but submits through the Agent
 Host. Only this standalone painting workflow creates painting history entries and painting jobs.
 
-Successful outputs become selectable references for the next edit. Each generation still creates
+`PaintingInputProvider` owns reference selection and parameter drafts. Its shared strategy only
+includes references accepted by the selected model; multiple outputs remain optional candidates.
+Successful outputs never replace input edited during generation. Each generation still creates
 its own painting record. A failed follow-up keeps the previous result visible, and cancellation
 restores its prompt, output dimensions, and route. The viewer's generation-details action opens
 the existing record; Edit and Resize hand off the selected image to the composer.
