@@ -50,6 +50,11 @@ private object CrashReportingState {
     }
     configured = true
     consentVersion = version
+    if (!consentFile.exists()) {
+      cleanCaches()
+      captureStartedAt = System.currentTimeMillis()
+      persistConsent()
+    }
     val saved = runCatching {
       AtomicFile(consentFile).readFully().toString(Charsets.UTF_8).split('\n')
     }.getOrDefault(emptyList())
@@ -59,7 +64,6 @@ private object CrashReportingState {
       captureStartedAt = startedAt
     } else {
       // Nothing recorded without a grant for this disclosure may be sent, including legacy reports.
-      AtomicFile(consentFile).delete()
       cleanCaches()
     }
     if (granted && canCapture) start()
@@ -82,11 +86,12 @@ private object CrashReportingState {
     return status()
   }
 
-  private fun persistConsent() {
+  private fun persistConsent(enabled: Boolean = true) {
     val file = AtomicFile(consentFile)
     val output = file.startWrite()
     try {
-      output.write("$consentVersion\n$captureStartedAt".toByteArray(Charsets.UTF_8))
+      val value = if (enabled) "$consentVersion\n$captureStartedAt" else "disabled"
+      output.write(value.toByteArray(Charsets.UTF_8))
       file.finishWrite(output)
     } catch (error: Throwable) {
       file.failWrite(output)
@@ -98,9 +103,8 @@ private object CrashReportingState {
     // The gates close before persistence, SDK shutdown, and cache cleanup.
     granted = false
     active = false
-    AtomicFile(consentFile).delete()
     Sentry.close()
-    check(!consentFile.exists()) { "Could not remove crash reporting consent" }
+    persistConsent(false)
     cleanCaches()
   }
 

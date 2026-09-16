@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  EAS_CLI_VERSION: 24.4.2
+
 concurrency:
   group: ios-release-${{ github.ref }}
   cancel-in-progress: false
@@ -42,10 +45,17 @@ jobs:
         with:
           version: 12.2.1
 
+      - name: Configure EAS CLI install scripts
+        # Match expo-github-action's temporary CLI directory; allowBuilds is project-only.
+        run: |
+          eas_cli_dir="$RUNNER_TEMP/eas-cli/$EAS_CLI_VERSION/$(node -p 'require("node:os").arch()')"
+          mkdir -p "$eas_cli_dir"
+          pnpm --dir "$eas_cli_dir" config set --location=project --json allowBuilds '{"dtrace-provider": false, "protobufjs": false}'
+
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: 24.4.2
+          eas-version: ${{ env.EAS_CLI_VERSION }}
           token: ${{ secrets.EXPO_TOKEN }}
           packager: pnpm
 
@@ -80,10 +90,17 @@ jobs:
         with:
           version: 12.2.1
 
+      - name: Configure EAS CLI install scripts
+        # Match expo-github-action's temporary CLI directory; allowBuilds is project-only.
+        run: |
+          eas_cli_dir="$RUNNER_TEMP/eas-cli/$EAS_CLI_VERSION/$(node -p 'require("node:os").arch()')"
+          mkdir -p "$eas_cli_dir"
+          pnpm --dir "$eas_cli_dir" config set --location=project --json allowBuilds '{"dtrace-provider": false, "protobufjs": false}'
+
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: 24.4.2
+          eas-version: ${{ env.EAS_CLI_VERSION }}
           token: ${{ secrets.EXPO_TOKEN }}
           packager: pnpm
 
