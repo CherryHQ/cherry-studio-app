@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 24 24"><defs><polygon id="path-79" points="19.0816859 0 5.9750688 12.8639931 0 9.58892361" />
+        <polygon id="path-81" points="13.1066171 0 1.3492029 17.0879861 0 12.8661111" />
+        <polygon id="path-83" points="8.38438957 0 0 10.7519965 0.578239773 7.68" />
+        <polygon id="path-85" points="11.1791745 0 7.39107479 18.4319965 0 14.0159896" />
+        <path d="M13.1066171,0 C10.9386624,2.16036458 8.7500376,4.3003125 6.57246239,6.45118056 C4.38117103,8.58848958 2.20110356,10.7367014 0,12.8639931 C2.16795472,10.7036285 4.35638783,8.56385417 6.53413732,6.41298611 C8.72544611,4.27585069 10.9056879,2.1278125 13.1066171,0 Z" id="path-87" />
+        <path d="M11.1776756,0 C9.36478989,2.31822917 7.4327984,4.71458333 5.60933362,7.02449653 C3.77070613,9.32258681 1.84939825,11.726059 0,14.0159896 C1.81271145,11.6979167 3.74337838,9.30138889 5.56682573,6.99166667 C7.40545323,4.69357639 9.32827737,2.29010417 11.1776756,0 Z" id="path-89" />
+        <polygon id="path-91" points="0.576510242 0 0.296804251 1.53758681 0 3.07199653 0.279705991 1.53442708" />
+    </defs><g fill="none" fill-rule="evenodd" transform="translate(0.216991, 0.000000)"><g transform="translate(1.517663, 2.976007)">
+                        <mask id="mask-80" fill="white">
+                            <use xlink:href="#path-79" />
+                        </mask>
+                        <g id="Clip-31" />
+                        <polygon id="Fill-30" fill="#0085FE" mask="url(#mask-80)" points="-0.871420479 -0.868055556 19.9531064 -0.868055556 19.9531064 13.7320486 -0.871420479 13.7320486" />
+                    </g>
+                    <g transform="translate(7.492732, 2.976007)">
+                        <mask id="mask-82" fill="white">
+                            <use xlink:href="#path-81" />
+                        </mask>
+                        <g id="Clip-33" />
+                        <polygon id="Fill-32" fill="#0055F0" mask="url(#mask-82)" points="-0.871420479 -0.868055556 13.9780376 -0.868055556 13.9780376 17.9560417 -0.871420479 17.9560417" />
+                    </g>
+                    <g transform="translate(8.841935, 9.311997)">
+                        <mask id="mask-84" fill="white">
+                            <use xlink:href="#path-83" />
+                        </mask>
+                        <g id="Clip-35" />
+                        <polygon id="Fill-34" fill="#0A24BD" mask="url(#mask-84)" points="-0.871420479 -0.868055556 9.25581005 -0.868055556 9.25581005 11.6200521 -0.871420479 11.6200521" />
+                    </g>
+                    <g transform="translate(9.420174, 2.976007)">
+                        <mask id="mask-86" fill="white">
+                            <use xlink:href="#path-85" />
+                        </mask>
+                        <g id="Clip-37" />
+                        <polygon id="Fill-36" fill="#0085FE" mask="url(#mask-86)" points="-0.871420479 -0.868055556 12.0505949 -0.868055556 12.0505949 19.3000521 -0.871420479 19.3000521" />
+                    </g>
+                    <g transform="translate(7.492732, 2.976007)">
+                        <mask id="mask-88" fill="white">
+                            <use xlink:href="#path-87" />
+                        </mask>
+                        <g id="Clip-39" />
+                        <polygon id="Fill-38" fill-opacity="0.7" fill="#88FCF9" mask="url(#mask-88)" points="-0.871420479 -0.868055556 13.9780376 -0.868055556 13.9780376 13.7320486 -0.871420479 13.7320486" />
+                    </g>
+                    <g transform="translate(9.421673, 2.976007)">
+                        <mask id="mask-90" fill="white">
+                            <use xlink:href="#path-89" />
+                        </mask>
+                        <g id="Clip-41" />
+                        <polygon id="Fill-40" fill-opacity="0.7" fill="#88FCF9" mask="url(#mask-90)" points="-0.871420479 -0.868055556 12.0490961 -0.868055556 12.0490961 14.8840451 -0.871420479 14.8840451" />
+                    </g>
+                    <g transform="translate(8.841935, 16.991997)">
+                        <mask id="mask-92" fill="white">
+                            <use xlink:href="#path-91" />
+                        </mask>
+                        <g id="Clip-43" />
+                        <polygon id="Fill-42" fill="#0096FC" mask="url(#mask-92)" points="-0.868814037 -0.868055556 1.44532428 -0.868055556 1.44532428 3.94005208 -0.868814037 3.94005208" />
+                    </g>
+                </g></svg>
