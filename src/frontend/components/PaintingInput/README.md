@@ -8,3 +8,9 @@ It must be inside the caller's `ComposerSessionProvider` so switching controls p
 Standalone painting supplies an optional painting and uses a local image model selection. Agent
 chat supplies a controlled `modelSelection`, which permits switching between text and image models.
 The shared controls do not create painting jobs, navigate, or persist conversation messages.
+
+Callers keep `usePaintingReference` mounted with the composer and supply successful outputs. A
+single output becomes the editing reference; multiple outputs require selection or dismissal.
+The controls show the reference, allow removal or replacement, and deduplicate it with manual
+attachments before deriving the generation mode and submitting. Clearing the draft on send does
+not clear the reference, and refreshing the same output does not undo an explicit removal.

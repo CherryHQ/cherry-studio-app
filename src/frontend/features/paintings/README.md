@@ -16,3 +16,8 @@ in `src/frontend/utils/paintingDraftHandoff.ts`; preview transitions shared by b
 `PaintingComposer` uses `@/frontend/components/PaintingInput` for the image prompt, attachments,
 model picker, and parameter sheet. Agent chat shares those controls but submits through the Agent
 Host. Only this standalone painting workflow creates painting history entries and painting jobs.
+
+Successful outputs become selectable references for the next edit. Each generation still creates
+its own painting record. A failed follow-up keeps the previous result visible, and cancellation
+restores its prompt, output dimensions, and route. The viewer's generation-details action opens
+the existing record; Edit and Resize hand off the selected image to the composer.

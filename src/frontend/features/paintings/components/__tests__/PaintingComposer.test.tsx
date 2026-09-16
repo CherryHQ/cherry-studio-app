@@ -1,6 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/Message';
+import type { PaintingReference } from '@/frontend/components/PaintingInput';
 import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { PaintingGenerationStart } from '@/shared/contracts';
@@ -14,6 +15,7 @@ import type {
 import { PaintingComposer } from '../PaintingComposer';
 
 type PaintingInputProps = {
+  reference: PaintingReference;
   initialParamValues?: ImageParamDraft;
   onCancel: () => void;
   onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationStart | null>;
@@ -193,6 +195,9 @@ jest.mock('../PaintingAssistantMessage', () => ({
 }));
 
 jest.mock('@/frontend/components/PaintingInput', () => ({
+  usePaintingReference: jest.requireActual(
+    '@/frontend/components/PaintingInput/usePaintingReference',
+  ).usePaintingReference,
   PaintingInput: (props: PaintingInputProps) => {
     mockInputProps = props;
     return null;
@@ -370,7 +375,7 @@ describe('PaintingComposer', () => {
     expect(mockAlertShow).not.toHaveBeenCalled();
   });
 
-  it('keeps a failed turn but clears a cancelled turn', async () => {
+  it('keeps a failed turn and restores the last success when its retry is cancelled', async () => {
     renderComposer();
     mockGenerate.mockImplementationOnce(async () => {
       mockGeneration.error = new Error('provider unavailable');
@@ -389,7 +394,24 @@ describe('PaintingComposer', () => {
     await act(async () => {
       await mockInputProps?.onGenerate(input);
     });
-    expect(mockMessageListProps?.messages).toEqual([]);
+    expect(mockMessageListProps?.messages[0].data.parts?.[0]).toEqual({
+      text: painting.prompt,
+      type: 'text',
+    });
+    expect(mockAssistantProps).toMatchObject({ outputs: files.outputs, paintingId: painting.id });
+  });
+
+  it('keeps the selected editing target when a follow-up is cancelled', async () => {
+    renderComposer();
+    act(() => mockInputProps?.reference.select('output-1b'));
+    await act(async () => {
+      await mockInputProps?.onGenerate(input);
+    });
+    await act(async () => {
+      mockInputProps?.onCancel();
+    });
+    expect(mockInputProps?.reference.selected?.fileEntryId).toBe('output-1b');
+    expect(mockAssistantProps).toMatchObject({ outputs: files.outputs, paintingId: painting.id });
   });
 
   it('retries a failed active turn from its inline action', async () => {

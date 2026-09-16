@@ -55,5 +55,7 @@ selected model while its Agent update settles. It renders the text controls or t
 `Backend.agent.startSession` / `submitMessage`, just like text sends; they never create painting
 history. The Host stores outputs as assistant file parts, and the drawer opens the same Session.
 Per-message image settings drive the generation placeholder even if the Agent later changes models.
-Reference images are explicit attachments on each request; earlier generated images remain in the
-transcript and are not silently added to subsequent image requests.
+The latest successful image result supplies a visible editing reference: one image is selected
+automatically, while multiple images require a choice. Users can replace or clear the reference.
+It is submitted as an explicit attachment and stays separate from the text draft, so switching to
+a text model does not attach it. Reference selection belongs to the current composer session.

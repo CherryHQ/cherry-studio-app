@@ -30,14 +30,19 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/ModelPicker';
-import { PaintingInput, type PaintingInputSubmission } from '@/frontend/components/PaintingInput';
+import {
+  PaintingInput,
+  type PaintingInputSubmission,
+  usePaintingReference,
+} from '@/frontend/components/PaintingInput';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/features/plugin';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
+import type { AgentMessageView } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
-import type { useAgentChatControls } from '../../runtime';
+import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
@@ -54,6 +59,7 @@ type ChatInputProps = {
   agentId?: string;
   controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
+  imageResult?: AgentMessageView;
   sessionId?: string;
 };
 
@@ -69,8 +75,28 @@ const activeTransitionMotion = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
-export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
+export function ChatInput({
+  agentId,
+  controls,
+  dismissKeyboardOnSend,
+  imageResult,
+  sessionId,
+}: ChatInputProps) {
   const { cancel, canSend, isBusy, sendMessage } = controls;
+  const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
+  const reference = usePaintingReference(
+    latestImageResult?.parts.flatMap((part) =>
+      part.type === 'file' && part.purpose === 'artifact' && part.mediaType.startsWith('image/')
+        ? [
+            {
+              fileEntryId: part.fileEntryId,
+              mediaType: part.mediaType,
+              name: part.name ?? part.fileEntryId,
+            },
+          ]
+        : [],
+    ) ?? [],
+  );
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'all' });
@@ -129,6 +155,7 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
         modelSelection={modelSelection}
         onCancel={cancelGeneration}
         onGenerate={generateImage}
+        reference={reference}
         status={isBusy ? 'generating' : 'idle'}
       />
     );

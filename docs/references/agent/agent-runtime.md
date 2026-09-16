@@ -727,5 +727,9 @@ explicit reference attachments, and the reserved assistant message's usage attri
 outputs as managed generated files, then the Host persists them as assistant artifact parts using
 its usual cancellation, background reply, naming, and terminal-state flow. A ten-minute request
 limit bounds provider work; failures and cancellation discard files not yet returned to the Host.
-No painting history row or painting job is created. Historical images are not implicit inputs to
-later image requests; users attach the images they want to edit or use as references.
+No painting history row or painting job is created. The image composer exposes the latest successful
+image as an editable reference: a single output is selected automatically, while multiple outputs
+require a choice. Clearing image inputs starts a new image. The selected reference and manual
+attachments are deduplicated and submitted as explicit current-input file parts; the Host does not
+infer image inputs from history. The reference
+stays separate from the text draft and is not attached when switching to a text model.

@@ -3,6 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
@@ -12,9 +13,12 @@ import {
   ComposerSessionProvider,
   useComposerSendError,
 } from '@/frontend/components/Composer';
-import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
+import {
+  type ComposerInitialAttachment,
+  isComposerAttachmentReady,
+} from '@/frontend/components/Composer/utils/composerAttachments';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
-import { PaintingInput } from '@/frontend/components/PaintingInput';
+import { PaintingInput, usePaintingReference } from '@/frontend/components/PaintingInput';
 import {
   type ImageParamDraft,
   imageParamsResolutionLabel,
@@ -28,6 +32,7 @@ import {
   usePaintingGeneration,
 } from '../hooks/usePaintingGeneration';
 import { createPaintingMessages } from '../utils/paintingMessages';
+import { PaintingAssistantMessage } from './PaintingAssistantMessage';
 import { PaintingMessage, type PaintingMessageState } from './PaintingMessage';
 
 type ActivePaintingTurn = {
@@ -40,11 +45,11 @@ type ActivePaintingTurn = {
 export function PaintingComposer({
   initialAttachments,
   initialDraft,
-  initialFiles,
+  initialFiles: resolvedFiles,
   initialParamValues,
   isHandoff,
   onReceipt,
-  painting,
+  painting: resolvedPainting,
 }: {
   initialAttachments: readonly ComposerInitialAttachment[];
   initialDraft: string;
@@ -54,6 +59,11 @@ export function PaintingComposer({
   onReceipt?: (paintingId: string | undefined) => void;
   painting?: Painting;
 }) {
+  // Route updates follow each new receipt; only the opening record seeds this composer.
+  const [{ initialFiles, painting }] = useState(() => ({
+    initialFiles: resolvedFiles,
+    painting: resolvedPainting,
+  }));
   const { t } = useTranslation();
   const reportSendError = useComposerSendError({
     sendFailedLabel: t('painting.input.generateFailed'),
@@ -64,10 +74,16 @@ export function PaintingComposer({
   const isSubmittingRef = useRef(false);
   const [activeTurn, setActiveTurn] = useState<ActivePaintingTurn | null>(null);
   const [showPersistedTurn, setShowPersistedTurn] = useState(!isHandoff);
+  const [previousResult, setPreviousResult] = useState<{
+    activeTurn: ActivePaintingTurn | null;
+    showPersistedTurn: boolean;
+    state: PaintingMessageState;
+  } | null>(null);
   const receiptId = painting && painting.files.output.length === 0 ? painting.id : undefined;
   const generation = usePaintingGeneration({
     initialAspectRatio: initialFiles.outputAspectRatio,
     initialOutputs: initialFiles.outputs,
+    completedPaintingId: initialFiles.outputs.length > 0 ? painting?.id : undefined,
     onReceipt,
     paintingId: receiptId,
   });
@@ -83,6 +99,13 @@ export function PaintingComposer({
     imageParamsResolutionLabel(generation.paramValues ?? seededParamValues) ??
     t('painting.settings.option.auto');
   const outputs = generation.outputs.length > 0 ? generation.outputs : initialFiles.outputs;
+  const handoffReference =
+    initialAttachments.length === 1 &&
+    isComposerAttachmentReady(initialAttachments[0]) &&
+    initialAttachments[0].kind === 'image'
+      ? [initialAttachments[0]]
+      : [];
+  const reference = usePaintingReference(outputs.length > 0 ? outputs : handoffReference);
   const firstOutput = outputs[0];
   const failure = generation.error ?? generation.interruption;
   const assistantStatus =
@@ -120,6 +143,23 @@ export function PaintingComposer({
     async (input: PaintingGenerationInput) => {
       if (isSubmittingRef.current || generation.status === 'generating') return null;
       isSubmittingRef.current = true;
+      const restoreTurn = failure ? previousResult : { activeTurn, showPersistedTurn };
+      if (!failure && outputs.length > 0 && messages.length > 0) {
+        setPreviousResult({
+          activeTurn,
+          showPersistedTurn,
+          state: {
+            aspectRatio: generation.aspectRatio,
+            error: null,
+            interruption: null,
+            outputs,
+            paintingId: activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined),
+            prompt: activeTurn?.input.prompt ?? painting?.prompt ?? '',
+            resolution: generationResolution,
+            status: 'idle',
+          },
+        });
+      }
       setShowPersistedTurn(false);
       setActiveTurn({
         assistantMessageId: Crypto.randomUUID(),
@@ -130,7 +170,8 @@ export function PaintingComposer({
       try {
         const result = await generatePainting(input);
         if (!result) {
-          setActiveTurn(null);
+          setActiveTurn(restoreTurn?.activeTurn ?? null);
+          setShowPersistedTurn(restoreTurn?.showPersistedTurn ?? false);
           return null;
         }
         setActiveTurn((current) =>
@@ -145,7 +186,19 @@ export function PaintingComposer({
         isSubmittingRef.current = false;
       }
     },
-    [activeTurn, generatePainting, generation.status, showPersistedTurn],
+    [
+      activeTurn,
+      failure,
+      generatePainting,
+      generation.aspectRatio,
+      generation.status,
+      generationResolution,
+      messages.length,
+      outputs,
+      painting,
+      previousResult,
+      showPersistedTurn,
+    ],
   );
   const retryInput = activeTurn?.input;
   const canRetry = Boolean(failure && retryInput);
@@ -160,8 +213,8 @@ export function PaintingComposer({
   const handleCancel = () => {
     void generation.cancel().then((cancelled) => {
       if (cancelled) {
-        setActiveTurn(null);
-        setShowPersistedTurn(false);
+        setActiveTurn(previousResult?.activeTurn ?? null);
+        setShowPersistedTurn(previousResult?.showPersistedTurn ?? false);
       }
     });
   };
@@ -198,8 +251,15 @@ export function PaintingComposer({
     ],
   );
   const renderMessage = useCallback(
-    (message: MessageListItem) => <PaintingMessage message={message} state={messageRenderState} />,
-    [messageRenderState],
+    (message: MessageListItem) => (
+      <View className="gap-3">
+        {message.role === 'assistant' && failure && previousResult ? (
+          <PaintingAssistantMessage {...previousResult.state} animateOutput={false} />
+        ) : null}
+        <PaintingMessage message={message} state={messageRenderState} />
+      </View>
+    ),
+    [failure, messageRenderState, previousResult],
   );
   // Results belong to the message list. Only an explicit handoff or an
   // unfinished receipt seeds the draft; finishing a job must not remount it.
@@ -230,6 +290,7 @@ export function PaintingComposer({
           onCancel={handleCancel}
           onGenerate={handleGenerate}
           painting={painting}
+          reference={reference}
           status={generation.status}
         />
       </ComposerDock>

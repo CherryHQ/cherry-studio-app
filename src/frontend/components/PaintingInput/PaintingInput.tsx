@@ -1,27 +1,33 @@
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import { type ImageGenerationMode, type ParamValues } from '@cherrystudio/provider-registry';
-import { Composer } from '@cherrystudio/ui/components';
+import { Button, Composer } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import {
-  ComposerAttachments,
+  ComposerAttachmentStrip,
   ComposerField,
   ComposerMenu,
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
+  useComposerActions,
   useComposerPresentationActions,
   useComposerState,
 } from '@/frontend/components/Composer';
-import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
+import {
+  appendComposerAttachments,
+  type ComposerAttachmentReady,
+} from '@/frontend/components/Composer/utils/composerAttachments';
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
   useModelPickerData,
   type ModelPickerModelItem,
 } from '@/frontend/components/ModelPicker';
+import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 import {
   getImageParamFields,
@@ -31,6 +37,7 @@ import {
   reconcileImageParamDraft,
   resolveImageGenerationMode,
 } from '@/frontend/data/paintings/imageGenerationParams';
+import { fileEntryUrl } from '@/shared/data/types/file';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
@@ -40,7 +47,9 @@ import {
 } from '@/shared/utils/paintingModelSupport';
 
 import { imageParamSummary } from './imageGenerationLabels';
+import { PaintingReferencePicker } from './PaintingReferencePicker';
 import { PaintingSettingsBottomSheet } from './PaintingSettingsBottomSheet';
+import type { PaintingReference } from './usePaintingReference';
 
 export type PaintingInputSubmission = {
   attachments: readonly ComposerAttachmentReady[];
@@ -70,6 +79,7 @@ type PaintingInputProps = {
   onCancel: () => void;
   onGenerate: (input: PaintingInputSubmission) => Promise<unknown>;
   painting?: Painting;
+  reference?: PaintingReference;
   status: 'idle' | 'generating';
 };
 
@@ -81,9 +91,11 @@ export function PaintingInput({
   onCancel,
   onGenerate,
   painting,
+  reference,
   status,
 }: PaintingInputProps) {
   const { t } = useTranslation();
+  const file = useBackendModule('file');
   const [defaultPaintingModelId] = usePreference('feature.paintings.default_model_id');
   const initialModelId =
     painting?.modelId && isUniqueModelId(painting.modelId)
@@ -106,13 +118,37 @@ export function PaintingInput({
   } | null>(null);
   const [seedApplied, setSeedApplied] = useState(false);
   const { attachments, draft } = useComposerState();
+  const { removeAttachment } = useComposerActions();
+  const selectedReference = reference?.selected;
+  const referenceAttachment = useMemo<ComposerAttachmentReady | undefined>(
+    () =>
+      selectedReference
+        ? {
+            ...selectedReference,
+            id: `reference:${selectedReference.fileEntryId}`,
+            kind: 'image',
+            status: 'ready',
+            uri: fileEntryUrl(selectedReference.fileEntryId),
+          }
+        : undefined,
+    [selectedReference],
+  );
+  const visibleAttachments = referenceAttachment
+    ? appendComposerAttachments(attachments, [referenceAttachment])
+    : attachments;
+  const handleAttachmentRemove = (id: string) => {
+    const attachment = visibleAttachments.find((item) => item.id === id);
+    if (selectedReference && attachment?.fileEntryId === selectedReference.fileEntryId)
+      reference?.clear();
+    removeAttachment(id);
+  };
   const modelPickerData = useModelPickerData({ modelType: modelSelection ? 'all' : 'image' });
   const selectedModelItem = modelPickerData.getModelItem(selectedModelId);
   const selectedModel = selectedModelItem?.model;
   const selectedProvider = selectedModelItem?.provider;
   const isSelectedModelAvailable = selectedModelItem !== undefined;
   const selectedModelLabel = selectedModel?.name ?? historicalModelLabel(painting);
-  const attachmentCount = attachments.length;
+  const attachmentCount = visibleAttachments.length;
   const requestedMode = attachmentCount > 0 ? 'edit' : 'generate';
   const selectedMode = resolvePaintingGenerationMode(selectedModel, attachmentCount > 0);
   const isSelectedModelModeCompatible = selectedMode !== undefined;
@@ -202,7 +238,22 @@ export function PaintingInput({
       if (!selectedModelId || !selectedModel || !isSelectedModelAvailable) {
         throw new Error('Select an available image generation model');
       }
-      const submittedAttachmentCount = attachments.length;
+      if (reference?.needsSelection) {
+        throw new PaintingInputValidationError('painting.input.chooseReference', {});
+      }
+      const submittedAttachments = [...attachments];
+      if (
+        referenceAttachment &&
+        !attachments.some(
+          (attachment) => attachment.fileEntryId === referenceAttachment.fileEntryId,
+        )
+      ) {
+        submittedAttachments.push({
+          ...referenceAttachment,
+          uri: await file.getUri(referenceAttachment.fileEntryId),
+        });
+      }
+      const submittedAttachmentCount = submittedAttachments.length;
       const mode = resolvePaintingGenerationMode(selectedModel, submittedAttachmentCount > 0);
       if (!mode) throw new Error('The selected model does not support these image inputs');
       const submittedMode = resolveImageGenerationMode(selectedModel?.imageGeneration, mode);
@@ -226,7 +277,7 @@ export function PaintingInput({
         submittedMode,
       );
       await onGenerate({
-        attachments,
+        attachments: submittedAttachments,
         mode,
         modelId: selectedModelId,
         modelName: selectedModel.name,
@@ -234,7 +285,16 @@ export function PaintingInput({
         prompt: text,
       });
     },
-    [isSelectedModelAvailable, onGenerate, paramValues, selectedModel, selectedModelId],
+    [
+      file,
+      isSelectedModelAvailable,
+      onGenerate,
+      paramValues,
+      reference?.needsSelection,
+      referenceAttachment,
+      selectedModel,
+      selectedModelId,
+    ],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) =>
@@ -254,6 +314,7 @@ export function PaintingInput({
           Boolean(selectedModelId) &&
           isSelectedModelAvailable &&
           isPromptValid &&
+          !reference?.needsSelection &&
           status === 'idle'
         }
         dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -267,7 +328,27 @@ export function PaintingInput({
         onStop={onCancel}
         streaming={status === 'generating'}
       >
-        <ComposerAttachments />
+        {reference ? <PaintingReferencePicker reference={reference} /> : null}
+        {visibleAttachments.length > 0 ? (
+          <View className="gap-2 pb-2">
+            {selectedReference ? (
+              <View className="flex-row flex-wrap items-center justify-between gap-2">
+                <Text className="text-sm text-muted-foreground">
+                  {t('painting.input.editReference')}
+                </Text>
+                {reference && reference.images.length > 1 ? (
+                  <Button onPress={reference.choose} size="sm" variant="ghost">
+                    <Button.Label>{t('painting.input.changeReference')}</Button.Label>
+                  </Button>
+                ) : null}
+              </View>
+            ) : null}
+            <ComposerAttachmentStrip
+              attachments={visibleAttachments}
+              onAttachmentRemove={handleAttachmentRemove}
+            />
+          </View>
+        ) : null}
         <ComposerField placeholder={t('painting.input.placeholder')} />
         <Composer.Toolbar>
           <ComposerMenu media="images" />
