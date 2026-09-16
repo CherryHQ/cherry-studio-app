@@ -113,30 +113,35 @@ export function createCalendarTools(deps: DeviceToolDependencies) {
     createDeviceRuntimeTool({
       capabilityId: CALENDAR_TOOL_IDS.createEvent,
       deps,
-      description: 'Create an event in a writable device calendar without attendees.',
+      description:
+        'Create an event in a writable device calendar without attendees. Android may open a system form if calendar lookup fails; requires_user_action does not confirm saving. Never retry an unknown write outcome automatically.',
       displayName: 'Create calendar event',
       inputSchema: createEventSchema,
       permissionScopes: ['calendar.write'],
-      run: (input) =>
-        createCalendarEvent({
-          allDay: input.allDay,
-          calendarId: input.calendarId || undefined,
-          endDate: input.endDate,
-          location: input.location || undefined,
-          notes: input.notes || undefined,
-          startDate: input.startDate,
-          timeZone: input.timeZone || undefined,
-          title: input.title,
-        }),
+      run: (input, signal) =>
+        createCalendarEvent(
+          {
+            allDay: input.allDay,
+            calendarId: input.calendarId || undefined,
+            endDate: input.endDate,
+            location: input.location || undefined,
+            notes: input.notes || undefined,
+            startDate: input.startDate,
+            timeZone: input.timeZone || undefined,
+            title: input.title,
+          },
+          signal,
+        ),
     }),
     createDeviceRuntimeTool({
       capabilityId: CALENDAR_TOOL_IDS.updateEvent,
       deps,
-      description: 'Update selected fields of an existing device calendar event.',
+      description:
+        'Update selected fields of an existing device calendar event. Android failures may open the existing event for manual editing; requested changes are not prefilled and requires_user_action does not confirm saving.',
       displayName: 'Update calendar event',
       inputSchema: updateEventSchema,
       permissionScopes: ['calendar.read', 'calendar.write'],
-      run: (input) => updateCalendarEvent(toEventUpdate(input)),
+      run: (input, signal) => updateCalendarEvent(toEventUpdate(input), signal),
     }),
     createDeviceRuntimeTool({
       capabilityId: CALENDAR_TOOL_IDS.deleteEvent,

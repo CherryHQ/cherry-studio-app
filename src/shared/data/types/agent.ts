@@ -7,7 +7,7 @@ import { UniqueModelIdSchema } from '@/shared/data/types/model';
 export const AgentToolApprovalModeSchema = z.enum(['default', 'auto']);
 export type AgentToolApprovalMode = z.infer<typeof AgentToolApprovalModeSchema>;
 
-export const DEFAULT_AGENT_TOOL_APPROVAL_MODE: AgentToolApprovalMode = 'default';
+export const DEFAULT_AGENT_TOOL_APPROVAL_MODE: AgentToolApprovalMode = 'auto';
 export const CHERRY_AGENT_AVATAR = '🍒';
 
 export const AgentIdSchema = z.uuidv4();

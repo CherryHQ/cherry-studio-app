@@ -7,7 +7,7 @@ import { BlurTargetView } from 'expo-blur';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MainHeader } from '@/frontend/appShell/header';
@@ -145,12 +145,17 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       </ComposerDismissArea>
       {hasComposer ? (
         <ComposerDock layoutMode="flow">
-          <ChatInput
-            agentId={resolvedAgentId}
-            controls={controls}
-            dismissKeyboardOnSend
-            sessionId={sessionId}
-          />
+          <View className="gap-2">
+            <ChatInput
+              agentId={resolvedAgentId}
+              controls={controls}
+              dismissKeyboardOnSend
+              sessionId={sessionId}
+            />
+            <Text className="text-center text-xs text-muted-foreground">
+              {t('chat.input.disclaimer')}
+            </Text>
+          </View>
         </ComposerDock>
       ) : null}
     </ComposerSessionProvider>
