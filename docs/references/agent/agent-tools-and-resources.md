@@ -335,6 +335,14 @@ retry; cancellation still propagates without becoming a cached failure.
   the Runtime approval decision immediately before access.
 - A missing platform API or denied permission returns a normalized unavailable/permission result;
   it never falls back to another calendar account or remote service.
+- On Android, creation failures before writing may open the system calendar form with the event
+  details. The user chooses the destination calendar and saves. A rejected or timed-out creation
+  after writing starts has an unknown outcome and must not be retried or open a second creation form.
+- Failed Android updates may open the existing event in the system calendar for manual editing.
+  Pending writes must settle before another edit; a timeout returns an unknown outcome without
+  opening the event. The system form does not prefill updates or reliably report whether the user
+  saved. Its result is `requires_user_action`, never confirmation of a successful mutation.
+  These fallbacks retain the tool's existing permission and approval requirements.
 - Reminder capabilities are iOS-only and are absent from the Android catalog rather than present and
   always failing.
 - A device failure settles as a `{ status: 'error', message, retryable }` value rather than a throw,

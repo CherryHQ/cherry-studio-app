@@ -1,4 +1,5 @@
 import { BottomSheet, Button, Image } from '@cherrystudio/ui/components';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -16,6 +17,7 @@ export function PaintingTemplateBottomSheet({
   template,
 }: PaintingTemplateBottomSheetProps) {
   const { t } = useTranslation();
+  const [isPromptExpanded, setIsPromptExpanded] = useState(false);
 
   return (
     <BottomSheet
@@ -45,15 +47,36 @@ export function PaintingTemplateBottomSheet({
           <Image
             accessibilityLabel={template.title}
             cachePolicy="memory-disk"
-            className="h-52 w-40 rounded-lg"
+            className="aspect-[4/5] w-1/2 min-w-40 max-w-80 rounded-lg"
             contentFit="contain"
             source={template.preview}
             testID="painting-template-sheet-image"
           />
         </View>
-        <Text className="text-base text-foreground" selectable testID="painting-template-prompt">
-          {createPaintingTemplatePrompt(template)}
-        </Text>
+        <View className="gap-2">
+          <Text
+            className="text-base text-foreground"
+            numberOfLines={isPromptExpanded ? undefined : 4}
+            selectable
+            testID="painting-template-prompt"
+          >
+            {createPaintingTemplatePrompt(template)}
+          </Text>
+          <View className="items-start">
+            <Button
+              accessibilityState={{ expanded: isPromptExpanded }}
+              onPress={() => setIsPromptExpanded((expanded) => !expanded)}
+              size="sm"
+              variant="ghost"
+            >
+              {t(
+                isPromptExpanded
+                  ? 'painting.templates.hidePrompt'
+                  : 'painting.templates.showPrompt',
+              )}
+            </Button>
+          </View>
+        </View>
       </ScrollView>
     </BottomSheet>
   );

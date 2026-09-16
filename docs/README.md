@@ -8,6 +8,7 @@ Guides are task-oriented procedures for changing or extending the application.
 
 | Document | Description |
 | --- | --- |
+| [Development](./guides/development.md) | Set up the environment, run the development client, and find validation and packaging guides |
 | [Extending Cherry Mobile](./guides/extending.md) | Add resource endpoints, workflows, persistence, backend behavior, and UI |
 | [Git Workflow](./guides/git-workflow.md) | Commits, stacked PRs, review readiness, and case-only renames |
 | [GitHub Plugin Authorization](./guides/github-plugin-authorization.md) | Publisher OAuth App configuration, in-app browser authorization, token renewal, and acceptance prerequisites |

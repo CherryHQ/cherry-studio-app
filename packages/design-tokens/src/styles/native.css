@@ -53,6 +53,7 @@
   --color-border-selected: var(--border-selected);
   --color-link: var(--link);
   --color-secondary-active: var(--secondary-active);
+  --color-control-active: var(--control-active);
   --color-success: var(--success);
   --color-success-subtle: var(--success-subtle);
   --color-success-subtle-foreground: var(--success-subtle-foreground);
@@ -185,6 +186,7 @@
       --border-selected: var(--gray-alpha-700);
       --link: var(--blue-900);
       --secondary-active: var(--gray-alpha-300);
+      --control-active: oklch(0.67 0.192 146);
       --success: var(--green-900);
       --success-subtle: var(--green-100);
       --success-subtle-foreground: var(--green-1000);
@@ -308,6 +310,7 @@
       --border-selected: var(--gray-alpha-700);
       --link: var(--blue-900);
       --secondary-active: var(--gray-alpha-300);
+      --control-active: oklch(0.67 0.192 146);
       --success: var(--green-900);
       --success-subtle: var(--green-100);
       --success-subtle-foreground: var(--green-1000);

@@ -32,6 +32,8 @@
   /* Pressed state for `--secondary` fills. Not a Shadcn name — upstream models
    * interaction states as hover, which a touch surface does not have. */
   --secondary-active: var(--gray-alpha-300);
+  /* Fixed control fill from desktop's switch brand-600; not a text color. */
+  --control-active: oklch(0.67 0.192 146);
 
   /* Feedback.
    * 每个 intent 的 base 档位不同（error/info 取 700，success/warning 取 900），

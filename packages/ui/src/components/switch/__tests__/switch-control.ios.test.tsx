@@ -19,9 +19,12 @@ jest.mock('@expo/ui/swift-ui/modifiers', () => ({
   controlSize: (size: string) => ({ controlSize: size }),
   disabled: (disabled: boolean) => ({ disabled }),
   labelsHidden: () => ({ labelsHidden: true }),
+  tint: (color: string) => ({ tint: color }),
 }));
 
 jest.mock('uniwind', () => ({
+  useResolveClassNames: (className: string) =>
+    className === 'bg-control-active' ? { backgroundColor: 'control-active-color' } : {},
   useUniwind: () => ({ theme: 'dark' }),
 }));
 
@@ -64,6 +67,7 @@ describe('SwitchControl (iOS)', () => {
     expect(toggle.props.modifiers).toEqual([
       { labelsHidden: true },
       { controlSize: 'regular' },
+      { tint: 'control-active-color' },
       { accessibilityLabel: 'Airplane mode' },
       { disabled: false },
     ]);
@@ -108,6 +112,7 @@ describe('SwitchControl (iOS)', () => {
     expect(toggle.props.modifiers).toEqual([
       { labelsHidden: true },
       { controlSize: 'regular' },
+      { tint: 'control-active-color' },
       { accessibilityHidden: true },
       { disabled: true },
     ]);

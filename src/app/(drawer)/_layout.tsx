@@ -1,6 +1,7 @@
 import { type DrawerContentComponentProps, Drawer } from 'expo-router/drawer';
-import { useWindowDimensions } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 import type { PanGesture } from 'react-native-gesture-handler';
+import { useUniwind } from 'uniwind';
 
 import { RouteHeaderProvider } from '@/frontend/appShell/header';
 import { Sidebar } from '@/frontend/appShell/sidebar';
@@ -26,7 +27,13 @@ function configureDrawerGesture(gesture: PanGesture) {
 
 export default function DrawerLayout() {
   const { width } = useWindowDimensions();
-  const [backgroundColor, overlayColor] = useThemeColor(['background', 'scrim']);
+  const { theme } = useUniwind();
+  const [backgroundColor, sidebarColor, sidebarBorderColor, overlayColor] = useThemeColor([
+    'background',
+    'sidebar',
+    'sidebar-border',
+    'scrim',
+  ]);
 
   return (
     <RouteHeaderProvider rootAction="drawer">
@@ -38,6 +45,9 @@ export default function DrawerLayout() {
           // stays visible: it tells the user where they came from and closes the
           // drawer on tap.
           drawerStyle: {
+            backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
+            borderEndColor: sidebarBorderColor,
+            borderEndWidth: theme === 'dark' ? StyleSheet.hairlineWidth : 0,
             width: Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
           },
           // The chat surface is stable context; the sidebar is a temporary

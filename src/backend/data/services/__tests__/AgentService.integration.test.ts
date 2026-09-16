@@ -85,14 +85,18 @@ describe('AgentService persistence', () => {
       instructions: '',
       modelId: 'openai::gpt-4',
       name: 'Researcher',
-      toolApprovalMode: 'default',
+      toolApprovalMode: 'auto',
     });
   });
 
   it('creates one localized initial Agent only for a never-used Agent store', async () => {
     const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
 
-    expect(initial).toMatchObject({ avatar: '🍒', name: 'Cherry Agent' });
+    expect(initial).toMatchObject({
+      avatar: '🍒',
+      name: 'Cherry Agent',
+      toolApprovalMode: 'auto',
+    });
     await expect(agentService.createInitialAgent({ name: 'Cherry 小助手' })).resolves.toBeNull();
     expect((await agentService.list()).items).toHaveLength(1);
 
@@ -109,6 +113,7 @@ describe('AgentService persistence', () => {
     expect(await agentService.getById(agent.id)).toMatchObject({
       avatar: '🍒',
       avatarUri: null,
+      toolApprovalMode: 'auto',
     });
   });
 
@@ -150,13 +155,13 @@ describe('AgentService persistence', () => {
   it('persists an explicit tool approval mode and lets the user change it', async () => {
     const agent = await agentService.create({
       name: 'Researcher',
-      toolApprovalMode: 'auto',
+      toolApprovalMode: 'default',
     });
 
-    expect(agent.toolApprovalMode).toBe('auto');
+    expect(agent.toolApprovalMode).toBe('default');
     await expect(
-      agentService.update(agent.id, { toolApprovalMode: 'default' }),
-    ).resolves.toMatchObject({ toolApprovalMode: 'default' });
+      agentService.update(agent.id, { toolApprovalMode: 'auto' }),
+    ).resolves.toMatchObject({ toolApprovalMode: 'auto' });
   });
 
   it('falls back to no model when the preferred default is not registered', async () => {
