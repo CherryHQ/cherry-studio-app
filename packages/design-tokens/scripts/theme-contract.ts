@@ -88,6 +88,7 @@ export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
   'border-selected',
   'link',
   'secondary-active',
+  'control-active',
 
   /* Feedback */
   'success',

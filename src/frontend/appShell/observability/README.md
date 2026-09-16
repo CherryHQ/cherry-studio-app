@@ -20,8 +20,9 @@ session tracking, breadcrumbs, screenshots, view hierarchies, and log streaming 
 ### Consent
 
 Settings places Privacy settings and About us in the same group, with Privacy settings first.
-Privacy settings opens a page with one Send anonymous error reports switch. New installs and
-upgrades without a matching grant default to off. A grant is the stored `SENTRY_CONSENT_VERSION`;
+Privacy settings opens a page with one Send anonymous error reports switch. First use defaults to
+on; a saved `disabled` marker keeps manual opt-outs off across relaunches. Stale grants stay off.
+A grant is the stored `SENTRY_CONSENT_VERSION`;
 Android also stores when the grant began so older system ANR history is rejected. The native module
 stores this outside SQLite and excludes it from backups, so database startup failures do not
 prevent reading an existing grant. This is consent to diagnostic reporting, not acceptance of a
@@ -29,9 +30,10 @@ complete legal privacy policy. Bump the version when that scope changes.
 
 Enabling starts native and JavaScript reporting immediately in production builds; other builds only
 record the choice. Disabling closes the JS gate immediately, revokes the native gate, stops the SDK,
-deletes the grant, and removes the pending report cache. Android also checks consent before each
-queued send. A request already handed to the network may finish, and data already transmitted
-cannot be recalled. Startup without a current grant deletes any cache left behind, so a report
+replaces the grant with the disabled marker, and removes the pending report cache. Android also
+checks consent before each queued send. A request already handed to the network may finish, and
+data already transmitted cannot be recalled. Startup without a current grant deletes any cache left
+behind, so a report
 written after revocation is never replayed under a later grant. Persistence/cleanup failures are
 shown in settings. Native revocation closes its gate before disk operations; if the
 bridge call rejects, JS stays paused and the switch restores the last saved choice for retrying.

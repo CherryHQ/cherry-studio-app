@@ -11,7 +11,7 @@ export const dingtalkPlugin: PluginDefinition = {
   guide: dingtalkGuide,
   catalog: {
     id: 'dingtalk',
-    icon: 'file-text',
+    icon: 'dingtalk',
     links: {
       credentials: 'https://mcp.dingtalk.com',
       website: 'https://www.dingtalk.com',

@@ -193,8 +193,10 @@ The app has two search shapes, and which one a screen takes follows from where t
 
 A screen that already holds everything it can match keeps its search in place, through
 `components/InlineSearch`. The field sits between the screen's `RouteHeader` and its content: iOS
-mounts `Stack.SearchBar` with `placement="stacked"`, giving it a row under the title, while Android
-draws CherryUI's `SearchField` in that same spot. Android's own header search bar exists but arrives
+mounts `Stack.SearchBar` with `placement="stacked"` when the safe window width fits the form column.
+Above the 720-point form limit, iOS draws CherryUI's `SearchField` inside that column, aligned with
+the results, and the Agent list uses an opaque header to reserve space above it. Android always
+draws the content field. Android's own header search bar exists but arrives
 as a toolbar menu item, pinned right of the screen's actions and styled by the platform rather than
 by CherryUI, so it is deliberately not used. Agent list, model-service list, and MCP server list are
 all this shape.

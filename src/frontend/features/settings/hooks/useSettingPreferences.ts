@@ -4,12 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { withThemeTransition } from 'react-native-nitro-theme-transition';
 
 import { useMultiplePreferences } from '@/frontend/data/hooks';
-import { initI18n, resolveLanguage } from '@/frontend/i18n';
+import { resolveLanguage } from '@/frontend/i18n';
 import { themeTransition } from '@/frontend/utils/constants';
 import { applyThemeModePreference } from '@/frontend/utils/theme';
 import { type LanguageVarious, ThemeMode } from '@/shared/data/preference';
-
-import { languageOptions } from '../settingOptions';
+import { APP_LANGUAGES } from '@/shared/utils/languages';
 
 const preferenceMapping = {
   language: 'app.language',
@@ -21,7 +20,8 @@ export function useSettingPreferences() {
   const { toast } = useToast();
   const [preferences, setPreferences] = useMultiplePreferences(preferenceMapping);
   const persistenceVersionRef = useRef(0);
-  const languageValue = resolveLanguage(preferences.language);
+  const languageValue: LanguageVarious | 'system' =
+    preferences.language == null ? 'system' : resolveLanguage(preferences.language);
 
   const handleThemeModeChange = useCallback(
     (nextThemeMode: ThemeMode) => {
@@ -60,15 +60,22 @@ export function useSettingPreferences() {
   );
 
   const handleLanguageChange = useCallback(
-    (nextLanguage: LanguageVarious) => {
-      void setPreferences({ language: nextLanguage }).then(() => initI18n(nextLanguage));
+    (nextLanguage: LanguageVarious | 'system') => {
+      void setPreferences({ language: nextLanguage === 'system' ? null : nextLanguage }).catch(
+        () => {
+          toast.show({ label: t('settings.language.saveFailed'), variant: 'danger' });
+        },
+      );
     },
-    [setPreferences],
+    [setPreferences, t, toast],
   );
 
   return {
     language: {
-      options: languageOptions,
+      options: [
+        { label: t('settings.language.system'), value: 'system' as const },
+        ...APP_LANGUAGES,
+      ],
       value: languageValue,
       onValueChange: handleLanguageChange,
     },

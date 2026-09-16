@@ -56,6 +56,7 @@ type ChatInputProps = {
 
 const logger = loggerService.withContext('ChatInput');
 const restingInputHeight = 32;
+const FIELD_CONTENT_STYLE = { minHeight: restingInputHeight };
 const restingActionSlotWidth = restingInputHeight + 8;
 const restingSecondaryControlScale = 0.92;
 const activeToolbarGap = 16;
@@ -285,7 +286,12 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
                 </View>
                 <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
                   <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
-                    <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
+                    {/* Center a short field in the action row; longer drafts grow naturally. */}
+                    <View
+                      className="absolute top-0 right-0 left-0 justify-center"
+                      onLayout={handleFieldLayout}
+                      style={FIELD_CONTENT_STYLE}
+                    >
                       <ComposerField
                         style={isPluginPickerVisible ? compactInputStyle : undefined}
                         testID="chat-composer-input"

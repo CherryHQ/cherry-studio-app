@@ -18,6 +18,12 @@ configuration, not in repository rules.
   [Code Organization](docs/references/code-organization.md).
 - When adding, changing, removing, or running tests, read
   [Testing And CI](docs/guides/testing-and-ci.md).
+- When changing user-visible copy, translations, or supported languages, read
+  [Internationalization](docs/guides/internationalization.md). The coding AI must directly
+  translate new or changed copy into every supported locale in the same change, using the feature
+  context and glossary. `pnpm i18n:sync` scaffolds resources; `pnpm i18n:check` and CI only validate
+  them. Do not add an automatic translation workflow or translation service. The shared language
+  resolver owns locale selection for UI and Agent behavior.
 - Before creating commits, splitting work, or opening a pull request, read
   [Git Workflow](docs/guides/git-workflow.md).
 - Before creating installation packages or changing build configuration, read

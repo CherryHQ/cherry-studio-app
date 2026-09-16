@@ -7,6 +7,7 @@ import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUniwind } from 'uniwind';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
@@ -29,7 +30,8 @@ const endReachedThreshold = 24;
  */
 export function SidebarBody({ children }: PropsWithChildren) {
   const insets = useSafeAreaInsets();
-  const backgroundColor = useThemeColor('background');
+  const { theme } = useUniwind();
+  const backgroundColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
   const { bottomPadding: dockBottomPadding } = useDockMetrics();
   const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
   const endReachedHandlerRef = useRef<(() => void) | undefined>(undefined);
@@ -93,12 +95,6 @@ function SidebarBodyDefault({
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
         <SidebarNavRow
-          icon={FolderIcon}
-          label={t('navigation.library')}
-          onPress={openLibrary}
-          testID="sidebar-library"
-        />
-        <SidebarNavRow
           icon={MousePointerClickIcon}
           label={t('navigation.agents')}
           onPress={navigateAgents}
@@ -115,6 +111,12 @@ function SidebarBodyDefault({
           label={t('plugins.title')}
           onPress={openPlugins}
           testID="sidebar-plugins"
+        />
+        <SidebarNavRow
+          icon={FolderIcon}
+          label={t('navigation.library')}
+          onPress={openLibrary}
+          testID="sidebar-library"
         />
       </View>
 

@@ -4,6 +4,8 @@
  * `@/shared/data/types/webSearch`, below this module in the layering.
  */
 
+import type { AppLanguage } from '@/shared/utils/languages';
+
 export type PreferenceUpdateOptions = {
   optimistic: boolean;
 };
@@ -14,17 +16,4 @@ export enum ThemeMode {
   system = 'system',
 }
 
-/** 有限的UI语言 */
-export type LanguageVarious =
-  | 'zh-CN'
-  | 'zh-TW'
-  | 'de-DE'
-  | 'el-GR'
-  | 'en-US'
-  | 'es-ES'
-  | 'fr-FR'
-  | 'ja-JP'
-  | 'pt-PT'
-  | 'ro-RO'
-  | 'ru-RU'
-  | 'vi-VN';
+export type LanguageVarious = AppLanguage;
