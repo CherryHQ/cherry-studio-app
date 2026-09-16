@@ -117,6 +117,7 @@ export function PaintingInput({
     values: ImageParamDraft;
   } | null>(null);
   const [seedApplied, setSeedApplied] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { attachments, draft } = useComposerState();
   const { removeAttachment } = useComposerActions();
   const selectedReference = reference?.selected;
@@ -133,9 +134,12 @@ export function PaintingInput({
         : undefined,
     [selectedReference],
   );
-  const visibleAttachments = referenceAttachment
+  const attachmentsWithReference = referenceAttachment
     ? appendComposerAttachments(attachments, [referenceAttachment])
     : attachments;
+  // Keep the saved selection for recovery, but clear its preview as soon as send starts.
+  const isReferenceVisible = !isSubmitting && status === 'idle' && canSend !== false;
+  const visibleAttachments = isReferenceVisible ? attachmentsWithReference : attachments;
   const handleAttachmentRemove = (id: string) => {
     const attachment = visibleAttachments.find((item) => item.id === id);
     if (selectedReference && attachment?.fileEntryId === selectedReference.fileEntryId)
@@ -148,7 +152,7 @@ export function PaintingInput({
   const selectedProvider = selectedModelItem?.provider;
   const isSelectedModelAvailable = selectedModelItem !== undefined;
   const selectedModelLabel = selectedModel?.name ?? historicalModelLabel(painting);
-  const attachmentCount = visibleAttachments.length;
+  const attachmentCount = attachmentsWithReference.length;
   const requestedMode = attachmentCount > 0 ? 'edit' : 'generate';
   const selectedMode = resolvePaintingGenerationMode(selectedModel, attachmentCount > 0);
   const isSelectedModelModeCompatible = selectedMode !== undefined;
@@ -241,49 +245,54 @@ export function PaintingInput({
       if (reference?.needsSelection) {
         throw new PaintingInputValidationError('painting.input.chooseReference', {});
       }
-      const submittedAttachments = [...attachments];
-      if (
-        referenceAttachment &&
-        !attachments.some(
-          (attachment) => attachment.fileEntryId === referenceAttachment.fileEntryId,
-        )
-      ) {
-        submittedAttachments.push({
-          ...referenceAttachment,
-          uri: await file.getUri(referenceAttachment.fileEntryId),
-        });
-      }
-      const submittedAttachmentCount = submittedAttachments.length;
-      const mode = resolvePaintingGenerationMode(selectedModel, submittedAttachmentCount > 0);
-      if (!mode) throw new Error('The selected model does not support these image inputs');
-      const submittedMode = resolveImageGenerationMode(selectedModel?.imageGeneration, mode);
-      if (submittedMode?.definition.requirePrompt !== false && text.trim().length === 0) {
-        throw new Error('Image prompt is required');
-      }
-      if (!isImageParamDraftValid(paramValues, submittedMode)) {
-        const customSize = getImageParamFields(submittedMode).find(
-          (field) =>
-            field.spec.type === 'size' &&
-            paramValues[field.spec.pairedEnumKey ?? 'size'] === 'custom',
+      setIsSubmitting(true);
+      try {
+        const submittedAttachments = [...attachments];
+        if (
+          referenceAttachment &&
+          !attachments.some(
+            (attachment) => attachment.fileEntryId === referenceAttachment.fileEntryId,
+          )
+        ) {
+          submittedAttachments.push({
+            ...referenceAttachment,
+            uri: await file.getUri(referenceAttachment.fileEntryId),
+          });
+        }
+        const submittedAttachmentCount = submittedAttachments.length;
+        const mode = resolvePaintingGenerationMode(selectedModel, submittedAttachmentCount > 0);
+        if (!mode) throw new Error('The selected model does not support these image inputs');
+        const submittedMode = resolveImageGenerationMode(selectedModel?.imageGeneration, mode);
+        if (submittedMode?.definition.requirePrompt !== false && text.trim().length === 0) {
+          throw new Error('Image prompt is required');
+        }
+        if (!isImageParamDraftValid(paramValues, submittedMode)) {
+          const customSize = getImageParamFields(submittedMode).find(
+            (field) =>
+              field.spec.type === 'size' &&
+              paramValues[field.spec.pairedEnumKey ?? 'size'] === 'custom',
+          );
+          throw new PaintingInputValidationError('painting.input.invalidCustomSize', {
+            max: customSize?.spec.type === 'size' ? customSize.spec.maxSide : '',
+            min: customSize?.spec.type === 'size' ? customSize.spec.minSide : '',
+          });
+        }
+        const submittedValues = prepareImageParamValues(
+          paramValues,
+          selectedModel?.imageGeneration,
+          submittedMode,
         );
-        throw new PaintingInputValidationError('painting.input.invalidCustomSize', {
-          max: customSize?.spec.type === 'size' ? customSize.spec.maxSide : '',
-          min: customSize?.spec.type === 'size' ? customSize.spec.minSide : '',
+        await onGenerate({
+          attachments: submittedAttachments,
+          mode,
+          modelId: selectedModelId,
+          modelName: selectedModel.name,
+          paramValues: submittedValues,
+          prompt: text,
         });
+      } finally {
+        setIsSubmitting(false);
       }
-      const submittedValues = prepareImageParamValues(
-        paramValues,
-        selectedModel?.imageGeneration,
-        submittedMode,
-      );
-      await onGenerate({
-        attachments: submittedAttachments,
-        mode,
-        modelId: selectedModelId,
-        modelName: selectedModel.name,
-        paramValues: submittedValues,
-        prompt: text,
-      });
     },
     [
       file,
@@ -311,6 +320,7 @@ export function PaintingInput({
         // model selection, prompt readiness, and in-flight work.
         canSend={
           canSend !== false &&
+          !isSubmitting &&
           Boolean(selectedModelId) &&
           isSelectedModelAvailable &&
           isPromptValid &&
@@ -328,10 +338,10 @@ export function PaintingInput({
         onStop={onCancel}
         streaming={status === 'generating'}
       >
-        {reference ? <PaintingReferencePicker reference={reference} /> : null}
+        {isReferenceVisible && reference ? <PaintingReferencePicker reference={reference} /> : null}
         {visibleAttachments.length > 0 ? (
           <View className="gap-2 pb-2">
-            {selectedReference ? (
+            {isReferenceVisible && selectedReference ? (
               <View className="flex-row flex-wrap items-center justify-between gap-2">
                 <Text className="text-sm text-muted-foreground">
                   {t('painting.input.editReference')}

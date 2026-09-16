@@ -12,5 +12,7 @@ The shared controls do not create painting jobs, navigate, or persist conversati
 Callers keep `usePaintingReference` mounted with the composer and supply successful outputs. A
 single output becomes the editing reference; multiple outputs require selection or dismissal.
 The controls show the reference, allow removal or replacement, and deduplicate it with manual
-attachments before deriving the generation mode and submitting. Clearing the draft on send does
-not clear the reference, and refreshing the same output does not undo an explicit removal.
+attachments before deriving the generation mode and submitting. Sending immediately clears the
+reference preview while retaining its selection for failure or cancellation recovery. The preview
+returns with the new successful output, or with the previous selection if the request fails or is
+cancelled. Refreshing the same output does not undo an explicit removal.
