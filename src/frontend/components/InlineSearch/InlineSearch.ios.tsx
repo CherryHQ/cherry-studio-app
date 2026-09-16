@@ -3,13 +3,23 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SearchBarCommands } from 'react-native-screens';
 
-import type { InlineSearchProps } from './InlineSearch.types';
+import { useIsFormContentConstrained } from '@/frontend/appShell/layout';
 
-/**
- * Keeps native search in its own row under the title, matching Android's field.
- * The shared adapter owns placement so screens use the same top search layout.
- */
-export function InlineSearch({ onChangeText, placeholder, value }: InlineSearchProps) {
+import type { InlineSearchProps } from './InlineSearch.types';
+import { InlineSearchField } from './InlineSearchField';
+
+export function InlineSearch(props: InlineSearchProps) {
+  const isFormContentConstrained = useIsFormContentConstrained();
+
+  // Native header search spans the window, outside the form's width constraint.
+  return isFormContentConstrained ? (
+    <InlineSearchField {...props} />
+  ) : (
+    <NativeInlineSearch {...props} />
+  );
+}
+
+function NativeInlineSearch({ onChangeText, placeholder, value }: InlineSearchProps) {
   const { t } = useTranslation();
   const searchBarRef = useRef<SearchBarCommands | null>(null);
   const nativeValueRef = useRef<string | undefined>(undefined);

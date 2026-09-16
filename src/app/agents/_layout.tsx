@@ -1,12 +1,13 @@
 import { Stack } from 'expo-router';
 
 import { headerScreenOptions } from '@/frontend/appShell/header';
-import { FormContentFrame } from '@/frontend/appShell/layout';
+import { FormContentFrame, useIsFormContentConstrained } from '@/frontend/appShell/layout';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 export default function AgentsStackLayout() {
   const foregroundColor = useThemeColor('foreground');
+  const isFormContentConstrained = useIsFormContentConstrained();
 
   // The editor is a form, not a list: nothing scrolls far enough for a floating
   // header to be worth the glass, and an opaque one lets the native stack own the
@@ -25,7 +26,8 @@ export default function AgentsStackLayout() {
       screenLayout={FormContentFrame}
       screenOptions={{
         ...headerScreenOptions,
-        headerTransparent: isLiquidGlassAvailable,
+        // Wide-window search is a content row; the header must reserve its own space.
+        headerTransparent: isLiquidGlassAvailable && !isFormContentConstrained,
         headerTintColor: foregroundColor,
       }}
     >
