@@ -16,6 +16,17 @@ const databaseName = 'cherry.db';
 // app_state journal key for the custom (FTS) DDL; mirrors SeedRunner's `seed:` journal.
 const customSqlJournalKey = 'custom-sql:agent-session-message-fts';
 
+/**
+ * Before closing, expo-sqlite by default walks `sqlite3_next_stmt` and
+ * finalizes every statement on the connection. That walk cannot tell app
+ * statements from the ones FTS5 owns internally, so FTS5 finalizes them a
+ * second time while the connection closes — a native use-after-free that
+ * killed the app on physical iOS devices. See expo/expo#38168.
+ */
+const openDatabaseOptions: SQLite.SQLiteOpenOptions = {
+  finalizeUnusedStatementsBeforeClosing: false,
+};
+
 const logger = loggerService.withContext('DbService');
 
 export type Database = ExpoSQLiteDatabase<DatabaseSchema>;
@@ -49,7 +60,7 @@ export class DbService extends BaseService {
   protected async onInit(): Promise<void> {
     this.assertOpen();
 
-    const sqlite = SQLite.openDatabaseSync(databaseName);
+    const sqlite = SQLite.openDatabaseSync(databaseName, openDatabaseOptions);
     this.connection = { db: createDrizzleDatabase(sqlite), sqlite };
 
     await this.configurePragmas();
@@ -63,9 +74,19 @@ export class DbService extends BaseService {
       return;
     }
 
-    this.connection?.sqlite.closeSync();
+    const connection = this.connection;
     this.connection = null;
     this.disposed = true;
+
+    try {
+      connection?.sqlite.closeSync();
+    } catch (error) {
+      // Drizzle prepares a statement per query and never finalizes it, and
+      // with the pre-close walk disabled SQLite refuses to close while any
+      // remain (SQLITE_BUSY). Leaking one handle at teardown is the accepted
+      // cost; a rejected onStop would leave the service stuck in Stopping.
+      logger.warn('Failed to close database connection', error as Error);
+    }
   }
 
   getDb(): Database {
