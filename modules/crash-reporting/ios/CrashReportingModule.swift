@@ -44,11 +44,14 @@ private final class CrashReportingState {
     }
     configured = true
     consentVersion = version
+    if !FileManager.default.fileExists(atPath: try consentFile().path) {
+      try cleanCaches()
+      try consentVersion.write(to: consentFile(), atomically: true, encoding: .utf8)
+    }
     if (try? String(contentsOf: consentFile(), encoding: .utf8)) == version {
       setGate(granted: true, active: false)
     } else {
       // Nothing recorded without a grant for this disclosure may be sent, including legacy reports.
-      try removeConsentFile()
       try cleanCaches()
     }
     if isGranted && canCapture {
@@ -78,7 +81,7 @@ private final class CrashReportingState {
     // The gates close before SDK shutdown and disk cleanup.
     setGate(granted: false, active: false)
     SentrySDK.close()
-    try removeConsentFile()
+    try "disabled".write(to: consentFile(), atomically: true, encoding: .utf8)
     try cleanCaches()
   }
 
@@ -106,13 +109,6 @@ private final class CrashReportingState {
     values.isExcludedFromBackup = true
     try directory.setResourceValues(values)
     return directory.appendingPathComponent("consent")
-  }
-
-  private func removeConsentFile() throws {
-    let file = try consentFile()
-    if FileManager.default.fileExists(atPath: file.path) {
-      try FileManager.default.removeItem(at: file)
-    }
   }
 
   private var caches: URL {

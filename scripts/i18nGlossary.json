@@ -1,0 +1,32 @@
+{
+  "doNotTranslate": ["Cherry Studio", "MCP", "OpenAI", "Ollama", "GitHub", "OAuth"],
+  "terms": {
+    "Agent": {
+      "note": "A configured agent with instructions and tools. Follow Mobile's domain language; do not replace it with Assistant.",
+      "zh-cn": "智能体",
+      "zh-tw": "智能體",
+      "ja-jp": "エージェント",
+      "de-de": "Agent",
+      "el-gr": "Πράκτορας",
+      "es-es": "Agente",
+      "fr-fr": "Agent",
+      "pt-pt": "Agente",
+      "ro-ro": "Agent",
+      "ru-ru": "Агент",
+      "tr-tr": "Ajan",
+      "vi-vn": "Tác nhân"
+    },
+    "Session": {
+      "note": "One conversation with an agent, including its messages and execution history.",
+      "zh-cn": "会话",
+      "zh-tw": "會話",
+      "ja-jp": "セッション"
+    },
+    "Provider": {
+      "note": "A configured AI service provider, not a generic supplier.",
+      "zh-cn": "服务商",
+      "zh-tw": "供應商",
+      "ja-jp": "プロバイダー"
+    }
+  }
+}

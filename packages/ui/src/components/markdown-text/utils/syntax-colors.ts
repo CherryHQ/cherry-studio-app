@@ -4,15 +4,15 @@ type SyntaxColors = NonNullable<NonNullable<MarkdownStyle['codeBlock']>['syntaxC
 
 const LIGHT_SYNTAX_COLORS: SyntaxColors = {
   keyword: '#A626A4',
-  string: '#3D7F3C',
-  number: '#986801',
-  constant: '#986801',
-  function: '#4078F2',
-  type: '#A16C00',
-  variable: '#E45649',
-  property: '#E45649',
-  tag: '#E45649',
-  attribute: '#986801',
+  string: '#337533',
+  number: '#8D5E00',
+  constant: '#8D5E00',
+  function: '#2A5FD7',
+  type: '#915C00',
+  variable: '#C0332B',
+  property: '#C0332B',
+  tag: '#C0332B',
+  attribute: '#8D5E00',
   embedded: '#CA1243',
 };
 

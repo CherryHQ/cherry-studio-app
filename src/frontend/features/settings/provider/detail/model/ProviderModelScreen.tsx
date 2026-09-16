@@ -43,7 +43,8 @@ export default function ProviderModelScreen() {
 }
 
 function ModelDetails({ model, provider }: { model: Model; provider: Provider }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const { toast } = useToast();
   const router = useRouter();
   const edit = () =>
@@ -150,7 +151,7 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
                 {t('settings.provider.models.detail.contextWindow')}
               </Text>
               <Text className="font-semibold text-foreground text-3xl" style={styles.number}>
-                {model.contextWindow?.toLocaleString()}
+                {model.contextWindow?.toLocaleString(locale)}
               </Text>
             </View>
           ) : null}
@@ -160,7 +161,7 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
                 <View className="min-w-32 flex-1 gap-1" key={limit.field}>
                   <Text className="text-muted-foreground text-sm">{limit.label}</Text>
                   <Text className="font-medium text-foreground text-xl" style={styles.number}>
-                    {limit.value?.toLocaleString()}
+                    {limit.value?.toLocaleString(locale)}
                   </Text>
                 </View>
               ))}

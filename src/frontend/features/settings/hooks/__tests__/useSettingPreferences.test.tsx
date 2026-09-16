@@ -11,7 +11,7 @@ const mockToastShow = jest.fn();
 const mockWithThemeTransition = jest.fn((applyTheme: () => void, _config: unknown) => applyTheme());
 const mockSetPreferences = jest.fn(async () => undefined);
 
-let mockPreferences: { language: string; themeMode: ThemeMode };
+let mockPreferences: { language: string | null; themeMode: ThemeMode };
 
 jest.mock('@/frontend/data/hooks', () => ({
   useMultiplePreferences: () => [mockPreferences, mockSetPreferences],
@@ -22,7 +22,6 @@ jest.mock('@/frontend/utils/theme', () => ({
 }));
 
 jest.mock('@/frontend/i18n', () => ({
-  initI18n: jest.fn(),
   resolveLanguage: (language: string) => language,
 }));
 
@@ -86,6 +85,27 @@ describe('useSettingPreferences', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
     preferences = undefined;
+  });
+
+  test('keeps system mode distinct from the effective language', async () => {
+    mockPreferences.language = null;
+    const settings = mount();
+    expect(settings.language.value).toBe('system');
+
+    await act(async () => settings.language.onValueChange('system'));
+    expect(mockSetPreferences).toHaveBeenCalledWith({ language: null });
+  });
+
+  test('a failed language save retains the old selection and reports the failure', async () => {
+    mockSetPreferences.mockRejectedValueOnce(new Error('write failed'));
+    const settings = mount();
+    await act(async () => settings.language.onValueChange('ja-JP'));
+
+    expect(current().language.value).toBe('en-US');
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'settings.language.saveFailed',
+      variant: 'danger',
+    });
   });
 
   test('applies the theme synchronously, before the write is even issued', () => {

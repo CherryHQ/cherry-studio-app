@@ -88,9 +88,9 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
   },
   {
     title: '主操作与品牌',
-    hint: '--primary 采用与 PC 一致的绿色方向，明暗模式使用对应绿色阶及配套前景；--brand 仅用于固定的 Cherry Studio Logo 红（#ff5757），不用于操作和内容。',
+    hint: '--control-active 对齐 PC 开关的固定绿色；--primary 保留明暗适配的强调色及配套前景；--brand 仅用于固定的 Cherry Studio Logo 红（#ff5757）。',
     kind: 'surface',
-    variables: ['--primary', '--primary-foreground', '--brand'],
+    variables: ['--control-active', '--primary', '--primary-foreground', '--brand'],
   },
   {
     title: '状态',

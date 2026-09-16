@@ -64,7 +64,7 @@ export default function AppearanceSettingsScreen() {
         open={isLanguagePickerOpen}
         options={settingPreferences.language.options}
         selectedValue={settingPreferences.language.value}
-        size="compact"
+        size="large"
         testID="language-picker"
         title={t('settings.items.appLanguage')}
       />
