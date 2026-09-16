@@ -262,6 +262,7 @@
   "chat.input.attachmentNoText": "文档中没有可读取的文字。扫描件或纯图片文档需要先进行文字识别再发送。",
   "chat.input.attachmentsRejected": "无法发送这些附件，请检查格式、文件大小，以及文档是否损坏或受密码保护。支持 PDF、DOCX、PPTX、XLSX 和文本文件。",
   "chat.input.attachmentUnavailable": "某个附件已不可用或已发生变化。",
+  "chat.input.disclaimer": "内容由 AI 生成，仅供参考",
   "chat.input.sendError.agentNotFound": "该 Agent 已不存在。",
   "chat.input.sendError.executionUnavailable": "该 Agent 的模型或工具不可用，请检查 Agent 设置。",
   "chat.input.sendError.sessionBusy": "该对话仍在回复中，请等待完成后重试。",
