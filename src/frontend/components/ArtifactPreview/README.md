@@ -8,7 +8,9 @@ This shared component family connects an artifact preview surface to its viewer 
   the transition target. Callers supply its accessible label and observe zoom state when navigation
   gestures must be disabled.
 - `useSaveImageToPhotos` owns the shared add-only photo permission and save flow, consumed by
-  painting and file viewers.
+  painting and file viewers. It prepares the common branded export copy through
+  `appShell/imageExport` after permission succeeds and releases it after Photos copies the image.
+  File viewers pass provenance so completed document exports do not receive another footer.
 - `ArtifactPreviewLink` accepts an Expo Router destination and marks its child as the preview
   source.
 - `ArtifactPreviewTarget` marks the corresponding viewer content as the transition target.

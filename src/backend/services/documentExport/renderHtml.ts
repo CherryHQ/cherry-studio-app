@@ -8,6 +8,7 @@ import {
   type ExportDocument,
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
+import { EXPORT_SIGNATURE_STYLE, exportSignatureColumns } from '@/shared/utils/exportSignature';
 
 import { escapeHtml, safeExportUrl } from './normalizeDocument';
 import {
@@ -157,11 +158,15 @@ export async function renderHtml(
   const { base, sm, lg, xl } = typography;
   const title = document.title && !isConversation ? `<h1>${escapeHtml(document.title)}</h1>` : '';
   const content = imageFrame
-    ? `<article class="print-content"><header class="print-caption"><span>${escapeHtml(imageFrame.label)}</span><span class="print-index">01—${String(document.sections.length).padStart(2, '0')}</span></header>${title}${body}</article>`
+    ? `<div class="print-frame"><article class="print-content"><header class="print-caption"><span>${escapeHtml(imageFrame.label)}</span><span class="print-index">01—${String(document.sections.length).padStart(2, '0')}</span></header>${title}${body}</article></div>`
     : `<article>${title}${body}</article>`;
   const footer = signature
-    ? `<footer class="print-signature"><strong class="print-brand">${escapeHtml(signature.brandName)}</strong><div class="print-metadata"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><span class="print-divider" aria-hidden="true"></span><time class="print-timestamp">${escapeHtml(signature.timestamp)}</time></div></footer>`
+    ? `<footer class="print-signature"><div class="print-identity"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><strong class="print-brand">${escapeHtml(signature.brandName)}</strong></div><time class="print-timestamp print-secondary">${escapeHtml(signature.timestamp)}</time></footer>`
     : '';
+  const signatureStyle = EXPORT_SIGNATURE_STYLE;
+  const signatureColumns = exportSignatureColumns(signatureStyle.referenceWidth);
+  const signatureScale = (imageFrame ? width : width - 32) / signatureStyle.referenceWidth;
+  const signatureSize = (value: number) => value * signatureScale;
   // Match the native message rows and CherryUI Markdown rhythm. The page supplies the
   // same resolved color tokens and accessibility type scale used by those components.
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>
@@ -216,7 +221,8 @@ details:not([open])>.details-content{display:none}
 math{max-width:100%;overflow-wrap:anywhere}math[display="block"]{padding:12px;margin:0 0 12px;text-align:center}
 ${
   imageFrame
-    ? `main.image-print{padding:16px 16px 0;background:${imageFrame.background}}
+    ? `main.image-print{padding:0;background:${imageFrame.background}}
+.print-frame{padding:16px 16px 0}
 .print-content{padding:24px 20px;background:${colors.background};color:${colors.foreground}}
 .print-caption{display:flex;justify-content:space-between;gap:12px;padding-bottom:16px;border-bottom:1px solid ${colors.border};margin-bottom:24px;color:${colors.muted};font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
 .print-caption+.print-section{padding-top:0}.print-caption+h1{margin-bottom:24px}
@@ -228,12 +234,12 @@ ${
 }
 ${
   signature
-    ? `.print-signature{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;min-height:44px;padding:8px 0;color:${signature.foreground}}
-.print-brand{min-width:0;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;letter-spacing:.02em;text-transform:uppercase}
-.print-metadata{display:flex;align-items:center;gap:8px;margin-left:auto;max-width:100%}
-img.print-logo{width:20px;height:20px;flex-shrink:0;object-fit:contain;border-radius:0;margin:0}
-.print-divider{width:1px;height:16px;flex-shrink:0;background:currentColor;opacity:.2}
-.print-timestamp{font-family:"SFMono-Regular",Consolas,monospace;font-size:${Math.max(12, sm.fontSize - 1)}px;line-height:${sm.lineHeight - 2}px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}`
+    ? `.print-signature{display:flex;align-items:center;gap:${signatureSize(signatureStyle.columnGap)}px;min-height:${signatureSize(signatureStyle.minHeight)}px;padding:${signatureSize(signatureStyle.paddingY)}px ${signatureSize(signatureStyle.paddingX)}px;background:${signature.background};color:${signature.foreground};font-size:${signatureSize(signatureStyle.primarySize)}px;line-height:${signatureSize(signatureStyle.primaryLineHeight)}px}
+.print-identity{display:flex;align-items:center;gap:${signatureSize(signatureStyle.detailGap)}px;min-width:0;flex:${signatureColumns.leftWidth}}
+.print-brand{min-width:0;font-size:inherit;line-height:inherit}
+.print-timestamp{min-width:0;flex:${signatureColumns.rightWidth};text-align:right}
+img.print-logo{width:${signatureSize(signatureStyle.logoSize)}px;height:${signatureSize(signatureStyle.logoSize)}px;flex-shrink:0;object-fit:contain;border-radius:0;margin:0}
+.print-secondary{font-size:${signatureSize(signatureStyle.secondarySize)}px;line-height:${signatureSize(signatureStyle.secondaryLineHeight)}px;opacity:${signatureStyle.secondaryOpacity};font-variant-numeric:tabular-nums}`
     : ''
 }
 </style></head><body><main class="${imageFrame ? 'image-print' : 'html-document'}">${content}${footer}</main></body></html>`;
@@ -246,7 +252,7 @@ function validatePresentation(value: ExportPresentation) {
   const signature = value.signature;
   const colors = Object.values(value.colors);
   if (frame) colors.push(frame.background);
-  if (signature) colors.push(signature.foreground);
+  if (signature) colors.push(signature.background, signature.foreground);
   if (
     !Number.isFinite(value.width) ||
     value.width < 280 ||

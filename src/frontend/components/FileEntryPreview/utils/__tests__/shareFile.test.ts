@@ -1,3 +1,4 @@
+import type { ExportSignature } from '@/shared/contracts/documentExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { shareFile } from '../shareFile';
@@ -5,6 +6,13 @@ import { shareFile } from '../shareFile';
 const mockCopy = jest.fn();
 const mockShare = jest.fn();
 const mockCreateDirectory = jest.fn();
+const mockRelease = jest.fn();
+const mockPrepareExport = jest.fn();
+
+jest.mock('@/frontend/appShell/imageExport', () => ({
+  prepareFileExport: (...args: unknown[]) => mockPrepareExport(...args),
+}));
+jest.mock('expo-crypto', () => ({ randomUUID: () => 'export-operation' }));
 
 jest.mock('expo-file-system', () => ({
   Directory: jest.fn((...parts: string[]) => ({
@@ -30,15 +38,28 @@ const entry = FileEntrySchema.parse({
   size: 2_000_000,
   updatedAt: 2,
 });
+const signature: ExportSignature = {
+  background: '#ffffff',
+  foreground: '#000000',
+  brandName: 'Cherry Studio',
+  timestamp: '2026.09.16 18:00',
+  logoDataUrl: 'data:image/png;base64,AA==',
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockCopy.mockResolvedValue(undefined);
   mockShare.mockResolvedValue(undefined);
+  mockPrepareExport.mockImplementation(async ({ entry, uri }) => ({
+    uri,
+    filename: entry.filename,
+    mediaType: entry.mediaType,
+    release: mockRelease,
+  }));
 });
 
 it('shares a copy with the display filename and original media type, independent of the viewer limit', async () => {
-  await shareFile({ entry, uri: 'file:///managed/id.md' });
+  await shareFile({ entry, uri: 'file:///managed/id.md' }, signature);
   expect(mockCopy).toHaveBeenCalledWith(
     expect.objectContaining({
       uri: `file:///cache/FileExports/${entry.id}/2/笔记.md`,
@@ -53,6 +74,41 @@ it('shares a copy with the display filename and original media type, independent
 
 it('does not present a partial export when copying fails', async () => {
   mockCopy.mockRejectedValueOnce(new Error('out of space'));
-  await expect(shareFile({ entry, uri: 'file:///managed/id.md' })).rejects.toThrow('out of space');
+  await expect(shareFile({ entry, uri: 'file:///managed/id.md' }, signature)).rejects.toThrow(
+    'out of space',
+  );
+  expect(mockShare).not.toHaveBeenCalled();
+  expect(mockRelease).toHaveBeenCalledTimes(1);
+});
+
+it('delivers the signed PNG copy with a matching filename and MIME type', async () => {
+  const imageEntry = FileEntrySchema.parse({
+    ...entry,
+    filename: '作品.jpg',
+    mediaType: 'image/jpeg',
+  });
+  mockPrepareExport.mockResolvedValueOnce({
+    uri: 'file:///signed.png',
+    filename: '作品.png',
+    mediaType: 'image/png',
+    release: mockRelease,
+  });
+  await shareFile({ entry: imageEntry, uri: 'file:///managed/original.jpg' }, signature);
+  expect(mockShare).toHaveBeenCalledWith(
+    `file:///cache/FileExports/${entry.id}/export-operation/作品.png`,
+    {
+      dialogTitle: '作品.png',
+      mimeType: 'image/png',
+    },
+  );
+  expect(mockRelease).toHaveBeenCalledTimes(1);
+});
+
+it('does not share the unmarked original after signature generation fails', async () => {
+  mockPrepareExport.mockRejectedValueOnce(new Error('Cannot render signature'));
+  await expect(shareFile({ entry, uri: 'file:///managed/id.md' }, signature)).rejects.toThrow(
+    'Cannot render signature',
+  );
+  expect(mockCopy).not.toHaveBeenCalled();
   expect(mockShare).not.toHaveBeenCalled();
 });

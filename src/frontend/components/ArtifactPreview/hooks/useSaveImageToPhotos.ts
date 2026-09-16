@@ -1,26 +1,41 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import * as MediaLibrary from 'expo-media-library';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { prepareImageExport, useExportSignature } from '@/frontend/appShell/imageExport';
 import { useBackendModule } from '@/frontend/data';
 import { canRequestDevicePermission, canUseDevicePermission } from '@/shared/contracts';
+import type { FileEntryProvenance } from '@/shared/data/types/file';
+import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 /** Shared add-only Photos permission flow for generated and managed images. */
-export function useSaveImageToPhotos(uri: string) {
+export function useSaveImageToPhotos(uri: string, provenance?: FileEntryProvenance) {
   const { t } = useTranslation();
   const permissions = useBackendModule('permissions');
   const { toast } = useToast();
   const { alert } = useAlert();
+  const signature = useExportSignature();
+  const saving = useRef(false);
 
   const saveToPhotos = useCallback(async () => {
+    if (saving.current) return;
+    saving.current = true;
+    let exported: Awaited<ReturnType<typeof prepareImageExport>> | undefined;
     try {
-      await MediaLibrary.Asset.create(uri);
+      exported = await prepareImageExport(
+        { uri, provenance },
+        { ...signature, timestamp: formatExportTimestamp(new Date()) },
+      );
+      await MediaLibrary.Asset.create(exported.uri);
       toast.show({ label: t('imageActions.saved'), variant: 'success' });
     } catch {
       toast.show({ label: t('imageActions.saveFailed'), variant: 'danger' });
+    } finally {
+      saving.current = false;
+      exported?.release();
     }
-  }, [uri, t, toast]);
+  }, [uri, provenance, signature, t, toast]);
 
   const showOpenSettingsAlert = useCallback(() => {
     alert.confirm({
