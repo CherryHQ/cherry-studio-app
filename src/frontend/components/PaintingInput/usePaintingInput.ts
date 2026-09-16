@@ -41,7 +41,7 @@ export function usePaintingInput({
 }) {
   const file = useBackendModule('file');
   const { attachments, draft } = useComposerState();
-  const { clearAttachments, removeAttachment } = useComposerActions();
+  const { removeAttachment } = useComposerActions();
   const session = usePaintingInputSession();
   const { reference } = session;
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,38 +124,17 @@ export function usePaintingInput({
     strategy,
     reference,
     referenceAttachment,
-    isReferencePaused,
-    isCheckingReference,
-    isReferenceUnavailable,
     attachments: submittedAttachments,
-    issue,
-    attachmentIssue,
     paramValues,
     resolvedMode,
     isSubmitting,
     canSend,
-    inputIssueForModel: (candidate: Model) => {
-      const candidateStrategy = createPaintingGenerationStrategy(candidate);
-      const includeReference =
-        selection &&
-        (selection.origin === 'explicit' ||
-          (attachments.length === 0 &&
-            referenceFact &&
-            candidateStrategy.canReference(referenceFact)));
-      const imageIds = new Set(attachments.map((image) => image.fileEntryId ?? image.id));
-      if (includeReference) imageIds.add(selection.image.fileEntryId);
-      return candidateStrategy.inputIssue(imageIds.size);
-    },
     setParamValue: (key: string, value: unknown) => {
       if (model)
         session.setParameterDraft(parameterKey, {
           modelId: model.id,
           values: { ...paramValues, [key]: value },
         });
-    },
-    clearImages: () => {
-      reference.clear();
-      clearAttachments();
     },
     removeAttachment: (id: string) => {
       const attachment = submittedAttachments.find((item) => item.id === id);

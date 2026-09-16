@@ -22,15 +22,10 @@ import {
   type ModelPickerModelItem,
 } from '@/frontend/components/ModelPicker';
 import { usePreference } from '@/frontend/data/hooks';
-import { fileAttachmentIssueDescription } from '@/frontend/utils/fileAttachmentFeedback';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 import { getImageParamFields, type ImageParamDraft } from '@/shared/utils/imageGenerationParams';
-import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
-import {
-  createPaintingGenerationStrategy,
-  PaintingGenerationError,
-} from '@/shared/utils/paintingGenerationStrategy';
+import { PaintingGenerationError } from '@/shared/utils/paintingGenerationStrategy';
 
 import { imageParamSummary } from './imageGenerationLabels';
 import { paintingInputIssueLabel } from './paintingInputFeedback';
@@ -94,7 +89,7 @@ export function PaintingInput({
     initialParamValues: selectedModelId === initialModelId ? initialParamValues : undefined,
     onGenerate,
   });
-  const { inputIssueForModel, reference, strategy } = input;
+  const { reference, strategy } = input;
   const openProviderSetup = useOpenProviderSetup(
     modelSelection?.providerSetupReturnTo ??
       (painting ? `/paintings?paintingId=${encodeURIComponent(painting.id)}` : '/paintings'),
@@ -106,17 +101,6 @@ export function PaintingInput({
     : input.attachments.filter((item) => item.id !== input.referenceAttachment?.id);
   const paramFields = getImageParamFields(input.resolvedMode);
   const settingsSummary = imageParamSummary(t, paramFields, input.paramValues);
-  const issueLabel = modelPickerData.isLoading
-    ? t('settings.provider.models.loading')
-    : input.isCheckingReference
-      ? t('painting.input.checkingReference')
-      : input.isReferenceUnavailable
-        ? t('painting.input.referenceUnavailable')
-        : input.issue
-          ? paintingInputIssueLabel(t, input.issue)
-          : input.attachmentIssue
-            ? fileAttachmentIssueDescription(input.attachmentIssue.issue, t)
-            : undefined;
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       if (modelSelection) modelSelection.onSelect(item.modelId);
@@ -126,24 +110,6 @@ export function PaintingInput({
     [modelSelection],
   );
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
-  const describeModel = useCallback(
-    (item: ModelPickerModelItem) => {
-      if (isTextGenerationModel(item.model)) return { description: '', priority: 1 };
-      const candidate = createPaintingGenerationStrategy(item.model);
-      const issue = inputIssueForModel(item.model);
-      const capabilityKeys = {
-        'generate-only': 'painting.model.generateOnly',
-        'generate-and-edit': 'painting.model.generateAndEdit',
-        'image-required': 'painting.model.imageRequired',
-        unavailable: 'painting.input.modelUnavailable',
-      } as const;
-      return {
-        description: issue ? paintingInputIssueLabel(t, issue) : t(capabilityKeys[candidate.kind]),
-        priority: issue ? 2 : 0,
-      };
-    },
-    [inputIssueForModel, t],
-  );
   const getSendErrorLabel = useCallback(
     (error: unknown) =>
       error instanceof PaintingGenerationError
@@ -170,22 +136,19 @@ export function PaintingInput({
         {isReferenceVisible && reference.isPickerOpen && strategy.acceptsImages ? (
           <PaintingReferencePicker reference={reference} />
         ) : null}
-        {isReferenceVisible && input.isReferencePaused ? (
-          <View className="flex-row items-center justify-between gap-2 pb-2">
-            <Text className="flex-1 text-sm text-muted-foreground">
-              {t('painting.input.referencePaused')}
-            </Text>
-            <Button onPress={reference.clear} size="sm" variant="ghost">
-              <Button.Label>{t('common.remove')}</Button.Label>
-            </Button>
-          </View>
-        ) : null}
         {visibleAttachments.length > 0 ? (
           <View className="gap-2 pb-2">
             {isReferenceVisible && input.referenceAttachment ? (
-              <Text className="text-sm text-muted-foreground">
-                {t('painting.input.editReference')}
-              </Text>
+              <View className="flex-row flex-wrap items-center justify-between gap-2">
+                <Text className="text-sm text-muted-foreground">
+                  {t('painting.input.editReference')}
+                </Text>
+                {reference.images.length > 1 ? (
+                  <Button onPress={reference.choose} size="sm" variant="ghost">
+                    <Button.Label>{t('painting.input.changeReference')}</Button.Label>
+                  </Button>
+                ) : null}
+              </View>
             ) : null}
             <ComposerAttachmentStrip
               attachments={visibleAttachments}
@@ -193,27 +156,9 @@ export function PaintingInput({
             />
           </View>
         ) : null}
-        {isReferenceVisible ? (
-          <View className="flex-row flex-wrap items-center gap-2">
-            {strategy.acceptsImages && reference.images.length > 0 ? (
-              <Button onPress={reference.choose} size="sm" variant="ghost">
-                <Button.Label>{t('painting.input.usePreviousResult')}</Button.Label>
-              </Button>
-            ) : null}
-            {input.attachments.length > 0 ? (
-              <Button onPress={input.clearImages} size="sm" variant="ghost">
-                <Button.Label>
-                  {t(
-                    strategy.canGenerate ? 'painting.input.newImage' : 'painting.input.changeImage',
-                  )}
-                </Button.Label>
-              </Button>
-            ) : null}
-          </View>
-        ) : null}
         <ComposerField placeholder={t('painting.input.placeholder')} />
         <Composer.Toolbar>
-          {strategy.acceptsImages ? <ComposerMenu media="images" /> : null}
+          <ComposerMenu media="images" />
           {input.resolvedMode && paramFields.length > 0 ? (
             <Composer.Action
               accessibilityLabel={
@@ -242,15 +187,6 @@ export function PaintingInput({
           />
           <Composer.Send />
         </Composer.Toolbar>
-        {isReferenceVisible && issueLabel ? (
-          <Text
-            accessibilityRole="text"
-            className="text-sm text-muted-foreground"
-            testID="painting-input-issue"
-          >
-            {issueLabel}
-          </Text>
-        ) : null}
       </ComposerSurface>
       {isSettingsOpen && input.resolvedMode ? (
         <PaintingSettingsBottomSheet
@@ -262,7 +198,6 @@ export function PaintingInput({
       ) : null}
       {isModelPickerOpen ? (
         <ModelPickerDrawer
-          describeModel={describeModel}
           modelType={modelSelection ? 'all' : 'image'}
           open
           onAddProvider={() => {

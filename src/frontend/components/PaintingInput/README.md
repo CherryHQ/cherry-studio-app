@@ -14,7 +14,9 @@ The shared controls do not create painting jobs, navigate, or persist conversati
 `createPaintingGenerationStrategy` in shared utilities resolves the callable mode, image limits,
 prompt requirements and strict parameter admission from model capabilities. Both backend execution
 owners use the same strategy before persisting work, with authoritative managed-file metadata.
-`usePaintingInput` applies this policy to the session; `PaintingInput` renders the controls and feedback.
+`usePaintingInput` applies this policy to the session; `PaintingInput` retains the existing controls
+and layout. Readiness checks govern submission without adding persistent inline status copy, new
+action rows, or model capability subtitles. Rejected submissions use the existing feedback flow.
 
 A valid single output becomes an automatic reference only for compatible models and untouched
 next-turn input. Multiple outputs remain optional candidates. Generate-only models pause automatic

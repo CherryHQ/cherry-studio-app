@@ -27,7 +27,7 @@ export function usePaintingReference(
     resultId: result?.id,
     selection: attachments.length === 0 ? automaticSelection(result) : undefined,
     attachmentKey,
-    isPickerOpen: false,
+    isPickerOpen: attachments.length === 0 && (result?.images.length ?? 0) > 1,
     submitted: false,
     editedAfterSubmission: false,
   }));
@@ -59,7 +59,13 @@ export function usePaintingReference(
       resultId: result?.id,
       selection,
       editedAfterSubmission,
-      ...(hasNewResult ? { isPickerOpen: false, submitted: false } : {}),
+      ...(hasNewResult
+        ? {
+            isPickerOpen:
+              !hasNewInput && !editedAfterSubmission && (result?.images.length ?? 0) > 1,
+            submitted: false,
+          }
+        : {}),
     };
     setState(current);
   }

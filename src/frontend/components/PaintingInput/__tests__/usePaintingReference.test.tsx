@@ -52,7 +52,6 @@ describe('painting reference intent', () => {
   it('leaves multiple results as optional candidates until explicitly selected', () => {
     update({ ids: ['first', 'second'] });
     expect(reference.selection).toBeUndefined();
-    act(() => reference.choose());
     expect(reference.isPickerOpen).toBe(true);
     act(() => reference.select(image('second')));
     update({ ids: ['first', 'second'] });

@@ -12,7 +12,6 @@ import type { ModelTypeFilter } from '../utils/modelTypeFilter';
 import { ModelPickerList } from './ModelPickerList';
 
 type ModelPickerDrawerProps = {
-  describeModel?: (item: ModelPickerModelItem) => { description: string; priority: number };
   emptyText?: string;
   isModelVisible?: (item: ModelPickerModelItem) => boolean;
   modelType: ModelTypeFilter;
@@ -27,7 +26,6 @@ type ModelPickerDrawerProps = {
 
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
-  describeModel,
   emptyText,
   isModelVisible,
   modelType,
@@ -55,7 +53,6 @@ export function ModelPickerDrawer({
     >
       <ModelRegistryGate>
         <ModelPickerDrawerContent
-          describeModel={describeModel}
           deferredSearchText={deferredSearchText}
           emptyText={emptyText}
           isModelVisible={isModelVisible}
@@ -75,7 +72,6 @@ export function ModelPickerDrawer({
 }
 
 function ModelPickerDrawerContent({
-  describeModel,
   deferredSearchText,
   emptyText,
   isModelVisible,
@@ -90,7 +86,6 @@ function ModelPickerDrawerContent({
   selectedModelId,
 }: Pick<
   ModelPickerDrawerProps,
-  | 'describeModel'
   | 'isModelVisible'
   | 'emptyText'
   | 'modelType'
@@ -113,17 +108,13 @@ function ModelPickerDrawerContent({
   });
   const visibleGroups = useMemo(
     () =>
-      groups.flatMap((group) => {
-        const items = isModelVisible ? group.items.filter(isModelVisible) : group.items;
-        const presented = describeModel
-          ? items
-              .map((item) => ({ item, ...describeModel(item) }))
-              .sort((left, right) => left.priority - right.priority)
-              .map(({ item, description }) => ({ ...item, description }))
-          : items;
-        return presented.length > 0 ? [{ ...group, items: presented }] : [];
-      }),
-    [describeModel, groups, isModelVisible],
+      isModelVisible
+        ? groups.flatMap((group) => {
+            const items = group.items.filter(isModelVisible);
+            return items.length > 0 ? [{ ...group, items }] : [];
+          })
+        : groups,
+    [groups, isModelVisible],
   );
   const listItems = useMemo(() => buildModelPickerListItems(visibleGroups), [visibleGroups]);
   const hasSearch = deferredSearchText.trim().length > 0;

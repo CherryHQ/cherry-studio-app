@@ -241,7 +241,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
   }, [item, onSelect]);
   return (
     <Pressable
-      accessibilityLabel={[item.model.name, item.description].filter(Boolean).join(', ')}
+      accessibilityLabel={item.model.name}
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       className="min-h-12 flex-row items-center gap-3 px-6 active:opacity-60"
@@ -252,9 +252,6 @@ const ModelPickerRow = memo(function ModelPickerRow({
         <Text className="text-base text-foreground" numberOfLines={2}>
           {item.model.name}
         </Text>
-        {item.description ? (
-          <Text className="text-sm text-muted-foreground">{item.description}</Text>
-        ) : null}
       </View>
       {isSelected ? <CheckIcon className="size-5 shrink-0 text-foreground" /> : null}
     </Pressable>

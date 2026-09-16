@@ -1,6 +1,5 @@
 import type { ImageGenerationSupport } from '@cherrystudio/provider-registry';
 import { useEffect, type ComponentProps, type ReactNode } from 'react';
-import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ComposerSurface } from '@/frontend/components/Composer';
@@ -119,7 +118,6 @@ describe('capability-aware painting input', () => {
       .flatMap((strip) =>
         strip.props.attachments.map((item: { fileEntryId: string }) => item.fileEntryId),
       );
-  const labels = () => renderer.root.findAllByType(Text).map((text) => text.props.children);
   const send = async (text = 'Make it blue') => {
     const attachments = mockComposerState.attachments;
     mockComposerState = { attachments: [], draft: '' };
@@ -209,7 +207,6 @@ describe('capability-aware painting input', () => {
     mockModel = { ...mockModel, imageGeneration: { modes: { generate: { supports: {} } } } };
     update();
     expect(mockSurfaceProps.canSend).toBe(false);
-    expect(labels()).toContain('painting.input.imagesUnsupported');
   });
 
   it('gives manual images priority without exceeding a single-image model limit', async () => {
@@ -248,7 +245,6 @@ describe('capability-aware painting input', () => {
     );
     act(() => mockSession.reference.clear());
     expect(mockSurfaceProps.canSend).toBe(false);
-    expect(labels()).toContain('painting.input.referenceRequired');
   });
 
   it('keeps parameter drafts across text controls and preserves invalid input for correction', () => {
@@ -264,7 +260,6 @@ describe('capability-aware painting input', () => {
       mockSession.setParameterDraft(key, { modelId: mockModel.id, values: { numImages: 20 } }),
     );
     expect(mockSurfaceProps.canSend).toBe(false);
-    expect(labels()).toContain('painting.input.invalidParameters');
     update({ showText: true });
     update();
     expect(mockSession.parameterDrafts[key].values).toEqual({ numImages: 20 });

@@ -29,8 +29,8 @@ export function PaintingReferencePicker({ reference }: { reference: PaintingRefe
           </View>
         ))}
       </ScrollView>
-      <Button onPress={reference.choose} size="sm" variant="ghost">
-        <Button.Label>{t('common.close')}</Button.Label>
+      <Button onPress={reference.clear} size="sm" variant="ghost">
+        <Button.Label>{t('painting.input.newImage')}</Button.Label>
       </Button>
     </View>
   );
