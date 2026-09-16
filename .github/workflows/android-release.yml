@@ -1,4 +1,4 @@
-name: Android EAS Build
+name: Android Release
 
 on:
   push:
@@ -8,14 +8,32 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-android:
-    name: Queue Android EAS Build
+    name: Build Android APK on EAS
     runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      # GitHub's generate-notes API requires contents: write.
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          version="${RELEASE_TAG#v}"
+          test "${version%%-*}" = "$(jq -r '.expo.version' app.json)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -30,12 +48,129 @@ jobs:
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 24.4.2
           token: ${{ secrets.EXPO_TOKEN }}
           packager: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Queue Android build on EAS
-        run: eas build --platform android --profile development --non-interactive --no-wait
+      - name: Build Android on EAS and wait for completion
+        run: eas build --platform android --profile production --non-interactive --wait --json > "$RUNNER_TEMP/android-build.json"
+
+      - name: Download APK and prepare release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          build_json="$RUNNER_TEMP/android-build.json"
+          jq -e 'length == 1 and .[0].status == "FINISHED" and .[0].platform == "ANDROID"' "$build_json"
+          build_id="$(jq -er '.[0].id' "$build_json")"
+          apk_url="$(jq -er '.[0].artifacts.applicationArchiveUrl' "$build_json")"
+          version="$(jq -r '.expo.version' app.json)"
+          release_date="$(TZ=Asia/Shanghai date +%F)"
+          artifact_dir="$RUNNER_TEMP/android-release"
+          mkdir -p "$artifact_dir"
+          apk_name="cherry-studio-${version}-${release_date}-android.apk"
+          curl --fail --location --retry 3 --connect-timeout 30 --max-time 900 \
+            "$apk_url" --output "$artifact_dir/$apk_name"
+          unzip -tq "$artifact_dir/$apk_name"
+          unzip -Z1 "$artifact_dir/$apk_name" | grep -x 'AndroidManifest.xml'
+          (cd "$artifact_dir" && sha256sum "$apk_name" > SHA256SUMS)
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$RELEASE_TAG" -f target_commitish="$GITHUB_SHA" \
+            --jq .body > "$artifact_dir/release-notes.md"
+          cat >> "$artifact_dir/release-notes.md" <<EOF
+
+          ## Installation
+
+          - Android: download the attached APK (ARM64) and install it on your device.
+          - iOS: distributed through TestFlight after Apple processing and tester setup. The iOS workflow runs independently.
+          - SHA-256 checksums are included in SHA256SUMS.
+
+          Source: $GITHUB_SHA
+          Android EAS build: $build_id
+          EOF
+          echo "Android EAS build: $build_id" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save APK for independent publishing retries
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: ${{ runner.temp }}/android-release/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+          # A deliberate build-job rerun replaces its saved bundle; publishing-only retries reuse it.
+          overwrite: true
+
+  publish-github:
+    name: Publish APK to GitHub
+    needs: build-android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: release
+
+      - name: Publish release with APK and checksums
+        working-directory: release
+        run: |
+          sha256sum --check SHA256SUMS
+          prerelease=false
+          if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=true; fi
+          if ! gh release view "$RELEASE_TAG" --json id > /dev/null; then
+            gh release create "$RELEASE_TAG" --verify-tag --draft \
+              --title "$RELEASE_TAG" --notes-file release-notes.md --prerelease="$prerelease"
+          fi
+          gh release view "$RELEASE_TAG" --json assets > "$RUNNER_TEMP/github-release.json"
+          mkdir -p "$RUNNER_TEMP/existing-assets"
+          for asset in SHA256SUMS *.apk; do
+            if jq -e --arg name "$asset" '.assets[] | select(.name == $name)' "$RUNNER_TEMP/github-release.json" > /dev/null; then
+              gh release download "$RELEASE_TAG" --pattern "$asset" --dir "$RUNNER_TEMP/existing-assets"
+              cmp "$asset" "$RUNNER_TEMP/existing-assets/$asset"
+            else
+              gh release upload "$RELEASE_TAG" "$asset"
+            fi
+          done
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$prerelease"
+          echo "GitHub Release: https://github.com/$GH_REPO/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  publish-gitcode:
+    name: Publish APK to GitCode
+    needs: build-android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository and tag history
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+
+      - name: Download release files
+        uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: ${{ runner.temp }}/android-release
+
+      - name: Publish GitCode tag, release and attachments
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_DIRECTORY: ${{ runner.temp }}/android-release
+        run: node scripts/publishGitcodeRelease.ts
