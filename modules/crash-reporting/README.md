@@ -9,8 +9,8 @@ implement its own crash recorder or upload protocol.
 
 - `configure` receives the production/DSN gate and disclosure version at root-layout startup and
   runs asynchronously off the JS thread, because it reads consent, removes stale caches, and may
-  start the SDK. Only an existing grant for that version enables native initialization. Android
-  manifest auto-init and React Native's JS-driven native initialization are disabled.
+  start the SDK. A missing preference defaults to enabled and persists a grant for that version.
+  Android manifest auto-init and React Native's JS-driven native initialization are disabled.
 - JavaScript envelopes arrive through React Native's `captureEnvelope` and go straight to the
   transport on both platforms; the native `beforeSend` filters below only see native events. The
   Android transport gate still applies to them; on iOS, stopping the SDK on revocation drops them.
@@ -18,8 +18,8 @@ implement its own crash recorder or upload protocol.
   revoked if a reload changes the disclosure version or removes the production/DSN gate.
 - `setConsent(true)` persists the disclosure version (Android also persists the grant time) and, in
   production builds, starts the SDK at once. `setConsent(false)` closes the capture and transport
-  gates, stops the SDK, deletes the grant, and removes the report cache. Both may repeat within one
-  process; the gates are plain flags read by every SDK callback.
+  gates, stops the SDK, persists a `disabled` marker, and removes the report cache. Both may repeat
+  within one process; the gates are plain flags read by every SDK callback.
 - iOS stores the grant in an Application Support directory excluded from backups. Android uses an
   `AtomicFile` under `noBackupFilesDir`. Neither depends on app SQLite, preference hydration, or
   exported app data.
@@ -56,7 +56,8 @@ Run builds and device checks only with explicit task authorization.
 
 When authorized, cover both iOS and Android:
 
-1. Fresh install, absent/stale grant, absent DSN, and non-production profile: no Sentry requests.
+1. Fresh install: the switch defaults to on. Saved opt-outs survive relaunches. Stale grants,
+   absent DSN, and non-production profiles send no Sentry requests.
 2. Grant, then relaunch: a JS error and a real native crash retain usable source/symbol information.
 3. Offline crash, revoke before delivery, re-grant and relaunch: revoked reports are never sent.
 4. Revoke while a send is queued, including a subsequent JS reload: no new sends; document requests
@@ -65,7 +66,7 @@ When authorized, cover both iOS and Android:
 6. Inspect structured envelopes for prompts, provider responses, credentials, user/device IDs,
    URLs, paths, and attachments. Inspect NDK dumps separately; do not infer their contents from JS
    or Java event filtering.
-7. Consent write/delete failure: show an error and keep the current process paused.
+7. Consent write failure: show an error and keep the current process paused.
 
 Official references: [native initialization](https://docs.sentry.io/platforms/react-native/manual-setup/native-init/),
 [native filtering limitation](https://sentry.zendesk.com/hc/en-us/articles/26323481356443-How-to-filter-native-events-in-React-Native-SDK),
