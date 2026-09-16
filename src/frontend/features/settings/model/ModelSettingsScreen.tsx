@@ -1,9 +1,7 @@
-import { Section, useAlert, useToast } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
+import { Section, useToast } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import {
@@ -26,13 +24,9 @@ const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter(
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
-  const { alert } = useAlert();
   const { toast } = useToast();
-  const { saveSelections, selections: savedSelections } = useModelSettingSelections();
+  const { saveSelections, selections } = useModelSettingSelections();
   const openProviderSetup = useOpenProviderSetup();
-  const [draft, setDraft] = useState(savedSelections);
-  const [baseline, setBaseline] = useState(savedSelections);
   const [isSaving, setIsSaving] = useState(false);
   const imageModelPickerData = useModelPickerData({ modelType: 'image' });
   const textModelPickerData = useModelPickerData({ modelType: 'text' });
@@ -44,73 +38,32 @@ export default function ModelSettingsScreen() {
   }, [openProviderSetup]);
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
-      if (!activeKind) {
+      if (!activeKind || isSaving) {
         return;
       }
 
-      setDraft((current) => ({
-        ...current,
-        [activeKind]: getNextModelSelection(current[activeKind], item.modelId),
-      }));
+      setIsSaving(true);
       setActiveKind(undefined);
+      void saveSelections({
+        [activeKind]: getNextModelSelection(selections[activeKind], item.modelId),
+      })
+        .then(() => {
+          toast.show({ label: t('settings.model.saved'), variant: 'success' });
+        })
+        .catch(() => {
+          toast.show({ label: t('settings.model.saveFailed'), variant: 'danger' });
+        })
+        .finally(() => setIsSaving(false));
     },
-    [activeKind],
-  );
-  const isDirty = MODEL_SETTING_KINDS.some((kind) => draft[kind] !== baseline[kind]);
-  const handleSave = useCallback(() => {
-    if (!isDirty || isSaving) {
-      return;
-    }
-
-    setIsSaving(true);
-    void saveSelections(draft)
-      .then(() => {
-        setBaseline(draft);
-        toast.show({ label: t('settings.model.saved'), variant: 'success' });
-      })
-      .catch(() => {
-        toast.show({ label: t('settings.model.saveFailed'), variant: 'danger' });
-      })
-      .finally(() => setIsSaving(false));
-  }, [draft, isDirty, isSaving, saveSelections, t, toast]);
-  const requestClose = useCallback(() => {
-    if (isSaving) {
-      return;
-    }
-
-    if (!isDirty) {
-      router.back();
-      return;
-    }
-
-    alert.confirm({
-      confirmLabel: t('common.discard'),
-      description: t('settings.model.discardMessage'),
-      onConfirm: () => router.back(),
-      role: 'destructive',
-      title: t('settings.model.discardTitle'),
-    });
-  }, [alert, isDirty, isSaving, router, t]);
-  const rightActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.save'),
-        disabled: !isDirty || isSaving,
-        key: 'save-model-settings',
-        label: isSaving ? t('common.saving') : t('common.save'),
-        onPress: handleSave,
-        type: 'label',
-      },
-    ],
-    [handleSave, isDirty, isSaving, t],
+    [activeKind, isSaving, saveSelections, selections, t, toast],
   );
   const items = useMemo(
     () =>
       VISIBLE_MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => {
         const item =
           kind === 'painting'
-            ? imageModelPickerData.getModelItem(draft[kind])
-            : textModelPickerData.getModelItem(draft[kind]);
+            ? imageModelPickerData.getModelItem(selections[kind])
+            : textModelPickerData.getModelItem(selections[kind]);
 
         return {
           key: kind,
@@ -123,19 +76,13 @@ export default function ModelSettingsScreen() {
           ) : undefined,
         };
       }),
-    [draft, imageModelPickerData, isSaving, t, textModelPickerData],
+    [imageModelPickerData, isSaving, selections, t, textModelPickerData],
   );
-  const selectedModelId = activeKind ? draft[activeKind] : null;
+  const selectedModelId = activeKind ? selections[activeKind] : null;
 
   return (
     <>
-      <SettingsScrollPage
-        headerProps={{
-          onBack: requestClose,
-          rightActions,
-          title: t('settings.pages.model.title'),
-        }}
-      >
+      <SettingsScrollPage headerProps={{ title: t('settings.pages.model.title') }}>
         <Section>
           {items.map(({ key, ...item }) => (
             <Section.SelectItem key={key} {...item} />
