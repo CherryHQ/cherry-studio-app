@@ -89,7 +89,7 @@ describe('painting generation strategy', () => {
       { numImages: 10 },
       { quality: 'high' },
       { quality: '' },
-      { seed: 'invalid' },
+      { seed: 1.5 },
     ]) {
       expect(() => strategy.prepare({ images: [], prompt: 'Draw', paramValues })).toThrow(
         'invalid-parameters',

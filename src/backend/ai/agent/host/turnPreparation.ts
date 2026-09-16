@@ -261,13 +261,14 @@ async function prepareResolvedTurn(
     availableFiles,
   );
 
-  let inferenceModel: Awaited<ReturnType<AgentInferenceModelResolver>>;
-  try {
-    inferenceModel = await raceAbort(dependencies.inferenceModel(agent.model), signal);
-  } catch {
-    signal.throwIfAborted();
-    fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.');
-  }
+  const resolveInferenceModel = async () => {
+    try {
+      return await raceAbort(dependencies.inferenceModel(agent.model), signal);
+    } catch {
+      signal.throwIfAborted();
+      fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.');
+    }
+  };
   const imageGeneration = await dependencies.imageGeneration?.prepare({
     instructions: agent.instructions,
     model: agent.model,
@@ -284,7 +285,7 @@ async function prepareResolvedTurn(
       history: storedTurnContext.history,
       imageGeneration,
       inferenceSnapshot: createAgentInferenceSnapshot({
-        model: inferenceModel,
+        model: await resolveInferenceModel(),
         options: {},
         tools: [],
         imageGeneration: imageGeneration.settings,
@@ -364,6 +365,7 @@ async function prepareResolvedTurn(
     [...systemTools, ...configuredTools],
     agent.toolApprovalMode,
   );
+  const inferenceModel = await resolveInferenceModel();
   let modelPreflight: RuntimeModelPreflight;
   try {
     modelPreflight = await raceAbort(runtime.preflightModel(agent.model), signal);
