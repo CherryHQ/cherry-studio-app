@@ -118,18 +118,6 @@ function formatLocalDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Match the language already resolved for the mobile UI. */
-export function resolveAgentAppLanguage(
-  configuredLanguage: LanguageVarious | null,
-  deviceLanguageCode: string | null | undefined,
-): LanguageVarious {
-  if (configuredLanguage) {
-    return configuredLanguage;
-  }
-
-  return deviceLanguageCode === 'zh' ? 'zh-CN' : 'en-US';
-}
-
 function buildResponseLanguageSection(appLanguage: LanguageVarious): string {
   return `## Response Language
 
