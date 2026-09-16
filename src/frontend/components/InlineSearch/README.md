@@ -14,15 +14,16 @@ it, and the one place that decides how each platform draws it.
 - The field and the query are separable. `useInlineSearch` owns the query and the filtering;
   `InlineSearch` draws the input. A screen that filters server-side takes the component alone, and a
   screen whose field lives somewhere unusual takes the hook alone.
-- The component is placed between the screen's `RouteHeader` and its content. iOS renders nothing
-  there — the field lives in the native header — while Android draws a real row, so both platforms
-  read the same at the call site.
+- The component is placed between the screen's `RouteHeader` and its content. iOS uses the native
+  header while the window fits the form column. When the safe window width exceeds that column's
+  720-point limit, search becomes a content row aligned with its results. Android always draws a
+  content row. The caller and its query stay mounted when this placement changes.
 - Mount search with the header, outside the list's loading, error, and empty branches. Data arriving
   or a query returning no matches must not add or remove the native search bar.
 - The query is controlled on both platforms. Parent updates, including an initial non-empty value
   and later clears or restores, are synchronized into the native iOS search bar.
 - A screen that hides search for a mode, such as multi-select editing, unmounts the component. There
-  is no `hidden` prop: unmounting removes the native header options on iOS.
+  is no `hidden` prop: unmounting removes the field, including any native header options on iOS.
 - Matching is keyword-based, not substring-based, through `@/frontend/utils/search`. `gpt 4o` finds
   `GPT-4o`, and a query may span an item's fields.
 - `isFiltering` separates "nothing matched" from "nothing exists yet". Screens need both empty
@@ -30,14 +31,14 @@ it, and the one place that decides how each platform draws it.
 
 ## Organization
 
-- `InlineSearch.ios.tsx` mounts `Stack.SearchBar` with `placement="stacked"`, giving the field its
-  own row under the title. It explicitly disables toolbar integration so search stays away from
-  bottom page actions on iOS 26.
-- `InlineSearch.android.tsx` draws CherryUI's `SearchField` in that same position. Android's native
-  search bar exists, but it is a toolbar menu item with platform styling that lands right of the
-  screen's own actions; drawing the field keeps both platforms aligned.
+- `InlineSearch.ios.tsx` chooses placement using the app-shell form-width contract. Narrow windows
+  mount `Stack.SearchBar` with `placement="stacked"` and toolbar integration disabled; wide windows
+  use `InlineSearchField` inside the page. Headers must reserve their own space above content search.
+- `InlineSearchField.tsx` draws CherryUI's `SearchField`; `InlineSearch.android.tsx` always uses it.
+  Android's native search bar is a toolbar menu item with platform styling that lands right of the
+  screen's own actions.
 - `InlineSearch.types.ts` holds the shared controlled props and the semantic `screen` / `embedded`
-  placement choice used by the Android frame.
+  placement choice used by the content row.
 - `useInlineSearch.ts` holds the query state and the filtering, and nothing about placement.
 
 ## Extension Boundary

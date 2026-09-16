@@ -4,6 +4,14 @@ import { InlineSearch } from '../InlineSearch.ios';
 
 const mockSetText = jest.fn();
 
+jest.mock('@/frontend/appShell/layout', () => ({
+  useIsFormContentConstrained: () => false,
+}));
+
+jest.mock('@cherrystudio/ui/components', () => ({
+  SearchField: () => null,
+}));
+
 jest.mock('expo-router', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');

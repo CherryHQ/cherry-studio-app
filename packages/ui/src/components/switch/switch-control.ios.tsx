@@ -5,8 +5,9 @@ import {
   controlSize,
   disabled as disabledModifier,
   labelsHidden,
+  tint,
 } from '@expo/ui/swift-ui/modifiers';
-import { useUniwind } from 'uniwind';
+import { useResolveClassNames, useUniwind } from 'uniwind';
 
 import type { SwitchControlProps } from './switch-control.types';
 import type { SwitchSize } from './switch.types';
@@ -29,6 +30,7 @@ export function SwitchControl({
   value,
 }: SwitchControlProps) {
   const { theme } = useUniwind();
+  const { backgroundColor: activeColor } = useResolveClassNames('bg-control-active');
   const accessibilityModifier = accessibilityElementsHidden
     ? accessibilityHidden()
     : accessibilityLabel
@@ -50,6 +52,7 @@ export function SwitchControl({
         modifiers={[
           labelsHidden(),
           controlSize(controlSizes[size]),
+          ...(typeof activeColor === 'string' ? [tint(activeColor)] : []),
           ...(accessibilityModifier ? [accessibilityModifier] : []),
           disabledModifier(disabled),
         ]}

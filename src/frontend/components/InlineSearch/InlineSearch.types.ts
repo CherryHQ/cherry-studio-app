@@ -5,8 +5,8 @@ export type InlineSearchProps = {
   /**
    * Called with the current query on every edit, including clears.
    *
-   * The caller owns the query. Android binds `value` directly to the field;
-   * iOS synchronizes it through the native search bar command ref.
+   * The caller owns the query, including across window-size changes. Content
+   * fields bind `value` directly; native iOS search uses its command ref.
    */
   onChangeText: (value: string) => void;
   placeholder?: string;

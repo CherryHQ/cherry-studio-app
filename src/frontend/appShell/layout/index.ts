@@ -1,1 +1,5 @@
-export { FormContentFrame, ReadingContentFrame } from './ScreenContentFrame';
+export {
+  FormContentFrame,
+  ReadingContentFrame,
+  useIsFormContentConstrained,
+} from './ScreenContentFrame';

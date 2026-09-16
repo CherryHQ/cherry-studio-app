@@ -1,16 +1,36 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { AndroidConfig, withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
+const {
+  AndroidConfig,
+  withAndroidManifest,
+  withDangerousMod,
+  withMainActivity,
+} = require('expo/config-plugins');
 
 const RESOURCE_NAME = 'cherry_screen_orientation';
 
-// Android resolves the orientation resource for the device. Keep phone portrait
-// behavior while allowing tablet rotation without a JS-driven orientation lock.
+// MainActivity resolves the device-specific resource at runtime: manifest
+// resources cannot vary by screen size. Phones stay portrait; tablets can rotate.
 module.exports = (config) => {
   config = withAndroidManifest(config, (mod) => {
     const activity = AndroidConfig.Manifest.getMainActivityOrThrow(mod.modResults);
-    activity.$['android:screenOrientation'] = `@integer/${RESOURCE_NAME}`;
+    activity.$['android:screenOrientation'] = 'unspecified';
     activity.$['android:resizeableActivity'] = 'true';
+    return mod;
+  });
+
+  config = withMainActivity(config, (mod) => {
+    if (mod.modResults.language !== 'kt') {
+      throw new Error('Tablet orientation requires the Kotlin MainActivity.');
+    }
+    const orientation = `requestedOrientation = resources.getInteger(R.integer.${RESOURCE_NAME})`;
+    if (!mod.modResults.contents.includes(orientation)) {
+      mod.modResults.contents = AndroidConfig.CodeMod.appendContentsInsideDeclarationBlock(
+        mod.modResults.contents,
+        'override fun onCreate',
+        `    ${orientation}\n`,
+      );
+    }
     return mod;
   });
 
