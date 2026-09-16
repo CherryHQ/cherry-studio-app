@@ -30,6 +30,7 @@ import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { LanguagePreferenceObserver } from '@/frontend/i18n';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 // Hold the native surface until the matching React Native startup cover has
@@ -60,6 +61,7 @@ function RootLayout() {
                             <BottomSheetProvider>
                               <RouteHeaderProvider rootAction="back">
                                 <BackgroundActivityBridge />
+                                <LanguagePreferenceObserver />
                                 <RootStack />
                               </RouteHeaderProvider>
                             </BottomSheetProvider>

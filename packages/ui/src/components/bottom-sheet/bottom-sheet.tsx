@@ -201,7 +201,7 @@ export function BottomSheet(props: BottomSheetProps) {
         <View
           accessibilityElementsHidden={!open}
           accessibilityViewIsModal
-          className="overflow-hidden border-continuous bg-background"
+          className="overflow-hidden border-continuous bg-background dark:border dark:border-border dark:bg-popover"
           importantForAccessibility={open ? 'yes' : 'no-hide-descendants'}
           onAccessibilityEscape={dismissible ? requestClose : undefined}
           style={[
@@ -213,6 +213,7 @@ export function BottomSheet(props: BottomSheetProps) {
           ]}
           testID={testID}
         >
+          <View className="absolute inset-0 dark:bg-secondary" pointerEvents="none" />
           <View accessibilityElementsHidden className="items-center pt-3" pointerEvents="none">
             <View className="h-1 w-9 rounded-full bg-border-strong" />
           </View>
@@ -265,7 +266,7 @@ export function BottomSheet(props: BottomSheetProps) {
           </View>
           {hasFooter ? (
             <View
-              className="border-t border-border bg-background px-4 pt-3"
+              className="border-t border-border px-4 pt-3"
               style={{ paddingBottom: Math.max(insets.bottom, 16) }}
             >
               {footer}

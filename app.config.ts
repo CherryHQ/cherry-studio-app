@@ -1,4 +1,7 @@
+import 'tsx/cjs';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+
+import { APP_LANGUAGES } from './src/shared/utils/languages';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const profile = process.env.PROFILE ?? 'production';
@@ -40,6 +43,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       .map((plugin) => {
         if (plugin === 'expo-dev-client') {
           return [plugin, { addGeneratedScheme: profile === 'development' }];
+        }
+        if (plugin === 'expo-localization') {
+          return [plugin, { supportedLocales: APP_LANGUAGES.map(({ value }) => value) }];
         }
         if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
           return [
