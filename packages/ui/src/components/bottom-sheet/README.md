@@ -4,6 +4,9 @@
 bottom-attached surface, rounded top corners, drag handle, scrim, safe-area
 handling, gestures, Android back behavior, and accessibility behavior on iOS and Android.
 
+Dark mode uses an opaque `popover` base with a neutral `secondary` overlay and a fine border to
+separate the sheet from the page. The header, body, and fixed footer share this fill.
+
 The card fills the horizontal safe area up to 720 logical points and remains centered on wider
 windows. Its native host and scrim still span the window; the transparent space beside the card
 dismisses through the same guarded close action. Geometry updates do not replace the sheet or its

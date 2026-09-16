@@ -33,7 +33,7 @@ export function SwitchControl({
       className={cn(
         'justify-center rounded-full p-0.5',
         sizeStyles[size].root,
-        value ? 'items-end bg-primary' : 'items-start bg-border-selected',
+        value ? 'items-end bg-control-active' : 'items-start bg-border-selected',
         disabled && 'opacity-40',
       )}
       disabled={disabled}
@@ -44,13 +44,9 @@ export function SwitchControl({
       style={style}
       testID={testID}
     >
-      <View
-        className={cn(
-          'rounded-full',
-          sizeStyles[size].thumb,
-          value ? 'bg-primary-foreground' : 'bg-background',
-        )}
-      />
+      <View className={cn('rounded-full bg-constant-black/30 p-px', sizeStyles[size].thumb)}>
+        <View className="flex-1 rounded-full bg-constant-white" />
+      </View>
     </Pressable>
   );
 }
