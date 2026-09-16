@@ -65,6 +65,11 @@ not configure groups or submit the app for an App Store public release.
   iOS build ID without a new EAS build.
 - Partial Android uploads are resumable. Matching attachments are reused; missing files are uploaded.
   If a file differs, inspect the existing release and use a new version tag for a replacement build.
+- GitCode uploads stop if throughput stays below 1 KiB/s for 60 seconds, with a 15-minute limit
+  per attempt. Transport failures and temporary HTTP errors are retried up to three attempts with
+  fresh upload URLs. Before retrying, the job checks whether the attachment already arrived and
+  verifies its checksum. Logs include the filename, attempt, HTTP status, bytes sent, and speed;
+  signed URLs and upload headers are not logged.
 - Before retrying an interrupted iOS submission, check its EAS submission page and App Store Connect.
   If Apple already received it, do not upload it again. A failed EAS submission can also be retried
   from EAS without building another IPA.

@@ -159,7 +159,8 @@ jobs:
     name: Publish APK to GitCode
     needs: build-android
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Three bounded upload attempts plus attachment verification; successful builds are reused.
+    timeout-minutes: 75
     steps:
       - name: Checkout repository and tag history
         uses: actions/checkout@v5
