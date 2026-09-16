@@ -1,4 +1,4 @@
-name: iOS EAS Build
+name: iOS TestFlight
 
 on:
   push:
@@ -8,14 +8,29 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ios-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-ios:
-    name: Queue iOS EAS Build
+    name: Build iOS on EAS
     runs-on: ubuntu-latest
+    timeout-minutes: 180
+    outputs:
+      build_id: ${{ steps.build.outputs.build_id }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          version="${RELEASE_TAG#v}"
+          test "${version%%-*}" = "$(jq -r '.expo.version' app.json)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -30,12 +45,56 @@ jobs:
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          eas-version: 24.4.2
           token: ${{ secrets.EXPO_TOKEN }}
           packager: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Queue iOS build on EAS
-        run: eas build --platform ios --profile development --non-interactive --no-wait
+      - name: Build iOS on EAS and wait for completion
+        id: build
+        run: |
+          eas build --platform ios --profile production --non-interactive --wait --json > "$RUNNER_TEMP/ios-build.json"
+          jq -e 'length == 1 and .[0].status == "FINISHED" and .[0].platform == "IOS"' "$RUNNER_TEMP/ios-build.json"
+          build_id="$(jq -er '.[0].id' "$RUNNER_TEMP/ios-build.json")"
+          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
+          echo "iOS EAS build: $build_id" >> "$GITHUB_STEP_SUMMARY"
+
+  submit-ios:
+    name: Upload iOS to TestFlight
+    needs: build-ios
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.2.1
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: 24.4.2
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Submit this build and wait for upload
+        env:
+          IOS_BUILD_ID: ${{ needs.build-ios.outputs.build_id }}
+          PROFILE: production
+        run: |
+          eas submit --platform ios --profile production --id "$IOS_BUILD_ID" \
+            --non-interactive --wait --no-auto-testflight-setup
+          echo "Uploaded iOS build $IOS_BUILD_ID to App Store Connect. Apple processing and TestFlight tester configuration remain in App Store Connect." >> "$GITHUB_STEP_SUMMARY"
