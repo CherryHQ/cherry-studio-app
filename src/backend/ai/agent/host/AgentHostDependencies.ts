@@ -23,6 +23,7 @@ import { providerService } from '@/backend/data/services/ProviderService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
+import { resolveAppLanguage } from '@/shared/utils/languages';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
@@ -34,7 +35,6 @@ import { createAgentRuntimeToolResolver } from '../tools/runtimeTools';
 import { type AgentDefinitionSource, createAgentTableDefinitionSource } from './agentDefinitions';
 import { AgentSessionNaming } from './AgentSessionNaming';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
-import { resolveAgentAppLanguage } from './agentSystemPrompt';
 import { createAgentInferenceModelResolver } from './inferenceSnapshot';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentHost';
 
@@ -89,9 +89,9 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   }
 
   appLanguage(): LanguageVarious {
-    return resolveAgentAppLanguage(
+    return resolveAppLanguage(
       this.preferenceService.readCached('app.language'),
-      getLocales()[0]?.languageCode,
+      getLocales().map((locale) => locale.languageTag),
     );
   }
 
