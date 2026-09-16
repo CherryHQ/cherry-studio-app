@@ -1,10 +1,20 @@
 import type { PropsWithChildren } from 'react';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const FORM_CONTENT_MAX_WIDTH = 720;
+
+/** Whether the window leaves space beside the form column, inside its safe area. */
+export function useIsFormContentConstrained() {
+  const { width } = useWindowDimensions();
+  const { left, right } = useSafeAreaInsets();
+
+  return width - left - right > FORM_CONTENT_MAX_WIDTH;
+}
 
 /** Shared page constraints; neither frame owns navigation or page identity. */
 export function FormContentFrame({ children }: PropsWithChildren) {
-  return <ScreenContentFrame maxWidth={720}>{children}</ScreenContentFrame>;
+  return <ScreenContentFrame maxWidth={FORM_CONTENT_MAX_WIDTH}>{children}</ScreenContentFrame>;
 }
 
 export function ReadingContentFrame({ children }: PropsWithChildren) {

@@ -1,5 +1,5 @@
 import type { RuntimeTool } from '../../runtime';
-import { buildAgentSystemPrompt, resolveAgentAppLanguage } from '../agentSystemPrompt';
+import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 
 function tool(capabilityId: string, providerName = capabilityId): RuntimeTool {
   return {
@@ -169,11 +169,5 @@ describe('buildAgentSystemPrompt', () => {
     expect(
       buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools: [] }),
     ).not.toContain('## Reading Attachments');
-  });
-
-  test('resolves the effective App language from preferences before the device fallback', () => {
-    expect(resolveAgentAppLanguage('ja-JP', 'zh')).toBe('ja-JP');
-    expect(resolveAgentAppLanguage(null, 'zh')).toBe('zh-CN');
-    expect(resolveAgentAppLanguage(null, 'en')).toBe('en-US');
   });
 });

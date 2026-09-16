@@ -50,6 +50,10 @@ Run only the specialized contract checks triggered by the change. Examples inclu
 `pnpm docs:check-links`, `pnpm skills:check`, `pnpm design:check`, database migration checks, and
 desktop synchronization guards.
 
+For translation or language changes, use `pnpm i18n:check` as described in
+[Internationalization](./internationalization.md). PR CI runs the same read-only check;
+`pnpm i18n:sync` is an explicit resource-editing step, not a test or translation service.
+
 ### Platform Component Families
 
 Tests mirror the ownership boundary described in

@@ -33,7 +33,7 @@ Earlier items do not yield to later ones.
 tokens/colors/vercel.css   Palette (background / gray / gray-alpha / blue / green / amber / red)
         ↓
 shadcn.css                 32 shadcn role names
-product.css                46 Cherry product semantics
+product.css                47 Cherry product semantics
         ↓
 native.css                 Generated. Never edit by hand.
         ↓
@@ -56,7 +56,7 @@ Three shadcn names are **HeroUI-reserved and not part of either entry point**: `
 
 ### Adding A Token
 
-First answer: **does this role already have a name?** Among the 46 product tokens it usually does. If it genuinely does not:
+First answer: **does this role already have a name?** Among the 47 product tokens it usually does. If it genuinely does not:
 
 1. Declare the value in `product.css`, pointing at a palette step (`var(--green-900)`), not an oklch literal — unless it must not follow the theme, see below.
 2. Add the name to `CHERRY_PRODUCT_VARIABLE_TOKENS` in `scripts/theme-contract.ts`.
@@ -78,18 +78,22 @@ There is no fifth. A new literal must state in its commit which case it falls un
 
 "This colour is fixed by the platform" is **not** on the list. The failure mode of literals is silent divergence: the modal scrim was 40% in one place and 20% in another — two dim levels in one app — until it converged on `--scrim`.
 
-### `--brand` vs `--primary`
+### Control Green, Text Emphasis, And Brand
 
 Mobile follows desktop's neutral-first interface with green action emphasis. These roles are independent:
 
-- `--primary` uses `--green-900`: dark green in light mode, bright green in dark mode. The mode-aware
-  steps preserve readable text and icons; they follow desktop's green direction rather than copying
-  its fixed `#00b96b` preference value onto every surface.
+- `--control-active` is the fixed desktop switch green, `oklch(0.67 0.192 146)` (`brand-600`).
+  Switches use it in both themes; the iOS adapter applies it explicitly as the native tint.
+  Switch thumbs use `constant-white`. Android and Web add a one-point outline with
+  `constant-black/30` over the track so the white thumb has a distinct edge.
+- `--primary` uses `--green-900`: dark green in light mode, bright green in dark mode. These
+  mode-aware steps preserve readable emphasized text and icons.
 - `--primary-foreground` uses `--background-100`: white on the light-mode green, black on the dark-mode green.
 - `--brand` is the fixed Cherry logo red (`#ff5757`), reserved for brand artwork. Actions, selections,
   links, and tool mentions must not consume it.
 
-Use `primary` for emphasized actions and adjustable progress, `link` for links and tool mentions,
+Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,
+`link` for links and tool mentions,
 and neutral `secondary` / `border-selected` for ordinary selection. Default buttons remain neutral.
 HeroUI's `accent` adapter follows `primary`; the underlying Shadcn `accent` remains a neutral overlay.
 
@@ -100,9 +104,10 @@ introduce runtime color inputs together with a real setting and its paired foreg
 
 Body text (`text-sm` / `text-base`, including semibold) needs **4.5:1**. Graphics and borders need **3:1**.
 
-Check the actual foreground/background pair before choosing. Desktop's fixed `#00b96b` has only
-2.58:1 contrast on white, so Mobile uses the existing mode-aware green emphasis step for `primary`.
-Logo artwork is not a substitute for a readable text or interaction color.
+Check the actual foreground/background pair before choosing. The desktop switch uses `brand-600`,
+independently of the `#00b96b` theme preference. The fixed control green is not a text color;
+Mobile retains the mode-aware green emphasis step for `primary`. Control position and accessible
+state also communicate on/off and progress. Logo artwork is not a substitute for readable content.
 
 ### The Gray Ramp Is Not Monotonic
 
@@ -162,6 +167,11 @@ The interface is one continuous surface by default. **A surface or a border has 
 Reach for them in this order: spacing → alignment → typography → density → and only then borders and surfaces.
 
 Do not wrap every section in a card, and never nest cards. The four border tiers (`border-subtle` < `border` < `border-strong` < `border-selected`) are monotonic in both themes; choose by meaning, not by eye.
+
+In dark mode, temporary drawers use `sidebar` above the page's `background`. Shared bottom sheets
+use `popover` with a neutral `secondary` overlay, matching the raised menu surface. A fine edge
+reinforces separation. Scroll fades match their host surface, and sheet footers inherit the sheet's
+fill so they do not fall back to the page's black background.
 
 When a screen feels cluttered, separate **volume** from **loudness**. Volume is fixed by removing, merging, or reordering content. Loudness is fixed by reducing competing colours, sizes, weights, borders, surfaces, and motion. Keep one deliberate anchor — restraint is not flattening everything into having no focus.
 

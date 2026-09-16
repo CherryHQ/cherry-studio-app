@@ -21,7 +21,7 @@ export const wecomPlugin: PluginDefinition = {
   guide: wecomGuide,
   catalog: {
     id: 'wecom',
-    icon: 'file-text',
+    icon: 'wecom',
     links: {
       credentials: 'https://open.work.weixin.qq.com/help2/pc/cat?doc_id=21677',
       website: 'https://work.weixin.qq.com',
