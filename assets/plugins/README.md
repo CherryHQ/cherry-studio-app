@@ -35,10 +35,11 @@ The compact monochrome marks are smaller; the narrow, wide, and outline marks ar
 
 - Preserve brand paths and colors. Amap's original arrow paths are extracted from the official
   SVG without its map background or shadow; Feishu's favicon plate is removed during generation.
-- GitHub and Notion use `foreground` in both themes. The other four keep their brand colors.
-- Inline references scale with text. Their 48 × 48 PNG attachments include the same neutral
-  frame, optical scales, and theme colors, using the 24 pt frame's radius and border proportions.
-  Only the unknown-plugin inline fallback remains an unframed, mention-tinted file icon.
+- Page icons use `foreground` for GitHub and Notion in both themes. The other four keep their brand colors.
+- Inline references scale with text and use transparent 48 × 48 PNG attachments without a frame.
+  They keep the same relative optical scales, normalized by the largest scale to remove tile padding.
+  The four colored marks each share one resource across themes; only GitHub and Notion have black
+  and white variants. The unknown-plugin inline fallback is a mention-tinted file icon.
   The composer and messages share `getPluginInlineIcon`; both retain their existing 80% icon opacity.
 - Names remain beside the icons; the artwork does not duplicate the accessible label.
 
@@ -64,12 +65,13 @@ vertically for SVG. The existing inline fallback preserves the Lucide `file-text
 Run `pnpm exec tsx scripts/generatePluginIcons.ts` from the repository root. This converts local
 artwork only; it does not download assets or build the app. Sharp crops transparent margins,
 fits each mark into a 144 × 144 transparent square, and writes lossless WebP for page icons.
-The component applies the shared optical scale at display time. The generator also composes
-48 × 48 PNG attachments for both themes in `inline-icons.json`, reading `card`, `border`,
-`foreground`, and the radius from the design-token package. Its color conversion is deliberately
-limited to neutral OKLCH values; a non-neutral frame token requires an explicit generator update.
-Regenerate these attachments after changing those tokens or the optical scales. The original
-brand SVGs do not change when the theme changes.
+The component applies the shared optical scale at display time. The generator also writes
+transparent 48 × 48 PNG attachments in `inline-icons.json`, with white variants only for the two
+monochrome marks. Regenerate after changing source artwork or optical scales. Theme colors and
+corner tokens are applied by the page component and do not require regenerating artwork.
+
+The SVG files are editable source artwork; WebP files serve page images; PNG data serves native
+text attachments. `presentation.png` is a review preview and is not loaded by the application.
 
 When adding a plugin, add its local source and optical scale to the generator, its inline entry in
 `src/frontend/utils/pluginIcons.ts`, and its page asset in `PluginIcon`. `PluginIconId` keeps

@@ -1,12 +1,12 @@
 import icons from '@/assets/plugins/inline-icons.json';
 
 const PLUGIN_INLINE_ICONS = {
-  amap: { light: icons.amap, dark: icons['amap-dark'] },
-  dingtalk: { light: icons.dingtalk, dark: icons['dingtalk-dark'] },
-  feishu: { light: icons.feishu, dark: icons['feishu-dark'] },
+  amap: { light: icons.amap, dark: icons.amap },
+  dingtalk: { light: icons.dingtalk, dark: icons.dingtalk },
+  feishu: { light: icons.feishu, dark: icons.feishu },
   github: { light: icons.github, dark: icons['github-dark'] },
   notion: { light: icons.notion, dark: icons['notion-dark'] },
-  wecom: { light: icons.wecom, dark: icons['wecom-dark'] },
+  wecom: { light: icons.wecom, dark: icons.wecom },
 };
 
 export type PluginIconId = keyof typeof PLUGIN_INLINE_ICONS;
