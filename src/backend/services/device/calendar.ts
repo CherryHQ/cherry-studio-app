@@ -1,4 +1,5 @@
 import * as Calendar from 'expo-calendar';
+import * as CalendarForm from 'expo-calendar/legacy';
 import { Platform } from 'react-native';
 
 import { parseDateRange, toIso, withNativeToolTimeout } from './utils';
@@ -71,36 +72,139 @@ export async function createCalendarEvent(
     startDate: string;
     title: string;
   },
+  signal?: AbortSignal,
 ) {
   const { calendarId, endDate, startDate, ...details } = input;
   const range = parseDateRange(startDate, endDate);
-  const calendar = calendarId
-    ? await withNativeToolTimeout(Calendar.ExpoCalendar.get(calendarId), 'Calendar lookup')
-    : await getDefaultWritableCalendar(Calendar.EntityTypes.EVENT);
-  assertWritable(calendar);
-  const event = await withNativeToolTimeout(
-    calendar.createEvent({ ...details, endDate: range.end, startDate: range.start }),
-    'Calendar event creation',
-  );
-  return serializeEvent(event);
+  const eventDetails = { ...details, endDate: range.end, startDate: range.start };
+  let hasWriteStarted = false;
+  try {
+    throwIfCalendarCancelled(signal);
+    const calendar = calendarId
+      ? await withNativeToolTimeout(Calendar.ExpoCalendar.get(calendarId), 'Calendar lookup')
+      : await getDefaultWritableCalendar(Calendar.EntityTypes.EVENT);
+    assertWritable(calendar);
+    throwIfCalendarCancelled(signal);
+    hasWriteStarted = true;
+    const event = await withNativeToolTimeout(
+      calendar.createEvent(eventDetails),
+      'Calendar event creation',
+    );
+    return serializeEvent(event);
+  } catch (error) {
+    throwIfCalendarCancelled(signal, error);
+    if (Platform.OS !== 'android') throw error;
+    // Expo inserts before constructing its returned event. Even a rejected call
+    // can have written a row; a timeout also leaves the native operation running.
+    if (hasWriteStarted) return uncertainCalendarWrite(error);
+    return {
+      ...(await openCalendarForm(
+        () => CalendarForm.createEventInCalendarAsync(eventDetails, { startNewActivityTask: true }),
+        error,
+        'The system calendar creation form was opened. Ask the user to check the details, select the intended calendar, and save. Saving is not confirmed; do not report the event as created or retry automatically.',
+        signal,
+      )),
+      requestedCalendarId: calendarId ?? null,
+    };
+  }
 }
 
-export async function updateCalendarEvent(input: UpdateCalendarEventDetails & { id: string }) {
+export async function updateCalendarEvent(
+  input: UpdateCalendarEventDetails & { id: string },
+  signal?: AbortSignal,
+) {
   const { id, ...details } = input;
   if (details.startDate && details.endDate) parseDateRange(details.startDate, details.endDate);
-  const event = await withNativeToolTimeout(
-    Calendar.ExpoCalendarEvent.get(id),
-    'Calendar event lookup',
-  );
-  await withNativeToolTimeout(
-    event.update({
+  let isWritePending = false;
+  try {
+    throwIfCalendarCancelled(signal);
+    const event = await withNativeToolTimeout(
+      Calendar.ExpoCalendarEvent.get(id),
+      'Calendar event lookup',
+    );
+    throwIfCalendarCancelled(signal);
+    const update = {
       ...details,
       ...(details.endDate !== undefined && { endDate: new Date(details.endDate) }),
       ...(details.startDate !== undefined && { startDate: new Date(details.startDate) }),
-    } as Parameters<typeof event.update>[0]),
-    'Calendar event update',
-  );
-  return { id, updated: true as const };
+    } as Parameters<typeof event.update>[0];
+    // A timed-out write must not race with the user's edits in the calendar app.
+    const operation = event.update(update);
+    isWritePending = true;
+    await withNativeToolTimeout(
+      operation.finally(() => {
+        isWritePending = false;
+      }),
+      'Calendar event update',
+    );
+    return { id, updated: true as const };
+  } catch (error) {
+    throwIfCalendarCancelled(signal, error);
+    if (Platform.OS !== 'android') throw error;
+    if (isWritePending) return { ...uncertainCalendarWrite(error), id };
+    return {
+      ...(await openCalendarForm(
+        () => CalendarForm.editEventInCalendarAsync({ id }, { startNewActivityTask: true }),
+        error,
+        'The existing event was opened in the system calendar. Ask the user to check its current values and manually apply any remaining requested changes. The changes are not prefilled and saving is not confirmed; do not report success or retry automatically.',
+        signal,
+      )),
+      id,
+      requestedChanges: details,
+    };
+  }
+}
+
+function throwIfCalendarCancelled(signal?: AbortSignal, error?: unknown) {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : Object.assign(new Error('Calendar request cancelled'), { name: 'AbortError' });
+  }
+  if (error instanceof Error && error.name === 'AbortError') throw error;
+}
+
+function uncertainCalendarWrite(error: unknown) {
+  return {
+    status: 'error' as const,
+    outcome: 'unknown' as const,
+    retryable: false,
+    error: error instanceof Error ? error.message : String(error),
+    message:
+      'The calendar write may have completed or may still be running. Ask the user to check the system calendar before making further changes. Do not retry automatically or open a new creation form, as that could duplicate an event.',
+  };
+}
+
+async function openCalendarForm(
+  open: () => Promise<unknown>,
+  error: unknown,
+  message: string,
+  signal?: AbortSignal,
+) {
+  const reason = error instanceof Error ? error.message : String(error);
+  try {
+    // A new Android task reports `done` on launch, before the user edits or saves.
+    await open();
+    throwIfCalendarCancelled(signal);
+    return {
+      status: 'requires_user_action' as const,
+      fallback: 'system_calendar' as const,
+      saveConfirmed: false,
+      retryable: false,
+      error: reason,
+      message,
+    };
+  } catch (formError) {
+    throwIfCalendarCancelled(signal, formError);
+    return {
+      status: 'error' as const,
+      retryable: false,
+      error: reason,
+      fallbackError: formError instanceof Error ? formError.message : String(formError),
+      message:
+        'The system calendar form could not be opened. Tell the user to check or change the event in their calendar app manually; do not retry automatically.',
+    };
+  }
 }
 
 export async function deleteCalendarEvent(id: string) {

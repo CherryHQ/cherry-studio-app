@@ -3,7 +3,6 @@ import {
   isLiquidGlassAvailable as isSystemLiquidGlassAvailable,
 } from 'expo-glass-effect';
 
-export const defaultLanguage = 'en-US';
 export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
 // Gap kept between the keyboard and the focused input inside scrollable forms.

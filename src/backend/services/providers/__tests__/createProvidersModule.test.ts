@@ -59,6 +59,9 @@ describe('explicit provider activation', () => {
       'openai-codex',
       'claude-code',
       'lmstudio',
+      'ollama',
+      'ovms',
+      'new-api',
       'azure-openai',
       'vertexai',
       'aws-bedrock',
@@ -71,7 +74,7 @@ describe('explicit provider activation', () => {
       );
     }
     expect(dependencies.providers.create).not.toHaveBeenCalled();
-    expect(catalogIds).toEqual(expect.arrayContaining(['ollama', 'ovms', 'new-api']));
+    expect(catalogIds).toEqual(expect.arrayContaining(['openai', 'anthropic', 'gemini']));
   });
 
   it('prepares without enabling, then enables a configured provider with local models', async () => {

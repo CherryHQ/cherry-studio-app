@@ -27,6 +27,35 @@ do not use Expo's cloud build workers. See the
 [Expo local build guide](https://docs.expo.dev/build-reference/local-builds/) for platform requirements
 and limitations.
 
+## App Variants
+
+`app.json` holds the production defaults. `app.config.ts` selects the app identity using `PROFILE`,
+which the EAS build profiles already set. The `development-simulator` profile inherits the
+development identity. An unset `PROFILE` defaults to production; unknown values are rejected.
+
+| EAS profile | App name | iOS / Android ID suffix | URL scheme |
+| --- | --- | --- | --- |
+| `development` | Cherry Studio Dev | `.dev` | `cherrystudio-dev` |
+| `preview` | Cherry Studio Preview | `.preview` | `cherrystudio-preview` |
+| `production` | Cherry Studio | none | `cherrystudio` |
+
+The base IDs are `com.cherryai.cherrystudio-app` (iOS) and
+`com.cherryai.cherrystudio_app` (Android). Widget identifiers and iOS App Groups follow the selected
+variant. Each variant has independent app data; existing installations retain their previous identity
+and their data is not automatically migrated to apps using the new IDs.
+
+The `dev`, `start`, Storybook, `ios`, and `android` scripts select `PROFILE=development`. The `prebuild`
+script also defaults to development, while preserving an explicitly set `PROFILE` (for example,
+`PROFILE=preview pnpm prebuild --clean`). For preview or production, use direct Expo commands with the
+same explicit `PROFILE` when building or starting Metro. When switching variants with existing generated
+`ios` or `android` directories, regenerate them with `PROFILE=<profile> pnpm exec expo prebuild --clean`
+before building; this replaces generated native projects, including any manual native edits.
+
+These identity changes require new native builds. Each iOS variant needs
+matching Apple app identifiers, widget identifiers, App Groups, and provisioning profiles. The EAS
+project ID stays unchanged. Before production submission, check that `submit.production.ios.ascAppId`
+in `eas.json` points to an App Store Connect app matching the new production bundle identifier.
+
 ## Sentry Environment Variables
 
 Development and preview builds do not need Sentry credentials. `app.config.ts` omits the Sentry
@@ -96,7 +125,7 @@ Rebuild the native client after adding or changing native dependencies such as S
 Metro again does not add a native module to an already installed client. Local and cloud EAS builds
 generate native projects from the selected profile because `.easignore` excludes `ios` and `android`.
 When using direct Expo builds with existing native folders, follow the
-[app-variant regeneration instructions](../../README.md#app-variants) after switching profiles;
+[app-variant regeneration instructions](#app-variants) after switching profiles;
 removing a plugin from app config does not clean its hooks out of an existing native project.
 
 Successful compilation alone does not verify production Sentry event delivery or source-map

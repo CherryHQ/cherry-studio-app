@@ -144,7 +144,7 @@ const ChatShareMessageRow = memo(function ChatShareMessageRow({
 }: {
   message: AgentMessageView;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isSharing } = useChatShareSelectionState();
   const { toggleMessage } = useChatShareSelectionActions();
   const selected = useIsChatMessageSelected(message.id);
@@ -180,7 +180,7 @@ const ChatShareMessageRow = memo(function ChatShareMessageRow({
           </Text>
           <Text className="shrink text-muted-foreground text-xs" numberOfLines={1}>
             {isChatMessageExportable(message)
-              ? new Date(message.createdAt).toLocaleString()
+              ? new Date(message.createdAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language)
               : t('chat.share.unsettled')}
           </Text>
         </View>

@@ -3,7 +3,7 @@
 
 > ### Branch strategy
 >
-> - Active development targets `v0.2`.
+> - Active development targets `main`.
 
 ### What this PR does
 
@@ -45,7 +45,7 @@ If this PR introduces breaking changes, please describe the changes and the impa
 This checklist is not enforcing, but it is a reminder of items that could be relevant to every PR.
 Approvers are expected to review this list.
 
-- [ ] Branch: This PR targets `v0.2`
+- [ ] Branch: This PR targets `main`
 - [ ] PR: The PR description is expressive enough and will help future contributors
 - [ ] Preview: For a user-facing change, I uploaded screenshots or a video so reviewers can quickly verify the effect; otherwise, I explained why it is not applicable
 - [ ] Code: [Write code that humans can understand](https://en.wikiquote.org/wiki/Martin_Fowler#code-for-humans) and [keep it simple](https://en.wikipedia.org/wiki/KISS_principle)

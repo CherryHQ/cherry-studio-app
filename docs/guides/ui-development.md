@@ -96,6 +96,8 @@ failure feels:
 - Shared controls retain accessible labels, states, scalable text, and usable platform fallbacks.
 - Competing gestures have one documented winner and cancelled interactions do not fire on release.
 - Feature components keep business state and translations outside CherryUI.
+- User-visible copy follows [Internationalization](./internationalization.md), including
+  accessibility labels, supported locales, interpolation, and language-aware formatting.
 - Outcome feedback follows [Report Outcomes](#report-outcomes): toasts for in-place outcomes,
   alerts only for text that must be read or a decision.
 - Containers own external placement and reusable children do not carry screen-specific gutters.
