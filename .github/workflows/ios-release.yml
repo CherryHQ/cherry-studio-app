@@ -42,6 +42,11 @@ jobs:
         with:
           version: 12.2.1
 
+      - name: Configure EAS CLI install scripts
+        # Expo installs the CLI outside the workspace, so use the runner's pnpm policy.
+        run: |
+          pnpm config set --global --json allowBuilds '{"dtrace-provider": false, "protobufjs": false}'
+
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
@@ -79,6 +84,11 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 12.2.1
+
+      - name: Configure EAS CLI install scripts
+        # Expo installs the CLI outside the workspace, so use the runner's pnpm policy.
+        run: |
+          pnpm config set --global --json allowBuilds '{"dtrace-provider": false, "protobufjs": false}'
 
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
