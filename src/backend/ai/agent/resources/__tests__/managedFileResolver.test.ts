@@ -49,6 +49,7 @@ describe('managedFileResolver', () => {
       'file:///private/managed/available.png',
       'image/png',
       signal,
+      undefined,
     );
     await expect(resolver.readAsBytes(facts.get(AVAILABLE_ID)!, signal)).resolves.toEqual(
       Uint8Array.from([116, 101, 120, 116]),

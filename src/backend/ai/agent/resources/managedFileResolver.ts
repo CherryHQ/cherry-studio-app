@@ -52,7 +52,11 @@ export interface ManagedFileResolver {
     fileEntryIds: readonly FileEntryId[],
   ): Promise<ReadonlyMap<string, ManagedFileFact>>;
   readAsBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
-  readAsDataUrl(file: ManagedFileFact, signal: AbortSignal): Promise<string | undefined>;
+  readAsDataUrl(
+    file: ManagedFileFact,
+    signal: AbortSignal,
+    options?: { compress?: boolean },
+  ): Promise<string | undefined>;
   readDocumentText(
     file: ManagedFileFact,
     signal: AbortSignal,
@@ -66,7 +70,12 @@ type AvailableFileEntries = {
 export function createManagedFileResolver(
   entries: AvailableFileEntries,
   getUri: (entry: Pick<FileEntry, 'filename' | 'id'>) => string | undefined,
-  readDataUrl: (uri: string, mediaType: string, signal: AbortSignal) => Promise<string>,
+  readDataUrl: (
+    uri: string,
+    mediaType: string,
+    signal: AbortSignal,
+    options?: { compress?: boolean },
+  ) => Promise<string>,
   readBytes: (uri: string, signal: AbortSignal) => Promise<Uint8Array>,
   readDocument: typeof readDocumentUriText = readDocumentUriText,
 ): ManagedFileResolver {
@@ -98,14 +107,17 @@ export function createManagedFileResolver(
 
       return facts;
     },
-    async readAsDataUrl(file, signal) {
+    async readAsDataUrl(file, signal, options) {
       throwIfAborted(signal);
       const uri = getUri({ filename: file.name, id: file.fileEntryId });
       if (!uri) {
         return undefined;
       }
       try {
-        const dataUrl = await rejectOnAbort(readDataUrl(uri, file.mediaType, signal), signal);
+        const dataUrl = await rejectOnAbort(
+          readDataUrl(uri, file.mediaType, signal, options),
+          signal,
+        );
         throwIfAborted(signal);
         return dataUrl;
       } catch {
