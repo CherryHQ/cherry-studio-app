@@ -9,9 +9,12 @@ import type { PermissionsModule } from './permissions';
 import type { PluginsModule } from './plugins';
 import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
+import type { SystemEntryModule } from './systemEntry';
+import type { TranslationModule } from './translation';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly systemEntry: SystemEntryModule;
   readonly agent: AgentProtocol;
   readonly desktopConnections: DesktopConnectionsModule;
   readonly documentExport: DocumentExportModule;
@@ -24,6 +27,7 @@ export interface Backend {
   readonly profile: ProfileModule;
   readonly providers: ProvidersModule;
   readonly webSearch: WebSearchModule;
+  readonly translation: TranslationModule;
 }
 
 export type BackendModuleKey = keyof Backend;

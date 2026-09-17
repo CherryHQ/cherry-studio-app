@@ -64,6 +64,7 @@ export interface AiGenerateRequest extends AiBaseRequest {
 export interface AiGenerateResult {
   text: string;
   usage?: LanguageModelUsage;
+  finishReason?: string;
 }
 
 export interface AiImageRequest extends AiBaseRequest {
@@ -216,6 +217,37 @@ export class AiService extends BaseService {
   // ── Non-streaming text generation (agent.generate) ──
 
   async generateText(request: AiGenerateRequest): Promise<AiGenerateResult> {
+    const { text, usage } = await this.generateTextWithUsagePolicy(request, true);
+    return { text, usage };
+  }
+
+  /** Temporary text has no tools, usage capture, or caller-supplied execution hooks. */
+  async generateTemporaryText(request: {
+    uniqueModelId: UniqueModelId;
+    system: string;
+    prompt: string;
+    signal: AbortSignal;
+  }): Promise<Pick<AiGenerateResult, 'text' | 'finishReason'>> {
+    const { text, finishReason } = await this.generateTextWithUsagePolicy(
+      {
+        uniqueModelId: request.uniqueModelId,
+        system: request.system,
+        prompt: request.prompt,
+        requestOptions: {
+          signal: request.signal,
+          maxRetries: 0,
+          headers: { 'Cache-Control': 'no-store' },
+        },
+      },
+      false,
+    );
+    return { text, finishReason };
+  }
+
+  private async generateTextWithUsagePolicy(
+    request: AiGenerateRequest,
+    captureUsage: boolean,
+  ): Promise<AiGenerateResult> {
     const signal = request.requestOptions?.signal;
 
     const repairUsagePlugins: { current?: AiPlugin[] } = {};
@@ -230,25 +262,29 @@ export class AiService extends BaseService {
       sdkConfig,
       tools,
     } = await this.buildAgentParamsFor(request, () => repairUsagePlugins.current ?? []);
-    const usagePlugin = createAiUsagePlugin(
-      createCaptureContext({
-        provider,
-        model,
-        sdkModelId: sdkConfig.modelId,
-        credentialReceipt,
-        usageAttribution: request.usageAttribution,
-      }),
-      this.services.aiUsageRecord,
-    );
-    repairUsagePlugins.current = [usagePlugin];
+    const usagePlugins = captureUsage
+      ? [
+          createAiUsagePlugin(
+            createCaptureContext({
+              provider,
+              model,
+              sdkModelId: sdkConfig.modelId,
+              credentialReceipt,
+              usageAttribution: request.usageAttribution,
+            }),
+            this.services.aiUsageRecord,
+          ),
+        ]
+      : [];
+    repairUsagePlugins.current = usagePlugins;
 
     const generator = new AiSdkGenerator({
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
-      plugins: [...plugins, usagePlugin],
+      plugins: [...plugins, ...usagePlugins],
       context,
-      repairToolCall,
+      repairToolCall: captureUsage ? repairToolCall : undefined,
       system: request.system,
       tools,
       options,

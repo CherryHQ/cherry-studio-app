@@ -11,3 +11,10 @@ export * from './profile';
 export * from './providers';
 export * from './webSearch';
 export * from './plugins';
+export * from './translation';
+export type {
+  SystemAction,
+  SystemEntryCapabilities,
+  SystemEntryModule,
+  SystemEntrySession,
+} from './systemEntry';

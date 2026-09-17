@@ -28,7 +28,7 @@ import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import { publishForegroundActivityAttention } from '@/frontend/appShell/backgroundActivity';
 import AssistantActivity from '@/frontend/appShell/backgroundActivity/AssistantActivity/AssistantActivity';
 import PaintingActivity from '@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActivity';
-import i18n from '@/frontend/i18n';
+import i18n, { resolveLanguage } from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
@@ -93,13 +93,15 @@ export function createAppBootstrapRuntime(
     preference,
     webSearch,
   });
-  const { backend, dataApiDependencies } = createBackend(services, {
-    dbService,
-    documentExport,
-    desktopConnections,
-    languageServing,
-    providerRegistryUpdater,
-  });
+  const { backend, dataApiDependencies, translationConfiguration, disposeSystemEntry } =
+    createBackend(services, {
+      dbService,
+      documentExport,
+      desktopConnections,
+      languageServing,
+      providerRegistryUpdater,
+      getInterfaceLanguage: () => resolveLanguage(preference.readCached('app.language')),
+    });
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
@@ -133,9 +135,11 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
-      // Nothing to drain ahead of the host: `JobRuntime` is a service, so
-      // reverse-order teardown settles it before the database it writes through.
+      // Drain system-entry consumers and translation configuration before the host's resources.
+      // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
+        await disposeSystemEntry();
+        await translationConfiguration.dispose();
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;
@@ -155,7 +159,9 @@ export function createAppBootstrapRuntime(
       // Starts the PostReady phase alongside the hand-run tasks. Both are
       // best-effort and off the first-paint path; the host logs its own
       // failures rather than surfacing them here.
+      const translationReady = translationConfiguration.start();
       host.runPostReady();
+      await translationReady;
     },
   };
 }

@@ -402,11 +402,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     };
   }
 
-  async startSession(input: AgentStartSessionInput): Promise<AgentSessionView> {
+  async startSession(
+    input: AgentStartSessionInput,
+    options?: { signal?: AbortSignal },
+  ): Promise<AgentSessionView> {
     const parsed = AgentStartSessionInputSchema.parse(input);
     this.assertAcceptingSubmissions();
     const completion = createCompletionSignal();
     const abortController = new AbortController();
+    const cancelAdmission = () => abortController.abort(options?.signal?.reason);
+    options?.signal?.addEventListener('abort', cancelAdmission, { once: true });
+    if (options?.signal?.aborted) cancelAdmission();
     const admission = { abortController, completion: completion.promise };
     const { signal } = abortController;
     this.initialAdmissions.add(admission);
@@ -417,6 +423,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     );
 
     try {
+      signal.throwIfAborted();
       const plan = await prepareInitialTurn(this.turnPreparation, parsed, signal);
       openedRuntimeSession = await this.openRuntimeSession(plan.runtime, signal);
       signal.throwIfAborted();
@@ -455,6 +462,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           );
       }
       this.initialAdmissions.delete(admission);
+      options?.signal?.removeEventListener('abort', cancelAdmission);
       preparationLease.release();
       completion.resolve();
     }

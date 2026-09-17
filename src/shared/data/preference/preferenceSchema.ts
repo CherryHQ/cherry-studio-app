@@ -46,6 +46,7 @@ export interface PreferenceSchema {
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
+  'feature.translate.target_language': string | null;
 
   'file.document_parser.mode': DocumentParserMode;
 
@@ -76,6 +77,7 @@ export const PreferenceDefaults = {
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
+  'feature.translate.target_language': null,
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
 

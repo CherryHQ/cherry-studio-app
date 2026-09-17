@@ -22,6 +22,36 @@ jest.mock('@/backend/ai/generation/AiSdkGenerator', () => ({
 
 beforeEach(installProviderRegistryTestSnapshot);
 
+test('temporary translation excludes recording and tool execution without changing ordinary generation', async () => {
+  mockGeneratorConstructor.mockClear();
+  const model = createModel('translation');
+  const services = createServices({ model });
+  const service = new AiService(services);
+  await service.generateText({ uniqueModelId: model.id, prompt: 'ordinary request' });
+  expect(mockGeneratorConstructor.mock.calls.at(-1)?.[0].plugins).toEqual(
+    expect.arrayContaining([expect.objectContaining({ name: 'ai-usage-capture' })]),
+  );
+
+  const signal = new AbortController().signal;
+  await service.generateTemporaryText({
+    uniqueModelId: model.id,
+    prompt: 'private source',
+    system: 'Translate.',
+    signal,
+  });
+  const parameters = mockGeneratorConstructor.mock.calls.at(-1)?.[0];
+  expect(parameters.plugins).not.toEqual(
+    expect.arrayContaining([expect.objectContaining({ name: 'ai-usage-capture' })]),
+  );
+  expect(parameters.tools).toBeUndefined();
+  expect(parameters.repairToolCall).toBeUndefined();
+  expect(parameters.options).toMatchObject({
+    maxRetries: 0,
+    headers: { 'Cache-Control': 'no-store' },
+  });
+  expect(mockGenerate).toHaveBeenLastCalledWith({ prompt: 'private source' }, signal);
+});
+
 describe('AiService.listModels', () => {
   afterEach(() => {
     jest.restoreAllMocks();

@@ -28,7 +28,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       bundleIdentifier,
       entitlements: {
         ...config.ios?.entitlements,
-        'com.apple.security.application-groups': [groupIdentifier],
+        'com.apple.security.application-groups': [
+          groupIdentifier,
+          `group.${bundleIdentifier}.system-integration`,
+        ],
+        'keychain-access-groups': [
+          `$(AppIdentifierPrefix)${bundleIdentifier}`,
+          `$(AppIdentifierPrefix)${bundleIdentifier}.system-integration`,
+        ],
+        'com.apple.developer.translation-app': true,
       },
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
@@ -66,6 +74,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
                   bundleIdentifier: widgetBundleIdentifier,
                   entitlements: { 'com.apple.security.application-groups': [groupIdentifier] },
                 },
+                ...['CherryShareExtension', 'CherryTranslationExtension'].map((targetName) => ({
+                  targetName,
+                  bundleIdentifier: `${bundleIdentifier}.${targetName}`,
+                  entitlements: {
+                    'com.apple.security.application-groups': [
+                      `group.${bundleIdentifier}.system-integration`,
+                    ],
+                    'keychain-access-groups': [
+                      `$(AppIdentifierPrefix)${bundleIdentifier}.system-integration`,
+                    ],
+                  },
+                })),
               ],
             },
           },

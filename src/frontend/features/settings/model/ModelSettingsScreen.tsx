@@ -19,10 +19,8 @@ import {
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
-// 快速模型和翻译模型暂无功能接入，暂时隐藏设置入口，待功能接通后恢复。
-const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter(
-  (kind) => kind !== 'fast' && kind !== 'translate',
-);
+// 快速模型尚未接入功能；翻译模型用于临时翻译及兼容的系统入口。
+const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter((kind) => kind !== 'fast');
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();

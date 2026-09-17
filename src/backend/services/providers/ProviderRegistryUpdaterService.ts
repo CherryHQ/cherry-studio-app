@@ -18,6 +18,7 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import { modelConfigurationChanges } from '@/backend/data/modelConfigurationChanges';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
@@ -154,7 +155,9 @@ export class ProviderRegistryUpdaterService extends BaseService {
         if (!isCatalogManifestCompatible(snapshot.manifest)) continue;
         const parsed = this.parseAndValidateFiles(snapshot.files, snapshot.manifest);
         this.activeSlot = snapshot.slot;
-        providerRegistryService.installRemoteSnapshot(parsed);
+        await modelConfigurationChanges.write(async () => {
+          providerRegistryService.installRemoteSnapshot(parsed);
+        });
         this.activeManifest = snapshot.manifest;
         providerRegistryUpdates.emit({ revision: snapshot.manifest.revision, source: 'cache' });
         return;
@@ -257,7 +260,9 @@ export class ProviderRegistryUpdaterService extends BaseService {
       return;
     }
 
-    providerRegistryService.installRemoteSnapshot(staged.parsed);
+    await modelConfigurationChanges.write(async () => {
+      providerRegistryService.installRemoteSnapshot(staged.parsed);
+    });
     this.activeManifest = staged.manifest;
     providerRegistryUpdates.emit({ revision: staged.manifest.revision, source });
     logger.info('Registry snapshot applied', {

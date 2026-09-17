@@ -4,12 +4,14 @@ import { and, asc, desc, eq, gt, inArray, isNull, notInArray, or, type SQL } fro
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import { agentTable, monotonicUpdateTimestamp, userModelTable } from '@/backend/data/db/schemas';
 import type {
   InsertUserProviderRow,
   UserProviderRow,
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
+import { modelConfigurationChanges } from '@/backend/data/modelConfigurationChanges';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { ProviderListPageQuery } from '@/shared/data/api/schemas/providers';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
@@ -357,6 +359,10 @@ export class ProviderService {
    * reference to a particular host generation and a replaced host cannot leave
    * this singleton writing to a closed connection.
    */
+  private withConfigurationWrite<T>(write: (tx: Database) => Promise<T>): Promise<T> {
+    return modelConfigurationChanges.write(() => this.dbService.withWriteTx(write));
+  }
+
   private get dbService() {
     return application.get('DbService');
   }
@@ -527,7 +533,7 @@ export class ProviderService {
 
   async create(input: CreateProviderInput): Promise<Provider> {
     const values = toInsert(input);
-    const row = (await this.dbService.withWriteTx((tx) => {
+    const row = (await this.withConfigurationWrite((tx) => {
       if (values.presetProviderId === null) {
         assertCustomProviderEndpointConfiguration({
           defaultChatEndpoint: values.defaultChatEndpoint,
@@ -569,7 +575,7 @@ export class ProviderService {
     if (input.name !== undefined) {
       updates.name = input.name;
     }
-    const [row] = await this.dbService.withWriteTx(async (tx) => {
+    const [row] = await this.withConfigurationWrite(async (tx) => {
       const [current] = await tx
         .select()
         .from(userProviderTable)
@@ -655,7 +661,7 @@ export class ProviderService {
 
   async replaceApiKeys(providerId: string, apiKeys: ApiKeyEntry[]): Promise<Provider> {
     const normalizedApiKeys = normalizeApiKeys(apiKeys);
-    const [row] = await this.dbService.withWriteTx((tx) =>
+    const [row] = await this.withConfigurationWrite((tx) =>
       tx
         .update(userProviderTable)
         .set({ apiKeys: normalizedApiKeys })
@@ -703,7 +709,7 @@ export class ProviderService {
   }
 
   async delete(providerId: string): Promise<void> {
-    await this.dbService.withWriteTx(async (tx) => {
+    await this.withConfigurationWrite(async (tx) => {
       const providerModelIds = tx
         .select({ id: userModelTable.id })
         .from(userModelTable)
@@ -731,7 +737,7 @@ export class ProviderService {
       return;
     }
 
-    await this.dbService.withWriteTx(async (tx) => {
+    await this.withConfigurationWrite(async (tx) => {
       const providerIds = inputs.map((input) => input.providerId);
       const existingRows = await tx
         .select({
