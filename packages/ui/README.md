@@ -801,9 +801,14 @@ const source = icon?.[theme];
 Call sites pass the selected source to `expo-image`. Theme switching is handled
 by choosing `light` or `dark` from the returned pair.
 
-If a dark SVG does not exist, the generated dark WebP entry points to the light
+By default, if a dark SVG does not exist, the generated dark WebP entry points to the light
 WebP unless the source uses `currentColor`. This keeps the API stable while still
 allowing later dark assets to be added without changing call sites.
+
+The generator also supplies dark color fallbacks for Cohere, Fireworks, Sophnet,
+GLM vision, and SenseNova, whose original ink has low contrast on dark mobile
+surfaces. These adjustments live in `darkBrandColors` in `generate-icons.ts` so
+desktop icon synchronization preserves them. A supplied dark SVG takes precedence.
 
 Provider id aliases live in:
 

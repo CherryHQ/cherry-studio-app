@@ -133,7 +133,7 @@ export const PROVIDER_ICONS = {
   },
   cohere: {
     light: require('./light/cohere.webp'),
-    dark: require('./light/cohere.webp'),
+    dark: require('./dark/cohere.webp'),
   },
   composio: {
     light: require('./light/composio.webp'),
@@ -217,7 +217,7 @@ export const PROVIDER_ICONS = {
   },
   fireworks: {
     light: require('./light/fireworks.webp'),
-    dark: require('./light/fireworks.webp'),
+    dark: require('./dark/fireworks.webp'),
   },
   flowith: {
     light: require('./light/flowith.webp'),
@@ -529,7 +529,7 @@ export const PROVIDER_ICONS = {
   },
   sophnet: {
     light: require('./light/sophnet.webp'),
-    dark: require('./light/sophnet.webp'),
+    dark: require('./dark/sophnet.webp'),
   },
   stability: {
     light: require('./light/stability.webp'),
