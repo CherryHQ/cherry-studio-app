@@ -1,5 +1,9 @@
+const { readdirSync } = require('node:fs');
+const path = require('node:path');
 const expoConfig = require('eslint-config-expo/flat');
 const { defineConfig } = require('eslint/config');
+
+const projectRoot = path.dirname(require.resolve('./package.json'));
 
 // Layer dependency direction from the current architecture reference:
 // app -> {bootstrap, frontend, shared}
@@ -148,11 +152,33 @@ const retiredImports = [
 const aliasRoots = (roots) =>
   roots.flatMap((root) => [`@/${root}`, `@/${root}/*`, `@/${root}/*/**`]);
 
-const restrictedImports = (files, patterns) => ({
+// Reuse the same layer declarations for resolved paths, so relative imports,
+// @src aliases, re-exports, require(), and dynamic imports cannot bypass them.
+const restrictedImportRules = (patterns, zones = []) => ({
+  '@typescript-eslint/no-restricted-imports': ['error', { patterns }],
+  'import/no-restricted-paths': [
+    'error',
+    {
+      basePath: projectRoot,
+      zones: [
+        ...patterns.flatMap((pattern) =>
+          (pattern.group ?? [])
+            .filter((entry) => entry.startsWith('@/') && !entry.includes('*'))
+            .map((entry) => ({
+              target: '.',
+              from: `src/${entry.slice(2)}`,
+              message: pattern.message,
+            })),
+        ),
+        ...zones,
+      ],
+    },
+  ],
+});
+
+const restrictedImports = (files, patterns, zones) => ({
   files,
-  rules: {
-    '@typescript-eslint/no-restricted-imports': ['error', { patterns }],
-  },
+  rules: restrictedImportRules(patterns, zones),
 });
 
 const layerPattern = (roots, message) => ({
@@ -238,26 +264,31 @@ const frontendLayer = layerPattern(
   'Frontend may depend only on frontend and shared modules. Use Data API hooks for resources, preference hooks for settings, and useBackendModule() for workflows.',
 );
 
-const frontendSharedLayer = {
-  group: ['@/frontend/features/*', '@/frontend/features/*/**'],
+const frontendSharedLayer = layerPattern(
+  ['frontend/features'],
+  'Shared frontend modules must not depend on pages; move the shared capability down instead.',
+);
+
+const frontendImplementationPackages = {
+  regex:
+    '^(?:ai(?:/|$)|@ai-sdk/|@earendil-works/|@cherrystudio/(?:ai-core|ai-sdk-provider)(?:/|$)|drizzle-orm(?:/|$)|expo-sqlite(?:/|$))',
   message:
-    'Shared frontend modules must not depend on pages; move the shared capability down instead.',
+    'Frontend consumes Data API and workflow contracts; AI SDK and database implementations belong to backend.',
 };
 
-const frontendPageLayer = {
-  // Page modules use relative imports inside their own tree. A dependency shared by independent
-  // pages belongs in a neutral frontend module rather than behind one page's private path.
-  // Gitignore-style negations must first unban each ancestor directory.
-  group: [
-    '@/frontend/features/*/*/*',
-    '@/frontend/features/*/*/*/*',
-    '@/frontend/features/*/*/*/*/*',
-    '@/frontend/features/*/*/*/*/*/*',
-  ],
-  allowTypeImports: true,
-  message:
-    'Deep page import: use relative imports within one page tree or move cross-page code to a neutral frontend owner.',
-};
+// Each feature root is a page tree. Imports within it are allowed; independent
+// pages must move shared code to a neutral owner, including type-only imports.
+const frontendPageZones = readdirSync(path.join(projectRoot, 'src/frontend/features'), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => ({
+    target: `src/frontend/features/${entry.name}`,
+    from: 'src/frontend/features',
+    except: [`./${entry.name}`],
+    message:
+      'Independent page trees must not import each other. Move shared capabilities to frontend components, hooks, data, or utils.',
+  }));
 
 const sharedLayer = layerPattern(
   ['app', 'backend', 'bootstrap', 'frontend'],
@@ -363,12 +394,7 @@ module.exports = defineConfig([
   {
     files: ['src/backend/**/*.{ts,tsx}'],
     ignores: [...piZoneFiles, ...aiSdkGenerationZoneFiles],
-    rules: {
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        { patterns: [backendLayer, piIsolation, aiSdkGenerationPrivacy] },
-      ],
-    },
+    rules: restrictedImportRules([backendLayer, piIsolation, aiSdkGenerationPrivacy]),
   },
   // The facade and its own implementation are the inside of the generation
   // boundary; the Pi ban still applies to them.
@@ -384,12 +410,12 @@ module.exports = defineConfig([
       'src/backend/ai/agent/runtime/**/__tests__/**/*.{ts,tsx}',
       'src/backend/ai/agent/runtime/pi/**/*.{ts,tsx}',
     ],
-    rules: {
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        { patterns: [backendLayer, runtimeContractLayer, sharedPlatformIndependence, piIsolation] },
-      ],
-    },
+    rules: restrictedImportRules([
+      backendLayer,
+      runtimeContractLayer,
+      sharedPlatformIndependence,
+      piIsolation,
+    ]),
   },
   // The Pi implementation honors the same contract constraints but is the one
   // Runtime directory allowed to name Pi modules and @earendil-works packages.
@@ -402,12 +428,7 @@ module.exports = defineConfig([
       'src/backend/ai/agent/runtime/pi/__tests__/**/*.{ts,tsx}',
       'src/backend/ai/agent/runtime/pi/piModelResolver.ts',
     ],
-    rules: {
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        { patterns: [backendLayer, runtimeContractLayer, sharedPlatformIndependence] },
-      ],
-    },
+    rules: restrictedImportRules([backendLayer, runtimeContractLayer, sharedPlatformIndependence]),
   },
   // `piModelResolver.ts` is the Pi zone's one bridge from app entities to Pi: it
   // reads Provider and Model records and materializes an Expo-backed fetch,
@@ -435,12 +456,23 @@ module.exports = defineConfig([
   // Registration is assembly: this file names every concrete service class —
   // including the Pi Runtime binding — so it keeps only the backend layer rule.
   restrictedImports(['src/backend/core/application/serviceRegistry.ts'], [backendLayer]),
-  restrictedImports(['src/frontend/**/*.{ts,tsx}'], [frontendLayer]),
-  restrictedImports(sharedFrontendDirectories, [frontendLayer, frontendSharedLayer]),
-  restrictedImports(['src/frontend/features/**/*.{ts,tsx}'], [frontendLayer, frontendPageLayer]),
+  restrictedImports(
+    ['src/frontend/**/*.{ts,tsx}'],
+    [frontendLayer, frontendImplementationPackages],
+  ),
+  restrictedImports(sharedFrontendDirectories, [
+    frontendLayer,
+    frontendSharedLayer,
+    frontendImplementationPackages,
+  ]),
+  restrictedImports(
+    ['src/frontend/features/**/*.{ts,tsx}'],
+    [frontendLayer, frontendImplementationPackages],
+    frontendPageZones,
+  ),
   restrictedImports(['src/shared/**/*.{ts,tsx}'], [sharedLayer]),
   restrictedImports(
-    ['src/shared/contracts/**/*.{ts,tsx}'],
+    ['src/shared/{contracts,data,utils}/**/*.{ts,tsx}'],
     [sharedLayer, sharedPlatformIndependence],
   ),
   restrictedImports(
@@ -455,6 +487,13 @@ module.exports = defineConfig([
         group: platformIndependentPackages,
         message:
           '@cherrystudio/universal mirrors desktop src/shared and must remain platform- and React-independent.',
+      },
+    ],
+    [
+      {
+        target: 'packages/universal/src',
+        from: 'src',
+        message: 'Packages must not depend on app code.',
       },
     ],
   ),
