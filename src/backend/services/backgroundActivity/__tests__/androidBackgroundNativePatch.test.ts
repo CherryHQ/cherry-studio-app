@@ -37,3 +37,12 @@ test('native destruction reports the admitted task name instead of changing noti
   expect(service).toContain('taskName = extras.getString("taskName")');
   expect(service).toMatch(/void onDestroy\(\)[\s\S]*?\.emit\("stopped", taskName\)/);
 });
+
+test('a refused foreground promotion keeps the started service and its task', () => {
+  const promotion = service.slice(
+    service.indexOf('private void updateForeground()'),
+    service.indexOf('public void onTimeout('),
+  );
+  expect(promotion).toContain('ForegroundServiceStartNotAllowedException');
+  expect(promotion).not.toContain('stopSelf');
+});

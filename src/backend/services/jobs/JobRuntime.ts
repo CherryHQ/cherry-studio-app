@@ -45,10 +45,9 @@ import {
   type JobService,
   type TerminalJobStatus,
 } from '@/backend/data/services/JobService';
-import {
-  type KeepAliveLease,
-  type KeepAliveSource,
-  waitForKeepAlive,
+import type {
+  KeepAliveLease,
+  KeepAliveSource,
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
@@ -848,7 +847,6 @@ export class JobRuntime extends BaseService {
     });
     let released = false;
     const lease: KeepAliveLease = {
-      ready: sourceLease.ready,
       release: () => {
         if (released) return;
         released = true;
@@ -956,7 +954,6 @@ export class JobRuntime extends BaseService {
 
     const task = (async () => {
       try {
-        await waitForKeepAlive(keepAliveLease, controller.signal);
         const output = await handler.execute(ctx);
         // Cancellation wins even when a handler ignored its signal and returned
         // normally. Keeping this fence in the runtime gives every handler the
@@ -974,11 +971,7 @@ export class JobRuntime extends BaseService {
         const abortReason: unknown = controller.signal.reason;
         const isTimeout = isAbort && abortReason instanceof JobHandlerTimeoutError;
         const interruption =
-          abortReason instanceof KeepAliveInterruptionError
-            ? abortReason
-            : err instanceof KeepAliveInterruptionError
-              ? err
-              : undefined;
+          abortReason instanceof KeepAliveInterruptionError ? abortReason : undefined;
         const userCancel = isAbort && !isTimeout && !interruption;
         const thrownMessage = err instanceof Error ? err.message : String(err);
         const cancelMessage = abortReason instanceof Error ? abortReason.message : null;

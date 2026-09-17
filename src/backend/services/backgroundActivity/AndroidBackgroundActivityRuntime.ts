@@ -45,11 +45,7 @@ type ActivityRecord = {
   latestProps: ActivityProps;
   props: ActivityProps;
 };
-type LeaseRecord = {
-  onInterrupt?: (reason: Error) => void | Promise<void>;
-  rejectReady: (reason: Error) => void;
-  resolveReady: () => void;
-};
+type LeaseRecord = { onInterrupt?: (reason: Error) => void | Promise<void> };
 type Notifications = typeof import('expo-notifications');
 
 /** Business leases and content only; open-source libraries own native execution and delivery. */
@@ -70,7 +66,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   private nextId = 0;
   private operationTail: Promise<void> = Promise.resolve();
   private permissionRequested = false;
-  private starting?: { cancellation?: Promise<void> };
+  private unprotected = false;
 
   constructor(
     private readonly environment: Pick<
@@ -113,6 +109,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         for (const activity of this.activities) activity.finishPresentation?.();
         this.backgroundStartedAt = undefined;
         this.backgroundLimitReached = false;
+        this.unprotected = false;
         this.clearDeadline();
         this.scheduleReconcile();
       } else {
@@ -135,39 +132,22 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   }
 
   acquire(_tag: string, onInterrupt?: (reason: Error) => void | Promise<void>): KeepAliveLease {
-    let resolveReady!: () => void;
-    let rejectReady!: (reason: Error) => void;
-    const ready = new Promise<void>((resolve, reject) => {
-      resolveReady = resolve;
-      rejectReady = reject;
-    });
-    // Presentation-only consumers use onInterrupt; execution owners also await ready.
-    void ready.catch(() => {});
-    const lease: LeaseRecord = { onInterrupt, rejectReady, resolveReady };
-    const unavailable =
-      !this.background || this.disposed
-        ? new KeepAliveInterruptionError('unavailable')
-        : this.backgroundLimitReached && AppState.currentState !== 'active'
-          ? new KeepAliveInterruptionError('execution-limit')
-          : undefined;
-    if (unavailable) {
-      rejectReady(unavailable);
+    if (!this.background || this.disposed) return { release() {} };
+    if (this.backgroundLimitReached && AppState.currentState !== 'active') {
       void Promise.resolve()
-        .then(() => onInterrupt?.(unavailable))
+        .then(() => onInterrupt?.(new KeepAliveInterruptionError('execution-limit')))
         .catch((error: unknown) => logger.warn('Background task interruption failed', { error }));
-      return { ready, release() {} };
+      return { release() {} };
     }
+    const lease: LeaseRecord = { onInterrupt };
     this.leases.add(lease);
     this.scheduleReconcile();
     return {
-      ready,
       release: () => {
-        if (this.leases.delete(lease)) {
-          // Disabling background execution during preparation removes its admission gate.
-          resolveReady();
-          if (this.leases.size === 0) this.cancelStart();
-          this.scheduleReconcile();
-        }
+        if (!this.leases.delete(lease)) return;
+        // Later work gets its own admission attempt once the unprotected work has ended.
+        if (this.leases.size === 0) this.unprotected = false;
+        this.scheduleReconcile();
       },
     };
   }
@@ -246,10 +226,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   protected async onStop(): Promise<void> {
     this.disposed = true;
     this.clearDeadline();
-    for (const lease of this.leases)
-      lease.rejectReady(new KeepAliveInterruptionError('unavailable'));
     this.leases.clear();
-    this.cancelStart();
     for (const activity of this.activities) activity.finishPresentation?.();
     await this.enqueue(async () => {
       await this.stopService();
@@ -277,12 +254,12 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     const content = this.runningContent();
     try {
       if (!background.isRunning()) {
+        if (this.unprotected) return;
         // Android 12+: start only from a visible Activity, never from a background retry.
         if (AppState.currentState !== 'active' || this.backgroundLimitReached) {
-          throw new KeepAliveInterruptionError('start-rejected');
+          this.continueUnprotected(new Error('Background execution was requested while hidden.'));
+          return;
         }
-        const starting: { cancellation?: Promise<void> } = {};
-        this.starting = starting;
         try {
           await background.start(holdBackgroundExecution, {
             ...content,
@@ -296,32 +273,12 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
             progressBar: { max: 1, value: 0, indeterminate: true },
           });
         } catch (error) {
-          if (!starting.cancellation) throw error;
-        } finally {
-          await starting.cancellation;
-          this.starting = undefined;
+          this.continueUnprotected(error);
+          return;
         }
-        if (starting.cancellation) return;
       }
-      if (this.disposed || this.leases.size === 0) {
-        await this.stopService();
-        return;
-      }
-      for (const lease of this.leases) lease.resolveReady();
       await background.updateNotification(content);
       this.armDeadline();
-    } catch (error) {
-      if (!background.isRunning()) {
-        // Cancellation may enqueue surface cleanup, so never await it inside this queue.
-        const reason =
-          error instanceof KeepAliveInterruptionError
-            ? error
-            : new KeepAliveInterruptionError('start-rejected', { cause: error });
-        void this.interruptLeases(reason).catch((interruptionError: unknown) =>
-          logger.warn('Background service interruption failed', { error: interruptionError }),
-        );
-      }
-      throw error;
     } finally {
       // Request after admission, including a failed attempt or a return while running.
       // The permission sheet must not race admission or depend on its success.
@@ -335,19 +292,22 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     }
   }
 
+  /**
+   * Protection is best effort: work that could not get it keeps running and ends through its
+   * own result or a real platform revocation. Returning to the foreground retries admission.
+   */
+  private continueUnprotected(cause: unknown): void {
+    this.unprotected = true;
+    logger.error('Background execution is unprotected', cause as Error, {
+      operation: 'background.start',
+      appState: AppState.currentState,
+      leaseCount: this.leases.size,
+    });
+  }
+
   private async stopService(): Promise<void> {
     this.clearDeadline();
     if (this.background?.isRunning()) await this.background.stop();
-  }
-
-  private cancelStart(): void {
-    if (this.starting && !this.starting.cancellation) {
-      this.starting.cancellation = this.background!.stop().catch((error: unknown) => {
-        logger.error('Background startup cancellation failed', error as Error, {
-          operation: 'background.start.cancel',
-        });
-      });
-    }
   }
 
   private runningContent() {
@@ -509,7 +469,6 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     this.interrupting = true;
     const leases = [...this.leases];
     this.leases.clear();
-    for (const lease of leases) lease.rejectReady(reason);
     for (const activity of this.activities) activity.finishPresentation?.();
     if (leases.length > 0) {
       logger.error('Background execution interrupted', reason, {

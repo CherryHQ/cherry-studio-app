@@ -50,7 +50,6 @@ import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
-import { waitForKeepAlive } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
   AgentCancelTurnInputSchema,
@@ -424,7 +423,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     );
 
     try {
-      await waitForKeepAlive(preparationLease, signal);
       const plan = await prepareInitialTurn(this.turnPreparation, parsed, signal);
       if (!plan.imageGeneration) {
         openedRuntimeSession = await this.openRuntimeSession(plan.runtime, signal);
@@ -578,7 +576,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       abortController.abort(reason),
     );
     try {
-      await waitForKeepAlive(preparationLease, signal);
       // Every gate between admission and the first durable write lives in the
       // preparation stage; a failure there leaves nothing to reconcile.
       const plan = await prepareTurn(this.turnPreparation, parsed, signal);

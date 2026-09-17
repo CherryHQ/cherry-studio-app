@@ -133,10 +133,16 @@ index 46375fd98ce4dc36efa6a3f5f0fb9a199f297280..068775c3a8f06a003b986a7e3f144704
  
      @SuppressWarnings("unused")
 diff --git a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
-index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe60e5495e5 100644
+index 963b7889356454d12c150398631a3d493f53b5b2..a4292e153e50ed5144e892dfc370eca8e6302439 100644
 --- a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
 +++ b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
-@@ -15,15 +15,61 @@ import androidx.annotation.NonNull;
+@@ -10,20 +10,67 @@ import android.content.Intent;
+ import android.net.Uri;
+ import android.os.Build;
+ import android.os.Bundle;
++import android.util.Log;
+ 
+ import androidx.annotation.NonNull;
  import androidx.annotation.Nullable;
  import androidx.core.app.NotificationCompat;
  import androidx.core.app.ServiceCompat;
@@ -199,7 +205,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
  
      @SuppressLint("UnspecifiedImmutableFlag")
      @NonNull
-@@ -37,6 +83,8 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+@@ -37,6 +84,8 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
          Intent notificationIntent;
          if (linkingURI != null) {
              notificationIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(linkingURI));
@@ -208,7 +214,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
          } else {
              //as RN works on single activity architecture - we don't need to find current activity on behalf of react context
              notificationIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-@@ -59,7 +107,9 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+@@ -59,7 +108,9 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
                  .setSmallIcon(iconInt)
                  .setContentIntent(contentIntent)
                  .setOngoing(true)
@@ -219,7 +225,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
                  .setColor(color);
  
          final Bundle progressBarBundle = bgOptions.getProgressBar();
-@@ -92,28 +142,50 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+@@ -92,28 +143,50 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
          if (extras == null) {
              throw new IllegalArgumentException("Extras cannot be null");
          }
@@ -238,20 +244,20 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
 +            taskName = extras.getString("taskName");
 +            createNotificationChannel(currentOptions.getTaskTitle(), currentOptions.getTaskDesc());
 +        }
-+        if (!updateForeground()) return START_NOT_STICKY;
++        updateForeground();
 +        // Content and visibility changes do not create another Headless JS task.
 +        if (!update) super.onStartCommand(intent, flags, startId);
 +        return START_NOT_STICKY;
 +    }
  
-+    private boolean updateForeground() {
-+        if (currentOptions == null) return true;
++    private void updateForeground() {
++        if (currentOptions == null) return;
 +        if (isAppVisible()) {
 +            if (foreground) {
 +                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
 +                foreground = false;
 +            }
-+            return true;
++            return;
 +        }
 +        final Notification notification = buildNotification(this, currentOptions);
          try {
@@ -270,24 +276,25 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
          } catch (RuntimeException e) {
              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                      && e instanceof android.app.ForegroundServiceStartNotAllowedException) {
-                 // Android 12+: not allowed to start foreground service from background
+-                // Android 12+: not allowed to start foreground service from background
 -                stopSelf(startId);
 -                return START_NOT_STICKY;
-+                stopSelf();
-+                return false;
++                // Android 12+ refused promotion. The started service keeps the task
++                // until Android stops it; destruction then reports the interruption.
++                Log.w("RNBackgroundActions", "Foreground promotion refused", e);
++                return;
              }
              throw e;
          }
 -        return super.onStartCommand(intent, flags, startId);
-+        return true;
      }
  
      @Override
 diff --git a/lib/types/index.d.ts b/lib/types/index.d.ts
-index cc9906f27b2d988ec01fc07e4096ec24b075b22e..2a01240037c37b3227185ece253aea690fc159fb 100644
+index cc9906f27b2d988ec01fc07e4096ec24b075b22e..9deaaf22e58b7bb5a31b04d376842bf8d4c791b8 100644
 --- a/lib/types/index.d.ts
 +++ b/lib/types/index.d.ts
-@@ -28,15 +28,17 @@ declare const backgroundServer: BackgroundServer;
+@@ -28,15 +28,16 @@ declare const backgroundServer: BackgroundServer;
   *            progressBar?: {max: number, value: number, indeterminate?: boolean},
   *            foregroundServiceType?: Array<'dataSync'|'mediaPlayback'|'phoneCall'|'location'|'connectedDevice'|'mediaProjection'|'camera'|'microphone'|'health'|'remoteMessaging'|'systemExempted'|'shortService'|'specialUse'>
   *            }} BackgroundTaskOptions
@@ -303,11 +310,10 @@ index cc9906f27b2d988ec01fc07e4096ec24b075b22e..2a01240037c37b3227185ece253aea69
      /** @private */
      private _isRunning;
 +    private _activeTaskName;
-+    private _pendingStart;
      /** @private @type {BackgroundTaskOptions} */
      private _currentOptions;
      /**
-@@ -112,7 +114,8 @@ declare class BackgroundServer extends EventEmitter<"expiration", any> {
+@@ -112,7 +113,8 @@ declare class BackgroundServer extends EventEmitter<"expiration", any> {
       * @private
       * @template T
       * @param {(taskData?: T) => Promise<void>} task
@@ -318,7 +324,7 @@ index cc9906f27b2d988ec01fc07e4096ec24b075b22e..2a01240037c37b3227185ece253aea69
      private _generateTask;
      /**
 diff --git a/src/index.js b/src/index.js
-index b744e685308297bb3e0f250ae18ec43c5ff2f971..158bfdb3098c4e9eb52810cc1bdc7a188be976eb 100644
+index b744e685308297bb3e0f250ae18ec43c5ff2f971..c34030cccb7a2cdf9332d46372f6ae4c9fab1e10 100644
 --- a/src/index.js
 +++ b/src/index.js
 @@ -12,7 +12,7 @@ import EventEmitter from 'eventemitter3';
@@ -330,18 +336,16 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..158bfdb3098c4e9eb52810cc1bdc7a18
   */
  class BackgroundServer extends EventEmitter {
      constructor() {
-@@ -23,6 +23,10 @@ class BackgroundServer extends EventEmitter {
+@@ -23,6 +23,8 @@ class BackgroundServer extends EventEmitter {
          this._stopTask = () => {};
          /** @private */
          this._isRunning = false;
 +        /** @private @type {string | undefined} */
 +        this._activeTaskName;
-+        /** @private */
-+        this._pendingStart;
          /** @private @type {BackgroundTaskOptions} */
          this._currentOptions;
          this._addListeners();
-@@ -33,6 +37,14 @@ class BackgroundServer extends EventEmitter {
+@@ -33,6 +35,13 @@ class BackgroundServer extends EventEmitter {
       */
      _addListeners() {
          nativeEventEmitter.addListener('expiration', () => this.emit('expiration'));
@@ -349,14 +353,13 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..158bfdb3098c4e9eb52810cc1bdc7a18
 +            if (taskName !== this._activeTaskName) return;
 +            this._activeTaskName = undefined;
 +            this._isRunning = false;
-+            this._pendingStart?.reject(new Error('Background service stopped while starting'));
 +            this._stopTask();
 +            this.emit('stopped');
 +        });
      }
  
      /**
-@@ -78,11 +90,35 @@ class BackgroundServer extends EventEmitter {
+@@ -78,11 +87,21 @@ class BackgroundServer extends EventEmitter {
      async start(task, options) {
          this._runnedTasks++;
          this._currentOptions = this._normalizeOptions(options);
@@ -369,34 +372,20 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..158bfdb3098c4e9eb52810cc1bdc7a18
 -            this._isRunning = true;
 +            this._activeTaskName = taskName;
 +            AppRegistry.registerHeadlessTask(taskName, () => finalTask);
-+            // startService() only enqueues an intent. The native Headless JS
-+            // callback below confirms that the service acquired its wake lock
-+            // and admitted this task; no second native event protocol is needed.
-+            let pendingStart;
-+            const started = new Promise((resolve, reject) => {
-+                pendingStart = { taskName, resolve, reject };
-+            });
-+            // A synchronous native-module error must not leave the admission rejection unhandled.
-+            void started.catch(() => {});
-+            this._pendingStart = pendingStart;
-+            const timer = setTimeout(() => pendingStart.reject(new Error('Background service startup timed out')), 10000);
 +            try {
-+                await Promise.all([started, RNBackgroundActions.start(this._currentOptions)]);
++                await RNBackgroundActions.start(this._currentOptions);
 +                if (this._activeTaskName !== taskName) {
 +                    throw new Error('Background service stopped while starting');
 +                }
 +                this._isRunning = true;
 +            } catch (error) {
-+                if (this._activeTaskName === taskName) await this.stop().catch(() => {});
++                if (this._activeTaskName === taskName) this._activeTaskName = undefined;
 +                throw error;
-+            } finally {
-+                clearTimeout(timer);
-+                if (this._pendingStart === pendingStart) this._pendingStart = undefined;
 +            }
          } else {
              await RNBackgroundActions.start(this._currentOptions);
              this._isRunning = true;
-@@ -94,14 +130,19 @@ class BackgroundServer extends EventEmitter {
+@@ -94,14 +113,18 @@ class BackgroundServer extends EventEmitter {
       * @private
       * @template T
       * @param {(taskData?: T) => Promise<void>} task
@@ -412,21 +401,19 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..158bfdb3098c4e9eb52810cc1bdc7a18
              await new Promise((resolve) => {
                  self._stopTask = resolve;
 -                task(parameters).then(() => self.stop());
-+                if (self._pendingStart?.taskName === taskName) self._pendingStart.resolve();
 +                task(parameters).then(() => {
 +                    if (Platform.OS !== 'android' || self._activeTaskName === taskName) return self.stop();
 +                });
              });
          };
      }
-@@ -129,9 +170,12 @@ class BackgroundServer extends EventEmitter {
+@@ -129,9 +152,11 @@ class BackgroundServer extends EventEmitter {
       * @returns {Promise<void>}
       */
      async stop() {
 +        // Invalidate before native destruction can emit its asynchronous event.
 +        this._activeTaskName = undefined;
 +        this._isRunning = false;
-+        this._pendingStart?.reject(new Error('Background service stopped while starting'));
          this._stopTask();
          await RNBackgroundActions.stop();
 -        this._isRunning = false;

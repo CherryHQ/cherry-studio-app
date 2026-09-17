@@ -100,57 +100,33 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
-test('a rejected service start interrupts unprotected work and still requests notification permission', async () => {
-  const failure = new Error('Native service admission failed');
-  native.start.mockRejectedValueOnce(failure);
+test('a failed service start leaves work running unprotected and retries after the next foreground entry', async () => {
+  native.start.mockRejectedValueOnce(new Error('Native service admission failed'));
   const interrupted = jest.fn();
+  const surface = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('preparing'));
   runtime.acquire('chat', interrupted);
   await flush();
-  expect(interrupted).toHaveBeenCalledTimes(1);
-  expect(interrupted).toHaveBeenCalledWith(
-    expect.objectContaining({ reason: 'start-rejected', cause: failure }),
-  );
   expect(running).toBe(false);
   expect(notices.requestPermissionsAsync).toHaveBeenCalledTimes(1);
-  runtime.acquire('next-task');
-  await flush();
-  expect(running).toBe(true);
-});
-
-test('a failed restart interrupts tasks admitted while earlier cancellation drains', async () => {
-  const firstFailure = new Error('Initial admission failed');
-  const restartFailure = new Error('Recovery admission failed');
-  native.start.mockRejectedValueOnce(firstFailure).mockRejectedValueOnce(restartFailure);
-  const surface = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('preparing'));
-  let finishCancellation!: () => void;
-  const cancellation = new Promise<void>((resolve) => {
-    finishCancellation = resolve;
-  });
-  const oldInterrupted = jest.fn(async () => {
-    await cancellation;
-    await surface.end('immediate', props('cancelled'));
-  });
-  runtime.acquire('old-task', oldInterrupted);
-  await flush();
-  expect(oldInterrupted).toHaveBeenCalledWith(expect.objectContaining({ cause: firstFailure }));
-
-  const newInterrupted = jest.fn();
-  runtime.acquire('new-task', newInterrupted);
-  await flush();
+  // Content updates must not turn one failed admission into a retry loop.
+  await surface.update(props('responding'));
   expect(native.start).toHaveBeenCalledTimes(1);
-  expect(newInterrupted).not.toHaveBeenCalled();
-
-  finishCancellation();
+  setAppState('background');
+  setAppState('active');
   await flush();
   expect(native.start).toHaveBeenCalledTimes(2);
-  expect(oldInterrupted).toHaveBeenCalledTimes(1);
-  expect(newInterrupted).toHaveBeenCalledTimes(1);
-  expect(newInterrupted).toHaveBeenCalledWith(expect.objectContaining({ cause: restartFailure }));
-  expect(running).toBe(false);
+  expect(running).toBe(true);
+  expect(interrupted).not.toHaveBeenCalled();
+});
 
-  runtime.acquire('later-task');
+test('a failed start does not block protection for work admitted after the unprotected work ends', async () => {
+  native.start.mockRejectedValueOnce(new Error('Native service admission failed'));
+  const unprotected = runtime.acquire('chat');
   await flush();
-  expect(native.start).toHaveBeenCalledTimes(3);
+  unprotected.release();
+  runtime.acquire('next-task');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(2);
   expect(running).toBe(true);
 });
 
@@ -223,51 +199,20 @@ test('shares the library service across concurrent tasks and stops on the last r
   expect(native.stop).toHaveBeenCalledTimes(1);
 });
 
-test('execution admission waits for service startup and remains cancellable', async () => {
-  let failStart!: (error: Error) => void;
-  native.start.mockImplementationOnce(
-    () =>
-      new Promise<void>((_resolve, reject) => {
-        failStart = reject;
-      }),
-  );
-  native.stop.mockImplementationOnce(async () => {
-    failStart(new Error('Start cancelled'));
-  });
-  const lease = runtime.acquire('chat');
-  const ready = jest.fn();
-  void lease.ready!.then(ready);
-  await flush();
-  expect(ready).not.toHaveBeenCalled();
-  lease.release();
-  await flush();
-  expect(native.stop).toHaveBeenCalledTimes(1);
-  expect(running).toBe(false);
-  await runtime.acquire('replacement').ready;
-  expect(running).toBe(true);
-});
-
-test('leaving before the queued service start rejects admission instead of keeping an empty lease', async () => {
-  const lease = runtime.acquire('chat');
+test('work admitted while hidden runs unprotected until the app returns, then continues in background', async () => {
   setAppState('background');
-  await expect(lease.ready).rejects.toMatchObject({ reason: 'start-rejected' });
-  expect(native.start).not.toHaveBeenCalled();
-});
-
-test('rejects unprotected background work and admits a new visible task that can continue in background', async () => {
-  setAppState('background');
+  const interrupted = jest.fn();
   const surface = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('preparing'));
-  const denied = runtime.acquire('chat');
-  await expect(denied.ready).rejects.toMatchObject({ reason: 'start-rejected' });
+  runtime.acquire('chat', interrupted);
   await flush();
   expect(native.start).not.toHaveBeenCalled();
+  expect(interrupted).not.toHaveBeenCalled();
   setAppState('active');
   await flush();
-  expect(native.start).not.toHaveBeenCalled();
-  await runtime.acquire('new-chat').ready;
   setAppState('background');
   await surface.update(props('responding'));
   expect(native.start).toHaveBeenCalledTimes(1);
+  expect(interrupted).not.toHaveBeenCalled();
   expect(native.updateNotification).toHaveBeenLastCalledWith(
     expect.objectContaining({ taskDesc: 'responding' }),
   );

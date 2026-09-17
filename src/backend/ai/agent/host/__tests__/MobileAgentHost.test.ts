@@ -99,7 +99,6 @@ const backgroundReplyTurn = {
 };
 const backgroundReply = {
   acquirePreparation: jest.fn((_onInterrupt: (reason: Error) => void) => ({
-    ready: undefined as Promise<void> | undefined,
     release: jest.fn(),
   })),
   clearSession: jest.fn(),
@@ -492,42 +491,6 @@ describe('MobileAgentHost', () => {
   );
 
   test.each(['new', 'existing'] as const)(
-    '%s-session submission waits for native admission before preparation or durable writes',
-    async (kind) => {
-      const admission = createDeferred();
-      const release = jest.fn();
-      backgroundReply.acquirePreparation.mockReturnValueOnce({ ready: admission.promise, release });
-      const prepare = jest.fn(inferenceModel);
-      const host = createHost(new FakeRuntime(), noOpNaming, noFiles, noOpTools, prepare);
-      const sessionId = kind === 'new' ? uuidv7() : (await createStoredSession()).id;
-      const input = {
-        sessionId,
-        ...messageIds(),
-        parts: [{ type: 'text' as const, text: 'Wait for protection' }],
-      };
-      const submitting =
-        kind === 'new'
-          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
-          : host.submitMessage(input);
-      await Promise.resolve();
-      expect(prepare).not.toHaveBeenCalled();
-      expect(await store.listMessages(sessionId)).toEqual([]);
-      const rejected = expect(submitting).rejects.toMatchObject({
-        view: { code: 'INTERRUPTED' },
-      });
-      // Revocation must abort admission even if the native promise never settles.
-      backgroundReply.acquirePreparation.mock.calls[0]![0](
-        new KeepAliveInterruptionError('start-rejected'),
-      );
-      await rejected;
-      expect(prepare).not.toHaveBeenCalled();
-      expect(backgroundReply.startTurn).not.toHaveBeenCalled();
-      expect(release).toHaveBeenCalledTimes(1);
-      await host._doStop();
-    },
-  );
-
-  test.each(['new', 'existing'] as const)(
     'interrupting %s-session preparation releases protection without launching a turn',
     async (kind) => {
       const prepared = createDeferred();
@@ -551,9 +514,12 @@ describe('MobileAgentHost', () => {
         kind === 'new'
           ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
           : host.submitMessage(input);
-      const reason = new Error('Background service admission failed');
-      const rejected = expect(submitting).rejects.toThrow(reason);
-      backgroundReply.acquirePreparation.mock.calls[0]![0](reason);
+      const rejected = expect(submitting).rejects.toMatchObject({
+        view: { code: 'INTERRUPTED', retryable: true },
+      });
+      backgroundReply.acquirePreparation.mock.calls[0]![0](
+        new KeepAliveInterruptionError('service-stopped'),
+      );
       prepared.resolve();
       await rejected;
       expect(

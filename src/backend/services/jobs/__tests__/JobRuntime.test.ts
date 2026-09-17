@@ -5,7 +5,6 @@ import { uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database } from '@/backend/data/db/DbService';
 import { type InsertJobRow, jobTable } from '@/backend/data/db/schemas/job';
 import { JobService } from '@/backend/data/services/JobService';
-import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import { JOB_ERROR_CODES, type JobProgress } from '@/shared/data/api/schemas/jobs';
 
 import { JobExecutionError } from '../JobExecutionError';
@@ -109,44 +108,6 @@ describe('JobRuntime', () => {
 
     expect(pump).toHaveBeenCalledWith({ reason: 'cold-start' });
   });
-
-  it.each(['ready', 'rejected', 'cancelled'] as const)(
-    'does not execute a user-continued job until native admission is %s',
-    async (outcome) => {
-      let resolve!: () => void;
-      let reject!: (reason: Error) => void;
-      const ready = new Promise<void>((accept, deny) => {
-        resolve = accept;
-        reject = deny;
-      });
-      const release = jest.fn();
-      const acquire = jest.fn(() => ({ ready, release }));
-      const execute = jest.fn(async () => 'generated');
-      const { runtime } = await setup(
-        [['internal.echo', makeEchoHandler({ executionClass: 'user-continued', execute })]],
-        { keepAlive: { acquire } },
-      );
-      const handle = await enqueueTest(runtime, 'internal.echo', {}, { maxAttempts: 3 });
-      await waitFor(() => acquire.mock.calls.length > 0);
-      expect(execute).not.toHaveBeenCalled();
-      if (outcome === 'ready') resolve();
-      else if (outcome === 'rejected') reject(new KeepAliveInterruptionError('start-rejected'));
-      else await runtime.cancel(handle.id, 'user');
-      const finished = await handle.finished;
-      expect(finished.status).toBe(
-        outcome === 'ready' ? 'completed' : outcome === 'rejected' ? 'failed' : 'cancelled',
-      );
-      expect(execute).toHaveBeenCalledTimes(outcome === 'ready' ? 1 : 0);
-      if (outcome === 'rejected') {
-        expect(finished.error).toMatchObject({
-          code: JOB_ERROR_CODES.INTERRUPTED,
-          retryable: false,
-        });
-        expect(finished.attempt).toBe(0);
-      }
-      await waitFor(() => release.mock.calls.length === 1);
-    },
-  );
 
   it('runs an echo job end to end and persists the terminal snapshot', async () => {
     const progressEvents: JobProgress[] = [];

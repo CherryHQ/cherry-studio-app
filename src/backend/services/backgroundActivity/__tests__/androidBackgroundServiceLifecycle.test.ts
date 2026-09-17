@@ -45,7 +45,6 @@ beforeAll(() => {
 });
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.useFakeTimers();
   mockNativeStart.mockImplementation(async ({ taskName }) => {
     mockHeadlessTasks.set(taskName, mockHeadlessFactories.get(taskName)!()());
   });
@@ -55,7 +54,6 @@ afterEach(async () => {
   background.removeAllListeners('stopped');
   mockHeadlessFactories.clear();
   mockHeadlessTasks.clear();
-  jest.useRealTimers();
 });
 
 test('unexpected destruction resets running state before interrupting and finishes the headless task', async () => {
@@ -69,45 +67,6 @@ test('unexpected destruction resets running state before interrupting and finish
   expect(observedRunning).toEqual([false]);
   await task;
   expect(mockNativeStop).not.toHaveBeenCalled();
-});
-
-test('native request acceptance does not admit execution before the headless task starts', async () => {
-  mockNativeStart.mockResolvedValueOnce(undefined);
-  let ready = false;
-  const starting = background.start(hold, options).then(() => {
-    ready = true;
-  });
-  await Promise.resolve();
-  await Promise.resolve();
-  expect(ready).toBe(false);
-  expect(background.isRunning()).toBe(false);
-  const name = mockNativeStart.mock.calls[0]![0].taskName;
-  const task = mockHeadlessFactories.get(name)!()();
-  await starting;
-  expect(background.isRunning()).toBe(true);
-  await background.stop();
-  await task;
-});
-
-test('a missing headless start times out and a late callback cannot revive it', async () => {
-  mockNativeStart.mockResolvedValueOnce(undefined);
-  const starting = background.start(hold, options);
-  const rejected = expect(starting).rejects.toThrow('Background service startup timed out');
-  jest.advanceTimersByTime(10_000);
-  await rejected;
-  expect(mockNativeStop).toHaveBeenCalledTimes(1);
-  const name = mockNativeStart.mock.calls[0]![0].taskName;
-  await mockHeadlessFactories.get(name)!()();
-  expect(background.isRunning()).toBe(false);
-});
-
-test('explicit cancellation rejects pending admission without waiting for its timeout', async () => {
-  mockNativeStart.mockResolvedValueOnce(undefined);
-  const starting = background.start(hold, options);
-  const rejected = expect(starting).rejects.toThrow('Background service stopped while starting');
-  await background.stop();
-  await rejected;
-  expect(background.isRunning()).toBe(false);
 });
 
 test('expected stops and late events from an older service cannot interrupt a newer task', async () => {

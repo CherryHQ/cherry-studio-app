@@ -10,32 +10,9 @@ import {
 } from '@/backend/core/lifecycle';
 
 export type KeepAliveLease = {
-  /** Optional admission gate: resolves on readiness or release, rejects on platform failure. */
-  ready?: Promise<void>;
   /** Idempotent; the last release across all holders stops the platform mechanism. */
   release(): void;
 };
-
-/** Wait at the execution boundary without making cancellation wait for native startup. */
-export async function waitForKeepAlive(
-  lease: KeepAliveLease | undefined,
-  signal: AbortSignal,
-): Promise<void> {
-  signal.throwIfAborted();
-  const ready = lease?.ready;
-  if (!ready) return;
-  let onAbort!: () => void;
-  try {
-    await new Promise<void>((resolve, reject) => {
-      onAbort = () => reject(signal.reason);
-      signal.addEventListener('abort', onAbort, { once: true });
-      void ready.then(resolve, reject);
-    });
-    signal.throwIfAborted();
-  } finally {
-    signal.removeEventListener('abort', onAbort);
-  }
-}
 
 export type KeepAliveSource = {
   /**

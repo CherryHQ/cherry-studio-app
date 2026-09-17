@@ -1,6 +1,4 @@
 const messages = {
-  unavailable: 'Background execution is unavailable.',
-  'start-rejected': 'Background execution could not start while the app was visible.',
   'service-stopped': 'The system stopped background execution.',
   'execution-limit': 'Background execution reached its time limit.',
 };

@@ -156,7 +156,6 @@ export class BackgroundReplyRuntime
     const lease = this.keepAlive.acquire('chat.preparation', onInterrupt);
     this.preparationLeases.add(lease);
     return {
-      ready: lease.ready,
       release: () => {
         if (this.preparationLeases.delete(lease)) lease.release();
       },
