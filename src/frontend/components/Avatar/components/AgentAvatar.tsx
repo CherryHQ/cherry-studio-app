@@ -1,5 +1,6 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import { Avatar } from '@cherrystudio/ui/components';
+import { View } from 'react-native';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
@@ -24,8 +25,8 @@ type AgentAvatarProps = {
 };
 
 /**
- * Round Agent avatar: photo, persisted slime artwork, built-in emoji, then the
- * legacy name fallback. Unnamed legacy records use a neutral bot badge.
+ * Photos and legacy fallbacks use the round Avatar frame. Slime artwork owns its
+ * silhouette and renders without a border or circular clipping.
  */
 export function AgentAvatar({
   accessibilityLabel,
@@ -36,7 +37,23 @@ export function AgentAvatar({
   uri,
 }: AgentAvatarProps) {
   const iconColor = useThemeColor('foreground');
-  const slime = parseSlimeAvatar(avatar);
+  const slime = uri ? null : parseSlimeAvatar(avatar);
+
+  if (slime) {
+    return (
+      <View
+        accessible
+        accessibilityLabel={accessibilityLabel ?? name}
+        accessibilityRole="image"
+        className="shrink-0"
+        style={{ height: size, width: size }}
+        testID={testID}
+      >
+        <SlimeAvatar parts={slime} size={size} />
+      </View>
+    );
+  }
+
   const fallback = name.trim() ? getBrandAvatarFallback(name) : undefined;
 
   return (
@@ -49,8 +66,6 @@ export function AgentAvatar({
           recyclingKey={uri}
           source={{ uri }}
         />
-      ) : slime ? (
-        <SlimeAvatar parts={slime} size={size} />
       ) : avatar === CHERRY_AGENT_AVATAR ? (
         <Avatar.Fallback textProps={{ style: { fontSize: Math.round(size * 0.58) } }}>
           {avatar}

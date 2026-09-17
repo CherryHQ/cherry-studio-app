@@ -19,7 +19,8 @@ Cherry product data and presentation rules before composing that primitive.
 - `AgentAvatar` renders an Agent's image, persisted slime artwork, built-in Cherry emoji, then the
   legacy initial tile or a neutral bot badge. The private `SlimeAvatar` composes five shapes,
   eight palettes, and eight eye styles from the stored descriptor; rendering never rerolls it.
-  It stays round across these presentations.
+  Slime artwork fills more of its canvas with a soft, asymmetric silhouette and larger white eyes,
+  without a circular border or clipping. Photos and legacy fallbacks retain the round Avatar frame.
 - `AvatarImagePicker` owns the shared camera/library and square-crop interaction while leaving
   persistence to its caller.
 - `AvatarPickerField` is the block an editing form opens with — a centred avatar over its caption,

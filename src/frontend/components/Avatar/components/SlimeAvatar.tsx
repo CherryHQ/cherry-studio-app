@@ -18,14 +18,14 @@ export function SlimeAvatar({ parts, size }: { parts: SlimeAvatarParts; size: nu
   return (
     <Svg accessible={false} height={size} pointerEvents="none" viewBox="0 0 200 200" width={size}>
       <Defs>
-        <RadialGradient cx="32%" cy="21%" id={gradientId} r="90%">
+        <RadialGradient cx="30%" cy="14%" id={gradientId} r="85%">
           <Stop offset="0" stopColor={palette.light} />
-          <Stop offset="0.6" stopColor={palette.mid} />
+          <Stop offset="0.5" stopColor={palette.mid} />
           <Stop offset="1" stopColor={palette.base} />
         </RadialGradient>
       </Defs>
       <Path d={shape.path} fill={`url(#${gradientId})`} />
-      <G transform={`translate(100 ${shape.eyeY}) scale(0.78)`}>
+      <G transform={`translate(100 ${shape.eyeY})`}>
         {SLIME_EYES[parts.eyes].map(({ d, strokeWidth }) => (
           <Path
             key={d}
