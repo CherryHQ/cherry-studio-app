@@ -20,7 +20,7 @@ message list keeps its geometry and selection does not subscribe into the chat r
   Session together with its admitted first message, and the frontend hands the accepted Draft to
   that Session without remounting the composer or message list. Navigating elsewhere still starts an isolated
   composer identity.
-- `input/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
+- `components/ChatInput/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
   edited on the Agent screen; image attachment admission failures restore the managed draft and
   surface a user-facing reason.
 - `workspace/` merges persisted transcript rows with live Agent messages, adapts protocol parts into
@@ -48,3 +48,15 @@ window rather than trimming it to the usual recent-message render window. Until 
 reaches the live transcript, the workspace excludes live rows to avoid displaying a false contiguous
 history. Sending or pressing return-to-latest replaces the window with the latest messages.
 Message navigation leaves composer identity tied to the Session.
+
+The Agent editor and chat model picker accept both text and image models. `ChatInput` owns the
+selected model while its Agent update settles. It renders the text controls or the shared
+`PaintingInput` controls without changing the composer Session or message list. Image sends use
+`Backend.agent.startSession` / `submitMessage`, just like text sends; they never create painting
+history. The Host stores outputs as assistant file parts, and the drawer opens the same Session.
+Per-message image settings drive the generation placeholder even if the Agent later changes models.
+`PaintingInputProvider` retains reference intent and parameter drafts in the current composer session.
+Compatible models can automatically use a single successful output when next-turn input is untouched;
+multiple outputs remain optional candidates. Generate-only models pause automatic references and
+block incompatible explicit images. The shared input strategy owns these rules. Effective references
+are submitted as file parts and stay separate from the text draft; text controls do not attach them.

@@ -417,7 +417,12 @@ export class AiService extends BaseService {
         ...request,
         requestOptions: { ...request.requestOptions, signal: controller.signal },
       };
-      const probe = this.generateText({ ...probeRequest, system: 'test', prompt: 'hi' });
+      const probe = this.generateText({
+        ...probeRequest,
+        system: 'test',
+        prompt: 'hi',
+        reasoningEffort: 'none',
+      });
       const probes: Promise<unknown>[] = [probe, timeoutPromise];
       if (abortPromise) {
         probes.push(abortPromise);

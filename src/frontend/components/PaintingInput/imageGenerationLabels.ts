@@ -1,10 +1,7 @@
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
 import type { TFunction } from 'i18next';
 
-import type {
-  ImageParamDraft,
-  ImageParamField,
-} from '@/frontend/data/paintings/imageGenerationParams';
+import type { ImageParamDraft, ImageParamField } from '@/shared/utils/imageGenerationParams';
 
 const PARAM_LABEL_KEYS = {
   addWatermark: 'painting.settings.param.addWatermark',

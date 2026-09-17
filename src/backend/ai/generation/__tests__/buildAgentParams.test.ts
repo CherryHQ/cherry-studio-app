@@ -118,7 +118,7 @@ describe('buildAgentParams assistant-less contract', () => {
       });
 
       expect(result.options.providerOptions).toEqual({
-        openai: { systemMessageMode: 'system' },
+        openai: { store: false, systemMessageMode: 'system' },
       });
     },
   );
@@ -140,8 +140,41 @@ describe('buildAgentParams assistant-less contract', () => {
     });
 
     expect(result.options.providerOptions).toEqual({
-      openai: { systemMessageMode: 'system' },
+      openai: { store: false, systemMessageMode: 'system' },
     });
+  });
+
+  it('keeps Responses defaults without opting into reasoning for ordinary generation', async () => {
+    const options = await buildReasoningOptions({
+      apiModelId: 'qwen3.7-max',
+      providerId: 'dashscope',
+    });
+
+    expect(options.openai).toMatchObject({ store: false, systemMessageMode: 'system' });
+    expect(options.openai).not.toHaveProperty('reasoningEffort');
+    expect(options.openai).not.toHaveProperty('forceReasoning');
+  });
+
+  it('enables Responses reasoning serialization for a non-OpenAI model', async () => {
+    await expect(
+      buildReasoningOptions({
+        apiModelId: 'qwen3.7-max',
+        providerId: 'dashscope',
+        selection: 'high',
+      }),
+    ).resolves.toMatchObject({
+      openai: { forceReasoning: true, reasoningEffort: 'high', store: false },
+    });
+  });
+
+  it('lets an explicit request override the Responses storage default', async () => {
+    await expect(
+      buildReasoningOptions({
+        apiModelId: 'qwen3.7-max',
+        providerId: 'dashscope',
+        callOverrides: { providerOptions: { openai: { store: true } } },
+      }),
+    ).resolves.toMatchObject({ openai: { store: true } });
   });
 
   it('serializes an explicit reasoning selection', async () => {

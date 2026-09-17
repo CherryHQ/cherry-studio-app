@@ -368,6 +368,53 @@ describe('Turn Runtime input assembly', () => {
     expect(toRuntimeHistory([message])).toEqual([{ turnId: 'turn-1', messages: [] }]);
   });
 
+  test('omits an interrupted tool call that never received its input', () => {
+    // The stream ended while the provider was still sending arguments: the
+    // part settled as `interrupted` with no `input`. Replaying it as a call
+    // with `null` arguments makes providers such as Qwen reject the next turn.
+    const message: AgentMessageView = {
+      id: 'assistant-message',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'assistant',
+      status: 'error',
+      parts: [
+        { id: 'text-1', type: 'text', text: 'Let me look that up.', state: 'done' },
+        {
+          id: 'tool-call-1',
+          type: 'tool',
+          toolCallId: 'call-1',
+          toolRef: { source: 'builtin', capabilityId: 'web-search' },
+          providerName: 'web_search',
+          displayName: 'Web search',
+          state: 'interrupted',
+          output: {
+            value: { status: 'interrupted', reason: 'The turn was interrupted.' },
+            artifacts: [],
+          },
+        },
+        {
+          id: 'error-1',
+          type: 'error',
+          error: { code: 'INTERRUPTED', message: 'Connection reset', retryable: true },
+        },
+      ],
+      usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      stats: null,
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+    };
+
+    expect(toRuntimeHistory([message])).toEqual([
+      {
+        turnId: 'turn-1',
+        messages: [{ role: 'assistant', parts: [{ type: 'text', text: 'Let me look that up.' }] }],
+      },
+    ]);
+  });
+
   test.each([
     ['output-available', false],
     ['error', true],

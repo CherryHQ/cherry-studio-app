@@ -85,6 +85,7 @@ export interface PiRuntimeDependencies {
   resolveModel(
     model: RuntimeExecutionRequest['model'],
     options: RuntimeExecutionRequest['options'],
+    sessionId: string,
   ): PiModelResolution | Promise<PiModelResolution>;
 }
 
@@ -642,7 +643,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     let secrets: readonly string[] = attachmentRedactions;
     try {
       const resolution = await raceAbort(
-        this.dependencies.resolveModel(request.model, request.options),
+        this.dependencies.resolveModel(request.model, request.options, request.sessionId),
         turn.abortController.signal,
       );
       secrets = [...resolution.redactionValues, ...attachmentRedactions];
@@ -1383,18 +1384,25 @@ class PiRuntimeSession implements AgentRuntimeSession {
     });
   }
 
+  /**
+   * `input` is `undefined` when the caller has no arguments of its own (an
+   * unmapped native result); an existing part then keeps the input it already
+   * received instead of having it overwritten.
+   */
   private ensureToolPartFromProviderCall(
     turn: ActiveTurn,
     toolCallId: string,
     providerName: string,
-    input: RuntimeJsonValue,
+    input: RuntimeJsonValue | undefined,
   ): ToolPartBase | undefined {
     const binding = turn.toolBindingsByProviderName.get(providerName);
     if (!binding) {
       return undefined;
     }
     if (binding.kind === 'dispatch') {
-      if (!turn.dispatchCalls.has(toolCallId)) turn.dispatchCalls.set(toolCallId, input);
+      if (input !== undefined && !turn.dispatchCalls.has(toolCallId)) {
+        turn.dispatchCalls.set(toolCallId, input);
+      }
       return undefined;
     }
     const wasStreaming = turn.streamingToolCalls.delete(toolCallId);
@@ -1406,7 +1414,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       part = this.ensureToolPart(turn, {
         displayName: runtimeTool.displayName,
         id: `tool-${toolCallId}`,
-        input,
+        ...(input !== undefined ? { input } : {}),
         providerName,
         toolCallId,
         toolRef: runtimeTool.ref,
@@ -1520,7 +1528,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
               result.toolCallId,
               createPiDispatchActivityInput(turn.dispatchCalls.get(result.toolCallId)),
             )
-          : this.ensureToolPartFromProviderCall(turn, result.toolCallId, result.toolName, null);
+          : this.ensureToolPartFromProviderCall(
+              turn,
+              result.toolCallId,
+              result.toolName,
+              undefined,
+            );
       if (!base) continue;
       const output = result.isError
         ? createErrorToolResult(TOOL_EXECUTION_ERROR)

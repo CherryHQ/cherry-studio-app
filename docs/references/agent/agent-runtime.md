@@ -714,3 +714,22 @@ Every Runtime implementation passes the same suite:
 
 The production conformance target is the Pi Runtime. A fake Runtime exercises Host behavior without
 Pi or a provider connection.
+
+## Direct Image Model Turns
+
+When the selected Agent model generates images, the Host prepares a direct image request through
+`agentImageGeneration` before reserving the ordinary Session and message rows. This path validates
+managed image inputs and registry mode support, captures image parameters in the inference snapshot,
+and skips text-model preflight, tool discovery, and opening a Pi session. Pi remains the text engine.
+
+The image capability calls `AiService.generateImage` with the Agent instructions, current prompt,
+explicit reference attachments, and the reserved assistant message's usage attribution. It imports
+outputs as managed generated files, then the Host persists them as assistant artifact parts using
+its usual cancellation, background reply, naming, and terminal-state flow. A ten-minute request
+limit bounds provider work; failures and cancellation discard files not yet returned to the Host.
+No painting history row or painting job is created. The image composer exposes the latest successful
+image as an editable reference: a single output is selected automatically, while multiple outputs
+require a choice. Clearing image inputs starts a new image. The selected reference and manual
+attachments are deduplicated and submitted as explicit current-input file parts; the Host does not
+infer image inputs from history. The reference
+stays separate from the text draft and is not attached when switching to a text model.

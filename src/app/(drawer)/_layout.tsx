@@ -4,6 +4,7 @@ import type { PanGesture } from 'react-native-gesture-handler';
 import { useUniwind } from 'uniwind';
 
 import { RouteHeaderProvider } from '@/frontend/appShell/header';
+import { ChatDockLayoutProvider } from '@/frontend/appShell/layout';
 import { Sidebar } from '@/frontend/appShell/sidebar';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
@@ -37,41 +38,43 @@ export default function DrawerLayout() {
 
   return (
     <RouteHeaderProvider rootAction="drawer">
-      <Drawer
-        drawerContent={renderSidebar}
-        screenOptions={{
-          configureGestureHandler: configureDrawerGesture,
-          // The sidebar stops short of the right edge so a dimmed strip of chat
-          // stays visible: it tells the user where they came from and closes the
-          // drawer on tap.
-          drawerStyle: {
-            backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
-            borderEndColor: sidebarBorderColor,
-            borderEndWidth: theme === 'dark' ? StyleSheet.hairlineWidth : 0,
-            width: Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
-          },
-          // The chat surface is stable context; the sidebar is a temporary
-          // surface that slides over it as the only moving plane.
-          drawerType: 'front',
-          headerShown: false,
-          // Dim the exposed scene while preserving the drawer's native progress
-          // animation and tap-to-close interaction.
-          overlayColor,
-          sceneStyle: {
-            // Keep the scene opaque where a screen leaves its own content style
-            // transparent, including beneath the overlaid sidebar.
-            backgroundColor,
-            // The full-screen scene reaches every window edge. Let the display
-            // handle physical corners without clipping the header's blur.
-            overflow: 'hidden',
-          },
-          // Only chat belongs to this navigator, so the full-width gesture can
-          // never expose the sidebar over another product screen.
-          swipeEdgeWidth: width,
-        }}
-      >
-        <Drawer.Screen name="(chat)" />
-      </Drawer>
+      <ChatDockLayoutProvider>
+        <Drawer
+          drawerContent={renderSidebar}
+          screenOptions={{
+            configureGestureHandler: configureDrawerGesture,
+            // The sidebar stops short of the right edge so a dimmed strip of chat
+            // stays visible: it tells the user where they came from and closes the
+            // drawer on tap.
+            drawerStyle: {
+              backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
+              borderEndColor: sidebarBorderColor,
+              borderEndWidth: theme === 'dark' ? StyleSheet.hairlineWidth : 0,
+              width: Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
+            },
+            // The chat surface is stable context; the sidebar is a temporary
+            // surface that slides over it as the only moving plane.
+            drawerType: 'front',
+            headerShown: false,
+            // Dim the exposed scene while preserving the drawer's native progress
+            // animation and tap-to-close interaction.
+            overlayColor,
+            sceneStyle: {
+              // Keep the scene opaque where a screen leaves its own content style
+              // transparent, including beneath the overlaid sidebar.
+              backgroundColor,
+              // The full-screen scene reaches every window edge. Let the display
+              // handle physical corners without clipping the header's blur.
+              overflow: 'hidden',
+            },
+            // Only chat belongs to this navigator, so the full-width gesture can
+            // never expose the sidebar over another product screen.
+            swipeEdgeWidth: width,
+          }}
+        >
+          <Drawer.Screen name="(chat)" />
+        </Drawer>
+      </ChatDockLayoutProvider>
     </RouteHeaderProvider>
   );
 }

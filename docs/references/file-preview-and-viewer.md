@@ -81,6 +81,13 @@ Images also have Save to Photos, using the add-only permission flow shared with 
 page render a retry state without losing sharing or system opening. The painting viewer retains
 its own route and painting-specific actions.
 
+PNG files with `document-export` provenance use `ArtifactImagePages` instead. The viewer reads only
+the PNG header, displays bounded pages at original decode resolution and reading width, and scrolls
+vertically. Pinch/pan/double-tap zoom keeps the original page pixels. Large single PNGs use a
+viewport-sized browser displaying the actual file, avoiding a full-height native Image drawable;
+browser decoding limits still apply. The export page reuses this reader.
+
+
 ### Markdown And Text
 
 The reader loads at most 1 MiB plus one byte to detect truncation, with a read-only file handle that
@@ -99,6 +106,10 @@ is disabled on this scroll surface pending platform gesture acceptance; copying 
 long press. Text query entries are discarded one minute after their last observer leaves.
 
 ### HTML
+
+The overflow menu also offers PNG and image-based PPTX conversion for complete HTML sources.
+See [HTML Conversion](./html-conversion.md) for pagination, limits, implementation selection and
+pending native acceptance.
 
 HTML uses `react-native-webview` with `source.html`, without a file URI or an application origin.
 Authored scripts and network resources may run so generated charts and interactive pages work.
@@ -133,7 +144,11 @@ addresses concrete missing interfaces rather than depending on a large `data:` U
 `{cacheDirectory}/FileExports/{entryId}/{revision}/{filename}` so recipients see the display name,
 not the managed blob's UUID. The exported copy never becomes file authority. It remains in the
 OS-managed cache after the sheet closes because Android recipients may read it asynchronously.
-Only sharing out is added; no incoming-share extension is enabled.
+`shareFiles` also accepts ordered collections for paged document export. It finishes all cache
+copies before opening one multi-file chooser through `react-native-share`; failure or cancellation
+before presentation never sends a partial selection. Single-file shares retain Expo Sharing.
+The native multi-file dependency requires a rebuilt development client. Only sharing out is added;
+no incoming-share extension is enabled.
 
 | Failure | Feedback |
 | --- | --- |

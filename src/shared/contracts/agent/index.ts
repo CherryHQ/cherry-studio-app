@@ -48,6 +48,8 @@ export {
   AgentExecutionTargetSchema,
   AgentFailureReasonSchema,
   AgentFailureSnapshotSchema,
+  AgentImageGenerationSchema,
+  type AgentImageGeneration,
   AgentInferenceSnapshotSchema,
   AgentInferenceSnapshotV1Schema,
   AgentInferenceSnapshotViewSchema,

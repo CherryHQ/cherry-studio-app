@@ -1,4 +1,4 @@
-import { queryOptions, useQueries } from '@tanstack/react-query';
+import { queryOptions, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
 import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
@@ -27,6 +27,7 @@ type FilePreviewResult = {
 /** Shared cursor pages and batched previews for the library and attachment picker. */
 export function useFileEntryPages({ enabled }: { enabled: boolean }) {
   const file = useBackendModule('file');
+  const queryClient = useQueryClient();
   const query = useInfiniteQuery('/files/entries', {
     enabled,
     limit: FILE_ENTRY_PAGE_SIZE,
@@ -36,6 +37,17 @@ export function useFileEntryPages({ enabled }: { enabled: boolean }) {
       query.pages.map((page) =>
         queryOptions({
           enabled,
+          // Page membership changes after deletion. Keep surviving files visible
+          // while the new page resolves, using their existing per-file previews.
+          placeholderData: () => {
+            const cachedEntries = page.items.flatMap((entry) => {
+              const cached = queryClient.getQueryData<ResolvedFileEntry>(
+                queryKeys.files.previewUri(entry),
+              );
+              return cached ? [{ ...cached, entry }] : [];
+            });
+            return cachedEntries.length > 0 ? cachedEntries : undefined;
+          },
           queryFn: async (): Promise<ResolvedFileEntry[]> => {
             const uris = await file.resolveUris(page.items);
             return page.items.map((entry, index) => ({
@@ -49,7 +61,7 @@ export function useFileEntryPages({ enabled }: { enabled: boolean }) {
           staleTime: Infinity,
         }),
       ),
-    [enabled, file, query.pages],
+    [enabled, file, query.pages, queryClient],
   );
   const combineUriPages = useCallback((results: readonly FileUriPageResult[]) => {
     return {
@@ -66,14 +78,16 @@ export function useFileEntryPages({ enabled }: { enabled: boolean }) {
           Boolean(item.uri) && fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri;
         return queryOptions({
           enabled: enabled && needsPreview,
-          initialData: needsPreview ? undefined : item,
+          // Retain the original URI even before an image thumbnail is ready.
+          initialData: item,
+          initialDataUpdatedAt: needsPreview ? 0 : undefined,
           queryFn: async (): Promise<ResolvedFileEntry> => ({
             ...item,
             previewUri: await file.generatePreviewUri(item.entry),
           }),
           queryKey: queryKeys.files.previewUri(item.entry),
           retry: false,
-          staleTime: Infinity,
+          staleTime: (query) => (query.state.dataUpdatedAt === 0 ? 0 : Infinity),
         });
       }),
     [enabled, file, uriPages.entries],

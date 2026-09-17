@@ -100,6 +100,9 @@ export function FileLibraryList({
       },
       deleteSelected: async (ids) => {
         const results = await Promise.allSettled(ids.map((id) => file.delete(id)));
+        // Keep optimistic hides until the list reflects every committed deletion,
+        // including the successful files in a partially failed batch.
+        await refresh();
         const firstFailure = results.find(
           (result): result is PromiseRejectedResult => result.status === 'rejected',
         );
@@ -109,7 +112,7 @@ export function FileLibraryList({
       },
       getAllIds: () => visibleEntries.map((item) => item.entry.id),
     }),
-    [file, visibleEntries],
+    [file, refresh, visibleEntries],
   );
   useRegisterSelectionSource(fileLibrarySelectionScope, selectionSource);
   const listRef = useRef<LegendListRef>(null);

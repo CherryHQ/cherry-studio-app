@@ -47,6 +47,9 @@ export function toRuntimeInputParts(
  * Persisted protocol transcript to normalized runtime history. Tool parts
  * expand into `tool-call` + `tool-result` pairs; protocol `error` parts stay
  * behind the boundary (they describe the turn, not model-visible content).
+ * A terminal tool part that never received its input (the stream ended while
+ * the provider was still sending arguments) has no replayable call, so the
+ * pair is omitted rather than sent back as a call with `null` arguments.
  */
 export function toRuntimeHistory(
   messages: AgentMessageView[],
@@ -85,6 +88,7 @@ export function toRuntimeHistory(
               part.state === 'denied' ||
               part.state === 'error' ||
               part.state === 'interrupted') &&
+            part.input !== undefined &&
             output.success
           ) {
             parts.push({
@@ -92,7 +96,7 @@ export function toRuntimeHistory(
               toolCallId: part.toolCallId,
               toolRef: part.toolRef,
               providerName: part.providerName,
-              input: part.input ?? null,
+              input: part.input,
             });
             parts.push({
               type: 'tool-result',

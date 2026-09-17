@@ -12,6 +12,8 @@ import {
   DocumentExportError,
   type DocumentExportInput,
   type DocumentExportModule,
+  type HtmlConversionContext,
+  type HtmlConversionInput,
 } from '@/shared/contracts/documentExport';
 
 import {
@@ -28,6 +30,7 @@ export class DocumentExportRuntime extends BaseService implements DocumentExport
   private stopped = false;
   private foreground = AppState.currentState === 'active';
   private readonly sessions = new Set<ReturnType<typeof createDocumentExportSession>>();
+  private conversion: { controller: AbortController; promise: Promise<unknown> } | undefined;
 
   configure(dependencies: DocumentExportDependencies) {
     this.dependencies = dependencies;
@@ -47,17 +50,45 @@ export class DocumentExportRuntime extends BaseService implements DocumentExport
     return session;
   }
 
+  convertHtml(input: HtmlConversionInput, context?: HtmlConversionContext) {
+    this.assertActive();
+    if (!this.dependencies) throw new DocumentExportError('disposed');
+    if (this.conversion) throw new DocumentExportError('busy');
+    context?.signal?.throwIfAborted();
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    context?.signal?.addEventListener('abort', abort, { once: true });
+    const dependencies = this.dependencies;
+    const promise = Promise.resolve()
+      .then(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- do not load the ZIP writer until conversion is requested
+        const { convertHtml } = require('./convertHtml') as typeof import('./convertHtml');
+        return convertHtml(input, dependencies, controller.signal, context?.onProgress);
+      })
+      .finally(() => {
+        context?.signal?.removeEventListener('abort', abort);
+        this.conversion = undefined;
+      });
+    this.conversion = { controller, promise };
+    return promise;
+  }
+
   protected onInit() {
     this.foreground = AppState.currentState === 'active';
     this.registerAppStateListener((state) => {
       this.foreground = state === 'active';
       if (!this.foreground) this.sessions.forEach((session) => session.cancel());
+      if (!this.foreground) this.conversion?.controller.abort();
     });
   }
 
   protected async onStop() {
     this.stopped = true;
-    await Promise.allSettled([...this.sessions].map((session) => session.dispose()));
+    this.conversion?.controller.abort();
+    await Promise.allSettled([
+      ...[...this.sessions].map((session) => session.dispose()),
+      this.conversion?.promise,
+    ]);
   }
 
   protected onDestroy() {

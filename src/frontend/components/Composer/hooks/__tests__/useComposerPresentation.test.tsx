@@ -6,7 +6,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useComposerPresentation } from '../useComposerPresentation';
 
 const mockBlur = jest.fn();
-const mockRemove = jest.fn();
 const mockIsKeyboardVisible = KeyboardController.isVisible as jest.MockedFunction<
   typeof KeyboardController.isVisible
 >;
@@ -16,9 +15,10 @@ const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
 const mockAddKeyboardListener = KeyboardEvents.addListener as jest.MockedFunction<
   typeof KeyboardEvents.addListener
 >;
+type KeyboardEventName = Parameters<typeof KeyboardEvents.addListener>[0];
+const keyboardListeners = new Map<KeyboardEventName, Set<() => void>>();
 const inputRef = { current: { blur: mockBlur } as unknown as ComposerInputHandle };
 let presentation: ReturnType<typeof useComposerPresentation>;
-let handleKeyboardWillHide: (() => void) | undefined;
 let renderer: ReactTestRenderer | undefined;
 let frameCallbacks: FrameRequestCallback[];
 let requestAnimationFrameSpy: jest.SpyInstance;
@@ -29,7 +29,7 @@ describe('useComposerPresentation', () => {
     mockBlur.mockReset();
     mockIsKeyboardVisible.mockReturnValue(true);
     mockKeyboardDismiss.mockResolvedValue(undefined);
-    handleKeyboardWillHide = undefined;
+    keyboardListeners.clear();
     frameCallbacks = [];
     requestAnimationFrameSpy = jest
       .spyOn(global, 'requestAnimationFrame')
@@ -38,11 +38,14 @@ describe('useComposerPresentation', () => {
         return frameCallbacks.length;
       });
     mockAddKeyboardListener.mockImplementation((event, listener) => {
-      if (event === 'keyboardWillHide') {
-        handleKeyboardWillHide = () => listener(KeyboardController.state());
-      }
+      const listeners = keyboardListeners.get(event) ?? new Set<() => void>();
+      const callback = () => listener(KeyboardController.state());
+      listeners.add(callback);
+      keyboardListeners.set(event, listeners);
 
-      return { remove: mockRemove } as unknown as ReturnType<typeof KeyboardEvents.addListener>;
+      return {
+        remove: () => listeners.delete(callback),
+      } as unknown as ReturnType<typeof KeyboardEvents.addListener>;
     });
 
     act(() => {
@@ -56,12 +59,60 @@ describe('useComposerPresentation', () => {
     requestAnimationFrameSpy.mockRestore();
   });
 
+  test('does not follow an already visible global keyboard before its field receives focus', () => {
+    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+  });
+
+  test('follows dismissal until the keyboard finishes closing, then detaches', () => {
+    act(() => presentation.actions.activateInput());
+    act(() => presentation.actions.dismissInput());
+    act(() => emitKeyboardEvent('keyboardWillHide'));
+
+    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: true });
+
+    act(() => emitKeyboardEvent('keyboardDidHide'));
+    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+  });
+
+  test('detaches immediately when dismissed with no keyboard visible', () => {
+    act(() => presentation.actions.activateInput());
+    mockIsKeyboardVisible.mockReturnValue(false);
+
+    act(() => presentation.actions.dismissInput());
+    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+  });
+
+  test('handles a hide delivered synchronously by native blur', () => {
+    act(() => presentation.actions.activateInput());
+    mockBlur.mockImplementationOnce(() => emitKeyboardEvent('keyboardDidHide'));
+
+    act(() => presentation.actions.dismissInput());
+    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+  });
+
+  test('keeps a new focus connected when the previous dismissal finishes late', () => {
+    act(() => presentation.actions.activateInput());
+    act(() => presentation.actions.dismissInput());
+    act(() => presentation.actions.activateInput());
+    act(() => emitKeyboardEvent('keyboardDidHide'));
+
+    expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: true });
+  });
+
+  test('removes the keyboard subscription on unmount', () => {
+    expect(keyboardListeners.get('keyboardDidHide')?.size).toBe(1);
+    act(() => renderer?.unmount());
+    renderer = undefined;
+    expect(keyboardListeners.get('keyboardDidHide')?.size).toBe(0);
+  });
+
   test('ignores an unmatched keyboard hide while focus is being established', () => {
     mockIsKeyboardVisible.mockReturnValue(false);
 
     act(() => {
       presentation.actions.activateInput();
-      handleKeyboardWillHide?.();
+      emitKeyboardEvent('keyboardWillHide');
+      emitKeyboardEvent('keyboardDidHide');
     });
 
     expect(presentation.state.isEditing).toBe(true);
@@ -70,7 +121,8 @@ describe('useComposerPresentation', () => {
 
   test('preserves the current composer state when a keyboard hide notification arrives', () => {
     act(() => presentation.actions.activateInput());
-    act(() => handleKeyboardWillHide?.());
+    act(() => emitKeyboardEvent('keyboardWillHide'));
+    act(() => emitKeyboardEvent('keyboardDidHide'));
 
     expect(presentation.state.isEditing).toBe(true);
     expect(mockBlur).not.toHaveBeenCalled();
@@ -81,7 +133,7 @@ describe('useComposerPresentation', () => {
     async (result) => {
       act(() => presentation.actions.activateInput());
       // Reproduce native blur delivering a hide before the next React commit.
-      mockBlur.mockImplementationOnce(() => handleKeyboardWillHide?.());
+      mockBlur.mockImplementationOnce(() => emitKeyboardEvent('keyboardWillHide'));
       const error = new Error('Picker failed');
       const present = jest.fn(() => {
         if (result === 'failed') throw error;
@@ -103,7 +155,8 @@ describe('useComposerPresentation', () => {
       expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: false });
 
       // Search inside the model/file sheet must not end composer editing either.
-      act(() => handleKeyboardWillHide?.());
+      act(() => emitKeyboardEvent('keyboardWillHide'));
+      act(() => emitKeyboardEvent('keyboardDidHide'));
       expect(presentation.state.isEditing).toBe(true);
       expect(mockBlur).toHaveBeenCalledTimes(1);
 
@@ -135,10 +188,15 @@ describe('useComposerPresentation', () => {
     act(() => presentation.actions.activateInput());
     expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: true });
 
-    act(() => handleKeyboardWillHide?.());
+    act(() => emitKeyboardEvent('keyboardWillHide'));
+    act(() => emitKeyboardEvent('keyboardDidHide'));
     expect(presentation.state.isEditing).toBe(true);
   });
 });
+
+function emitKeyboardEvent(event: KeyboardEventName) {
+  keyboardListeners.get(event)?.forEach((listener) => listener());
+}
 
 function Harness() {
   const current = useComposerPresentation(inputRef);

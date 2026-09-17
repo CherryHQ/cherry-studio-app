@@ -146,12 +146,18 @@ The project uses Expo 57.0.21 and React Native 0.86.3, which includes Hermes V1
 and slow development startup. See the [Expo SDK 57 release notes](https://expo.dev/changelog/sdk-57#known-regressions).
 Existing development clients must be rebuilt to receive the engine update.
 
-Keep the version-specific patches for Expo Router, Calendar, Notifications, Reanimated, Metro,
-and Metro Runtime when updating dependencies. The upgraded patched direct dependencies use exact
-versions so an unrelated install cannot select a newer unpatched release. Metro 0.84.5 is selected by Expo's
-Metro dependency; its patches support the existing Worklets Bundle Mode integration.
+Keep the version-specific patches for Expo Router, Calendar, Notifications, Image Picker, App Metrics,
+Reanimated, Metro, and Metro Runtime when updating dependencies. The upgraded patched direct
+dependencies use exact versions so an unrelated install cannot select a newer unpatched release.
+Metro 0.84.5 is selected by Expo's Metro dependency; its patches support the existing Worklets Bundle
+Mode integration.
 
 `react-native-streamdown` requires Bundle Mode and the `remend` import forwarding configured in
 Babel. Keep those settings when updating Hermes. Worklets 0.10.2 remains within Reanimated 4.5's
 supported 0.10.x range; removing the experimental mode requires a separate change to streaming
 Markdown processing.
+
+Android builds compile `expo-image-picker` and `expo-notifications` from source through
+`expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
+instead of using Expo's precompiled binaries. The App Metrics patch retains the main session's
+JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.

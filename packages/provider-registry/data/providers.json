@@ -19,6 +19,10 @@
           "reasoningFormat": {
             "type": "openai-chat"
           }
+        },
+        "openai-responses": {
+          "adapterFamily": "cherryin",
+          "baseUrl": "https://open.cherryin.net"
         }
       },
       "id": "cherryin",
@@ -513,7 +517,7 @@
       "description": "OpenRouter - AI model provider",
       "endpointConfigs": {
         "anthropic-messages": {
-          "adapterFamily": "openrouter",
+          "adapterFamily": "anthropic",
           "baseUrl": "https://openrouter.ai/api",
           "requestControls": {
             "serviceTier": {
@@ -648,6 +652,7 @@
           "baseUrl": "http://localhost:3000"
         },
         "google-generate-content": {
+          "adapterFamily": "newapi",
           "baseUrl": "http://localhost:3000"
         },
         "openai-chat-completions": {
@@ -658,6 +663,7 @@
           }
         },
         "openai-responses": {
+          "adapterFamily": "newapi",
           "baseUrl": "http://localhost:3000"
         }
       },
@@ -941,6 +947,67 @@
           },
           "reasoningFormat": {
             "type": "openai-chat"
+          }
+        },
+        "openai-responses": {
+          "adapterFamily": "openai",
+          "baseUrl": "https://opencode.ai/zen/go/v1",
+          "reasoningFormat": {
+            "type": "openai-responses",
+            "wire": {
+              "auto": {
+                "effortMap": {
+                  "auto": "medium"
+                },
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "effort"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "effort": {
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "effort"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "off": {
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "literal",
+                      "value": "none"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              }
+            }
           }
         }
       },
@@ -1834,7 +1901,7 @@
       "apiFeatures": {
         "arrayContent": false
       },
-      "defaultChatEndpoint": "openai-chat-completions",
+      "defaultChatEndpoint": "openai-responses",
       "description": "Poe - AI model provider",
       "endpointConfigs": {
         "anthropic-messages": {
@@ -1849,6 +1916,13 @@
             "wire": {
               "disabled": true
             }
+          }
+        },
+        "openai-responses": {
+          "adapterFamily": "openai",
+          "baseUrl": "https://api.poe.com/v1/",
+          "reasoningFormat": {
+            "type": "openai-responses"
           }
         }
       },
@@ -1968,6 +2042,10 @@
       "defaultChatEndpoint": "openai-responses",
       "description": "Hugging Face - AI model provider",
       "endpointConfigs": {
+        "anthropic-messages": {
+          "adapterFamily": "anthropic",
+          "baseUrl": "https://router.huggingface.co/v1/"
+        },
         "openai-responses": {
           "adapterFamily": "huggingface",
           "baseUrl": "https://router.huggingface.co/v1/"
@@ -2128,5 +2206,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "e5166ef2806754d1"
+  "version": "b74a116e1d18b7d6"
 }

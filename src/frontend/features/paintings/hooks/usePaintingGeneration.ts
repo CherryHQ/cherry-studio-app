@@ -1,10 +1,9 @@
-import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
+import type { ParamValues } from '@cherrystudio/provider-registry';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
-import { imageParamsAspectRatio } from '@/frontend/data/paintings/imageGenerationParams';
 import {
   type PaintingJobInterruptionReason,
   paintingJobInterruptionReason,
@@ -20,7 +19,7 @@ import type {
 import { AiFailureSnapshotSchema, type AiFailureSnapshot } from '@/shared/contracts/aiFailure';
 import type { JobError } from '@/shared/data/api/schemas/jobs';
 import { isTerminalStatus } from '@/shared/data/api/schemas/jobs';
-import type { UniqueModelId } from '@/shared/data/types/model';
+import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 export type PaintingGenerationStatus = 'idle' | 'generating';
 
@@ -48,14 +47,7 @@ export type PaintingInterruption = {
 
 export type PaintingOutput = PaintingGenerationOutput;
 
-export type PaintingGenerationInput = {
-  attachments: readonly ComposerAttachmentReady[];
-  mode: ImageGenerationMode;
-  modelId: UniqueModelId;
-  modelName: string;
-  paramValues: ParamValues;
-  prompt: string;
-};
+export type PaintingGenerationInput = PaintingInputSubmission;
 
 export type PaintingGenerationResult = BackendPaintingGenerationResult;
 
@@ -73,17 +65,19 @@ const JOB_POLL_INTERVAL_MS = 1000;
  * generations happen to be in flight.
  */
 export function usePaintingGeneration({
+  completedPaintingId,
   initialAspectRatio,
   initialOutputs,
   onReceipt,
   paintingId,
 }: {
+  completedPaintingId?: string;
   initialAspectRatio?: number;
   initialOutputs: readonly PaintingOutput[];
   /**
    * Fires with the receipt this screen is now bound to (and with `undefined`
-   * when a cancel discards it), so the route can carry the id and survive a
-   * remount.
+   * when a cancel discards the first attempt, or with the last successful
+   * receipt when cancelling a follow-up), so the route survives a remount.
    */
   onReceipt?: (paintingId: string | undefined) => void;
   paintingId?: string;
@@ -108,6 +102,8 @@ export function usePaintingGeneration({
   // and show it as generating again.
   const [settledJobIds, setSettledJobIds] = useState<ReadonlySet<string>>(() => new Set());
   const receiptIdRef = useRef<string | undefined>(paintingId);
+  const lastSuccessfulReceiptIdRef = useRef(completedPaintingId);
+  const lastSuccessfulParamValuesRef = useRef<ParamValues | null>(null);
   const aspectRatio = displayParamValues
     ? imageParamsAspectRatio(displayParamValues)
     : (initialAspectRatio ?? 1);
@@ -174,6 +170,8 @@ export function usePaintingGeneration({
       setError(null);
       retryReceiptIdRef.current = undefined;
       const result = job.output as PaintingGenerationResult;
+      lastSuccessfulReceiptIdRef.current = result.painting.id;
+      lastSuccessfulParamValuesRef.current = displayParamValues;
       setOutputs(result.outputs);
       setStatus('idle');
       void syncPaintingQueries(result.painting);
@@ -190,7 +188,7 @@ export function usePaintingGeneration({
     const failure = readPaintingFailure(job.error);
     setStatus('idle');
     setError(failure);
-  }, [activeJobId, job, syncPaintingQueries]);
+  }, [activeJobId, displayParamValues, job, syncPaintingQueries]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const cancelStartedGeneration = useCallback(
@@ -204,14 +202,15 @@ export function usePaintingGeneration({
           await paintings.cancelGeneration(jobId);
           if (receiptId !== undefined) {
             await deletePaintings([receiptId]);
-            receiptIdRef.current = undefined;
-            onReceipt?.(undefined);
+            receiptIdRef.current = lastSuccessfulReceiptIdRef.current;
+            onReceipt?.(lastSuccessfulReceiptIdRef.current);
           }
 
           setSettledJobIds((current) => new Set(current).add(jobId));
           setActiveJobId(null);
           setError(null);
           setSettledInterruption(null);
+          setDisplayParamValues(lastSuccessfulParamValuesRef.current);
           retryReceiptIdRef.current = undefined;
           isGenerationInFlightRef.current = false;
           setStatus('idle');

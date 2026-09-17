@@ -5,6 +5,7 @@ import { MenuPanel } from '../menu-panel';
 
 const mockOpenChange = jest.fn();
 const mockClosed = jest.fn();
+let mockShouldUseNativePresses = false;
 const anchor = { height: 48, pageX: 16, pageY: 120, width: 200 };
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
@@ -64,7 +65,13 @@ jest.mock('../menu-overlay', () => {
     }) =>
       React.createElement(
         MenuInteraction,
-        { value: { isOpen, close: onClose } },
+        {
+          value: {
+            isOpen,
+            close: onClose,
+            shouldUseNativePresses: mockShouldUseNativePresses,
+          },
+        },
         React.createElement(View, props, children),
       ),
   };
@@ -85,10 +92,15 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/git-fork', () => () => null);
 
-describe('MenuContent', () => {
+// Native coordinate/scroll arbitration needs device coverage. These cases
+// protect the shared action, dismissal, and accessibility contract in both paths.
+describe.each([false, true])('MenuContent (native presses: %s)', (shouldUseNativePresses) => {
   let renderer: ReactTestRenderer | undefined;
 
-  beforeEach(() => mockOpenChange.mockReset());
+  beforeEach(() => {
+    mockOpenChange.mockReset();
+    mockShouldUseNativePresses = shouldUseNativePresses;
+  });
 
   afterEach(() => {
     act(() => renderer?.unmount());
