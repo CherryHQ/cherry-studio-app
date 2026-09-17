@@ -2,13 +2,12 @@ import * as z from 'zod';
 
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
 import { type Agent, AgentSchema, CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
-import { SlimeAvatarSchema } from '@/shared/data/types/agentAvatar';
 
 import { type OrderEndpoints } from './endpointHelpers';
 
 /**
  * Managed avatar references are written only by the image workflow.
- * Creation may select slime artwork or the built-in Cherry emoji without a file.
+ * Creation may select the built-in Cherry emoji without creating a file.
  */
 const AGENT_MUTABLE_FIELDS = {
   disabledCapabilities: true,
@@ -21,7 +20,7 @@ const AGENT_MUTABLE_FIELDS = {
 export const CreateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS)
   .partial()
   .required({ name: true })
-  .extend({ avatar: z.union([z.literal(CHERRY_AGENT_AVATAR), SlimeAvatarSchema]).optional() })
+  .extend({ avatar: z.literal(CHERRY_AGENT_AVATAR).optional() })
   .strict();
 export type CreateAgentDto = z.infer<typeof CreateAgentSchema>;
 

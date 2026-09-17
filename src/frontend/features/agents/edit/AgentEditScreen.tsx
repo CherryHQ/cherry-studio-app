@@ -36,7 +36,6 @@ import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { Agent } from '@/shared/data/types/agent';
-import { createRandomSlimeAvatar } from '@/shared/data/types/agentAvatar';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -148,8 +147,6 @@ function AgentEditForm({
   const [isToolApprovalModePickerOpen, setIsToolApprovalModePickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('agent.default_model_id');
   const [form, setForm] = useState<AgentFormState>(() => createAgentFormState(agent));
-  // The preview and create request share one value, including after a failed save.
-  const [draftAvatar] = useState(() => (agent ? undefined : createRandomSlimeAvatar()));
   const [toolBindings, setToolBindings] = useState<WriteAgentToolBinding[]>(() =>
     createAgentToolBindingDraft(originalToolBindings),
   );
@@ -257,7 +254,7 @@ function AgentEditForm({
     let savedAgentId: string;
 
     try {
-      savedAgentId = (await createAgent({ ...dto.value, avatar: draftAvatar })).id;
+      savedAgentId = (await createAgent(dto.value)).id;
     } catch {
       toast.show({ label: t('agent.toast.saveFailed'), variant: 'danger' });
       return;
@@ -286,7 +283,6 @@ function AgentEditForm({
     agent?.avatarUri,
     alert,
     createAgent,
-    draftAvatar,
     form,
     hasPickedModel,
     isEditing,
@@ -346,7 +342,7 @@ function AgentEditForm({
         >
           <AgentAvatar
             accessibilityLabel={t('agent.form.setAvatar')}
-            avatar={agent ? agent.avatar : draftAvatar}
+            avatar={agent?.avatar}
             name={form.name}
             size={agentFormAvatarSize}
             uri={form.avatarUri}

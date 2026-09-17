@@ -7,7 +7,6 @@ import { installTestHost, uninstallTestHost } from '@/backend/core/application/t
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
-import { SlimeAvatarSchema } from '@/shared/data/types/agentAvatar';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { agentService } from '../AgentService';
@@ -79,7 +78,7 @@ describe('AgentService persistence', () => {
     const agent = await agentService.create({ name: 'Researcher' });
 
     expect(agent).toMatchObject({
-      avatarUri: null,
+      avatar: null,
       // Storage-neutral default: a row created without the editor has every
       // capability enabled; the create form seeds its own deny-list.
       disabledCapabilities: [],
@@ -88,21 +87,6 @@ describe('AgentService persistence', () => {
       name: 'Researcher',
       toolApprovalMode: 'auto',
     });
-    expect(SlimeAvatarSchema.safeParse(agent.avatar).success).toBe(true);
-    await agentService.update(agent.id, { name: 'Renamed' });
-    expect(await agentService.getById(agent.id)).toMatchObject({
-      avatar: agent.avatar,
-      name: 'Renamed',
-    });
-  });
-
-  it('persists the new-form preview without generating a different avatar', async () => {
-    const avatar = 'agent-avatar-slime:v1:soft-square:mint:hollow';
-    const agent = await agentService.create({ avatar, name: 'Researcher' });
-
-    expect(agent.avatar).toBe(avatar);
-    expect(await agentService.getById(agent.id)).toMatchObject({ avatar, avatarUri: null });
-    expect((await agentService.list()).items[0].avatar).toBe(avatar);
   });
 
   it('creates one localized initial Agent only for a never-used Agent store', async () => {

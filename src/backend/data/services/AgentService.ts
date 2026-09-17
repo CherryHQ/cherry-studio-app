@@ -22,7 +22,6 @@ import {
   CHERRY_AGENT_AVATAR,
   DEFAULT_AGENT_TOOL_APPROVAL_MODE,
 } from '@/shared/data/types/agent';
-import { createRandomSlimeAvatar } from '@/shared/data/types/agentAvatar';
 import { sanitizeDisabledAgentCapabilities } from '@/shared/data/types/agentCapability';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -346,7 +345,6 @@ export class AgentService {
       agentTable,
       {
         ...dto,
-        avatar: dto.avatar ?? createRandomSlimeAvatar(),
         modelId,
         toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
       },

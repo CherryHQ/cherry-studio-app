@@ -16,11 +16,8 @@ Cherry product data and presentation rules before composing that primitive.
 - `ProviderBrandAvatar` resolves a provider's built-in logo and generated-initial fallback. It does
   not read uploaded avatars, so provider-avatar persistence remains provider-owned.
 - `ModelAvatar` resolves a model icon from its model and provider records.
-- `AgentAvatar` renders an Agent's image, persisted slime artwork, built-in Cherry emoji, then the
-  legacy initial tile or a neutral bot badge. The private `SlimeAvatar` composes five shapes,
-  eight palettes, and eight eye styles from the stored descriptor; rendering never rerolls it.
-  Slime artwork fills more of its canvas with a soft, asymmetric silhouette and larger white eyes,
-  without a circular border or clipping. Photos and legacy fallbacks retain the round Avatar frame.
+- `AgentAvatar` renders an Agent's image, then its built-in Cherry emoji, then the generated initial
+  tile or a neutral bot badge for an unnamed draft. It stays round across these presentations.
 - `AvatarImagePicker` owns the shared camera/library and square-crop interaction while leaving
   persistence to its caller.
 - `AvatarPickerField` is the block an editing form opens with — a centred avatar over its caption,

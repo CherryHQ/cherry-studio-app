@@ -15,7 +15,7 @@ export type AgentAvatars = {
 
 /**
  * Owns uploaded avatar files and their read-time URI projection, which require
- * a directory `backend/data` must not reach into. Slime descriptors and emoji pass through
+ * a directory `backend/data` must not reach into. Built-in emoji pass through
  * unchanged with no image URI.
  *
  * Writes go create-file → write-column → drop-previous-file, so a failure never
