@@ -1,3 +1,5 @@
+import { getProviderBaseUrlIssue } from '@cherrystudio/ai-runtime/provider';
+
 import type { ProviderConfigurationIssue } from '@/shared/contracts/providers';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 
@@ -47,12 +49,5 @@ export function getProviderConfigurationIssue(
       | keyof NonNullable<Provider['endpointConfigs']>
       | undefined);
   const baseUrl = endpoint ? provider.endpointConfigs?.[endpoint]?.baseUrl?.trim() : undefined;
-  if (!baseUrl || /\s/.test(baseUrl) || baseUrl.endsWith('#')) return 'invalid-endpoint';
-  try {
-    const url = new URL(baseUrl);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'invalid-endpoint';
-  } catch {
-    return 'invalid-endpoint';
-  }
-  return null;
+  return !baseUrl || getProviderBaseUrlIssue(baseUrl) ? 'invalid-endpoint' : null;
 }

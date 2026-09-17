@@ -89,6 +89,12 @@ export destination. SVG remains under Images in the library and keeps image atta
 page render a retry state without losing sharing or system opening. The painting viewer retains
 its own route and painting-specific actions.
 
+PNG files with `document-export` provenance use `ArtifactImagePages` instead. The viewer reads only
+the PNG header, displays bounded pages at original decode resolution and reading width, and scrolls
+vertically. Pinch/pan/double-tap zoom keeps the original page pixels. Large single PNGs use a
+viewport-sized browser displaying the actual file, avoiding a full-height native Image drawable;
+browser decoding limits still apply. The export page reuses this reader.
+
 ### SVG And PDF
 
 SVG loads as a base64 image in `FileSvgBody`, retaining vector rendering and browser zoom.
@@ -236,7 +242,11 @@ completed document exports keep their finalized bytes. Sharing copies the prepar
 `{cacheDirectory}/FileExports/{entryId}/{revision-or-export-id}/{filename}` so recipients see the
 display name, not the managed blob's UUID. The exported copy never becomes file authority. It remains in the
 OS-managed cache after the sheet closes because Android recipients may read it asynchronously.
-Only sharing out is added; no incoming-share extension is enabled.
+`shareFiles` also accepts ordered collections for paged document export. It finishes all cache
+copies before opening one multi-file chooser through `react-native-share`; failure or cancellation
+before presentation never sends a partial selection. Single-file shares retain Expo Sharing.
+The native multi-file dependency requires a rebuilt development client. Only sharing out is added;
+no incoming-share extension is enabled.
 
 | Failure | Feedback |
 | --- | --- |

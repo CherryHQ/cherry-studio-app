@@ -1,65 +1,76 @@
 # Document Export Page
 
-Owns an independent fullscreen share layer, compact format menu, preview, controlled HTML capture and
-a single Share action. The root stack presents it as a fullscreen modal without the regular route
-header. The layer owns its safe areas, close action and the application theme. Closing returns to
-the caller; once the system share sheet closes, the layer dismisses to the caller's optional
-`returnTo` href instead, because neither platform distinguishes delivery from cancellation. The
-request supplies its allowed formats and initial format. A single chat message defaults to image;
-multiple selected messages allow only HTML and Markdown and default to HTML. The Markdown preview
-reads the frozen in-memory document without creating a file.
-It renders leaf prose with the existing Markdown component and composes the actual CherryUI
-`MessagePart.Process` and `MessagePart.Reasoning` components for disclosures. Both start collapsed
-and retain independent toggles; the source snapshot has no live chat reads.
-Its final brand row uses a Markdown separator, bold brand name and the same frozen export time as
-HTML and PNG. The preview and exported `.md` file share that formatter; no logo image is embedded.
-HTML or PNG is generated when that format is selected, including the initial preview. A source
-may supply one initially unchecked option and its alternate document; changing it refreshes only the
-selected format.
+Owns the fullscreen share layer, format/layout menus, preview and document capture strategy. The
+app-shell handoff owns the selected source snapshots; this page never reads live chat state.
+Closing retains the caller's selection. Dismissing the system share sheet returns to the optional
+`returnTo` route, without claiming the recipient received the files.
 
-HTML and PNG receive resolved semantic colors, the accessibility typography scale and a shared
-resolved `watermark` at the end of the document. The code-only request option defaults to `cherry`;
-`none` omits the footer from both the preview and saved output, including Markdown. HTML keeps the source's bubble/message hints. For
-images, the frontend also supplies an optional `imageFrame` presentation with theme-aware margins
-and numbered message headings. The signature uses the same full-width white footer as painting and
-file image exports: the original Cherry logo and Cherry Studio name on the left, with the time
-aligned to the right. Shared geometry has a 56-point minimum height at 360 points wide,
-scales with export width, and grows for wrapped text. The timestamp uses `YYYY.MM.DD HH:mm`
-and is frozen when the layer opens, including across format, theme and thinking-option changes.
-Content colors follow theme changes; the signature keeps its white background and black text
-through constant color tokens. Active saving/delivery holds its current presentation until the
-share sheet finishes. The backend lays out this frame inside
-the captured document; it acquires no chat or frontend dependency. The preview displays that exact artifact with outer canvas space;
-long images remain vertically scrollable. Ordinary documents retain their headings.
+Chat exports default to paged PNG images. Short content produces one image; longer content adds
+pages without reducing resolution or omitting messages. The layout menu retains a single-long-image
+option. HTML and Markdown remain available for every nonempty selection. Markdown stays in memory
+until Share. An optional unchecked source toggle selects an alternate immutable document.
 
-Process/reasoning hints also preserve the two disclosure levels in HTML. Both start collapsed;
-only HTML and the native preview can expand them. PNG captures the collapsed summaries. Markdown
-files retain nested `<details>` markup for readers that support it instead of flattening thinking
-into ordinary headings and body text.
+Images use a fixed 360-logical-pixel layout and 3x output density, independent of the device window.
+Typography follows the frozen accessibility step; semantic colors follow the theme until delivery
+starts. The existing numbered message treatment, Cherry signature and frozen local timestamp stay
+inside the export. HTML retains its document presentation and window-derived width.
 
-The page claims its sessions from the app-shell handoff, serializes superseded renders and closes
-both sessions on route exit. `fileExport.shareFile` checks system sharing availability, then materializes the selected format
-if necessary, persists it to the
-file library and opens the system share sheet. Repeated sharing of the current artifact reuses its
-saved entry; cancelling the sheet retains the file.
+The frontend supplies one resolved `watermark` for HTML and images, preserved during format fallback.
+The code-only request option defaults to `cherry`; `none` omits the brand footer from both the
+preview and saved output, including Markdown. The image-only `imageFrame` uses the document background
+and label. Image content spans the output width with ordinary text padding and no decorative outer frame.
+With Cherry watermarks, Markdown preview and saved text use the
+same separated brand/time footer without logo bytes. The signature appears at the end of the
+document. PNG pages do not include page numbers or reserve space for an ordinal footer.
 
-The capture WebView is a controlled, navigation-free surface below an opaque loading view. After
-measuring the complete layout, image output stays in one file at a fixed 2x scale. Screen density
-only converts output pixels to native view points. There is no additional layout-height or total
-pixel limit, and longer content never lowers the output scale. PNG removes the 16K output edge
-restriction; native capture and preview capabilities still determine practical limits.
+The signature uses the same full-width white footer as painting and file image exports: the
+original Cherry logo and Cherry Studio name on the left, with the time aligned to the right.
+Shared geometry has a 56-point minimum height at 360 points wide, scales with export width, and
+grows for wrapped text. The timestamp uses `YYYY.MM.DD HH:mm` and stays frozen across format,
+theme and thinking-option changes. Constant color tokens keep the signature white with black text.
+Active saving/delivery holds its current presentation until the share sheet finishes.
 
-Capture scales the original CSS layout into one full-height native view, awaiting matching native
-layout and browser painting before taking a single PNG screenshot. Only its 24-byte header is read
-to validate the signature and exact dimensions. The original lossless PNG is retained until the
-session finishes copying it, with no full-file read, image decoding or second encoding step. The
-native lease remains held through late cleanup. Capture has a 60-second timeout. The image preview
-uses disk-only caching and scrolls through the single output image.
+## Image Capture
 
-Image generation or display failures automatically prepare HTML with the same signature. Image
-resource limits and HTML failures fall back to the complete in-memory Markdown preview. The menu and Share action describe
-the actual format, accompanied by a document-ready note for conversion fallbacks. Cancellation and
-backgrounding pause work instead of starting another conversion.
+`useDocumentExportHtmlCapture` supplies document-specific scripts and page frames to the shared
+[`HtmlCapture`](../../components/HtmlCapture/README.md) executor. The controlled WebView waits for
+decoded assets, fonts and stable layout. Paged capture measures
+message/paragraph boundaries and painted text/image ranges. It prefers a message boundary after
+60% of a page, then a paragraph boundary, then a gap between painted lines. Headings stay with the
+following line, normal table rows stay together, and oversized table rows can continue between
+lines. Images are contained within a page. An indivisible object that cannot fit fails conversion
+instead of losing content. Included process/reasoning details expand before capture; Markdown and
+HTML retain their interactive disclosures.
 
-The selection format policy and single-image pipeline still require device acceptance. Tests were
-added but not run. Earlier simulator results do not validate the current behavior.
+Each content slice is at most 1200 logical pixels high, with 16 pixels of top spacing and no page-number
+footer, so output is 1080 pixels wide and at most 3648 pixels high. The native surface
+shows only that slice. It never allocates a full-document bitmap in paged mode. Each lossless PNG
+is header-checked, handed to the backend, copied, and released before the next screenshot. The
+60-second timeout resets for each page; the physical lease covers capture and file delivery across
+both document export and HTML-file conversion. Closing unmounts the surface, but backend completion
+waits for an in-flight capture or copy so cleanup cannot race a late write.
+
+Single-long-image mode still takes one full-height screenshot at the same density. It has no
+application height/pixel cap and retains device-dependent capture and decoding limits. It is not a
+streaming encoder. Source images also retain device-dependent decode costs.
+
+## Preview And Delivery
+
+`DocumentExportImagePreview` adapts the actual PNG files to the shared `ArtifactImagePages` viewer.
+It no longer substitutes the source HTML for the image. Bounded pages load original pixels, fit
+width and scroll vertically; zooming a page temporarily disables list scrolling. Large single PNGs
+use a viewport-sized browser showing the actual file, whose decoding/zoom quality still depends on
+the browser. No full-height native Image view receives those files.
+
+`appShell/fileExport.shareFiles` checks system availability before materializing and saving every
+page in order, then opens one multi-file share sheet. A failed save can resume
+using already committed pages. Saved pages remain in the file library after cancellation or route
+exit. `react-native-share` supplies multi-file delivery and requires a rebuilt development client;
+ordinary single-file delivery retains `expo-sharing`.
+
+Image conversion/display failures prepare HTML; HTML failures retain the complete Markdown preview.
+The menu and Share action describe the resulting format and show a fallback note. Backgrounding or
+cancellation pauses conversion instead of selecting another format.
+
+Regression coverage has been updated. Builds, type checks, tests and device acceptance were not run
+for this change; previous simulator results do not validate this pipeline.

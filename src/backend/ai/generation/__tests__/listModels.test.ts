@@ -5,6 +5,24 @@ import type { Provider } from '@/shared/data/types/provider';
 import { listModels } from '../listModels';
 
 describe('listModels adapter', () => {
+  it('requests /models at a versionless custom base URL without a URL fragment', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    const provider = createProvider();
+    provider.id = 'custom';
+    provider.presetProviderId = undefined;
+    provider.endpointConfigs = {
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://api.example.com/gateway#' },
+    };
+    await listModels(provider, { getRotatedApiKey: () => 'test-key' }, undefined, {
+      throwOnError: true,
+    });
+    const [input] = fetchMock.mock.calls[0];
+    expect(input instanceof Request ? input.url : String(input)).toBe(
+      'https://api.example.com/gateway/models',
+    );
+  });
   afterEach(() => {
     jest.restoreAllMocks();
   });

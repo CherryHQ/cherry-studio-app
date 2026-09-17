@@ -1,4 +1,3 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { Keyboard, Pressable, Text } from 'react-native';
@@ -9,10 +8,9 @@ import {
   parseChatRoute,
   useStartNewChat,
 } from '@/frontend/appShell/navigation/chat';
+import { AgentAvatar } from '@/frontend/components/Avatar';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import type { Agent } from '@/shared/data/types/agent';
-
-const AGENT_NAME_MINIMUM_FONT_SCALE = 12 / 14;
 
 export function useMainHeaderAgent() {
   const router = useRouter();
@@ -44,22 +42,20 @@ export function MainHeaderAgentButton({ agent, onPress }: { agent: Agent; onPres
     <Pressable
       accessibilityLabel={agent.name}
       accessibilityRole="button"
-      className="h-10 max-w-56 min-w-0 shrink flex-row items-center justify-center gap-1 rounded-full px-3 active:bg-secondary"
+      className="min-h-10 max-w-56 min-w-0 shrink flex-row items-center gap-2 rounded-full px-3 py-1 active:opacity-60"
       hitSlop={8}
       onPress={onPress}
       testID="current-agent-button"
     >
+      <AgentAvatar avatar={agent.avatar} name={agent.name} size={24} uri={agent.avatarUri} />
       <Text
-        adjustsFontSizeToFit
-        className="min-w-0 shrink text-center font-semibold text-foreground text-sm"
-        ellipsizeMode="clip"
+        className="min-w-0 shrink font-medium text-base text-foreground"
+        ellipsizeMode="tail"
         maxFontSizeMultiplier={1.2}
-        minimumFontScale={AGENT_NAME_MINIMUM_FONT_SCALE}
         numberOfLines={1}
       >
         {agent.name}
       </Text>
-      <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
     </Pressable>
   );
 }

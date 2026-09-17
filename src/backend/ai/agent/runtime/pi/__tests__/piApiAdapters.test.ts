@@ -63,6 +63,14 @@ const CASES: {
 ];
 
 describe('Pi API adapters', () => {
+  test.each([ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, ENDPOINT_TYPE.OPENAI_RESPONSES])(
+    'respects version suppression for %s',
+    (endpoint) => {
+      expect(resolvePiApiAdapter(endpoint).formatBaseUrl('https://api.example.com/gateway#')).toBe(
+        'https://api.example.com/gateway',
+      );
+    },
+  );
   beforeEach(() => {
     jest.restoreAllMocks();
     for (const testCase of CASES) testCase.streamSimple.mockReturnValue(mockStreamResult);

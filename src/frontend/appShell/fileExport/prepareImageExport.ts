@@ -19,7 +19,6 @@ import {
 } from '@/shared/contracts/fileExport';
 import type { FileEntryProvenance } from '@/shared/data/types/file';
 import { EXPORT_SIGNATURE_STYLE, exportSignatureColumns } from '@/shared/utils/exportSignature';
-import { isSvgMediaType } from '@/shared/utils/imageFileTypes';
 
 type PreparedImage = { uri: string; release(): void };
 
@@ -119,9 +118,11 @@ export async function prepareFileExport(
   { entry, uri }: ResolvedFile,
   watermark: ExportWatermark,
 ): Promise<ExportFile & { release(): void }> {
+  const mediaType = entry.mediaType.split(';')[0].trim().toLowerCase();
   if (
-    !entry.mediaType.trim().toLowerCase().startsWith('image/') ||
-    isSvgMediaType(entry.mediaType) ||
+    !mediaType.startsWith('image/') ||
+    // SVG must retain its vector bytes; the footer renderer only decodes bitmaps.
+    mediaType === 'image/svg+xml' ||
     entry.provenance === 'document-export' ||
     watermark.kind === 'none'
   ) {

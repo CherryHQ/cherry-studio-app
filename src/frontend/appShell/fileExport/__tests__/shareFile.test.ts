@@ -1,10 +1,11 @@
 import type { ExportSignature, ExportWatermark } from '@/shared/contracts/fileExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import { shareFile } from '../shareFile';
+import { shareFile, shareFiles } from '../shareFile';
 
 const mockCopy = jest.fn();
 const mockShare = jest.fn();
+const mockShareMultiple = jest.fn();
 const mockAvailable = jest.fn();
 const mockCreateDirectory = jest.fn();
 const mockRelease = jest.fn();
@@ -25,6 +26,10 @@ jest.mock('expo-file-system', () => ({
     uri: [typeof base === 'string' ? base : base.uri, name].filter(Boolean).join('/'),
   })),
   Paths: { cache: 'file:///cache' },
+}));
+jest.mock('react-native-share', () => ({
+  __esModule: true,
+  default: { open: (options: unknown) => mockShareMultiple(options) },
 }));
 jest.mock('expo-sharing', () => ({
   isAvailableAsync: () => mockAvailable(),
@@ -116,6 +121,49 @@ it('does not share the unmarked original after signature generation fails', asyn
   );
   expect(mockCopy).not.toHaveBeenCalled();
   expect(mockShare).not.toHaveBeenCalled();
+});
+
+it('shares all pages in order through one chooser without re-encoding them', async () => {
+  const files = [1, 2, 3].map((index) => ({
+    entry: FileEntrySchema.parse({
+      ...entry,
+      id: `00000000-0000-7000-8000-${String(index).padStart(12, '0')}`,
+      filename: `conversation-${index}.png`,
+      mediaType: 'image/png',
+      provenance: 'document-export',
+    }),
+    uri: `file:///managed/${index}.png`,
+  }));
+  await shareFiles(async () => files, { watermark });
+  expect(mockCopy).toHaveBeenCalledTimes(3);
+  expect(mockShare).not.toHaveBeenCalled();
+  expect(mockShareMultiple).toHaveBeenCalledWith({
+    urls: files.map(({ entry }) => `file:///cache/FileExports/${entry.id}/2/${entry.filename}`),
+    type: 'image/png',
+    failOnCancel: false,
+    useInternalStorage: true,
+  });
+});
+
+it('never opens a partial multi-image share if a later page copy fails', async () => {
+  mockCopy.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('No space'));
+  const file = { entry, uri: 'file:///managed/page.png' };
+  await expect(shareFiles([file, file], { watermark })).rejects.toThrow('No space');
+  expect(mockShareMultiple).not.toHaveBeenCalled();
+  expect(mockShare).not.toHaveBeenCalled();
+});
+
+it('cancellation after copying stops delivery without deleting files another receiver may still use', async () => {
+  const controller = new AbortController();
+  mockCopy.mockImplementationOnce(async () => controller.abort());
+  await expect(
+    shareFiles([{ entry, uri: 'file:///managed/page.png' }], {
+      watermark,
+      signal: controller.signal,
+    }),
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  expect(mockShare).not.toHaveBeenCalled();
+  expect(mockShareMultiple).not.toHaveBeenCalled();
 });
 
 it('checks availability before generating or persisting a file', async () => {

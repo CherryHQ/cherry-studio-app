@@ -1,318 +1,264 @@
 # Document Export
 
-Document export is implemented as an application capability. Chat supplies the first document
-adapter; the conversion service has no Agent, conversation, message-list, or navigation dependency.
-Previous iOS simulator acceptance covered the original selection and capture flow. The summary
-selector, selection format policy, theme-aware frame and scaled single-image capture described here
-still require device acceptance on iOS and Android.
+Document export is an application capability. Chat supplies a document adapter; conversion has no
+Agent, conversation, live message-list or navigation dependency. The current paged capture and
+multi-file delivery require iOS/Android device acceptance. Earlier simulator evidence does not
+validate this implementation.
 
 ## Ownership
 
 | Owner | Responsibility |
 | --- | --- |
-| `shared/contracts/documentExport.ts` | Source-neutral document, targets, artifacts, caller-owned session and capture callback |
-| `backend/services/documentExport` | Validation, conversion, bounded image resources, temporary files, explicit persistence and cancellation |
+| `shared/contracts/documentExport.ts` | Documents, targets, ordered artifacts, sessions and capture delivery |
+| `backend/services/documentExport` | Validation, resources, conversion, temporary files and explicit persistence |
 | `DocumentExportRuntime` | Foreground admission, live/closing sessions and host teardown |
-| `bootstrap/composition/createBackend.ts` | Connects the runtime to a file-entry store bound to the originating database |
+| `bootstrap/composition/createBackend.ts` | Managed-file dependencies bound to the originating database |
 | `frontend/appShell/fileExport` | Watermark configuration, finalized-file delivery, system availability and cancellation checks |
-| `frontend/appShell/documentExport` | Opens the export page and hands off a transient request; URLs contain only its ID |
-| `frontend/features/documentExport` | Format choice, preview, controlled HTML capture and user-triggered delivery |
-| `frontend/features/chat/share` | Message selection and selected history reads, thinking inclusion policy and the chat-to-document adapter |
-| `frontend/features/library` | The existing file stream, with an additional Sharing source filter |
+| `frontend/appShell/documentExport` | Transient handoff; routes contain only the request ID |
+| `frontend/features/documentExport` | Format/layout choice, capture and user-triggered delivery |
+| `frontend/components/ArtifactPreview` | Actual-image reading shared with the file viewer |
+| `frontend/features/chat/share` | Selection, selected-history reads and thinking inclusion policy |
+| `frontend/features/library` | Existing file stream with a Sharing provenance filter |
 
-The service follows [Code Organization](./code-organization.md),
-[Runtime Ownership](./runtime-ownership.md), and the
-[workflow contract rules](../../src/shared/contracts/README.md). `Backend.documentExport` is its
-only frontend workflow boundary. This is a callable application capability; it is not registered as
-an Agent tool or MCP tool.
+Follow [Code Organization](./code-organization.md), [Runtime Ownership](./runtime-ownership.md) and
+[workflow contracts](../../src/shared/contracts/README.md). `Backend.documentExport` is the only
+frontend workflow boundary. Export is not an Agent or MCP tool.
 
 ## Pipeline
 
 ```mermaid
 flowchart TD
-    Source[Caller-owned content selection] --> Document[ExportDocument]
-    Document --> Normalize[Validate and copy input]
-    Normalize --> Markdown[Markdown]
+    Source[Selected immutable content] --> Normalize[Validate and copy document]
+    Normalize --> Markdown[In-memory Markdown]
     Normalize --> Resources[Prepare image resources]
     Resources --> HTML[Controlled HTML and MathML]
-    HTML --> Capture[Page-owned PNG capture]
-    Markdown --> TextPreview[In-memory text preview]
-    HTML --> Preview[Temporary artifact and preview]
-    Capture --> Preview
-    TextPreview --> Materialize[Share creates Markdown file]
-    Materialize --> Save[Explicit Share]
-    Preview --> Save
-    Save --> Library[Managed file with document-export source]
-    Library --> Delivery[Retained readable copy and system share sheet]
+    HTML --> Layout[Measure content and page boundaries]
+    Layout --> Capture[Capture one PNG page]
+    Capture --> Copy[Copy and release native page]
+    Copy --> Capture
+    Copy --> Artifact[Publish complete ordered artifact]
+    HTML --> Artifact
+    Markdown --> Materialize[Share creates Markdown file]
+    Materialize --> Save[Persist managed files]
+    Artifact --> Save
+    Save --> Library[File library]
+    Save --> Delivery[Readable copies and one system share sheet]
 ```
 
-There is an explicit target switch, not a plugin or job registry. Markdown/HTML can be produced by a
-programmatic caller without mounting a page. Image output requires a capture callback; the backend
-never imports a React component, holds a native view reference, or opens navigation.
+The target switch is explicit. Programmatic Markdown/HTML conversion does not require a mounted
+page. Image conversion receives a capture callback; backend code never imports a React component
+or owns a native view reference.
 
 ## Document And Session Contract
 
-The document has an optional title, ordered sections, optional section headings/metadata, and
-blocks of plain text, Markdown, images, attachments, details, or references. Sections can carry
-source-owned bubble/message presentation hints without exposing chat models to the exporter.
-Images refer to entries in its
-asset map. Asset sources are managed file IDs or remote image URLs. Ordinary Markdown image
-references are discovered by the Markdown parser when rendering HTML, so code examples do not
-cause downloads. There is no special inline asset URL scheme in this implementation; callers use
-explicit image blocks for managed files.
+A document contains an optional title, ordered sections, headings/metadata and text, Markdown,
+image, attachment, detail or reference blocks. Optional bubble/message hints express source-owned
+hierarchy without exposing chat models. Assets refer to managed file IDs or eligible remote URLs.
+Markdown image references are discovered through parsed tokens so code examples never download
+resources. `{ kind: 'markdown', source, title? }` normalizes to the same model.
 
-The convenience input `{ kind: 'markdown', source, title? }` normalizes to the same document model.
-Input values are copied and deeply frozen before use; later mutation by the caller cannot change the
-source text. The session exposes this immutable document for structured native previews.
-Resources become byte snapshots on their first successful read. Failed image reads stay retryable.
+Input is copied and deeply frozen. Successful image reads become reusable byte snapshots; failed
+reads can retry. `session.document` and `session.markdown` are available without files or asset reads.
 
 ```ts
-const session = backend.documentExport.createSession({
-  kind: 'markdown',
-  source: '# Notes\n\nDocument content.',
-});
+const session = backend.documentExport.createSession({ kind: 'markdown', source: '# Notes' });
 try {
-  const previewText = session.markdown; // No files or image reads.
-  // An explicit persistence/delivery action materializes the file.
+  const previewText = session.markdown;
   const artifact = await session.render({ format: 'markdown' });
-  const file = await session.save(artifact); // One managed file for the current artifact.
+  const files = await session.save(artifact); // One file here; images may return multiple pages.
 } finally {
   await session.dispose();
 }
 ```
 
-`render` accepts an optional abort signal and semantic progress callback. HTML/image targets require
-explicit presentation values: logical width, the resolved base/sm/lg/xl typography roles, and
-resolved semantic colors, including user bubbles, code surfaces and secondary text. The export
-page freezes width, typography and export time at opening. Theme changes regenerate the preview;
-the active presentation is held while saving or delivering so the current file cannot be replaced. Programmatic input presentation is validated and copied by the HTML renderer.
+`render` accepts an abort signal and semantic progress, including the current image ordinal and
+total. HTML/image targets receive validated logical width, resolved typography and semantic colors.
+The page freezes typography/time at opening. Images always use a 360-logical-pixel width; HTML
+retains its window-derived width. Theme changes regenerate the preview except during delivery.
+Image output includes numbered messages, theme surfaces, Cherry branding and the local
+`YYYY.MM.DD HH:mm` timestamp inside the captured document.
 
-HTML and image presentation may supply a resolved `watermark`. The application defaults to `cherry`;
-a code-only `none` option omits the footer from every preview and output format. The Cherry variant
-carries a `signature` with resolved background/text colors,
-an embedded PNG logo, brand name and timestamp. Images may also supply an `imageFrame` with a resolved background
-color and localized label. These are presentation data, independent of the source document. The
-renderer copies and validates them, escapes text, and includes the signature after the content
-inside `main`. The frontend supplies the signature for both HTML and images, including image-to-HTML
-fallbacks; the frame is image-only. HTML keeps its conversation hierarchy. Markdown targets accept the same resolved watermark and use
-its brand name and timestamp for a separated text signature; theme colors and logo bytes do not enter Markdown output.
+Markdown/HTML artifacts hold one file and source text. Image artifacts hold a layout (`pages` or
+`single`) and ordered `pages`, each containing its PNG descriptor, width and height. Artifacts,
+page collections, file descriptors and image/formula issues are frozen. They do not retain source
+HTML as a substitute image preview.
 
-Every artifact contains one file descriptor. Markdown/HTML artifacts also contain their source
-text; image artifacts contain their width and height. Artifacts also contain structured
-image/formula issues. Artifacts and file descriptors are frozen.
-The session admits one operation at a time, including saving, and accepts only its current artifact
-for persistence. A new completed render replaces the previous temporary output. Rendering Markdown
-again reuses its current file and saved entry while they remain available and the complete text,
-including the signature, matches.
+A session admits one operation at a time. Capture delivers each page through awaited `onPage`;
+the surface releases the native PNG only after the backend copy settles. Delivery must be ordered
+and match the declared total. Only a complete batch replaces the current artifact. Failure cleans
+the incomplete directory and retains the previous artifact. `save` accepts only the current artifact.
+Repeated Markdown rendering reuses the current file when available and its complete text, including
+the signature, matches.
 
-## Output Behavior
+HTML and image presentation share an optional resolved `watermark`. The application defaults to
+`cherry`; the code-only `none` option omits the brand footer from every preview and output format.
+The Cherry variant contains a `signature` with resolved background/text colors, the embedded Cherry
+logo, brand name and frozen timestamp. The frontend supplies the shared white
+footer with black text used by painting and file image exports. The renderer copies and validates
+the presentation, escapes its text and includes the signature after the content inside `main`.
+The image-only `imageFrame` uses the document background and supplies a localized label. Image content
+spans the output width with ordinary text padding, without a contrasting outer frame. Image-to-HTML fallbacks
+retain the watermark. Markdown uses the same resolved watermark's brand name and timestamp in a
+separated text footer; preview and saved text share its formatter.
+`session.markdown` remains the unbranded source. The signature ends the document and is not repeated
+on every PNG page. PNG pages have no page numbers or reserved ordinal-footer space.
 
-| Content | Markdown | HTML and long image |
+## Content Behavior
+
+| Content | Markdown | HTML and image |
 | --- | --- | --- |
-| Plain user text | Escape formatting markers, preserve line breaks | Preserve literal text and whitespace; HTML uses a right-aligned bubble, framed images use numbered message rows |
-| Prose, tables, lists, code | Preserve authored Markdown | Render through `markdown-it`; code wraps and tables fit the document width |
-| Math | Preserve source | KaTeX produces MathML with `trust: false` and bounded expansion; unsupported formulas remain visible as source |
-| Managed images | Alt/name placeholder | Embed validated PNG/JPEG bytes or show a placeholder |
-| Remote images | Keep eligible external URLs | Fetch without credentials, enforce bounds and embed, or show a placeholder |
-| Attachments | Name/type and eligible external link | Name/type and eligible external link; attached documents are not rasterized |
-| Included process/details | Nested, initially collapsed `<details>` retain the summary and content | HTML retains expandable collapsed details; PNG displays the collapsed summary |
-| References | Portable numbered links | Numbered links and a readable URL list, including in the image |
+| Plain user text | Escaped formatting markers and preserved line breaks | Literal text; HTML bubbles or numbered image sections |
+| Prose, lists, tables, code | Authored Markdown | `markdown-it`; code wraps and tables fit width |
+| Math | Authored source | KaTeX MathML with bounded expansion; unsupported formulas retain source |
+| Managed images | Alt/name placeholder | Validated embedded PNG/JPEG or a placeholder |
+| Remote images | Eligible external URL | Fetch without credentials, then embed or use a placeholder |
+| Attachments | Name/type and eligible link | Name/type and eligible link; documents are not rasterized |
+| Included process/details | Nested collapsed `<details>` retaining content | HTML starts collapsed; image capture expands included details |
+| References | Numbered links | Numbered links and readable URLs |
 
-HTML contains inline CSS and embedded displayed resources. MathML needs no downloaded fonts or
-runtime script. Raw authored HTML is escaped; generated links admit only HTTP, HTTPS, and mailto
-without URL credentials. A content security policy disables scripts, remote subresources and forms.
-The preview disables JavaScript. The separate capture surface permits only its injected readiness
-protocol and blocks navigation, file access, cookies and new windows.
+HTML embeds displayed resources and inline CSS. Raw authored HTML is escaped. Links admit HTTP,
+HTTPS and mailto without credentials. CSP disables scripts, remote subresources and forms. HTML
+preview disables JavaScript. The capture WebView accepts only its injected protocol, blocks
+navigation, file access, cookies and new windows, and waits for assets/fonts/layout before capture.
+Image preview contains actual PNGs, so it has no interactive links or disclosures.
 
-Markdown is source text rather than a reconstruction of rendered HTML. Authored Markdown remains
-unchanged; generated metadata and structured blocks are escaped. Managed image/attachment blocks
-do not expose sandbox paths.
-The export page appends a horizontal rule and one row with the bold brand name and frozen export
-time. Its native preview and `.md` artifact share the same Markdown signature formatter, including
-when another format falls back to Markdown. `session.markdown` remains the unbranded source text;
-the optional target watermark is applied when the artifact is rendered.
+Chat HTML retains the native bubble/message hierarchy, accessibility typography and existing
+surface/code tokens. The source adapter supplies two snapshots when thinking exists: omitted by
+default and included by the switch. Included content covers visible reasoning, intermediate prose
+and readable tool names, never raw payloads, credentials or diagnostics. The image capture expands
+those supplied details so their content is readable without an interactive disclosure.
 
-Chat HTML follows the native message hierarchy: 16-point gutters, an 88%-width user column,
-question attachments above the bubble, compact assistant labels, and full-width answers. They omit
-the extra article title and section dividers. The page supplies CherryUI's resolved accessibility
-type scale and the existing chat/code/surface tokens for both light and dark themes. Paragraphs,
-headings, code blocks, tables and process disclosures follow the native message spacing and surfaces.
-The native Markdown preview composes the same CherryUI `MessagePart.Process` and
-`MessagePart.Reasoning` components used in chat. Process summaries use the transcript's elapsed-time
-label; the nested reasoning row uses its completed-thinking label. HTML follows the same two
-initially collapsed levels, process separator, compact nested rows and reasoning rail. PNG captures
-the collapsed summary rather than exposing hidden thinking as plain text.
+## Image Layout And Capture
 
-The parser is `markdown-it` 15.0.1. Capture uses `react-native-view-shot` 5.1.0, matching Expo SDK 57.
-Both platforms capture the complete, scaled native view once as a lossless PNG and keep that file
-for delivery. The frontend reads only the first 24 bytes to validate the PNG signature and output
-dimensions; it does not load or decode the full file or run a second encoder. The native screenshot
-remains alive until the session finishes copying it or cancellation settles, then its capture file
-is released. Published files use `.png` and `image/png`. Math uses KaTeX. This does not imply full
-parity with the native Markdown renderer.
+The renderer remains `markdown-it` → `react-native-webview` → `react-native-view-shot` 5.1.0.
+View Shot documents WebView support with a non-collapsible Android wrapper
+([upstream](https://github.com/gre/react-native-view-shot#interoperability-table)). Browser alternatives
+such as [html-to-image](https://github.com/bubkoo/html-to-image) also have large-output scaling and
+canvas/data-URL limits; swapping libraries does not establish unlimited image capacity.
 
-## Limits And Capture
+Default image layout is **paged PNG at fixed 3x density**. Short content yields one page. Each
+content slice is at most 1200 logical pixels high, plus 16 pixels of top spacing and no page-number footer.
+At the page's fixed width this yields 1080-pixel-wide images no taller than 3648 pixels. Content
+length adds pages rather than lowering resolution or truncating the selection.
 
-The image format is **one lossless PNG image at a fixed 2x scale**, produced from one complete screenshot.
-Multiple selected chat messages support only HTML and Markdown. Capture failures automatically
-prepare HTML; image-resource limits or failed HTML conversion use the complete in-memory Markdown preview. Background/cancelled work
-pauses instead of triggering another conversion.
+Pagination uses measured message/paragraph boundaries and painted ranges. It prefers a message
+boundary after 60% of a page, then a paragraph boundary, then a gap between lines. Headings stay
+with the following line; normal table rows remain intact. Oversized rows can continue between
+painted lines. Embedded images are contained within the page height. An indivisible object that
+cannot fit causes conversion failure instead of silent clipping. Table continuation headers are
+not repeated by the current slicing implementation.
 
-| Resource | Limit |
+Only the current slice enters the native screenshot viewport. Original layout coordinates stay
+fixed while the clipping window advances. CSS zoom maps logical layout into the chosen output
+pixels independent of screen density. Native layout and browser frames settle before each capture.
+The frontend checks the PNG's 24-byte header and dimensions, not image sharpness. The screenshot
+is copied unchanged and released before the next one; paged capture allocates no full-document
+output bitmap and runs no second image encoder.
+
+The layout menu retains **single long image**. This mode still uses a full-height screenshot at
+3x density, without an application output-height/pixel cap. It is not streamed and still scales
+native allocation with document length. It cannot guarantee arbitrary dimensions on the device or
+in receiving applications.
+
+## Validation And Resource Boundaries
+
+| Resource | Rule |
 | --- | --- |
-| Document text | 500,000 UTF-16 code units across admitted input values |
-| Sections | 128 |
-| Input structure | 10,000 visited values; depth at most 24 before recursive schema parsing |
-| Image sources | 32 per HTML/image render, including discovered Markdown images; source admission still permits a text export |
-| Encoded image | 4 MiB each; 16 MiB total prepared bytes |
-| Decoded image | 8 million pixels each; 16 million total prepared pixels |
-| Source dimensions | At most 8192 pixels on each axis |
-| Supported sources | Still PNG and JPEG; animated PNG, GIF, WebP and SVG use a placeholder |
-| Embedded image text | 24 MiB of base64 references per output, including repeated references |
-| Remote read | 15 seconds; redirects rejected; response stream stopped at the byte cap |
-| HTML width / typography | 280–800 logical pixels / 12–40 pixel type, with 12–56 pixel line heights |
-| Capture per image | No application-imposed layout-height or total-pixel cap; native capture and preview capabilities determine practical limits |
-| Output images | One per operation; capture failures use a document preview |
-| Output scale | Fixed 2x; never reduced to fit longer content |
-| Capture readiness/native wait | 60 seconds; physical lease held until native work settles |
-| Runtime sessions | At most 4 live or closing sessions; one interactive request |
+| Text | 500,000 UTF-16 code units across admitted values |
+| Sections | 128 selected sections |
+| Input structure | 10,000 visited values; depth 24 before recursive schema parsing |
+| Image source count/bytes/pixels/dimensions | No application cap; dimensions must be positive |
+| Supported images | Still PNG/JPEG; unsupported or animated formats use placeholders |
+| Repeated embedded image bytes | No application cap |
+| Remote read | 15 seconds, no redirects, cancellable stream |
+| HTML width / type | 280–800 logical pixels / 12–40 font size and 12–56 line height |
+| Paged capture | 1200 logical content height plus 48 frame height per image |
+| Single capture | No application height/pixel cap |
+| Capture wait | 60 seconds per page; physical lease includes native capture and file copy |
+| Sessions | Four live/closing sessions, one interactive request |
 
-Output dimensions are twice the measured layout dimensions, independent of the device pixel ratio.
-The capture never lowers resolution to fit a height or memory budget. PNG output has no 16K edge
-restriction. The full native screenshot, native PNG encoder and image preview still allocate memory
-in proportion to the output size; format support does not guarantee arbitrary dimensions on a device.
+The native lease prevents a closing capture from overlapping a replacement. Cancellation hides
+the surface immediately; capture completion waits for in-flight native work and page copying before
+backend temporary cleanup. Late results never publish. Background/inactive transitions pause work
+and require an explicit retry; they do not start a fallback conversion. Ordinary image failure
+prepares HTML; failed HTML conversion retains the complete Markdown preview and reports the actual
+resulting format.
 
-The surface waits for fonts, decoded images and stable layout, then chooses output dimensions before
-allocating the full native surface. It preserves the original CSS width and scales the layout to
-the admitted output pixels, without reflowing text or multiplying the bitmap by screen density.
-It waits for matching native layout and browser painting before taking one screenshot, then checks
-the dimensions recorded in the PNG header. The wrapper is non-collapsible and disables clipping
-removal. The preview displays the actual final PNG. Cancellation never publishes a late result.
+## Actual Image Reading
 
-Messages from the WebView must match the active request and expected dimensions. A module-local
-capture lease prevents another physical capture from reusing a closing surface. Abort/timeout has
-an immediate logical result; a late native file is released instead of being published. Native work
-keeps its lease until its actual promise settles. These controls do not establish that off-screen
-WebView rendering works on all devices; only the local iOS text-message scenario has been verified.
+`ArtifactImagePages` displays actual PNG files in the export page and document-export file viewer.
+Bounded pages decode at original resolution, fit reading width without initial pixel upscaling,
+scroll vertically and support pinch/pan/double-tap zoom. The list pauses scrolling during zoom.
+Known dimensions select the viewing path; the file viewer reads only the PNG header before loading.
 
-## Lifetime And File Library
+Single images above the viewer's original-decode budget use a viewport-sized WebView displaying
+the actual local PNG URL, with file read access limited to that PNG. Controlled injected code fits
+the browser's image document to reading width and reports decode failures; navigation is blocked.
+Loading the file URL also uses the native iOS read-access API, which inline HTML does not. This
+prevents sending a giant PNG through a full-height native Image drawable; it is not
+a region decoder, and browser downsampling/decoding limits remain. It does not guarantee full-detail
+viewing of arbitrarily large files.
 
-- `DocumentExportRuntime` is a Gate lifecycle service depending on `DbService`. Initialization
-  subscribes to app state; it does not parse documents, fetch resources or mount a capture surface.
-- Background/inactive transitions cancel active operations and reject new work. Returning to the
-  foreground permits an explicit retry; generation never restarts silently.
-- The runtime closes admission before teardown, disposes every session, and retains closing
-  sessions until cleanup settles. Managed-file reads/writes use the original host's database,
-  so late cancellation cannot redirect an old operation into a replacement host.
-- Session scratch and its current preview live under the OS cache. A replacement render deletes
-  the previous completed preview; route exit or disposal deletes session scratch. Abandoned cache
-  files after process death remain disposable OS-managed cache.
-- The app-shell request has a 30-second deadline before route handoff. Missing requests after
-  process death show an unavailable state. Route cleanup is deferred one task so development
-  remounts can reclaim the same request, then it waits for disposal before admitting another.
-- The source supplies allowed formats and an initial format. Single-message chat exports default
-  to PNG; multi-message selections allow HTML and Markdown and default to HTML. Selecting Markdown displays the structured
-  document from memory, retaining native process/reasoning disclosures and using Markdown only for
-  leaf prose, without generating any output file. A source can supply one initially unchecked option
-  and an alternate document; changing it renders only the current format. Both sessions close with
-  the route.
-- **Share first commits the final artifact into the existing managed file store.** It is the page’s
-  only delivery action, including for Markdown. Repeated actions reuse the saved file for the
-  current artifact. Changing formats creates a new artifact; reopening an export is a new session and
-  may create another file.
-- Saved files have `provenance: 'document-export'`. Watermark options belong to the rendering request
-  and do not add persisted file fields or require a migration. Sharing an existing export reuses
-  its bytes, including exports generated with `none`, without changing provenance or adding a footer.
-- Sharing is an additional source filter over the library's existing cursor stream. Exported PNG images
-  also remain in Images, while HTML/Markdown remain in Documents. There is no second table or
-  separate permanent directory for sharing.
-- Permanent files follow the existing [file model](./data/file-model.md): only explicit user
-  deletion removes them. Closing a preview, deleting a conversation, or dismissing a share sheet
-  does not delete saved files.
-- System delivery uses the shared `appShell/fileExport.shareFile` helper. It checks availability
-  before invoking the page's materialize/save factory, checks cancellation, and prepares a readable
-  cache copy before opening the system share sheet and retains the copy for late recipient reads. Share-sheet
-  completion does not claim delivery to another person. Cancelled sharing still leaves the saved
-  file in Sharing. Existing file-viewer actions provide saving images to Photos and system opening.
+This boundary matters because a reported Android `ExpoImageView` / `RecordingCanvas` failure tried
+to draw a 478,668,800-byte bitmap. Native drawing errors are outside image-loader callbacks.
+[Android's drawing implementation](https://android.googlesource.com/platform/frameworks/base/+/master/graphics/java/android/graphics/RecordingCanvas.java)
+checks bitmap limits. Paged output avoids that whole-output allocation by design, while embedded
+source image decoding remains device-dependent.
 
-No background jobs, process-death resume, content-hash deduplication, hosted links, PDF conversion,
-or attachment bundles are introduced.
+## Persistence And System Delivery
 
-## Chat Integration
+`DocumentExportRuntime` is a Gate service depending on `DbService`. Its host-bound dependencies
+prevent late work from switching databases. Teardown closes admission, cancels work and waits for
+all sessions to dispose. Session scratch lives under the OS cache and is removed on replacement or
+exit. A handoff has a 30-second route deadline; missing requests after process death are unavailable.
 
-The assistant toolbar opens `/chat-share` with the session and clicked answer IDs. The answer
-starts selected. This independent, paginated list shows user/assistant roles, timestamps and at
-most four lines from a 240-character excerpt. Pending/streaming messages cannot be selected and
-system messages are excluded. Whole-row presses toggle selection. No Markdown renderer, tool
-payload or media view is mounted inside a selection row.
+Share persists files sequentially into the existing managed store with `provenance: 'document-export'`.
+Multi-page filenames use sortable ordinal suffixes. Already committed pages survive later failure
+or cancellation and are reused on retry of that artifact. A new render/session may create new files.
+Committed files remain in the library's Images and Sharing filters and are deleted only through
+ordinary file deletion. No new table, database column or permanent export directory is added.
+Watermark options affect rendered bytes without adding file metadata. Existing document exports,
+including those generated with `none`, are shared unchanged without another watermark pass.
 
-The original chat list and composer remain mounted with unchanged layout and draft state. Only the
-selected summary row and count subscribe to an individual toggle. Cancel/native Back closes the
-selector. Closing the export preview retains the selection; changing route identity resets it. The
-selector has no per-row local state and can recycle rows by message ID.
+`appShell/fileExport.shareFiles` checks system availability before invoking the page's
+materialize/save factory, checks cancellation and prepares readable cache copies in order, then
+opens one share sheet.
+Single-file delivery keeps `expo-sharing`; multiple files use `react-native-share` 12.3.1 with local
+file URLs, without re-encoding. Copies remain in OS-managed cache for late recipient reads. Closing
+the chooser does not prove delivery. The new native dependency requires rebuilding the development
+client; no incoming-share extension is configured.
 
-Confirmation resolves exactly the selected persisted messages in one bounded ID query,
-and supplies them in chronological order to `/document-export`. Same-turn questions are included
-only when selected. Unselected pending messages do not block export. A conversation can contain more
-than 128 messages; the existing section limit applies only to the selection. Missing/unfinished
-selected messages, failed reads, and exceeded content budgets produce localized feedback without
-silently dropping content. Cancelling preparation or unmounting/backgrounding stops pending reads.
-Closing the preview keeps the selection editable. Once the system share sheet closes, the preview
-dismisses to the chat route the source supplied. Neither platform reports whether the user
-delivered or cancelled, so both outcomes return to the chat. The preview is an independent
-fullscreen modal using the application theme and its own close action.
-Two or more selected messages default to HTML and offer only HTML and Markdown in the format menu.
-A single selected message defaults to PNG and offers all three formats. The request preserves this
-format policy when thinking content is toggled. Images include straight theme-aware margins and
-conversation content. Both HTML and images end with the common white export signature: the Cherry
-logo and Cherry Studio name on the left, with local export time aligned to the right. Painting and file image delivery share its content and geometry through
-`appShell/fileExport`. Constant color tokens keep the footer white with black text in both themes.
-The timestamp uses
-`YYYY.MM.DD HH:mm` and is frozen at opening across both document snapshots and format changes.
-The signature has a 56-point minimum height at its 360-point reference width, scales with image
-width, and grows for wrapped text. The displayed
-preview uses the generated image, including the selected message and branding, and scrolls
-vertically. Images exceeding the single-file bounds fall back to a document preview.
+The runtime also owns direct [HTML Conversion](./html-conversion.md) to PNG and image-based PPTX.
+This consumes sequential captures of authored HTML and persists one managed file, independently of
+the document-block conversion and its paged PNG artifacts.
 
-Visible thinking content is omitted by default. When present, the source supplies two immutable
-document snapshots and an option label so the preview can include that content through a switch without acquiring chat
-dependencies. Only the selected format is rendered for the selected snapshot.
+No background export job, process-death resume, hosted link, PDF conversion or streaming single-PNG
+encoder is introduced by this implementation.
 
-The adapter follows the chat article's final-answer boundary. Earlier prose and reasoning are
-process content; the last visible text is a final answer only when no later process part follows
-it. File parts remain after the answer. The thinking option includes reasoning, intermediate prose and
-readable tool names, never raw tool inputs, result envelopes, credentials or diagnostics.
+## Chat Selection
 
-Persisted `[cite:id]` references from web search/fetch outputs become ordinary numbered links.
-Code examples and unknown markers remain source text. File references become document-local assets.
-The generic export page has no live chat subscription and cannot load a conversation on its own.
+`/chat-share` starts with the clicked message selected and displays a paginated history summary.
+Rows show role/time and up to four lines from a 240-character excerpt, without mounting Markdown
+or media. The original chat layout and composer remain mounted. Confirmation reads exactly the
+selected persisted IDs, restores chronological order, and rejects missing/unfinished messages or
+failed reads without silently omitting content. The selection is limited to 128 messages, not the
+whole conversation. Every nonempty selection offers image, HTML and Markdown.
+
+Closing export retains selection. Closing the system chooser dismisses to the source chat route.
+The page's optional checkbox switches between immutable thinking snapshots. Persisted citations
+become numbered references, while unknown/code markers remain source text.
 
 ## Validation Status
 
-Behavior tests were added for source copying/limits, Markdown and HTML behavior, resource limits,
-asset retry/reuse, temporary/permanent lifetime, stale artifact rejection, asynchronous capture
-copying, late cancellation cleanup, lifecycle admission/teardown, selected-message reads and file source persistence. Markdown lifetime
-coverage also checks that preview creates no files or asset reads and repeated sharing reuses its file.
-Preview-hook coverage includes lazy conversion, option changes and stale-format rejection; request
-coverage checks disposal of both option snapshots. PNG coverage checks output metadata, complete-image
-capture, header reads and validation, temporary-file ownership and late native cancellation cleanup.
-The library filter and existing serialization/composition fixtures were updated as well.
+Regression coverage includes page boundaries, line/image integrity, full-height single mode,
+ordered delivery, interrupted-save reuse, incomplete-output cleanup, header-only reading, capture
+cancellation, unchanged shared bytes and all-or-nothing chooser admission. Existing source,
+resource, snapshot, lifecycle, fallback and chat-selection coverage is retained.
 
-The latest changes add regression cases for fixed output clarity, screenshots beyond 16K,
-source-file cleanup, invalid PNG headers, cancelled native work, bounded excerpts and
-selection subscription isolation. Changed-file formatting and lint passed. Tests, type checks,
-builds and device acceptance were not run for these changes.
-
-The earlier implementation was exercised on an iPhone 17 Pro simulator with an iOS development
-client. Those results do not validate the new selector, theme behavior or scaled capture pipeline.
-
-When authorized, acceptance should cover both iOS and Android, light/dark themes, different pixel
-ratios, long text, wide tables/code, inline/display math, multiple images, rejected/failed resources,
-backgrounding, repeated actions, actual PNG dimensions, and a recipient opening the shared file. Follow
+Tests, type checks, builds and device acceptance have not been run for this change. Static formatting
+and lint do not establish PNG sharpness or native rendering correctness. When authorized, acceptance
+must cover iOS/Android, light/dark themes, device densities, long paragraphs/code/tables/math, images,
+page boundaries, process inclusion, background/close during capture/copy, repeated saves, reading
+actual stored PNGs and a recipient opening the shared files. Follow
 [Testing And CI](../guides/testing-and-ci.md) and
 [Parallel Device Testing](../guides/parallel-device-testing.md).
-
-Regression cases also cover the 128-message selection limit, HTML defaults and allowed formats for
-multiple messages, single-message image defaults, document-only fallback and stale-request
-cancellation. Tests, type checks, native builds and device acceptance have not been run for the
-format-policy change.

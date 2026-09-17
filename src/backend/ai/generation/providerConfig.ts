@@ -25,6 +25,7 @@ import {
   resolveProviderVariant,
   type ResolvedEndpoint,
   routeToEndpoint,
+  shouldAppendProviderApiVersion,
   stripArkUnsupportedIncludes,
   transformZhipuRequestBody,
   withoutTrailingApiVersion,
@@ -34,7 +35,6 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import {
   resolveProviderConnection,
-  shouldAppendProviderApiVersion,
   type ResolvedProviderConnection,
 } from '@/backend/ai/provider/providerConnection';
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';

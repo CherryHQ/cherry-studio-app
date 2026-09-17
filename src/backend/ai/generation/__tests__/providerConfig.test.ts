@@ -9,6 +9,22 @@ import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../providerConfig';
 
 describe('providerToAiSdkConfig', () => {
+  it('honors a versionless custom base URL during model checks', async () => {
+    const provider = createProvider({
+      id: 'custom-openai',
+      presetProviderId: undefined,
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://example.com/gateway#' },
+      },
+    });
+    const config = await providerToAiSdkConfig(
+      provider,
+      createModel(provider.id, 'custom-model'),
+      createRuntime(),
+    );
+    expect(config.providerSettings.baseURL).toBe('https://example.com/gateway');
+  });
   it.each([
     ['opencode', ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai', 'https://opencode.ai/zen/go/v1'],
     ['cherryin', ENDPOINT_TYPE.OPENAI_RESPONSES, 'cherryin', 'https://open.cherryin.net/v1'],

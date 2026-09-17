@@ -10,7 +10,8 @@ format and its preview. The request retains this choice; no watermark control is
 
 Image is the default format. A source can supply `allowedFormats` and `initialFormat`; the handoff
 replaces an unsupported initial format with the first allowed format. The preview offers only
-those formats. Chat selections with multiple messages allow HTML and Markdown and start with HTML.
+those formats. All chat selections start with image and offer image, HTML and Markdown. The export page owns
+paged versus single-image layout; it defaults to pages.
 An optional source-owned checkbox label and alternate input create
 an unchecked session alongside the checked session; the checkbox starts unchecked. Creating either
 snapshot only prepares text; the page renders the selected format on opening. Route exit disposes

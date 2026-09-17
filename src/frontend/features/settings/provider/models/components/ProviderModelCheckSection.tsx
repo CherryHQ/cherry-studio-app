@@ -1,3 +1,4 @@
+import { resolveWireModelId } from '@cherrystudio/ai-runtime/provider';
 import { Button, Section, SelectField } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +13,11 @@ import {
 import type { Model } from '@/shared/data/types/model';
 import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
+import {
+  getCustomProviderEndpointRequestPreview,
+  isCustomProviderTextEndpointType,
+} from '../../apiService/utils/providerApiServiceEndpointRules';
+import { ProviderRequestUrl } from '../../components/ProviderRequestUrl';
 import { useProviderModelCheck } from '../hooks/useProviderModelCheck';
 import { getProviderModelEndpointLabelKey } from '../utils/providerModelAdd';
 import { getProviderModelEndpointState } from '../utils/providerModelEndpoint';
@@ -67,7 +73,20 @@ export function ProviderModelCheckSection({
       return undefined;
     }
 
-    return `${t(getProviderModelEndpointLabelKey(endpointState.endpointType))} · ${getUrlHost(baseUrl)}`;
+    const preview = isCustomProviderTextEndpointType(endpointState.endpointType)
+      ? getCustomProviderEndpointRequestPreview(endpointState.endpointType, baseUrl, provider)
+      : null;
+    return {
+      protocol: t(getProviderModelEndpointLabelKey(endpointState.endpointType)),
+      label: t(
+        preview
+          ? 'settings.provider.apiService.requestUrl'
+          : 'settings.provider.apiService.baseUrl',
+      ),
+      url: preview
+        ? preview.replace('{model}', resolveWireModelId(selectedModel, endpointState.endpointType))
+        : baseUrl.replace(/#$/, ''),
+    };
   }, [provider, selectedModel, t]);
 
   return (
@@ -108,7 +127,10 @@ export function ProviderModelCheckSection({
           </Text>
         ) : null}
         {endpointDetail ? (
-          <Text className="text-muted-foreground text-xs">{endpointDetail}</Text>
+          <View className="gap-2">
+            <Text className="text-muted-foreground text-xs">{endpointDetail.protocol}</Text>
+            <ProviderRequestUrl label={endpointDetail.label} url={endpointDetail.url} />
+          </View>
         ) : null}
       </View>
 
@@ -125,14 +147,6 @@ export function ProviderModelCheckSection({
       ) : null}
     </View>
   );
-}
-
-function getUrlHost(baseUrl: string): string {
-  try {
-    return new URL(baseUrl).host;
-  } catch {
-    return baseUrl;
-  }
 }
 
 function ModelCheckResult({

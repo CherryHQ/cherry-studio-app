@@ -8,6 +8,7 @@ import {
   type DocumentExportProgress,
   type DocumentExportSession,
   type DocumentExportTarget,
+  type ExportImagePage,
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { ExportFile } from '@/shared/contracts/fileExport';
@@ -35,7 +36,7 @@ export function createDocumentExportSession(
   const assets = new Map<string, PreparedAsset>();
   let operation: { controller: AbortController; promise: Promise<unknown> } | undefined;
   let current: DocumentExportArtifact | undefined;
-  let saved: { artifactId: string; file: ResolvedFile } | undefined;
+  const saved = new Map<string, ResolvedFile>();
   let disposed = false;
   let disposal: Promise<void> | undefined;
 
@@ -73,7 +74,7 @@ export function createDocumentExportSession(
     const markdownText =
       target.format === 'markdown'
         ? markdown + renderMarkdownSignature(target.watermark)
-        : undefined;
+        : markdown;
     if (
       target.format === 'markdown' &&
       current?.format === 'markdown' &&
@@ -91,23 +92,23 @@ export function createDocumentExportSession(
     let didPublish = false;
     try {
       progress('rendering');
-      let content: Omit<DocumentExportArtifact, 'id' | 'file'>;
-      let text: string | undefined;
-      let capture:
-        | Awaited<ReturnType<Extract<DocumentExportTarget, { format: 'image' }>['capture']>>
-        | undefined;
-      const extension =
-        target.format === 'markdown' ? 'md' : target.format === 'html' ? 'html' : 'png';
-      const mediaType =
-        target.format === 'markdown'
-          ? 'text/markdown'
-          : target.format === 'html'
-            ? 'text/html'
-            : 'image/png';
-      const filename = readableFilename(document.title ?? '', { extension, fallback: 'document' });
+      outputDirectory.create({ intermediates: true });
+      let artifact: DocumentExportArtifact;
       if (target.format === 'markdown') {
-        text = markdownText;
-        content = { format: 'markdown', issues: [] };
+        const filename = readableFilename(document.title ?? '', {
+          extension: 'md',
+          fallback: 'document',
+        });
+        const file = new File(outputDirectory, filename);
+        progress('writing');
+        file.write(markdownText);
+        artifact = {
+          id,
+          format: 'markdown',
+          text: markdownText,
+          issues: [],
+          file: { uri: file.uri, filename, mediaType: 'text/markdown' },
+        };
       } else {
         progress('resolving-assets');
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
@@ -120,71 +121,90 @@ export function createDocumentExportSession(
           dependencies.readManagedImage,
           signal,
         );
-        text = result.html;
-        content = { format: target.format, issues: result.issues };
-        if (target.format === 'image') {
-          progress('capturing');
-          capture = await target.capture({
-            html: result.html,
-            width: target.presentation.width,
-            signal,
+        if (target.format === 'html') {
+          const filename = readableFilename(document.title ?? '', {
+            extension: 'html',
+            fallback: 'document',
           });
-        }
-      }
-      // Always release a successful capture, even when a late cancellation wins.
-      try {
-        progress('writing');
-        outputDirectory.create({ intermediates: true });
-        const file = new File(outputDirectory, filename);
-        let artifact: DocumentExportArtifact;
-        if (capture) {
-          if (
-            !Number.isSafeInteger(capture.width) ||
-            !Number.isSafeInteger(capture.height) ||
-            capture.width < 1 ||
-            capture.height < 1
-          )
-            throw new DocumentExportError('image-size-limit');
-          await new File(capture.uri).copy(file);
+          const file = new File(outputDirectory, filename);
+          progress('writing');
+          file.write(result.html);
           artifact = {
             id,
-            file: { filename, mediaType, uri: file.uri },
-            format: 'image',
-            width: capture.width,
-            height: capture.height,
-            issues: content.issues,
+            format: 'html',
+            html: result.html,
+            issues: result.issues,
+            file: { uri: file.uri, filename, mediaType: 'text/html' },
           };
         } else {
-          file.write(text!);
-          const common = {
+          const pages: ExportImagePage[] = [];
+          let total: number | undefined;
+          const filename = readableFilename(document.title ?? '', {
+            extension: 'png',
+            fallback: 'document',
+          });
+          progress('capturing');
+          await target.capture({
+            html: result.html,
+            width: target.presentation.width,
+            layout: target.layout,
+            signal,
+            onPage: async (image) => {
+              signal.throwIfAborted();
+              if (
+                ![image.width, image.height, image.total].every(
+                  (value) => Number.isSafeInteger(value) && value > 0,
+                ) ||
+                image.index !== pages.length ||
+                image.index >= image.total ||
+                (total !== undefined && total !== image.total)
+              )
+                throw new DocumentExportError('capture-failed');
+              total = image.total;
+              progress({ stage: 'capturing', page: image.index + 1, total });
+              const pageFilename =
+                total === 1
+                  ? filename
+                  : `${filename.slice(0, -4)}-${String(image.index + 1).padStart(Math.max(3, String(total).length), '0')}.png`;
+              const file = new File(outputDirectory, pageFilename);
+              await new File(image.uri).copy(file);
+              signal.throwIfAborted();
+              pages.push(
+                Object.freeze({
+                  width: image.width,
+                  height: image.height,
+                  file: Object.freeze({
+                    filename: pageFilename,
+                    mediaType: 'image/png',
+                    uri: file.uri,
+                  }),
+                }),
+              );
+            },
+          });
+          if (!pages.length || pages.length !== total)
+            throw new DocumentExportError('capture-failed');
+          artifact = {
             id,
-            file: { filename, mediaType, uri: file.uri },
-            issues: content.issues,
+            format: 'image',
+            layout: target.layout,
+            pages: Object.freeze(pages),
+            issues: result.issues,
           };
-          artifact =
-            target.format === 'markdown'
-              ? { ...common, format: 'markdown', text: text! }
-              : { ...common, format: 'html', html: text! };
-        }
-        signal.throwIfAborted();
-        assertActive();
-        if (current) removeDirectory(new File(current.file.uri).parentDirectory);
-        artifact = Object.freeze({
-          ...artifact,
-          file: Object.freeze(artifact.file),
-          issues: Object.freeze(artifact.issues.map((issue) => Object.freeze(issue))),
-        });
-        current = artifact;
-        saved = undefined;
-        didPublish = true;
-        return artifact;
-      } finally {
-        try {
-          capture?.release();
-        } catch {
-          /* A retained artifact remains usable if native cleanup fails. */
         }
       }
+      signal.throwIfAborted();
+      assertActive();
+      if (current) removeDirectory(new Directory(directory, current.id));
+      if (artifact.format !== 'image') Object.freeze(artifact.file);
+      artifact = Object.freeze({
+        ...artifact,
+        issues: Object.freeze(artifact.issues.map((issue) => Object.freeze(issue))),
+      });
+      current = artifact;
+      saved.clear();
+      didPublish = true;
+      return artifact;
     } catch (error) {
       signal.throwIfAborted();
       if (error instanceof DocumentExportError) throw error;
@@ -203,11 +223,20 @@ export function createDocumentExportSession(
       run(signal, async (operationSignal) => {
         operationSignal.throwIfAborted();
         if (current !== artifact) throw new DocumentExportError('invalid-input');
-        if (saved?.artifactId === artifact.id && new File(saved.file.uri).exists) return saved.file;
-        const file = await dependencies.saveFile(artifact.file, operationSignal);
-        // A committed save outlives this session, including a concurrent page close.
-        saved = { artifactId: artifact.id, file };
-        return file;
+        const files =
+          artifact.format === 'image' ? artifact.pages.map((page) => page.file) : [artifact.file];
+        const results: ResolvedFile[] = [];
+        for (const file of files) {
+          operationSignal.throwIfAborted();
+          let resolved = saved.get(file.uri);
+          if (!resolved || !new File(resolved.uri).exists) {
+            resolved = await dependencies.saveFile(file, operationSignal);
+            // A committed page survives cancellation; a retry must not duplicate it.
+            saved.set(file.uri, resolved);
+          }
+          results.push(resolved);
+        }
+        return Object.freeze(results);
       }),
     cancel: () => operation?.controller.abort(),
     dispose: () => {
@@ -220,7 +249,7 @@ export function createDocumentExportSession(
           removeDirectory(directory);
           assets.clear();
           current = undefined;
-          saved = undefined;
+          saved.clear();
           onDisposed();
         }
       })();

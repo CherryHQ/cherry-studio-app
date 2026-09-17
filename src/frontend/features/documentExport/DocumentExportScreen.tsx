@@ -1,14 +1,7 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import {
-  ActionMenu,
-  Button,
-  ContentState,
-  Image,
-  Switch,
-  useToast,
-} from '@cherrystudio/ui/components';
+import { ActionMenu, Button, ContentState, Switch, useToast } from '@cherrystudio/ui/components';
 import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { type Href, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -23,7 +16,7 @@ import {
   scheduleDocumentExportFinish,
   type DocumentExportOption,
 } from '@/frontend/appShell/documentExport';
-import { FileSharingError, shareFile, useExportWatermark } from '@/frontend/appShell/fileExport';
+import { FileSharingError, shareFiles, useExportWatermark } from '@/frontend/appShell/fileExport';
 import { usePreference } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -32,14 +25,17 @@ import type {
   DocumentExportSession,
   ExportDocument,
   ExportFormat,
+  ExportImageLayout,
   ExportPresentation,
 } from '@/shared/contracts/documentExport';
 import type { ExportWatermarkStyle } from '@/shared/contracts/fileExport';
 import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
-import { useDocumentExportHtmlCapture } from './components/DocumentExportHtmlSurface';
+import { DocumentExportImagePreview } from './components/DocumentExportImagePreview';
 import { DocumentExportTextPreview } from './components/DocumentExportTextPreview';
+import { useDocumentExportHtmlCapture } from './hooks/useDocumentExportHtmlCapture';
 import { useDocumentExportPreview } from './hooks/useDocumentExportPreview';
+import { IMAGE_LAYOUT_WIDTH } from './utils/imagePagePlan';
 
 export function DocumentExportScreen() {
   const params = useLocalSearchParams<{ requestId?: string | string[] }>();
@@ -116,10 +112,11 @@ function DocumentExportBody({
   const { width: windowWidth } = useWindowDimensions();
   const [selection, setSelection] = useState({
     format: initialFormat,
+    imageLayout: 'pages' as ExportImageLayout,
     isOptionChecked: false,
     revision: 0,
   });
-  const { format, isOptionChecked, revision } = selection;
+  const { format, imageLayout, isOptionChecked, revision } = selection;
   const session = !isOptionChecked && option ? option.uncheckedSession : checkedSession;
   const [fontStep] = usePreference('ui.font_size_step');
   const createWatermark = useExportWatermark(watermark);
@@ -200,8 +197,9 @@ function DocumentExportBody({
       const isConversation = document.sections.some((section) => section.presentation);
       return {
         ...presentation,
+        width: IMAGE_LAYOUT_WIDTH,
         imageFrame: {
-          background: secondary,
+          background,
           label: t(isConversation ? 'documentExport.conversation' : 'documentExport.document'),
         },
       };
@@ -210,7 +208,7 @@ function DocumentExportBody({
       checked: frameDocument(checkedSession.document),
       unchecked: option ? frameDocument(option.uncheckedSession.document) : undefined,
     };
-  }, [checkedSession.document, option, presentation, secondary, t]);
+  }, [background, checkedSession.document, option, presentation, t]);
   const imagePresentation =
     !isOptionChecked && imagePresentations.unchecked
       ? imagePresentations.unchecked
@@ -226,6 +224,7 @@ function DocumentExportBody({
     previewPresentation,
     capture,
     revision,
+    imageLayout,
   );
   const [isSharing, setIsSharing] = useState(false);
   const sharing = useRef<AbortController | undefined>(undefined);
@@ -264,7 +263,7 @@ function DocumentExportBody({
     setIsSharing(true);
     let sheetClosed = false;
     try {
-      await shareFile(
+      await shareFiles(
         async () => {
           const selected = await getArtifact(controller.signal);
           return session.save(selected, controller.signal);
@@ -309,7 +308,7 @@ function DocumentExportBody({
           key={artifact.id}
           artifact={artifact}
           onError={previewFallback}
-          width={Math.min(presentation.width, Math.max(1, windowWidth - left - right - 48))}
+          width={Math.max(1, windowWidth - left - right - 48)}
         />
       ) : (
         <View className="flex-1 overflow-hidden">
@@ -335,9 +334,16 @@ function DocumentExportBody({
               />
             ) : (
               <ContentState.Loading
-                title={t(
-                  `documentExport.progress.${state.status === 'loading' ? state.progress : 'rendering'}`,
-                )}
+                title={
+                  state.status === 'loading' && typeof state.progress !== 'string'
+                    ? t('documentExport.progress.page', {
+                        page: state.progress.page,
+                        total: state.progress.total,
+                      })
+                    : t(
+                        `documentExport.progress.${state.status === 'loading' ? state.progress : 'rendering'}`,
+                      )
+                }
               />
             )}
           </ScrollView>
@@ -361,6 +367,34 @@ function DocumentExportBody({
             format={activeFormat}
             onSelect={selectFormat}
           />
+          {activeFormat === 'image' ? (
+            <ActionMenu
+              items={(['pages', 'single'] as const).map((value) => ({
+                id: value,
+                label: t(`documentExport.imageLayouts.${value}`),
+                checked: imageLayout === value,
+                disabled: isSharing,
+                onPress: () => {
+                  if (!sharing.current)
+                    setSelection((current) =>
+                      current.imageLayout === value
+                        ? current
+                        : { ...current, imageLayout: value, revision: current.revision + 1 },
+                    );
+                },
+              }))}
+            >
+              <Button
+                accessibilityLabel={`${t('documentExport.imageLayout')}: ${t(`documentExport.imageLayouts.${imageLayout}`)}`}
+                disabled={isSharing}
+                icon={<ChevronDownIcon size={16} />}
+                size="sm"
+                variant="ghost"
+              >
+                {t(`documentExport.imageLayouts.${imageLayout}`)}
+              </Button>
+            </ActionMenu>
+          ) : null}
           {option ? (
             <View className="min-h-11 flex-row items-center gap-3">
               <Text className="text-muted-foreground text-sm">{option.label}</Text>
@@ -388,7 +422,9 @@ function DocumentExportBody({
           onPress={() => void share()}
           size="lg"
         >
-          {t(activeFormat === 'image' ? 'documentExport.shareImage' : 'documentExport.share')}
+          {artifact?.format === 'image'
+            ? t('documentExport.shareImages', { count: artifact.pages.length })
+            : t('documentExport.share')}
         </Button>
       </View>
     </View>
@@ -439,41 +475,31 @@ function ArtifactPreview({
   width: number;
   onError(): void;
 }) {
-  const { t } = useTranslation();
-  if (artifact.format === 'html')
-    return (
-      <WebView
-        allowFileAccess={false}
-        allowFileAccessFromFileURLs={false}
-        allowUniversalAccessFromFileURLs={false}
-        incognito
-        javaScriptEnabled={false}
-        onError={onError}
-        onContentProcessDidTerminate={onError}
-        onRenderProcessGone={onError}
-        onShouldStartLoadWithRequest={({ url }) => url === 'about:blank'}
-        originWhitelist={['*']}
-        sharedCookiesEnabled={false}
-        source={{ html: artifact.html }}
-        style={{ width, alignSelf: 'center', backgroundColor: 'transparent' }}
-        thirdPartyCookiesEnabled={false}
-      />
-    );
-  if (artifact.format !== 'image') return null;
+  const source = useMemo(
+    () => (artifact.format === 'html' ? { html: artifact.html } : undefined),
+    [artifact],
+  );
+  if (artifact.format === 'image')
+    return <DocumentExportImagePreview artifact={artifact} onError={onError} width={width} />;
+  if (!source) return null;
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerClassName="flex-grow items-center justify-center py-4"
-    >
-      <Image
-        accessibilityLabel={t('documentExport.imagePreview')}
-        cachePolicy="disk"
-        contentFit="contain"
-        onError={onError}
-        source={{ uri: artifact.file.uri }}
-        style={{ width, height: (width * artifact.height) / artifact.width }}
-      />
-    </ScrollView>
+    <WebView
+      allowFileAccess={false}
+      allowFileAccessFromFileURLs={false}
+      allowUniversalAccessFromFileURLs={false}
+      incognito
+      javaScriptEnabled={false}
+      onError={onError}
+      onContentProcessDidTerminate={onError}
+      onRenderProcessGone={onError}
+      onShouldStartLoadWithRequest={({ url }) => url === 'about:blank'}
+      originWhitelist={['*']}
+      sharedCookiesEnabled={false}
+      source={source}
+      style={{ width, alignSelf: 'center', backgroundColor: 'transparent' }}
+      textZoom={100}
+      thirdPartyCookiesEnabled={false}
+    />
   );
 }
 

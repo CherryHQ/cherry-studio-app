@@ -41,6 +41,7 @@ export type DocumentExportInput =
   | { kind: 'markdown'; source: string; title?: string };
 
 export type ExportFormat = 'markdown' | 'html' | 'image';
+export type ExportImageLayout = 'pages' | 'single';
 /** Optional print treatment supplied by the frontend, independent of the shared signature. */
 export type ExportImageFrame = {
   background: string;
@@ -67,30 +68,42 @@ export type ExportPresentation = {
   watermark?: ExportWatermark;
 };
 export type DocumentExportIssue = { code: 'image-unavailable' | 'formula-fallback'; label: string };
+export type ExportImagePage = { file: ExportFile; width: number; height: number };
 export type DocumentExportArtifact = {
   id: string;
-  file: ExportFile;
   issues: readonly DocumentExportIssue[];
 } & (
-  | { format: 'markdown'; text: string }
-  | { format: 'html'; html: string }
-  | { format: 'image'; width: number; height: number }
+  | { format: 'markdown'; file: ExportFile; text: string }
+  | { format: 'html'; file: ExportFile; html: string }
+  | {
+      format: 'image';
+      layout: ExportImageLayout;
+      pages: readonly ExportImagePage[];
+    }
 );
 
-/** Returns a lossless PNG file. The page also owns cleanup of late/failed native output. */
+/** Delivers each PNG in order; the surface releases it after onPage settles. */
 export type CaptureExportHtml = (input: {
   html: string;
   width: number;
+  layout: ExportImageLayout;
   signal: AbortSignal;
-}) => Promise<{
+  onPage(image: {
+    uri: string;
+    width: number;
+    height: number;
+    index: number;
+    total: number;
+  }): Promise<void>;
+}) => Promise<void>;
+
+export type HtmlConversionFormat = 'image' | 'pptx';
+export type CapturedHtmlPage = {
   uri: string;
   width: number;
   height: number;
   release(): void;
-}>;
-
-export type HtmlConversionFormat = 'image' | 'pptx';
-export type CapturedHtmlPage = Awaited<ReturnType<CaptureExportHtml>>;
+};
 /** Capture one page at a time. The producer releases each PNG after onPage settles. */
 export type CaptureHtmlPages = (input: {
   format: HtmlConversionFormat;
@@ -117,8 +130,18 @@ export const HTML_CONVERSION_MAX_EDGE = 8192;
 export type DocumentExportTarget =
   | { format: 'markdown'; watermark?: ExportWatermark }
   | { format: 'html'; presentation: ExportPresentation }
-  | { format: 'image'; presentation: ExportPresentation; capture: CaptureExportHtml };
-export type DocumentExportProgress = 'rendering' | 'resolving-assets' | 'capturing' | 'writing';
+  | {
+      format: 'image';
+      layout: ExportImageLayout;
+      presentation: ExportPresentation;
+      capture: CaptureExportHtml;
+    };
+export type DocumentExportProgress =
+  | 'rendering'
+  | 'resolving-assets'
+  | 'capturing'
+  | 'writing'
+  | { stage: 'capturing'; page: number; total: number };
 
 export class DocumentExportError extends Error {
   constructor(
@@ -126,7 +149,6 @@ export class DocumentExportError extends Error {
       | 'invalid-input'
       | 'size-limit'
       | 'image-size-limit'
-      | 'image-resource-limit'
       | 'busy'
       | 'disposed'
       | 'inactive'
@@ -150,8 +172,8 @@ export interface DocumentExportSession {
       onProgress?: (progress: DocumentExportProgress) => void;
     },
   ): Promise<DocumentExportArtifact>;
-  /** Explicit user intent: persist once per artifact, retaining bytes after page exit. */
-  save(artifact: DocumentExportArtifact, signal?: AbortSignal): Promise<ResolvedFile>;
+  /** Persist in order. A retry reuses pages already committed before an interruption. */
+  save(artifact: DocumentExportArtifact, signal?: AbortSignal): Promise<readonly ResolvedFile[]>;
   dispose(): Promise<void>;
 }
 

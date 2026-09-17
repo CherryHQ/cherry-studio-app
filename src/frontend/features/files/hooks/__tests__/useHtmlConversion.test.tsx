@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { HtmlCaptureInput } from '@/frontend/components/HtmlCapture';
 import type {
   HtmlConversionContext,
   HtmlConversionFormat,
@@ -9,7 +10,6 @@ import type {
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import type { HtmlCaptureRequest } from '../../components/HtmlConversionSurface';
 import { useHtmlConversion } from '../useHtmlConversion';
 
 const mockPrepareImage = jest.fn();
@@ -20,6 +20,9 @@ const mockConvertHtml = jest.fn();
 const mockShare = jest.fn();
 const mockDelivered = jest.fn();
 const mockToast = jest.fn();
+const mockCaptureHtml = jest.fn();
+let mockFinishCapture: () => void;
+let mockFailCapture: (error: unknown) => void;
 
 jest.mock('@/frontend/appShell/fileExport', () => ({
   prepareImageExport: (...args: unknown[]) => mockPrepareImage(...args),
@@ -41,8 +44,9 @@ jest.mock('@/frontend/utils/capturePng', () => ({
 jest.mock('@/frontend/data', () => ({
   useBackendModule: () => ({ convertHtml: mockConvertHtml }),
 }));
-jest.mock('../../components/HtmlConversionSurface', () => ({ HtmlConversionSurface: () => null }));
-jest.mock('expo-crypto', () => ({ randomUUID: () => 'capture-id' }));
+jest.mock('@/frontend/components/HtmlCapture', () => ({
+  useHtmlCapture: () => ({ capture: mockCaptureHtml, surface: null }),
+}));
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToast } }),
 }));
@@ -85,6 +89,13 @@ beforeEach(() => {
   mockPrepareImage.mockReset().mockResolvedValue(signed);
   mockReadDimensions.mockReset().mockReturnValue({ width: 1280, height: 920 });
   mockPersistPage.mockReset().mockResolvedValue(undefined);
+  mockCaptureHtml.mockReset().mockImplementation(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        mockFinishCapture = resolve;
+        mockFailCapture = reject;
+      }),
+  );
   mockConvertHtml.mockImplementation(
     async (input: HtmlConversionInput, context: HtmlConversionContext) => {
       await input.capture({
@@ -170,10 +181,9 @@ test('adds the PPT footer only to the final slide without creating another slide
   const last = { ...page, uri: 'file:///last-slide.png' };
   const { request, sharing } = await start('pptx');
   await act(async () => {
-    request.started = true;
-    await request.input.onPage(first, 0, 2);
-    await request.input.onPage(last, 1, 2);
-    request.finish();
+    await request.onPage(first, 0, 2, request.signal);
+    await request.onPage(last, 1, 2, request.signal);
+    mockFinishCapture();
     await sharing;
   });
   expect(mockPrepareImage).toHaveBeenCalledTimes(1);
@@ -213,15 +223,14 @@ async function start(format: HtmlConversionFormat) {
   await act(async () => {
     sharing = actions.share('<html/>', 'page.html', format);
   });
-  return { request: actions.surface!.props.request as HtmlCaptureRequest, sharing };
+  return { request: mockCaptureHtml.mock.calls[0][0] as HtmlCaptureInput, sharing };
 }
 
-async function deliver(request: HtmlCaptureRequest) {
-  request.started = true;
+async function deliver(request: HtmlCaptureInput) {
   try {
-    await request.input.onPage(page, 0, 1);
-    request.finish();
+    await request.onPage(page, 0, 1, request.signal);
+    mockFinishCapture();
   } catch (error) {
-    request.finish(error);
+    mockFailCapture(error);
   }
 }

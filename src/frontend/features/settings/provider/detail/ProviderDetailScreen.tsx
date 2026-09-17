@@ -1,8 +1,8 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Alert, Button, ContentState, Spinner, useToast } from '@cherrystudio/ui/components';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Redirect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -59,15 +59,30 @@ function ProviderDetailSettings({
 }) {
   const { t } = useTranslation();
   const router = useRouter();
+  const navigation = useNavigation();
   const { toast } = useToast();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const activeTab: ProviderDetailTab = tab === 'models' ? 'models' : 'configuration';
   const providers = useBackendModule('providers');
+  const notifyRegistryUpdated = useEffectEvent(() => {
+    if (navigation.isFocused()) {
+      toast.show({ label: t('models.registry.updated'), variant: 'success' });
+    }
+  });
   useEffect(() => {
     if (activeTab !== 'models') return;
+    let isActive = true;
     // Opening a model list is the only catalog refresh after the first download. Offline or
     // unchanged catalogs keep the saved snapshot, and a first download failing shows in the gate.
-    void providers.applyRegistryUpdate().catch(() => undefined);
+    void providers
+      .applyRegistryUpdate()
+      .then((result) => {
+        if (isActive && result.status === 'updated') notifyRegistryUpdated();
+      })
+      .catch(() => undefined);
+    return () => {
+      isActive = false;
+    };
   }, [activeTab, providers]);
   const { isPreparing, openSetup } = useProviderSetup();
   const [isSyncPromptOpen, setIsSyncPromptOpen] = useState(false);

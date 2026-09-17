@@ -91,17 +91,10 @@ export async function renderHtml(
     }
   };
   document.sections.forEach((section) => visitBlocks(section.blocks));
-  if (sources.size > 32) throw new DocumentExportError('image-resource-limit');
   const prepared = await resolveDocumentAssets(sources, cache, readManagedImage, signal);
   issues.push(...prepared.issues);
-  let embeddedCharacters = 0;
   const image = (key: string, alt: string) => {
     const data = prepared.images.get(key);
-    if (data) {
-      embeddedCharacters += data.length;
-      if (embeddedCharacters > 24 * 1024 * 1024)
-        throw new DocumentExportError('image-resource-limit');
-    }
     return data
       ? `<img src="${data}" alt="${escapeHtml(alt)}">`
       : `<p class="image-placeholder">[${escapeHtml(alt || 'Image')}]</p>`;
@@ -163,7 +156,7 @@ export async function renderHtml(
   const { base, sm, lg, xl } = typography;
   const title = document.title && !isConversation ? `<h1>${escapeHtml(document.title)}</h1>` : '';
   const content = imageFrame
-    ? `<div class="print-frame"><article class="print-content"><header class="print-caption"><span>${escapeHtml(imageFrame.label)}</span><span class="print-index">01—${String(document.sections.length).padStart(2, '0')}</span></header>${title}${body}</article></div>`
+    ? `<article class="print-content"><header class="print-caption"><span>${escapeHtml(imageFrame.label)}</span><span class="print-index">01—${String(document.sections.length).padStart(2, '0')}</span></header>${title}${body}</article>`
     : `<article>${title}${body}</article>`;
   const footer = signature
     ? `<footer class="print-signature"><div class="print-identity"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><strong class="print-brand">${escapeHtml(signature.brandName)}</strong></div><time class="print-timestamp print-secondary">${escapeHtml(signature.timestamp)}</time></footer>`
@@ -227,7 +220,6 @@ math{max-width:100%;overflow-wrap:anywhere}math[display="block"]{padding:12px;ma
 ${
   imageFrame
     ? `main.image-print{padding:0;background:${imageFrame.background}}
-.print-frame{padding:16px 16px 0}
 .print-content{padding:24px 20px;background:${colors.background};color:${colors.foreground}}
 .print-caption{display:flex;justify-content:space-between;gap:12px;padding-bottom:16px;border-bottom:1px solid ${colors.border};margin-bottom:24px;color:${colors.muted};font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
 .print-caption+.print-section{padding-top:0}.print-caption+h1{margin-bottom:24px}

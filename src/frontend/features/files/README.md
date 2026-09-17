@@ -8,8 +8,11 @@ This page owns reading, rendering, and copying.
 Complete HTML also offers Share as image and Share as PPT actions. `useHtmlConversion` owns progress,
 cancellation and opening the system share sheet as soon as conversion finishes, using the shared
 file export helper without an intermediate result panel. A compact spinner, progress label and cancel
-action sit above the visible HTML content. `HtmlConversionSurface` stays laid out beneath the opaque
+action sit above the visible HTML content. The shared
+[`HtmlCapture`](../../components/HtmlCapture/README.md) surface stays laid out beneath the opaque
 viewer and supplies sequential native captures to `Backend.documentExport.convertHtml`.
+This page supplies the HTML measurement/page scripts and applies the selected watermark before
+delivering each captured page; the shared executor owns capture, cancellation and temporary PNG release.
 See [HTML Conversion](../../../../docs/references/html-conversion.md)
 for format behavior, limits, selection evidence and pending acceptance.
 

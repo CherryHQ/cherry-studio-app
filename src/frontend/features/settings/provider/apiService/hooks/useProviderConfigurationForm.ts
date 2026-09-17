@@ -70,6 +70,7 @@ export function useProviderConfigurationForm(providerId: string) {
         })
       : createEmptyProviderFormValues();
   const form = useProviderFormDraft({
+    provider,
     createInitialValues,
     defaultEndpointNeedsRepair,
     endpointTypes,

@@ -20,8 +20,9 @@ owns Cherry footer geometry and time formatting. Markdown renders only the brand
 
 `prepareImageExport` appends a footer to a disposable PNG without resizing or overwriting the source.
 `none` returns the original image without decoding, re-encoding or changing its format.
-`prepareFileExport` supplies matching filename and media type; SVG and non-image source files pass
-through with their original bytes, without bitmap decoding or watermarking.
+`prepareFileExport` supplies matching filename and media type; non-image source files pass through.
+SVG files also pass through with their original bytes, filename and media type for sharing and system
+opening, without a footer, because the image renderer only decodes bitmaps.
 The in-app preview and original image used for editing retain their bytes.
 
 Watermark selection belongs to the current export request, not file metadata. It is not persisted
@@ -40,6 +41,12 @@ files then follow the existing file-delivery policy without another watermark pa
 source factory. Document and HTML callers put generation/persistence in that factory. It checks
 cancellation before admission, after asynchronous preparation and before opening the system sheet,
 and releases its prepared temporary image even when cancellation wins.
+
+`shareFiles(source, { watermark, signal })` admits an ordered collection or its asynchronous
+factory through the same availability and cancellation checks. Document exports use it for paged
+PNG delivery. All files are prepared and copied before one chooser opens: single-file delivery uses
+Expo Sharing, while multiple files use React Native Share. Completed document pages are copied
+without re-encoding, and a failed copy never opens a partial share sheet.
 
 `useShareFile` owns ordinary-file busy state, unmount cancellation and localized feedback.
 `useSaveImageToPhotos` owns add-only permission guidance and releases its prepared image after

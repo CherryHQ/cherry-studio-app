@@ -39,7 +39,10 @@ fonts/images, charts, cancellation, backgrounding and PowerPoint opening without
 
 ## Ownership And Resource Use
 
-`files` owns the conversion UI and native capture. Its temporary WebView keeps file access and
+`files` owns the conversion UI, HTML capture strategy and watermark policy. The shared
+[`HtmlCapture`](../../src/frontend/components/HtmlCapture/README.md) family owns the temporary WebView,
+native layout/ready handshake, sequential capture and session lifecycle for both HTML conversion
+and document export. The WebView keeps file access and
 cookie sharing disabled and blocks navigation. Only this conversion surface has a message bridge:
 messages carry a request id, bounded geometry and capture acknowledgments. Native code chooses the
 page order and output paths; HTML never receives managed-file paths, credentials or backend APIs.
@@ -51,7 +54,9 @@ admitting another. A screenshot is released after its consumer finishes, includi
 completion after cancellation. Temporary output is removed after success or failure; a committed
 managed file outlives the viewer.
 
-`capturePng` is shared with document export under `frontend/utils`. It uses native temporary PNG
+The shared executor prevents overlapping native capture between the two workflows and holds its
+lease through cancellation until in-flight capture, watermark and copy work finishes.
+`capturePng`, under `frontend/utils`, uses native temporary PNG
 files and checks actual PNG dimensions without decoding the bitmap in JavaScript. Captured pages
 and signed PNG output are capped at 8192 pixels per edge and 16 million pixels; PPT is capped at
 64 pages and output at 128 MiB. Watermark composition uses the shared Skia renderer and re-encodes only the image receiving a footer;

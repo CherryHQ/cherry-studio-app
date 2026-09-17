@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { ProviderFormAvatar } from './components/ProviderFormAvatar';
+import { ProviderFormEndpoint } from './components/ProviderFormEndpoint';
 import { ProviderFormBaseUrl, ProviderFormTextEndpoints } from './components/ProviderFormEndpoints';
 import { ProviderFormApiKey, ProviderFormName } from './components/ProviderFormFields';
 import { type ProviderForm as ProviderFormValue, ProviderFormContext } from './context';
@@ -37,6 +38,7 @@ export const ProviderForm = Object.assign(ProviderFormRoot, {
   ApiKey: ProviderFormApiKey,
   Avatar: ProviderFormAvatar,
   BaseUrl: ProviderFormBaseUrl,
+  Endpoint: ProviderFormEndpoint,
   Endpoints: ProviderFormTextEndpoints,
   Name: ProviderFormName,
 });

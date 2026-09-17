@@ -346,10 +346,13 @@ describe('Agent tool and managed-file contracts', () => {
     ).toBe(false);
   });
 
-  test('round-trips the classified text attachment admission error', () => {
+  test.each([
+    ['ATTACHMENT_INVALID', 'Attachment "notes.txt" is not valid UTF-8 text.'],
+    ['AGENT_MODEL_NOT_CONFIGURED', 'Agent has no configured model: agent-1'],
+  ])('round-trips the %s admission error', (code, message) => {
     const error = {
-      code: 'ATTACHMENT_INVALID',
-      message: 'Attachment "notes.txt" is not valid UTF-8 text.',
+      code,
+      message,
       retryable: false,
     } as const;
 

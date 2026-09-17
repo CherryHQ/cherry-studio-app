@@ -87,7 +87,9 @@ export function routeToEndpoint(apiHost: string): { baseURL: string; endpoint: s
     'images/edits',
     'predict',
   ];
-  const endpointMatch = SUPPORTED_ENDPOINTS.find((ep) => host.endsWith(ep));
+  const endpointMatch = SUPPORTED_ENDPOINTS.find(
+    (ep) => host.endsWith(`/${ep}`) || host.endsWith(`:${ep}`),
+  );
   if (!endpointMatch) {
     return { baseURL: host.replace(/\/+$/, ''), endpoint: '' };
   }
@@ -99,7 +101,10 @@ export function routeToEndpoint(apiHost: string): { baseURL: string; endpoint: s
 export function formatApiHost(baseURL = '', appendApiVersion = true, apiVersion = 'v1'): string {
   const trimmed = baseURL.trim();
   if (!trimmed) return '';
-  if (trimmed.endsWith('#')) return trimmed;
+  if (trimmed.endsWith('#')) {
+    // Full endpoint overrides still need their marker when routeToEndpoint runs.
+    return routeToEndpoint(trimmed).endpoint ? trimmed : trimmed.slice(0, -1).replace(/\/+$/, '');
+  }
   const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
   if (!appendApiVersion || hasApiVersion(withoutTrailingSlash)) {
     return withoutTrailingSlash;
@@ -135,4 +140,57 @@ function hasApiVersion(value: string): boolean {
 
 export function isWithTrailingSharp(baseURL = ''): boolean {
   return baseURL.trim().endsWith('#');
+}
+
+export type ProviderBaseUrlIssue =
+  | { code: 'invalid-url' }
+  | { code: 'endpoint-path'; suggestedBaseUrl: string };
+
+/** A base URL must leave request paths to the selected protocol. A trailing # disables version insertion. */
+export function getProviderBaseUrlIssue(value: string): ProviderBaseUrlIssue | null {
+  const baseUrl = value.trim().replace(/#$/, '');
+  if (!baseUrl || /\s/.test(baseUrl)) return { code: 'invalid-url' };
+  try {
+    const url = new URL(baseUrl);
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.search ||
+      url.hash ||
+      url.username ||
+      url.password
+    ) {
+      return { code: 'invalid-url' };
+    }
+    const endpointPath = url.pathname.match(
+      /\/(?:chat\/completions|responses|messages|images\/generations|images\/edits|models\/[^/]+:(?:streamGenerateContent|generateContent))\/?$/,
+    );
+    if (endpointPath) {
+      const root = `${url.origin}${url.pathname.slice(0, endpointPath.index)}`;
+      return {
+        code: 'endpoint-path',
+        suggestedBaseUrl: formatApiHost(root) === root ? root : `${root}#`,
+      };
+    }
+    return null;
+  } catch {
+    return { code: 'invalid-url' };
+  }
+}
+
+const PROVIDERS_WITHOUT_API_VERSION = new Set([
+  'github',
+  'copilot',
+  'perplexity',
+  'newapi',
+  'new-api',
+  'azure-openai',
+]);
+
+export function shouldAppendProviderApiVersion(
+  provider?: Pick<Provider, 'id' | 'presetProviderId'>,
+): boolean {
+  return (
+    !PROVIDERS_WITHOUT_API_VERSION.has(provider?.id ?? '') &&
+    !PROVIDERS_WITHOUT_API_VERSION.has(provider?.presetProviderId ?? '')
+  );
 }

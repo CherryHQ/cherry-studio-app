@@ -1,6 +1,7 @@
 import { createContext, use } from 'react';
 
 import type { EndpointType } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import type { ProviderFormValues } from './utils/providerFormValues';
 
@@ -9,11 +10,13 @@ export type ProviderFormActions = {
   setApiKey: (value: string) => void;
   setAvatarUri: (uri: string | null) => void;
   setDefaultChatEndpoint: (endpoint: EndpointType) => void;
+  replaceTextEndpoint: (endpoint: EndpointType) => void;
   setEndpointUrl: (endpoint: EndpointType, value: string) => void;
   setName: (value: string) => void;
 };
 
 export type ProviderFormMeta = {
+  provider?: Provider;
   /** Endpoint the "Base URL" field edits — the first of `endpointTypes`. */
   baseUrlEndpoint: EndpointType | null;
   /**

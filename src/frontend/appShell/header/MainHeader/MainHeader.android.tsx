@@ -1,7 +1,7 @@
 import MaskedView from '@react-native-masked-view/masked-view';
 import { BlurView } from 'expo-blur';
 import { Stack } from 'expo-router';
-import { type RefObject, useState } from 'react';
+import { type RefObject } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
@@ -13,7 +13,6 @@ import { useMainHeaderActions } from './useMainHeaderActions';
 import { useMainHeaderAgentPicker } from './useMainHeaderAgentPicker';
 
 const HEADER_HORIZONTAL_INSET = 16;
-const HEADER_TITLE_ACTION_GAP = 4;
 const HEADER_BLUR_INTENSITY = 24;
 
 export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
@@ -21,11 +20,7 @@ export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> 
   const { theme } = useUniwind();
   const { agent, currentAgentId, leadingAction, rightActions } = useMainHeaderActions();
   const { agentPickerSheet, openAgentPicker } = useMainHeaderAgentPicker(currentAgentId);
-  const [leadingActionsWidth, setLeadingActionsWidth] = useState(0);
-  const [rightActionsWidth, setRightActionsWidth] = useState(0);
   const horizontalInset = HEADER_HORIZONTAL_INSET + Math.max(insets.left, insets.right);
-  const titleSideInset =
-    horizontalInset + Math.max(leadingActionsWidth, rightActionsWidth) + HEADER_TITLE_ACTION_GAP;
 
   return (
     <>
@@ -59,29 +54,26 @@ export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> 
         {/* 56dp row matches the native-stack toolbar height, so the 36dp action
             surfaces keep the same clearance as native-header screens. */}
         <View
-          className="relative flex-row items-center"
+          className="flex-row items-center"
           pointerEvents="box-none"
           style={{ height: mainHeaderRowHeight, paddingHorizontal: horizontalInset }}
         >
           {/* The chat route is currently a drawer root, so the route policy
               resolves this leading action to the sidebar button. */}
-          <View
-            className="z-10 items-start"
-            onLayout={(event) => setLeadingActionsWidth(event.nativeEvent.layout.width)}
-          >
+          <View className="shrink-0 items-start">
             <HeaderActionGroup actions={[leadingAction]} placement="left" />
           </View>
-          <View
-            className="absolute inset-y-0 items-center justify-center"
-            pointerEvents="box-none"
-            style={{ left: titleSideInset, right: titleSideInset }}
-          >
-            {agent ? <MainHeaderAgentButton agent={agent} onPress={openAgentPicker} /> : null}
+          <View className="min-w-0 flex-1 items-start" pointerEvents="box-none">
+            {agent ? (
+              <View className="relative max-w-full min-w-0 rounded-full">
+                {/* The header already blurs the chat underneath. Keep this tint
+                    translucent so the capsule shares that blur without another pass. */}
+                <View className="absolute inset-0 rounded-full bg-card/70" pointerEvents="none" />
+                <MainHeaderAgentButton agent={agent} onPress={openAgentPicker} />
+              </View>
+            ) : null}
           </View>
-          <View
-            className="z-10 ml-auto items-end"
-            onLayout={(event) => setRightActionsWidth(event.nativeEvent.layout.width)}
-          >
+          <View className="shrink-0 items-end">
             <HeaderActionGroup actions={rightActions} placement="right" />
           </View>
         </View>

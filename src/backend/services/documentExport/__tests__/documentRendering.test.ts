@@ -261,7 +261,7 @@ test('Markdown image examples inside code never fetch resources', async () => {
   expect(fetch).not.toHaveBeenCalled();
 });
 
-test('a selection exceeding the image resource budget still admits its complete text export', async () => {
+test('more than 32 image sources remain in the complete HTML export', async () => {
   const document = normalizeDocument({
     kind: 'document',
     document: {
@@ -281,17 +281,56 @@ test('a selection exceeding the image resource budget still admits its complete 
       assets: Object.fromEntries(
         Array.from({ length: 33 }, (_, index) => [
           `image-${index}`,
-          { kind: 'remote-image' as const, url: `https://example.com/${index}.png` },
+          {
+            kind: 'managed-file' as const,
+            fileEntryId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+          },
         ]),
       ),
     },
   });
-  const read = jest.fn();
-  await expect(
-    renderHtml(document, presentation, new Map(), read, new AbortController().signal),
-  ).rejects.toMatchObject({ code: 'image-resource-limit' });
-  expect(read).not.toHaveBeenCalled();
+  const png = Uint8Array.from(
+    atob(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=',
+    ),
+    (character) => character.charCodeAt(0),
+  );
+  const read = jest.fn(async () => png);
+  const { html, issues } = await renderHtml(
+    document,
+    presentation,
+    new Map(),
+    read,
+    new AbortController().signal,
+  );
+  expect(issues).toEqual([]);
+  expect(html.match(/<img src="data:image\/png;base64,/g)).toHaveLength(33);
+  expect(html).toContain('alt="Photo 32"');
+  expect(read).toHaveBeenCalledTimes(33);
   const markdown = renderMarkdown(document);
   expect(markdown).toContain('All selected message text\\.');
   expect(markdown).toContain('Photo 32');
+});
+
+test('repeated embedded images do not impose an output text budget', async () => {
+  const document = normalizeDocument({
+    kind: 'markdown',
+    source: Array.from(
+      { length: 25 },
+      (_, index) => `![Photo ${index}](https://example.com/image.png)`,
+    ).join('\n\n'),
+  });
+  const dataUrl = `data:image/png;base64,${'A'.repeat(1024 * 1024)}`;
+  const cache = new Map([['https://example.com/image.png', { dataUrl }]]);
+  const { html, issues } = await renderHtml(
+    document,
+    presentation,
+    cache,
+    jest.fn(),
+    new AbortController().signal,
+  );
+  expect(issues).toEqual([]);
+  expect(html.length).toBeGreaterThan(24 * 1024 * 1024);
+  expect(html.match(/<img src="data:image\/png;base64,/g)).toHaveLength(25);
+  expect(html).toContain('alt="Photo 24"');
 });
