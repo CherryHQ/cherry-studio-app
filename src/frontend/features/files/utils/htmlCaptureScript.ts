@@ -8,7 +8,11 @@ import {
 import { HTML_CAPTURE_HEIGHT, HTML_CAPTURE_WIDTH, type HtmlCapturePage } from './htmlCapturePlan';
 
 /** Runs only in the disposable conversion WebView, never in the user's interactive preview. */
-export function htmlCaptureSetupScript(id: string, format: HtmlConversionFormat, density: number) {
+export function htmlCaptureSetupScript(
+  id: string | number,
+  format: HtmlConversionFormat,
+  density: number,
+) {
   return `(async function(){
     if(window.__cherryCapture) return;
     var send=function(message){window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({id:${JSON.stringify(id)}},message)));};
@@ -96,7 +100,7 @@ export function htmlCaptureSetupScript(id: string, format: HtmlConversionFormat,
 }
 
 export function htmlCapturePageScript(
-  id: string,
+  id: string | number,
   index: number,
   page: HtmlCapturePage,
   density: number,

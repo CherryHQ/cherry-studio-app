@@ -1,5 +1,4 @@
 import { useToast } from '@cherrystudio/ui/components';
-import { randomUUID } from 'expo-crypto';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +8,7 @@ import {
   shareFile,
   useExportWatermark,
 } from '@/frontend/appShell/fileExport';
+import { useHtmlCapture } from '@/frontend/components/HtmlCapture';
 import { useBackendModule } from '@/frontend/data';
 import { readPngDimensions } from '@/frontend/utils/capturePng';
 import {
@@ -20,10 +20,7 @@ import {
 import type { ExportWatermark, FileExportOptions } from '@/shared/contracts/fileExport';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import {
-  HtmlConversionSurface,
-  type HtmlCaptureRequest,
-} from '../components/HtmlConversionSurface';
+import { htmlConversionCaptureSource } from '../utils/htmlConversionCaptureSource';
 
 const logger = loggerService.withContext('HtmlConversion');
 type Progress = Parameters<NonNullable<HtmlConversionContext['onProgress']>>[0];
@@ -33,7 +30,7 @@ export function useHtmlConversion(options: FileExportOptions = {}) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const createWatermark = useExportWatermark(options.watermark);
-  const [request, setRequest] = useState<HtmlCaptureRequest>();
+  const { capture: captureHtml, surface } = useHtmlCapture();
   const [progress, setProgress] = useState<Progress>();
   const [isSharing, setIsSharing] = useState(false);
   const current = useRef<AbortController | undefined>(undefined);
@@ -49,55 +46,22 @@ export function useHtmlConversion(options: FileExportOptions = {}) {
   const capture = useCallback(
     (html: string, watermark: ExportWatermark): CaptureHtmlPages =>
       (input) =>
-        new Promise((resolve, reject) => {
-          input.signal.throwIfAborted();
-          const controller = new AbortController();
-          let settled = false;
-          let failure: unknown;
-          const request: HtmlCaptureRequest = {
-            id: randomUUID(),
-            html,
-            input: {
-              ...input,
-              signal: controller.signal,
-              onPage: async (page, index, total) => {
-                if (watermark.kind === 'none' || (input.format === 'pptx' && index !== total - 1))
-                  return input.onPage(page, index, total);
-                const signed = await prepareImageExport(page, watermark);
-                try {
-                  controller.signal.throwIfAborted();
-                  await input.onPage({ ...signed, ...readPngDimensions(signed.uri) }, index, total);
-                } finally {
-                  signed.release();
-                }
-              },
-            },
-            started: false,
-            abort: (error) => {
-              if (settled) return;
-              failure ??= error;
-              controller.abort();
-              if (!request.started) request.finish(error);
-            },
-            finish: (error) => {
-              if (settled) return;
-              settled = true;
-              clearTimeout(timer);
-              input.signal.removeEventListener('abort', abort);
-              if (mounted.current) setRequest(undefined);
-              if (failure || error) reject(failure ?? error);
-              else resolve();
-            },
-          };
-          const abort = () => request.abort(new DOMException('Conversion cancelled', 'AbortError'));
-          const timer = setTimeout(
-            () => request.abort(new DocumentExportError('capture-failed')),
-            180_000,
-          );
-          input.signal.addEventListener('abort', abort, { once: true });
-          setRequest(request);
+        captureHtml({
+          source: ({ id, density }) => htmlConversionCaptureSource(html, input.format, id, density),
+          signal: input.signal,
+          onPage: async (page, index, total, signal) => {
+            if (watermark.kind === 'none' || (input.format === 'pptx' && index !== total - 1))
+              return input.onPage(page, index, total);
+            const signed = await prepareImageExport(page, watermark);
+            try {
+              signal.throwIfAborted();
+              await input.onPage({ ...signed, ...readPngDimensions(signed.uri) }, index, total);
+            } finally {
+              signed.release();
+            }
+          },
         }),
-    [],
+    [captureHtml],
   );
 
   async function share(html: string, title: string, format: HtmlConversionFormat) {
@@ -168,6 +132,6 @@ export function useHtmlConversion(options: FileExportOptions = {}) {
     isSharing,
     cancel: () => current.current?.abort(),
     progress,
-    surface: request ? <HtmlConversionSurface key={request.id} request={request} /> : null,
+    surface,
   };
 }

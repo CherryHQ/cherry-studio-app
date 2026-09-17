@@ -31,9 +31,9 @@ import type {
 import type { ExportWatermarkStyle } from '@/shared/contracts/fileExport';
 import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
-import { useDocumentExportHtmlCapture } from './components/DocumentExportHtmlSurface';
 import { DocumentExportImagePreview } from './components/DocumentExportImagePreview';
 import { DocumentExportTextPreview } from './components/DocumentExportTextPreview';
+import { useDocumentExportHtmlCapture } from './hooks/useDocumentExportHtmlCapture';
 import { useDocumentExportPreview } from './hooks/useDocumentExportPreview';
 import { IMAGE_LAYOUT_WIDTH } from './utils/imagePagePlan';
 

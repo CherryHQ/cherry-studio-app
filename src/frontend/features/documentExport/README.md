@@ -1,6 +1,6 @@
 # Document Export Page
 
-Owns the fullscreen share layer, format/layout menus, preview and controlled HTML capture. The
+Owns the fullscreen share layer, format/layout menus, preview and document capture strategy. The
 app-shell handoff owns the selected source snapshots; this page never reads live chat state.
 Closing retains the caller's selection. Dismissing the system share sheet returns to the optional
 `returnTo` route, without claiming the recipient received the files.
@@ -31,7 +31,9 @@ Active saving/delivery holds its current presentation until the share sheet fini
 
 ## Image Capture
 
-The controlled WebView waits for decoded assets, fonts and stable layout. Paged capture measures
+`useDocumentExportHtmlCapture` supplies document-specific scripts and page frames to the shared
+[`HtmlCapture`](../../components/HtmlCapture/README.md) executor. The controlled WebView waits for
+decoded assets, fonts and stable layout. Paged capture measures
 message/paragraph boundaries and painted text/image ranges. It prefers a message boundary after
 60% of a page, then a paragraph boundary, then a gap between painted lines. Headings stay with the
 following line, normal table rows stay together, and oversized table rows can continue between
@@ -43,9 +45,9 @@ Each content slice is at most 1200 logical pixels high. A 48-pixel frame provide
 an ordinal footer, so output is 1080 pixels wide and at most 3744 pixels high. The native surface
 shows only that slice. It never allocates a full-document bitmap in paged mode. Each lossless PNG
 is header-checked, handed to the backend, copied, and released before the next screenshot. The
-60-second timeout resets for each page; the physical lease covers capture and file delivery.
-Closing hides the surface immediately, but backend completion waits for an in-flight copy so cleanup
-cannot race a late write.
+60-second timeout resets for each page; the physical lease covers capture and file delivery across
+both document export and HTML-file conversion. Closing unmounts the surface, but backend completion
+waits for an in-flight capture or copy so cleanup cannot race a late write.
 
 Single-long-image mode still takes one full-height screenshot at the same density. It has no
 application height/pixel cap and retains device-dependent capture and decoding limits. It is not a
