@@ -62,8 +62,8 @@ export async function shareFiles(
       mimeType: mediaTypes[0],
     });
   } else {
-    // Load the native multi-file capability only when needed; ordinary single-file shares keep their existing path.
-    const { default: Share } = await import('react-native-share');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native loading shared by Metro and CommonJS tests
+    const { default: Share } = require('react-native-share') as typeof import('react-native-share');
     signal?.throwIfAborted();
     await Share.open({
       urls,
