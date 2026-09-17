@@ -1,6 +1,9 @@
 import { type ComponentType, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { BackHandler, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  GestureHandlerRootView,
+  Pressable as GesturePressable,
+} from 'react-native-gesture-handler';
 import { OverKeyboardView } from 'react-native-keyboard-controller';
 
 import { focusMenuTarget } from './menu-focus';
@@ -30,7 +33,13 @@ export function MenuOverlay(props: MenuOverlayProps) {
 
 /** Composer overlays keep the editor's native focus and current keyboard state. */
 export function KeyboardMenuOverlay(props: MenuOverlayProps) {
-  return <MenuOverlayRoot {...props} host={KeyboardMenuOverlayHost} />;
+  return (
+    <MenuOverlayRoot
+      {...props}
+      host={KeyboardMenuOverlayHost}
+      shouldUseNativePresses={Platform.OS === 'android'}
+    />
+  );
 }
 
 function MenuOverlayRoot({
@@ -40,8 +49,12 @@ function MenuOverlayRoot({
   isVisible,
   onClose,
   onClosed,
+  shouldUseNativePresses = false,
   testID,
-}: MenuOverlayProps & { host: ComponentType<MenuOverlayHostProps> }) {
+}: MenuOverlayProps & {
+  host: ComponentType<MenuOverlayHostProps>;
+  shouldUseNativePresses?: boolean;
+}) {
   const items = useRef(new Set<View>());
   const isActive = useRef(isOpen);
   const focusFrame = useRef<number | undefined>(undefined);
@@ -52,9 +65,10 @@ function MenuOverlayRoot({
     };
   }, []);
   const interaction = useMemo(
-    () => ({ close: onClose, isOpen, registerItem }),
-    [isOpen, onClose, registerItem],
+    () => ({ close: onClose, isOpen, registerItem, shouldUseNativePresses }),
+    [isOpen, onClose, registerItem, shouldUseNativePresses],
   );
+  const BackdropPressable = shouldUseNativePresses ? GesturePressable : Pressable;
 
   const requestClose = useCallback(() => {
     if (isActive.current) onClose();
@@ -90,7 +104,7 @@ function MenuOverlayRoot({
     >
       <GestureHandlerRootView accessibilityViewIsModal style={styles.root}>
         <MenuInteraction value={interaction}>
-          <Pressable
+          <BackdropPressable
             accessibilityElementsHidden
             accessible={false}
             importantForAccessibility="no-hide-descendants"

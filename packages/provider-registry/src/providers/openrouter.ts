@@ -14,7 +14,7 @@ export default defineProvider({
   defaultChatEndpoint: 'openai-chat-completions',
   endpointConfigs: {
     'anthropic-messages': {
-      adapterFamily: 'openrouter',
+      adapterFamily: 'anthropic',
       baseUrl: 'https://openrouter.ai/api',
       requestControls: {
         serviceTier: {

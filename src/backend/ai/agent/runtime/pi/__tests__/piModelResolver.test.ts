@@ -1,11 +1,14 @@
 import {
+  buildRuntimeEndpointConfigs,
   ENDPOINT_TYPE,
   MODEL_CAPABILITY,
   type EndpointType,
 } from '@cherrystudio/provider-registry';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
@@ -125,6 +128,7 @@ describe('Pi model resolver', () => {
           ? { supportsDeveloperRole: false }
           : undefined,
     );
+    expect(resolution.model.headers).not.toHaveProperty('x-opencode-session');
     expect(resolution.streamFn).toBe(mockBoundStreamFn);
     expect(resolution.supportsTools).toBe(true);
     expect(resolution.defaultThinkingLevel).toBe('high');
@@ -150,6 +154,102 @@ describe('Pi model resolver', () => {
       }),
     );
   });
+
+  test.each(CASES.filter((testCase) => testCase.adapterFamily !== 'google'))(
+    'adds the OpenCode session header to the $api model and transport',
+    async (testCase) => {
+      for (const id of ['opencode', 'opencode-copy']) {
+        const provider = {
+          ...makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily),
+          id,
+          presetProviderId: id === 'opencode-copy' ? 'opencode' : undefined,
+        };
+        mockGetProviderById.mockResolvedValue(provider);
+        mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType, { providerId: id }));
+
+        for (const sessionId of ['session-1', 'session-2']) {
+          const resolution = await resolver.resolveModel(
+            { modelId: 'test-model', providerId: id },
+            {},
+            sessionId,
+          );
+
+          expect(resolution.model.headers).toMatchObject({
+            'x-opencode-session': sessionId,
+            'X-Custom': 'custom',
+          });
+          expect(mockBindPiStream).toHaveBeenLastCalledWith(
+            expect.anything(),
+            expect.objectContaining({ headers: resolution.model.headers }),
+          );
+        }
+        expect(provider.settings.extraHeaders).not.toHaveProperty('x-opencode-session');
+      }
+    },
+  );
+
+  test('preserves an explicit OpenCode session header regardless of casing', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      'https://opencode.ai/zen/go/v1',
+      'openai-compatible',
+    );
+    provider.presetProviderId = 'opencode';
+    provider.settings.extraHeaders = { 'X-OpenCode-Session': 'configured-session' };
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS));
+
+    const resolution = await resolve(resolver);
+
+    expect(resolution.model.headers).toMatchObject({ 'X-OpenCode-Session': 'configured-session' });
+    expect(resolution.model.headers).not.toHaveProperty('x-opencode-session');
+    expect(mockBindPiStream).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ headers: resolution.model.headers }),
+    );
+  });
+
+  test.each([
+    [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'openai-completions', 'https://opencode.ai/zen/go/v1'],
+    [ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai-responses', 'https://opencode.ai/zen/go/v1'],
+    [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'anthropic-messages', 'https://opencode.ai/zen/go'],
+  ] as const)(
+    'keeps OpenCode Go conversations on the bundled %s route',
+    async (endpointType, api, baseUrl) => {
+      const preset = providerRegistryService.loadProviders().find(({ id }) => id === 'opencode');
+      if (!preset) throw new Error('Missing OpenCode provider preset');
+      const provider = {
+        ...makeProvider(endpointType, baseUrl, ''),
+        id: 'opencode',
+        presetProviderId: 'opencode',
+        endpointConfigs: buildRuntimeEndpointConfigs(preset.endpointConfigs),
+      };
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(endpointType, { providerId: provider.id }));
+
+      const resolution = await resolver.resolveModel(
+        { modelId: 'test-model', providerId: provider.id },
+        {},
+        'conversation-session',
+      );
+
+      expect(resolution.model).toMatchObject({
+        api,
+        baseUrl,
+        headers: {
+          'User-Agent': 'CherryStudioMobile/1.0',
+          'x-opencode-session': 'conversation-session',
+        },
+      });
+      expect(mockBindPiStream).toHaveBeenLastCalledWith(
+        expect.objectContaining({ api }),
+        expect.objectContaining({
+          apiKey: 'secret-key',
+          headers: resolution.model.headers,
+        }),
+      );
+    },
+  );
 
   test.each(CASES)(
     'normalizes DeepSeek responses on the configured $api route',
@@ -211,10 +311,49 @@ describe('Pi model resolver', () => {
 
     const resolution = await resolve(resolver, { maxOutputTokens: 1024 });
 
-    expect(toPiModelPreflight(model).maxInputTokens).toBe(96_000);
+    expect(toPiModelPreflight(model).maxInputTokens).toBe(120_000);
     expect(resolution.maxInputTokens).toBe(120_000);
     expect(resolution.model.contextWindow).toBe(128_000);
     expect(resolution.model.maxTokens).toBe(32_000);
+  });
+
+  test('preserves input capacity and the output capability when both span the full context', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_RESPONSES;
+    const model = makeModel(endpoint, {
+      apiModelId: 'grok-4.5',
+      contextWindow: 500_000,
+      maxOutputTokens: 500_000,
+    });
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(endpoint, 'https://api.x.ai/v1', 'xai-responses'),
+    );
+    mockGetModelById.mockResolvedValue(model);
+
+    const preflight = await resolver.preflightModel({
+      providerId: 'test-provider',
+      modelId: model.modelId,
+    });
+    const resolution = await resolve(resolver);
+
+    expect(preflight).toMatchObject({
+      contextWindow: 500_000,
+      maxInputTokens: 500_000,
+      maxOutputTokens: 500_000,
+    });
+    expect(resolution.model.maxTokens).toBe(500_000);
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ maxTokens: 500_000 }),
+    );
+    const shortRequest = buildBaseOptions(resolution.model, {
+      messages: [{ role: 'user', content: '测试', timestamp: 1 }],
+    });
+    const longerRequest = buildBaseOptions(resolution.model, {
+      messages: [{ role: 'user', content: 'x'.repeat(100_000), timestamp: 1 }],
+    });
+    expect(shortRequest.maxTokens).toBeGreaterThan(16_384);
+    expect(shortRequest.maxTokens).toBeLessThan(500_000);
+    expect(longerRequest.maxTokens).toBeLessThan(shortRequest.maxTokens!);
   });
 
   test.each([{ id: 'perplexity' }, { id: 'copied-perplexity', presetProviderId: 'perplexity' }])(
@@ -274,7 +413,7 @@ describe('Pi model resolver', () => {
     ).resolves.toMatchObject({
       contextWindow: 128_000,
       inputModalities: ['text', 'image'],
-      maxInputTokens: 123_904,
+      maxInputTokens: 128_000,
       maxOutputTokens: 4_096,
       supportsTools: true,
     });
@@ -282,7 +421,7 @@ describe('Pi model resolver', () => {
     expect(mockBindPiStream).not.toHaveBeenCalled();
   });
 
-  test('bounds input capacity by both the model limit and reserved output', () => {
+  test('bounds the independent input limit by the total context window', () => {
     expect(
       toPiModelPreflight(
         makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES, {
@@ -291,7 +430,7 @@ describe('Pi model resolver', () => {
           maxOutputTokens: 4_000,
         }),
       ),
-    ).toMatchObject({ contextWindow: 16_000, maxInputTokens: 12_000, maxOutputTokens: 4_000 });
+    ).toMatchObject({ contextWindow: 16_000, maxInputTokens: 16_000, maxOutputTokens: 4_000 });
   });
 
   test('uses the existing per-model gateway route', async () => {
@@ -322,6 +461,7 @@ describe('Pi model resolver', () => {
     const resolution = await resolver.resolveModel(
       { modelId: 'claude-sonnet-4-5', providerId: 'aihubmix' },
       {},
+      'session-1',
     );
 
     expect(resolution.model).toMatchObject({
@@ -437,5 +577,9 @@ function resolve(
   resolver: PiRuntimeDependencies,
   options: Parameters<PiRuntimeDependencies['resolveModel']>[1] = {},
 ) {
-  return resolver.resolveModel({ modelId: 'test-model', providerId: 'test-provider' }, options);
+  return resolver.resolveModel(
+    { modelId: 'test-model', providerId: 'test-provider' },
+    options,
+    'session-1',
+  );
 }

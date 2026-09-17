@@ -41,4 +41,12 @@ This module owns Expo Router header adapters used by the app screens.
   card token and a compact shadow so their complete outline remains visible against the header;
   inverse surfaces use constant contrast because they sit over uncontrolled media.
 - `MainHeaderAgentButton` is the one exception to the black-icon rule: it carries the current
-  Agent's avatar, so the chat identifies its Agent the same way the Agent list does.
+  Agent's avatar, so the chat identifies its Agent the same way the Agent list does. A compact
+  avatar and medium-weight single-line name sit in a capsule beside the leading menu action on
+  the left on both platforms, without a disclosure chevron. iOS lets the native toolbar own the
+  glass material where supported, with a spacer separating the capsule from the menu action;
+  Android draws a borderless translucent card tint over the header's existing blur,
+  in the flexible space between the action groups. The capsule reuses that blur without another
+  blur view or sampling target; Android versions below 12 retain the translucent material fallback.
+  Its non-interactive background does not change the button's dimensions or fade the backdrop on
+  press. Long names truncate at the end, and pressing the capsule opens the Agent picker.

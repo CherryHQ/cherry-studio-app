@@ -41,6 +41,8 @@ module.exports = {
       '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/agent.js',
     '^@earendil-works/pi-agent-core/compaction$':
       '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js',
+    '^@earendil-works/pi-ai/api/(.*)$':
+      '<rootDir>/node_modules/@earendil-works/pi-ai/dist/api/$1.js',
     '^@earendil-works/pi-ai/utils/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-ai/dist/utils/$1.js',
     '^@cherrystudio/ui/background-activity/ios$':

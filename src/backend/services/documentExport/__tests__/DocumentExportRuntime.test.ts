@@ -1,9 +1,11 @@
 import { AppState } from 'react-native';
 
+import { convertHtml } from '../convertHtml';
 import { createDocumentExportSession } from '../createDocumentExportSession';
 import { DocumentExportRuntime } from '../DocumentExportRuntime';
 
 jest.mock('../createDocumentExportSession', () => ({ createDocumentExportSession: jest.fn() }));
+jest.mock('../convertHtml', () => ({ convertHtml: jest.fn() }));
 
 beforeEach(() => {
   Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
@@ -83,6 +85,43 @@ test('shutdown retains a closing session until its cleanup settles', async () =>
   expect(stopped).toBe(false);
   finish();
   await closing;
+  await stopping;
+  expect(stopped).toBe(true);
+});
+
+test('HTML conversion cancels on background and retains its lease until late cleanup finishes', async () => {
+  let change!: (state: string) => void;
+  jest.mocked(AppState.addEventListener).mockImplementation((_event, listener) => {
+    change = listener as typeof change;
+    return { remove: jest.fn() };
+  });
+  let signal!: AbortSignal;
+  let finish!: () => void;
+  jest.mocked(convertHtml).mockImplementation((_input, _dependencies, operationSignal) => {
+    signal = operationSignal;
+    return new Promise((_resolve, reject) => {
+      finish = () => reject(new DOMException('Conversion cancelled', 'AbortError'));
+    });
+  });
+  const runtime = new DocumentExportRuntime();
+  runtime.configure({ readManagedImage: jest.fn(), saveFile: jest.fn() });
+  await runtime._doInit();
+  const input = { title: 'Page', format: 'pptx' as const, capture: async () => {} };
+  const conversion = runtime.convertHtml(input);
+  const rejection = expect(conversion).rejects.toMatchObject({ name: 'AbortError' });
+  await Promise.resolve();
+  change('background');
+  expect(signal.aborted).toBe(true);
+  change('active');
+  expect(() => runtime.convertHtml(input)).toThrow(expect.objectContaining({ code: 'busy' }));
+  let stopped = false;
+  const stopping = runtime._doStop().then(() => {
+    stopped = true;
+  });
+  await Promise.resolve();
+  expect(stopped).toBe(false);
+  finish();
+  await rejection;
   await stopping;
   expect(stopped).toBe(true);
 });

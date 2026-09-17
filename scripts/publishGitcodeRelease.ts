@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReadStream, openAsBlob } from 'node:fs';
+import { createReadStream } from 'node:fs';
 import { appendFile, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -8,6 +8,76 @@ import { setTimeout as delay } from 'node:timers/promises';
 const REPOSITORY = 'CherryHQ/cherry-studio-app';
 const API_URL = 'https://api.gitcode.com/api/v5';
 const REPOSITORY_URL = `https://gitcode.com/${REPOSITORY}.git`;
+const MAX_UPLOAD_ATTEMPTS = 3;
+
+interface UploadDestination {
+  url: string;
+  headers: Record<string, string>;
+}
+
+class UploadError extends Error {
+  readonly retryable: boolean;
+
+  constructor(message: string, retryable: boolean) {
+    super(message);
+    this.retryable = retryable;
+  }
+}
+
+function curlConfigValue(value: string): string {
+  if (/[\r\n\0]/.test(value)) throw new Error('Invalid GitCode upload configuration.');
+  return JSON.stringify(value);
+}
+
+function uploadFile(path: string, name: string, upload: UploadDestination): void {
+  // Send signed URLs and callback headers through stdin, never command arguments or logs.
+  const config = [
+    `url = ${curlConfigValue(upload.url)}`,
+    ...Object.entries(upload.headers).map(
+      ([key, value]) => `header = ${curlConfigValue(`${key}: ${value}`)}`,
+    ),
+  ].join('\n');
+  const result = spawnSync(
+    'curl',
+    [
+      '--disable',
+      '--config',
+      '-',
+      '--globoff',
+      '--proto',
+      '=https',
+      '--request',
+      'PUT',
+      '--upload-file',
+      path,
+      '--output',
+      '/dev/null',
+      '--silent',
+      '--connect-timeout',
+      '30',
+      '--speed-limit',
+      '1024',
+      '--speed-time',
+      '60',
+      '--max-time',
+      '900',
+      '--write-out',
+      '%{http_code} %{size_upload} %{speed_upload} %{time_total}',
+    ],
+    { input: config, encoding: 'utf8', timeout: 930_000 },
+  );
+  if (result.error) throw new Error(`Could not run curl for GitCode attachment ${name}.`);
+  const [status, bytes, speed, seconds] = result.stdout.trim().split(/\s+/).map(Number);
+  const metrics = `HTTP ${status || 0}, ${bytes || 0} bytes sent, ${speed || 0} bytes/s, ${seconds || 0}s`;
+  console.log(`GitCode upload ${name}: curl ${result.status}, ${metrics}`);
+  if (result.status === 0 && status >= 200 && status < 300) return;
+
+  // Retry transport failures and transient HTTP responses, not permissions or invalid requests.
+  const retryable =
+    [5, 6, 7, 18, 28, 35, 52, 55, 56, 92].includes(result.status ?? -1) ||
+    [408, 429, 500, 502, 503, 504].includes(status);
+  throw new UploadError(`Could not upload ${name}: curl ${result.status}, ${metrics}`, retryable);
+}
 
 interface Release {
   assets: { name: string; browser_download_url: string }[];
@@ -124,63 +194,77 @@ export async function publishGitcodeRelease({ token, tag, directory }: PublishOp
     });
   }
   if (!response.ok) throw new Error(`Could not prepare GitCode release: HTTP ${response.status}`);
-  const release = (await response.json()) as Release;
+  let release = (await response.json()) as Release;
+
+  async function refreshRelease(): Promise<void> {
+    const refreshed = await api(tagPath);
+    if (!refreshed.ok) throw new Error(`Could not read GitCode release: HTTP ${refreshed.status}`);
+    release = (await refreshed.json()) as Release;
+  }
 
   for (const name of files) {
     const localPath = join(directory, name);
     const expectedChecksum = await fileChecksum(localPath);
-    const existing = release.assets.find((asset) => asset.name === name);
-    if (existing) {
-      if ((await downloadChecksum(existing.browser_download_url)) !== expectedChecksum) {
+    for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt++) {
+      if (attempt > 1) await refreshRelease();
+      const existing = release.assets.find((asset) => asset.name === name);
+      if (existing) {
+        if ((await downloadChecksum(existing.browser_download_url)) !== expectedChecksum) {
+          throw new Error(
+            `GitCode attachment ${name} has different content; refusing to overwrite it.`,
+          );
+        }
+        console.log(`Reusing GitCode attachment ${name}`);
+        break;
+      }
+
+      const uploadResponse = await api(
+        `${releasePath}/${encodeURIComponent(tag)}/upload_url?file_name=${encodeURIComponent(name)}`,
+      );
+      if (!uploadResponse.ok) {
+        throw new Error(`Could not obtain a GitCode upload URL: HTTP ${uploadResponse.status}`);
+      }
+      const upload = (await uploadResponse.json()) as UploadDestination;
+      if (!upload.url.startsWith('https://') || !upload.headers) {
+        throw new Error('GitCode returned an invalid attachment upload destination.');
+      }
+      console.log(
+        `Uploading GitCode attachment ${name}, attempt ${attempt}/${MAX_UPLOAD_ATTEMPTS}`,
+      );
+      let uploadError: UploadError | undefined;
+      try {
+        uploadFile(localPath, name, upload);
+      } catch (error) {
+        if (!(error instanceof UploadError) || !error.retryable) throw error;
+        uploadError = error;
+      }
+
+      // OBS registers the attachment through a callback; allow it time to appear.
+      let attachment: Release['assets'][number] | undefined;
+      // A failed request may still have reached OBS. Check its callback before issuing another PUT.
+      for (let poll = 0; poll < 6; poll++) {
+        await refreshRelease();
+        attachment = release.assets.find((asset) => asset.name === name);
+        if (attachment) break;
+        await delay(5_000);
+      }
+      if (!attachment && uploadError) {
+        if (attempt === MAX_UPLOAD_ATTEMPTS) throw uploadError;
+        console.warn(`${uploadError.message}; retrying with a fresh upload URL.`);
+        await delay(attempt * 5_000);
+        continue;
+      }
+      if (!attachment) {
+        throw new Error(`GitCode attachment ${name} was not registered with the expected content.`);
+      }
+      if ((await downloadChecksum(attachment.browser_download_url)) !== expectedChecksum) {
         throw new Error(
           `GitCode attachment ${name} has different content; refusing to overwrite it.`,
         );
       }
-      console.log(`Reusing GitCode attachment ${name}`);
-      continue;
+      console.log(`Published GitCode attachment ${name}`);
+      break;
     }
-
-    const uploadResponse = await api(
-      `${releasePath}/${encodeURIComponent(tag)}/upload_url?file_name=${encodeURIComponent(name)}`,
-    );
-    if (!uploadResponse.ok) {
-      throw new Error(`Could not obtain a GitCode upload URL: HTTP ${uploadResponse.status}`);
-    }
-    const upload = (await uploadResponse.json()) as {
-      url: string;
-      headers: Record<string, string>;
-    };
-    if (!upload.url.startsWith('https://') || !upload.headers) {
-      throw new Error('GitCode returned an invalid attachment upload destination.');
-    }
-    const uploaded = await fetch(upload.url, {
-      method: 'PUT',
-      headers: upload.headers,
-      body: await openAsBlob(localPath),
-      redirect: 'error',
-      signal: AbortSignal.timeout(900_000),
-    });
-    if (!uploaded.ok) throw new Error(`Could not upload ${name}: HTTP ${uploaded.status}`);
-    await uploaded.body?.cancel();
-
-    // OBS registers the attachment through a callback; allow it time to appear.
-    let attachment: Release['assets'][number] | undefined;
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const refreshed = await api(tagPath);
-      if (!refreshed.ok)
-        throw new Error(`Could not read GitCode release: HTTP ${refreshed.status}`);
-      const current = (await refreshed.json()) as Release;
-      attachment = current.assets.find((asset) => asset.name === name);
-      if (attachment) break;
-      await delay(5_000);
-    }
-    if (
-      !attachment ||
-      (await downloadChecksum(attachment.browser_download_url)) !== expectedChecksum
-    ) {
-      throw new Error(`GitCode attachment ${name} was not registered with the expected content.`);
-    }
-    console.log(`Published GitCode attachment ${name}`);
   }
 
   const summary = `GitCode Release ${tag}: https://gitcode.com/${REPOSITORY}/releases\n`;

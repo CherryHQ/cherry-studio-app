@@ -15,8 +15,8 @@ This module owns the model selection surface, model metadata UI, and model setti
 - `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
   embedded in the Android controls frame. Product workflows own their purpose controls rather than
   exposing provider capability taxonomies through the shared picker.
-- `useModelSettingSelections` reads model selection preferences and exposes an explicit batch-save
-  operation for the settings screen's draft.
+- `useModelSettingSelections` reads model selection preferences and saves partial updates. The
+  settings screen persists each selection immediately.
 - Model setting and model type helpers are exported from `index.ts`.
 
 ## Organization

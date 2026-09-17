@@ -139,7 +139,7 @@ function AgentEditForm({
   const isEditing = Boolean(agentId);
   const { createAgent, isCreating, isSettingAvatar, setAgentAvatar } = useAgentMutations();
   const { flush, hasFailedSave, retry, saveField, saveToolBindings } = useAgentAutoSave(agentId);
-  const modelPickerData = useModelPickerData({ modelType: 'text' });
+  const modelPickerData = useModelPickerData({ modelType: 'all' });
   const openProviderSetup = useOpenProviderSetup(
     shouldStartChat ? '/agents/new?startChat=true' : undefined,
   );
@@ -438,7 +438,7 @@ function AgentEditForm({
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
-          modelType="text"
+          modelType="all"
           open
           onAddProvider={handleAddProvider}
           onClose={closeModelPicker}

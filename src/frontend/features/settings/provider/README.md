@@ -75,10 +75,21 @@ OpenVINO Model Server), including copies identified by their preset provider ID 
 ## Provider Form
 
 `ProviderForm` is a compound component over one draft: `ProviderForm.Avatar`, `.Name`, `.BaseUrl`,
-and `.ApiKey`. `useProviderFormDraft` owns field state; `useProviderConfigurationForm` adds loading,
+`.Endpoint`, `.Endpoints`, and `.ApiKey`. `useProviderFormDraft` owns field state; `useProviderConfigurationForm` adds loading,
 validation, endpoint impact confirmation, and saving for existing providers. Creation keeps its
 own initial persistence step. Each screen drives its actions from the same draft that its fields
 consume and composes the slots it needs.
+
+Endpoint fields share protocol labels, full request URL previews with explicit copying, and
+correction hints for pasted request paths. Base URLs accept the desktop-compatible trailing `#` to
+disable automatic version insertion. The marker remains visible in the input and saved configuration,
+and is removed before outgoing requests. Provider-specific transports
+without a standard URL formatter do not display a guessed request URL.
+
+First-use setup replaces the single selected text endpoint atomically when the protocol changes,
+carrying the visible URL forward. Clearing that URL keeps the selected protocol. Providers already
+configured with multiple text endpoints use the multi-endpoint form so setup cannot hide or discard
+their other addresses.
 
 ## Connectivity And Models
 

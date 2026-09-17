@@ -1,10 +1,12 @@
+import { formatApiHost, getBaseUrl } from '@cherrystudio/ai-runtime/provider';
 import { Button, ContentState, useAlert } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 
+import { ProviderRequestUrl } from '../../../components/ProviderRequestUrl';
 import {
   useProviderModelPull,
   type ProviderModelPullLoadResult,
@@ -27,6 +29,13 @@ export function ProviderModelSyncTask({
 }: ProviderModelTaskProps & { hasConfiguredModels: boolean; isConfiguredModelsLoading: boolean }) {
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const modelListUrl =
+    provider.presetProviderId == null &&
+    provider.modelListSource !== 'registry' &&
+    (provider.defaultChatEndpoint === 'openai-chat-completions' ||
+      provider.defaultChatEndpoint === 'openai-responses')
+      ? `${formatApiHost(getBaseUrl(provider))}/models`
+      : null;
   const [syncLoadResult, setSyncLoadResult] = useState<ProviderModelPullLoadResult>();
   const { applyModelChange, cancelPull, isPreviewLoading, loadPullPreview, preview } =
     useProviderModelPull({ providerId: provider.id });
@@ -121,6 +130,17 @@ export function ProviderModelSyncTask({
         title={t('settings.provider.models.syncTitle')}
       />
       <View className="flex-1">
+        {modelListUrl && !hasSavedModels ? (
+          <View className="gap-2 px-6 py-3">
+            <ProviderRequestUrl
+              label={t('settings.provider.apiService.modelListUrl')}
+              url={modelListUrl}
+            />
+            <Text className="text-muted-foreground text-xs">
+              {t('settings.provider.apiService.modelListHint')}
+            </Text>
+          </View>
+        ) : null}
         {hasSavedModels && shouldEnableProvider ? (
           <ProviderModelSetupCompletion
             isEnabling={isEnabling}

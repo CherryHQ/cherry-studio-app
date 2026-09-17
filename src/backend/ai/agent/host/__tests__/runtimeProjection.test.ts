@@ -22,6 +22,7 @@ describe('Runtime output projection', () => {
     const part = toAgentMessagePart({
       displayName: 'Fetch web page',
       id: 'tool-call-1',
+      input: { urls: ['https://example.com/a', 'https://example.com/b'] },
       providerName: 'web_fetch',
       state: 'error',
       toolCallId: 'call-1',

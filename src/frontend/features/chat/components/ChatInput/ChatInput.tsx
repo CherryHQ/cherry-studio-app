@@ -1,6 +1,6 @@
 import { Composer } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
 import Animated, {
@@ -30,11 +30,19 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/ModelPicker';
+import {
+  PaintingInput,
+  type PaintingInputSubmission,
+  PaintingInputProvider,
+} from '@/frontend/components/PaintingInput';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/features/plugin';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
+import type { AgentMessageView } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { UniqueModelId } from '@/shared/data/types/model';
+import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
-import type { useAgentChatControls } from '../../runtime';
+import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
@@ -51,6 +59,7 @@ type ChatInputProps = {
   agentId?: string;
   controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
+  imageResult?: AgentMessageView;
   sessionId?: string;
 };
 
@@ -66,18 +75,39 @@ const activeTransitionMotion = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
-export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
-  const { t } = useTranslation();
-  const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
+export function ChatInput({
+  agentId,
+  controls,
+  dismissKeyboardOnSend,
+  imageResult,
+  sessionId,
+}: ChatInputProps) {
+  const { cancel, canSend, isBusy, sendMessage } = controls;
+  const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
+  const paintingResult = latestImageResult
+    ? {
+        id: latestImageResult.id,
+        images: latestImageResult.parts.flatMap((part) =>
+          part.type === 'file' && part.purpose === 'artifact' && part.mediaType.startsWith('image/')
+            ? [
+                {
+                  fileEntryId: part.fileEntryId,
+                  mediaType: part.mediaType,
+                  name: part.name ?? part.fileEntryId,
+                },
+              ]
+            : [],
+        ),
+      }
+    : undefined;
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
-  const modelPickerData = useModelPickerData({ modelType: 'text' });
+  const modelPickerData = useModelPickerData({ modelType: 'all' });
   const providerSetupReturnTo = sessionId
     ? chatReturnToHref({ kind: 'session', sessionId })
     : agentId
       ? chatReturnToHref({ agentId, kind: 'draft' })
       : '/';
-  const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const persistModel = useCallback(
     (targetAgentId: string, modelId: ModelPickerModelItem['modelId']) =>
       updateAgent(targetAgentId, { modelId }),
@@ -99,6 +129,70 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
     handleModelPersistenceError,
   );
   const selectedModelItem = modelPickerData.getModelItem(selectedModelId);
+  const modelSelection = useMemo(
+    () => ({
+      modelId: selectedModelId,
+      onSelect: selectModel,
+      providerSetupReturnTo,
+    }),
+    [providerSetupReturnTo, selectModel, selectedModelId],
+  );
+  const generateImage = useCallback(
+    (input: PaintingInputSubmission) =>
+      sendMessage({
+        parts: toAgentInputParts({ attachments: input.attachments, text: input.prompt }),
+        modelId: input.modelId,
+        imageGeneration: { mode: input.mode, paramValues: input.paramValues },
+      }),
+    [sendMessage],
+  );
+  const cancelGeneration = useCallback(() => {
+    void cancel();
+  }, [cancel]);
+
+  return (
+    <PaintingInputProvider result={paintingResult}>
+      {selectedModelItem && isImageGenerationModel(selectedModelItem.model) ? (
+        <PaintingInput
+          canSend={canSend}
+          dismissKeyboardOnSend={dismissKeyboardOnSend}
+          modelSelection={modelSelection}
+          onCancel={cancelGeneration}
+          onGenerate={generateImage}
+          status={isBusy ? 'generating' : 'idle'}
+        />
+      ) : (
+        <TextChatInput
+          agentId={agentId}
+          controls={controls}
+          dismissKeyboardOnSend={dismissKeyboardOnSend}
+          providerSetupReturnTo={providerSetupReturnTo}
+          selectedModelId={selectedModelId}
+          selectedModelItem={selectedModelItem}
+          selectModel={selectModel}
+        />
+      )}
+    </PaintingInputProvider>
+  );
+}
+
+function TextChatInput({
+  agentId,
+  controls,
+  dismissKeyboardOnSend,
+  providerSetupReturnTo,
+  selectedModelId,
+  selectedModelItem,
+  selectModel,
+}: Omit<ChatInputProps, 'sessionId'> & {
+  providerSetupReturnTo: string;
+  selectedModelId: UniqueModelId | null;
+  selectedModelItem?: ModelPickerModelItem;
+  selectModel: (modelId: UniqueModelId) => void;
+}) {
+  const { t } = useTranslation();
+  const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
+  const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const selectedModel = selectedModelItem?.model;
   const selectedModelLabel = selectedModel?.name;
   const reasoningEfforts = useChatInputReasoningEfforts(selectedModel);
@@ -268,7 +362,7 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
           >
             {(effortGauge) => (
               <ComposerSurface
-                canSend={canSend}
+                canSend={selectedModelItem ? canSend : false}
                 dismissKeyboardOnSend={dismissKeyboardOnSend}
                 getSendErrorLabel={getSendErrorLabel}
                 onSend={handleSendPress}
@@ -355,7 +449,7 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
       </ChatInputPluginPopover>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
-          modelType="text"
+          modelType="all"
           open
           onAddProvider={handleAddProvider}
           onClose={closeModelPicker}

@@ -12,6 +12,22 @@ import {
 } from '../piLanguageBinding';
 
 describe('resolvePiLanguageBinding', () => {
+  it('accepts a base URL with automatic version insertion disabled', () => {
+    const provider = createProvider({
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_RESPONSES]: { baseUrl: 'https://api.example.com/gateway#' },
+      },
+    });
+    expect(
+      resolvePiLanguageBinding(
+        provider,
+        resolveProviderConnection(provider, createModel(undefined)),
+      ),
+    ).toEqual({
+      endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      status: 'supported',
+    });
+  });
   it('classifies Pi protocol facts without selecting credentials', () => {
     const provider = createProvider();
     const model = createModel(ENDPOINT_TYPE.OPENAI_RESPONSES);

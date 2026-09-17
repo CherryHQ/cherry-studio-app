@@ -152,6 +152,78 @@ test('HTML escapes authored markup, rejects executable links, renders tables and
   expect(result.issues).toEqual([]);
 });
 
+test('image and HTML exports include one brand signature after the complete content', async () => {
+  const document = normalizeDocument({ kind: 'markdown', source: 'Complete answer.' });
+  const signature = {
+    background: '#ffffff',
+    foreground: '#000000',
+    brandName: 'Cherry Studio <brand>',
+    timestamp: '2026.09.16 18:00',
+    logoDataUrl: 'data:image/png;base64,AA==',
+  };
+  for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
+    const { html } = await renderHtml(
+      document,
+      { ...presentation, watermark: { kind: 'cherry', signature }, imageFrame },
+      new Map(),
+      jest.fn(),
+      new AbortController().signal,
+    );
+    expect(html.match(/<footer\b/g)).toHaveLength(1);
+    const footer = html.slice(html.indexOf('<footer'));
+    expect(footer).toContain('Cherry Studio &lt;brand&gt;');
+    expect(footer).toContain(signature.timestamp);
+    expect(footer).not.toContain('<brand>');
+    expect(footer).not.toContain('AI-generated');
+    expect(html.indexOf('Complete answer.')).toBeLessThan(html.indexOf('<footer'));
+  }
+});
+
+test('rejects invalid signature colors and missing timestamp instead of rendering unsafe markup', async () => {
+  const document = normalizeDocument({ kind: 'markdown', source: 'Answer.' });
+  const signature = {
+    background: '#ffffff',
+    foreground: '#000000',
+    brandName: 'Cherry Studio',
+    timestamp: '2026.09.16 18:00',
+    logoDataUrl: 'data:image/png;base64,AA==',
+  };
+  for (const invalid of [
+    { ...signature, background: 'white;position:fixed' },
+    { ...signature, timestamp: undefined },
+  ]) {
+    await expect(
+      renderHtml(
+        document,
+        { ...presentation, watermark: { kind: 'cherry', signature: invalid as typeof signature } },
+        new Map(),
+        jest.fn(),
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'invalid-input' });
+  }
+});
+
+test('none removes the footer from HTML and image documents without removing content', async () => {
+  const document = normalizeDocument({ kind: 'markdown', source: 'Complete answer.' });
+  for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
+    const { html } = await renderHtml(
+      document,
+      {
+        ...presentation,
+        watermark: { kind: 'none' },
+        imageFrame,
+      },
+      new Map(),
+      jest.fn(),
+      new AbortController().signal,
+    );
+    expect(html).toContain('Complete answer.');
+    expect(html).not.toContain('<footer');
+    expect(html).not.toContain('print-signature');
+  }
+});
+
 test('missing resources stay retryable, while successful bytes are reused for later formats', async () => {
   const document: ExportDocument = {
     sections: [{ id: 'one', blocks: [{ kind: 'image', assetId: 'photo', alt: 'Photo' }] }],
@@ -189,7 +261,7 @@ test('Markdown image examples inside code never fetch resources', async () => {
   expect(fetch).not.toHaveBeenCalled();
 });
 
-test('a selection exceeding the image resource budget still admits its complete text export', async () => {
+test('more than 32 image sources remain in the complete HTML export', async () => {
   const document = normalizeDocument({
     kind: 'document',
     document: {
@@ -209,17 +281,56 @@ test('a selection exceeding the image resource budget still admits its complete 
       assets: Object.fromEntries(
         Array.from({ length: 33 }, (_, index) => [
           `image-${index}`,
-          { kind: 'remote-image' as const, url: `https://example.com/${index}.png` },
+          {
+            kind: 'managed-file' as const,
+            fileEntryId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+          },
         ]),
       ),
     },
   });
-  const read = jest.fn();
-  await expect(
-    renderHtml(document, presentation, new Map(), read, new AbortController().signal),
-  ).rejects.toMatchObject({ code: 'image-resource-limit' });
-  expect(read).not.toHaveBeenCalled();
+  const png = Uint8Array.from(
+    atob(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=',
+    ),
+    (character) => character.charCodeAt(0),
+  );
+  const read = jest.fn(async () => png);
+  const { html, issues } = await renderHtml(
+    document,
+    presentation,
+    new Map(),
+    read,
+    new AbortController().signal,
+  );
+  expect(issues).toEqual([]);
+  expect(html.match(/<img src="data:image\/png;base64,/g)).toHaveLength(33);
+  expect(html).toContain('alt="Photo 32"');
+  expect(read).toHaveBeenCalledTimes(33);
   const markdown = renderMarkdown(document);
   expect(markdown).toContain('All selected message text\\.');
   expect(markdown).toContain('Photo 32');
+});
+
+test('repeated embedded images do not impose an output text budget', async () => {
+  const document = normalizeDocument({
+    kind: 'markdown',
+    source: Array.from(
+      { length: 25 },
+      (_, index) => `![Photo ${index}](https://example.com/image.png)`,
+    ).join('\n\n'),
+  });
+  const dataUrl = `data:image/png;base64,${'A'.repeat(1024 * 1024)}`;
+  const cache = new Map([['https://example.com/image.png', { dataUrl }]]);
+  const { html, issues } = await renderHtml(
+    document,
+    presentation,
+    cache,
+    jest.fn(),
+    new AbortController().signal,
+  );
+  expect(issues).toEqual([]);
+  expect(html.length).toBeGreaterThan(24 * 1024 * 1024);
+  expect(html.match(/<img src="data:image\/png;base64,/g)).toHaveLength(25);
+  expect(html).toContain('alt="Photo 24"');
 });

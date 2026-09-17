@@ -74,6 +74,11 @@ describe('provider API service form helpers', () => {
       findInvalidCustomProviderEndpointUrl({
         'openai-chat-completions': 'https://chat.example.com/#',
       }),
+    ).toBeNull();
+    expect(
+      findInvalidCustomProviderEndpointUrl({
+        'openai-chat-completions': 'https://chat.example.com/v1/chat/completions',
+      }),
     ).toBe('openai-chat-completions');
   });
 
@@ -84,6 +89,16 @@ describe('provider API service form helpers', () => {
       'https://api.example.com/v1/chat/completions',
     ],
     ['openai-responses', 'https://api.example.com/v1/', 'https://api.example.com/v1/responses'],
+    [
+      'openai-responses',
+      'https://api.example.com/gateway#',
+      'https://api.example.com/gateway/responses',
+    ],
+    [
+      'openai-chat-completions',
+      'https://api.example.com/gateway#',
+      'https://api.example.com/gateway/chat/completions',
+    ],
     ['anthropic-messages', 'https://api.example.com', 'https://api.example.com/v1/messages'],
     [
       'google-generate-content',
@@ -92,6 +107,24 @@ describe('provider API service form helpers', () => {
     ],
   ] as const)('previews the final %s request URL', (endpointType, baseUrl, expected) => {
     expect(getCustomProviderEndpointRequestPreview(endpointType, baseUrl)).toBe(expected);
+  });
+
+  it('uses the same no-version provider policy as requests and avoids guessing custom transports', () => {
+    expect(
+      getCustomProviderEndpointRequestPreview(
+        'openai-chat-completions',
+        'https://api.example.com',
+        {
+          id: 'perplexity-copy',
+          presetProviderId: 'perplexity',
+        } as never,
+      ),
+    ).toBe('https://api.example.com/chat/completions');
+    expect(
+      getCustomProviderEndpointRequestPreview('openai-responses', 'https://azure.example.com', {
+        endpointConfigs: { 'openai-responses': { adapterFamily: 'azure-responses' } },
+      } as never),
+    ).toBeNull();
   });
 
   it('moves the default to the first remaining configured endpoint', () => {

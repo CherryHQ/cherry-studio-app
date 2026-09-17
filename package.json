@@ -9,7 +9,8 @@
     "autolinking": {
       "android": {
         "buildFromSource": [
-          "expo-notifications"
+          "expo-notifications",
+          "expo-image-picker"
         ]
       }
     }
@@ -42,6 +43,8 @@
     "skills:sync": "tsx scripts/skills-sync.ts",
     "skills:check": "tsx scripts/skills-check.ts",
     "docs:check-links": "tsx scripts/check-doc-links.ts",
+    "i18n:check": "tsx scripts/i18n.ts check",
+    "i18n:sync": "tsx scripts/i18n.ts sync",
     "test": "pnpm packages:build && pnpm test:packages && pnpm test:app",
     "test:ai-contract": "jest src/backend/ai/__tests__/behavior --runInBand",
     "test:app": "jest",
@@ -125,7 +128,7 @@
     "expo-haptics": "~57.0.2",
     "expo-image": "~57.0.4",
     "expo-image-manipulator": "~57.0.16",
-    "expo-image-picker": "~57.0.16",
+    "expo-image-picker": "57.0.16",
     "expo-intent-launcher": "~57.0.1",
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.9",
@@ -148,6 +151,7 @@
     "fractional-indexing": "^3.2.0",
     "heroui-native": "^1.0.5",
     "i18next": "^26.1.0",
+    "intl-pluralrules": "2.0.1",
     "katex": "0.17.0",
     "markdown-it": "^15.0.1",
     "ollama-ai-provider-v2": "3.3.1",
@@ -169,6 +173,7 @@
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-share": "12.3.1",
     "react-native-streamdown": "0.2.0",
     "react-native-svg": "15.15.4",
     "react-native-view-shot": "5.1.0",

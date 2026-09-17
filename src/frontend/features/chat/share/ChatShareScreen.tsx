@@ -22,7 +22,7 @@ import {
 import { isChatMessageExportable } from './toChatExportDocument';
 
 const LIST_STYLE = { flex: 1 };
-const LIST_CONTENT_STYLE = { paddingHorizontal: 20, paddingBottom: 12 };
+const LIST_CONTENT_STYLE = { paddingHorizontal: 20, paddingBottom: 12, gap: 8 };
 const KEEP_VISIBLE_POSITION = { data: true, size: true };
 
 export function ChatShareScreen() {
@@ -144,7 +144,7 @@ const ChatShareMessageRow = memo(function ChatShareMessageRow({
 }: {
   message: AgentMessageView;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isSharing } = useChatShareSelectionState();
   const { toggleMessage } = useChatShareSelectionActions();
   const selected = useIsChatMessageSelected(message.id);
@@ -180,7 +180,7 @@ const ChatShareMessageRow = memo(function ChatShareMessageRow({
           </Text>
           <Text className="shrink text-muted-foreground text-xs" numberOfLines={1}>
             {isChatMessageExportable(message)
-              ? new Date(message.createdAt).toLocaleString()
+              ? new Date(message.createdAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language)
               : t('chat.share.unsettled')}
           </Text>
         </View>

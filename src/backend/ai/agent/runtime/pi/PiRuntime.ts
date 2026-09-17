@@ -53,6 +53,7 @@ import {
   estimatePiLoopContextHeadroomTokens,
   estimatePiMessagesTokens,
   PI_ESTIMATED_CHARACTERS_PER_TOKEN,
+  PI_MIN_OUTPUT_RESERVE_TOKENS,
   planPiContext,
   type PiContextCompactionOptions,
 } from './contextCompaction';
@@ -85,6 +86,7 @@ export interface PiRuntimeDependencies {
   resolveModel(
     model: RuntimeExecutionRequest['model'],
     options: RuntimeExecutionRequest['options'],
+    sessionId: string,
   ): PiModelResolution | Promise<PiModelResolution>;
 }
 
@@ -642,7 +644,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     let secrets: readonly string[] = attachmentRedactions;
     try {
       const resolution = await raceAbort(
-        this.dependencies.resolveModel(request.model, request.options),
+        this.dependencies.resolveModel(request.model, request.options, request.sessionId),
         turn.abortController.signal,
       );
       secrets = [...resolution.redactionValues, ...attachmentRedactions];
@@ -736,7 +738,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
               contextWindow: model.contextWindow,
               maxInputTokens: resolution.maxInputTokens,
               messages: context.messages,
-              outputReserveTokens: options?.maxTokens ?? model.maxTokens,
+              outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
               systemPrompt: context.systemPrompt ?? '',
               tools: context.tools ?? [],
             }) < 0
@@ -766,7 +768,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
           model: resolution.model,
           models,
           options: this.contextOptions,
-          outputReserveTokens: request.options.maxOutputTokens ?? resolution.model.maxTokens,
           redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions),
           signal: turn.abortController.signal,
           thinkingLevel,
@@ -789,7 +790,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       if (contextPlan.checkpoint) {
         this.emit(turn, { type: 'context.checkpoint', checkpoint: contextPlan.checkpoint });
       }
-      const outputReserveTokens = request.options.maxOutputTokens ?? resolution.model.maxTokens;
       let modelContext: Pick<PiAgentContext, 'systemPrompt' | 'tools'> = {
         systemPrompt: conversation.systemPrompt,
         tools: piTools,
@@ -800,7 +800,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           contextWindow: resolution.model.contextWindow,
           maxInputTokens: resolution.maxInputTokens,
           messages,
-          outputReserveTokens,
+          outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
           systemPrompt: modelContext.systemPrompt,
           tools: modelContext.tools ?? [],
         });
@@ -1383,18 +1383,25 @@ class PiRuntimeSession implements AgentRuntimeSession {
     });
   }
 
+  /**
+   * `input` is `undefined` when the caller has no arguments of its own (an
+   * unmapped native result); an existing part then keeps the input it already
+   * received instead of having it overwritten.
+   */
   private ensureToolPartFromProviderCall(
     turn: ActiveTurn,
     toolCallId: string,
     providerName: string,
-    input: RuntimeJsonValue,
+    input: RuntimeJsonValue | undefined,
   ): ToolPartBase | undefined {
     const binding = turn.toolBindingsByProviderName.get(providerName);
     if (!binding) {
       return undefined;
     }
     if (binding.kind === 'dispatch') {
-      if (!turn.dispatchCalls.has(toolCallId)) turn.dispatchCalls.set(toolCallId, input);
+      if (input !== undefined && !turn.dispatchCalls.has(toolCallId)) {
+        turn.dispatchCalls.set(toolCallId, input);
+      }
       return undefined;
     }
     const wasStreaming = turn.streamingToolCalls.delete(toolCallId);
@@ -1406,7 +1413,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       part = this.ensureToolPart(turn, {
         displayName: runtimeTool.displayName,
         id: `tool-${toolCallId}`,
-        input,
+        ...(input !== undefined ? { input } : {}),
         providerName,
         toolCallId,
         toolRef: runtimeTool.ref,
@@ -1520,7 +1527,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
               result.toolCallId,
               createPiDispatchActivityInput(turn.dispatchCalls.get(result.toolCallId)),
             )
-          : this.ensureToolPartFromProviderCall(turn, result.toolCallId, result.toolName, null);
+          : this.ensureToolPartFromProviderCall(
+              turn,
+              result.toolCallId,
+              result.toolName,
+              undefined,
+            );
       if (!base) continue;
       const output = result.isError
         ? createErrorToolResult(TOOL_EXECUTION_ERROR)

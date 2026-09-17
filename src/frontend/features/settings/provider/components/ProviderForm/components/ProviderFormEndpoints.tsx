@@ -1,21 +1,19 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronUpIcon from '@cherrystudio/app-icons/icons/chevron-up';
-import { Button, Input, TextField } from '@cherrystudio/ui/components';
+import { Button } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-
-import type { EndpointType } from '@/shared/data/types/model';
 
 import {
   CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   type CustomProviderTextEndpoint,
   getConfiguredCustomProviderTextEndpoints,
-  getCustomProviderEndpointRequestPreview,
   hasConfiguredCustomProviderTextEndpoint,
   isValidEndpointBaseUrl,
 } from '../../../apiService/utils/providerApiServiceEndpointRules';
 import { useProviderForm } from '../context';
+import { ProviderFormEndpoint } from './ProviderFormEndpoint';
 
 const COMMON_TEXT_ENDPOINTS = CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.slice(0, 2);
 const ADVANCED_TEXT_ENDPOINTS = CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.slice(2);
@@ -29,19 +27,13 @@ const endpointLabelKeys = {
 
 /** The single primary URL used by preset and IAM-backed provider forms. */
 export function ProviderFormBaseUrl() {
-  const { t } = useTranslation();
   const { meta } = useProviderForm('ProviderForm.BaseUrl');
 
   if (!meta.baseUrlEndpoint) {
     return null;
   }
 
-  return (
-    <ProviderFormEndpointField
-      endpoint={meta.baseUrlEndpoint}
-      label={t('settings.provider.apiService.baseUrl')}
-    />
-  );
+  return <ProviderFormEndpoint endpoint={meta.baseUrlEndpoint} />;
 }
 
 ProviderFormBaseUrl.displayName = 'ProviderForm.BaseUrl';
@@ -127,82 +119,29 @@ function ProviderFormTextEndpointField({ endpoint }: { endpoint: CustomProviderT
   const { t } = useTranslation();
   const { actions, meta, state } = useProviderForm('ProviderForm.Endpoints');
   const label = t(endpointLabelKeys[endpoint]);
-  const value = state.endpointUrls[endpoint] ?? '';
-  const trimmedValue = value.trim();
+  const trimmedValue = state.endpointUrls[endpoint]?.trim() ?? '';
   const isInvalid = trimmedValue.length > 0 && !isValidEndpointBaseUrl(trimmedValue);
   const isDefault = endpoint === state.defaultChatEndpoint && trimmedValue.length > 0;
-  const requestUrl = getCustomProviderEndpointRequestPreview(endpoint, trimmedValue);
 
   return (
-    <TextField disabled={meta.isSubmitting} invalid={isInvalid}>
-      <View className="min-h-7 flex-row items-center justify-between gap-3">
-        <TextField.Label>{label}</TextField.Label>
-        {isDefault ? (
-          <Text className="font-medium text-muted-foreground text-xs">
-            {t('settings.provider.apiService.defaultEndpoint')}
-          </Text>
-        ) : trimmedValue ? (
-          <Button
-            accessibilityLabel={t('settings.provider.apiService.setDefaultEndpointAccessibility', {
-              endpoint: label,
-            })}
-            disabled={meta.isSubmitting || isInvalid}
-            onPress={() => actions.setDefaultChatEndpoint(endpoint)}
-            size="inline"
-            variant="link"
-          >
-            {t('settings.provider.apiService.setDefaultEndpoint')}
-          </Button>
-        ) : null}
-      </View>
-      <Input
-        accessibilityLabel={label}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-        onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
-        placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-        testID={`provider-endpoint-${endpoint}-input`}
-        value={value}
-      />
-      {requestUrl ? (
-        <Text
-          accessibilityLabel={t('settings.provider.apiService.requestUrlAccessibility', {
-            url: requestUrl,
-          })}
-          className="font-mono text-muted-foreground text-xs"
-          ellipsizeMode="middle"
-          numberOfLines={1}
-          selectable
-        >
-          {requestUrl}
+    <ProviderFormEndpoint endpoint={endpoint} label={label}>
+      {isDefault ? (
+        <Text className="font-medium text-muted-foreground text-xs">
+          {t('settings.provider.apiService.defaultEndpoint')}
         </Text>
+      ) : trimmedValue ? (
+        <Button
+          accessibilityLabel={t('settings.provider.apiService.setDefaultEndpointAccessibility', {
+            endpoint: label,
+          })}
+          disabled={meta.isSubmitting || isInvalid}
+          onPress={() => actions.setDefaultChatEndpoint(endpoint)}
+          size="inline"
+          variant="link"
+        >
+          {t('settings.provider.apiService.setDefaultEndpoint')}
+        </Button>
       ) : null}
-      <TextField.Error>
-        {isInvalid ? t('settings.provider.apiService.invalidBaseUrlMessage') : undefined}
-      </TextField.Error>
-    </TextField>
-  );
-}
-
-function ProviderFormEndpointField({ endpoint, label }: { endpoint: EndpointType; label: string }) {
-  const { actions, meta, state } = useProviderForm('ProviderForm.BaseUrl');
-  const value = state.endpointUrls[endpoint] ?? '';
-
-  return (
-    <TextField disabled={meta.isSubmitting}>
-      <TextField.Label>{label}</TextField.Label>
-      <Input
-        accessibilityLabel={label}
-        autoCapitalize="none"
-        autoCorrect={false}
-        disabled={meta.isSubmitting}
-        keyboardType="url"
-        onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
-        placeholder={label}
-        testID="provider-base-url-input"
-        value={value}
-      />
-    </TextField>
+    </ProviderFormEndpoint>
   );
 }

@@ -5,9 +5,13 @@ Only a request ID enters navigation. This owner retains the transient handoff un
 rejects overlapping requests, releases abandoned navigation, and waits for session cleanup before
 admitting the next request. The backend runtime remains the application-shutdown backstop.
 
+The code-only `watermark` option defaults to `cherry`; `none` omits the footer in every offered
+format and its preview. The request retains this choice; no watermark control is shown.
+
 Image is the default format. A source can supply `allowedFormats` and `initialFormat`; the handoff
 replaces an unsupported initial format with the first allowed format. The preview offers only
-those formats. Chat selections with multiple messages allow HTML and Markdown and start with HTML.
+those formats. All chat selections start with image and offer image, HTML and Markdown. The export page owns
+paged versus single-image layout; it defaults to pages.
 An optional source-owned checkbox label and alternate input create
 an unchecked session alongside the checked session; the checkbox starts unchecked. Creating either
 snapshot only prepares text; the page renders the selected format on opening. Route exit disposes

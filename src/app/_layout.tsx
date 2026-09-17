@@ -31,6 +31,7 @@ import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShe
 import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { LanguagePreferenceObserver } from '@/frontend/i18n';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 // Hold the native surface until the matching React Native startup cover has
@@ -61,6 +62,7 @@ function RootLayout() {
                             <BottomSheetProvider>
                               <RouteHeaderProvider rootAction="back">
                                 <BackgroundActivityBridge />
+                                <LanguagePreferenceObserver />
                                 <SystemEntryBridge />
                                 <RootStack />
                               </RouteHeaderProvider>

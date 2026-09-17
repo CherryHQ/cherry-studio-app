@@ -1,13 +1,11 @@
+import { shouldAppendProviderApiVersion } from '@cherrystudio/ai-runtime/provider';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import {
-  resolveProviderConnection,
-  shouldAppendProviderApiVersion,
-} from '@/backend/ai/provider/providerConnection';
+import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
 import { modelService } from '@/backend/data/services/ModelService';
 import {
   projectRuntimeReasoning,
@@ -46,7 +44,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
     },
-    async resolveModel(runtimeModel, runtimeOptions): Promise<PiModelResolution> {
+    async resolveModel(runtimeModel, runtimeOptions, sessionId): Promise<PiModelResolution> {
       const { adapter, connection, model, preflight, provider } =
         await resolveConfiguredPiModel(runtimeModel);
 
@@ -59,7 +57,13 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       }
 
       const modelId = connection.wireModelId;
-      const headers = connection.headers;
+      const headers = { ...connection.headers };
+      if (
+        (provider.id === 'opencode' || provider.presetProviderId === 'opencode') &&
+        !Object.keys(headers).some((name) => name.toLowerCase() === 'x-opencode-session')
+      ) {
+        headers['x-opencode-session'] = sessionId;
+      }
       const reasoningProfile = providerRegistryService.resolveReasoningProfile(
         provider,
         model,
@@ -186,10 +190,10 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
 export function toPiModelPreflight(model: Model): RuntimeModelPreflight {
   const contextWindow = model.contextWindow ?? DEFAULT_MODEL_CONTEXT_WINDOW;
   const maxOutputTokens = model.maxOutputTokens ?? DEFAULT_MODEL_MAX_OUTPUT_TOKENS;
-  const contextInputLimit = Math.max(0, contextWindow - maxOutputTokens);
+  // These are model limits; the Runtime budgets input and output together for each request.
   const maxInputTokens = Math.max(
     0,
-    Math.min(model.maxInputTokens ?? contextInputLimit, contextInputLimit),
+    Math.min(model.maxInputTokens ?? contextWindow, contextWindow),
   );
 
   return {

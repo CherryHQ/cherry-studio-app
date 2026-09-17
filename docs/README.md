@@ -11,6 +11,7 @@ Guides are task-oriented procedures for changing or extending the application.
 | [Development](./guides/development.md) | Set up the environment, run the development client, and find validation and packaging guides |
 | [Extending Cherry Mobile](./guides/extending.md) | Add resource endpoints, workflows, persistence, backend behavior, and UI |
 | [Git Workflow](./guides/git-workflow.md) | Commits, stacked PRs, review readiness, and case-only renames |
+| [Internationalization](./guides/internationalization.md) | Supported languages, shared resolution, translation resources, and PR checks |
 | [GitHub Plugin Authorization](./guides/github-plugin-authorization.md) | Publisher OAuth App configuration, in-app browser authorization, token renewal, and acceptance prerequisites |
 | [Local EAS Builds](./guides/local-builds.md) | Local installation packages, Sentry environment variables, and build profiles |
 | [Cloud Releases](./guides/cloud-releases.md) | EAS production builds, GitHub/GitCode APK releases, TestFlight uploads, and retry procedures |
@@ -57,6 +58,7 @@ They are the source of truth for how the repository works today.
 | [File Model](./references/data/file-model.md) | Sandbox file ownership, immutability, references, lifecycle, and user-triggered deletion |
 | [File Preview And Viewer](./references/file-preview-and-viewer.md) | File kinds, open policy, in-app viewing and export; native acceptance pending |
 | [Document Export](./references/document-export.md) | Application-level Markdown, HTML, and long-image export, file-library retention, limits, and pending device acceptance |
+| [HTML Conversion](./references/html-conversion.md) | HTML to PNG and image-based PPTX, native capture, streaming output, implementation selection and pending acceptance |
 | [Job Runtime](./references/job-runtime.md) | Durable job ledger, dispatch, cancellation, recovery, and painting generation |
 | [Lifecycle](./references/lifecycle/README.md) | Service host, startup phases, teardown, and resource-scope coordination |
 | [Storage Engine](./references/data/storage-engine.md) | Current SQLite engine, workarounds, and migration criteria |

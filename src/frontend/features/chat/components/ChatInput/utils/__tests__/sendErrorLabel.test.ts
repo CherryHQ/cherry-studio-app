@@ -9,6 +9,7 @@ function protocolError(code: AgentErrorView['code'], message = 'diagnostic text'
 describe('getSendErrorLabelKey', () => {
   test.each<[AgentErrorView['code'], string]>([
     ['AGENT_NOT_FOUND', 'chat.input.sendError.agentNotFound'],
+    ['AGENT_MODEL_NOT_CONFIGURED', 'chat.input.sendError.modelNotConfigured'],
     ['SESSION_NOT_FOUND', 'chat.input.sendError.sessionNotFound'],
     ['SESSION_BUSY', 'chat.input.sendError.sessionBusy'],
     ['CAPABILITY_UNSUPPORTED', 'chat.input.sendError.unsupported'],
