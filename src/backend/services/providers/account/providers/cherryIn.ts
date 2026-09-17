@@ -47,8 +47,7 @@ async function request(path: string, token: string, signal: AbortSignal) {
 
 export const cherryInAccountDefinition = {
   id: 'cherryin',
-  getApplication: () =>
-    getProviderOauthApplication(process.env.EXPO_PUBLIC_CHERRYIN_OAUTH_CLIENT_ID || CLIENT_ID),
+  getApplication: () => getProviderOauthApplication(CLIENT_ID),
   oauth: createProviderOauthClient({
     authorizationUrl: `${ACCOUNT_HOST}/oauth2/auth`,
     tokenUrl: `${ACCOUNT_HOST}/oauth2/token`,

@@ -123,5 +123,8 @@ OAuth/model protocols are not enabled merely by catalog metadata.
 Recharge opens the adapter's official system-browser URL and refreshes the account on return.
 An adapter receives a shared navigation return URL and may use it only when its upstream documents
 a return parameter. CherryIN currently uses its existing top-up URL without a return parameter.
-Automatic return stays optional. Each OAuth client must register the active build profile's shared
-callback; CherryIN development/preview registration remains unconfirmed. See `.env.example`.
+Automatic return stays optional. CherryIN uses the fixed public client ID in its adapter. The account
+server must register the active build profile's shared callback: `cherrystudio://oauth/callback`
+for production, `cherrystudio-dev://oauth/callback` for development, and
+`cherrystudio-preview://oauth/callback` for preview. CherryIN development/preview registration remains
+unconfirmed.
