@@ -1,7 +1,7 @@
 /** Shared geometry for the HTML footer and native image export compositor. */
 export const EXPORT_SIGNATURE_STYLE = {
   referenceWidth: 360,
-  paddingX: 16,
+  paddingX: 24,
   paddingY: 8,
   columnGap: 12,
   detailGap: 8,
@@ -11,7 +11,7 @@ export const EXPORT_SIGNATURE_STYLE = {
   secondarySize: 12,
   secondaryLineHeight: 18,
   secondaryOpacity: 0.56,
-  minHeight: 56,
+  minHeight: 48,
 } as const;
 
 export function exportSignatureColumns(width: number) {
