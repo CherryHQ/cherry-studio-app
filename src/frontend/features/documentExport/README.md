@@ -15,10 +15,12 @@ Typography follows the frozen accessibility step; semantic colors follow the the
 starts. The existing numbered message treatment, Cherry signature and frozen local timestamp stay
 inside the export. HTML retains its document presentation and window-derived width.
 
-The frontend supplies one shared `signature` for HTML and images, preserved during format fallback;
-the image-only `imageFrame` controls margins and the document label. Markdown preview and saved text
-use the same separated brand/time footer without logo bytes. The signature appears at the end of
-the document, while every PNG page receives an ordinal footer.
+The frontend supplies one resolved `watermark` for HTML and images, preserved during format fallback.
+The code-only request option defaults to `cherry`; `none` omits the brand footer from both the
+preview and saved output, including Markdown. The image-only `imageFrame` independently controls
+margins and the document label. With Cherry watermarks, Markdown preview and saved text use the
+same separated brand/time footer without logo bytes. The signature appears at the end of the
+document, while every PNG page receives an ordinal footer regardless of watermark style.
 
 The signature uses the same full-width white footer as painting and file image exports: the
 original Cherry logo and Cherry Studio name on the left, with the time aligned to the right.
@@ -57,7 +59,8 @@ width and scroll vertically; zooming a page temporarily disables list scrolling.
 use a viewport-sized browser showing the actual file, whose decoding/zoom quality still depends on
 the browser. No full-height native Image view receives those files.
 
-Share saves every page in order, then opens one multi-file share sheet. A failed save can resume
+`appShell/fileExport.shareFiles` checks system availability before materializing and saving every
+page in order, then opens one multi-file share sheet. A failed save can resume
 using already committed pages. Saved pages remain in the file library after cancellation or route
 exit. `react-native-share` supplies multi-file delivery and requires a rebuilt development client;
 ordinary single-file delivery retains `expo-sharing`.

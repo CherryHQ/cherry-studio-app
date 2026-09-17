@@ -4,23 +4,20 @@ import { Text, View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import type {
-  ExportBlock,
-  ExportDocument,
-  ExportSignature,
-} from '@/shared/contracts/documentExport';
+import type { ExportBlock, ExportDocument } from '@/shared/contracts/documentExport';
+import type { ExportWatermark } from '@/shared/contracts/fileExport';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
 /** Keep disclosure structure intact; Markdown is only the renderer for leaf prose. */
 export function DocumentExportTextPreview({
   document,
-  signature,
+  watermark,
 }: {
   document: ExportDocument;
-  signature?: Pick<ExportSignature, 'brandName' | 'timestamp'>;
+  watermark?: ExportWatermark;
 }) {
   const isConversation = document.sections.some((section) => section.presentation);
-  const footer = renderMarkdownSignature(signature);
+  const footer = renderMarkdownSignature(watermark);
   return (
     <View className="gap-6">
       <View>

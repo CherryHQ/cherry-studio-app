@@ -109,7 +109,7 @@ test('default Markdown and its unchecked snapshot stay in memory until sharing',
     markdownArtifact,
   );
   expect(unchecked.render).toHaveBeenCalledWith(
-    { format: 'markdown', signature: undefined },
+    { format: 'markdown', watermark: undefined },
     { signal: expect.any(AbortSignal) },
   );
   expect(checked.render).not.toHaveBeenCalled();
@@ -125,6 +125,7 @@ test('image fallback retains the same brand signature in Markdown preview and de
     foreground: '#111111',
     logoDataUrl: 'data:image/png;base64,AA==',
   };
+  const watermark = { kind: 'cherry' as const, signature };
   session.render.mockImplementation(async (target) => {
     if (target.format === 'markdown') return markdownArtifact;
     throw new DocumentExportError('capture-failed');
@@ -136,7 +137,7 @@ test('image fallback retains the same brand signature in Markdown preview and de
         session={session}
         format="image"
         revision={0}
-        currentPresentation={{ ...presentation, signature }}
+        currentPresentation={{ ...presentation, watermark }}
       />,
     );
   });
@@ -147,7 +148,7 @@ test('image fallback retains the same brand signature in Markdown preview and de
   });
   await ref.current!.getArtifact(new AbortController().signal);
   expect(session.render).toHaveBeenLastCalledWith(
-    { format: 'markdown', signature },
+    { format: 'markdown', watermark },
     { signal: expect.any(AbortSignal) },
   );
 });

@@ -4,8 +4,9 @@ Application-owned conversion and artifact lifetime. `DocumentExportRuntime` impl
 `Backend.documentExport`; composition injects managed-file access tied to the originating database.
 Sessions own immutable source snapshots, prepared assets, cancellation, current temporary output
 and explicit persistence. `session.markdown` needs no file or resource reads and remains unbranded.
-Markdown rendering appends the optional target signature; reuse requires matching complete text.
-HTML and image rendering share the presentation signature independently of the image-only frame.
+Markdown rendering applies the optional target watermark; reuse requires matching complete text.
+HTML and image rendering share the resolved watermark independently of the image-only frame.
+The `none` variant omits the brand footer. Watermark options do not add file metadata.
 
 Markdown/HTML artifacts contain one immutable file descriptor and source text. Image artifacts
 contain ordered immutable pages, each with its PNG file and dimensions. The frontend capture
@@ -23,3 +24,8 @@ explicit single-image capture and embedded source decoding still depend on devic
 
 See [Document Export](../../../../docs/references/document-export.md) for the capture protocol,
 source validation, file lifetime and outstanding device acceptance.
+
+`convertHtml` handles the HTML viewer's direct PNG/PPTX conversions without normalizing authored
+HTML into document blocks. It consumes sequential frontend captures, streams image-only PPTX bytes,
+and persists one managed file. [HTML Conversion](../../../../docs/references/html-conversion.md)
+owns its limits, cancellation and rendering constraints.

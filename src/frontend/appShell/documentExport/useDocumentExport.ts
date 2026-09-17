@@ -7,6 +7,7 @@ import type {
   DocumentExportSession,
   ExportFormat,
 } from '@/shared/contracts/documentExport';
+import type { ExportWatermarkStyle } from '@/shared/contracts/fileExport';
 
 import { createDocumentExportRequest, finishDocumentExportRequest } from './documentExportRequest';
 
@@ -17,6 +18,7 @@ export function useDocumentExport() {
       input,
       initialFormat = 'image',
       allowedFormats,
+      watermark,
       option,
       returnTo,
     }: {
@@ -24,6 +26,8 @@ export function useDocumentExport() {
       initialFormat?: ExportFormat;
       /** Formats offered for this source, in menu order. Defaults to all formats. */
       allowedFormats?: readonly [ExportFormat, ...ExportFormat[]];
+      /** Defaults to the Cherry footer; none omits it from every offered format. */
+      watermark?: ExportWatermarkStyle;
       /** An initially unchecked source option, with a complete document for its unchecked state. */
       option?: { label: string; uncheckedInput: DocumentExportInput };
       /** Dismissed to after the system share sheet closes; without it the page stays open. */
@@ -37,13 +41,14 @@ export function useDocumentExport() {
         await session.dispose();
         throw error;
       }
-      const request = createDocumentExportRequest(
+      const request = createDocumentExportRequest({
         session,
         initialFormat,
-        option && uncheckedSession ? { label: option.label, uncheckedSession } : undefined,
+        option: option && uncheckedSession ? { label: option.label, uncheckedSession } : undefined,
         returnTo,
         allowedFormats,
-      );
+        watermark,
+      });
       if (!request) {
         await Promise.allSettled([session.dispose(), uncheckedSession?.dispose()]);
         return 'busy';

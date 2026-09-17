@@ -11,10 +11,6 @@ This shared component family connects an artifact preview surface to its viewer 
   It shares the existing pinch/pan interaction, keeps bounded pages at original decode resolution,
   and disables the surrounding list during zoom. Large single images use a viewport-sized browser
   displaying the actual PNG, with browser-dependent decode quality.
-- `useSaveImageToPhotos` owns the shared add-only photo permission and save flow, consumed by
-  painting and file viewers. It prepares the common branded export copy through
-  `appShell/imageExport` after permission succeeds and releases it after Photos copies the image.
-  File viewers pass provenance so completed document exports do not receive another footer.
 - `ArtifactPreviewLink` accepts an Expo Router destination and marks its child as the preview
   source.
 - `ArtifactPreviewTarget` marks the corresponding viewer content as the transition target.
@@ -26,8 +22,8 @@ of the iOS accessibility tree.
 ## Ownership
 
 Painting and drawing pages own artifact descriptors, file resolution, viewer routes, chrome, and
-capability actions such as edit, download, or retry. This family owns the transition, zoom, and save-to-Photos
-contracts shared by those pages. Image load failures are reported through the optional `onError`
+capability actions such as edit, download, or retry. This family owns the transition and zoom contracts shared by those pages.
+Application-level sharing and save-to-Photos actions belong to `appShell/fileExport`. Image load failures are reported through the optional `onError`
 callback so the page owns its retry and fallback.
 
 ## Organization

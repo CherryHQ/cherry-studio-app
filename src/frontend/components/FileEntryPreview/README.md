@@ -16,17 +16,11 @@ logging, and the single opening policy shared by the composer, messages, and fil
 - `useResolvedFile`: entry and local-byte resolution for cards and the viewer, with explicit retry.
 - `useOpenFileEntry`: `openFileEntry` routes supported kinds to `/files/[fileEntryId]` and hands
   `document` to the platform. `openFileEntryWithSystem` is the viewer's explicit escape hatch.
-- `useShareFile`: shares a resolved file with availability checks, busy state, and failure feedback.
-- `shareFile`: copies a resolved file into the share cache and opens the system share sheet for
-  callers such as document export that own availability, cancellation, and feedback. Image sharing
-  and system opening use the shared `appShell/imageExport` signature and PNG descriptor. Completed
-  document images retain their existing signature; non-image file bytes remain unchanged.
-- `shareFiles`: copies all files in order before opening one chooser. Single-file delivery uses
-  Expo Sharing; multiple files use React Native Share. Both paths use the shared export preparation;
-  completed document pages are copied without re-encoding. An optional abort signal
-  can stop copying/delivery, and cache copies remain available for late recipient reads.
 - `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by
   the attachment image and painting outputs so neither renders a broken frame.
+
+Application-level sharing and watermark preparation belong to `appShell/fileExport`. System
+opening consumes its `prepareFileExport`; completed document exports retain their original bytes.
 
 Opening failures report a toast. Thumbnail failures are logged and keep the existing fallback.
 The image thumbnail query uses the same resolved-entry shape and query key as the file library.

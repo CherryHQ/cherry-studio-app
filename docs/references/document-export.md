@@ -13,6 +13,7 @@ validate this implementation.
 | `backend/services/documentExport` | Validation, resources, conversion, temporary files and explicit persistence |
 | `DocumentExportRuntime` | Foreground admission, live/closing sessions and host teardown |
 | `bootstrap/composition/createBackend.ts` | Managed-file dependencies bound to the originating database |
+| `frontend/appShell/fileExport` | Watermark configuration, finalized-file delivery, system availability and cancellation checks |
 | `frontend/appShell/documentExport` | Transient handoff; routes contain only the request ID |
 | `frontend/features/documentExport` | Format/layout choice, capture and user-triggered delivery |
 | `frontend/components/ArtifactPreview` | Actual-image reading shared with the file viewer |
@@ -89,13 +90,15 @@ the incomplete directory and retains the previous artifact. `save` accepts only 
 Repeated Markdown rendering reuses the current file when available and its complete text, including
 the signature, matches.
 
-HTML and image presentation share an optional `signature` containing resolved background/text colors,
-the embedded Cherry logo, brand name and frozen timestamp. The frontend supplies the shared white
+HTML and image presentation share an optional resolved `watermark`. The application defaults to
+`cherry`; the code-only `none` option omits the brand footer from every preview and output format.
+The Cherry variant contains a `signature` with resolved background/text colors, the embedded Cherry
+logo, brand name and frozen timestamp. The frontend supplies the shared white
 footer with black text used by painting and file image exports. The renderer copies and validates
 the presentation, escapes its text and includes the signature after the content inside `main`.
 The image-only `imageFrame` supplies its background and localized label. Image-to-HTML fallbacks
-retain the signature. Markdown uses the same
-brand name and timestamp in a separated text footer; preview and saved text share its formatter.
+retain the watermark. Markdown uses the same resolved watermark's brand name and timestamp in a
+separated text footer; preview and saved text share its formatter.
 `session.markdown` remains the unbranded source. The signature ends the document and is not repeated
 on every PNG page; each PNG page has its own ordinal footer.
 
@@ -213,12 +216,20 @@ Multi-page filenames use sortable ordinal suffixes. Already committed pages surv
 or cancellation and are reused on retry of that artifact. A new render/session may create new files.
 Committed files remain in the library's Images and Sharing filters and are deleted only through
 ordinary file deletion. No new table, database column or permanent export directory is added.
+Watermark options affect rendered bytes without adding file metadata. Existing document exports,
+including those generated with `none`, are shared unchanged without another watermark pass.
 
-`FileEntryPreview.shareFiles` prepares readable cache copies in order, then opens one share sheet.
+`appShell/fileExport.shareFiles` checks system availability before invoking the page's
+materialize/save factory, checks cancellation and prepares readable cache copies in order, then
+opens one share sheet.
 Single-file delivery keeps `expo-sharing`; multiple files use `react-native-share` 12.3.1 with local
 file URLs, without re-encoding. Copies remain in OS-managed cache for late recipient reads. Closing
 the chooser does not prove delivery. The new native dependency requires rebuilding the development
 client; no incoming-share extension is configured.
+
+The runtime also owns direct [HTML Conversion](./html-conversion.md) to PNG and image-based PPTX.
+This consumes sequential captures of authored HTML and persists one managed file, independently of
+the document-block conversion and its paged PNG artifacts.
 
 No background export job, process-death resume, hosted link, PDF conversion or streaming single-PNG
 encoder is introduced by this implementation.

@@ -8,10 +8,10 @@ import {
   type DocumentExportProgress,
   type DocumentExportSession,
   type DocumentExportTarget,
-  type ExportFile,
   type ExportImagePage,
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import type { ExportFile } from '@/shared/contracts/fileExport';
 import { readableFilename } from '@/shared/data/types/file';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
@@ -73,7 +73,7 @@ export function createDocumentExportSession(
     signal.throwIfAborted();
     const markdownText =
       target.format === 'markdown'
-        ? markdown + renderMarkdownSignature(target.signature)
+        ? markdown + renderMarkdownSignature(target.watermark)
         : markdown;
     if (
       target.format === 'markdown' &&

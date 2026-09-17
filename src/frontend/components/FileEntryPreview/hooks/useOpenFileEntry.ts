@@ -2,28 +2,25 @@ import { openFilePreview, useToast } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { prepareFileExport, useExportSignature } from '@/frontend/appShell/imageExport';
+import { prepareFileExport, useExportWatermark } from '@/frontend/appShell/fileExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import type { FileExportOptions } from '@/shared/contracts/fileExport';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import { fileEntryPreviewKind, toFilePreviewFile } from '../utils/fileEntryPresentation';
 
 const logger = loggerService.withContext('FileEntryPreview');
 
 /** Shared by cards and the viewer's explicit system-open escape hatch. */
-export function useOpenFileEntry() {
+export function useOpenFileEntry(options: FileExportOptions = {}) {
   const router = useRouter();
   const { t } = useTranslation();
   const { toast } = useToast();
-  const signature = useExportSignature();
+  const createWatermark = useExportWatermark(options.watermark);
 
   const openFileEntryWithSystem = async ({ entry, uri }: ResolvedFile) => {
     try {
-      const exported = await prepareFileExport(
-        { entry, uri },
-        { ...signature, timestamp: formatExportTimestamp(new Date()) },
-      );
+      const exported = await prepareFileExport({ entry, uri }, createWatermark());
       // The recipient may read after the chooser closes; the OS owns this cache copy's lifetime.
       await openFilePreview({
         file: toFilePreviewFile(

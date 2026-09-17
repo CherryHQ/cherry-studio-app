@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PixelRatio, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
+import { capturePng } from '@/frontend/utils/capturePng';
 import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/documentExport';
 
-import { capturePng } from '../utils/capturePng';
 import { imageCapturePlan, type ImageCapturePlan } from '../utils/imageCapturePlan';
 import { imageMeasurementScript, imagePageReadinessScript } from '../utils/imageCaptureScripts';
 import { IMAGE_PAGE_CHROME, imagePagePlan, type ImagePageSlice } from '../utils/imagePagePlan';

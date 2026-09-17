@@ -240,6 +240,11 @@ export interface MessageRuntimeTimingSink {
 
 export type RuntimeExecutionRequest = {
   turnId: string;
+  /**
+   * Host-owned conversation identity. Providers that key requests on the conversation
+   * (OpenCode's `x-opencode-session`) receive the same value on every turn.
+   */
+  sessionId: string;
   /** Host-prepared application prompt: Runtime rules, language, selected guides and Agent instructions. */
   instructions: string;
   model: RuntimeModel;

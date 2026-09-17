@@ -10,19 +10,26 @@ import {
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
-import type { ExportFile, ExportSignature } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import {
+  getExportSignature,
+  type ExportFile,
+  type ExportSignature,
+  type ExportWatermark,
+} from '@/shared/contracts/fileExport';
 import type { FileEntryProvenance } from '@/shared/data/types/file';
 import { EXPORT_SIGNATURE_STYLE, exportSignatureColumns } from '@/shared/utils/exportSignature';
 
 type PreparedImage = { uri: string; release(): void };
 
-/** Only export copies receive the signature. Document images already contain it at capture. */
+/** Finalized exports retain their chosen treatment; source images get a disposable copy. */
 export async function prepareImageExport(
   source: { uri: string; provenance?: FileEntryProvenance },
-  signature: ExportSignature,
+  watermark: ExportWatermark,
 ): Promise<PreparedImage> {
-  if (source.provenance === 'document-export') return { uri: source.uri, release() {} };
+  const signature = getExportSignature(watermark);
+  if (source.provenance === 'document-export' || !signature)
+    return { uri: source.uri, release() {} };
 
   const resources: { dispose(): void }[] = [];
   const keep = <T extends { dispose(): void }>(resource: T): T => {
@@ -109,15 +116,16 @@ export async function prepareImageExport(
 /** Shared by the share sheet and the system-opening escape hatch. */
 export async function prepareFileExport(
   { entry, uri }: ResolvedFile,
-  signature: ExportSignature,
+  watermark: ExportWatermark,
 ): Promise<ExportFile & { release(): void }> {
   if (
     !entry.mediaType.trim().toLowerCase().startsWith('image/') ||
-    entry.provenance === 'document-export'
+    entry.provenance === 'document-export' ||
+    watermark.kind === 'none'
   ) {
     return { uri, filename: entry.filename, mediaType: entry.mediaType, release() {} };
   }
-  const image = await prepareImageExport({ uri, provenance: entry.provenance }, signature);
+  const image = await prepareImageExport({ uri, provenance: entry.provenance }, watermark);
   const stem = entry.filename.replace(/\.[^.]+$/, '');
   return { ...image, filename: `${stem.slice(0, 251)}.png`, mediaType: 'image/png' };
 }
@@ -148,6 +156,8 @@ function createParagraph(
     paragraph.layout(width);
     return paragraph;
   } finally {
-    builder.dispose();
+    // Skia's native ParagraphBuilder omits dispose even though its TS interface declares it.
+    // The web implementation exposes it; native builders are released by the host object's GC.
+    builder.dispose?.();
   }
 }

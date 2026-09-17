@@ -1,4 +1,5 @@
 import type { CaptureExportHtml } from '@/shared/contracts/documentExport';
+import type { ExportWatermark } from '@/shared/contracts/fileExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { createDocumentExportSession } from '../createDocumentExportSession';
@@ -145,16 +146,28 @@ test('Markdown materialization preserves the signature and reuses only matching 
     () => {},
     () => {},
   );
-  const signature = { brandName: 'Cherry Studio', timestamp: '2026/09/15 12:00' };
-  const first = await session.render({ format: 'markdown', signature });
+  const watermark: ExportWatermark = {
+    kind: 'cherry',
+    signature: {
+      brandName: 'Cherry Studio',
+      timestamp: '2026/09/15 12:00',
+      background: '#ffffff',
+      foreground: '#000000',
+      logoDataUrl: 'data:image/png;base64,AA==',
+    },
+  };
+  const first = await session.render({ format: 'markdown', watermark });
   if (first.format !== 'markdown') throw new Error('Expected Markdown');
   expect(first.text).toBe('Content\n\n---\n\n**Cherry Studio** · 2026/09/15 12:00\n');
   expect(mockFiles.get(first.file.uri)).toBe(first.text);
   expect(session.markdown).toBe('Content\n');
-  await expect(session.render({ format: 'markdown', signature })).resolves.toBe(first);
+  await expect(session.render({ format: 'markdown', watermark })).resolves.toBe(first);
   const second = await session.render({
     format: 'markdown',
-    signature: { ...signature, timestamp: '2026/09/15 12:01' },
+    watermark: {
+      kind: 'cherry',
+      signature: { ...watermark.signature, timestamp: '2026/09/15 12:01' },
+    },
   });
   if (second.format !== 'markdown') throw new Error('Expected Markdown');
   expect(second.text).toContain('2026/09/15 12:01');
@@ -179,6 +192,36 @@ test('replacing a preview discards its file and rejects stale publication reques
   await expect(session.save(first)).rejects.toMatchObject({ code: 'invalid-input' });
   await session.dispose();
   expect(mockFiles.size).toBe(0);
+});
+
+test('switching Markdown to none replaces the branded output with a plain file', async () => {
+  const saveFile = jest.fn(async () => savedFile);
+  const session = createDocumentExportSession(
+    { kind: 'markdown', source: 'Content' },
+    { readManagedImage: jest.fn(), saveFile },
+    () => {},
+    () => {},
+  );
+  const watermark: ExportWatermark = {
+    kind: 'cherry',
+    signature: {
+      brandName: 'Cherry Studio',
+      timestamp: '2026.09.17 12:00',
+      background: '#ffffff',
+      foreground: '#000000',
+      logoDataUrl: 'data:image/png;base64,AA==',
+    },
+  };
+  const branded = await session.render({ format: 'markdown', watermark });
+  if (branded.format !== 'markdown') throw new Error('Expected Markdown');
+  expect(mockFiles.get(branded.file.uri)).toContain('Cherry Studio');
+  const plain = await session.render({ format: 'markdown', watermark: { kind: 'none' } });
+  if (plain.format !== 'markdown') throw new Error('Expected Markdown');
+  expect(plain.id).not.toBe(branded.id);
+  expect(mockFiles.get(plain.file.uri)).toBe('Content\n');
+  await session.save(plain);
+  expect(saveFile).toHaveBeenCalledWith(plain.file, expect.any(AbortSignal));
+  await session.dispose();
 });
 
 test('cancelled capture waits for its in-flight delivery and never publishes partial pages', async () => {

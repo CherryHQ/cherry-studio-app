@@ -853,6 +853,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       state.abortController.signal.throwIfAborted();
       const events = state.runtimeSession.execute({
         turnId: state.turn.id,
+        sessionId,
         instructions: buildAgentSystemPrompt({
           agentInstructions: plan.agent.instructions,
           appLanguage: this.ports.appLanguage(),

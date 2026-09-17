@@ -164,7 +164,7 @@ test('image and HTML exports include one brand signature after the complete cont
   for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
     const { html } = await renderHtml(
       document,
-      { ...presentation, signature, imageFrame },
+      { ...presentation, watermark: { kind: 'cherry', signature }, imageFrame },
       new Map(),
       jest.fn(),
       new AbortController().signal,
@@ -195,12 +195,32 @@ test('rejects invalid signature colors and missing timestamp instead of renderin
     await expect(
       renderHtml(
         document,
-        { ...presentation, signature: invalid as typeof signature },
+        { ...presentation, watermark: { kind: 'cherry', signature: invalid as typeof signature } },
         new Map(),
         jest.fn(),
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({ code: 'invalid-input' });
+  }
+});
+
+test('none removes the footer from HTML and image documents without removing content', async () => {
+  const document = normalizeDocument({ kind: 'markdown', source: 'Complete answer.' });
+  for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
+    const { html } = await renderHtml(
+      document,
+      {
+        ...presentation,
+        watermark: { kind: 'none' },
+        imageFrame,
+      },
+      new Map(),
+      jest.fn(),
+      new AbortController().signal,
+    );
+    expect(html).toContain('Complete answer.');
+    expect(html).not.toContain('<footer');
+    expect(html).not.toContain('print-signature');
   }
 });
 

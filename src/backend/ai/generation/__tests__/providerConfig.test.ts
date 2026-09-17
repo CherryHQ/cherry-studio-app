@@ -1,5 +1,7 @@
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
+import { createPresetProviderInput } from '@/backend/data/services/presetProviders';
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
@@ -7,6 +9,57 @@ import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../providerConfig';
 
 describe('providerToAiSdkConfig', () => {
+  it.each([
+    ['opencode', ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai', 'https://opencode.ai/zen/go/v1'],
+    ['cherryin', ENDPOINT_TYPE.OPENAI_RESPONSES, 'cherryin', 'https://open.cherryin.net/v1'],
+    ['poe', ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai', 'https://api.poe.com/v1'],
+    ['openrouter', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'anthropic', 'https://openrouter.ai/api/v1'],
+    [
+      'huggingface',
+      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      'anthropic',
+      'https://router.huggingface.co/v1',
+    ],
+    ['new-api', ENDPOINT_TYPE.OPENAI_RESPONSES, 'newapi', 'http://localhost:3000/v1'],
+    ['new-api', ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, 'newapi', 'http://localhost:3000/v1beta'],
+  ] as const)(
+    'routes the bundled %s %s endpoint through %s',
+    async (presetId, endpointType, sdkProviderId, baseURL) => {
+      const preset = providerRegistryService.loadProviders().find(({ id }) => id === presetId);
+      if (!preset) throw new Error(`Missing provider preset ${presetId}`);
+      const { defaultChatEndpoint, endpointConfigs } = createPresetProviderInput(preset);
+
+      for (const id of [presetId, `${presetId}-copy`]) {
+        const provider = createProvider({
+          id,
+          presetProviderId: presetId,
+          defaultChatEndpoint: defaultChatEndpoint ?? undefined,
+          endpointConfigs: endpointConfigs ?? undefined,
+        });
+        const model = { ...createModel(id, 'test-model'), endpointTypes: [endpointType] };
+
+        const config = await providerToAiSdkConfig(provider, model, createRuntime(), {
+          sessionId: 'probe-session',
+        });
+
+        expect(config.providerId).toBe(sdkProviderId);
+        expect(config.providerSettings).toMatchObject({ baseURL });
+        if (sdkProviderId === 'newapi' || sdkProviderId === 'cherryin') {
+          expect(config.providerSettings).toMatchObject({
+            endpointType:
+              endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT ? 'gemini' : 'openai-response',
+          });
+        }
+        if (presetId === 'opencode') {
+          expect(config.providerSettings.headers).toMatchObject({
+            'User-Agent': 'CherryStudioMobile/1.0',
+            'x-opencode-session': 'probe-session',
+          });
+        }
+      }
+    },
+  );
+
   it('selects the TokenHub image adapter for a copied preset without changing its chat adapter', async () => {
     const provider = createProvider({
       id: 'tokenhub-copy',

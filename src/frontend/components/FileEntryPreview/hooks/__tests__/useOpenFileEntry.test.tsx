@@ -10,9 +10,9 @@ const mockOpen = jest.fn();
 const mockToast = jest.fn();
 const mockPrepareFileExport = jest.fn();
 
-jest.mock('@/frontend/appShell/imageExport', () => ({
+jest.mock('@/frontend/appShell/fileExport', () => ({
   prepareFileExport: (...args: unknown[]) => mockPrepareFileExport(...args),
-  useExportSignature: () => ({ brandName: 'Cherry Studio' }),
+  useExportWatermark: () => () => ({ kind: 'cherry', signature: { brandName: 'Cherry Studio' } }),
 }));
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));

@@ -12,7 +12,7 @@ import { createAiRepair, type RequestContext } from '@cherrystudio/ai-runtime/to
 import {
   applyFastModeToProviderOptions,
   applyServiceTierToProviderOptions,
-  buildResolvedReasoningProviderOptions,
+  buildCapabilityProviderOptions,
   filterStandardParams,
   getTimeout,
   normalizeServiceTierSelection,
@@ -84,6 +84,7 @@ export async function buildAgentParams({
     throw new Error(`Mobile AI runtime does not support embedding or rerank models: ${model.id}`);
   }
 
+  const requestId = Crypto.randomUUID();
   const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
     provider,
     model,
@@ -92,7 +93,11 @@ export async function buildAgentParams({
       resolveApiKey: (providerId, override) =>
         services.provider.resolveApiKey(providerId, override),
     },
-    { apiKeyOverride: request.apiKeyOverride, resolvedConnection: connection },
+    {
+      apiKeyOverride: request.apiKeyOverride,
+      resolvedConnection: connection,
+      sessionId: requestId,
+    },
   );
   const endpointType = connection.endpointType;
   const providerOptionsKey = resolveProviderOptionsKey(sdkConfig.providerId, {
@@ -128,15 +133,22 @@ export async function buildAgentParams({
     assistantSummary:
       typeof provider.settings.summaryText === 'string' ? provider.settings.summaryText : undefined,
   });
-  let providerOptions =
-    request.reasoningEffort === undefined
-      ? {}
-      : buildResolvedReasoningProviderOptions({
-          aiSdkProviderId: sdkConfig.providerId,
-          providerOptionsKey,
-          endpointType,
-          reasoning,
-        });
+  let providerOptions = buildCapabilityProviderOptions(
+    invocationModel,
+    provider,
+    {
+      enableGenerateImage: false,
+      enableReasoning: request.reasoningEffort !== undefined,
+      enableWebSearch: false,
+    },
+    {
+      aiSdkProviderId: sdkConfig.providerId,
+      runtimeProviderId: sdkConfig.providerId,
+      providerOptionsKey,
+      endpointType,
+      reasoning,
+    },
+  );
   if (serviceTierControl) {
     const serviceTierSelection = normalizeServiceTierSelection(
       serviceTierControl,
@@ -192,13 +204,16 @@ export async function buildAgentParams({
     endpointType,
     providerOptionsKey,
   );
+  const hasProviderOptions = Object.values(effectiveProviderOptions).some((namespace) =>
+    Object.values(namespace).some((value) => value !== undefined),
+  );
 
   return {
     credentialReceipt,
     sdkConfig: { ...sdkConfig, modelId: connection.wireModelId },
     context: {
       abortSignal: request.requestOptions?.signal,
-      requestId: Crypto.randomUUID(),
+      requestId,
     },
     plugins,
     repairToolCall,
@@ -210,7 +225,7 @@ export async function buildAgentParams({
       ...(request.callOverrides?.toolChoice && {
         toolChoice: request.callOverrides.toolChoice,
       }),
-      ...(Object.keys(effectiveProviderOptions).length > 0 && {
+      ...(hasProviderOptions && {
         providerOptions: effectiveProviderOptions,
       }),
       ...overridden.standardParams,
