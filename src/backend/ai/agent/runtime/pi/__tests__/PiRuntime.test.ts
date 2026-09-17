@@ -2718,6 +2718,71 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
+  test('keeps the received input when Pi settles a call with a native error result', async () => {
+    const runtime = createTestRuntime();
+    const executed = jest.fn();
+    const tool = { ...askTool(executed), approval: 'auto' as const };
+    const input = { fileEntryId: 'file-1' };
+    arrange(runtime, async (context) => {
+      const piTool = context.options.initialState?.tools?.[0];
+      if (!piTool) throw new Error('Native error result program requires one tool.');
+      const message = assistantMessage({
+        content: [{ type: 'toolCall', id: 'native-call', name: piTool.name, arguments: input }],
+        stopReason: 'toolUse',
+      });
+      const toolCall = message.content[0];
+      if (toolCall.type !== 'toolCall') throw new Error('Missing tool call.');
+      await context.emit({ type: 'message_start', message });
+      await context.emit({
+        type: 'message_update',
+        message,
+        assistantMessageEvent: {
+          type: 'toolcall_end',
+          contentIndex: 0,
+          toolCall,
+          partial: message,
+        },
+      });
+      await context.emit({ type: 'message_end', message });
+      // Pi rejected the call itself (for example argument validation), so the
+      // Mobile executor never ran and the result reaches the Runtime unmapped.
+      await context.emit({
+        type: 'turn_end',
+        message,
+        toolResults: [
+          {
+            role: 'toolResult',
+            toolCallId: toolCall.id,
+            toolName: toolCall.name,
+            content: [{ type: 'text', text: 'Invalid arguments.' }],
+            details: { error: 'Invalid arguments.' },
+            isError: true,
+            timestamp: Date.now(),
+          },
+        ],
+      });
+      await emitText(context, 'The tool request was invalid.');
+    });
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-native-error-result', { tools: [tool] })),
+    );
+
+    expect(executed).not.toHaveBeenCalled();
+    expect(
+      events.find(
+        (event) =>
+          event.type === 'part.replace' &&
+          event.part.type === 'tool' &&
+          event.part.toolCallId === 'native-call' &&
+          event.part.state === 'error',
+      ),
+    ).toMatchObject({ part: { input, error: { code: 'tool_execution_error' } } });
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    await session.close();
+  });
+
   test('projects a deferred target failure onto the real MCP tool identity', async () => {
     const runtime = createTestRuntime();
     const targetTool: RuntimeTool = {
