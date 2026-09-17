@@ -84,3 +84,27 @@ describe('react-native-enriched-markdown iOS patch', () => {
     );
   });
 });
+
+describe('react-native-enriched-markdown Android input patch', () => {
+  const patch = readFileSync(
+    `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
+    'utf8',
+  );
+
+  test('absorbs only the framework long-press cursor-controller null pointer', () => {
+    expect(patch).toContain('+  override fun performLongClick(): Boolean =');
+    expect(patch).toContain(
+      '!top.className.startsWith("android.widget.Editor") || top.methodName != "performLongClick"',
+    );
+    expect(patch).toContain('+        throw e');
+  });
+
+  test('measures an immutable snapshot instead of the live Editable', () => {
+    expect(patch).toContain('+    val text: SpannedString?,');
+    expect(patch).toContain('+    val textSnapshot = text?.let { SpannedString(it) }');
+    expect(patch).toContain('+    val size = measure(cachedWidth, textSnapshot, paint)');
+    expect(patch).toContain(
+      '+    data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))',
+    );
+  });
+});
