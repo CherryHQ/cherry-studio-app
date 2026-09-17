@@ -136,13 +136,15 @@ View Shot documents WebView support with a non-collapsible Android wrapper
 such as [html-to-image](https://github.com/bubkoo/html-to-image) also have large-output scaling and
 canvas/data-URL limits; swapping libraries does not establish unlimited image capacity.
 
-Default image layout is **paged PNG at fixed 3x density**. Short content yields one page. Each
-content slice is at most 1200 logical pixels high, plus 16 pixels of top spacing and no page-number footer.
-At the page's fixed width this yields 1080-pixel-wide images no taller than 3648 pixels. Content
+Default image layout is **paged PNG at fixed 3x density**. Content stays in one image until it reaches
+the capture budget, shared with HTML image conversion's 8192-pixel edge limit. After reserving
+16 logical pixels of top spacing, each content slice holds up to 2714 logical pixels. At the page's
+fixed width this yields 1080-pixel-wide images no taller than 8190 pixels, with no page-number footer.
+This is an application capture budget, not a detected device maximum. Content
 length adds pages rather than lowering resolution or truncating the selection.
 
-Pagination uses measured message/paragraph boundaries and painted ranges. It prefers a message
-boundary after 60% of a page, then a paragraph boundary, then a gap between lines. Headings stay
+Pagination fills each image to that limit and uses painted ranges to move a cut back only when
+needed to avoid splitting content. Message and paragraph boundaries do not trigger early cuts. Headings stay
 with the following line; normal table rows remain intact. Oversized rows can continue between
 painted lines. Embedded images are contained within the page height. An indivisible object that
 cannot fit causes conversion failure instead of silent clipping. Table continuation headers are
@@ -172,7 +174,7 @@ in receiving applications.
 | Repeated embedded image bytes | No application cap |
 | Remote read | 15 seconds, no redirects, cancellable stream |
 | HTML width / type | 280–800 logical pixels / 12–40 font size and 12–56 line height |
-| Paged capture | 1200 logical content height plus 48 frame height per image |
+| Paged capture | 8192-pixel edge budget; 2714 logical content height plus 16 top spacing at 3x |
 | Single capture | No application height/pixel cap |
 | Capture wait | 60 seconds per page; physical lease includes native capture and file copy |
 | Sessions | Four live/closing sessions, one interactive request |
@@ -187,7 +189,8 @@ resulting format.
 ## Actual Image Reading
 
 `ArtifactImagePages` displays actual PNG files in the export page and document-export file viewer.
-Bounded pages decode at original resolution, fit reading width without initial pixel upscaling,
+Pages within the viewer's original-pixel budget decode at original resolution; larger pages use
+display resolution. Pages fit reading width without initial pixel upscaling,
 scroll vertically and support pinch/pan/double-tap zoom. The list pauses scrolling during zoom.
 Known dimensions select the viewing path; the file viewer reads only the PNG header before loading.
 

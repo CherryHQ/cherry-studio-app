@@ -19,7 +19,7 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
     }
     if(stable<3)throw new Error('Layout unstable');
     var origin=main.getBoundingClientRect().top;
-    var ink=[],sections=[],blocks=[];
+    var ink=[];
     function bounds(rect){return [Math.max(0,Math.floor(rect.top-origin)),Math.min(height,Math.ceil(rect.bottom-origin))];}
     if(${JSON.stringify(layout)}==='pages'){
       var walker=document.createTreeWalker(main,NodeFilter.SHOW_TEXT);
@@ -38,8 +38,6 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
           if(rect.height<=${IMAGE_PAGE_HEIGHT})ink.push([Math.ceil(rect.top-origin),Math.floor(rect.bottom-origin)]);
         }else ink.push(bounds(rect));
       });
-      main.querySelectorAll('section').forEach(function(element){sections.push(Math.min(height,Math.ceil(element.getBoundingClientRect().bottom-origin)));});
-      main.querySelectorAll('p,pre,blockquote,li,table,.plain-text,.attachment').forEach(function(element){blocks.push(Math.min(height,Math.ceil(element.getBoundingClientRect().bottom-origin)));});
       var lines=ink.slice().sort(function(a,b){return a[0]-b[0];});
       main.querySelectorAll('h1,h2,h3,h4,h5,h6,.print-heading,.message-heading,thead').forEach(function(element){
         var rect=element.getBoundingClientRect();if(!rect.height)return;
@@ -50,7 +48,7 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
         if(next&&next[1]-heading[0]<${IMAGE_PAGE_HEIGHT})ink.push([heading[0],next[1]]);
       });
     }
-    window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'measure',height:height,width:main.scrollWidth,sections:sections,blocks:blocks,ink:ink}));
+    window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'measure',height:height,width:main.scrollWidth,ink:ink}));
   }catch(error){window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},error:true}));}})();true;`;
 }
 

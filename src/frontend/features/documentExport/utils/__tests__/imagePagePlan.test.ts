@@ -1,10 +1,17 @@
-import { imagePagePlan, type ImagePageMeasurement } from '../imagePagePlan';
+import { HTML_CONVERSION_MAX_EDGE } from '@/shared/contracts/documentExport';
+
+import { imageCapturePlan } from '../imageCapturePlan';
+import {
+  IMAGE_LAYOUT_WIDTH,
+  IMAGE_PAGE_HEIGHT,
+  IMAGE_PAGE_TOP_INSET,
+  imagePagePlan,
+  type ImagePageMeasurement,
+} from '../imagePagePlan';
 
 const measurement = (values: Partial<ImagePageMeasurement> = {}): ImagePageMeasurement => ({
-  width: 360,
-  height: 2800,
-  sections: [],
-  blocks: [],
+  width: IMAGE_LAYOUT_WIDTH,
+  height: IMAGE_PAGE_HEIGHT * 2 + 400,
   ink: [],
   ...values,
 });
@@ -13,26 +20,43 @@ test('short content remains one image without padding the content to a full page
   expect(imagePagePlan(measurement({ height: 400 }), 'pages')).toEqual([{ top: 0, height: 400 }]);
 });
 
-test('prefers message boundaries, then paragraph boundaries, without losing any content', () => {
-  expect(imagePagePlan(measurement({ sections: [1000], blocks: [1100, 2100] }), 'pages')).toEqual([
-    { top: 0, height: 1000 },
-    { top: 1000, height: 1100 },
-    { top: 2100, height: 700 },
+test('content beyond the former 1200-point page stays in one image when it fits', () => {
+  expect(imagePagePlan(measurement({ height: 2500 }), 'pages')).toEqual([{ top: 0, height: 2500 }]);
+});
+
+test('fills every image to the capture limit before starting the next', () => {
+  expect(imagePagePlan(measurement(), 'pages')).toEqual([
+    { top: 0, height: IMAGE_PAGE_HEIGHT },
+    { top: IMAGE_PAGE_HEIGHT, height: IMAGE_PAGE_HEIGHT },
+    { top: IMAGE_PAGE_HEIGHT * 2, height: 400 },
+  ]);
+});
+
+test('the content limit uses all available output height after scale and top spacing', () => {
+  const plan = imageCapturePlan(IMAGE_LAYOUT_WIDTH, IMAGE_PAGE_HEIGHT + IMAGE_PAGE_TOP_INSET);
+  expect(plan.height).toBeLessThanOrEqual(HTML_CONVERSION_MAX_EDGE);
+  expect(plan.height + plan.scale).toBeGreaterThan(HTML_CONVERSION_MAX_EDGE);
+  expect(imagePagePlan(measurement({ height: IMAGE_PAGE_HEIGHT }), 'pages')).toEqual([
+    { top: 0, height: IMAGE_PAGE_HEIGHT },
+  ]);
+  expect(imagePagePlan(measurement({ height: IMAGE_PAGE_HEIGHT + 1 }), 'pages')).toEqual([
+    { top: 0, height: IMAGE_PAGE_HEIGHT },
+    { top: IMAGE_PAGE_HEIGHT, height: 1 },
   ]);
 });
 
 test('long paragraphs break between text lines and never inside painted text', () => {
   const input = measurement({
     ink: [
-      [1180, 1208],
-      [2380, 2408],
+      [IMAGE_PAGE_HEIGHT - 20, IMAGE_PAGE_HEIGHT + 8],
+      [IMAGE_PAGE_HEIGHT * 2 - 20, IMAGE_PAGE_HEIGHT * 2 + 8],
     ],
   });
   const pages = imagePagePlan(input, 'pages');
   expect(pages).toEqual([
-    { top: 0, height: 1180 },
-    { top: 1180, height: 1200 },
-    { top: 2380, height: 420 },
+    { top: 0, height: IMAGE_PAGE_HEIGHT - 20 },
+    { top: IMAGE_PAGE_HEIGHT - 20, height: IMAGE_PAGE_HEIGHT },
+    { top: IMAGE_PAGE_HEIGHT * 2 - 20, height: 420 },
   ]);
   expect(pages.reduce((sum, page) => sum + page.height, 0)).toBe(input.height);
 });
@@ -42,25 +66,28 @@ test('overlapping table-cell lines move a boundary above the complete painted ba
     imagePagePlan(
       measurement({
         ink: [
-          [1180, 1210],
-          [1175, 1190],
+          [IMAGE_PAGE_HEIGHT - 20, IMAGE_PAGE_HEIGHT + 10],
+          [IMAGE_PAGE_HEIGHT - 25, IMAGE_PAGE_HEIGHT - 10],
         ],
-        blocks: [1190],
       }),
       'pages',
     )[0],
-  ).toEqual({ top: 0, height: 1175 });
+  ).toEqual({ top: 0, height: IMAGE_PAGE_HEIGHT - 25 });
 });
 
 test('moves a fitting image to the next page instead of cutting it', () => {
-  expect(imagePagePlan(measurement({ ink: [[700, 1400]] }), 'pages')[0]).toEqual({
-    top: 0,
-    height: 700,
-  });
+  expect(
+    imagePagePlan(
+      measurement({ ink: [[IMAGE_PAGE_HEIGHT - 500, IMAGE_PAGE_HEIGHT + 200]] }),
+      'pages',
+    )[0],
+  ).toEqual({ top: 0, height: IMAGE_PAGE_HEIGHT - 500 });
 });
 
 test('an object taller than a page fails instead of silently dropping or cutting its content', () => {
-  expect(() => imagePagePlan(measurement({ ink: [[0, 1800]] }), 'pages')).toThrow();
+  expect(() =>
+    imagePagePlan(measurement({ ink: [[0, IMAGE_PAGE_HEIGHT + 600]] }), 'pages'),
+  ).toThrow();
 });
 
 test('single-image mode preserves the complete height without a page-height restriction', () => {

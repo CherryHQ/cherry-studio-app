@@ -34,16 +34,18 @@ Active saving/delivery holds its current presentation until the share sheet fini
 
 `useDocumentExportHtmlCapture` supplies document-specific scripts and page frames to the shared
 [`HtmlCapture`](../../components/HtmlCapture/README.md) executor. The controlled WebView waits for
-decoded assets, fonts and stable layout. Paged capture measures
-message/paragraph boundaries and painted text/image ranges. It prefers a message boundary after
-60% of a page, then a paragraph boundary, then a gap between painted lines. Headings stay with the
+decoded assets, fonts and stable layout. Paged capture measures painted text/image ranges and fills
+each image to the capture limit, moving the cut back only to avoid painted content. Message and
+paragraph boundaries do not trigger early cuts. Headings stay with the
 following line, normal table rows stay together, and oversized table rows can continue between
 lines. Images are contained within a page. An indivisible object that cannot fit fails conversion
 instead of losing content. Included process/reasoning details expand before capture; Markdown and
 HTML retain their interactive disclosures.
 
-Each content slice is at most 1200 logical pixels high, with 16 pixels of top spacing and no page-number
-footer, so output is 1080 pixels wide and at most 3648 pixels high. The native surface
+Paged capture reuses HTML image conversion's 8192-pixel edge budget. At 3x density, each content
+slice is at most 2714 logical pixels high, with 16 pixels of top spacing and no page-number footer,
+so output is 1080 pixels wide and at most 8190 pixels high. This is an application capture budget,
+not a detected device maximum. The native surface
 shows only that slice. It never allocates a full-document bitmap in paged mode. Each lossless PNG
 is header-checked, handed to the backend, copied, and released before the next screenshot. The
 60-second timeout resets for each page; the physical lease covers capture and file delivery across
@@ -57,8 +59,9 @@ streaming encoder. Source images also retain device-dependent decode costs.
 ## Preview And Delivery
 
 `DocumentExportImagePreview` adapts the actual PNG files to the shared `ArtifactImagePages` viewer.
-It no longer substitutes the source HTML for the image. Bounded pages load original pixels, fit
-width and scroll vertically; zooming a page temporarily disables list scrolling. Large single PNGs
+It no longer substitutes the source HTML for the image. Pages fit width and scroll vertically;
+those above the viewer's original-pixel budget use display resolution. Zooming a page temporarily
+disables list scrolling. Large single PNGs
 use a viewport-sized browser showing the actual file, whose decoding/zoom quality still depends on
 the browser. No full-height native Image view receives those files.
 

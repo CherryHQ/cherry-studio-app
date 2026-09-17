@@ -1,6 +1,6 @@
 import { DocumentExportError } from '@/shared/contracts/documentExport';
 
-const CAPTURE_SCALE = 3;
+export const IMAGE_CAPTURE_SCALE = 3;
 
 export type ImageCapturePlan = {
   width: number;
@@ -14,14 +14,14 @@ export function imageCapturePlan(width: number, height: number): ImageCapturePla
   if (![width, height].every((value) => Number.isFinite(value) && value > 0)) {
     throw new DocumentExportError('capture-failed');
   }
-  const pixelWidth = Math.ceil(width * CAPTURE_SCALE);
-  const pixelHeight = Math.ceil(height * CAPTURE_SCALE);
+  const pixelWidth = Math.ceil(width * IMAGE_CAPTURE_SCALE);
+  const pixelHeight = Math.ceil(height * IMAGE_CAPTURE_SCALE);
   if (!Number.isSafeInteger(pixelWidth) || !Number.isSafeInteger(pixelHeight))
     throw new DocumentExportError('capture-failed');
   return {
     width: pixelWidth,
     height: pixelHeight,
-    scale: CAPTURE_SCALE,
+    scale: IMAGE_CAPTURE_SCALE,
     layoutHeight: height,
   };
 }
