@@ -37,7 +37,7 @@ const claudeModels: { apiModelId: string; modelId: string }[] = [
 export default defineProvider({
   id: 'poe',
   name: 'Poe',
-  defaultChatEndpoint: 'openai-chat-completions',
+  defaultChatEndpoint: 'openai-responses',
   endpointConfigs: {
     'openai-responses': {
       adapterFamily: 'openai',

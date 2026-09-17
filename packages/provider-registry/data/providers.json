@@ -1901,7 +1901,7 @@
       "apiFeatures": {
         "arrayContent": false
       },
-      "defaultChatEndpoint": "openai-chat-completions",
+      "defaultChatEndpoint": "openai-responses",
       "description": "Poe - AI model provider",
       "endpointConfigs": {
         "anthropic-messages": {
@@ -2206,5 +2206,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "30b0cbcdf43bcbbd"
+  "version": "b74a116e1d18b7d6"
 }
