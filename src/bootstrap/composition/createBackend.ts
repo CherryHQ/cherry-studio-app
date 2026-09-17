@@ -14,6 +14,7 @@ import type { DbService } from '@/backend/data/db/DbService';
 import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
+import { ProviderAccountService } from '@/backend/data/services/ProviderAccountService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
 import {
@@ -35,6 +36,10 @@ import {
   resolveUserAvatarUri,
   USER_AVATAR_IMAGE_CONFIG,
 } from '@/backend/services/profile/userAvatarStorage';
+import {
+  cherryInAccountDefinition,
+  type ProviderAccountRuntime,
+} from '@/backend/services/providers/account';
 import { createProvidersModule } from '@/backend/services/providers/createProvidersModule';
 import {
   deleteProviderAvatar,
@@ -62,6 +67,7 @@ export function createBackend(
   services: BackendServices,
   infrastructure: {
     dbService: DbService;
+    providerAccounts: ProviderAccountRuntime;
     documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
     languageServing: LanguageServingSupport & AgentRuntime;
@@ -69,11 +75,17 @@ export function createBackend(
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  infrastructure.providerAccounts.configure(new ProviderAccountService(dbService), [
+    cherryInAccountDefinition,
+  ]);
   // Capture this host's database; late work never resolves a replacement host.
   const exportFiles = new FileEntryService(dbService);
   infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
-  infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService), () =>
-    infrastructure.providerRegistryUpdater.ensureReady(),
+  infrastructure.desktopConnections.configure(
+    new DesktopConnectionService(dbService, (provider) =>
+      infrastructure.providerAccounts.getCapabilities(provider),
+    ),
+    () => infrastructure.providerRegistryUpdater.ensureReady(),
   );
   const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(
     infrastructure.languageServing,
@@ -143,6 +155,7 @@ export function createBackend(
     servers: services.mcpServer,
   });
   const providers = createProvidersModule({
+    accounts: infrastructure.providerAccounts,
     hasAvailableModels: async (provider) =>
       (await services.model.list({ providerId: provider.id, enabled: true })).some((model) =>
         isModelSupportedBySystem(provider, model),

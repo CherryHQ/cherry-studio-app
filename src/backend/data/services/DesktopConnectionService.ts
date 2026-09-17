@@ -1,5 +1,6 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
 import { asc, eq } from 'drizzle-orm';
+import { randomUUID } from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
 import type { DbService } from '@/backend/data/db/DbService';
@@ -10,6 +11,10 @@ import {
   userModelTable,
   userProviderTable,
 } from '@/backend/data/db/schemas';
+import type {
+  ProviderAccountCapabilities,
+  ProviderAccountIdentity,
+} from '@/shared/contracts/providerAccounts';
 import { DataApiError, DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import {
   type DesktopImportPreview,
@@ -117,7 +122,15 @@ function resolvePresetProviderId(provider: DesktopProviderSnapshot): string | nu
 
 function getProviderImportUnavailableReason(
   provider: DesktopProviderSnapshot,
+  account?: ProviderAccountCapabilities,
 ): DesktopImportUnavailableReason | undefined {
+  if (
+    provider.authType === 'oauth' &&
+    account?.apiKeys &&
+    provider.apiKeys.some((key) => key.isEnabled && key.key.trim())
+  ) {
+    return undefined;
+  }
   const hasSupportedAuthMethod = provider.authMethods?.includes('api-key') ?? false;
   return provider.authType === 'oauth' || (provider.authMethods && !hasSupportedAuthMethod)
     ? 'unsupported-auth'
@@ -134,7 +147,10 @@ function getEnabledDesktopProviders(snapshot: DesktopProvidersSnapshot) {
     }));
 }
 
-function mapProvider(provider: DesktopProviderSnapshot): Omit<InsertUserProviderRow, 'orderKey'> {
+function mapProvider(
+  provider: DesktopProviderSnapshot,
+  account?: ProviderAccountCapabilities,
+): Omit<InsertUserProviderRow, 'orderKey'> {
   const seenKeyIds = new Set<string>();
   const seenKeyValues = new Set<string>();
   for (const apiKey of provider.apiKeys) {
@@ -152,7 +168,10 @@ function mapProvider(provider: DesktopProviderSnapshot): Omit<InsertUserProvider
   return {
     apiFeatures: mapApiFeatures(provider),
     apiKeys: provider.apiKeys,
-    authConfig: parseSupportedAuthConfig(provider.authConfig),
+    authConfig:
+      account?.apiKeys && provider.authType === 'oauth'
+        ? { type: 'api-key' }
+        : parseSupportedAuthConfig(provider.authConfig),
     defaultChatEndpoint,
     endpointConfigs: mapEndpointConfigs(provider),
     isEnabled: true,
@@ -213,7 +232,12 @@ function mapModel(
 
 export class DesktopConnectionService {
   // Workflows bind the originating host's database; API reads use the active host.
-  constructor(private readonly database?: Pick<DbService, 'getDb' | 'withWriteTx'>) {}
+  constructor(
+    private readonly database?: Pick<DbService, 'getDb' | 'withWriteTx'>,
+    private readonly accountCapabilities?: (
+      provider: ProviderAccountIdentity,
+    ) => ProviderAccountCapabilities,
+  ) {}
 
   private get dbService() {
     return this.database ?? application.get('DbService');
@@ -302,7 +326,8 @@ export class DesktopConnectionService {
     const existingModels = new Set(modelRows.map((row) => row.id));
     return {
       providers: getEnabledDesktopProviders(snapshot).map((provider) => {
-        const unavailableReason = getProviderImportUnavailableReason(provider);
+        const account = this.accountCapabilities?.(provider);
+        const unavailableReason = getProviderImportUnavailableReason(provider, account);
         return {
           action: existingProviders.has(provider.id) ? 'update' : 'add',
           id: provider.id,
@@ -315,6 +340,9 @@ export class DesktopConnectionService {
           })),
           name: provider.name,
           ...(unavailableReason ? { unavailableReason } : {}),
+          ...(!unavailableReason && account?.balance && provider.authType === 'oauth'
+            ? { accountNotice: 'sign-in-for-balance' as const }
+            : {}),
         };
       }),
     };
@@ -339,7 +367,7 @@ export class DesktopConnectionService {
       if (!provider) {
         throw desktopError('invalid-selection', 'A selected provider is no longer available');
       }
-      if (getProviderImportUnavailableReason(provider)) {
+      if (getProviderImportUnavailableReason(provider, this.accountCapabilities?.(provider))) {
         throw desktopError(
           'unsupported-auth',
           'A selected provider uses an authentication method unsupported on mobile',
@@ -363,7 +391,19 @@ export class DesktopConnectionService {
           .from(userProviderTable)
           .where(eq(userProviderTable.providerId, providerId))
           .limit(1);
-        const configuration = mapProvider(provider);
+        const account = this.accountCapabilities?.(provider);
+        const configuration = mapProvider(provider, account);
+        if (existingProvider && account?.apiKeys) {
+          // Local key identities and enabled choices belong to the phone, including account-owned keys.
+          const keys = [...(existingProvider.apiKeys ?? [])];
+          for (const key of provider.apiKeys) {
+            if (keys.some((existing) => existing.key === key.key)) continue;
+            keys.push(
+              keys.some((existing) => existing.id === key.id) ? { ...key, id: randomUUID() } : key,
+            );
+          }
+          configuration.apiKeys = keys;
+        }
         if (!configuration.presetProviderId) {
           // Retained mobile models may still use endpoints absent from the PC.
           configuration.endpointConfigs = {

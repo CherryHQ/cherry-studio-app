@@ -90,4 +90,26 @@ describe('desktop connection api schemas', () => {
     });
     expect(parseSupportedAuthConfig(snapshot.providers[0]?.authConfig)).toBeNull();
   });
+  test('drops desktop OAuth secrets while deriving eligibility from authConfig when authType is absent', () => {
+    const snapshot = DesktopProvidersSnapshotSchema.parse({
+      version: 1,
+      providers: [
+        {
+          id: 'cherryin',
+          name: 'CherryIN',
+          models: [],
+          apiKeys: [{ id: 'model', key: 'model-key', isEnabled: true }],
+          authConfig: {
+            type: 'oauth',
+            accessToken: 'desktop-access',
+            refreshToken: 'desktop-refresh',
+          },
+        },
+      ],
+    });
+    expect(snapshot.providers[0]).toMatchObject({ authType: 'oauth', authConfig: null });
+    expect(JSON.stringify(snapshot)).not.toContain('desktop-access');
+    expect(JSON.stringify(snapshot)).not.toContain('desktop-refresh');
+    expect(snapshot.providers[0]?.apiKeys[0]?.key).toBe('model-key');
+  });
 });

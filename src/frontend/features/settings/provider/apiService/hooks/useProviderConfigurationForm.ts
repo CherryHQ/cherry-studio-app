@@ -1,9 +1,9 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 
-import { useQuery } from '@/frontend/data';
+import { useBackendModule, useQuery } from '@/frontend/data';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 
 import {
@@ -42,13 +42,15 @@ export function useProviderConfigurationForm(providerId: string) {
   const { toast } = useToast();
   const providerAvatars = useProviderAvatarActions();
   const storedAvatarUri = useProviderAvatar(providerId);
+  const accounts = useBackendModule('providers').accounts;
   const queries = useProviderApiServiceQueries(providerId);
   const { apiKeys, apiKeysQuery, authConfig, authConfigQuery, provider, providerQuery } = queries;
   const modelsQuery = useQuery('/models', { enabled: Boolean(providerId), query: { providerId } });
   const isCustomProvider = isFullyCustomProvider(provider);
   const [isPersisting, setIsPersisting] = useState(false);
   const savePending = useRef(false);
-  const isSaving = isPersisting || queries.isSaving;
+  const [isAccountBusy, setIsAccountBusy] = useState(false);
+  const isSaving = isAccountBusy || isPersisting || queries.isSaving;
   const isLoading =
     providerQuery.isPending ||
     apiKeysQuery.isPending ||
@@ -79,6 +81,22 @@ export function useProviderConfigurationForm(providerId: string) {
     sourceKey: !isLoading && provider ? provider.id : '',
   });
   const { state, meta } = form;
+  const previousKeys = useRef({ providerId, input: apiKeysInput });
+  const replaceSavedApiKey = form.actions.replaceSavedApiKey;
+  useEffect(() => {
+    const previous = previousKeys.current;
+    previousKeys.current = { providerId, input: apiKeysInput };
+    if (
+      !isLoading &&
+      provider &&
+      accounts.getCapabilities(provider).apiKeys &&
+      previous.providerId === providerId &&
+      previous.input !== apiKeysInput &&
+      state.apiKey === previous.input
+    ) {
+      replaceSavedApiKey(apiKeysInput);
+    }
+  }, [accounts, apiKeysInput, isLoading, provider, providerId, replaceSavedApiKey, state.apiKey]);
   const showApiKey = shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type, provider);
   const requiresApiKey = showApiKey && !provider?.authOptional;
   const disabledKeys = Boolean(apiKeys?.length) && !apiKeys?.some((key) => key.isEnabled);
@@ -223,7 +241,15 @@ export function useProviderConfigurationForm(providerId: string) {
     }
   }
 
+  async function reloadAccountKeys() {
+    const result = await apiKeysQuery.refetch({ throwOnError: true });
+    form.actions.replaceSavedApiKey(buildApiKeysInputFromEntries(result.data ?? []));
+  }
+
   return {
+    accountChangesDisabled: state.apiKey !== apiKeysInput || isSaving,
+    reloadAccountKeys,
+    setIsAccountBusy,
     apiKeys,
     canCompleteSetup,
     canSubmit,

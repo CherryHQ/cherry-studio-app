@@ -234,6 +234,13 @@ export const DesktopProviderSnapshotSchema = z
       }
       modelIds.add(model.modelId);
     }
+  })
+  .transform((provider) => {
+    const oauth =
+      provider.authType === 'oauth' ||
+      z.object({ type: z.literal('oauth') }).safeParse(provider.authConfig).success;
+    // Keep import eligibility metadata, but never retain a desktop account grant.
+    return oauth ? { ...provider, authType: 'oauth' as const, authConfig: null } : provider;
   });
 export type DesktopProviderSnapshot = z.infer<typeof DesktopProviderSnapshotSchema>;
 
@@ -280,6 +287,7 @@ export type DesktopImportPreview = {
     models: { action: 'add' | 'skip'; modelId: string; name: string }[];
     name: string;
     unavailableReason?: DesktopImportUnavailableReason;
+    accountNotice?: 'sign-in-for-balance';
   }[];
 };
 

@@ -97,3 +97,34 @@ provider models for management, labels unavailable models, and supports detail, 
 menus, and scoped multi-selection. The detail page's `model/` branch owns model inspection and its
 `edit/` child. Model grouping, deletion protection, selection, and synchronization remain under
 `models/`.
+
+## Provider Accounts
+
+`backend.providers.accounts` is the shared account contract. Setup and detail compose
+`components/ProviderAccount/` using its capability declaration; `account/` receives the shared
+`/oauth/callback` route. UI, callback routing, query keys and credential ownership do not branch on
+provider IDs. The registered adapter determines sign-in, model API-key, balance and recharge support.
+
+The backend's `providers/account/ProviderAccountRuntime` owns attempts, callback validation,
+credential persistence, refresh, logout and provider deletion cleanup. `providerOauth` supplies the
+shared PKCE authorization-code client. Adapters own client configuration, account API response
+parsing and the recharge URL. The composition root currently registers only CherryIN.
+
+Model calls keep their existing supported authentication paths. Account login adds model API keys
+when the adapter supplies them; logout removes only unchanged keys owned by that local account.
+Account key changes update the form baseline without discarding other edits. Balance values carry
+their currency instead of assuming USD throughout the shared UI.
+
+Desktop OAuth imports use the same registered model-key capability. They discard the desktop grant,
+preserve local keys and IDs/enabled choices, and add new PC keys. The balance belongs to the account
+signed in on this phone; imported keys may belong to a different account. Unsupported upstream
+OAuth/model protocols are not enabled merely by catalog metadata.
+
+Recharge opens the adapter's official system-browser URL and refreshes the account on return.
+An adapter receives a shared navigation return URL and may use it only when its upstream documents
+a return parameter. CherryIN currently uses its existing top-up URL without a return parameter.
+Automatic return stays optional. CherryIN uses the fixed public client ID in its adapter. The account
+server must register the active build profile's shared callback: `cherrystudio://oauth/callback`
+for production, `cherrystudio-dev://oauth/callback` for development, and
+`cherrystudio-preview://oauth/callback` for preview. CherryIN development/preview registration remains
+unconfirmed.
