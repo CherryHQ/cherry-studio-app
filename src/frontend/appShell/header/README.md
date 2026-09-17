@@ -41,4 +41,6 @@ This module owns Expo Router header adapters used by the app screens.
   card token and a compact shadow so their complete outline remains visible against the header;
   inverse surfaces use constant contrast because they sit over uncontrolled media.
 - `MainHeaderAgentButton` is the one exception to the black-icon rule: it carries the current
-  Agent's avatar, so the chat identifies its Agent the same way the Agent list does.
+  Agent's avatar, so the chat identifies its Agent the same way the Agent list does. The avatar and
+  single-line name share a CherryUI `Surface` pill; long names truncate at the end, and pressing the
+  pill opens the Agent picker.

@@ -57,4 +57,16 @@ describe('agent api schemas', () => {
       CreateAgentSchema.safeParse({ avatar: 'file:///avatar.webp', name: 'Cherry Agent' }).success,
     ).toBe(false);
   });
+
+  test('accepts a generated slime descriptor only at creation', () => {
+    const avatar = 'agent-avatar-slime:v1:round:blue:slant';
+    expect(CreateAgentSchema.parse({ avatar, name: 'Researcher' })).toMatchObject({ avatar });
+    expect(UpdateAgentSchema.safeParse({ avatar }).success).toBe(false);
+    expect(
+      CreateAgentSchema.safeParse({
+        avatar: 'agent-avatar-slime:v1:round:blue:unknown',
+        name: 'Researcher',
+      }).success,
+    ).toBe(false);
+  });
 });

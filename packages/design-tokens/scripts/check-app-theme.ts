@@ -40,6 +40,8 @@ const colorLiteralAllowlist: Record<string, string> = {
   'packages/ui/src/scripts/generate-icons.ts': 'build script, outside the render tree',
   'src/frontend/components/Avatar/utils/brandAvatarStyles.ts':
     'upstream of the tokens: picks ink by luminance, its output is the colour decision',
+  'src/frontend/components/Avatar/utils/slimeAvatarArtwork.ts':
+    'artwork: slime avatar palettes and eye ink are fixed illustration colors, not theme roles',
   'src/frontend/appShell/startup/StartupCover.tsx':
     'outside the theme runtime: paints before the CSS variable tree exists',
   'src/frontend/features/onboarding/logoDraw/utils/logoPalette.ts':

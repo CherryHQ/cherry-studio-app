@@ -98,8 +98,12 @@ denial becomes `denied`. Cancellation, failure, or startup reconciliation conver
 before the assistant message settles. Later model history therefore contains paired calls/results
 and never replays an unanswerable approval. No `agent_approval` table.
 
-**Avatar stores the built-in Cherry emoji or a stable file reference.** The initial Cherry Agent
-and the onboarding fallback store `🍒`, matching Desktop's Cherry Assistant. Existing records are
+**Avatar stores a slime descriptor, built-in Cherry emoji, or stable file reference.** New user
+Agents randomly combine a shape, color, and eye style once, persisted as
+`agent-avatar-slime:v1:{shape}:{color}:{eyes}`. The create form holds this value for both its preview
+and create request; `AgentService` generates one if a caller omits it. Renames and reads never
+regenerate the artwork. There is no appearance configuration UI. The initial Cherry Agent and the
+onboarding fallback still store `🍒`, matching Desktop's Cherry Assistant; existing records are
 preserved. Uploaded avatars follow the user-avatar pattern
 ([File Model](../data/file-model.md), `userAvatarStorage.ts`): processed to
 WebP under `{documentDirectory}/agent-avatars/`, referenced as
@@ -109,12 +113,12 @@ attached to a soft-deleted Agent for historical Sessions.
 
 Implemented as `agentAvatarStorage.ts` over the parameterized `userContentImageStorage`, driven by
 `PUT /agents/:id/avatar`: store the new image, write the column, then drop the previous file, with a
-column-write failure compensating the new file. Creation accepts only the built-in `🍒` value;
+column-write failure compensating the new file. Creation accepts a validated slime descriptor or `🍒`;
 updates reject direct avatar writes, and managed file references always use the image workflow.
 The uuid rotates on every replace so the uri, which doubles as the image cache key,
 changes with it.
 
-Emoji avatars render from `Agent.avatar` and have no image URI. File references project into a
+Slime and emoji avatars render from `Agent.avatar` and have no image URI. File references project into a
 device-local `Agent.avatarUri`, rebuilt per read because the
 absolute path does not survive container relocation. That projection happens at the Data API
 boundary, not in `AgentService`: resolving it is file-system work under `backend/services`, which
@@ -175,7 +179,7 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `id` | text | PK, UUID v4 | |
 | `name` | text | NOT NULL | |
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
-| `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
+| `avatar` | text | NULL | Slime descriptor, Cherry emoji, or stable file reference; NULL uses the name fallback |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
 | `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |

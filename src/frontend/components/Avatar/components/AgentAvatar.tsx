@@ -3,8 +3,10 @@ import { Avatar } from '@cherrystudio/ui/components';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
+import { parseSlimeAvatar } from '@/shared/data/types/agentAvatar';
 
 import { getBrandAvatarFallback } from '../utils/brandAvatarStyles';
+import { SlimeAvatar } from './SlimeAvatar';
 
 const AGENT_AVATAR_SIZE = 40;
 const AGENT_AVATAR_INITIAL_FONT_SIZE = 18;
@@ -12,7 +14,7 @@ const AGENT_AVATAR_INITIAL_FONT_SIZE = 18;
 type AgentAvatarProps = {
   /** Defaults to `name`; pass one explicitly when the name may be blank. */
   accessibilityLabel?: string;
-  /** Stored avatar value; built-in emoji are rendered without an image URI. */
+  /** Stored avatar value; slime artwork and built-in emoji need no image URI. */
   avatar?: null | string;
   name: string;
   size?: number;
@@ -22,13 +24,8 @@ type AgentAvatarProps = {
 };
 
 /**
- * Round avatar for an Agent: photo, built-in emoji, or the generated initial tile providers use
- * (`getBrandAvatarFallback`) — round rather than square because an Agent reads
- * as a persona, not a brand.
- *
- * A blank name falls through to a neutral bot badge instead of an initial: the
- * create form renders this before anything is typed, and the shared fallback's
- * placeholder letter is `P`, from its provider origins.
+ * Round Agent avatar: photo, persisted slime artwork, built-in emoji, then the
+ * legacy name fallback. Unnamed legacy records use a neutral bot badge.
  */
 export function AgentAvatar({
   accessibilityLabel,
@@ -39,6 +36,7 @@ export function AgentAvatar({
   uri,
 }: AgentAvatarProps) {
   const iconColor = useThemeColor('foreground');
+  const slime = parseSlimeAvatar(avatar);
   const fallback = name.trim() ? getBrandAvatarFallback(name) : undefined;
 
   return (
@@ -51,6 +49,8 @@ export function AgentAvatar({
           recyclingKey={uri}
           source={{ uri }}
         />
+      ) : slime ? (
+        <SlimeAvatar parts={slime} size={size} />
       ) : avatar === CHERRY_AGENT_AVATAR ? (
         <Avatar.Fallback textProps={{ style: { fontSize: Math.round(size * 0.58) } }}>
           {avatar}

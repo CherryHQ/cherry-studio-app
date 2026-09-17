@@ -81,20 +81,23 @@ describe('replaceAgentAvatar', () => {
     ).resolves.toBe(`agent-avatar-file:${STORED_NAME}`);
   });
 
-  it.each([null, '🍒'])('has no previous file to drop for avatar %s', async (previousAvatar) => {
-    const images = createImages();
+  it.each([null, '🍒', 'agent-avatar-slime:v1:round:blue:slant'])(
+    'has no previous file to drop for avatar %s',
+    async (previousAvatar) => {
+      const images = createImages();
 
-    const persisted = await replaceAgentAvatar(
-      images,
-      AGENT_ID,
-      sourceUri,
-      previousAvatar,
-      async (avatar) => avatar,
-    );
+      const persisted = await replaceAgentAvatar(
+        images,
+        AGENT_ID,
+        sourceUri,
+        previousAvatar,
+        async (avatar) => avatar,
+      );
 
-    expect(persisted).toBe(`agent-avatar-file:${STORED_NAME}`);
-    expect(images.remove).not.toHaveBeenCalled();
-  });
+      expect(persisted).toBe(`agent-avatar-file:${STORED_NAME}`);
+      expect(images.remove).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('resolveAgentAvatarUri', () => {
@@ -106,13 +109,16 @@ describe('resolveAgentAvatarUri', () => {
     );
   });
 
-  it.each([null, '', 'file:///documents/agent-avatars/escape.webp'])(
-    'resolves nothing for %p',
-    async (avatar) => {
-      const images = createImages();
+  it.each([
+    null,
+    '',
+    '🍒',
+    'agent-avatar-slime:v1:round:blue:slant',
+    'file:///documents/agent-avatars/escape.webp',
+  ])('resolves nothing for %p', async (avatar) => {
+    const images = createImages();
 
-      await expect(resolveAgentAvatarUri(images, avatar)).resolves.toBeUndefined();
-      expect(images.resolve).not.toHaveBeenCalled();
-    },
-  );
+    await expect(resolveAgentAvatarUri(images, avatar)).resolves.toBeUndefined();
+    expect(images.resolve).not.toHaveBeenCalled();
+  });
 });

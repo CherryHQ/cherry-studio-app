@@ -13,11 +13,11 @@ export const CHERRY_AGENT_AVATAR = '🍒';
 export const AgentIdSchema = z.uuidv4();
 
 export const AgentSchema = z.strictObject({
-  /** Built-in Cherry emoji or a managed avatar file reference; null uses the name fallback. */
+  /** Slime descriptor, built-in Cherry emoji, or managed file; null uses the name fallback. */
   avatar: z.string().nullable(),
   /**
    * Read-time projection of `avatar` into a device-local image URI; null when
-   * an emoji, unset, or when the file is gone. Absolute paths are never persisted — iOS
+   * slime artwork, an emoji, unset, or when the file is gone. Absolute paths are never persisted — iOS
    * relocates the app container — so this is rebuilt on every read.
    */
   avatarUri: z.string().nullable(),
