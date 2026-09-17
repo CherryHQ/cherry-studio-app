@@ -36,6 +36,7 @@ import {
   estimatePiLoopContextHeadroomTokens,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
   PI_IMAGE_CONTEXT_TOKEN_RESERVE,
+  resolvePiOutputReserveTokens,
 } from '../contextCompaction';
 import {
   PI_DOCUMENT_ATTACHMENT_ENVELOPE_PREFIX,
@@ -173,7 +174,7 @@ function createTestRuntime(
       preflightModel: () => ({
         contextWindow: holder.resolution.model.contextWindow,
         inputModalities: [...holder.resolution.model.input],
-        maxInputTokens: holder.resolution.model.contextWindow - holder.resolution.model.maxTokens,
+        maxInputTokens: holder.resolution.maxInputTokens ?? holder.resolution.model.contextWindow,
         maxOutputTokens: holder.resolution.model.maxTokens,
         supportsTools: holder.resolution.supportsTools,
       }),
@@ -1265,6 +1266,40 @@ describe('PiRuntime mapping', () => {
       usage: { input: 0, output: 0, totalTokens: 0 },
     });
     await session.close();
+  });
+
+  test.each([32_000, 500_000])(
+    'admits a short prompt when the output capability equals the %i-token context window',
+    async (contextWindow) => {
+      const runtime = createTestRuntime();
+      const holder = arrange(runtime, (context) => emitText(context, '可用。'));
+      holder.resolution = {
+        ...holder.resolution,
+        model: { ...holder.resolution.model, contextWindow, maxTokens: contextWindow },
+      };
+      const session = await runtime.open();
+
+      const events = await collect(
+        session.execute(
+          baseRequest('turn-shared-output-window', {
+            input: [{ type: 'text', text: '测试' }],
+          }),
+        ),
+      );
+
+      expect(events.some((event) => event.type === 'failed')).toBe(false);
+      expect(events.at(-1)).toEqual({ type: 'completed' });
+      expect(holder.lastOptions?.initialState?.model?.maxTokens).toBe(contextWindow);
+      await session.close();
+    },
+  );
+
+  test('keeps output headroom bounded without reserving a model-wide output capability', () => {
+    const model = { contextWindow: 500_000, maxTokens: 500_000 };
+    expect(resolvePiOutputReserveTokens(model)).toBe(16_384);
+    expect(resolvePiOutputReserveTokens(model, 512)).toBe(512);
+    expect(resolvePiOutputReserveTokens({ ...model, maxTokens: 4_096 })).toBe(4_096);
+    expect(resolvePiOutputReserveTokens({ contextWindow: 8_000, maxTokens: 8_000 })).toBe(1_600);
   });
 
   test('reserves output once while respecting independent input and total context limits', () => {

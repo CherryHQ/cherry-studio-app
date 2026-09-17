@@ -54,6 +54,7 @@ import {
   estimatePiMessagesTokens,
   PI_ESTIMATED_CHARACTERS_PER_TOKEN,
   planPiContext,
+  resolvePiOutputReserveTokens,
   type PiContextCompactionOptions,
 } from './contextCompaction';
 import { toPiConversation } from './modelMessages';
@@ -730,6 +731,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return stream;
       };
       const streamFn = tracePiStream(providerStream, request.trace);
+      const outputReserveTokens = resolvePiOutputReserveTokens(
+        resolution.model,
+        request.options.maxOutputTokens,
+      );
       const models: Pick<Models, 'completeSimple'> = {
         completeSimple: async (model, context, options) => {
           if (
@@ -737,7 +742,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
               contextWindow: model.contextWindow,
               maxInputTokens: resolution.maxInputTokens,
               messages: context.messages,
-              outputReserveTokens: options?.maxTokens ?? model.maxTokens,
+              outputReserveTokens: resolvePiOutputReserveTokens(model, options?.maxTokens),
               systemPrompt: context.systemPrompt ?? '',
               tools: context.tools ?? [],
             }) < 0
@@ -767,7 +772,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           model: resolution.model,
           models,
           options: this.contextOptions,
-          outputReserveTokens: request.options.maxOutputTokens ?? resolution.model.maxTokens,
+          outputReserveTokens,
           redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions),
           signal: turn.abortController.signal,
           thinkingLevel,
@@ -790,7 +795,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       if (contextPlan.checkpoint) {
         this.emit(turn, { type: 'context.checkpoint', checkpoint: contextPlan.checkpoint });
       }
-      const outputReserveTokens = request.options.maxOutputTokens ?? resolution.model.maxTokens;
       let modelContext: Pick<PiAgentContext, 'systemPrompt' | 'tools'> = {
         systemPrompt: conversation.systemPrompt,
         tools: piTools,

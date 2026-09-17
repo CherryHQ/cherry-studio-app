@@ -29,6 +29,21 @@ export const PI_COMPACTION_SETTINGS: CompactionSettings = {
   keepRecentTokens: 20_000,
 };
 
+/** Planning headroom is bounded; Pi fits the actual output cap to each request's context. */
+export function resolvePiOutputReserveTokens(
+  model: Pick<PiModel<PiApi>, 'contextWindow' | 'maxTokens'>,
+  maxTokens = model.maxTokens,
+): number {
+  return Math.max(
+    0,
+    Math.min(
+      maxTokens,
+      model.maxTokens,
+      resolveCompactionSettings(model.contextWindow).reserveTokens,
+    ),
+  );
+}
+
 export const CHERRY_COMPACTION_INSTRUCTIONS = `Summarize a general mobile assistant conversation, not a coding workspace.
 Preserve user goals, preferences, decisions, unresolved questions, and conclusions needed to continue.
 Keep tool calls paired with their outcomes. Do not reproduce attachment bodies, credentials, connection details, or sensitive tool-result payloads; retain only non-sensitive conclusions.`;

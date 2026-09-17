@@ -190,10 +190,10 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
 export function toPiModelPreflight(model: Model): RuntimeModelPreflight {
   const contextWindow = model.contextWindow ?? DEFAULT_MODEL_CONTEXT_WINDOW;
   const maxOutputTokens = model.maxOutputTokens ?? DEFAULT_MODEL_MAX_OUTPUT_TOKENS;
-  const contextInputLimit = Math.max(0, contextWindow - maxOutputTokens);
+  // These are model limits; the Runtime budgets input and output together for each request.
   const maxInputTokens = Math.max(
     0,
-    Math.min(model.maxInputTokens ?? contextInputLimit, contextInputLimit),
+    Math.min(model.maxInputTokens ?? contextWindow, contextWindow),
   );
 
   return {

@@ -5,6 +5,7 @@ import {
   type EndpointType,
 } from '@cherrystudio/provider-registry';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
@@ -310,10 +311,49 @@ describe('Pi model resolver', () => {
 
     const resolution = await resolve(resolver, { maxOutputTokens: 1024 });
 
-    expect(toPiModelPreflight(model).maxInputTokens).toBe(96_000);
+    expect(toPiModelPreflight(model).maxInputTokens).toBe(120_000);
     expect(resolution.maxInputTokens).toBe(120_000);
     expect(resolution.model.contextWindow).toBe(128_000);
     expect(resolution.model.maxTokens).toBe(32_000);
+  });
+
+  test('preserves input capacity and the output capability when both span the full context', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_RESPONSES;
+    const model = makeModel(endpoint, {
+      apiModelId: 'grok-4.5',
+      contextWindow: 500_000,
+      maxOutputTokens: 500_000,
+    });
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(endpoint, 'https://api.x.ai/v1', 'xai-responses'),
+    );
+    mockGetModelById.mockResolvedValue(model);
+
+    const preflight = await resolver.preflightModel({
+      providerId: 'test-provider',
+      modelId: model.modelId,
+    });
+    const resolution = await resolve(resolver);
+
+    expect(preflight).toMatchObject({
+      contextWindow: 500_000,
+      maxInputTokens: 500_000,
+      maxOutputTokens: 500_000,
+    });
+    expect(resolution.model.maxTokens).toBe(500_000);
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ maxTokens: 500_000 }),
+    );
+    const shortRequest = buildBaseOptions(resolution.model, {
+      messages: [{ role: 'user', content: '测试', timestamp: 1 }],
+    });
+    const longerRequest = buildBaseOptions(resolution.model, {
+      messages: [{ role: 'user', content: 'x'.repeat(100_000), timestamp: 1 }],
+    });
+    expect(shortRequest.maxTokens).toBeGreaterThan(16_384);
+    expect(shortRequest.maxTokens).toBeLessThan(500_000);
+    expect(longerRequest.maxTokens).toBeLessThan(shortRequest.maxTokens!);
   });
 
   test.each([{ id: 'perplexity' }, { id: 'copied-perplexity', presetProviderId: 'perplexity' }])(
@@ -373,7 +413,7 @@ describe('Pi model resolver', () => {
     ).resolves.toMatchObject({
       contextWindow: 128_000,
       inputModalities: ['text', 'image'],
-      maxInputTokens: 123_904,
+      maxInputTokens: 128_000,
       maxOutputTokens: 4_096,
       supportsTools: true,
     });
@@ -381,7 +421,7 @@ describe('Pi model resolver', () => {
     expect(mockBindPiStream).not.toHaveBeenCalled();
   });
 
-  test('bounds input capacity by both the model limit and reserved output', () => {
+  test('bounds the independent input limit by the total context window', () => {
     expect(
       toPiModelPreflight(
         makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES, {
@@ -390,7 +430,7 @@ describe('Pi model resolver', () => {
           maxOutputTokens: 4_000,
         }),
       ),
-    ).toMatchObject({ contextWindow: 16_000, maxInputTokens: 12_000, maxOutputTokens: 4_000 });
+    ).toMatchObject({ contextWindow: 16_000, maxInputTokens: 16_000, maxOutputTokens: 4_000 });
   });
 
   test('uses the existing per-model gateway route', async () => {

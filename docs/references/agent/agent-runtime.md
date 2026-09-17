@@ -118,6 +118,13 @@ limits, and native tool support. The Host calls it before reservation; provider 
 credentials, endpoints, and headers remain private to the Runtime adapter. Pi preflight and final
 model resolution read the same mobile model/provider services and enforce the same endpoint rules.
 
+Preflight reports the independent input limit, bounded by the total context window, without
+subtracting the model's maximum output capability. Pi context planning reserves bounded output
+headroom (at most 16,384 tokens and 20% of the context window, capped by the requested/model output
+limit). This reserve is separate from the output cap sent to Pi: the SDK dynamically fits that cap
+to each request's remaining context. Attachment, tool-loop, and compaction input guards remain
+responsible for rejecting inputs that cannot fit.
+
 Capabilities describe what the engine contract can represent. In particular, `tools: true` means
 Pi can run a tool loop; it does not mean any effective tool will enter the turn. The Host derives
 the effective tools from system and Agent-owned inputs, and the Pi model adapter separately checks
