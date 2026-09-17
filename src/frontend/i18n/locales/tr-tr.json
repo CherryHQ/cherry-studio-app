@@ -563,6 +563,7 @@
   "models.registry.downloadRequired": "Devam etmek için model kataloğunu indirin. Lütfen tekrar deneyin; katalog indirildikten sonra çevrimdışı kullanım için kaydedilir.",
   "models.registry.failed": "Model kataloğu indirilemedi",
   "models.registry.loading": "Model kataloğu indiriliyor…",
+  "models.registry.updated": "Model bilgileri güncellendi",
   "models.type.audio": "Ses",
   "models.type.embedding": "Gömme",
   "models.type.image": "Görsel",

@@ -563,6 +563,7 @@
   "models.registry.downloadRequired": "Laden Sie den Modellkatalog herunter, um fortzufahren. Bitte versuchen Sie es erneut; Nach dem Herunterladen wird der Katalog für die Offline-Verwendung gespeichert.",
   "models.registry.failed": "Der Modellkatalog konnte nicht heruntergeladen werden",
   "models.registry.loading": "Modellkatalog wird heruntergeladen…",
+  "models.registry.updated": "Modellinformationen aktualisiert",
   "models.type.audio": "Audio",
   "models.type.embedding": "Embedding",
   "models.type.image": "Bild",

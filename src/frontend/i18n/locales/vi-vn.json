@@ -559,6 +559,7 @@
   "models.registry.downloadRequired": "Tải xuống danh mục mô hình để tiếp tục. Vui lòng thử lại; sau khi tải xuống, danh mục sẽ được lưu để sử dụng ngoại tuyến.",
   "models.registry.failed": "Không thể tải xuống danh mục mẫu máy",
   "models.registry.loading": "Đang tải xuống danh mục mô hình…",
+  "models.registry.updated": "Đã cập nhật thông tin mô hình",
   "models.type.audio": "Âm thanh",
   "models.type.embedding": "Nhúng",
   "models.type.image": "Hình ảnh",

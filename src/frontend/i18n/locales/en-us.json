@@ -563,6 +563,7 @@
   "models.registry.downloadRequired": "Download the model catalog to continue. Please retry; once downloaded, the catalog is saved for offline use.",
   "models.registry.failed": "Could not download the model catalog",
   "models.registry.loading": "Downloading model catalog…",
+  "models.registry.updated": "Model information updated",
   "models.type.audio": "Audio",
   "models.type.embedding": "Embedding",
   "models.type.image": "Image",

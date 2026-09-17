@@ -563,6 +563,7 @@
   "models.registry.downloadRequired": "Κάντε λήψη του καταλόγου μοντέλων για να συνεχίσετε. Παρακαλώ δοκιμάστε ξανά. Μόλις γίνει λήψη, ο κατάλογος αποθηκεύεται για χρήση εκτός σύνδεσης.",
   "models.registry.failed": "Δεν ήταν δυνατή η λήψη του καταλόγου μοντέλων",
   "models.registry.loading": "Λήψη καταλόγου μοντέλων…",
+  "models.registry.updated": "Οι πληροφορίες των μοντέλων ενημερώθηκαν",
   "models.type.audio": "Ήχος",
   "models.type.embedding": "ενσωμάτωση",
   "models.type.image": "Εικόνα",

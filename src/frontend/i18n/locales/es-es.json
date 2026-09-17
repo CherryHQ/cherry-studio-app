@@ -567,6 +567,7 @@
   "models.registry.downloadRequired": "Descargue el catálogo de modelos para continuar. Vuelva a intentarlo; Una vez descargado, el catálogo se guarda para su uso sin conexión.",
   "models.registry.failed": "No se pudo descargar el catálogo de modelos",
   "models.registry.loading": "Descargando catálogo de modelos…",
+  "models.registry.updated": "Información de los modelos actualizada",
   "models.type.audio": "Audio",
   "models.type.embedding": "Embeddings",
   "models.type.image": "Imagen",

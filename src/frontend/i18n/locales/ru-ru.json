@@ -571,6 +571,7 @@
   "models.registry.downloadRequired": "Чтобы продолжить, загрузите каталог моделей. Пожалуйста, повторите попытку; После загрузки каталог сохраняется для использования в автономном режиме.",
   "models.registry.failed": "Не удалось загрузить каталог моделей.",
   "models.registry.loading": "Загрузка каталога моделей…",
+  "models.registry.updated": "Сведения о моделях обновлены",
   "models.type.audio": "Аудио",
   "models.type.embedding": "Эмбеддинги",
   "models.type.image": "Изображение",

@@ -559,6 +559,7 @@
   "models.registry.downloadRequired": "需要先下载模型目录。请重试，下载完成后可离线使用目录。",
   "models.registry.failed": "模型目录下载失败",
   "models.registry.loading": "正在下载模型目录…",
+  "models.registry.updated": "模型信息已更新",
   "models.type.audio": "音频",
   "models.type.embedding": "嵌入",
   "models.type.image": "图片",

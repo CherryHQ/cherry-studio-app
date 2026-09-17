@@ -567,6 +567,7 @@
   "models.registry.downloadRequired": "Descărcați catalogul modelului pentru a continua. Vă rugăm să reîncercați; odată descărcat, catalogul este salvat pentru utilizare offline.",
   "models.registry.failed": "Nu s-a putut descărca catalogul de modele",
   "models.registry.loading": "Se descarcă catalogul de modele...",
+  "models.registry.updated": "Informațiile despre modele au fost actualizate",
   "models.type.audio": "Audio",
   "models.type.embedding": "Embedding",
   "models.type.image": "Imagine",

@@ -567,6 +567,7 @@
   "models.registry.downloadRequired": "Téléchargez le catalogue de modèles pour continuer. Veuillez réessayer ; une fois téléchargé, le catalogue est enregistré pour une utilisation hors ligne.",
   "models.registry.failed": "Impossible de télécharger le catalogue de modèles",
   "models.registry.loading": "Téléchargement du catalogue de modèles…",
+  "models.registry.updated": "Informations sur les modèles mises à jour",
   "models.type.audio": "Audio",
   "models.type.embedding": "Incorporation",
   "models.type.image": "Image",
