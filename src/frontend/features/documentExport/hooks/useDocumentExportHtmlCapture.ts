@@ -6,7 +6,7 @@ import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/
 import { imageCapturePlan } from '../utils/imageCapturePlan';
 import { imageMeasurementScript, imagePageReadinessScript } from '../utils/imageCaptureScripts';
 import {
-  IMAGE_PAGE_CHROME,
+  IMAGE_PAGE_TOP_INSET,
   imagePagePlan,
   type ImagePageMeasurement,
 } from '../utils/imagePagePlan';
@@ -34,7 +34,7 @@ export function useDocumentExportHtmlCapture() {
             return pages.map((slice, index) => {
               const plan = imageCapturePlan(
                 input.width,
-                slice.height + (input.layout === 'pages' ? IMAGE_PAGE_CHROME : 0),
+                slice.height + (input.layout === 'pages' ? IMAGE_PAGE_TOP_INSET : 0),
               );
               return {
                 width: plan.width,
@@ -42,7 +42,6 @@ export function useDocumentExportHtmlCapture() {
                 script: imagePageReadinessScript(
                   id,
                   index,
-                  pages.length,
                   input.width,
                   slice,
                   plan,

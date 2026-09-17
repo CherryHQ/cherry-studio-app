@@ -96,11 +96,12 @@ The Cherry variant contains a `signature` with resolved background/text colors, 
 logo, brand name and frozen timestamp. The frontend supplies the shared white
 footer with black text used by painting and file image exports. The renderer copies and validates
 the presentation, escapes its text and includes the signature after the content inside `main`.
-The image-only `imageFrame` supplies its background and localized label. Image-to-HTML fallbacks
+The image-only `imageFrame` uses the document background and supplies a localized label. Image content
+spans the output width with ordinary text padding, without a contrasting outer frame. Image-to-HTML fallbacks
 retain the watermark. Markdown uses the same resolved watermark's brand name and timestamp in a
 separated text footer; preview and saved text share its formatter.
 `session.markdown` remains the unbranded source. The signature ends the document and is not repeated
-on every PNG page; each PNG page has its own ordinal footer.
+on every PNG page. PNG pages have no page numbers or reserved ordinal-footer space.
 
 ## Content Behavior
 
@@ -136,8 +137,8 @@ such as [html-to-image](https://github.com/bubkoo/html-to-image) also have large
 canvas/data-URL limits; swapping libraries does not establish unlimited image capacity.
 
 Default image layout is **paged PNG at fixed 3x density**. Short content yields one page. Each
-content slice is at most 1200 logical pixels high, plus 48 pixels of spacing and ordinal footer.
-At the page's fixed width this yields 1080-pixel-wide images no taller than 3744 pixels. Content
+content slice is at most 1200 logical pixels high, plus 16 pixels of top spacing and no page-number footer.
+At the page's fixed width this yields 1080-pixel-wide images no taller than 3648 pixels. Content
 length adds pages rather than lowering resolution or truncating the selection.
 
 Pagination uses measured message/paragraph boundaries and painted ranges. It prefers a message

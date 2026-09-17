@@ -22,7 +22,7 @@ import {
 import { isChatMessageExportable } from './toChatExportDocument';
 
 const LIST_STYLE = { flex: 1 };
-const LIST_CONTENT_STYLE = { paddingHorizontal: 20, paddingBottom: 12 };
+const LIST_CONTENT_STYLE = { paddingHorizontal: 20, paddingBottom: 12, gap: 8 };
 const KEEP_VISIBLE_POSITION = { data: true, size: true };
 
 export function ChatShareScreen() {

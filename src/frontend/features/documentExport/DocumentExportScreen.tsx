@@ -199,7 +199,7 @@ function DocumentExportBody({
         ...presentation,
         width: IMAGE_LAYOUT_WIDTH,
         imageFrame: {
-          background: secondary,
+          background,
           label: t(isConversation ? 'documentExport.conversation' : 'documentExport.document'),
         },
       };
@@ -208,7 +208,7 @@ function DocumentExportBody({
       checked: frameDocument(checkedSession.document),
       unchecked: option ? frameDocument(option.uncheckedSession.document) : undefined,
     };
-  }, [checkedSession.document, option, presentation, secondary, t]);
+  }, [background, checkedSession.document, option, presentation, t]);
   const imagePresentation =
     !isOptionChecked && imagePresentations.unchecked
       ? imagePresentations.unchecked

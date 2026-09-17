@@ -17,10 +17,11 @@ inside the export. HTML retains its document presentation and window-derived wid
 
 The frontend supplies one resolved `watermark` for HTML and images, preserved during format fallback.
 The code-only request option defaults to `cherry`; `none` omits the brand footer from both the
-preview and saved output, including Markdown. The image-only `imageFrame` independently controls
-margins and the document label. With Cherry watermarks, Markdown preview and saved text use the
+preview and saved output, including Markdown. The image-only `imageFrame` uses the document background
+and label. Image content spans the output width with ordinary text padding and no decorative outer frame.
+With Cherry watermarks, Markdown preview and saved text use the
 same separated brand/time footer without logo bytes. The signature appears at the end of the
-document, while every PNG page receives an ordinal footer regardless of watermark style.
+document. PNG pages do not include page numbers or reserve space for an ordinal footer.
 
 The signature uses the same full-width white footer as painting and file image exports: the
 original Cherry logo and Cherry Studio name on the left, with the time aligned to the right.
@@ -41,8 +42,8 @@ lines. Images are contained within a page. An indivisible object that cannot fit
 instead of losing content. Included process/reasoning details expand before capture; Markdown and
 HTML retain their interactive disclosures.
 
-Each content slice is at most 1200 logical pixels high. A 48-pixel frame provides top spacing and
-an ordinal footer, so output is 1080 pixels wide and at most 3744 pixels high. The native surface
+Each content slice is at most 1200 logical pixels high, with 16 pixels of top spacing and no page-number
+footer, so output is 1080 pixels wide and at most 3648 pixels high. The native surface
 shows only that slice. It never allocates a full-document bitmap in paged mode. Each lossless PNG
 is header-checked, handed to the backend, copied, and released before the next screenshot. The
 60-second timeout resets for each page; the physical lease covers capture and file delivery across

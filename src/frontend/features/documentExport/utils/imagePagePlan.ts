@@ -2,7 +2,7 @@ import { DocumentExportError, type ExportImageLayout } from '@/shared/contracts/
 
 export const IMAGE_LAYOUT_WIDTH = 360;
 export const IMAGE_PAGE_HEIGHT = 1200;
-export const IMAGE_PAGE_CHROME = 48;
+export const IMAGE_PAGE_TOP_INSET = 16;
 
 export type ImagePageSlice = { top: number; height: number };
 export type ImagePageMeasurement = {

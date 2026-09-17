@@ -1,7 +1,7 @@
 import type { ExportImageLayout } from '@/shared/contracts/documentExport';
 
 import type { ImageCapturePlan } from './imageCapturePlan';
-import { IMAGE_PAGE_HEIGHT, type ImagePageSlice } from './imagePagePlan';
+import { IMAGE_PAGE_HEIGHT, IMAGE_PAGE_TOP_INSET, type ImagePageSlice } from './imagePagePlan';
 
 export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
   return `(async function(){try{
@@ -57,7 +57,6 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
 export function imagePageReadinessScript(
   id: number,
   index: number,
-  total: number,
   width: number,
   slice: ImagePageSlice,
   plan: ImageCapturePlan,
@@ -73,7 +72,6 @@ export function imagePageReadinessScript(
       root=document.createElement('div');root.id='export-page';
       var clip=document.createElement('div');clip.id='export-page-content';
       document.body.appendChild(root);root.appendChild(clip);clip.appendChild(main);
-      var footer=document.createElement('div');footer.id='export-page-number';root.appendChild(footer);
     }
     var isPaged=${JSON.stringify(layout)}==='pages';
     var background=getComputedStyle(main).backgroundColor;
@@ -82,13 +80,9 @@ export function imagePageReadinessScript(
     root.style.zoom='${plan.scale / density}';
     var clip=document.getElementById('export-page-content');
     clip.style.cssText='position:relative;overflow:hidden;width:100%;height:${slice.height}px;';
-    clip.style.top=isPaged?'16px':'0';
+    clip.style.top=isPaged?'${IMAGE_PAGE_TOP_INSET}px':'0';
     main.style.width='${width}px';main.style.maxWidth='none';main.style.margin='0';
     main.style.position='absolute';main.style.left='0';main.style.top='-${slice.top}px';
-    var footer=document.getElementById('export-page-number');
-    footer.style.cssText='position:absolute;left:0;right:0;bottom:0;height:32px;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:16px;';
-    footer.style.display=isPaged?'flex':'none';
-    footer.textContent='${index + 1} / ${total}';
     for(var frame=0;frame<3;frame++)await new Promise(requestAnimationFrame);
     window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'ready',index:${index}}));
   }catch(error){window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},error:true}));}})();true;`;

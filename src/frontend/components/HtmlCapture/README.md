@@ -9,7 +9,7 @@ Each source supplies its initial viewport, measurement script and measured page 
 use native layout points; frames use physical PNG pixels. Source scripts wait for fonts, images and
 stable document layout, then post a request-tagged measurement. The shared surface resizes for each
 frame, waits for native layout, injects the frame script and accepts its matching `ready` message
-before taking a screenshot. Document export owns semantic pagination and page footers; files owns
+before taking a screenshot. Document export owns semantic pagination and document presentation; files owns
 desktop HTML measurement, authored slides, geometric pagination and conversion limits.
 
 The session holds one shared capture lease across both consumers. Active competing requests fail
