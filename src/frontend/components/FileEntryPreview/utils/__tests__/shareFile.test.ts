@@ -1,3 +1,4 @@
+import type { ExportSignature } from '@/shared/contracts/documentExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { shareFile, shareFiles } from '../shareFile';
@@ -6,6 +7,13 @@ const mockCopy = jest.fn();
 const mockShare = jest.fn();
 const mockShareMultiple = jest.fn();
 const mockCreateDirectory = jest.fn();
+const mockRelease = jest.fn();
+const mockPrepareExport = jest.fn();
+
+jest.mock('@/frontend/appShell/imageExport', () => ({
+  prepareFileExport: (...args: unknown[]) => mockPrepareExport(...args),
+}));
+jest.mock('expo-crypto', () => ({ randomUUID: () => 'export-operation' }));
 
 jest.mock('expo-file-system', () => ({
   Directory: jest.fn((...parts: string[]) => ({
@@ -35,15 +43,28 @@ const entry = FileEntrySchema.parse({
   size: 2_000_000,
   updatedAt: 2,
 });
+const signature: ExportSignature = {
+  background: '#ffffff',
+  foreground: '#000000',
+  brandName: 'Cherry Studio',
+  timestamp: '2026.09.16 18:00',
+  logoDataUrl: 'data:image/png;base64,AA==',
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockCopy.mockResolvedValue(undefined);
   mockShare.mockResolvedValue(undefined);
+  mockPrepareExport.mockImplementation(async ({ entry, uri }) => ({
+    uri,
+    filename: entry.filename,
+    mediaType: entry.mediaType,
+    release: mockRelease,
+  }));
 });
 
 it('shares a copy with the display filename and original media type, independent of the viewer limit', async () => {
-  await shareFile({ entry, uri: 'file:///managed/id.md' });
+  await shareFile({ entry, uri: 'file:///managed/id.md' }, signature);
   expect(mockCopy).toHaveBeenCalledWith(
     expect.objectContaining({
       uri: `file:///cache/FileExports/${entry.id}/2/笔记.md`,
@@ -58,7 +79,42 @@ it('shares a copy with the display filename and original media type, independent
 
 it('does not present a partial export when copying fails', async () => {
   mockCopy.mockRejectedValueOnce(new Error('out of space'));
-  await expect(shareFile({ entry, uri: 'file:///managed/id.md' })).rejects.toThrow('out of space');
+  await expect(shareFile({ entry, uri: 'file:///managed/id.md' }, signature)).rejects.toThrow(
+    'out of space',
+  );
+  expect(mockShare).not.toHaveBeenCalled();
+  expect(mockRelease).toHaveBeenCalledTimes(1);
+});
+
+it('delivers the signed PNG copy with a matching filename and MIME type', async () => {
+  const imageEntry = FileEntrySchema.parse({
+    ...entry,
+    filename: '作品.jpg',
+    mediaType: 'image/jpeg',
+  });
+  mockPrepareExport.mockResolvedValueOnce({
+    uri: 'file:///signed.png',
+    filename: '作品.png',
+    mediaType: 'image/png',
+    release: mockRelease,
+  });
+  await shareFile({ entry: imageEntry, uri: 'file:///managed/original.jpg' }, signature);
+  expect(mockShare).toHaveBeenCalledWith(
+    `file:///cache/FileExports/${entry.id}/export-operation/作品.png`,
+    {
+      dialogTitle: '作品.png',
+      mimeType: 'image/png',
+    },
+  );
+  expect(mockRelease).toHaveBeenCalledTimes(1);
+});
+
+it('does not share the unmarked original after signature generation fails', async () => {
+  mockPrepareExport.mockRejectedValueOnce(new Error('Cannot render signature'));
+  await expect(shareFile({ entry, uri: 'file:///managed/id.md' }, signature)).rejects.toThrow(
+    'Cannot render signature',
+  );
+  expect(mockCopy).not.toHaveBeenCalled();
   expect(mockShare).not.toHaveBeenCalled();
 });
 
@@ -69,10 +125,11 @@ it('shares all pages in order through one chooser without re-encoding them', asy
       id: `00000000-0000-7000-8000-${String(index).padStart(12, '0')}`,
       filename: `conversation-${index}.png`,
       mediaType: 'image/png',
+      provenance: 'document-export',
     }),
     uri: `file:///managed/${index}.png`,
   }));
-  await shareFiles(files);
+  await shareFiles(files, signature);
   expect(mockCopy).toHaveBeenCalledTimes(3);
   expect(mockShare).not.toHaveBeenCalled();
   expect(mockShareMultiple).toHaveBeenCalledWith({
@@ -86,7 +143,7 @@ it('shares all pages in order through one chooser without re-encoding them', asy
 it('never opens a partial multi-image share if a later page copy fails', async () => {
   mockCopy.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('No space'));
   const file = { entry, uri: 'file:///managed/page.png' };
-  await expect(shareFiles([file, file])).rejects.toThrow('No space');
+  await expect(shareFiles([file, file], signature)).rejects.toThrow('No space');
   expect(mockShareMultiple).not.toHaveBeenCalled();
   expect(mockShare).not.toHaveBeenCalled();
 });
@@ -95,7 +152,7 @@ it('cancellation after copying stops delivery without deleting files another rec
   const controller = new AbortController();
   mockCopy.mockImplementationOnce(async () => controller.abort());
   await expect(
-    shareFiles([{ entry, uri: 'file:///managed/page.png' }], controller.signal),
+    shareFiles([{ entry, uri: 'file:///managed/page.png' }], signature, controller.signal),
   ).rejects.toMatchObject({ name: 'AbortError' });
   expect(mockShare).not.toHaveBeenCalled();
   expect(mockShareMultiple).not.toHaveBeenCalled();

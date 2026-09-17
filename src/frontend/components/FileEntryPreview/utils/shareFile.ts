@@ -1,29 +1,47 @@
+import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
+import { prepareFileExport } from '@/frontend/appShell/imageExport';
+import type { ExportSignature } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 
 /** Exported bytes are disposable copies; the managed files remain authoritative. */
 export async function shareFiles(
   files: readonly ResolvedFile[],
+  signature: ExportSignature,
   signal?: AbortSignal,
 ): Promise<void> {
   if (!files.length) throw new Error('No files to share');
   const urls: string[] = [];
-  for (const { entry, uri } of files) {
+  const mediaTypes: string[] = [];
+  let filename = '';
+  for (const file of files) {
     signal?.throwIfAborted();
-    const directory = new Directory(Paths.cache, 'FileExports', entry.id, String(entry.updatedAt));
-    directory.create({ idempotent: true, intermediates: true });
-    const exported = new File(directory, entry.filename);
-    if (!exported.exists) await new File(uri).copy(exported, { overwrite: true });
-    urls.push(exported.uri);
+    const prepared = await prepareFileExport(file, signature);
+    try {
+      signal?.throwIfAborted();
+      const directory = new Directory(
+        Paths.cache,
+        'FileExports',
+        file.entry.id,
+        prepared.uri === file.uri ? String(file.entry.updatedAt) : randomUUID(),
+      );
+      directory.create({ idempotent: true, intermediates: true });
+      const exported = new File(directory, prepared.filename);
+      if (!exported.exists) await new File(prepared.uri).copy(exported, { overwrite: true });
+      urls.push(exported.uri);
+      mediaTypes.push(prepared.mediaType.split(';')[0].trim().toLowerCase());
+      filename = prepared.filename;
+    } finally {
+      prepared.release();
+    }
   }
   signal?.throwIfAborted();
-  const mediaTypes = files.map(({ entry }) => entry.mediaType.split(';')[0].trim().toLowerCase());
   // The receiving app may read after the chooser resolves. Leave these copies in OS-managed cache.
   if (files.length === 1) {
     await Sharing.shareAsync(urls[0], {
-      dialogTitle: files[0].entry.filename,
+      dialogTitle: filename,
       mimeType: mediaTypes[0],
     });
   } else {
@@ -39,6 +57,6 @@ export async function shareFiles(
   }
 }
 
-export async function shareFile(file: ResolvedFile): Promise<void> {
-  return shareFiles([file]);
+export async function shareFile(file: ResolvedFile, signature: ExportSignature): Promise<void> {
+  return shareFiles([file], signature);
 }

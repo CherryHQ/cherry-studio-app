@@ -15,6 +15,8 @@ import {
   type AgentSessionStatus,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { TraceRecorder } from '../../../observability';
@@ -33,6 +35,7 @@ import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessi
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from '../agentDefinitions';
+import type { AgentImageGenerationPort } from '../agentImageGeneration';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { MobileAgentHost } from '../MobileAgentHost';
@@ -135,6 +138,7 @@ const stubTool: RuntimeTool = {
 };
 
 type HostOverrides = {
+  imageGeneration?: AgentImageGenerationPort;
   traces?: TraceRecorder;
   agents?: AgentDefinitionSource;
   appLanguage?: () => 'en-US' | 'zh-CN';
@@ -157,6 +161,7 @@ function createHost(
       documentParserMode: () => 'builtin',
       files,
       inferenceModel: resolveInferenceModel,
+      imageGeneration: overrides.imageGeneration,
       naming: () => naming,
       runtimeTools: {
         resolve: overrides.resolveRuntimeTools ?? (async () => ({ tools: [], pluginGuides: [] })),
@@ -259,6 +264,193 @@ describe('MobileAgentHost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
+  });
+
+  test('keeps image and text exchanges in one durable Session without opening Pi for images', async () => {
+    const settings = { mode: 'generate' as const, paramValues: { aspectRatio: '16:9' } };
+    const entry = FileEntrySchema.parse({
+      id: FILE_ENTRY_ID,
+      filename: 'orchard.png',
+      mediaType: 'image/png',
+      provenance: 'generated',
+      createdAt: 1,
+      updatedAt: 1,
+      size: 12,
+    });
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const open = jest.spyOn(runtime, 'open');
+    const preflight = jest.spyOn(runtime, 'preflightModel');
+    const execute = jest.fn(async () => [entry]);
+    const resolveRuntimeTools = jest.fn(async () => ({ tools: [], pluginGuides: [] }));
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
+      imageGeneration: {
+        prepare: async ({ model }) =>
+          model.modelId === 'image-model' ? { settings, execute } : null,
+      },
+      resolveRuntimeTools,
+    });
+    const ids = messageIds();
+    const session = await host.startSession({
+      sessionId: uuidv7(),
+      ...ids,
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+      modelId: createUniqueModelId('mock-provider', 'image-model'),
+      parts: [{ type: 'text', text: 'Draw an orchard' }],
+      imageGeneration: settings,
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'success',
+      'image saved',
+    );
+    expect(await store.getSession(session.id)).toMatchObject({ agentId: AGENT_ID });
+    expect(open).not.toHaveBeenCalled();
+    expect(preflight).not.toHaveBeenCalled();
+    expect(resolveRuntimeTools).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledWith(
+      expect.any(AbortSignal),
+      expect.objectContaining({
+        messageRef: { kind: 'agent-session', id: ids.assistantMessageId },
+      }),
+    );
+    const generated = (await store.listMessages(session.id))[1];
+    expect(generated.parts).toEqual([
+      expect.objectContaining({
+        type: 'file',
+        fileEntryId: entry.id,
+        purpose: 'artifact',
+      }),
+    ]);
+    expect(generated.inferenceSnapshot).toMatchObject({
+      snapshot: { imageGeneration: settings, tools: [] },
+    });
+
+    runtime.script((controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: {
+          id: 'text-result',
+          type: 'text',
+          text: 'An orchard.',
+          state: 'done',
+        },
+      });
+      controller.emit({ type: 'completed' });
+    });
+    await host.submitMessage({
+      sessionId: session.id,
+      ...messageIds(),
+      parts: [{ type: 'text', text: 'Describe it' }],
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[3]?.status === 'success',
+      'text saved',
+    );
+    expect(open).toHaveBeenCalledTimes(1);
+    await host.submitMessage({
+      sessionId: session.id,
+      ...messageIds(),
+      parts: [{ type: 'text', text: 'Draw a second orchard' }],
+      modelId: createUniqueModelId('mock-provider', 'image-model'),
+      imageGeneration: settings,
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[5]?.status === 'success',
+      'next image saved',
+    );
+    const messages = await store.listMessages(session.id);
+    expect(messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+    ]);
+    expect(messages[1]).toEqual(generated);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(1);
+    await host._doStop();
+  });
+
+  test('cancels an image request through the Session and keeps its user message', async () => {
+    const settings = { mode: 'generate' as const, paramValues: {} };
+    let requestSignal: AbortSignal | undefined;
+    const host = createHost(new FakeRuntime(), noOpNaming, noFiles, noOpTools, inferenceModel, {
+      imageGeneration: {
+        prepare: async () => ({
+          settings,
+          execute: (signal) => {
+            requestSignal = signal;
+            return new Promise((_resolve, reject) => {
+              if (signal.aborted) reject(signal.reason);
+              else signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+            });
+          },
+        }),
+      },
+    });
+    const session = await host.startSession({
+      sessionId: uuidv7(),
+      ...messageIds(),
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+      parts: [{ type: 'text', text: 'Draw a cherry' }],
+      imageGeneration: settings,
+    });
+    const messages = await store.listMessages(session.id);
+    await host.cancelTurn({ sessionId: session.id, turnId: messages[1].turnId! });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'cancelled',
+      'cancelled image saved',
+    );
+    expect(requestSignal?.aborted).toBe(true);
+    expect((await store.listMessages(session.id))[0].parts[0]).toMatchObject({
+      text: 'Draw a cherry',
+    });
+    expect((await store.listMessages(session.id))[1].parts).toEqual([]);
+    await host._doStop();
+  });
+
+  test('preserves provider image failures in the assistant message', async () => {
+    const error = new AiRequestError({
+      message: 'Quota exceeded',
+      retryable: false,
+      failure: {
+        version: 1,
+        reasonCode: 'quota',
+        source: { layer: 'provider', code: 'quota_exceeded' },
+      },
+    });
+    const host = createHost(new FakeRuntime(), noOpNaming, noFiles, noOpTools, inferenceModel, {
+      imageGeneration: {
+        prepare: async () => ({
+          settings: { mode: 'generate', paramValues: {} },
+          execute: async () => {
+            throw error;
+          },
+        }),
+      },
+    });
+    const session = await host.startSession({
+      sessionId: uuidv7(),
+      ...messageIds(),
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+      parts: [{ type: 'text', text: 'Draw a cherry' }],
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'error',
+      'image failure saved',
+    );
+    expect((await store.listMessages(session.id))[1].parts).toEqual([
+      expect.objectContaining({
+        type: 'error',
+        error: { code: 'EXECUTION_FAILED', ...error.detail },
+      }),
+    ]);
+    await host._doStop();
   });
 
   test.each(['new', 'existing'] as const)(

@@ -23,7 +23,7 @@ export function FileViewerHeader({
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction();
   const { openFileEntryWithSystem } = useOpenFileEntry();
-  const saveToPhotos = useSaveImageToPhotos(file.uri);
+  const saveToPhotos = useSaveImageToPhotos(file.uri, file.entry.provenance);
   const { isSharing, share } = useShareFile(file);
   const isImage = fileEntryPreviewKind(file.entry) === 'image';
 

@@ -12,7 +12,9 @@ This shared component family connects an artifact preview surface to its viewer 
   and disables the surrounding list during zoom. Large single images use a viewport-sized browser
   displaying the actual PNG, with browser-dependent decode quality.
 - `useSaveImageToPhotos` owns the shared add-only photo permission and save flow, consumed by
-  painting and file viewers.
+  painting and file viewers. It prepares the common branded export copy through
+  `appShell/imageExport` after permission succeeds and releases it after Photos copies the image.
+  File viewers pass provenance so completed document exports do not receive another footer.
 - `ArtifactPreviewLink` accepts an Expo Router destination and marks its child as the preview
   source.
 - `ArtifactPreviewTarget` marks the corresponding viewer content as the transition target.

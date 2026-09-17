@@ -72,7 +72,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
         >
           <ProfileAvatarImage
             accessibilityLabel={displayName || t('settings.profile.avatar')}
-            size={32}
+            size={28}
           />
           {displayName ? (
             <Text

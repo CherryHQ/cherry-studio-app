@@ -23,6 +23,13 @@ const mockGetPermissions = jest.fn();
 const mockRequestPermissions = jest.fn();
 const mockToastShow = jest.fn();
 const mockOpenSettings = jest.fn();
+const mockPrepareImageExport = jest.fn();
+const mockReleaseImageExport = jest.fn();
+
+jest.mock('@/frontend/appShell/imageExport', () => ({
+  prepareImageExport: (...args: unknown[]) => mockPrepareImageExport(...args),
+  useExportSignature: () => ({ brandName: 'Cherry Studio' }),
+}));
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockRouterBack, push: mockRouterPush }),
@@ -112,6 +119,10 @@ describe('usePaintingViewerActions', () => {
     jest.clearAllMocks();
     actions = undefined;
     mockCreateAsset.mockResolvedValue(undefined);
+    mockPrepareImageExport.mockResolvedValue({
+      uri: 'file:///painting-export.png',
+      release: mockReleaseImageExport,
+    });
     mockGetPermissions.mockResolvedValue({
       'photos.write': { state: 'granted', canAskAgain: false },
     });
@@ -154,7 +165,8 @@ describe('usePaintingViewerActions', () => {
 
     expect(mockGetPermissions).toHaveBeenCalledWith(['photos.write']);
     expect(mockRequestPermissions).not.toHaveBeenCalled();
-    expect(mockCreateAsset).toHaveBeenCalledWith('file:///painting.png');
+    expect(mockCreateAsset).toHaveBeenCalledWith('file:///painting-export.png');
+    expect(mockReleaseImageExport).toHaveBeenCalledTimes(1);
   });
 
   it('requests photo access only after Alert confirmation', async () => {
@@ -178,7 +190,7 @@ describe('usePaintingViewerActions', () => {
     await act(onConfirm);
 
     expect(mockRequestPermissions).toHaveBeenCalledWith(['photos.write']);
-    expect(mockCreateAsset).toHaveBeenCalledWith('file:///painting.png');
+    expect(mockCreateAsset).toHaveBeenCalledWith('file:///painting-export.png');
   });
 
   it('offers to open system settings when photo access cannot be requested again', async () => {
@@ -268,7 +280,7 @@ describe('usePaintingViewerActions', () => {
   it('shows a Toast after saving to Photos', async () => {
     await act(async () => actions?.download());
 
-    expect(mockCreateAsset).toHaveBeenCalledWith('file:///painting.png');
+    expect(mockCreateAsset).toHaveBeenCalledWith('file:///painting-export.png');
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'imageActions.saved',
       variant: 'success',
@@ -280,6 +292,17 @@ describe('usePaintingViewerActions', () => {
 
     await act(async () => actions?.download());
 
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'imageActions.saveFailed',
+      variant: 'danger',
+    });
+    expect(mockReleaseImageExport).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not save the unmarked original when image export fails', async () => {
+    mockPrepareImageExport.mockRejectedValueOnce(new Error('Cannot render signature'));
+    await act(async () => actions?.download());
+    expect(mockCreateAsset).not.toHaveBeenCalled();
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'imageActions.saveFailed',
       variant: 'danger',

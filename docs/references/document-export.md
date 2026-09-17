@@ -89,9 +89,12 @@ the incomplete directory and retains the previous artifact. `save` accepts only 
 Repeated Markdown rendering reuses the current file when available and its complete text, including
 the signature, matches.
 
-HTML and image presentation share an optional `signature` containing the resolved foreground color,
-embedded Cherry logo, brand name and frozen timestamp. The image-only `imageFrame` supplies its
-background and localized label. Image-to-HTML fallbacks retain the signature. Markdown uses the same
+HTML and image presentation share an optional `signature` containing resolved background/text colors,
+the embedded Cherry logo, brand name and frozen timestamp. The frontend supplies the shared white
+footer with black text used by painting and file image exports. The renderer copies and validates
+the presentation, escapes its text and includes the signature after the content inside `main`.
+The image-only `imageFrame` supplies its background and localized label. Image-to-HTML fallbacks
+retain the signature. Markdown uses the same
 brand name and timestamp in a separated text footer; preview and saved text share its formatter.
 `session.markdown` remains the unbranded source. The signature ends the document and is not repeated
 on every PNG page; each PNG page has its own ordinal footer.

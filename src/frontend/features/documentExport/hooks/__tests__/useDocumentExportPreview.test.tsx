@@ -121,6 +121,7 @@ test('image fallback retains the same brand signature in Markdown preview and de
   const signature = {
     brandName: 'Cherry Studio',
     timestamp: '2026/09/15 12:00',
+    background: '#ffffff',
     foreground: '#111111',
     logoDataUrl: 'data:image/png;base64,AA==',
   };

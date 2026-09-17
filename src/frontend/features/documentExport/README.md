@@ -20,6 +20,13 @@ the image-only `imageFrame` controls margins and the document label. Markdown pr
 use the same separated brand/time footer without logo bytes. The signature appears at the end of
 the document, while every PNG page receives an ordinal footer.
 
+The signature uses the same full-width white footer as painting and file image exports: the
+original Cherry logo and Cherry Studio name on the left, with the time aligned to the right.
+Shared geometry has a 56-point minimum height at 360 points wide, scales with export width, and
+grows for wrapped text. The timestamp uses `YYYY.MM.DD HH:mm` and stays frozen across format,
+theme and thinking-option changes. Constant color tokens keep the signature white with black text.
+Active saving/delivery holds its current presentation until the share sheet finishes.
+
 ## Image Capture
 
 The controlled WebView waits for decoded assets, fonts and stable layout. Paged capture measures

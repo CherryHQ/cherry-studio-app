@@ -2,8 +2,10 @@ import { openFilePreview, useToast } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+import { prepareFileExport, useExportSignature } from '@/frontend/appShell/imageExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import { fileEntryPreviewKind, toFilePreviewFile } from '../utils/fileEntryPresentation';
 
@@ -14,11 +16,20 @@ export function useOpenFileEntry() {
   const router = useRouter();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const signature = useExportSignature();
 
   const openFileEntryWithSystem = async ({ entry, uri }: ResolvedFile) => {
     try {
+      const exported = await prepareFileExport(
+        { entry, uri },
+        { ...signature, timestamp: formatExportTimestamp(new Date()) },
+      );
+      // The recipient may read after the chooser closes; the OS owns this cache copy's lifetime.
       await openFilePreview({
-        file: toFilePreviewFile(entry, uri),
+        file: toFilePreviewFile(
+          { ...entry, filename: exported.filename, mediaType: exported.mediaType },
+          exported.uri,
+        ),
         labels: {
           openWith: t('filePreview.openWith'),
           unavailable: t('filePreview.unavailable'),

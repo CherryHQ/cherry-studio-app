@@ -78,6 +78,7 @@ import {
   type AgentSubmitMessageInput,
   type AgentTurnView,
 } from '@/shared/contracts/agent';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
@@ -100,6 +101,7 @@ import {
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
+import type { AgentImageGenerationPort } from './agentImageGeneration';
 import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { buildAgentSystemPrompt } from './agentSystemPrompt';
@@ -166,6 +168,7 @@ export type MobileAgentHostPorts = {
   documentParserMode: () => DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
+  imageGeneration?: AgentImageGenerationPort;
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;
@@ -204,7 +207,7 @@ type ActiveTurnState = {
   recordedInvocations: Set<string>;
   /** Analytical writes started by this turn; the terminal write waits for them, the loop does not. */
   usageWrites: Promise<void>[];
-  runtimeSession: AgentRuntimeSession;
+  runtimeSession: AgentRuntimeSession | undefined;
 };
 
 type AdmissionState = {
@@ -310,6 +313,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       documentParserMode: () => this.ports.documentParserMode(),
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
+      imageGeneration: this.ports.imageGeneration,
       routeExecutionTarget: (target) => this.routeExecutionTarget(target),
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
@@ -418,7 +422,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
     try {
       const plan = await prepareInitialTurn(this.turnPreparation, parsed, signal);
-      openedRuntimeSession = await this.openRuntimeSession(plan.runtime, signal);
+      if (!plan.imageGeneration) {
+        openedRuntimeSession = await this.openRuntimeSession(plan.runtime, signal);
+      }
       signal.throwIfAborted();
 
       const reserved = await this.store.reserveInitialSubmission({
@@ -432,11 +438,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         inferenceSnapshot: plan.inferenceSnapshot,
       });
       const { session } = reserved;
-      this.runtimeSessions.set(session.id, {
-        runtimeId: plan.runtime.descriptor.id,
-        session: openedRuntimeSession,
-      });
-      isRuntimeSessionInstalled = true;
+      if (openedRuntimeSession) {
+        this.runtimeSessions.set(session.id, {
+          runtimeId: plan.runtime.descriptor.id,
+          session: openedRuntimeSession,
+        });
+        isRuntimeSessionInstalled = true;
+      }
       this.startReservedTurn(
         session.id,
         session.title,
@@ -567,7 +575,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
       // Open the Runtime before creating durable pending rows. A failed open
       // must leave no reservation that startup reconciliation has to repair.
-      const runtimeSession = await this.getRuntimeSession(sessionId, plan.runtime, signal);
+      const runtimeSession = plan.imageGeneration
+        ? undefined
+        : await this.getRuntimeSession(sessionId, plan.runtime, signal);
       signal.throwIfAborted();
 
       // Invariant 2: reservation commits before execution starts.
@@ -606,7 +616,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.publish(parsed.sessionId, { type: 'turn.updated', turn: active.turn });
     }
     active.abortController.abort(new Error('The turn was cancelled.'));
-    await active.runtimeSession.cancel(parsed.turnId);
+    await active.runtimeSession?.cancel(parsed.turnId);
   }
 
   async respondApproval(input: {
@@ -619,7 +629,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     const active = this.activeTurns.get(parsed.sessionId);
     const approval = active?.pendingApprovals.get(parsed.approvalId);
     // Invariant 7: correlate to the active Session, turn, and approval; fail closed.
-    if (!active || active.turn.id !== parsed.turnId || approval?.status !== 'pending') {
+    if (
+      !active ||
+      !active.runtimeSession ||
+      active.turn.id !== parsed.turnId ||
+      approval?.status !== 'pending'
+    ) {
       fail('APPROVAL_NOT_FOUND', 'The approval is not pending on the active turn.');
     }
     await active.runtimeSession.respondApproval({
@@ -696,7 +711,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     sessionTitle: string,
     plan: TurnPlan,
     reserved: ReserveSubmissionResult,
-    runtimeSession: AgentRuntimeSession,
+    runtimeSession: AgentRuntimeSession | undefined,
     abortController: AbortController,
   ): { turnId: string; userMessageId: string; assistantMessageId: string } {
     plan.usageAttribution.bindMessage({ kind: 'agent-session', id: reserved.assistantMessage.id });
@@ -747,7 +762,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           messageId: reserved.assistantMessage.id,
         },
         {
-          'runtime.name': plan.runtime.descriptor.id,
+          'runtime.name': plan.imageGeneration ? 'image-generation' : plan.runtime.descriptor.id,
           'gen_ai.provider.id': plan.agent.model.providerId,
           'gen_ai.request.model': plan.agent.model.modelId,
         },
@@ -794,6 +809,38 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   private async runTurn(sessionId: string, plan: TurnPlan, state: ActiveTurnState): Promise<void> {
     try {
+      if (plan.imageGeneration) {
+        const entries = await plan.imageGeneration.execute(
+          state.abortController.signal,
+          plan.usageAttribution.resolve(),
+        );
+        // Adopt every output synchronously before the next await. The ordinary
+        // snapshot/finalization path owns the durable file refs from here.
+        const parts: AgentMessagePart[] = entries.map((entry) => {
+          state.resources.grantFile(entry.id);
+          return {
+            id: `image-${entry.id}`,
+            type: 'file',
+            fileEntryId: entry.id,
+            mediaType: entry.mediaType,
+            name: entry.filename,
+            purpose: 'artifact',
+          };
+        });
+        state.assistantMessage = { ...state.assistantMessage, parts, status: 'streaming' };
+        this.requestSnapshot(sessionId, state);
+        state.backgroundReply.update(state.assistantMessage);
+        await this.finalize(
+          sessionId,
+          state,
+          state.abortController.signal.aborted ? 'cancelled' : 'completed',
+          null,
+        );
+        return;
+      }
+      if (!state.runtimeSession || !plan.modelPreflight) {
+        throw new Error('The prepared text turn has no Runtime session.');
+      }
       const runtimeAttachments = await materializeRuntimeAttachments({
         files: this.files,
         history: plan.history,
@@ -859,6 +906,29 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (state.abortController.signal.aborted) {
         try {
           await this.finalize(sessionId, state, 'cancelled', null);
+        } catch (finalizeError) {
+          this.handleTerminalPersistenceFailure(sessionId, state, finalizeError);
+        }
+        return;
+      }
+      if (plan.imageGeneration) {
+        if (!(error instanceof AiRequestError)) {
+          logger.warn('Agent image generation failed', error as Error);
+        }
+        const detail =
+          error instanceof AiRequestError
+            ? { code: 'EXECUTION_FAILED' as const, ...error.detail }
+            : toAgentErrorView({
+                code:
+                  error instanceof Error && error.name === 'TimeoutError'
+                    ? 'timeout'
+                    : 'image_generation_failed',
+                message: 'Image generation failed.',
+                retryable: true,
+                origin: 'host',
+              });
+        try {
+          await this.finalize(sessionId, state, 'failed', detail);
         } catch (finalizeError) {
           this.handleTerminalPersistenceFailure(sessionId, state, finalizeError);
         }

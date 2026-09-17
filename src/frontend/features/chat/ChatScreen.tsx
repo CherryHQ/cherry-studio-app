@@ -11,7 +11,7 @@ import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MainHeader } from '@/frontend/appShell/header';
-import { ReadingContentFrame } from '@/frontend/appShell/layout';
+import { ChatDockFooter, ReadingContentFrame } from '@/frontend/appShell/layout';
 import {
   type ChatRouteParamsInput,
   type ChatTarget,
@@ -34,7 +34,7 @@ import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
-import { useAgentChatControls, useAgentChatDraftHandoff } from './runtime';
+import { latestAgentImageResult, useAgentChatControls, useAgentChatDraftHandoff } from './runtime';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 
@@ -145,16 +145,23 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       </ComposerDismissArea>
       {hasComposer ? (
         <ComposerDock layoutMode="flow">
-          <View className="gap-2">
+          <View>
             <ChatInput
               agentId={resolvedAgentId}
               controls={controls}
               dismissKeyboardOnSend
+              imageResult={
+                messageWindow.hasNewerMessages
+                  ? undefined
+                  : latestAgentImageResult(messageWindow.messages)
+              }
               sessionId={sessionId}
             />
-            <Text className="text-center text-xs text-muted-foreground">
-              {t('chat.input.disclaimer')}
-            </Text>
+            <ChatDockFooter>
+              <Text className="text-center text-xs text-muted-foreground">
+                {t('chat.input.disclaimer')}
+              </Text>
+            </ChatDockFooter>
           </View>
         </ComposerDock>
       ) : null}

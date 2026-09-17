@@ -152,6 +152,58 @@ test('HTML escapes authored markup, rejects executable links, renders tables and
   expect(result.issues).toEqual([]);
 });
 
+test('image and HTML exports include one brand signature after the complete content', async () => {
+  const document = normalizeDocument({ kind: 'markdown', source: 'Complete answer.' });
+  const signature = {
+    background: '#ffffff',
+    foreground: '#000000',
+    brandName: 'Cherry Studio <brand>',
+    timestamp: '2026.09.16 18:00',
+    logoDataUrl: 'data:image/png;base64,AA==',
+  };
+  for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
+    const { html } = await renderHtml(
+      document,
+      { ...presentation, signature, imageFrame },
+      new Map(),
+      jest.fn(),
+      new AbortController().signal,
+    );
+    expect(html.match(/<footer\b/g)).toHaveLength(1);
+    const footer = html.slice(html.indexOf('<footer'));
+    expect(footer).toContain('Cherry Studio &lt;brand&gt;');
+    expect(footer).toContain(signature.timestamp);
+    expect(footer).not.toContain('<brand>');
+    expect(footer).not.toContain('AI-generated');
+    expect(html.indexOf('Complete answer.')).toBeLessThan(html.indexOf('<footer'));
+  }
+});
+
+test('rejects invalid signature colors and missing timestamp instead of rendering unsafe markup', async () => {
+  const document = normalizeDocument({ kind: 'markdown', source: 'Answer.' });
+  const signature = {
+    background: '#ffffff',
+    foreground: '#000000',
+    brandName: 'Cherry Studio',
+    timestamp: '2026.09.16 18:00',
+    logoDataUrl: 'data:image/png;base64,AA==',
+  };
+  for (const invalid of [
+    { ...signature, background: 'white;position:fixed' },
+    { ...signature, timestamp: undefined },
+  ]) {
+    await expect(
+      renderHtml(
+        document,
+        { ...presentation, signature: invalid as typeof signature },
+        new Map(),
+        jest.fn(),
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'invalid-input' });
+  }
+});
+
 test('missing resources stay retryable, while successful bytes are reused for later formats', async () => {
   const document: ExportDocument = {
     sections: [{ id: 'one', blocks: [{ kind: 'image', assetId: 'photo', alt: 'Photo' }] }],

@@ -7,15 +7,11 @@ import type {
   FileModule,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
-import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
-import {
-  resolvePaintingGenerationMode,
-  supportsPaintingGenerationMode,
-} from '@/shared/utils/paintingModelSupport';
+import { createPaintingGenerationStrategy } from '@/shared/utils/paintingGenerationStrategy';
 
 import type {
   PaintingGenerateJobImage,
@@ -83,23 +79,27 @@ async function startGeneration(
   input: PaintingGenerationInput,
 ): Promise<PaintingGenerationStart> {
   const prompt = input.prompt.trim();
-  const signature = generationSignature({ ...input, prompt });
   const model = await dependencies.getModel(input.modelId);
-  const hasImages = input.fileEntryIds.length > 0;
-  const mode = resolvePaintingGenerationMode(model ?? undefined, hasImages);
-  if (!model || !mode || input.mode !== mode) {
-    throw new FileAttachmentError({ code: 'model-unsupported' });
-  }
-  const definition = model.imageGeneration?.modes[input.mode];
-  if (model.imageGeneration && !definition)
-    throw new FileAttachmentError({ code: 'model-unsupported' });
+  const strategy = createPaintingGenerationStrategy(model ?? undefined);
   const prepared = await dependencies.files.prepareAttachments({
-    fileEntryIds: input.fileEntryIds,
-    target: {
-      purpose: 'painting',
-      acceptsImages: supportsPaintingGenerationMode(model, 'edit'),
-      maxImages: definition?.maxInputImages,
-    },
+    fileEntryIds: [...new Set(input.fileEntryIds)],
+    target: strategy.attachmentTarget,
+  });
+  const request = strategy.prepare({
+    images: prepared.map(({ entry }) => ({
+      fileEntryId: entry.id,
+      name: entry.filename,
+      mediaType: entry.mediaType,
+      size: entry.size,
+    })),
+    prompt,
+    mode: input.mode,
+    paramValues: input.paramValues,
+  });
+  const signature = generationSignature({
+    ...input,
+    ...request,
+    fileEntryIds: prepared.map(({ entry }) => entry.id),
   });
   const images: PaintingGenerateJobImage[] = prepared.map((file) => ({
     fileEntryId: file.entry.id,
@@ -128,11 +128,11 @@ async function startGeneration(
       tx,
       {
         images,
-        mode: input.mode,
+        mode: request.mode,
         modelId: input.modelId,
         modelName: input.modelName,
         paintingId: receipt.id,
-        paramValues: input.paramValues,
+        paramValues: request.paramValues,
         prompt,
       },
       { idempotencyKey: signature },
