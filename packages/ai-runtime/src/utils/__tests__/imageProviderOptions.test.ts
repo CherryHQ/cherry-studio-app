@@ -1,7 +1,7 @@
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { splitImageParamValues } from '../imageOptions';
-import { buildImageProviderOptions, mergeImageProviderOptions } from '../imageProviderOptions';
+import { buildImageProviderOptions } from '../imageProviderOptions';
 
 function provider(id: string, presetProviderId?: string): Provider {
   return {
@@ -194,29 +194,6 @@ describe('image provider option routing', () => {
       ),
     ).toEqual({
       bytedance: { size: '2K', watermark: false },
-    });
-  });
-
-  it('deep-merges image options into existing provider options', () => {
-    expect(
-      mergeImageProviderOptions(
-        {
-          google: {
-            imageConfig: { outputMimeType: 'image/webp' },
-            safetySetting: 'strict',
-          },
-        },
-        {
-          google: {
-            imageConfig: { aspectRatio: '16:9' },
-          },
-        },
-      ),
-    ).toEqual({
-      google: {
-        imageConfig: { aspectRatio: '16:9', outputMimeType: 'image/webp' },
-        safetySetting: 'strict',
-      },
     });
   });
 });

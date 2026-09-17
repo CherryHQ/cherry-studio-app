@@ -65,7 +65,7 @@ export interface BuiltAgentParams {
   credentialReceipt: ServingCredentialReceipt;
 }
 
-/** Build the assistant-less AI SDK request used by naming, checks, and paintings. */
+/** Build the assistant-less AI SDK text request used by naming and checks. */
 export async function buildAgentParams({
   request,
   services,
