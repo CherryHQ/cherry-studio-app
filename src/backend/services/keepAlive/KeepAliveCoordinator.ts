@@ -10,14 +10,37 @@ import {
 } from '@/backend/core/lifecycle';
 
 export type KeepAliveLease = {
+  /** Optional admission gate: resolves on readiness or release, rejects on platform failure. */
+  ready?: Promise<void>;
   /** Idempotent; the last release across all holders stops the platform mechanism. */
   release(): void;
 };
 
+/** Wait at the execution boundary without making cancellation wait for native startup. */
+export async function waitForKeepAlive(
+  lease: KeepAliveLease | undefined,
+  signal: AbortSignal,
+): Promise<void> {
+  signal.throwIfAborted();
+  const ready = lease?.ready;
+  if (!ready) return;
+  let onAbort!: () => void;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      onAbort = () => reject(signal.reason);
+      signal.addEventListener('abort', onAbort, { once: true });
+      void ready.then(resolve, reject);
+    });
+    signal.throwIfAborted();
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
 export type KeepAliveSource = {
   /**
    * Holds background execution for the caller. `onInterrupt` fires when the
-   * platform revokes execution before release; sources that cannot be revoked
+   * platform denies or revokes execution before release; sources that cannot be revoked
    * never call it.
    */
   acquire(tag: string, onInterrupt?: (reason: Error) => void | Promise<void>): KeepAliveLease;

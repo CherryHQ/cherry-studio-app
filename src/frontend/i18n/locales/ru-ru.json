@@ -195,7 +195,7 @@
   "chat.errorPart.detail.source": "Источник",
   "chat.errorPart.detail.status": "Статус HTTP",
   "chat.errorPart.detail.title": "Подробности ошибки",
-  "chat.errorPart.interrupted.message": "Приложение закрылось до завершения ответа. Отправьте сообщение еще раз.",
+  "chat.errorPart.interrupted.message": "Этот ответ был прерван. Отправьте сообщение ещё раз.",
   "chat.errorPart.interrupted.title": "Ответ прерван",
   "chat.errorPart.message": "Не удалось завершить ответ.",
   "chat.errorPart.message.auth": "Проверьте ключ API в настройках провайдера, затем повторите попытку.",

@@ -284,10 +284,10 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
  
      @Override
 diff --git a/lib/types/index.d.ts b/lib/types/index.d.ts
-index cc9906f27b2d988ec01fc07e4096ec24b075b22e..9deaaf22e58b7bb5a31b04d376842bf8d4c791b8 100644
+index cc9906f27b2d988ec01fc07e4096ec24b075b22e..2a01240037c37b3227185ece253aea690fc159fb 100644
 --- a/lib/types/index.d.ts
 +++ b/lib/types/index.d.ts
-@@ -28,15 +28,16 @@ declare const backgroundServer: BackgroundServer;
+@@ -28,15 +28,17 @@ declare const backgroundServer: BackgroundServer;
   *            progressBar?: {max: number, value: number, indeterminate?: boolean},
   *            foregroundServiceType?: Array<'dataSync'|'mediaPlayback'|'phoneCall'|'location'|'connectedDevice'|'mediaProjection'|'camera'|'microphone'|'health'|'remoteMessaging'|'systemExempted'|'shortService'|'specialUse'>
   *            }} BackgroundTaskOptions
@@ -303,10 +303,11 @@ index cc9906f27b2d988ec01fc07e4096ec24b075b22e..9deaaf22e58b7bb5a31b04d376842bf8
      /** @private */
      private _isRunning;
 +    private _activeTaskName;
++    private _pendingStart;
      /** @private @type {BackgroundTaskOptions} */
      private _currentOptions;
      /**
-@@ -112,7 +113,8 @@ declare class BackgroundServer extends EventEmitter<"expiration", any> {
+@@ -112,7 +114,8 @@ declare class BackgroundServer extends EventEmitter<"expiration", any> {
       * @private
       * @template T
       * @param {(taskData?: T) => Promise<void>} task
@@ -317,7 +318,7 @@ index cc9906f27b2d988ec01fc07e4096ec24b075b22e..9deaaf22e58b7bb5a31b04d376842bf8
      private _generateTask;
      /**
 diff --git a/src/index.js b/src/index.js
-index b744e685308297bb3e0f250ae18ec43c5ff2f971..92b895557a529374f2b5f0820ee9cf09a6df79cc 100644
+index b744e685308297bb3e0f250ae18ec43c5ff2f971..158bfdb3098c4e9eb52810cc1bdc7a188be976eb 100644
 --- a/src/index.js
 +++ b/src/index.js
 @@ -12,7 +12,7 @@ import EventEmitter from 'eventemitter3';
@@ -329,16 +330,18 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..92b895557a529374f2b5f0820ee9cf09
   */
  class BackgroundServer extends EventEmitter {
      constructor() {
-@@ -23,6 +23,8 @@ class BackgroundServer extends EventEmitter {
+@@ -23,6 +23,10 @@ class BackgroundServer extends EventEmitter {
          this._stopTask = () => {};
          /** @private */
          this._isRunning = false;
 +        /** @private @type {string | undefined} */
 +        this._activeTaskName;
++        /** @private */
++        this._pendingStart;
          /** @private @type {BackgroundTaskOptions} */
          this._currentOptions;
          this._addListeners();
-@@ -33,6 +35,13 @@ class BackgroundServer extends EventEmitter {
+@@ -33,6 +37,14 @@ class BackgroundServer extends EventEmitter {
       */
      _addListeners() {
          nativeEventEmitter.addListener('expiration', () => this.emit('expiration'));
@@ -346,13 +349,14 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..92b895557a529374f2b5f0820ee9cf09
 +            if (taskName !== this._activeTaskName) return;
 +            this._activeTaskName = undefined;
 +            this._isRunning = false;
++            this._pendingStart?.reject(new Error('Background service stopped while starting'));
 +            this._stopTask();
 +            this.emit('stopped');
 +        });
      }
  
      /**
-@@ -78,11 +87,21 @@ class BackgroundServer extends EventEmitter {
+@@ -78,11 +90,35 @@ class BackgroundServer extends EventEmitter {
      async start(task, options) {
          this._runnedTasks++;
          this._currentOptions = this._normalizeOptions(options);
@@ -365,20 +369,34 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..92b895557a529374f2b5f0820ee9cf09
 -            this._isRunning = true;
 +            this._activeTaskName = taskName;
 +            AppRegistry.registerHeadlessTask(taskName, () => finalTask);
++            // startService() only enqueues an intent. The native Headless JS
++            // callback below confirms that the service acquired its wake lock
++            // and admitted this task; no second native event protocol is needed.
++            let pendingStart;
++            const started = new Promise((resolve, reject) => {
++                pendingStart = { taskName, resolve, reject };
++            });
++            // A synchronous native-module error must not leave the admission rejection unhandled.
++            void started.catch(() => {});
++            this._pendingStart = pendingStart;
++            const timer = setTimeout(() => pendingStart.reject(new Error('Background service startup timed out')), 10000);
 +            try {
-+                await RNBackgroundActions.start(this._currentOptions);
++                await Promise.all([started, RNBackgroundActions.start(this._currentOptions)]);
 +                if (this._activeTaskName !== taskName) {
 +                    throw new Error('Background service stopped while starting');
 +                }
 +                this._isRunning = true;
 +            } catch (error) {
-+                if (this._activeTaskName === taskName) this._activeTaskName = undefined;
++                if (this._activeTaskName === taskName) await this.stop().catch(() => {});
 +                throw error;
++            } finally {
++                clearTimeout(timer);
++                if (this._pendingStart === pendingStart) this._pendingStart = undefined;
 +            }
          } else {
              await RNBackgroundActions.start(this._currentOptions);
              this._isRunning = true;
-@@ -94,11 +113,13 @@ class BackgroundServer extends EventEmitter {
+@@ -94,14 +130,19 @@ class BackgroundServer extends EventEmitter {
       * @private
       * @template T
       * @param {(taskData?: T) => Promise<void>} task
@@ -393,14 +411,22 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..92b895557a529374f2b5f0820ee9cf09
 +            if (Platform.OS === 'android' && self._activeTaskName !== taskName) return;
              await new Promise((resolve) => {
                  self._stopTask = resolve;
-                 task(parameters).then(() => self.stop());
-@@ -129,9 +150,11 @@ class BackgroundServer extends EventEmitter {
+-                task(parameters).then(() => self.stop());
++                if (self._pendingStart?.taskName === taskName) self._pendingStart.resolve();
++                task(parameters).then(() => {
++                    if (Platform.OS !== 'android' || self._activeTaskName === taskName) return self.stop();
++                });
+             });
+         };
+     }
+@@ -129,9 +170,12 @@ class BackgroundServer extends EventEmitter {
       * @returns {Promise<void>}
       */
      async stop() {
 +        // Invalidate before native destruction can emit its asynchronous event.
 +        this._activeTaskName = undefined;
 +        this._isRunning = false;
++        this._pendingStart?.reject(new Error('Background service stopped while starting'));
          this._stopTask();
          await RNBackgroundActions.stop();
 -        this._isRunning = false;

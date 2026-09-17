@@ -1,6 +1,10 @@
 import { Platform } from 'react-native';
 
-import { KeepAliveCoordinator, type KeepAliveSource } from '../KeepAliveCoordinator';
+import {
+  KeepAliveCoordinator,
+  type KeepAliveSource,
+  waitForKeepAlive,
+} from '../KeepAliveCoordinator';
 
 type OnInterrupt = (reason: Error) => void | Promise<void>;
 
@@ -14,6 +18,28 @@ describe('KeepAliveCoordinator', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
+
+  test.each(['ready', 'aborted'] as const)(
+    'admission settles on %s and removes its abort listener',
+    async (outcome) => {
+      let admit!: () => void;
+      const ready = new Promise<void>((resolve) => {
+        admit = resolve;
+      });
+      const controller = new AbortController();
+      const remove = jest.spyOn(controller.signal, 'removeEventListener');
+      const waiting = waitForKeepAlive({ ready, release() {} }, controller.signal);
+      if (outcome === 'ready') {
+        admit();
+        await waiting;
+      } else {
+        const reason = new Error('Cancelled');
+        controller.abort(reason);
+        await expect(waiting).rejects.toBe(reason);
+      }
+      expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+    },
+  );
 
   test('hands iOS leases to the audio source and Android leases to the foreground service', async () => {
     for (const [platform, selected] of [

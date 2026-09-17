@@ -192,7 +192,7 @@
   "chat.errorPart.detail.source": "來源",
   "chat.errorPart.detail.status": "HTTP 狀態",
   "chat.errorPart.detail.title": "錯誤詳情",
-  "chat.errorPart.interrupted.message": "應用在本次回復完成前已關閉，請重新發送。",
+  "chat.errorPart.interrupted.message": "本次回覆已中斷，請重新傳送。",
   "chat.errorPart.interrupted.title": "回復已中斷",
   "chat.errorPart.message": "本次回復未能完成。",
   "chat.errorPart.message.auth": "請檢查供應商設定中的 API 密鑰，然後重試。",

@@ -24,7 +24,8 @@
  *     after it; the run loop stops at the first terminal;
  * 5.  terminal message state commits before terminal events publish; the
  *     terminal turn is a projection of that committed message;
- * 6.  cancellation settles as `cancelled` (or `interrupted` at startup);
+ * 6.  user cancellation settles as `cancelled`; platform revocation fails with
+ *     `INTERRUPTED`, while unfinished turns reconcile as `interrupted` at startup;
  * 7.  approval responses correlate to the active Session/turn/approval and
  *     fail closed;
  * 8.  `observeSession` captures snapshot and subscription in one synchronous
@@ -49,6 +50,8 @@ import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
+import { waitForKeepAlive } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
@@ -421,6 +424,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     );
 
     try {
+      await waitForKeepAlive(preparationLease, signal);
       const plan = await prepareInitialTurn(this.turnPreparation, parsed, signal);
       if (!plan.imageGeneration) {
         openedRuntimeSession = await this.openRuntimeSession(plan.runtime, signal);
@@ -454,6 +458,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         abortController,
       );
       return session;
+    } catch (error) {
+      if (error instanceof KeepAliveInterruptionError) {
+        fail('INTERRUPTED', error.message, true);
+      }
+      throw error;
     } finally {
       if (openedRuntimeSession && !isRuntimeSessionInstalled) {
         await openedRuntimeSession
@@ -569,6 +578,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       abortController.abort(reason),
     );
     try {
+      await waitForKeepAlive(preparationLease, signal);
       // Every gate between admission and the first durable write lives in the
       // preparation stage; a failure there leaves nothing to reconcile.
       const plan = await prepareTurn(this.turnPreparation, parsed, signal);
@@ -598,6 +608,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         runtimeSession,
         abortController,
       );
+    } catch (error) {
+      if (error instanceof KeepAliveInterruptionError) {
+        fail('INTERRUPTED', error.message, true);
+      }
+      throw error;
     } finally {
       this.admittingSessions.delete(sessionId);
       preparationLease.release();
@@ -1108,6 +1123,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
   ): Promise<void> {
+    const interruption: unknown = state.abortController.signal.reason;
+    if (interruption instanceof KeepAliveInterruptionError) {
+      outcome = 'failed';
+      error = { code: 'INTERRUPTED', message: interruption.message, retryable: true };
+    }
     const terminalAt = Date.now();
     state.runtimeTiming.closeOpenSpans(terminalAt);
     state.runtimeTiming.complete(terminalAt);

@@ -193,7 +193,7 @@
   "chat.errorPart.detail.source": "Source",
   "chat.errorPart.detail.status": "HTTP status",
   "chat.errorPart.detail.title": "Error details",
-  "chat.errorPart.interrupted.message": "The app closed before this reply finished. Send the message again.",
+  "chat.errorPart.interrupted.message": "This reply was interrupted. Send the message again.",
   "chat.errorPart.interrupted.title": "Reply interrupted",
   "chat.errorPart.message": "The reply could not be completed.",
   "chat.errorPart.message.auth": "Check the API key in provider settings, then try again.",

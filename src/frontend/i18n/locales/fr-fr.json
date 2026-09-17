@@ -194,7 +194,7 @@
   "chat.errorPart.detail.source": "Source",
   "chat.errorPart.detail.status": "Statut HTTP",
   "chat.errorPart.detail.title": "Détails de l'erreur",
-  "chat.errorPart.interrupted.message": "L'application s'est fermée avant la fin de cette réponse. Envoyez à nouveau le message.",
+  "chat.errorPart.interrupted.message": "Cette réponse a été interrompue. Renvoyez le message.",
   "chat.errorPart.interrupted.title": "Réponse interrompue",
   "chat.errorPart.message": "La réponse n'a pas pu être complétée.",
   "chat.errorPart.message.auth": "Vérifiez la clé API dans les paramètres du fournisseur, puis réessayez.",

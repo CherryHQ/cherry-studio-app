@@ -193,7 +193,7 @@
   "chat.errorPart.detail.source": "Kaynak",
   "chat.errorPart.detail.status": "HTTP durumu",
   "chat.errorPart.detail.title": "Hata ayrıntıları",
-  "chat.errorPart.interrupted.message": "Bu yanıt tamamlanmadan uygulama kapandı. Mesajı tekrar gönderin.",
+  "chat.errorPart.interrupted.message": "Bu yanıt kesintiye uğradı. Mesajı yeniden gönderin.",
   "chat.errorPart.interrupted.title": "Yanıt kesildi",
   "chat.errorPart.message": "Yanıt tamamlanamadı.",
   "chat.errorPart.message.auth": "Sağlayıcı ayarlarında API anahtarını kontrol edip tekrar deneyin.",

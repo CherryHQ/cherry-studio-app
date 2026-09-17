@@ -18,6 +18,11 @@ post-presentation event so task acknowledgement can follow asynchronous native d
   Concurrent chat and painting work share one execution service. It becomes a `dataSync` foreground
   service only while the application is not visible. The last lease stops it.
 - Chat acquires a preference-gated preparation lease before its first asynchronous admission step.
+  Chat preparation and user-continued jobs await the lease's `ready` promise before execution.
+  On Android, the library resolves startup only when its registered Headless JS entry runs, not
+  when `startService()` merely accepts an intent. Missing acknowledgement times out after ten
+  seconds; cancellation can stop startup immediately. Background admission without an existing
+  service rejects instead of leaving a lease that has no execution protection.
   The generated turn acquires its session lease before preparation releases, so leaving during
   model/tool preparation does not defer the first service start until the app is already backgrounded.
   A failed preparation releases its lease without creating a task surface or starting generation.
@@ -45,12 +50,20 @@ post-presentation event so task acknowledgement can follow asynchronous native d
   delivery that never emits a JavaScript receipt event.
 - `BackgroundActivitySession.finish()` resolves after queued platform delivery. Painting awaits
   it before returning to `JobRuntime`, so execution protection includes the final notification.
+  Android subscribes before scheduling and waits for the matching post-presentation event, with
+  a three-second bound. Foreground return, cancellation, shutdown, and service interruption release
+  that wait. This event confirms a native presentation attempt, not that the user saw the alert.
+  Permission denial skips delivery. Scheduling failures get at most one retry with the same
+  identifier; successful scheduling is never retried because its presentation event is missing.
 - Job execution retains its lease while the dispatcher claims queued successors, including after
   forced cancellation. Serial painting requests therefore hand execution protection to the next
   task without stopping and trying to restart the service in the background.
 - Platform interruption aborts domain work before asynchronous cancellation writes. Chat waits for
   its current turn's persistence to finish; completed old updates and budget cancellation cannot
   release execution protection owned by newer work.
+  It persists a failed reply with `INTERRUPTED` and retains partial content. Painting persists
+  `JOB_INTERRUPTED` without automatic retries and ends its activity as failed. User cancellation
+  remains cancelled and silent. Failure notifications are best effort while the process is alive.
   Native service destruction also clears the library's running state before notifying this runtime
   to interrupt its current leases. Expected stops and events from an older service generation do
   not interrupt newer work. New foreground tasks can start protection after cancellation drains.
@@ -171,6 +184,9 @@ These native dependencies, both patches, and config plugins require a rebuilt de
 and EAS Updates cannot add native modules. Use [Local EAS Builds](../guides/local-builds.md) when a
 build is authorized. Compatibility with Cherry's Expo 57 / React Native 0.86 and device behavior
 must be verified in that client; source review and lint do not establish runtime compatibility.
+The admission acknowledgement reuses the existing native Headless JS callback and adds no native
+API. Its JavaScript changes do not themselves require a new binary, but the installed client must
+already include the documented native service and Expo presentation patches.
 
 `package.json` opts `expo-notifications` into `expo.autolinking.android.buildFromSource`. Expo's
 bundled precompiled AAR does not contain our native presentation event; patching its Kotlin sources
@@ -182,7 +198,8 @@ background-budget reset/cancellation, approval cleanup, single completion delive
 painting notification delivery before task completion. Additional cases cover foreground event
 delivery races, post-presentation task cleanup, cold-start navigation, task-versus-draft route
 identity, and legacy task URLs. Library lifecycle coverage exercises stopped-event ordering and
-stale generation rejection. Installed-source guards protect both native patches against dependency upgrades; they do not prove
+stale generation rejection, delayed/missing startup acknowledgement, cancellable admission,
+interruption persistence, and bounded notification delivery/retries. Installed-source guards protect both native patches against dependency upgrades; they do not prove
 Android runtime behavior. Device acceptance should cover foreground/background service transitions,
 notification-shade interaction, rapid return and exit, screen lock, concurrent chat/painting, denied
 notification permission, completion/approval taps from a cold app, and system termination without

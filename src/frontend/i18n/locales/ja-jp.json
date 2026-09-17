@@ -192,7 +192,7 @@
   "chat.errorPart.detail.source": "ソース",
   "chat.errorPart.detail.status": "HTTPステータス",
   "chat.errorPart.detail.title": "エラーの詳細",
-  "chat.errorPart.interrupted.message": "この返信が完了する前にアプリが終了しました。もう一度メッセージを送信してください。",
+  "chat.errorPart.interrupted.message": "この返信は中断されました。メッセージをもう一度送信してください。",
   "chat.errorPart.interrupted.title": "返信が中断されました",
   "chat.errorPart.message": "返信を完了できませんでした。",
   "chat.errorPart.message.auth": "プロバイダ設定の API キーを確認して、再試行してください。",

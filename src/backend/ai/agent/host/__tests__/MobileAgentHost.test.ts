@@ -7,6 +7,7 @@
 import { v7 as uuidv7 } from 'uuid';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply/backgroundReplyTypes';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
   AgentEventSchema,
   AgentProtocolError,
@@ -98,6 +99,7 @@ const backgroundReplyTurn = {
 };
 const backgroundReply = {
   acquirePreparation: jest.fn((_onInterrupt: (reason: Error) => void) => ({
+    ready: undefined as Promise<void> | undefined,
     release: jest.fn(),
   })),
   clearSession: jest.fn(),
@@ -485,6 +487,42 @@ describe('MobileAgentHost', () => {
       expect(backgroundReply.startTurn.mock.invocationCallOrder[0]).toBeLessThan(
         lease.release.mock.invocationCallOrder[0],
       );
+      await host._doStop();
+    },
+  );
+
+  test.each(['new', 'existing'] as const)(
+    '%s-session submission waits for native admission before preparation or durable writes',
+    async (kind) => {
+      const admission = createDeferred();
+      const release = jest.fn();
+      backgroundReply.acquirePreparation.mockReturnValueOnce({ ready: admission.promise, release });
+      const prepare = jest.fn(inferenceModel);
+      const host = createHost(new FakeRuntime(), noOpNaming, noFiles, noOpTools, prepare);
+      const sessionId = kind === 'new' ? uuidv7() : (await createStoredSession()).id;
+      const input = {
+        sessionId,
+        ...messageIds(),
+        parts: [{ type: 'text' as const, text: 'Wait for protection' }],
+      };
+      const submitting =
+        kind === 'new'
+          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
+          : host.submitMessage(input);
+      await Promise.resolve();
+      expect(prepare).not.toHaveBeenCalled();
+      expect(await store.listMessages(sessionId)).toEqual([]);
+      const rejected = expect(submitting).rejects.toMatchObject({
+        view: { code: 'INTERRUPTED' },
+      });
+      // Revocation must abort admission even if the native promise never settles.
+      backgroundReply.acquirePreparation.mock.calls[0]![0](
+        new KeepAliveInterruptionError('start-rejected'),
+      );
+      await rejected;
+      expect(prepare).not.toHaveBeenCalled();
+      expect(backgroundReply.startTurn).not.toHaveBeenCalled();
+      expect(release).toHaveBeenCalledTimes(1);
       await host._doStop();
     },
   );
@@ -2139,9 +2177,14 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
-  test('background interruption waits for cancelled turn persistence', async () => {
+  test('background interruption preserves partial output and waits for failed turn persistence', async () => {
     const started = createDeferred();
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'Partial reply', state: 'streaming' },
+      });
       started.resolve();
       if (!controller.signal.aborted) {
         await new Promise<void>((resolve) => {
@@ -2168,15 +2211,24 @@ describe('MobileAgentHost', () => {
 
     let drained = false;
     const interrupt = backgroundReply.startTurn.mock.calls[0]![0].onInterrupt!;
-    const interrupted = Promise.resolve(interrupt(new Error('Background time limit'))).then(() => {
+    const interrupted = Promise.resolve(
+      interrupt(new KeepAliveInterruptionError('execution-limit')),
+    ).then(() => {
       drained = true;
     });
-    await waitFor(() => finalize.mock.calls.length > 0, 'cancelled message persistence to start');
+    await waitFor(() => finalize.mock.calls.length > 0, 'interrupted message persistence to start');
     expect(drained).toBe(false);
     persistence.resolve();
     await interrupted;
-    expect((await store.listMessages(session.id))[1]?.status).toBe('cancelled');
-    expect(host.getSessionStatus(session.id)?.status).toBe('cancelled');
+    expect((await store.listMessages(session.id))[1]).toMatchObject({
+      status: 'error',
+      parts: [
+        { id: 'text-1', type: 'text', text: 'Partial reply', state: 'done' },
+        { type: 'error', error: { code: 'INTERRUPTED', retryable: true } },
+      ],
+    });
+    expect(host.getSessionStatus(session.id)?.status).toBe('failed');
+    expect(backgroundReplyTurn.finish).toHaveBeenCalledWith('failed', expect.any(Object));
   });
 
   test('stops active turns before draining Host-owned lifecycle work', async () => {

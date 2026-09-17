@@ -193,7 +193,7 @@
   "chat.errorPart.detail.source": "Πηγή",
   "chat.errorPart.detail.status": "Κατάσταση HTTP",
   "chat.errorPart.detail.title": "Λεπτομέρειες σφάλματος",
-  "chat.errorPart.interrupted.message": "Η εφαρμογή έκλεισε πριν ολοκληρωθεί αυτή η απάντηση. Στείλτε ξανά το μήνυμα.",
+  "chat.errorPart.interrupted.message": "Αυτή η απάντηση διακόπηκε. Στείλτε ξανά το μήνυμα.",
   "chat.errorPart.interrupted.title": "Η απάντηση διεκόπη",
   "chat.errorPart.message": "Η απάντηση δεν μπόρεσε να ολοκληρωθεί.",
   "chat.errorPart.message.auth": "Ελέγξτε το κλειδί API στις ρυθμίσεις παρόχου και δοκιμάστε ξανά.",

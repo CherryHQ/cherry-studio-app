@@ -6,6 +6,7 @@ const mockNativeStop = jest.fn(async () => {});
 const mockNativeUpdate = jest.fn(async () => {});
 const mockNativeListeners = new Map<string, (taskName: string) => void>();
 const mockHeadlessFactories = new Map<string, () => () => Promise<void>>();
+const mockHeadlessTasks = new Map<string, Promise<void>>();
 let background: typeof BackgroundService;
 
 jest.mock('react-native', () => ({
@@ -44,12 +45,17 @@ beforeAll(() => {
 });
 beforeEach(() => {
   jest.clearAllMocks();
-  mockNativeStart.mockResolvedValue(undefined);
+  jest.useFakeTimers();
+  mockNativeStart.mockImplementation(async ({ taskName }) => {
+    mockHeadlessTasks.set(taskName, mockHeadlessFactories.get(taskName)!()());
+  });
 });
 afterEach(async () => {
   await background.stop();
   background.removeAllListeners('stopped');
   mockHeadlessFactories.clear();
+  mockHeadlessTasks.clear();
+  jest.useRealTimers();
 });
 
 test('unexpected destruction resets running state before interrupting and finishes the headless task', async () => {
@@ -57,12 +63,51 @@ test('unexpected destruction resets running state before interrupting and finish
   background.on('stopped', () => observedRunning.push(background.isRunning()));
   await background.start(hold, options);
   const taskName = mockNativeStart.mock.calls[0]![0].taskName;
-  const task = mockHeadlessFactories.get(taskName)!()();
+  const task = mockHeadlessTasks.get(taskName)!;
   await background.updateNotification({ taskTitle: 'Updated' });
   mockNativeListeners.get('stopped')?.(taskName);
   expect(observedRunning).toEqual([false]);
   await task;
   expect(mockNativeStop).not.toHaveBeenCalled();
+});
+
+test('native request acceptance does not admit execution before the headless task starts', async () => {
+  mockNativeStart.mockResolvedValueOnce(undefined);
+  let ready = false;
+  const starting = background.start(hold, options).then(() => {
+    ready = true;
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(ready).toBe(false);
+  expect(background.isRunning()).toBe(false);
+  const name = mockNativeStart.mock.calls[0]![0].taskName;
+  const task = mockHeadlessFactories.get(name)!()();
+  await starting;
+  expect(background.isRunning()).toBe(true);
+  await background.stop();
+  await task;
+});
+
+test('a missing headless start times out and a late callback cannot revive it', async () => {
+  mockNativeStart.mockResolvedValueOnce(undefined);
+  const starting = background.start(hold, options);
+  const rejected = expect(starting).rejects.toThrow('Background service startup timed out');
+  jest.advanceTimersByTime(10_000);
+  await rejected;
+  expect(mockNativeStop).toHaveBeenCalledTimes(1);
+  const name = mockNativeStart.mock.calls[0]![0].taskName;
+  await mockHeadlessFactories.get(name)!()();
+  expect(background.isRunning()).toBe(false);
+});
+
+test('explicit cancellation rejects pending admission without waiting for its timeout', async () => {
+  mockNativeStart.mockResolvedValueOnce(undefined);
+  const starting = background.start(hold, options);
+  const rejected = expect(starting).rejects.toThrow('Background service stopped while starting');
+  await background.stop();
+  await rejected;
+  expect(background.isRunning()).toBe(false);
 });
 
 test('expected stops and late events from an older service cannot interrupt a newer task', async () => {
@@ -97,4 +142,19 @@ test('a stop arriving before the start promise resolves cannot restore a stale r
   finishStart();
   await rejected;
   expect(background.isRunning()).toBe(false);
+});
+
+test('a previously running task finishing late cannot stop its replacement', async () => {
+  let finishOld!: () => void;
+  const oldTask = new Promise<void>((resolve) => {
+    finishOld = resolve;
+  });
+  await background.start(() => oldTask, options);
+  await background.stop();
+  await background.start(hold, options);
+  finishOld();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(background.isRunning()).toBe(true);
+  expect(mockNativeStop).toHaveBeenCalledTimes(1);
 });

@@ -192,7 +192,7 @@
   "chat.errorPart.detail.source": "Nguồn",
   "chat.errorPart.detail.status": "Trạng thái HTTP",
   "chat.errorPart.detail.title": "Chi tiết lỗi",
-  "chat.errorPart.interrupted.message": "Ứng dụng đã đóng trước khi câu trả lời này kết thúc. Gửi tin nhắn một lần nữa.",
+  "chat.errorPart.interrupted.message": "Phản hồi này đã bị gián đoạn. Hãy gửi lại tin nhắn.",
   "chat.errorPart.interrupted.title": "Trả lời bị gián đoạn",
   "chat.errorPart.message": "Không thể hoàn thành câu trả lời.",
   "chat.errorPart.message.auth": "Hãy kiểm tra khóa API trong cài đặt của nhà cung cấp rồi thử lại.",

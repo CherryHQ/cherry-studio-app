@@ -194,7 +194,7 @@
   "chat.errorPart.detail.source": "Sursă",
   "chat.errorPart.detail.status": "Stare HTTP",
   "chat.errorPart.detail.title": "Detalii despre eroare",
-  "chat.errorPart.interrupted.message": "Aplicația s-a închis înainte ca acest răspuns să se termine. Trimite mesajul din nou.",
+  "chat.errorPart.interrupted.message": "Acest răspuns a fost întrerupt. Trimiteți mesajul din nou.",
   "chat.errorPart.interrupted.title": "Răspunsul a fost întrerupt",
   "chat.errorPart.message": "Răspunsul nu a putut fi completat.",
   "chat.errorPart.message.auth": "Verificați cheia API în setările furnizorului, apoi încercați din nou.",

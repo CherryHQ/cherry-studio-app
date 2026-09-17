@@ -194,7 +194,7 @@
   "chat.errorPart.detail.source": "Fuente",
   "chat.errorPart.detail.status": "Estado HTTP",
   "chat.errorPart.detail.title": "Detalles del error",
-  "chat.errorPart.interrupted.message": "La aplicación se cerró antes de que finalizara esta respuesta. Envía el mensaje nuevamente.",
+  "chat.errorPart.interrupted.message": "Esta respuesta se interrumpió. Vuelve a enviar el mensaje.",
   "chat.errorPart.interrupted.title": "Respuesta interrumpida",
   "chat.errorPart.message": "No se pudo completar la respuesta.",
   "chat.errorPart.message.auth": "Verifique la clave API en la configuración del proveedor y vuelva a intentarlo.",
