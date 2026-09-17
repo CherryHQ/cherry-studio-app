@@ -1,9 +1,6 @@
-import {
-  buildRuntimeEndpointConfigs,
-  ENDPOINT_TYPE,
-  MODEL_CAPABILITY,
-} from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
+import { createPresetProviderInput } from '@/backend/data/services/presetProviders';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -30,13 +27,14 @@ describe('providerToAiSdkConfig', () => {
     async (presetId, endpointType, sdkProviderId, baseURL) => {
       const preset = providerRegistryService.loadProviders().find(({ id }) => id === presetId);
       if (!preset) throw new Error(`Missing provider preset ${presetId}`);
+      const { defaultChatEndpoint, endpointConfigs } = createPresetProviderInput(preset);
 
       for (const id of [presetId, `${presetId}-copy`]) {
         const provider = createProvider({
           id,
           presetProviderId: presetId,
-          defaultChatEndpoint: preset.defaultChatEndpoint,
-          endpointConfigs: buildRuntimeEndpointConfigs(preset.endpointConfigs),
+          defaultChatEndpoint: defaultChatEndpoint ?? undefined,
+          endpointConfigs: endpointConfigs ?? undefined,
         });
         const model = { ...createModel(id, 'test-model'), endpointTypes: [endpointType] };
 
