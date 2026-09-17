@@ -4,6 +4,8 @@
  * conformance suite; durable-adapter behavior is outside this suite.
  */
 
+import { createRequire } from 'node:module';
+
 import { v7 as uuidv7 } from 'uuid';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply/backgroundReplyTypes';
@@ -40,6 +42,28 @@ import type { AgentImageGenerationPort } from '../agentImageGeneration';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { MobileAgentHost } from '../MobileAgentHost';
+
+const originalAbortController = globalThis.AbortController;
+const originalAbortSignal = globalThis.AbortSignal;
+
+beforeAll(() => {
+  // Node preserves abort reasons natively; use RN's controller and the app's
+  // preboot setup so interruption persistence exercises the device contract.
+  const abortPath = createRequire(require.resolve('react-native/package.json')).resolve(
+    'abort-controller/dist/abort-controller',
+  );
+  jest.isolateModules(() => {
+    const legacy = jest.requireActual(abortPath);
+    globalThis.AbortController = legacy.AbortController;
+    globalThis.AbortSignal = legacy.AbortSignal;
+    jest.requireActual('@/bootstrap/preboot/abortSignal');
+  });
+});
+
+afterAll(() => {
+  globalThis.AbortController = originalAbortController;
+  globalThis.AbortSignal = originalAbortSignal;
+});
 
 const AGENT_ID = 'agent-under-test';
 const FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000001';
