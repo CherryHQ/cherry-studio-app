@@ -323,7 +323,7 @@ Reverse-order teardown means consumers stop before the infrastructure they use: 
 
 | Concern | Rule |
 | --- | --- |
-| Gate failure | `fail-fast`. Startup aborts; the provider surfaces the error. No `custom` strategy is ported — it has no mobile use |
+| Gate failure | `fail-fast`. Installation rolls back the settled initialization layers, including failed services and their successful peers, while the failed host remains resolvable. It then clears the host and propagates the startup error to the provider. |
 | PostReady failure | `graceful`. Logged, startup unaffected |
 | Dispose during PostReady initialization | Waits for initialization, then stops the complete graph in reverse order |
 | Circular dependency | `CircularDependencyError` naming the cycle, thrown during resolution |
