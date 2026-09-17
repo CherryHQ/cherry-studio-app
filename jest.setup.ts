@@ -1,6 +1,12 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
+import { TextDecoder, TextEncoder } from 'node:util';
 
 global.__DEV__ = true;
+
+// jest-environment-jsdom 29 omits the encoders its own URL implementation needs.
+if (typeof globalThis.TextEncoder === 'undefined') {
+  Object.assign(globalThis, { TextDecoder, TextEncoder });
+}
 
 // Some tests replace react-native wholesale. Keep Expo's lazy fetch setup from
 // falling through to the then-missing TurboModuleRegistry during teardown.

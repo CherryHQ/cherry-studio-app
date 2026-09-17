@@ -7,6 +7,8 @@ export const fileQueryKeys = {
     ['files', entry.id, 'image-dimensions', entry.updatedAt, uri] as const,
   viewerText: (entry: FileEntry, uri: string) =>
     ['files', entry.id, 'viewer-text', entry.updatedAt, uri] as const,
+  viewerSvg: (entry: FileEntry, uri: string) =>
+    ['files', entry.id, 'viewer-svg', entry.updatedAt, uri] as const,
   previewUri: (entry: FileEntry) => ['files', entry.id, 'preview-uri', entry.updatedAt] as const,
   uri: (entryId: FileEntryId) => ['files', entryId, 'uri'] as const,
   previewUriPage: (entries: readonly FileEntry[]) =>

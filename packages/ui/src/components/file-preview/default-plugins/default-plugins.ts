@@ -1,1 +1,5 @@
-export { defaultFilePreviewFallback, defaultFilePreviewPlugins } from './default-plugins.android';
+export {
+  defaultFileCardThumbnail,
+  defaultFilePreviewFallback,
+  defaultFilePreviewPlugins,
+} from './default-plugins.android';

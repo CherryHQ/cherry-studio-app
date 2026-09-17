@@ -1,0 +1,166 @@
+{
+  "repository": "https://github.com/CherryHQ/cherry-studio",
+  "commit": "e131f495a9af593ec873bea34b935e97d644f586",
+  "files": [
+    {
+      "source": "src/renderer/components/FilePreview/officeZipPreflight.ts",
+      "target": "src/frontend/features/files/office/browser/officeZipPreflight.ts",
+      "sourceSha256": "0e62159f6ec4e1e2eb24feb8298387d8ca85e73603443e73ef56b599f3d2bd03"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/gridLayout.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/gridLayout.ts",
+      "sourceSha256": "9cec1111ef3a06351e03b60a607fc6e091827d890ba46a832bfa1ff5c6ee00b1"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/renderModel.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/renderModel.ts",
+      "sourceSha256": "4cbaa846ce5461e60b4f8335e16ec05383e8ec0333903df11bc89ec217812a89"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/fast-formula-parser.d.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/fast-formula-parser.d.ts",
+      "sourceSha256": "6a4a51ec2dff729dc599ca8545d60319ac5b30e112697980d346aa4573ab505d"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/XlsxGrid.tsx",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/XlsxGrid.tsx",
+      "sourceSha256": "8987125a337a9daa5bcfa9d3fce3f9e1dc87cb3b80c9ba2643a6645516cdc39f"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/charts/ChartRenderer.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/charts/ChartRenderer.ts",
+      "sourceSha256": "230acb551c46c4565d2f7a20b26876f567fae1692d5bee6d41d10e93bb6202d8"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/charts/EchartsChartRenderer.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/charts/EchartsChartRenderer.ts",
+      "sourceSha256": "b2462f664c0e79c9421b0c6348854cc5658a1db0a1be13c0bda901bc898f4e06"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/charts/buildChartOption.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/charts/buildChartOption.ts",
+      "sourceSha256": "db2050da9e2e06d26ed4b6fbfbe77cf5892a26d5082ebeb1ce0317efa03a5823"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/worker/chartXmlParser.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/worker/chartXmlParser.ts",
+      "sourceSha256": "f8aa9d61446c0d47bd7c29739077f99700d1a4c21ae6772caa0e0ee36011d309"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/worker/formulaEvaluator.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/worker/formulaEvaluator.ts",
+      "sourceSha256": "134a3b55baf48544af54cfb33ab273fe43aae4c3ad3cb0757e9c0ac91b330a60"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/worker/formulaFunctions.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/worker/formulaFunctions.ts",
+      "sourceSha256": "5e482a38def6040a27058294fbd6a90dde6f4b14067b77201b25a2e6b2365713"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/worker/numberFormat.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/worker/numberFormat.ts",
+      "sourceSha256": "1da919b10909cd8a28f616ce22a04ab910249bf3853ca7ad0fe8a5182d3f5a4a"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/worker/parseWorkbook.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/worker/parseWorkbook.ts",
+      "sourceSha256": "606ca805d906f1d8e4442271b4e262f121a64331a4be5a14103c414fbf46f1bd"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/worker/themeResolver.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/worker/themeResolver.ts",
+      "sourceSha256": "bc55de87a5e83d60051500f661f49b9638955b4f608c2fa1dbe245883db6ccf2"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/__tests__/officeZipPreflight.test.ts",
+      "target": "src/frontend/features/files/office/browser/__tests__/officeZipPreflight.test.ts",
+      "sourceSha256": "1fccaff1ee1492031c5b22fbe3789136e846e2f9cbaaefb851a98e9641973101"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/__tests__/zipTestBytes.ts",
+      "target": "src/frontend/features/files/office/browser/__tests__/_zipTestBytes.ts",
+      "sourceSha256": "59820515a8a1412e38c246a31e7661b4c7db117e0791b1d02f36eccc0581fab6"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/grid.layout.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/gridLayout.test.ts",
+      "sourceSha256": "826d3a1cb47814bd7d9cc141a86c23a762cfdbb7be81391581b449478753e0fb"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/parser.parseWorkbook.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/parseWorkbook.test.ts",
+      "sourceSha256": "ec1614896b5c7d08ea92ebbed3671d45611a45e16d4115f8ad2e1d4f56371ff4"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/formula.evaluator.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/formulaEvaluator.test.ts",
+      "sourceSha256": "2f921235ec2aa1fd748092c61a3b9f52ff2792866c22b477dfbd27d4e222ad3d"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/parser.numberFormat.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/numberFormat.test.ts",
+      "sourceSha256": "12abc5e162ee8ad3e049cb8e32c407cdac1cdfc90ff60822fb903e231515a7cc"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/parser.themeResolver.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/themeResolver.test.ts",
+      "sourceSha256": "ab289b85635fcc82000748384f13ec1dcfa9e7f9ec272f76cb44b1a269a0d1f3"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/chart.buildChartOption.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/buildChartOption.test.ts",
+      "sourceSha256": "a8b23815a436112faf0e3d0c76be6d2d8d12d88d78075a926cd9a877cbfd4f9b"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/chart.chartXmlParser.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/chartXmlParser.test.ts",
+      "sourceSha256": "12b807951d8dda2b5ee38051b936aeb375c840f20d09c022d565deabb00912f4"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/xlsxTestPackages.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/_xlsxTestPackages.ts",
+      "sourceSha256": "eb90f3a8906473aa17d8b374dda1a730ab4b845503f286d645fd9740b1dc4f80"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/parser.axisOffset.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/parseWorkbook.axisOffset.test.ts",
+      "sourceSha256": "da03dc38e70aa7bb0a96a7ff27ddbca3664c646cd1fb541e16a75824d832eef6"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/parser.formulaDate.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/parseWorkbook.formulaDate.test.ts",
+      "sourceSha256": "9d842132b740941dfcd05faf72eb5ff796ba2dff1c0bdf1ea91a685ec95b5aed"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/parser.floatingObjectCap.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/parseWorkbook.floatingObjectCap.test.ts",
+      "sourceSha256": "390094d62b62dcf2d06868126bbf0ea9b85f040310299803172debd26d197c39"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/parser.chartRangeGuard.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/parseWorkbook.chartRangeGuard.test.ts",
+      "sourceSha256": "1ca12b379f84673edd9e92b54837ff96beaa31536304c44bd2d5a1ed452f5838"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/chart.chartXmlParser.edgeCases.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/chartXmlParser.edgeCases.test.ts",
+      "sourceSha256": "770f78ce0aaf3ea2adef766eab74c8f252666dd409df22da97cc34020a873498"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/grid.render.test.tsx",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/XlsxGrid.test.tsx",
+      "sourceSha256": "c8324828baf76f922e718a717bc34cc77bfeec3347c21ff6f5ded5464a9bafad"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/__tests__/chart.echartsChartRenderer.test.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/EchartsChartRenderer.test.ts",
+      "sourceSha256": "a2e83ccbd502230f0ff4ea50a32280667f865400b16dd2dd99e3d402c318f088"
+    },
+    {
+      "source": "src/renderer/components/FilePreview/plugins/spreadsheet/mockModel.ts",
+      "target": "src/frontend/features/files/office/browser/spreadsheet/__tests__/_mockWorkbookModel.ts",
+      "sourceSha256": "aab84b5ec6785d5e567c75dbb7c4ff15d6cc47b03c1e2ef08a8f118d378ba716"
+    }
+  ]
+}

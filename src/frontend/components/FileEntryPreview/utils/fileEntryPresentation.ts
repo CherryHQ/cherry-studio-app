@@ -1,6 +1,10 @@
 import type { FilePreviewFile } from '@cherrystudio/ui/components';
 
 import { type FileEntry, filenameExtension } from '@/shared/data/types/file';
+import {
+  documentFileTypeFromMediaType,
+  isBuiltinOfficeFileType,
+} from '@/shared/utils/documentFileTypes';
 
 export function fileEntryDisplayName(entry: Pick<FileEntry, 'filename'>): string {
   return entry.filename;
@@ -10,7 +14,7 @@ export function fileEntryExtensionLabel(entry: Pick<FileEntry, 'filename'>): str
   return filenameExtension(entry.filename)?.slice(0, 5).toUpperCase() ?? '';
 }
 
-export type FileEntryKind = 'document' | 'html' | 'image' | 'markdown' | 'text';
+export type FileEntryKind = 'document' | 'html' | 'image' | 'markdown' | 'office' | 'pdf' | 'text';
 
 const kindByMediaType = new Map<string, FileEntryKind>([
   ['text/html', 'html'],
@@ -26,6 +30,10 @@ export function fileEntryPreviewKind(entry: Pick<FileEntry, 'mediaType'>): FileE
   // Media types carry parameters — `text/plain; charset=utf-8` — that the exact
   // lookup must not see.
   const mediaType = entry.mediaType.split(';')[0]?.trim().toLowerCase() ?? '';
+  const documentType = documentFileTypeFromMediaType(mediaType);
+  if (documentType === 'pdf') return 'pdf';
+  if (documentType && isBuiltinOfficeFileType(documentType)) return 'office';
+  if (documentType) return 'document';
 
   return (
     kindByMediaType.get(mediaType) ??

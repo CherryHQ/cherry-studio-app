@@ -27,6 +27,8 @@ function isTestFile(relativePath: string): boolean {
  * go stale.
  */
 const colorLiteralAllowlist: Record<string, string> = {
+  'src/frontend/features/files/office/browser/spreadsheet/worker/parseWorkbook.ts':
+    'artwork: Office document border fallback is part of the authored workbook palette',
   'packages/ui/src/background-activity/background-activity.ios.tsx':
     'outside the render tree: Live Activity UI never passes through uniwind',
   'packages/ui/src/background-activity/background-activity.preview.tsx':

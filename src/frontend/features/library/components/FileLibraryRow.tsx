@@ -73,14 +73,14 @@ export const FileLibraryRow = memo(function FileLibraryRow({
         pointerEvents="none"
       >
         {item.uri && fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri ? (
-          <FileEntrySkeleton size={PREVIEW_SIZE} variant="icon" />
+          <FileEntrySkeleton size={PREVIEW_SIZE} variant="thumbnail" />
         ) : (
           <LoadedFileEntryPreview
             entry={item.entry}
             previewUri={item.previewUri}
             size={PREVIEW_SIZE}
             uri={item.uri}
-            variant="icon"
+            variant="thumbnail"
           />
         )}
       </View>
@@ -98,7 +98,7 @@ export const FileLibraryRow = memo(function FileLibraryRow({
 export function FileLibraryRowSkeleton() {
   return (
     <View className="min-h-18 flex-row items-center gap-4 py-3">
-      <FileEntrySkeleton size={PREVIEW_SIZE} variant="icon" />
+      <FileEntrySkeleton size={PREVIEW_SIZE} variant="thumbnail" />
       <View className="min-w-0 flex-1 gap-2">
         <Skeleton className="h-5 w-3/4 rounded-sm" />
         <Skeleton className="h-4 w-2/5 rounded-sm" />

@@ -3,7 +3,16 @@ import { fileEntryPreviewKind } from '../fileEntryPresentation';
 describe('fileEntryPreviewKind', () => {
   it.each([
     ['image/png', 'image'],
-    ['application/pdf', 'document'],
+    ['image/svg+xml', 'image'],
+    ['application/pdf', 'pdf'],
+    ['application/msword', 'document'],
+    ['application/vnd.ms-excel', 'document'],
+    ['application/vnd.ms-powerpoint', 'document'],
+    ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'office'],
+    ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'office'],
+    ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'office'],
+    ['application/vnd.oasis.opendocument.text', 'document'],
+    ['text/rtf', 'document'],
     ['text/markdown', 'markdown'],
     ['application/zip', 'document'],
     ['text/html', 'html'],
@@ -26,6 +35,6 @@ describe('fileEntryPreviewKind', () => {
 
   it('ignores media type parameters and casing', () => {
     expect(fileEntryPreviewKind({ mediaType: 'Text/Plain; charset=utf-8' })).toBe('text');
-    expect(fileEntryPreviewKind({ mediaType: 'APPLICATION/PDF' })).toBe('document');
+    expect(fileEntryPreviewKind({ mediaType: 'APPLICATION/PDF' })).toBe('pdf');
   });
 });

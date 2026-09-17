@@ -1,6 +1,14 @@
 import { isSupportedTextAttachment, resolveTextImportMediaType } from '../textFileTypes';
 
 describe('text file types', () => {
+  test('keeps correctly typed SVG attachments readable as XML source', () => {
+    expect(
+      isSupportedTextAttachment({ name: 'diagram.svg', mediaType: 'IMAGE/SVG+XML; charset=utf-8' }),
+    ).toBe(true);
+    expect(isSupportedTextAttachment({ name: 'payload.exe', mediaType: 'image/svg+xml' })).toBe(
+      false,
+    );
+  });
   test.each(['notes.txt', 'settings.yaml', 'app.ts', 'data.json', 'events.jsonl'])(
     'infers %s only during an unspecified-type import',
     (name) => {

@@ -11,11 +11,14 @@ logging, and the single opening policy shared by the composer, messages, and fil
 - `FileEntryAttachment`: an assistant deliverable. Images render directly at their aspect ratio,
   with a height cap of 1.25 times the width; other kinds retain a full-width file row.
 - `FileEntrySkeleton` and `FileEntryAttachmentSkeleton`: loading placeholders owned by the adapter.
-- `fileEntryPreviewKind`: one `mediaType` classifier for `image`, `markdown`, `text`, `html`, and
-  `document`. JSON, XML, and YAML belong to `text`; PDF and unsupported types belong to `document`.
+- `fileEntryPreviewKind`: one `mediaType` classifier for `image`, `markdown`, `text`, `html`, `pdf`,
+  `office`, and `document`. SVG stays an image on file surfaces but opens in the vector viewer.
+  JSON, XML, and YAML belong to `text`; DOCX/XLSX/PPTX belong to `office`; legacy Office and other
+  platform-opened formats belong to `document`.
 - `useResolvedFile`: entry and local-byte resolution for cards and the viewer, with explicit retry.
 - `useOpenFileEntry`: `openFileEntry` routes supported kinds to `/files/[fileEntryId]` and hands
-  `document` to the platform. `openFileEntryWithSystem` is the viewer's explicit escape hatch.
+  `document` to the platform. `office` uses the same local application viewer on iPhone, iPad
+  and Android. `openFileEntryWithSystem` is the viewer's explicit escape hatch.
 - `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by
   the attachment image and painting outputs so neither renders a broken frame.
 
@@ -27,7 +30,7 @@ The image thumbnail query uses the same resolved-entry shape and query key as th
 
 The adapters forward CherryUI's `variant`: the composer uses `attachment` (icon above the file
 title), and the library uses `card` (title above the icon). Images keep their thumbnails. Both
-variants share the file icon/color presets in CherryUI, while the default `thumbnail` retains
+variants use Quick Look artwork on iOS and shared file icon/color presets on Android, while the default `thumbnail` retains
 plugin and platform preview rendering. `LoadedFileEntryPreview` also forwards a caller-owned
 `badge`, used for the library's generated-file provenance without reserving empty metadata rows.
 
@@ -42,13 +45,10 @@ Product-specific parsing or backend calls remain in this adapter family. Add a n
 only with explicit card and opening behavior; the CherryUI plugin vocabulary itself stays open.
 Do not infer a second classification from filenames at individual surfaces.
 
-Rows that already render filename metadata use the explicit `icon` variant: images retain their
-thumbnail, while other files use the same type-icon presentation as Composer and the library.
-The default `thumbnail` variant keeps Quick Look on iOS and the Android extension-card fallback for
-text and unsupported documents.
-The composer's `attachment` and library's `card` variants use the shared file icon/title layout.
-Extension-based icon routing changes artwork only; it never changes product classification or
-opening. Text excerpts remain a separate follow-up.
+Library list and file-picker rows use `thumbnail`: iOS requests Quick Look artwork and Android
+keeps the shared type artwork. The row still owns opening/selection; the preview remains excluded
+from touch and accessibility hit targets. The optional generic `icon` variant remains available
+for callers that explicitly want icon-only artwork.
 
 The viewer and export behavior are documented in
 [File Preview And Viewer](../../../../docs/references/file-preview-and-viewer.md).

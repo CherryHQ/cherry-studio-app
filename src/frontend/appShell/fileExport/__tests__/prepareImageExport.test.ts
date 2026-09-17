@@ -186,7 +186,12 @@ test('none preserves the source format and bytes without native image work', asy
   expect(mockResources).toHaveLength(0);
 });
 
-test.each(['image/svg+xml', 'IMAGE/SVG+XML', 'image/svg+xml;charset=utf-8'])(
+test.each([
+  'image/svg+xml',
+  'IMAGE/SVG+XML',
+  'image/svg+xml;charset=utf-8',
+  'image/svg+xml; charset=utf-8',
+])(
   'SVG delivery preserves the original file with a Cherry watermark requested (%s)',
   async (mediaType) => {
     const uri = 'file:///managed/drawing.svg';
@@ -206,6 +211,7 @@ test.each(['image/svg+xml', 'IMAGE/SVG+XML', 'image/svg+xml;charset=utf-8'])(
     expect(exported).toMatchObject({ uri, filename: entry.filename, mediaType });
     exported.release();
     expect(mockFiles.get(uri)).toBe(original);
+    expect(mockFiles.size).toBe(1);
     expect(mockResources).toHaveLength(0);
   },
 );

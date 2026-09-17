@@ -42,7 +42,8 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
   };
 
   const openFileEntry = (file: ResolvedFile) => {
-    if (fileEntryPreviewKind(file.entry) === 'document') {
+    const kind = fileEntryPreviewKind(file.entry);
+    if (kind === 'document') {
       void openFileEntryWithSystem(file);
     } else {
       router.push({ pathname: '/files/[fileEntryId]', params: { fileEntryId: file.entry.id } });

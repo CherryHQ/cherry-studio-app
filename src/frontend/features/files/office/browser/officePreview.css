@@ -1,0 +1,157 @@
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+body {
+  -webkit-text-size-adjust: 100%;
+}
+.office-document {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--chrome-background);
+  color: var(--ink);
+}
+.office-scroll {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.office-staging {
+  position: fixed;
+  left: -99999px;
+  top: 0;
+  visibility: hidden;
+}
+.office-docx {
+  width: max-content;
+  min-width: 100%;
+}
+.office-docx .docx-preview-wrapper {
+  background: transparent;
+  padding: 12px 0;
+  align-items: center;
+}
+.office-docx section.docx-preview {
+  box-shadow: none;
+  margin: 0 0 12px;
+  flex-shrink: 0;
+}
+.office-docx section.docx-preview:last-child {
+  margin-bottom: 0;
+}
+.office-pptx {
+  position: relative;
+}
+.office-grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  outline: none;
+  background: var(--paper);
+  color: var(--ink);
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  font-family: system-ui, sans-serif;
+}
+.office-position-relative {
+  position: relative;
+}
+.office-position-absolute {
+  position: absolute;
+}
+.office-fill {
+  width: 100%;
+  height: 100%;
+}
+.office-cell {
+  align-items: center;
+  background: var(--paper);
+  padding: 0 4px;
+}
+.office-cell-overlay {
+  z-index: 20;
+  pointer-events: none;
+  padding: 0 4px;
+  outline: 2px solid var(--primary);
+}
+.office-unevaluated {
+  opacity: 0.7;
+  font-style: italic;
+}
+.office-column-headers {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.office-row-headers {
+  position: sticky;
+  left: 0;
+  z-index: 30;
+}
+.office-column-header,
+.office-row-header {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--chrome-background);
+  color: var(--chrome-foreground);
+  border: 0.5px solid var(--border);
+  font-size: 12px;
+  user-select: none;
+}
+.office-floating-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.office-floating-image {
+  position: absolute;
+  object-fit: contain;
+}
+.office-floating-object {
+  position: absolute;
+  pointer-events: auto;
+}
+.office-chart-unsupported {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px;
+  border: 1px dashed var(--border);
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    13px system-ui,
+    sans-serif;
+}
+
+.office-image-unavailable {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: 4px;
+  border: 1px dashed var(--border);
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    12px system-ui,
+    sans-serif;
+}
