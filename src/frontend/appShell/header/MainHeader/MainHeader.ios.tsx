@@ -36,8 +36,9 @@ export function MainHeader() {
         <Stack.Toolbar.View>
           <HeaderAction action={leadingAction} />
         </Stack.Toolbar.View>
+        <Stack.Toolbar.Spacer hidden={!agent} width={4} />
         {agent ? (
-          <Stack.Toolbar.View hidesSharedBackground>
+          <Stack.Toolbar.View>
             <MainHeaderAgentButton agent={agent} onPress={openAgentPicker} />
           </Stack.Toolbar.View>
         ) : null}

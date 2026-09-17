@@ -1,7 +1,6 @@
-import { Surface } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { Keyboard, Pressable, Text, View } from 'react-native';
+import { Keyboard, Pressable, Text } from 'react-native';
 
 import {
   type ChatRouteParamsInput,
@@ -43,24 +42,20 @@ export function MainHeaderAgentButton({ agent, onPress }: { agent: Agent; onPres
     <Pressable
       accessibilityLabel={agent.name}
       accessibilityRole="button"
-      className="max-w-56 min-w-0 shrink rounded-full shadow-xs active:opacity-60"
+      className="min-h-10 max-w-56 min-w-0 shrink flex-row items-center gap-2 rounded-full px-3 py-1 active:opacity-60"
       hitSlop={8}
       onPress={onPress}
       testID="current-agent-button"
     >
-      <Surface interactive shape="pill">
-        <View className="min-h-10 min-w-0 flex-row items-center gap-2 px-3 py-1.5">
-          <AgentAvatar avatar={agent.avatar} name={agent.name} size={28} uri={agent.avatarUri} />
-          <Text
-            className="min-w-0 shrink font-semibold text-base text-foreground"
-            ellipsizeMode="tail"
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-          >
-            {agent.name}
-          </Text>
-        </View>
-      </Surface>
+      <AgentAvatar avatar={agent.avatar} name={agent.name} size={24} uri={agent.avatarUri} />
+      <Text
+        className="min-w-0 shrink font-medium text-base text-foreground"
+        ellipsizeMode="tail"
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+      >
+        {agent.name}
+      </Text>
     </Pressable>
   );
 }

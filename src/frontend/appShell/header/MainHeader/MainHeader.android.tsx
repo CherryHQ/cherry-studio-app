@@ -54,7 +54,7 @@ export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> 
         {/* 56dp row matches the native-stack toolbar height, so the 36dp action
             surfaces keep the same clearance as native-header screens. */}
         <View
-          className="flex-row items-center gap-1"
+          className="flex-row items-center"
           pointerEvents="box-none"
           style={{ height: mainHeaderRowHeight, paddingHorizontal: horizontalInset }}
         >
@@ -64,7 +64,14 @@ export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> 
             <HeaderActionGroup actions={[leadingAction]} placement="left" />
           </View>
           <View className="min-w-0 flex-1 items-start" pointerEvents="box-none">
-            {agent ? <MainHeaderAgentButton agent={agent} onPress={openAgentPicker} /> : null}
+            {agent ? (
+              <View className="relative max-w-full min-w-0 rounded-full">
+                {/* The header already blurs the chat underneath. Keep this tint
+                    translucent so the capsule shares that blur without another pass. */}
+                <View className="absolute inset-0 rounded-full bg-card/70" pointerEvents="none" />
+                <MainHeaderAgentButton agent={agent} onPress={openAgentPicker} />
+              </View>
+            ) : null}
           </View>
           <View className="shrink-0 items-end">
             <HeaderActionGroup actions={rightActions} placement="right" />
