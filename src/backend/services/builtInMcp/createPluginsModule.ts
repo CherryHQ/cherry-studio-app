@@ -9,6 +9,7 @@ import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
 import type { PluginAuthorizationManager } from './authorization/PluginAuthorizationManager';
+import type { PluginDiagnosticStage } from './pluginDiagnostics';
 import {
   getPluginDefinition,
   requirePluginAuthMethod,
@@ -37,11 +38,20 @@ export function createPluginsModule(
     authorizations.interrupt(pluginId, methodId);
     return serialize(pluginId, async () => {
       await authorizations.cancelAttempts(pluginId, methodId);
-      const { credential, accountLabel, signal } = await auth.prepare(attemptId, attemptSignal);
-      await validatePluginConnection(pluginId, methodId, credential, signal);
+      const { credential, accountLabel, signal } = await authorizations.recordOperation(
+        pluginId,
+        methodId,
+        'prepare',
+        () => auth.prepare(attemptId, attemptSignal),
+      );
+      await authorizations.recordOperation(pluginId, methodId, 'validate', () =>
+        validatePluginConnection(pluginId, methodId, credential, signal),
+      );
       let connection;
       try {
-        connection = await auth.commit(attemptId, accountLabel, signal);
+        connection = await authorizations.recordOperation(pluginId, methodId, 'commit', () =>
+          auth.commit(attemptId, accountLabel, signal),
+        );
       } catch (error) {
         if (signal.aborted) throw new PluginError('cancelled', 'Plugin authorization cancelled.');
         if (error instanceof PluginError) throw error;
@@ -60,11 +70,12 @@ export function createPluginsModule(
   async function step(
     pluginId: PluginId,
     methodId: string,
+    stage: PluginDiagnosticStage,
     action: () => Promise<PluginAuthorizationState>,
   ) {
     observer(pluginId, methodId).clearError();
     try {
-      return await action();
+      return await authorizations.recordOperation(pluginId, methodId, stage, action);
     } finally {
       observer(pluginId, methodId).check();
     }
@@ -75,12 +86,12 @@ export function createPluginsModule(
       observe: (pluginId, methodId, listener) => observer(pluginId, methodId).observe(listener),
       check: (pluginId, methodId) => observer(pluginId, methodId).check(),
       begin: (pluginId, methodId) =>
-        step(pluginId, methodId, () => authorizations.get(pluginId, methodId).begin()),
+        step(pluginId, methodId, 'begin', () => authorizations.get(pluginId, methodId).begin()),
       receiveCallback(pluginId, methodId, attemptId, url) {
         const auth = authorizations.get(pluginId, methodId);
         if (!auth.receiveCallback)
           throw new PluginError('unavailable', 'This method does not use callbacks.');
-        return step(pluginId, methodId, () => auth.receiveCallback!(attemptId, url));
+        return step(pluginId, methodId, 'callback', () => auth.receiveCallback!(attemptId, url));
       },
       async receiveRedirect(pluginId, url) {
         const plugin = requirePluginDefinition(pluginId);
@@ -90,7 +101,9 @@ export function createPluginsModule(
           const state = await auth.getState();
           if (state.status !== 'callback' || !auth.receiveCallback) continue;
           // Runtime validates the exact redirect, state, deadline and single consumption.
-          await step(pluginId, method.id, () => auth.receiveCallback!(state.attemptId, url));
+          await step(pluginId, method.id, 'callback', () =>
+            auth.receiveCallback!(state.attemptId, url),
+          );
           return;
         }
         // A cold start has no attempt; the user must begin again from the connection screen.
@@ -99,7 +112,7 @@ export function createPluginsModule(
         const auth = authorizations.get(pluginId, methodId);
         if (!auth.confirm)
           throw new PluginError('unavailable', 'This method does not require confirmation.');
-        return step(pluginId, methodId, () => auth.confirm!(attemptId));
+        return step(pluginId, methodId, 'confirm', () => auth.confirm!(attemptId));
       },
       useApplication(pluginId, methodId, fields) {
         const method = requirePluginAuthMethod(requirePluginDefinition(pluginId), methodId);
@@ -110,17 +123,17 @@ export function createPluginsModule(
             'This method does not accept an existing application.',
           );
         const parsed = createPluginCredentialsSchema(method.applicationFields).parse(fields);
-        return step(pluginId, methodId, () => auth.useApplication!(parsed));
+        return step(pluginId, methodId, 'application', () => auth.useApplication!(parsed));
       },
       cancel: (pluginId, methodId, callbackAttemptId) =>
-        step(pluginId, methodId, () =>
+        step(pluginId, methodId, 'cancel', () =>
           authorizations.get(pluginId, methodId).cancel(callbackAttemptId),
         ),
       resetApplication(pluginId, methodId) {
         const auth = authorizations.get(pluginId, methodId);
         if (!auth.resetApplication)
           throw new PluginError('unavailable', 'This method does not store an application.');
-        return step(pluginId, methodId, () => auth.resetApplication!());
+        return step(pluginId, methodId, 'reset_application', () => auth.resetApplication!());
       },
     },
     connect(input, signal) {
@@ -145,26 +158,32 @@ export function createPluginsModule(
             'Disconnect before replacing this connection.',
           );
         const credential = method.encodeCredentials(fields);
-        const accountLabel = await validatePluginConnection(
+        const accountLabel = await authorizations.recordOperation(
           parsed.pluginId,
           method.id,
-          credential,
-          signal,
+          'validate',
+          () => validatePluginConnection(parsed.pluginId, method.id, credential, signal),
         );
         signal?.throwIfAborted();
         await authorizations.cancelAttempts(parsed.pluginId);
         let connection;
         try {
-          connection = await authorizations.credentials.connect(
-            {
-              pluginId: parsed.pluginId,
-              authMethod: method.id,
-              serverName: plugin.serverName,
-              accountLabel,
-              credential,
-            },
-            signal,
-            method.requiresDisconnect ? { authorizationId: undefined } : undefined,
+          connection = await authorizations.recordOperation(
+            parsed.pluginId,
+            method.id,
+            'commit',
+            () =>
+              authorizations.credentials.connect(
+                {
+                  pluginId: parsed.pluginId,
+                  authMethod: method.id,
+                  serverName: plugin.serverName,
+                  accountLabel,
+                  credential,
+                },
+                signal,
+                method.requiresDisconnect ? { authorizationId: undefined } : undefined,
+              ),
           );
         } catch (error) {
           if (signal?.aborted) throw new PluginError('cancelled', 'Plugin connection cancelled.');
@@ -204,7 +223,9 @@ export function createPluginsModule(
         // Local revocation and binding invalidation are complete before the remote attempt.
         try {
           const signal = AbortSignal.timeout(5000);
-          await revocation.revoke(signal);
+          await authorizations.recordOperation(pluginId, current!.grant.authMethod, 'revoke', () =>
+            revocation.revoke(signal),
+          );
           return { revocation: 'revoked' as const, managementUrl: revocation.managementUrl };
         } catch {
           return { revocation: 'unconfirmed' as const, managementUrl: revocation.managementUrl };

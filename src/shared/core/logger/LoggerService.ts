@@ -6,6 +6,39 @@ type LogContextData = [] | [Error | NullableObject] | [Error | NullableObject, .
 
 type ErrorReporter = (error: Error, context: { module: string; operation: string }) => void;
 
+export type LogRecord = Record<string, unknown> & {
+  timestamp: string;
+  level: LogLevel;
+  message: string;
+  module: string;
+  process: 'main';
+};
+
+export type LogWriter = ((record: LogRecord) => void) & { flush?: () => void };
+
+let logWriter: LogWriter | undefined;
+
+/** Bootstrap supplies the platform writer; shared logging has no native dependencies. */
+export function installLogWriter(writer: LogWriter): () => void {
+  flushLogWriter();
+  logWriter = writer;
+  return () => {
+    if (logWriter === writer) {
+      flushLogWriter();
+      logWriter = undefined;
+    }
+  };
+}
+
+/** Flush pending summaries before backgrounding or collecting a diagnostic bundle. */
+export function flushLogWriter(): void {
+  try {
+    logWriter?.flush?.();
+  } catch {
+    /* Logging must not fail the caller. */
+  }
+}
+
 const LEVEL = {
   ERROR: 'error',
   WARN: 'warn',
@@ -91,8 +124,14 @@ export class LoggerService {
   }
 
   private processLog(level: LogLevel, message: string, data: LogContextData): void {
-    if (LEVEL_MAP[level] < LEVEL_MAP[this.level]) {
+    if (this.level === LEVEL.NONE || LEVEL_MAP[level] < LEVEL_MAP[this.level]) {
       return;
+    }
+
+    try {
+      logWriter?.(createLogRecord(level, message, this.module, this.context, data));
+    } catch {
+      // A failed log transport must not change the operation being recorded.
     }
 
     const error = data[0];
@@ -141,6 +180,43 @@ export class LoggerService {
         break;
     }
   }
+}
+
+/** Preserve the source template and structured error separately for metadata-only writers. */
+export function createLogRecord(
+  level: LogLevel,
+  message: string,
+  module: string,
+  context: LogContext,
+  data: readonly unknown[],
+): LogRecord {
+  const entry: Record<string, unknown> = {};
+  const [first, ...others] = data;
+  const rest: unknown[] = [];
+  if (first instanceof Error) {
+    entry.error = first;
+  } else if (first !== null && typeof first === 'object') {
+    Object.assign(entry, first);
+  } else if (first !== undefined) {
+    rest.push(first);
+  }
+  rest.push(
+    ...others.map((value) =>
+      value instanceof Error
+        ? { ...value, name: value.name, message: value.message, stack: value.stack }
+        : value,
+    ),
+  );
+  if (rest.length > 0) entry.data = rest;
+  if (Object.keys(context).length > 0) entry.context = context;
+  return {
+    ...entry,
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    module,
+    process: 'main',
+  };
 }
 
 export const loggerService = new LoggerService();

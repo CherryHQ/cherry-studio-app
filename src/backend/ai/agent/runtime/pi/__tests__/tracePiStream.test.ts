@@ -64,6 +64,32 @@ describe('tracePiStream', () => {
     expect(JSON.stringify(records)).not.toContain('gen_ai.usage');
   });
 
+  it('keeps provider status and code from terminal failures without copying response diagnostics', async () => {
+    const { traces, records } = createTraceRecorder();
+    const source = new AssistantMessageEventStream();
+    await tracePiStream(() => source, traces.startTrace('turn'))(model, { messages: [] });
+    const failed: AssistantMessage = {
+      ...message,
+      stopReason: 'error',
+      errorMessage: 'private response',
+      diagnostics: [
+        {
+          type: 'provider_response_failure',
+          timestamp: 1,
+          error: { name: 'ProviderError', message: 'private credential', code: 'quota' },
+          details: { statusCode: 429, body: 'private body' },
+        },
+      ],
+    };
+    source.push({ type: 'error', reason: 'error', error: failed });
+    await source.result();
+    expect(records.at(-1)).toMatchObject({
+      status: 'error',
+      attributes: { 'http.status_code': 429, 'error.code': 'quota' },
+    });
+    expect(JSON.stringify(records)).not.toContain('private');
+  });
+
   it('keeps cancellation terminal when a provider resolves late', async () => {
     const { traces, records } = createTraceRecorder();
     const root = traces.startTrace('turn');

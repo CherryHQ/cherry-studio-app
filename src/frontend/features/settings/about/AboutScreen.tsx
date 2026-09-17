@@ -5,6 +5,7 @@ import MessageSquareTextIcon from '@cherrystudio/app-icons/icons/message-square-
 import { Image, Section, useToast } from '@cherrystudio/ui/components';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
+import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Platform, Text, View } from 'react-native';
@@ -31,6 +32,7 @@ const ABOUT_LINKS = {
 
 export default function AboutSettingsScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { toast } = useToast();
   const versionLabel = APP_VERSION ? `v${APP_VERSION}` : t('settings.about.version.unknown');
   const buildLabel = APP_BUILD ? t('settings.about.version.build', { build: APP_BUILD }) : null;
@@ -100,6 +102,11 @@ export default function AboutSettingsScreen() {
       </View>
 
       <Section>
+        <Section.Item
+          label={t('settings.about.diagnostics.title')}
+          description={t('settings.about.diagnostics.entryHint')}
+          onPress={() => router.push('/settings/diagnostics')}
+        />
         <Section.Item
           accessibilityHint={t('settings.about.feedback.description')}
           accessibilityRole="link"

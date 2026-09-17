@@ -26,7 +26,7 @@ export const feishuPlugin: PluginDefinition = {
       interaction: 'polling',
       stages: ['registration', 'user'],
       applicationFields: FEISHU_CREDENTIAL_FIELDS,
-      createRuntime: (store) => new FeishuAuthorizationRuntime(store),
+      createRuntime: (store, diagnostics) => new FeishuAuthorizationRuntime(store, diagnostics),
       createRequestAuthorization: (tools) => ({
         apply(credential, { headers }) {
           const { tokens } = FeishuUserCredentialSchema.parse(credential);

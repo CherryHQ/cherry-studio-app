@@ -283,6 +283,46 @@ describe('MCP Runtime adapter', () => {
     },
   );
 
+  it('preserves plugin identity and classified failures across the tool adapter', async () => {
+    const { traces, records } = createTraceRecorder();
+    const failure = new McpRuntimeToolError(
+      'mcp_tool_call_failed',
+      'Private caller message',
+      false,
+      {
+        pluginReason: 'access',
+        statusCode: 403,
+        providerCode: 99991672,
+      },
+    );
+    const tool = createTool(
+      {
+        traces,
+        invoke: async () => {
+          throw failure;
+        },
+      },
+      { pluginId: 'feishu' },
+    );
+    await expect(
+      tool.execute({
+        input: { query: 'private query' },
+        signal: new AbortController().signal,
+        toolCallId: 'call-1',
+      }),
+    ).rejects.toBe(failure);
+    expect(records.at(-1)).toMatchObject({
+      status: 'error',
+      attributes: {
+        'plugin.id': 'feishu',
+        'plugin.error.reason': 'access',
+        'plugin.error.code': 99991672,
+        'http.status_code': 403,
+      },
+    });
+    expect(JSON.stringify(records)).not.toMatch(/Private|private query/);
+  });
+
   it('records a tool-reported failure even when the result preview is truncated', async () => {
     const { traces, records } = createTraceRecorder();
     const tool = createTool({

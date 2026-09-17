@@ -12,6 +12,7 @@ import type {
   PluginAuthorizationStore,
 } from '../../authorization/pluginAuthorization';
 import type { PluginCredential } from '../../authorization/pluginCredential';
+import { withoutPluginDiagnostics, type RecordPluginOperation } from '../../pluginDiagnostics';
 import { enrichDingtalkAccount } from './dingtalkAccount';
 import {
   dingtalkAccountLabel,
@@ -59,7 +60,10 @@ export class DingtalkAuthorizationRuntime implements PluginAuthorizationRuntime 
   private readonly resolutions = new Map<string, Promise<PluginCredential>>();
   private readonly failures = new Map<string, PluginErrorReason>();
 
-  constructor(private readonly store: PluginAuthorizationStore) {}
+  constructor(
+    private readonly store: PluginAuthorizationStore,
+    private readonly diagnostics: RecordPluginOperation = withoutPluginDiagnostics,
+  ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.operations
@@ -300,7 +304,9 @@ export class DingtalkAuthorizationRuntime implements PluginAuthorizationRuntime 
     if (credential.tokens.expiresAt > Date.now() + 60_000) return credential;
     if (credential.tokens.refreshExpiresAt <= Date.now())
       throw new PluginError('authorization', 'Dingtalk authorization expired.');
-    const result = await dingtalkOauth.refresh(credential, signal);
+    const result = await this.diagnostics('refresh', () =>
+      dingtalkOauth.refresh(credential, signal),
+    );
     signal.throwIfAborted();
     return result;
   }

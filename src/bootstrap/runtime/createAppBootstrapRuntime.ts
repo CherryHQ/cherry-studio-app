@@ -18,6 +18,7 @@ import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgr
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import type { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
@@ -75,6 +76,7 @@ export function createAppBootstrapRuntime(
   const desktopConnections = host.container.get<DesktopConnectionRuntime>(
     'DesktopConnectionRuntime',
   );
+  const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
@@ -97,6 +99,7 @@ export function createAppBootstrapRuntime(
     dbService,
     documentExport,
     desktopConnections,
+    diagnostics,
     languageServing,
     providerRegistryUpdater,
   });
