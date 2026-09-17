@@ -1,5 +1,6 @@
 import { Stack, useIsPreview } from 'expo-router';
 
+import { HeaderAction } from '../components/HeaderAction';
 import { HeaderActionGroup } from '../components/HeaderActionGroup/HeaderActionGroup';
 import { headerScreenOptions } from '../headerScreenOptions';
 import { MainHeaderAgentButton } from './MainHeaderAgentButton';
@@ -31,12 +32,16 @@ export function MainHeader() {
           },
         }}
       />
-      {agent ? (
-        <Stack.Title asChild>
-          <MainHeaderAgentButton agent={agent} onPress={openAgentPicker} />
-        </Stack.Title>
-      ) : null}
-      <HeaderActionGroup actions={[leadingAction]} placement="left" />
+      <Stack.Toolbar placement="left">
+        <Stack.Toolbar.View>
+          <HeaderAction action={leadingAction} />
+        </Stack.Toolbar.View>
+        {agent ? (
+          <Stack.Toolbar.View hidesSharedBackground>
+            <MainHeaderAgentButton agent={agent} onPress={openAgentPicker} />
+          </Stack.Toolbar.View>
+        ) : null}
+      </Stack.Toolbar>
       <HeaderActionGroup actions={rightActions} placement="right" />
       {agentPickerSheet}
     </>
