@@ -61,6 +61,7 @@ const backend = {
 } as unknown as Backend;
 const mockSyncPaintingQueries = jest.fn(async () => undefined);
 const mockDeletePaintings = jest.fn(async () => undefined);
+const mockOnReceipt = jest.fn();
 
 /** Per-test ledger state served by the mocked Data API. */
 let activeJobs: JobSnapshot[] = [];
@@ -100,7 +101,12 @@ function Probe({
   initialAspectRatio?: number;
   paintingId?: string;
 }) {
-  const generation = usePaintingGeneration({ initialAspectRatio, initialOutputs: [], paintingId });
+  const generation = usePaintingGeneration({
+    initialAspectRatio,
+    initialOutputs: [],
+    onReceipt: mockOnReceipt,
+    paintingId,
+  });
   useEffect(() => {
     api = generation;
   }, [generation]);
@@ -355,6 +361,43 @@ describe('usePaintingGeneration', () => {
     expect(mockDeletePaintings).toHaveBeenCalledWith(['painting-enqueue']);
     expect(result).toBeNull();
     expect(api?.status).toBe('idle');
+  });
+
+  it('restores the successful image, ratio, and route when a follow-up is cancelled', async () => {
+    jobById.set(
+      'job-1',
+      jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
+    );
+    await mountProbe();
+    await act(async () => {
+      await api?.generate({ ...request, paramValues: { aspectRatio: '3:4' } });
+    });
+    await waitForCondition(() => api?.outputs[0]?.fileEntryId === output.fileEntryId);
+
+    mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-2', paintingId: 'painting-2' });
+    jobById.set('job-2', jobSnapshot({ id: 'job-2', status: 'running' }));
+    await act(async () => {
+      await api?.generate({ ...request, paramValues: { aspectRatio: '1:1' } });
+    });
+    expect(api?.aspectRatio).toBe(1);
+    await act(async () => {
+      await api?.cancel();
+    });
+
+    expect(api?.outputs).toEqual([output]);
+    expect(api?.aspectRatio).toBeCloseTo(3 / 4);
+    expect(mockDeletePaintings).toHaveBeenLastCalledWith(['painting-2']);
+    expect(mockOnReceipt).toHaveBeenLastCalledWith('painting-1');
+    expect(api?.error).toBeNull();
+
+    mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-3', paintingId: 'painting-3' });
+    jobById.set('job-3', jobSnapshot({ id: 'job-3', status: 'running' }));
+    await act(async () => {
+      await api?.generate(request);
+    });
+    expect(mockStartGeneration).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ paintingId: expect.anything() }),
+    );
   });
 
   it('keeps polling when the cancellation request fails', async () => {

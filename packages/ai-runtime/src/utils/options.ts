@@ -1,6 +1,5 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import { ENDPOINT_TYPE, type ServiceTierSelection } from '@cherrystudio/provider-registry';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
 import type {
   OpenAIServiceTier,
@@ -17,7 +16,6 @@ import {
 import type { JSONValue } from 'ai';
 
 import type { AppProviderId, ProviderCapabilities } from '../types';
-import { addAnthropicHeaders } from './anthropicHeaders';
 import { buildGeminiGenerateImageParams } from './image';
 import { SystemProviderIds } from './providerIds';
 import {
@@ -238,7 +236,6 @@ function shouldNormalizeOpenAICompatibleReasoning(
 }
 
 export function buildCapabilityProviderOptions(
-  assistant: Assistant,
   model: Model,
   actualProvider: Provider,
   capabilities: Pick<
@@ -320,12 +317,7 @@ export function buildCapabilityProviderOptions(
       providerSpecificOptions = buildXAIProviderOptions(reasoningOptions.options);
       break;
     case 'bedrock':
-      providerSpecificOptions = buildBedrockProviderOptions(
-        assistant,
-        model,
-        actualProvider,
-        reasoningOptions.options,
-      );
+      providerSpecificOptions = { bedrock: { ...reasoningOptions.options } };
       break;
     case 'ollama':
       providerSpecificOptions = buildOllamaProviderOptions(model, reasoningOptions.options);
@@ -372,25 +364,6 @@ function encodeReasoningOptions(
   invocation: ResolvedReasoningInvocation,
 ): { providerId: string; options: Record<string, unknown> } {
   return { providerId: providerOptionsKey, options: encodeReasoningInvocation(invocation) };
-}
-
-/** Build the single providerOptions namespace that owns reasoning for this endpoint adapter. */
-export function buildResolvedReasoningProviderOptions(context: {
-  aiSdkProviderId: AppProviderId;
-  providerOptionsKey: string;
-  endpointType: EndpointType | undefined;
-  reasoning: ResolvedReasoningInvocation;
-}): Record<string, Record<string, JSONValue>> {
-  const encoded = encodeReasoningOptions(context.providerOptionsKey, context.reasoning);
-  const options = shouldNormalizeOpenAICompatibleReasoning(
-    context.aiSdkProviderId,
-    context.endpointType,
-  )
-    ? normalizeOpenAICompatibleParams(encoded.options)
-    : encoded.options;
-  return Object.keys(options).length > 0
-    ? ({ [encoded.providerId]: options } as Record<string, Record<string, JSONValue>>)
-    : {};
 }
 
 /**
@@ -523,22 +496,6 @@ function buildXAIProviderOptions(
   reasoningOptions: Record<string, unknown>,
 ): Record<string, Record<string, unknown>> {
   return { xai: { ...reasoningOptions } };
-}
-
-function buildBedrockProviderOptions(
-  assistant: Assistant,
-  model: Model,
-  provider: Provider,
-  reasoningOptions: Record<string, unknown>,
-): Record<string, Record<string, unknown>> {
-  const providerOptions: Record<string, unknown> = { ...reasoningOptions };
-  // MOBILE SYNC DIVERGENCE: desktop currently omits `provider` here and leaks a
-  // direct-Anthropic beta header into Bedrock, contradicting its own resolver contract.
-  const betaHeaders = addAnthropicHeaders(assistant, model, provider);
-  if (betaHeaders.length > 0) {
-    providerOptions.anthropicBeta = betaHeaders;
-  }
-  return { bedrock: providerOptions };
 }
 
 function buildOllamaProviderOptions(

@@ -1,3 +1,4 @@
+import type { ExportWatermark } from '@/shared/contracts/fileExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { createDocumentExportSession } from '../createDocumentExportSession';
@@ -150,6 +151,34 @@ test('replacing a preview discards its file and rejects stale publication reques
   await expect(session.save(first)).rejects.toMatchObject({ code: 'invalid-input' });
   await session.dispose();
   expect(mockFiles.size).toBe(0);
+});
+
+test('switching Markdown to none replaces the branded output with a plain file', async () => {
+  const saveFile = jest.fn(async () => savedFile);
+  const session = createDocumentExportSession(
+    { kind: 'markdown', source: 'Content' },
+    { readManagedImage: jest.fn(), saveFile },
+    () => {},
+    () => {},
+  );
+  const watermark: ExportWatermark = {
+    kind: 'cherry',
+    signature: {
+      brandName: 'Cherry Studio',
+      timestamp: '2026.09.17 12:00',
+      background: '#ffffff',
+      foreground: '#000000',
+      logoDataUrl: 'data:image/png;base64,AA==',
+    },
+  };
+  const branded = await session.render({ format: 'markdown', watermark });
+  expect(mockFiles.get(branded.file.uri)).toContain('Cherry Studio');
+  const plain = await session.render({ format: 'markdown', watermark: { kind: 'none' } });
+  expect(plain.id).not.toBe(branded.id);
+  expect(mockFiles.get(plain.file.uri)).toBe('Content\n');
+  await session.save(plain);
+  expect(saveFile).toHaveBeenCalledWith(plain.file, expect.any(AbortSignal));
+  await session.dispose();
 });
 
 test('cancelled capture releases a late native file and never publishes a partial artifact', async () => {

@@ -2,7 +2,14 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ChatProvider, useAgentChatControls, useAgentChatDraftHandoff } from '../ChatProvider';
+import type { AgentMessageView } from '@/shared/contracts/agent';
+
+import {
+  ChatProvider,
+  useAgentChatControls,
+  useAgentChatDraftHandoff,
+  useAgentChatImageResult,
+} from '../ChatProvider';
 
 const mockDispose = jest.fn();
 const mockInvalidateQueries = jest.fn();
@@ -11,7 +18,7 @@ const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockStartSession = jest.fn();
 const mockSubmitMessage = jest.fn();
-const mockChatState = { status: 'ready', activeTurn: null };
+const mockChatState = { status: 'ready', activeTurn: null, liveMessages: [] as AgentMessageView[] };
 const mockSubscribe = jest.fn(() => () => undefined);
 
 jest.mock('@tanstack/react-query', () => ({
@@ -53,10 +60,17 @@ type AgentChatControls = ReturnType<typeof useAgentChatControls>;
 
 let chatControls: AgentChatControls | undefined;
 let draftHandoff: ReturnType<typeof useAgentChatDraftHandoff>;
+let imageResult: AgentMessageView | undefined;
 
-function Probe({ sessionId, composerKey = 0 }: { sessionId?: string; composerKey?: number }) {
+type HarnessProps = { sessionId?: string; composerKey?: number; persistedImage?: AgentMessageView };
+
+function Probe({ sessionId, composerKey = 0, persistedImage }: HarnessProps) {
   const controls = useAgentChatControls({ agentId: 'agent-1', sessionId, composerKey });
   const handoff = useAgentChatDraftHandoff(sessionId);
+  const latestImage = useAgentChatImageResult(sessionId, persistedImage);
+  useEffect(() => {
+    imageResult = latestImage;
+  }, [latestImage]);
 
   useEffect(() => {
     captureChatControls(controls);
@@ -68,10 +82,10 @@ function Probe({ sessionId, composerKey = 0 }: { sessionId?: string; composerKey
   return null;
 }
 
-function Harness({ sessionId, composerKey }: { sessionId?: string; composerKey?: number }) {
+function Harness({ sessionId, composerKey, persistedImage }: HarnessProps) {
   return (
     <ChatProvider>
-      <Probe sessionId={sessionId} composerKey={composerKey} />
+      <Probe sessionId={sessionId} composerKey={composerKey} persistedImage={persistedImage} />
     </ChatProvider>
   );
 }
@@ -84,6 +98,8 @@ describe('ChatProvider Draft handoff', () => {
     jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
     chatControls = undefined;
     draftHandoff = undefined;
+    imageResult = undefined;
+    mockChatState.liveMessages = [];
     mockStartSession.mockImplementation(async (input) => ({ id: input.sessionId }));
     mockSubmitMessage.mockResolvedValue({});
   });
@@ -271,7 +287,71 @@ describe('ChatProvider Draft handoff', () => {
     expect(mockReplace).not.toHaveBeenCalled();
     expect(mockInvalidateQueries).toHaveBeenCalled();
   });
+
+  it('retains the latest image across history refreshes and drops it when switching sessions', () => {
+    const persisted = imageMessage('1');
+    const live = imageMessage('2');
+    mockChatState.liveMessages = [live];
+    act(() => {
+      renderer = create(<Harness persistedImage={persisted} sessionId="session-1" />);
+    });
+    expect(imageResult).toBe(live);
+
+    mockChatState.liveMessages = [];
+    act(() => {
+      renderer?.update(<Harness sessionId="session-1" />);
+    });
+    expect(imageResult).toBe(live);
+    act(() => {
+      renderer?.update(<Harness persistedImage={persisted} sessionId="session-1" />);
+    });
+    expect(imageResult).toBe(live);
+
+    act(() => {
+      renderer?.update(<Harness persistedImage={persisted} sessionId="session-2" />);
+    });
+    expect(imageResult).toBeUndefined();
+  });
 });
+
+function imageMessage(id: string): AgentMessageView {
+  return {
+    createdAt: '2026-09-01T00:00:00.000Z',
+    id,
+    inferenceSnapshot: {
+      status: 'supported',
+      snapshot: {
+        version: 1,
+        imageGeneration: { mode: 'generate', paramValues: {} },
+        model: {
+          uniqueModelId: 'provider::image',
+          providerId: 'provider',
+          modelId: 'image',
+          name: 'Image',
+        },
+        parameters: {},
+        tools: [],
+      },
+    },
+    modelId: 'provider::image',
+    parts: [
+      {
+        id: 'file-1',
+        type: 'file',
+        fileEntryId: `output-${id}`,
+        mediaType: 'image/png',
+        purpose: 'artifact',
+      },
+    ],
+    role: 'assistant',
+    sessionId: 'session-1',
+    stats: null,
+    status: 'success',
+    turnId: `turn-${id}`,
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    usage: null,
+  };
+}
 
 function captureChatControls(value: AgentChatControls) {
   chatControls = value;

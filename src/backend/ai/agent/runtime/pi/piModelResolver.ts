@@ -46,7 +46,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
     },
-    async resolveModel(runtimeModel, runtimeOptions): Promise<PiModelResolution> {
+    async resolveModel(runtimeModel, runtimeOptions, sessionId): Promise<PiModelResolution> {
       const { adapter, connection, model, preflight, provider } =
         await resolveConfiguredPiModel(runtimeModel);
 
@@ -59,7 +59,13 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       }
 
       const modelId = connection.wireModelId;
-      const headers = connection.headers;
+      const headers = { ...connection.headers };
+      if (
+        (provider.id === 'opencode' || provider.presetProviderId === 'opencode') &&
+        !Object.keys(headers).some((name) => name.toLowerCase() === 'x-opencode-session')
+      ) {
+        headers['x-opencode-session'] = sessionId;
+      }
       const reasoningProfile = providerRegistryService.resolveReasoningProfile(
         provider,
         model,

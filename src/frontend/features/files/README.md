@@ -5,6 +5,14 @@ The route carries identity only. `FileEntryPreview` owns classification and the 
 this page and system opening, and shares file export actions with the painting viewer.
 This page owns reading, rendering, and copying.
 
+Complete HTML also offers Share as image and Share as PPT actions. `useHtmlConversion` owns progress,
+cancellation and opening the system share sheet as soon as conversion finishes, using the shared
+file export helper without an intermediate result panel. A compact spinner, progress label and cancel
+action sit above the visible HTML content. `HtmlConversionSurface` stays laid out beneath the opaque
+viewer and supplies sequential native captures to `Backend.documentExport.convertHtml`.
+See [HTML Conversion](../../../../docs/references/html-conversion.md)
+for format behavior, limits, selection evidence and pending acceptance.
+
 - `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. The header offers
   sharing, saving to Photos, and system opening.
 - `FileTextViewer` reads at most 1 MiB plus one truncation-detection byte. Truncated HTML stays
@@ -25,7 +33,7 @@ This page owns reading, rendering, and copying.
   text selection or PDF-link interaction. Native back and system-edge gestures retain ownership.
 - SVG reads are capped at 4 MiB. Original exports remain complete.
   SVG query results are discarded as soon as the viewer has no observer.
-- The shared `FileEntryPreview` sharing helpers copy into an OS-managed cache directory using the
+- The shared `appShell/fileExport` sharing helpers copy into an OS-managed cache directory using the
   display filename. The copy survives closing the share sheet because Android recipients may read
   it later.
 

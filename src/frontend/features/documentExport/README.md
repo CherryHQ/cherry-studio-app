@@ -18,14 +18,17 @@ may supply one initially unchecked option and its alternate document; changing i
 selected format.
 
 HTML and PNG receive resolved semantic colors, the accessibility typography scale and a shared
-Cherry `signature` at the end of the document. HTML keeps the source's bubble/message hints. For
+resolved `watermark` at the end of the document. The code-only request option defaults to `cherry`;
+`none` omits the footer from both the preview and saved output, including Markdown. HTML keeps the source's bubble/message hints. For
 images, the frontend also supplies an optional `imageFrame` presentation with theme-aware margins
-and numbered message headings. The signature's 44-point baseline footer grows only when text needs
-more room. The brand name sits on the left; a cropped original Cherry logo embedded as PNG bytes,
-a fine divider and the local export time sit on the right. The timestamp uses `YYYY.MM.DD HH:mm`
-and is frozen when the layer
-opens, including across format, theme and thinking-option changes. Colors follow theme changes;
-only active saving/delivery holds its current presentation until the share sheet finishes. The backend lays out this frame inside
+and numbered message headings. The signature uses the same full-width white footer as painting and
+file image exports: the original Cherry logo and Cherry Studio name on the left, with the time
+aligned to the right. Shared geometry has a 56-point minimum height at 360 points wide,
+scales with export width, and grows for wrapped text. The timestamp uses `YYYY.MM.DD HH:mm`
+and is frozen when the layer opens, including across format, theme and thinking-option changes.
+Content colors follow theme changes; the signature keeps its white background and black text
+through constant color tokens. Active saving/delivery holds its current presentation until the
+share sheet finishes. The backend lays out this frame inside
 the captured document; it acquires no chat or frontend dependency. The preview displays that exact artifact with outer canvas space;
 long images remain vertically scrollable. Ordinary documents retain their headings.
 
@@ -35,7 +38,8 @@ files retain nested `<details>` markup for readers that support it instead of fl
 into ordinary headings and body text.
 
 The page claims its sessions from the app-shell handoff, serializes superseded renders and closes
-both sessions on route exit. Share materializes the selected format if necessary, persists it to the
+both sessions on route exit. `fileExport.shareFile` checks system sharing availability, then materializes the selected format
+if necessary, persists it to the
 file library and opens the system share sheet. Repeated sharing of the current artifact reuses its
 saved entry; cancelling the sheet retains the file.
 

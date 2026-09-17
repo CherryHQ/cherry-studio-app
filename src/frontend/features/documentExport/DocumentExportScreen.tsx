@@ -11,7 +11,6 @@ import {
 } from '@cherrystudio/ui/components';
 import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { type Href, router, useLocalSearchParams } from 'expo-router';
-import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
@@ -24,7 +23,7 @@ import {
   scheduleDocumentExportFinish,
   type DocumentExportOption,
 } from '@/frontend/appShell/documentExport';
-import { shareFile } from '@/frontend/components/FileEntryPreview';
+import { FileSharingError, shareFile, useExportWatermark } from '@/frontend/appShell/fileExport';
 import { usePreference } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -35,11 +34,12 @@ import type {
   ExportFormat,
   ExportPresentation,
 } from '@/shared/contracts/documentExport';
+import type { ExportWatermarkStyle } from '@/shared/contracts/fileExport';
+import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import { useDocumentExportHtmlCapture } from './components/DocumentExportHtmlSurface';
 import { DocumentExportTextPreview } from './components/DocumentExportTextPreview';
 import { useDocumentExportPreview } from './hooks/useDocumentExportPreview';
-import { EXPORT_BRAND } from './utils/exportBrand';
 
 export function DocumentExportScreen() {
   const params = useLocalSearchParams<{ requestId?: string | string[] }>();
@@ -84,6 +84,7 @@ function DocumentExportRoute({ requestId }: { requestId?: string }) {
           option={request.option}
           returnTo={request.returnTo}
           session={request.session}
+          watermark={request.watermark}
         />
       ) : (
         <View className="flex-1 justify-center p-6">
@@ -100,12 +101,14 @@ function DocumentExportBody({
   allowedFormats,
   option,
   returnTo,
+  watermark,
 }: {
   session: DocumentExportSession;
   initialFormat: ExportFormat;
   allowedFormats: readonly ExportFormat[];
   option?: DocumentExportOption;
   returnTo?: Href;
+  watermark: ExportWatermarkStyle;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -119,6 +122,7 @@ function DocumentExportBody({
   const { format, isOptionChecked, revision } = selection;
   const session = !isOptionChecked && option ? option.uncheckedSession : checkedSession;
   const [fontStep] = usePreference('ui.font_size_step');
+  const createWatermark = useExportWatermark(watermark);
   const [
     background,
     foreground,
@@ -153,15 +157,11 @@ function DocumentExportBody({
       typography: { base, sm, lg, xl },
     };
   });
-  const [timestamp] = useState(() => {
-    const date = new Date();
-    const pad = (value: number) => String(value).padStart(2, '0');
-    return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  });
+  const [timestamp] = useState(() => formatExportTimestamp(new Date()));
   const presentation = useMemo(
     () => ({
       ...layout,
-      signature: { ...EXPORT_BRAND, foreground, timestamp },
+      watermark: createWatermark(timestamp),
       colors: {
         background,
         foreground,
@@ -179,6 +179,7 @@ function DocumentExportBody({
     }),
     [
       layout,
+      createWatermark,
       background,
       foreground,
       muted,
@@ -263,20 +264,24 @@ function DocumentExportBody({
     setIsSharing(true);
     let sheetClosed = false;
     try {
-      const selected = await getArtifact(controller.signal);
-      const file = await session.save(selected, controller.signal);
-      controller.signal.throwIfAborted();
-      if (!(await Sharing.isAvailableAsync())) {
-        controller.signal.throwIfAborted();
-        toast.show({ label: t('fileViewer.shareUnavailable'), variant: 'danger' });
-        return;
-      }
-      controller.signal.throwIfAborted();
-      await shareFile(file);
+      await shareFile(
+        async () => {
+          const selected = await getArtifact(controller.signal);
+          return session.save(selected, controller.signal);
+        },
+        { watermark: previewPresentation.watermark ?? { kind: 'none' }, signal: controller.signal },
+      );
       sheetClosed = true;
-    } catch {
+    } catch (error) {
       if (!controller.signal.aborted)
-        toast.show({ label: t('documentExport.deliveryFailed'), variant: 'danger' });
+        toast.show({
+          label: t(
+            error instanceof FileSharingError
+              ? 'fileViewer.shareUnavailable'
+              : 'documentExport.deliveryFailed',
+          ),
+          variant: 'danger',
+        });
     } finally {
       sharing.current = undefined;
       if (!controller.signal.aborted) {
@@ -296,7 +301,7 @@ function DocumentExportBody({
           <DocumentExportTextPreview
             key={revision}
             document={session.document}
-            signature={previewPresentation.signature}
+            watermark={previewPresentation.watermark}
           />
         </ScrollView>
       ) : artifact ? (

@@ -3,12 +3,12 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useSaveImageToPhotos } from '@/frontend/components/ArtifactPreview';
-import { useResolvedFile, useShareFile } from '@/frontend/components/FileEntryPreview';
-import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
+import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
+import { useResolvedFile } from '@/frontend/components/FileEntryPreview';
 import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { Painting } from '@/shared/data/types/painting';
+import type { ImageParamDraft } from '@/shared/utils/imageGenerationParams';
 
 import { createPaintingOutputAttachmentDraft } from '../../utils/paintingOutputAttachment';
 
@@ -31,7 +31,10 @@ export function usePaintingViewerActions({
   const { isSharing, share } = useShareFile(file.data);
   const canShare = Boolean(file.data) && !isSharing;
 
-  const download = useSaveImageToPhotos(currentOutput.uri);
+  const download = useSaveImageToPhotos({
+    uri: currentOutput.uri,
+    provenance: file.data?.entry.provenance,
+  });
 
   const remove = useCallback(() => {
     const hasMultipleOutputs = painting.files.output.length > 1;

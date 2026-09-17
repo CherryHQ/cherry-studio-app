@@ -1,6 +1,7 @@
 import type { FileEntryId } from '@/shared/data/types/file';
 
 import type { ResolvedFile } from './file';
+import type { ExportFile, ExportWatermark } from './fileExport';
 
 export const DOCUMENT_EXPORT_MAX_SECTIONS = 128;
 
@@ -45,12 +46,6 @@ export type ExportImageFrame = {
   background: string;
   label: string;
 };
-export type ExportSignature = {
-  foreground: string;
-  logoDataUrl: string;
-  brandName: string;
-  timestamp: string;
-};
 export type ExportPresentation = {
   width: number;
   typography: Record<'base' | 'sm' | 'lg' | 'xl', { fontSize: number; lineHeight: number }>;
@@ -69,10 +64,9 @@ export type ExportPresentation = {
     inlineCodeForeground: string;
   };
   imageFrame?: ExportImageFrame;
-  signature?: ExportSignature;
+  watermark?: ExportWatermark;
 };
 export type DocumentExportIssue = { code: 'image-unavailable' | 'formula-fallback'; label: string };
-export type ExportFile = { uri: string; filename: string; mediaType: string };
 export type DocumentExportArtifact = {
   id: string;
   file: ExportFile;
@@ -95,8 +89,33 @@ export type CaptureExportHtml = (input: {
   release(): void;
 }>;
 
+export type HtmlConversionFormat = 'image' | 'pptx';
+export type CapturedHtmlPage = Awaited<ReturnType<CaptureExportHtml>>;
+/** Capture one page at a time. The producer releases each PNG after onPage settles. */
+export type CaptureHtmlPages = (input: {
+  format: HtmlConversionFormat;
+  signal: AbortSignal;
+  onPage(page: CapturedHtmlPage, index: number, total: number): Promise<void>;
+}) => Promise<void>;
+export type HtmlConversionInput = {
+  title: string;
+  format: HtmlConversionFormat;
+  capture: CaptureHtmlPages;
+};
+export type HtmlConversionContext = {
+  signal?: AbortSignal;
+  onProgress?: (progress: {
+    stage: 'capturing' | 'writing';
+    current: number;
+    total: number;
+  }) => void;
+};
+export const HTML_CONVERSION_MAX_PAGES = 64;
+export const HTML_CONVERSION_MAX_PIXELS = 16_000_000;
+export const HTML_CONVERSION_MAX_EDGE = 8192;
+
 export type DocumentExportTarget =
-  | { format: 'markdown'; signature?: Pick<ExportSignature, 'brandName' | 'timestamp'> }
+  | { format: 'markdown'; watermark?: ExportWatermark }
   | { format: 'html'; presentation: ExportPresentation }
   | { format: 'image'; presentation: ExportPresentation; capture: CaptureExportHtml };
 export type DocumentExportProgress = 'rendering' | 'resolving-assets' | 'capturing' | 'writing';
@@ -138,4 +157,6 @@ export interface DocumentExportSession {
 
 export interface DocumentExportModule {
   createSession(input: DocumentExportInput): DocumentExportSession;
+  /** Explicit conversion creates a managed file, with temporary output owned by the runtime. */
+  convertHtml(input: HtmlConversionInput, context?: HtmlConversionContext): Promise<ResolvedFile>;
 }

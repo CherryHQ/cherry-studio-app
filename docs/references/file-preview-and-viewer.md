@@ -197,6 +197,10 @@ long press. Text query entries are discarded one minute after their last observe
 
 ### HTML
 
+The overflow menu also offers PNG and image-based PPTX conversion for complete HTML sources.
+See [HTML Conversion](./html-conversion.md) for pagination, limits, implementation selection and
+pending native acceptance.
+
 HTML uses `react-native-webview` with `source.html`, without a file URI or an application origin.
 Authored scripts and network resources may run so generated charts and interactive pages work.
 The page owns its colors and styling; a mobile viewport is added after loading only when absent.
@@ -226,9 +230,11 @@ addresses concrete missing interfaces rather than depending on a large `data:` U
 
 ## Export And Feedback
 
-`expo-sharing` presents the system share sheet. Sharing copies the full original bytes to
-`{cacheDirectory}/FileExports/{entryId}/{revision}/{filename}` so recipients see the display name,
-not the managed blob's UUID. The exported copy never becomes file authority. It remains in the
+`expo-sharing` presents the system share sheet through `appShell/fileExport`. SVG and non-image files
+retain their full original bytes; ordinary raster images use the selected watermark policy, while
+completed document exports keep their finalized bytes. Sharing copies the prepared file to
+`{cacheDirectory}/FileExports/{entryId}/{revision-or-export-id}/{filename}` so recipients see the
+display name, not the managed blob's UUID. The exported copy never becomes file authority. It remains in the
 OS-managed cache after the sheet closes because Android recipients may read it asynchronously.
 Only sharing out is added; no incoming-share extension is enabled.
 

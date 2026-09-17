@@ -28,6 +28,7 @@ overrides:
   '@ai-sdk/provider-utils': 4.0.48
   '@ai-sdk/xai': 3.0.126
   ai: 6.0.185
+  expo-app-metrics: 57.0.17
   react-native-svg: 15.15.4
 
 allowBuilds:
@@ -72,6 +73,8 @@ patchedDependencies:
   expo-calendar@57.0.3: patches/expo-calendar@57.0.3.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch
   expo-notifications@57.0.17: patches/expo-notifications@57.0.17.patch
+  expo-image-picker@57.0.16: patches/expo-image-picker@57.0.16.patch
+  expo-app-metrics@57.0.17: patches/expo-app-metrics@57.0.17.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'

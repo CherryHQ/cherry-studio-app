@@ -78,7 +78,7 @@ export const appSidebar = {
   // than both so those surfaces win and cancel it; the library default of 5
   // beats them and steals their scroll.
   swipeActivationDistance: 20,
-  dockHeight: 48, // floating bottom dock's button height, shared by both buttons
+  dockHeight: 44, // floating bottom dock's button height, shared by both buttons
   dockMinInset: 16, // minimum horizontal inset, expanded when the safe area requires it
   headerRowHeight: 40, // brand row's height below the status bar; the body scrolls under it
   headerGapY: 8, // header's breathing room above and below the brand row

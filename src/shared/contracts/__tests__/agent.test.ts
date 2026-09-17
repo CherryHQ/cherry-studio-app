@@ -37,6 +37,42 @@ describe('Agent Session status contract', () => {
 });
 
 describe('Agent tool and managed-file contracts', () => {
+  test('round-trips image settings through initial sends, follow-ups, and inference snapshots', () => {
+    const imageGeneration = { mode: 'edit', paramValues: { size: '1024x1024', numImages: 2 } };
+    const input = {
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ type: 'text', text: 'Use a blue background' }],
+      imageGeneration,
+    };
+    expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+    const initial = { ...input, agentId: 'agent-1', executionTarget: { kind: 'local' } };
+    expect(AgentStartSessionInputSchema.parse(roundTrip(initial))).toEqual(initial);
+    const snapshot = {
+      version: 1,
+      model: {
+        uniqueModelId: 'provider::image',
+        providerId: 'provider',
+        modelId: 'image',
+        name: 'Image',
+      },
+      parameters: {},
+      tools: [],
+      imageGeneration,
+    };
+    expect(readAgentInferenceSnapshot(roundTrip(snapshot))).toEqual({
+      status: 'supported',
+      snapshot,
+    });
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({
+        ...input,
+        imageGeneration: { ...imageGeneration, mode: 'text' },
+      }).success,
+    ).toBe(false);
+  });
+
   test('round-trips plugin display snapshots and rejects mismatched input ranges', () => {
     const reference = { type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 3 };
     const input = { type: 'text', text: '使用 飞书', pluginReferences: [reference] };

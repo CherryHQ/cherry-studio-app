@@ -1,7 +1,12 @@
-import { MessagePart } from '@cherrystudio/ui/components';
-import { memo, type ReactNode } from 'react';
+import { ImageGenerationLoader, MessagePart } from '@cherrystudio/ui/components';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { type LayoutChangeEvent, View } from 'react-native';
+
+import {
+  imageParamsAspectRatio,
+  imageParamsResolutionLabel,
+} from '@/shared/utils/imageGenerationParams';
 
 import { MessageParts } from '../parts/MessageParts';
 import type { MessageListItem } from '../types';
@@ -28,6 +33,10 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
   const { t } = useTranslation();
   const isPendingEmptyMessage = message.status === 'pending' && !message.data.parts?.length;
 
+  if (isPendingEmptyMessage && message.imageGeneration) {
+    return <PendingImageMessage settings={message.imageGeneration} />;
+  }
+
   return isPendingEmptyMessage ? (
     <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
   ) : (
@@ -47,3 +56,32 @@ export const AssistantMessage = memo(function AssistantMessage({
     </View>
   );
 });
+
+function PendingImageMessage({
+  settings,
+}: {
+  settings: NonNullable<MessageListItem['imageGeneration']>;
+}) {
+  const { t } = useTranslation();
+  const [width, setWidth] = useState(0);
+  const aspectRatio = imageParamsAspectRatio(settings.paramValues);
+  const handleLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
+  return (
+    <View className="w-full" onLayout={handleLayout}>
+      {width > 0 ? (
+        <ImageGenerationLoader
+          active
+          height={width / aspectRatio}
+          label={t('painting.status.generating')}
+          resolution={
+            imageParamsResolutionLabel(settings.paramValues) ?? t('painting.settings.option.auto')
+          }
+          testID="chat-image-generation-loader"
+          width={width}
+        />
+      ) : (
+        <View style={{ aspectRatio }} />
+      )}
+    </View>
+  );
+}

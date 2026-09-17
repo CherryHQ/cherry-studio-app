@@ -17,6 +17,7 @@ jest.mock('@/backend/data/services/ProviderRegistryService', () => ({
     loadProviders: jest.fn(() => [
       { id: 'recommended', name: 'Recommended' },
       { id: 'optional', name: 'Optional' },
+      { id: 'plan', name: 'Plan', presetProviderId: 'recommended' },
     ]),
   },
 }));
@@ -47,7 +48,10 @@ describe('PresetProviderSeeder', () => {
 
   test('refreshes only providers that remain installed', async () => {
     await new PresetProviderSeeder().run(
-      createDbService({ existingProviderIds: ['optional'], hasSeedJournal: true }),
+      createDbService({
+        existingProviders: [{ providerId: 'optional', presetProviderId: 'optional' }],
+        hasSeedJournal: true,
+      }),
     );
 
     expect(providerService.batchUpsert).toHaveBeenCalledWith([
@@ -55,20 +59,40 @@ describe('PresetProviderSeeder', () => {
     ]);
     expect(providerRegistryService.loadProviders).toHaveBeenCalledTimes(1);
   });
+
+  test('refreshes copied presets without installing their originals or touching custom providers', async () => {
+    await new PresetProviderSeeder().run(
+      createDbService({
+        existingProviders: [
+          { providerId: 'optional-copy', presetProviderId: 'optional' },
+          { providerId: 'plan', presetProviderId: 'recommended' },
+          { providerId: 'recommended', presetProviderId: null },
+          { providerId: 'custom', presetProviderId: null },
+          { providerId: 'removed-copy', presetProviderId: 'removed' },
+        ],
+        hasSeedJournal: true,
+      }),
+    );
+
+    expect(providerService.batchUpsert).toHaveBeenCalledWith([
+      { name: 'Optional', providerId: 'optional-copy' },
+      { name: 'Plan', providerId: 'plan' },
+    ]);
+  });
 });
 
 function createDbService({
-  existingProviderIds = [],
+  existingProviders = [],
   hasSeedJournal = false,
 }: {
-  existingProviderIds?: string[];
+  existingProviders?: { providerId: string; presetProviderId: string | null }[];
   hasSeedJournal?: boolean;
 }): DbService {
   const db = {
     select: (projection: Record<string, unknown>) => ({
       from: () => {
         if ('providerId' in projection) {
-          return Promise.resolve(existingProviderIds.map((providerId) => ({ providerId })));
+          return Promise.resolve(existingProviders);
         }
 
         return {

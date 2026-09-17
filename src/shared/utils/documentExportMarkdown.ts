@@ -1,8 +1,8 @@
-import { DocumentExportError, type ExportSignature } from '@/shared/contracts/documentExport';
+import { DocumentExportError } from '@/shared/contracts/documentExport';
+import { getExportSignature, type ExportWatermark } from '@/shared/contracts/fileExport';
 
-export function renderMarkdownSignature(
-  signature?: Pick<ExportSignature, 'brandName' | 'timestamp'>,
-): string {
+export function renderMarkdownSignature(watermark?: ExportWatermark): string {
+  const signature = getExportSignature(watermark);
   if (!signature) return '';
   if (
     [signature.brandName, signature.timestamp].some(

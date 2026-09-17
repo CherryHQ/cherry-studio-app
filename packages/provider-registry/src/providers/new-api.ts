@@ -23,9 +23,11 @@ export default defineProvider({
       reasoningFormat: { type: 'openai-chat' },
     },
     'openai-responses': {
+      adapterFamily: 'newapi',
       baseUrl: 'http://localhost:3000',
     },
     'google-generate-content': {
+      adapterFamily: 'newapi',
       baseUrl: 'http://localhost:3000',
     },
   },

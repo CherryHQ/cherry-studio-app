@@ -34,7 +34,7 @@ export function useDocumentExportPreview(
   }>();
   const [attempt, setAttempt] = useState(0);
   const tail = useRef<Promise<unknown>>(Promise.resolve());
-  const markdown = session.markdown + renderMarkdownSignature(presentation.signature);
+  const markdown = session.markdown + renderMarkdownSignature(presentation.watermark);
   useEffect(() => {
     if (format === 'markdown') return;
     const controller = new AbortController();
@@ -114,7 +114,7 @@ export function useDocumentExportPreview(
       .then(() => {
         signal.throwIfAborted();
         return session.render(
-          { format: 'markdown', signature: presentation.signature },
+          { format: 'markdown', watermark: presentation.watermark },
           { signal },
         );
       });

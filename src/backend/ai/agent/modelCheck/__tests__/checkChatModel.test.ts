@@ -48,6 +48,7 @@ describe('chat model connection probe', () => {
       tools: [],
       contextCheckpoint: null,
       options: { maxOutputTokens: 64 },
+      sessionId: expect.any(String),
     });
     expect(probe.session.close).toHaveBeenCalledTimes(1);
 

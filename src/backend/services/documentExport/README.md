@@ -8,10 +8,16 @@ reads; `render` adds an optional Markdown brand signature and materializes a req
 the current Markdown artifact when its complete text matches. The frontend supplies native HTML
 capture through the shared callback contract; backend code never imports UI.
 
-Every artifact contains one immutable file descriptor. Image artifacts also contain the captured
+Every artifact contains one immutable file descriptor. Watermark options affect rendered bytes
+only; they do not add file metadata. Image artifacts also contain the captured
 width and height. A capture is published only after the image has been copied and validated.
 `save` returns one managed file and reuses it for repeated sharing of the same artifact. Temporary
 cleanup covers the artifact directory; committed files outlive the session.
 
 See [Document Export](../../../../docs/references/document-export.md) for formats, limits, storage
 semantics and pending native acceptance.
+
+`convertHtml` handles the HTML viewer's direct PNG/PPTX conversions without normalizing authored
+HTML into document blocks. It consumes sequential frontend captures, streams image-only PPTX bytes,
+and persists one managed file. [HTML Conversion](../../../../docs/references/html-conversion.md)
+owns its limits, cancellation and rendering constraints.

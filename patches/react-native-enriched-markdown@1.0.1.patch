@@ -883,3 +883,84 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    auto tmp_color = map.find("color");
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
+index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..bb59ce3a39ac5f47820fe4a36d37589ae1a9d0a3 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
+@@ -8,6 +8,7 @@ import android.graphics.Color
+ import android.os.Build
+ import android.text.Editable
+ import android.text.InputType
++import android.util.Log
+ import android.util.TypedValue
+ import android.view.Gravity
+ import android.view.KeyEvent
+@@ -290,6 +291,21 @@ class EnrichedMarkdownTextInputView(
+ 
+   override fun performClick(): Boolean = super.performClick()
+ 
++  // Selection callbacks can invalidate Editor's cursor controller during a long press.
++  // Backport https://github.com/software-mansion/enriched-markdown/pull/738.
++  override fun performLongClick(): Boolean =
++    try {
++      super.performLongClick()
++    } catch (e: NullPointerException) {
++      val top = e.stackTrace.firstOrNull()
++      if (top == null || !top.className.startsWith("android.widget.Editor") || top.methodName != "performLongClick") {
++        throw e
++      }
++      Log.w("EnrichedMarkdownTextInputView", "Framework cursor controller unavailable during long press", e)
++      // Mark the long press handled so ACTION_UP does not dispatch an extra click.
++      true
++    }
++
+   // In auto-grow mode (scrollEnabled=false) TextView's internal bringPointIntoView
+   // scrolls content before Fabric has resized the view, causing a visible flicker.
+   override fun scrollTo(
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
+index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..9d6f22f128ed6d3498445e9d633aefb16459b6fe 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
+@@ -2,6 +2,7 @@ package com.swmansion.enriched.markdown.input.layout
+ 
+ import android.content.Context
+ import android.os.Build
++import android.text.SpannedString
+ import android.text.StaticLayout
+ import android.text.TextPaint
+ import androidx.appcompat.widget.AppCompatEditText
+@@ -21,7 +22,7 @@ object InputMeasurementStore {
+   private data class MeasurementParams(
+     val cachedWidth: Float,
+     val cachedSize: Long,
+-    val text: CharSequence?,
++    val text: SpannedString?,
+     val paintParams: PaintParams,
+   )
+ 
+@@ -35,10 +36,12 @@ object InputMeasurementStore {
+     val cachedWidth = data[id]?.cachedWidth ?: 0f
+     val cachedSize = data[id]?.cachedSize ?: 0L
+ 
+-    val size = measure(cachedWidth, text, paint)
++    // Snapshot on the UI thread: Fabric must not measure an Editable while input mutates it.
++    val textSnapshot = text?.let { SpannedString(it) }
++    val size = measure(cachedWidth, textSnapshot, paint)
+     val paintParams = PaintParams(paint.typeface, paint.textSize)
+ 
+-    data[id] = MeasurementParams(cachedWidth, size, text, paintParams)
++    data[id] = MeasurementParams(cachedWidth, size, textSnapshot, paintParams)
+     return size != cachedSize
+   }
+ 
+@@ -85,8 +88,9 @@ object InputMeasurementStore {
+       }
+ 
+     val size = measure(width, value.text, paint)
+-    data[id] = MeasurementParams(width, size, value.text, value.paintParams)
++    // A newer UI snapshot or release must not be overwritten by this measurement.
++    data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))
+     return size
+   }
+ 
+   private fun initialMeasure(

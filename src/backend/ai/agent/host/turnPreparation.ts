@@ -45,6 +45,7 @@ import type {
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
+import type { AgentImageGenerationPlan, AgentImageGenerationPort } from './agentImageGeneration';
 import { validateRuntimeContextCheckpointCandidate } from './contextCheckpoints';
 import {
   createAgentInferenceSnapshot,
@@ -68,6 +69,7 @@ export type TurnPreparationDependencies = {
   documentParserMode(): DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
+  imageGeneration?: AgentImageGenerationPort;
   /** The Host keeps the engine binding; preparation only consumes the routed Runtime. */
   routeExecutionTarget(target: AgentExecutionTarget): AgentRuntime;
   runtimeTools: AgentRuntimeToolResolver;
@@ -88,7 +90,8 @@ export type TurnPlan = {
   inferenceSnapshot: ReturnType<typeof createAgentInferenceSnapshot>;
   /** Canonicalized input parts: file parts rewritten to verified managed facts. */
   inputParts: AgentInputPart[];
-  modelPreflight: RuntimeModelPreflight;
+  modelPreflight: RuntimeModelPreflight | null;
+  imageGeneration?: AgentImageGenerationPlan;
   resources: TurnResourceLedger;
   runtime: AgentRuntime;
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
@@ -258,6 +261,68 @@ async function prepareResolvedTurn(
     availableFiles,
   );
 
+  const resolveInferenceModel = async () => {
+    try {
+      return await raceAbort(dependencies.inferenceModel(agent.model), signal);
+    } catch {
+      signal.throwIfAborted();
+      fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.');
+    }
+  };
+  const imageGeneration = await dependencies.imageGeneration?.prepare({
+    instructions: agent.instructions,
+    model: agent.model,
+    parts,
+    resources,
+    settings: parsed.imageGeneration,
+    signal,
+  });
+  if (imageGeneration) {
+    return {
+      agent,
+      documentParserMode,
+      hasMessages: storedTurnContext.hasMessages,
+      history: storedTurnContext.history,
+      imageGeneration,
+      inferenceSnapshot: createAgentInferenceSnapshot({
+        model: await resolveInferenceModel(),
+        options: {},
+        tools: [],
+        imageGeneration: imageGeneration.settings,
+      }),
+      inputParts: parts,
+      modelPreflight: null,
+      resources,
+      runtime,
+      runtimeContextCheckpoint: null,
+      runtimeContentAttachments: new Map(),
+      sessionTitle: session.title,
+      sessionTurnIds: storedTurnContext.sessionTurnIds,
+      tools: [],
+      pluginGuides: [],
+      toolDiscoveryWarnings: [],
+      userParts: parts.map(
+        (part, index): AgentMessagePart =>
+          part.type === 'text'
+            ? { ...part, id: `input-${index}`, state: 'done' }
+            : {
+                ...part,
+                id: `input-${index}`,
+                purpose: 'input-attachment',
+                attachmentReport: {
+                  mode: 'image',
+                  sourceTruncated: false,
+                  requestTruncated: false,
+                },
+              },
+      ),
+      usageAttribution,
+    };
+  }
+  if (parsed.imageGeneration) {
+    fail('CAPABILITY_UNSUPPORTED', 'Image generation is unavailable for this Agent.');
+  }
+
   // Freeze system capabilities, configured MCP tools, and connected plugins so
   // mid-turn changes cannot alter the active catalog. The catalog closes over
   // this turn's resource ledger, never a global file surface. System capability
@@ -300,13 +365,7 @@ async function prepareResolvedTurn(
     [...systemTools, ...configuredTools],
     agent.toolApprovalMode,
   );
-  let inferenceModel: Awaited<ReturnType<AgentInferenceModelResolver>>;
-  try {
-    inferenceModel = await raceAbort(dependencies.inferenceModel(agent.model), signal);
-  } catch {
-    signal.throwIfAborted();
-    fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.');
-  }
+  const inferenceModel = await resolveInferenceModel();
   let modelPreflight: RuntimeModelPreflight;
   try {
     modelPreflight = await raceAbort(runtime.preflightModel(agent.model), signal);

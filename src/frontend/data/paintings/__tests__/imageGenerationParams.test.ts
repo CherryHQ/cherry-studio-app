@@ -7,18 +7,17 @@ import {
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import {
-  resolvePaintingGenerationMode,
-  supportsPaintingGenerationMode,
-} from '@/shared/utils/paintingModelSupport';
-
-import {
   imageParamsAspectRatio,
   imageParamsResolutionLabel,
   isImageParamDraftValid,
   prepareImageParamValues,
   reconcileImageParamDraft,
   resolveImageGenerationMode,
-} from '../imageGenerationParams';
+} from '@/shared/utils/imageGenerationParams';
+import {
+  resolvePaintingGenerationMode,
+  supportsPaintingGenerationMode,
+} from '@/shared/utils/paintingModelSupport';
 
 const support = {
   modes: {

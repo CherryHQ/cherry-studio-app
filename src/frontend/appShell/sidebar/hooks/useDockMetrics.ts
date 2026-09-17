@@ -1,6 +1,7 @@
 import { getComposerActionCenterOffset } from '@cherrystudio/ui/components';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useChatDockFooterHeight } from '@/frontend/appShell/layout';
 import { appSidebar } from '@/frontend/utils/constants';
 
 /**
@@ -13,6 +14,7 @@ import { appSidebar } from '@/frontend/utils/constants';
  */
 export function useDockMetrics() {
   const insets = useSafeAreaInsets();
+  const footerHeight = useChatDockFooterHeight();
   const buttonRadius = appSidebar.dockHeight / 2;
   const inset = Math.max(appSidebar.dockMinInset, insets.left, insets.right);
 
@@ -20,6 +22,6 @@ export function useDockMetrics() {
     /** Horizontal inset from the sidebar's edges. */
     inset,
     /** Aligns the dock's button centers with the composer's bottom action row. */
-    bottomPadding: getComposerActionCenterOffset(insets.bottom) - buttonRadius,
+    bottomPadding: getComposerActionCenterOffset(insets.bottom) + footerHeight - buttonRadius,
   };
 }

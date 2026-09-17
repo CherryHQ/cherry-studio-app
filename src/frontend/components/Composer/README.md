@@ -42,7 +42,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   - `getSendErrorLabel` — a message for a failure the caller recognises.
   - `dismissKeyboardOnSend` — defaults to blurring the input, ending editing, and dismissing the
     keyboard with its native transition when submitting. The dock follows that transition, just
-    as it follows keyboard opening. Chat enables it; its list does not dismiss the keyboard again.
+    as it follows keyboard opening, then detaches when closing finishes. If the keyboard is
+    already hidden, it detaches immediately. Only a new field focus reconnects it. Chat enables
+    this behavior; its list does not dismiss the keyboard again.
 - `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
   shared editing state. It forwards `style`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
