@@ -108,7 +108,7 @@ export const MODEL_ICONS = {
   },
   cohere: {
     light: require('./light/cohere.webp'),
-    dark: require('./dark/cohere.webp'),
+    dark: require('./light/cohere.webp'),
   },
   dalle: {
     light: require('./light/dalle.webp'),
@@ -144,7 +144,7 @@ export const MODEL_ICONS = {
   },
   fireworks: {
     light: require('./light/fireworks.webp'),
-    dark: require('./dark/fireworks.webp'),
+    dark: require('./light/fireworks.webp'),
   },
   fishaudio: {
     light: require('./light/fishaudio.webp'),
@@ -168,7 +168,7 @@ export const MODEL_ICONS = {
   },
   glmv: {
     light: require('./light/glmv.webp'),
-    dark: require('./dark/glmv.webp'),
+    dark: require('./light/glmv.webp'),
   },
   google: {
     light: require('./light/google.webp'),
@@ -608,7 +608,7 @@ export const MODEL_ICONS = {
   },
   sensenova: {
     light: require('./light/sensenova.webp'),
-    dark: require('./dark/sensenova.webp'),
+    dark: require('./light/sensenova.webp'),
   },
   skywork: {
     light: require('./light/skywork.webp'),

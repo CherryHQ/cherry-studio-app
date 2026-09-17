@@ -10,11 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "requireFullScreen": false,
-      "icon": {
-        "light": "./assets/icon.png",
-        "dark": "./assets/icon-dark.png",
-        "tinted": "./assets/icon-tinted.png"
-      },
+      "icon": "./assets/icon.png",
       "bundleIdentifier": "com.cherryai.cherrystudio-app",
       "appleTeamId": "87242QY66T",
       "privacyManifests": {

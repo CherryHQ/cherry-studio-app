@@ -27,16 +27,6 @@ type IconEntry = {
 const imageSize = 72;
 const foregroundLight = 'rgba(0, 0, 0, 0.9)';
 const foregroundDark = 'rgba(255, 255, 255, 0.9)';
-// Mobile dark fallbacks for desktop brands without a dark source. Adjust only
-// the low-contrast ink, preserving the geometry and the remaining brand colors.
-// Keep these outside icons/: design:sync replaces that directory from desktop.
-const darkBrandColors: Record<string, Record<string, string>> = {
-  cohere: { '#39594D': '#679480' },
-  fireworks: { '#5019C5': '#9C73F1' },
-  glmv: { '#0039C6': '#6E9FFF' },
-  sensenova: { '#5B29DA': '#8050E0' },
-  sophnet: { '#6200EE': '#A066FF' },
-};
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const sourceRoot = join(packageRoot, 'icons');
 const outputRoot = join(packageRoot, 'src/icons-webp');
@@ -269,24 +259,19 @@ export async function generateGroup(group: IconGroup, targetRoot = outputRoot, l
     const lightSvg = readFileSync(lightSourcePath, 'utf-8');
     const hasCurrentColor = /currentColor/.test(lightSvg);
     const hasDarkSource = Boolean(darkSourcePath && existsSync(darkSourcePath));
-    const darkColors = group === 'general' ? undefined : darkBrandColors[assetName];
-    const shouldRenderDark = hasDarkSource || hasCurrentColor || darkColors !== undefined;
+    const shouldRenderDark = hasDarkSource || hasCurrentColor;
 
     await renderIcon(lightSourcePath, join(lightAssetDir, `${assetName}.webp`), foregroundLight, {
       trim: shouldTrim,
     });
 
     if (shouldRenderDark) {
-      let darkSvg =
-        hasDarkSource && darkSourcePath ? readFileSync(darkSourcePath, 'utf-8') : lightSvg;
-      if (!hasDarkSource && darkColors) {
-        for (const [sourceColor, darkColor] of Object.entries(darkColors)) {
-          darkSvg = darkSvg.replaceAll(sourceColor, darkColor);
-        }
-      }
-      await renderSvg(darkSvg, join(darkAssetDir, `${assetName}.webp`), foregroundDark, {
-        trim: shouldTrim,
-      });
+      await renderIcon(
+        hasDarkSource && darkSourcePath ? darkSourcePath : lightSourcePath,
+        join(darkAssetDir, `${assetName}.webp`),
+        foregroundDark,
+        { trim: shouldTrim },
+      );
     }
 
     entries.push({
