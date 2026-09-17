@@ -12,7 +12,7 @@ import { createAiRepair, type RequestContext } from '@cherrystudio/ai-runtime/to
 import {
   applyFastModeToProviderOptions,
   applyServiceTierToProviderOptions,
-  buildResolvedReasoningProviderOptions,
+  buildCapabilityProviderOptions,
   filterStandardParams,
   getTimeout,
   normalizeServiceTierSelection,
@@ -133,15 +133,22 @@ export async function buildAgentParams({
     assistantSummary:
       typeof provider.settings.summaryText === 'string' ? provider.settings.summaryText : undefined,
   });
-  let providerOptions =
-    request.reasoningEffort === undefined
-      ? {}
-      : buildResolvedReasoningProviderOptions({
-          aiSdkProviderId: sdkConfig.providerId,
-          providerOptionsKey,
-          endpointType,
-          reasoning,
-        });
+  let providerOptions = buildCapabilityProviderOptions(
+    invocationModel,
+    provider,
+    {
+      enableGenerateImage: false,
+      enableReasoning: request.reasoningEffort !== undefined,
+      enableWebSearch: false,
+    },
+    {
+      aiSdkProviderId: sdkConfig.providerId,
+      runtimeProviderId: sdkConfig.providerId,
+      providerOptionsKey,
+      endpointType,
+      reasoning,
+    },
+  );
   if (serviceTierControl) {
     const serviceTierSelection = normalizeServiceTierSelection(
       serviceTierControl,
@@ -197,6 +204,9 @@ export async function buildAgentParams({
     endpointType,
     providerOptionsKey,
   );
+  const hasProviderOptions = Object.values(effectiveProviderOptions).some((namespace) =>
+    Object.values(namespace).some((value) => value !== undefined),
+  );
 
   return {
     credentialReceipt,
@@ -215,7 +225,7 @@ export async function buildAgentParams({
       ...(request.callOverrides?.toolChoice && {
         toolChoice: request.callOverrides.toolChoice,
       }),
-      ...(Object.keys(effectiveProviderOptions).length > 0 && {
+      ...(hasProviderOptions && {
         providerOptions: effectiveProviderOptions,
       }),
       ...overridden.standardParams,

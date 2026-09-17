@@ -1,7 +1,12 @@
+import { createOpenAI } from '@ai-sdk/openai';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
 import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
-import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import {
+  installProviderRegistryTestSnapshot,
+  providerRegistryTestSnapshot,
+} from '@/backend/data/services/providerRegistryTestSnapshot';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
@@ -158,6 +163,114 @@ describe('AiService.checkModel', () => {
       'x-opencode-session',
     );
   });
+
+  it.each([
+    ['dashscope', 'qwen3.8-max', true],
+    ['dashscope-copy', 'qwen3.8-max', true],
+    ['dashscope', 'qwen3.8-max-preview', false],
+  ] as const)(
+    'serializes a %s / %s probe using the downloaded reasoning contract',
+    async (providerId, apiModelId, supportsNonThinking) => {
+      // Desktop 8d8649f: Max supports disabling thinking; Max Preview does not.
+      providerRegistryService.installRemoteSnapshot({
+        models: providerRegistryTestSnapshot.models,
+        providerModels: {
+          version: 'desktop-qwen38-probe',
+          overrides: [
+            {
+              providerId: 'dashscope',
+              modelId: apiModelId.replaceAll('.', '-'),
+              apiModelId,
+              name: apiModelId,
+              reasoningContracts: {
+                'openai-responses': {
+                  support: {
+                    controls: [
+                      {
+                        kind: 'effort',
+                        values: supportsNonThinking
+                          ? ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+                          : ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+                        default: 'xhigh',
+                      },
+                    ],
+                  },
+                  wire: {
+                    ...(supportsNonThinking && {
+                      off: {
+                        operations: [
+                          {
+                            target: 'reasoningEffort',
+                            value: { source: 'literal', value: 'none' },
+                          },
+                        ],
+                      },
+                    }),
+                    effort: {
+                      operations: [{ target: 'reasoningEffort', value: { source: 'effort' } }],
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      });
+      const provider = createProvider({
+        id: providerId,
+        presetProviderId: 'dashscope',
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_RESPONSES]: {
+            adapterFamily: 'openai',
+            baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/',
+          },
+        },
+      });
+      const model = createModel(apiModelId, {
+        apiModelId,
+        providerId,
+        capabilities: [MODEL_CAPABILITY.REASONING],
+        endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+      });
+
+      await new AiService(createServices({ model, provider })).checkModel({
+        uniqueModelId: model.id,
+      });
+
+      const [params] = mockGeneratorConstructor.mock.calls[0];
+      let requestUrl: string | undefined;
+      let requestBody: Record<string, unknown> | undefined;
+      const sdkModel = createOpenAI({
+        ...params.providerSettings,
+        fetch: async (url, init) => {
+          requestUrl = String(url);
+          requestBody = JSON.parse(String(init?.body));
+          throw new Error('request captured');
+        },
+      }).responses(params.modelId);
+
+      await expect(
+        sdkModel.doGenerate({
+          prompt: [
+            { role: 'system', content: params.system },
+            { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+          ],
+          providerOptions: params.options.providerOptions,
+        }),
+      ).rejects.toThrow('request captured');
+
+      expect(requestUrl).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1/responses');
+      expect(requestBody).toMatchObject({
+        model: apiModelId,
+        store: false,
+        input: [
+          { role: 'system', content: 'test' },
+          { role: 'user', content: [{ type: 'input_text', text: 'hi' }] },
+        ],
+      });
+      expect(requestBody?.reasoning).toEqual(supportsNonThinking ? { effort: 'none' } : undefined);
+    },
+  );
 
   it.each([
     ['opencode', undefined, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'openai-compatible'],
