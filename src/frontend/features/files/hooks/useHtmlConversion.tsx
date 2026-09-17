@@ -1,22 +1,24 @@
 import { useToast } from '@cherrystudio/ui/components';
 import { randomUUID } from 'expo-crypto';
-import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { prepareImageExport, useExportSignature } from '@/frontend/appShell/imageExport';
-import { shareFile } from '@/frontend/components/FileEntryPreview';
+import {
+  FileSharingError,
+  prepareImageExport,
+  shareFile,
+  useExportWatermark,
+} from '@/frontend/appShell/fileExport';
 import { useBackendModule } from '@/frontend/data';
 import { readPngDimensions } from '@/frontend/utils/capturePng';
 import {
   DocumentExportError,
   type CaptureHtmlPages,
-  type ExportSignature,
   type HtmlConversionContext,
   type HtmlConversionFormat,
 } from '@/shared/contracts/documentExport';
+import type { ExportWatermark, FileExportOptions } from '@/shared/contracts/fileExport';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import {
   HtmlConversionSurface,
@@ -26,11 +28,11 @@ import {
 const logger = loggerService.withContext('HtmlConversion');
 type Progress = Parameters<NonNullable<HtmlConversionContext['onProgress']>>[0];
 
-export function useHtmlConversion() {
+export function useHtmlConversion(options: FileExportOptions = {}) {
   const module = useBackendModule('documentExport');
   const { t } = useTranslation();
   const { toast } = useToast();
-  const signature = useExportSignature();
+  const createWatermark = useExportWatermark(options.watermark);
   const [request, setRequest] = useState<HtmlCaptureRequest>();
   const [progress, setProgress] = useState<Progress>();
   const [isSharing, setIsSharing] = useState(false);
@@ -45,7 +47,7 @@ export function useHtmlConversion() {
   }, []);
 
   const capture = useCallback(
-    (html: string, signature: ExportSignature): CaptureHtmlPages =>
+    (html: string, watermark: ExportWatermark): CaptureHtmlPages =>
       (input) =>
         new Promise((resolve, reject) => {
           input.signal.throwIfAborted();
@@ -59,9 +61,9 @@ export function useHtmlConversion() {
               ...input,
               signal: controller.signal,
               onPage: async (page, index, total) => {
-                if (input.format === 'pptx') return input.onPage(page, index, total);
-                // Persist the signed image so document-export delivery can safely reuse it.
-                const signed = await prepareImageExport(page, signature);
+                if (watermark.kind === 'none' || (input.format === 'pptx' && index !== total - 1))
+                  return input.onPage(page, index, total);
+                const signed = await prepareImageExport(page, watermark);
                 try {
                   controller.signal.throwIfAborted();
                   await input.onPage({ ...signed, ...readPngDimensions(signed.uri) }, index, total);
@@ -106,26 +108,25 @@ export function useHtmlConversion() {
     setProgress({ stage: 'capturing', current: 0, total: 0 });
     let isConverted = false;
     try {
-      const isAvailable = await Sharing.isAvailableAsync();
-      controller.signal.throwIfAborted();
-      if (!isAvailable) {
-        toast.show({ label: t('fileViewer.shareUnavailable'), variant: 'danger' });
-        return;
-      }
-      const exportSignature = { ...signature, timestamp: formatExportTimestamp(new Date()) };
-      const file = await module.convertHtml(
-        { title, format, capture: capture(html, exportSignature) },
-        {
-          signal: controller.signal,
-          onProgress: (value) => {
-            if (mounted.current) setProgress(value);
-          },
+      const watermark = createWatermark();
+      await shareFile(
+        async () => {
+          const file = await module.convertHtml(
+            { title, format, capture: capture(html, watermark) },
+            {
+              signal: controller.signal,
+              onProgress: (value) => {
+                if (mounted.current) setProgress(value);
+              },
+            },
+          );
+          controller.signal.throwIfAborted();
+          isConverted = true;
+          setProgress(undefined);
+          return file;
         },
+        { watermark, signal: controller.signal },
       );
-      controller.signal.throwIfAborted();
-      isConverted = true;
-      setProgress(undefined);
-      await shareFile(file, exportSignature);
     } catch (error) {
       if (mounted.current) {
         const cancelled =
@@ -142,11 +143,13 @@ export function useHtmlConversion() {
           label: t(
             cancelled
               ? 'fileViewer.conversion.cancelled'
-              : isConverted
-                ? 'fileViewer.shareFailed'
-                : limit
-                  ? 'fileViewer.conversion.sizeLimit'
-                  : 'fileViewer.conversion.failed',
+              : error instanceof FileSharingError
+                ? 'fileViewer.shareUnavailable'
+                : isConverted
+                  ? 'fileViewer.shareFailed'
+                  : limit
+                    ? 'fileViewer.conversion.sizeLimit'
+                    : 'fileViewer.conversion.failed',
           ),
           variant: cancelled ? 'default' : 'danger',
         });

@@ -26,9 +26,15 @@ const mockOpenSettings = jest.fn();
 const mockPrepareImageExport = jest.fn();
 const mockReleaseImageExport = jest.fn();
 
-jest.mock('@/frontend/appShell/imageExport', () => ({
+jest.mock('@/frontend/appShell/fileExport', () => ({
+  ...jest.requireActual('@/frontend/appShell/fileExport/useSaveImageToPhotos'),
+  useShareFile: () => ({ isSharing: false, share: jest.fn() }),
+}));
+jest.mock('@/frontend/appShell/fileExport/prepareImageExport', () => ({
   prepareImageExport: (...args: unknown[]) => mockPrepareImageExport(...args),
-  useExportSignature: () => ({ brandName: 'Cherry Studio' }),
+}));
+jest.mock('@/frontend/appShell/fileExport/useExportWatermark', () => ({
+  useExportWatermark: () => () => ({ kind: 'cherry', signature: { brandName: 'Cherry Studio' } }),
 }));
 
 jest.mock('expo-router', () => ({
@@ -43,11 +49,6 @@ jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
   useToast: () => ({ toast: { show: mockToastShow } }),
 }));
-
-// Keep the real permission/save flow without loading the native image viewer.
-jest.mock('@/frontend/components/ArtifactPreview', () =>
-  jest.requireActual('@/frontend/components/ArtifactPreview/hooks/useSaveImageToPhotos'),
-);
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

@@ -3,19 +3,24 @@ import * as MediaLibrary from 'expo-media-library';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { prepareImageExport, useExportSignature } from '@/frontend/appShell/imageExport';
 import { useBackendModule } from '@/frontend/data';
 import { canRequestDevicePermission, canUseDevicePermission } from '@/shared/contracts';
+import type { FileExportOptions } from '@/shared/contracts/fileExport';
 import type { FileEntryProvenance } from '@/shared/data/types/file';
-import { formatExportTimestamp } from '@/shared/utils/exportSignature';
+
+import { prepareImageExport } from './prepareImageExport';
+import { useExportWatermark } from './useExportWatermark';
 
 /** Shared add-only Photos permission flow for generated and managed images. */
-export function useSaveImageToPhotos(uri: string, provenance?: FileEntryProvenance) {
+export function useSaveImageToPhotos(
+  { uri, provenance }: { uri: string; provenance?: FileEntryProvenance },
+  options: FileExportOptions = {},
+) {
   const { t } = useTranslation();
   const permissions = useBackendModule('permissions');
   const { toast } = useToast();
   const { alert } = useAlert();
-  const signature = useExportSignature();
+  const createWatermark = useExportWatermark(options.watermark);
   const saving = useRef(false);
 
   const saveToPhotos = useCallback(async () => {
@@ -23,10 +28,7 @@ export function useSaveImageToPhotos(uri: string, provenance?: FileEntryProvenan
     saving.current = true;
     let exported: Awaited<ReturnType<typeof prepareImageExport>> | undefined;
     try {
-      exported = await prepareImageExport(
-        { uri, provenance },
-        { ...signature, timestamp: formatExportTimestamp(new Date()) },
-      );
+      exported = await prepareImageExport({ uri, provenance }, createWatermark());
       await MediaLibrary.Asset.create(exported.uri);
       toast.show({ label: t('imageActions.saved'), variant: 'success' });
     } catch {
@@ -35,7 +37,7 @@ export function useSaveImageToPhotos(uri: string, provenance?: FileEntryProvenan
       saving.current = false;
       exported?.release();
     }
-  }, [uri, provenance, signature, t, toast]);
+  }, [uri, provenance, createWatermark, t, toast]);
 
   const showOpenSettingsAlert = useCallback(() => {
     alert.confirm({

@@ -6,6 +6,7 @@ import type {
   HtmlConversionFormat,
   HtmlConversionInput,
 } from '@/shared/contracts/documentExport';
+import type { FileExportOptions } from '@/shared/contracts/fileExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import type { HtmlCaptureRequest } from '../../components/HtmlConversionSurface';
@@ -17,11 +18,22 @@ const mockRelease = jest.fn();
 const mockPersistPage = jest.fn();
 const mockConvertHtml = jest.fn();
 const mockShare = jest.fn();
+const mockDelivered = jest.fn();
 const mockToast = jest.fn();
 
-jest.mock('@/frontend/appShell/imageExport', () => ({
+jest.mock('@/frontend/appShell/fileExport', () => ({
   prepareImageExport: (...args: unknown[]) => mockPrepareImage(...args),
-  useExportSignature: () => ({ brandName: 'Cherry Studio' }),
+  useExportWatermark:
+    (style = 'cherry') =>
+    () =>
+      style === 'none'
+        ? { kind: 'none' }
+        : {
+            kind: 'cherry',
+            signature: { brandName: 'Cherry Studio', timestamp: '2026.09.17 12:00' },
+          },
+  shareFile: (...args: unknown[]) => mockShare(...args),
+  FileSharingError: class extends Error {},
 }));
 jest.mock('@/frontend/utils/capturePng', () => ({
   readPngDimensions: (uri: string) => mockReadDimensions(uri),
@@ -29,12 +41,8 @@ jest.mock('@/frontend/utils/capturePng', () => ({
 jest.mock('@/frontend/data', () => ({
   useBackendModule: () => ({ convertHtml: mockConvertHtml }),
 }));
-jest.mock('@/frontend/components/FileEntryPreview', () => ({
-  shareFile: (...args: unknown[]) => mockShare(...args),
-}));
 jest.mock('../../components/HtmlConversionSurface', () => ({ HtmlConversionSurface: () => null }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'capture-id' }));
-jest.mock('expo-sharing', () => ({ isAvailableAsync: async () => true }));
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToast } }),
 }));
@@ -60,8 +68,8 @@ const savedFile = {
 let actions: ReturnType<typeof useHtmlConversion>;
 let renderer: ReactTestRenderer;
 
-function Probe() {
-  const currentActions = useHtmlConversion();
+function Probe({ options }: { options?: FileExportOptions }) {
+  const currentActions = useHtmlConversion(options);
   useEffect(() => {
     actions = currentActions;
   }, [currentActions]);
@@ -70,6 +78,10 @@ function Probe() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockShare.mockReset().mockImplementation(async (source) => {
+    const file = typeof source === 'function' ? await source() : source;
+    mockDelivered(file);
+  });
   mockPrepareImage.mockReset().mockResolvedValue(signed);
   mockReadDimensions.mockReset().mockReturnValue({ width: 1280, height: 920 });
   mockPersistPage.mockReset().mockResolvedValue(undefined);
@@ -89,36 +101,54 @@ beforeEach(() => {
 });
 afterEach(() => act(() => renderer.unmount()));
 
-test('persists the signed PNG with its full height and shares that completed document', async () => {
-  const { request, sharing } = await start('image');
-  await act(async () => {
-    await deliver(request);
-    await sharing;
-  });
-  expect(mockPrepareImage).toHaveBeenCalledWith(
-    page,
-    expect.objectContaining({ brandName: 'Cherry Studio', timestamp: expect.any(String) }),
-  );
-  expect(mockReadDimensions).toHaveBeenCalledWith(signed.uri);
-  expect(mockPersistPage).toHaveBeenCalledWith(
-    expect.objectContaining({ uri: signed.uri, width: 1280, height: 920 }),
-    0,
-    1,
-  );
-  expect(mockRelease).toHaveBeenCalledTimes(1);
-  expect(mockShare).toHaveBeenCalledWith(savedFile, mockPrepareImage.mock.calls[0][1]);
-});
+test.each(['image', 'pptx'] as const)(
+  'defaults %s to Cherry and delivers the completed file',
+  async (format) => {
+    const { request, sharing } = await start(format);
+    await act(async () => {
+      await deliver(request);
+      await sharing;
+    });
+    expect(mockPrepareImage).toHaveBeenCalledWith(page, {
+      kind: 'cherry',
+      signature: expect.objectContaining({
+        brandName: 'Cherry Studio',
+        timestamp: expect.any(String),
+      }),
+    });
+    expect(mockReadDimensions).toHaveBeenCalledWith(signed.uri);
+    expect(mockPersistPage).toHaveBeenCalledWith(
+      expect.objectContaining({ uri: signed.uri, width: 1280, height: 920 }),
+      0,
+      1,
+    );
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockShare).toHaveBeenCalledWith(expect.any(Function), {
+      watermark: mockPrepareImage.mock.calls[0][1],
+      signal: expect.any(AbortSignal),
+    });
+    expect(mockDelivered).toHaveBeenCalledWith(savedFile);
+  },
+);
 
-test('keeps PPT captures unchanged', async () => {
-  const { request, sharing } = await start('pptx');
-  await act(async () => {
-    await deliver(request);
-    await sharing;
-  });
-  expect(mockPersistPage).toHaveBeenCalledWith(page, 0, 1);
-  expect(mockPrepareImage).not.toHaveBeenCalled();
-  expect(mockRelease).not.toHaveBeenCalled();
-});
+test.each(['image', 'pptx'] as const)(
+  'keeps %s captures unchanged when watermark is none',
+  async (format) => {
+    act(() => renderer.update(<Probe options={{ watermark: 'none' }} />));
+    const { request, sharing } = await start(format);
+    await act(async () => {
+      await deliver(request);
+      await sharing;
+    });
+    expect(mockPersistPage).toHaveBeenCalledWith(page, 0, 1);
+    expect(mockPrepareImage).not.toHaveBeenCalled();
+    expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockShare).toHaveBeenCalledWith(expect.any(Function), {
+      watermark: { kind: 'none' },
+      signal: expect.any(AbortSignal),
+    });
+  },
+);
 
 test('releases the signed temporary file when persistence fails', async () => {
   mockPersistPage.mockRejectedValueOnce(new Error('Storage failed'));
@@ -128,11 +158,31 @@ test('releases the signed temporary file when persistence fails', async () => {
     await sharing;
   });
   expect(mockRelease).toHaveBeenCalledTimes(1);
-  expect(mockShare).not.toHaveBeenCalled();
+  expect(mockDelivered).not.toHaveBeenCalled();
   expect(mockToast).toHaveBeenCalledWith({
     label: 'fileViewer.conversion.failed',
     variant: 'danger',
   });
+});
+
+test('adds the PPT footer only to the final slide without creating another slide', async () => {
+  const first = { ...page, uri: 'file:///first-slide.png' };
+  const last = { ...page, uri: 'file:///last-slide.png' };
+  const { request, sharing } = await start('pptx');
+  await act(async () => {
+    request.started = true;
+    await request.input.onPage(first, 0, 2);
+    await request.input.onPage(last, 1, 2);
+    request.finish();
+    await sharing;
+  });
+  expect(mockPrepareImage).toHaveBeenCalledTimes(1);
+  expect(mockPrepareImage).toHaveBeenCalledWith(last, expect.objectContaining({ kind: 'cherry' }));
+  expect(mockPersistPage.mock.calls).toEqual([
+    [first, 0, 2],
+    [expect.objectContaining({ uri: signed.uri, width: 1280, height: 920 }), 1, 2],
+  ]);
+  expect(mockRelease).toHaveBeenCalledTimes(1);
 });
 
 test('cancellation during signing releases its late output without saving or sharing it', async () => {
@@ -155,7 +205,7 @@ test('cancellation during signing releases its late output without saving or sha
   });
   expect(mockRelease).toHaveBeenCalledTimes(1);
   expect(mockPersistPage).not.toHaveBeenCalled();
-  expect(mockShare).not.toHaveBeenCalled();
+  expect(mockDelivered).not.toHaveBeenCalled();
 });
 
 async function start(format: HtmlConversionFormat) {

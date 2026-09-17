@@ -14,6 +14,7 @@ still require device acceptance on iOS and Android.
 | `backend/services/documentExport` | Validation, conversion, bounded image resources, temporary files, explicit persistence and cancellation |
 | `DocumentExportRuntime` | Foreground admission, live/closing sessions and host teardown |
 | `bootstrap/composition/createBackend.ts` | Connects the runtime to a file-entry store bound to the originating database |
+| `frontend/appShell/fileExport` | Watermark configuration, finalized-file delivery, system availability and cancellation checks |
 | `frontend/appShell/documentExport` | Opens the export page and hands off a transient request; URLs contain only its ID |
 | `frontend/features/documentExport` | Format choice, preview, controlled HTML capture and user-triggered delivery |
 | `frontend/features/chat/share` | Message selection and selected history reads, thinking inclusion policy and the chat-to-document adapter |
@@ -86,13 +87,15 @@ resolved semantic colors, including user bubbles, code surfaces and secondary te
 page freezes width, typography and export time at opening. Theme changes regenerate the preview;
 the active presentation is held while saving or delivering so the current file cannot be replaced. Programmatic input presentation is validated and copied by the HTML renderer.
 
-HTML and image presentation may supply a shared `signature` with resolved background/text colors,
+HTML and image presentation may supply a resolved `watermark`. The application defaults to `cherry`;
+a code-only `none` option omits the footer from every preview and output format. The Cherry variant
+carries a `signature` with resolved background/text colors,
 an embedded PNG logo, brand name and timestamp. Images may also supply an `imageFrame` with a resolved background
 color and localized label. These are presentation data, independent of the source document. The
 renderer copies and validates them, escapes text, and includes the signature after the content
 inside `main`. The frontend supplies the signature for both HTML and images, including image-to-HTML
-fallbacks; the frame is image-only. HTML keeps its conversation hierarchy. Markdown targets accept
-the same brand name and timestamp for a separated text signature, without theme colors or logo bytes.
+fallbacks; the frame is image-only. HTML keeps its conversation hierarchy. Markdown targets accept the same resolved watermark and use
+its brand name and timestamp for a separated text signature; theme colors and logo bytes do not enter Markdown output.
 
 Every artifact contains one file descriptor. Markdown/HTML artifacts also contain their source
 text; image artifacts contain their width and height. Artifacts also contain structured
@@ -127,7 +130,7 @@ do not expose sandbox paths.
 The export page appends a horizontal rule and one row with the bold brand name and frozen export
 time. Its native preview and `.md` artifact share the same Markdown signature formatter, including
 when another format falls back to Markdown. `session.markdown` remains the unbranded source text;
-the optional target signature is applied when the artifact is rendered.
+the optional target watermark is applied when the artifact is rendered.
 
 Chat HTML follows the native message hierarchy: 16-point gutters, an 88%-width user column,
 question attachments above the bubble, compact assistant labels, and full-width answers. They omit
@@ -217,16 +220,17 @@ WebView rendering works on all devices; only the local iOS text-message scenario
   only delivery action, including for Markdown. Repeated actions reuse the saved file for the
   current artifact. Changing formats creates a new artifact; reopening an export is a new session and
   may create another file.
-- Saved files have `provenance: 'document-export'`. This extends the existing source enum without
-  adding a column or database migration; older files retain their existing provenance. Sharing an
-  existing managed file does not change its provenance.
+- Saved files have `provenance: 'document-export'`. Watermark options belong to the rendering request
+  and do not add persisted file fields or require a migration. Sharing an existing export reuses
+  its bytes, including exports generated with `none`, without changing provenance or adding a footer.
 - Sharing is an additional source filter over the library's existing cursor stream. Exported PNG images
   also remain in Images, while HTML/Markdown remain in Documents. There is no second table or
   separate permanent directory for sharing.
 - Permanent files follow the existing [file model](./data/file-model.md): only explicit user
   deletion removes them. Closing a preview, deleting a conversation, or dismissing a share sheet
   does not delete saved files.
-- System delivery uses the shared `FileEntryPreview.shareFile` helper. It prepares a readable
+- System delivery uses the shared `appShell/fileExport.shareFile` helper. It checks availability
+  before invoking the page's materialize/save factory, checks cancellation, and prepares a readable
   cache copy before opening the system share sheet and retains the copy for late recipient reads. Share-sheet
   completion does not claim delivery to another person. Cancelled sharing still leaves the saved
   file in Sharing. Existing file-viewer actions provide saving images to Photos and system opening.
@@ -262,7 +266,7 @@ A single selected message defaults to PNG and offers all three formats. The requ
 format policy when thinking content is toggled. Images include straight theme-aware margins and
 conversation content. Both HTML and images end with the common white export signature: the Cherry
 logo and Cherry Studio name on the left, with local export time aligned to the right. Painting and file image delivery share its content and geometry through
-`appShell/imageExport`. Constant color tokens keep the footer white with black text in both themes.
+`appShell/fileExport`. Constant color tokens keep the footer white with black text in both themes.
 The timestamp uses
 `YYYY.MM.DD HH:mm` and is frozen at opening across both document snapshots and format changes.
 The signature has a 56-point minimum height at its 360-point reference width, scales with image

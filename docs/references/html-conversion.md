@@ -18,8 +18,10 @@ It does not serialize interactive state from the live preview. Authored images, 
 load in the disposable WebView; images and fonts must finish loading before capture. Animations
 and media pause before layout measurement.
 
-- PNG captures the whole document in one image, then adds the shared brand and timestamp footer
-  before saving. Later sharing reuses this signed file without adding another footer.
+- The code-only `watermark` option defaults to `cherry`; `none` skips the footer. There is no UI
+  watermark control. PNG appends the footer to the whole-document capture. PPTX appends it only to
+  the final slide, without adding a slide. Watermark selection applies before saving;
+  later sharing reuses the completed bytes without adding another footer.
 - Outermost `[data-slide]` or `.slide` elements are made visible in document order. Each becomes
   one PPT slide. Their widths and heights are measured in the original parent layout before any
   slides are rearranged; hidden slides are temporarily revealed for measurement. For PNG, these
@@ -52,7 +54,7 @@ managed file outlives the viewer.
 `capturePng` is shared with document export under `frontend/utils`. It uses native temporary PNG
 files and checks actual PNG dimensions without decoding the bitmap in JavaScript. Captured pages
 and signed PNG output are capped at 8192 pixels per edge and 16 million pixels; PPT is capped at
-64 pages and output at 128 MiB. PNG signing uses the shared Skia renderer and re-encodes one image;
+64 pages and output at 128 MiB. Watermark composition uses the shared Skia renderer and re-encodes only the image receiving a footer;
 both the native capture and signed temporary file are released after consumption or cancellation.
 The capture timeout is three minutes. PNG dimensions are independent of display density.
 

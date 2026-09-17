@@ -1,4 +1,4 @@
-import type { ExportSignature } from '@/shared/contracts/documentExport';
+import type { ExportSignature, ExportWatermark } from '@/shared/contracts/fileExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { prepareFileExport, prepareImageExport } from '../prepareImageExport';
@@ -100,6 +100,8 @@ const signature: ExportSignature = {
   logoDataUrl: 'data:image/png;base64,AA==',
 };
 
+const watermark: ExportWatermark = { kind: 'cherry', signature };
+
 test.each(['native', 'web'])(
   'prepares an ordinary image for sharing with a %s paragraph builder',
   async (platform) => {
@@ -117,7 +119,7 @@ test.each(['native', 'web'])(
       size: original.length,
     });
 
-    const exported = await prepareFileExport({ entry, uri }, signature);
+    const exported = await prepareFileExport({ entry, uri }, watermark);
     expect(exported).toMatchObject({ filename: 'photo.png', mediaType: 'image/png' });
     expect(exported.uri).not.toBe(uri);
     expect(mockFiles.get(exported.uri)).toEqual(mockEncodedImage);
@@ -130,24 +132,58 @@ test.each(['native', 'web'])(
   },
 );
 
-test('a captured document keeps its exact PNG bytes on subsequent photo saves and file delivery', async () => {
-  const uri = 'file:///managed/conversation.png';
+test.each(['none', 'cherry'] as const)(
+  'a completed document keeps its bytes when delivery requests %s',
+  async (style) => {
+    const uri = 'file:///managed/conversation.png';
+    const entry = FileEntrySchema.parse({
+      id: '00000000-0000-7000-8000-000000000001',
+      filename: 'conversation.png',
+      mediaType: 'image/png',
+      provenance: 'document-export',
+      createdAt: 1,
+      updatedAt: 1,
+      size: 1000,
+    });
+    const original = new Uint8Array([1, 2, 3]);
+    mockFiles.set(uri, original);
+    const requestedWatermark: ExportWatermark = style === 'none' ? { kind: 'none' } : watermark;
+    const photo = await prepareImageExport(
+      { uri, provenance: entry.provenance },
+      requestedWatermark,
+    );
+    const shared = await prepareFileExport({ entry, uri }, requestedWatermark);
+    expect(photo.uri).toBe(uri);
+    expect(shared).toMatchObject({ uri, filename: entry.filename, mediaType: entry.mediaType });
+    // Neither operation owns the managed source, so releasing its export cannot remove it.
+    photo.release();
+    shared.release();
+    expect(mockFiles.get(uri)).toBe(original);
+    expect(mockResources).toHaveLength(0);
+  },
+);
+
+test('none preserves the source format and bytes without native image work', async () => {
+  const uri = 'file:///managed/photo.jpg';
+  const original = new Uint8Array([1, 2, 3]);
+  mockFiles.set(uri, original);
   const entry = FileEntrySchema.parse({
     id: '00000000-0000-7000-8000-000000000001',
-    filename: 'conversation.png',
-    mediaType: 'image/png',
-    provenance: 'document-export',
+    filename: 'photo.jpg',
+    mediaType: 'image/jpeg',
+    provenance: 'imported',
     createdAt: 1,
     updatedAt: 1,
-    size: 1000,
+    size: original.length,
   });
-  const photo = await prepareImageExport({ uri, provenance: entry.provenance }, signature);
-  const shared = await prepareFileExport({ entry, uri }, signature);
+  const photo = await prepareImageExport({ uri }, { kind: 'none' });
+  const file = await prepareFileExport({ entry, uri }, { kind: 'none' });
   expect(photo.uri).toBe(uri);
-  expect(shared).toMatchObject({ uri, filename: entry.filename, mediaType: entry.mediaType });
-  // Neither operation owns the managed source, so releasing its export cannot remove it.
+  expect(file).toMatchObject({ uri, filename: 'photo.jpg', mediaType: 'image/jpeg' });
   photo.release();
-  shared.release();
+  file.release();
+  expect(mockFiles.get(uri)).toBe(original);
+  expect(mockResources).toHaveLength(0);
 });
 
 test('non-image delivery preserves the original format and filename', async () => {
@@ -161,7 +197,7 @@ test('non-image delivery preserves the original format and filename', async () =
     updatedAt: 1,
     size: 1000,
   });
-  expect(await prepareFileExport({ entry, uri }, signature)).toMatchObject({
+  expect(await prepareFileExport({ entry, uri }, watermark)).toMatchObject({
     uri,
     filename: entry.filename,
     mediaType: entry.mediaType,

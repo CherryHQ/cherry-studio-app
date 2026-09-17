@@ -18,7 +18,8 @@ may supply one initially unchecked option and its alternate document; changing i
 selected format.
 
 HTML and PNG receive resolved semantic colors, the accessibility typography scale and a shared
-Cherry `signature` at the end of the document. HTML keeps the source's bubble/message hints. For
+resolved `watermark` at the end of the document. The code-only request option defaults to `cherry`;
+`none` omits the footer from both the preview and saved output, including Markdown. HTML keeps the source's bubble/message hints. For
 images, the frontend also supplies an optional `imageFrame` presentation with theme-aware margins
 and numbered message headings. The signature uses the same full-width white footer as painting and
 file image exports: the original Cherry logo and Cherry Studio name on the left, with the time
@@ -37,7 +38,8 @@ files retain nested `<details>` markup for readers that support it instead of fl
 into ordinary headings and body text.
 
 The page claims its sessions from the app-shell handoff, serializes superseded renders and closes
-both sessions on route exit. Share materializes the selected format if necessary, persists it to the
+both sessions on route exit. `fileExport.shareFile` checks system sharing availability, then materializes the selected format
+if necessary, persists it to the
 file library and opens the system share sheet. Repeated sharing of the current artifact reuses its
 saved entry; cancelling the sheet retains the file.
 

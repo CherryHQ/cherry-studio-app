@@ -2,13 +2,9 @@ import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import { type MenuItem } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
+import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
 import { HeaderChrome, useRouteHeaderLeadingAction } from '@/frontend/appShell/header';
-import { useSaveImageToPhotos } from '@/frontend/components/ArtifactPreview';
-import {
-  fileEntryPreviewKind,
-  useOpenFileEntry,
-  useShareFile,
-} from '@/frontend/components/FileEntryPreview';
+import { fileEntryPreviewKind, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
 import type { ResolvedFile } from '@/shared/contracts/file';
 
 const EMPTY_ITEMS: readonly MenuItem[] = [];
@@ -23,7 +19,10 @@ export function FileViewerHeader({
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction();
   const { openFileEntryWithSystem } = useOpenFileEntry();
-  const saveToPhotos = useSaveImageToPhotos(file.uri, file.entry.provenance);
+  const saveToPhotos = useSaveImageToPhotos({
+    uri: file.uri,
+    provenance: file.entry.provenance,
+  });
   const { isSharing, share } = useShareFile(file);
   const isImage = fileEntryPreviewKind(file.entry) === 'image';
 

@@ -8,6 +8,7 @@ import {
   type ExportDocument,
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
+import { getExportSignature } from '@/shared/contracts/fileExport';
 import { EXPORT_SIGNATURE_STYLE, exportSignatureColumns } from '@/shared/utils/exportSignature';
 
 import { escapeHtml, safeExportUrl } from './normalizeDocument';
@@ -28,7 +29,10 @@ export async function renderHtml(
   const presentation = {
     ...inputPresentation,
     imageFrame: inputPresentation.imageFrame ? { ...inputPresentation.imageFrame } : undefined,
-    signature: inputPresentation.signature ? { ...inputPresentation.signature } : undefined,
+    watermark:
+      inputPresentation.watermark?.kind === 'cherry'
+        ? { kind: 'cherry' as const, signature: { ...inputPresentation.watermark.signature } }
+        : inputPresentation.watermark,
     colors: { ...inputPresentation.colors },
     typography: Object.fromEntries(
       Object.entries(inputPresentation.typography).map(([key, value]) => [key, { ...value }]),
@@ -154,7 +158,8 @@ export async function renderHtml(
     })
     .join('\n');
   const isConversation = document.sections.some((section) => section.presentation);
-  const { colors, typography, width, imageFrame, signature } = presentation;
+  const { colors, typography, width, imageFrame } = presentation;
+  const signature = getExportSignature(presentation.watermark);
   const { base, sm, lg, xl } = typography;
   const title = document.title && !isConversation ? `<h1>${escapeHtml(document.title)}</h1>` : '';
   const content = imageFrame
@@ -249,7 +254,7 @@ img.print-logo{width:${signatureSize(signatureStyle.logoSize)}px;height:${signat
 
 function validatePresentation(value: ExportPresentation) {
   const frame = value.imageFrame;
-  const signature = value.signature;
+  const signature = getExportSignature(value.watermark);
   const colors = Object.values(value.colors);
   if (frame) colors.push(frame.background);
   if (signature) colors.push(signature.background, signature.foreground);
