@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, Model, Models, ToolResultMessage } from '@earendil-works/pi-ai';
+import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 
 import {
   estimatePiLoopContextHeadroomTokens,
@@ -7,7 +8,6 @@ import {
   PI_IMAGE_CONTEXT_TOKEN_RESERVE,
   PI_MIN_OUTPUT_RESERVE_TOKENS,
   planPiContext,
-  resolvePiOutputReserveTokens,
 } from '../contextCompaction';
 import type { PiConversation } from '../modelMessages';
 
@@ -45,22 +45,24 @@ function response(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
   };
 }
 
-function conversation(historyTokens = 0): PiConversation {
-  const historyTurns: PiConversation['historyTurns'] = historyTokens
-    ? [
-        {
-          turnId: 'old',
-          messages: [
-            { role: 'user', content: 'x'.repeat(historyTokens * 4), timestamp: 0 },
-            response(),
-          ],
-        },
-        {
-          turnId: 'recent',
-          messages: [{ role: 'user', content: 'Continue the task.', timestamp: 3 }, response()],
-        },
-      ]
-    : [];
+// Pi keeps the message that crosses keepRecentTokens, so removable history spans several turns.
+function conversation(historyTokens = 0, turnTokens = 5_000): PiConversation {
+  const historyTurns: PiConversation['historyTurns'] = [];
+  for (let remaining = historyTokens; remaining > 0; remaining -= turnTokens) {
+    historyTurns.push({
+      turnId: `old-${historyTurns.length}`,
+      messages: [
+        { role: 'user', content: 'x'.repeat(Math.min(turnTokens, remaining) * 4), timestamp: 0 },
+        response(),
+      ],
+    });
+  }
+  if (historyTokens) {
+    historyTurns.push({
+      turnId: 'recent',
+      messages: [{ role: 'user', content: 'Continue the task.', timestamp: 3 }, response()],
+    });
+  }
   return {
     historyTurns,
     history: historyTurns.flatMap((turn) => turn.messages),
@@ -78,7 +80,6 @@ function plan(
     conversation: conversation(),
     model,
     models: { completeSimple },
-    outputReserveTokens: resolvePiOutputReserveTokens(overrides.model ?? model),
     redactSummary: (summary) => summary,
     signal: new AbortController().signal,
     thinkingLevel: 'off',
@@ -112,6 +113,40 @@ describe('Pi context admission and compaction', () => {
     expect(completeSimple).not.toHaveBeenCalled();
   });
 
+  test('admits only input that leaves Pi room for a usable answer', async () => {
+    const admitted = conversation();
+    admitted.prompt.content = 'x'.repeat(122_000 * 4);
+    const rejected = conversation();
+    rejected.prompt.content = 'x'.repeat(124_000 * 4);
+
+    const result = await plan({ conversation: admitted });
+
+    expect(result.ok).toBe(true);
+    expect(
+      buildBaseOptions(model, {
+        systemPrompt: admitted.systemPrompt,
+        messages: [admitted.prompt],
+      }).maxTokens,
+    ).toBeGreaterThanOrEqual(1_024);
+    expect(await plan({ conversation: rejected })).toMatchObject({
+      ok: false,
+      code: 'context_window_exceeded',
+    });
+  });
+
+  test('compacts a small window before the hard limit rejects it', async () => {
+    const completeSimple = jest.fn(async () => response());
+
+    const result = await plan(
+      { conversation: conversation(11_500, 500), model: { ...model, contextWindow: 16_384 } },
+      completeSimple,
+    );
+
+    expect(completeSimple).toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.messages[0].role).toBe('compactionSummary');
+  });
+
   test.each([6_000, 8_000])(
     'keeps the independent input cap for %i input tokens',
     async (tokens) => {
@@ -136,21 +171,27 @@ describe('Pi context admission and compaction', () => {
   });
 
   test('allows Pi to compact removable history images instead of treating them as fixed input', async () => {
-    const current = conversation(10);
-    current.historyTurns[0].messages[0] = {
-      role: 'user',
-      content: Array.from({ length: 9 }, () => ({
-        type: 'image' as const,
-        mimeType: 'image/png',
-        data: 'AAAA',
-      })),
-      timestamp: 0,
-    };
+    const current = conversation();
+    current.historyTurns = Array.from({ length: 9 }, (_, index) => ({
+      turnId: `image-${index}`,
+      messages: [
+        {
+          role: 'user' as const,
+          content: [{ type: 'image' as const, mimeType: 'image/png', data: 'AAAA' }],
+          timestamp: 0,
+        },
+        response(),
+      ],
+    }));
     current.history = current.historyTurns.flatMap((turn) => turn.messages);
     const completeSimple = jest.fn(async () => response());
 
     const result = await plan(
-      { conversation: current, model: { ...model, contextWindow: 24_000 } },
+      {
+        conversation: current,
+        model: { ...model, contextWindow: 24_000 },
+        options: { settings: { enabled: true, reserveTokens: 4_800, keepRecentTokens: 3_000 } },
+      },
       completeSimple,
     );
 
@@ -174,7 +215,6 @@ describe('Pi context admission and compaction', () => {
 
       expect(completeSimple).toHaveBeenCalled();
       expect(result).toMatchObject({ ok: true, messages: current.history, checkpoint: null });
-      expect(current.history[0]).toMatchObject({ content: 'x'.repeat(115_000 * 4) });
     },
   );
 

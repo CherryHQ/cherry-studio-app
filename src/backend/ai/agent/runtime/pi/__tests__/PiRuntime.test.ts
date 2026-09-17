@@ -36,7 +36,6 @@ import {
   estimatePiLoopContextHeadroomTokens,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
   PI_IMAGE_CONTEXT_TOKEN_RESERVE,
-  resolvePiOutputReserveTokens,
 } from '../contextCompaction';
 import {
   PI_DOCUMENT_ATTACHMENT_ENVELOPE_PREFIX,
@@ -1293,14 +1292,6 @@ describe('PiRuntime mapping', () => {
       await session.close();
     },
   );
-
-  test('keeps output headroom bounded without reserving a model-wide output capability', () => {
-    const model = { contextWindow: 500_000, maxTokens: 500_000 };
-    expect(resolvePiOutputReserveTokens(model)).toBe(16_384);
-    expect(resolvePiOutputReserveTokens(model, 512)).toBe(512);
-    expect(resolvePiOutputReserveTokens({ ...model, maxTokens: 4_096 })).toBe(4_096);
-    expect(resolvePiOutputReserveTokens({ contextWindow: 8_000, maxTokens: 8_000 })).toBe(1_600);
-  });
 
   test('reserves output once while respecting independent input and total context limits', () => {
     const context = { messages: [], systemPrompt: 'x'.repeat(400), tools: [] };

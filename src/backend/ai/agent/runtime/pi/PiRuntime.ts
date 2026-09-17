@@ -55,7 +55,6 @@ import {
   PI_ESTIMATED_CHARACTERS_PER_TOKEN,
   PI_MIN_OUTPUT_RESERVE_TOKENS,
   planPiContext,
-  resolvePiOutputReserveTokens,
   type PiContextCompactionOptions,
 } from './contextCompaction';
 import { toPiConversation } from './modelMessages';
@@ -732,10 +731,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return stream;
       };
       const streamFn = tracePiStream(providerStream, request.trace);
-      const outputReserveTokens = resolvePiOutputReserveTokens(
-        resolution.model,
-        request.options.maxOutputTokens,
-      );
       const models: Pick<Models, 'completeSimple'> = {
         completeSimple: async (model, context, options) => {
           if (
@@ -773,7 +768,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
           model: resolution.model,
           models,
           options: this.contextOptions,
-          outputReserveTokens,
           redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions),
           signal: turn.abortController.signal,
           thinkingLevel,

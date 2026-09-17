@@ -23,28 +23,17 @@ const PI_ESTIMATED_IMAGE_TOKENS = 1_200;
 export const PI_ESTIMATED_CHARACTERS_PER_TOKEN = 4;
 export const PI_IMAGE_CONTEXT_TOKEN_RESERVE = 4_096;
 export const PI_CONTEXT_SAFETY_MARGIN_TOKENS = 1_024;
-// Admission only requires room for a response; Pi fits the actual output cap to the input.
-export const PI_MIN_OUTPUT_RESERVE_TOKENS = 1;
+// Pi's per-request output clamp keeps 4,096 tokens clear of the window before sizing output.
+const PI_OUTPUT_CLAMP_SAFETY_TOKENS = 4_096;
+const PI_MIN_ANSWER_TOKENS = 1_024;
+// Admission needs room for a usable answer once Pi has fitted the output cap to the input.
+export const PI_MIN_OUTPUT_RESERVE_TOKENS =
+  PI_OUTPUT_CLAMP_SAFETY_TOKENS - PI_CONTEXT_SAFETY_MARGIN_TOKENS + PI_MIN_ANSWER_TOKENS;
 export const PI_COMPACTION_SETTINGS: CompactionSettings = {
   enabled: true,
   reserveTokens: 16_384,
   keepRecentTokens: 20_000,
 };
-
-/** Planning headroom is bounded; Pi fits the actual output cap to each request's context. */
-export function resolvePiOutputReserveTokens(
-  model: Pick<PiModel<PiApi>, 'contextWindow' | 'maxTokens'>,
-  maxTokens = model.maxTokens,
-): number {
-  return Math.max(
-    0,
-    Math.min(
-      maxTokens,
-      model.maxTokens,
-      resolveCompactionSettings(model.contextWindow).reserveTokens,
-    ),
-  );
-}
 
 export const CHERRY_COMPACTION_INSTRUCTIONS = `Summarize a general mobile assistant conversation, not a coding workspace.
 Preserve user goals, preferences, decisions, unresolved questions, and conclusions needed to continue.
@@ -219,7 +208,6 @@ export async function planPiContext(input: {
   model: PiModel<PiApi>;
   models: Pick<Models, 'completeSimple'>;
   options?: PiContextCompactionOptions;
-  outputReserveTokens: number;
   redactSummary: (summary: string) => string;
   signal: AbortSignal;
   thinkingLevel: Parameters<typeof compact>[5];
@@ -274,19 +262,14 @@ export async function planPiContext(input: {
     message: 'The conversation exceeds the model context window.',
     retryable: false,
   };
-  // Output headroom and compaction headroom serve the same purpose. Reserve the
-  // larger target once. Output that fits outside an independent input cap must
-  // not reduce that input cap a second time.
   const compactionWindow = Math.min(
     input.model.contextWindow,
     input.maxInputTokens ?? input.model.contextWindow,
   );
+  // A small window must still reach compaction before the hard limit rejects the request.
   const triggerSettings = {
     ...settings,
-    reserveTokens: Math.max(
-      settings.reserveTokens,
-      input.outputReserveTokens - (input.model.contextWindow - compactionWindow),
-    ),
+    reserveTokens: Math.max(settings.reserveTokens, PI_MIN_OUTPUT_RESERVE_TOKENS),
   };
   if (
     !shouldCompact(totalTokens - PI_MIN_OUTPUT_RESERVE_TOKENS, compactionWindow, triggerSettings)

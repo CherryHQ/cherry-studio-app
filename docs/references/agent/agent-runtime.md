@@ -119,13 +119,14 @@ credentials, endpoints, and headers remain private to the Runtime adapter. Pi pr
 model resolution read the same mobile model/provider services and enforce the same endpoint rules.
 
 Preflight reports the independent input limit, bounded by the total context window, without
-subtracting the model's maximum output capability. Pi context planning targets bounded output
-headroom (at most 16,384 tokens and 20% of the context window, capped by the requested/model output
-limit). This target shares the compaction reserve instead of being added to it. It is a soft trigger,
-not a minimum response length or a sending limit: the SDK dynamically fits the actual output cap
-to each request's remaining context. Hard admission retains the safety margin and room for at least
-one output token while respecting the independent input cap. Output space outside an independent
-input cap does not reduce that input cap again.
+subtracting the model's maximum output capability. The SDK dynamically fits the actual output cap
+to each request's remaining context, keeping 4,096 tokens clear of the window before sizing output.
+Hard admission therefore retains the safety margin plus an output reserve that covers that clamp
+and a usable answer of at least 1,024 tokens; an admitted request is never reduced to a one-token
+response. The compaction reserve (at most 16,384 tokens and 20% of the window) is a soft trigger,
+not a sending limit, and never drops below the admission reserve, so a small window reaches
+compaction before the hard limit rejects it. Output space outside an independent input cap does not
+reduce that input cap again.
 
 Capabilities describe what the engine contract can represent. In particular, `tools: true` means
 Pi can run a tool loop; it does not mean any effective tool will enter the turn. The Host derives
