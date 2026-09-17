@@ -186,6 +186,30 @@ test('none preserves the source format and bytes without native image work', asy
   expect(mockResources).toHaveLength(0);
 });
 
+test.each(['image/svg+xml', 'IMAGE/SVG+XML', 'image/svg+xml;charset=utf-8'])(
+  'SVG delivery preserves the original file with a Cherry watermark requested (%s)',
+  async (mediaType) => {
+    const uri = 'file:///managed/drawing.svg';
+    const original = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>');
+    mockFiles.set(uri, original);
+    const entry = FileEntrySchema.parse({
+      id: '00000000-0000-7000-8000-000000000001',
+      filename: 'drawing.svg',
+      mediaType,
+      provenance: 'imported',
+      createdAt: 1,
+      updatedAt: 1,
+      size: original.length,
+    });
+
+    const exported = await prepareFileExport({ entry, uri }, watermark);
+    expect(exported).toMatchObject({ uri, filename: entry.filename, mediaType });
+    exported.release();
+    expect(mockFiles.get(uri)).toBe(original);
+    expect(mockResources).toHaveLength(0);
+  },
+);
+
 test('non-image delivery preserves the original format and filename', async () => {
   const uri = 'file:///managed/report.pdf';
   const entry = FileEntrySchema.parse({

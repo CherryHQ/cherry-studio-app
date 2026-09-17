@@ -21,6 +21,8 @@ owns Cherry footer geometry and time formatting. Markdown renders only the brand
 `prepareImageExport` appends a footer to a disposable PNG without resizing or overwriting the source.
 `none` returns the original image without decoding, re-encoding or changing its format.
 `prepareFileExport` supplies matching filename and media type; non-image source files pass through.
+SVG files also pass through with their original bytes, filename and media type for sharing and system
+opening, without a footer, because the image renderer only decodes bitmaps.
 The in-app preview and original image used for editing retain their bytes.
 
 Watermark selection belongs to the current export request, not file metadata. It is not persisted
