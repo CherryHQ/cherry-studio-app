@@ -24,6 +24,7 @@ import {
   scheduleDocumentExportFinish,
   type DocumentExportOption,
 } from '@/frontend/appShell/documentExport';
+import { useExportSignature } from '@/frontend/appShell/imageExport';
 import { shareFile } from '@/frontend/components/FileEntryPreview';
 import { usePreference } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -35,11 +36,11 @@ import type {
   ExportFormat,
   ExportPresentation,
 } from '@/shared/contracts/documentExport';
+import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import { useDocumentExportHtmlCapture } from './components/DocumentExportHtmlSurface';
 import { DocumentExportTextPreview } from './components/DocumentExportTextPreview';
 import { useDocumentExportPreview } from './hooks/useDocumentExportPreview';
-import { EXPORT_BRAND } from './utils/exportBrand';
 
 export function DocumentExportScreen() {
   const params = useLocalSearchParams<{ requestId?: string | string[] }>();
@@ -119,6 +120,7 @@ function DocumentExportBody({
   const { format, isOptionChecked, revision } = selection;
   const session = !isOptionChecked && option ? option.uncheckedSession : checkedSession;
   const [fontStep] = usePreference('ui.font_size_step');
+  const exportSignature = useExportSignature();
   const [
     background,
     foreground,
@@ -153,15 +155,11 @@ function DocumentExportBody({
       typography: { base, sm, lg, xl },
     };
   });
-  const [timestamp] = useState(() => {
-    const date = new Date();
-    const pad = (value: number) => String(value).padStart(2, '0');
-    return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  });
+  const [timestamp] = useState(() => formatExportTimestamp(new Date()));
   const presentation = useMemo(
     () => ({
       ...layout,
-      signature: { ...EXPORT_BRAND, foreground, timestamp },
+      signature: { ...exportSignature, timestamp },
       colors: {
         background,
         foreground,
@@ -179,6 +177,7 @@ function DocumentExportBody({
     }),
     [
       layout,
+      exportSignature,
       background,
       foreground,
       muted,
@@ -272,7 +271,7 @@ function DocumentExportBody({
         return;
       }
       controller.signal.throwIfAborted();
-      await shareFile(file);
+      await shareFile(file, { ...exportSignature, timestamp });
       sheetClosed = true;
     } catch {
       if (!controller.signal.aborted)

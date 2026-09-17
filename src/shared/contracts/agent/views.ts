@@ -1,3 +1,4 @@
+import { ImageGenerationModeSchema, imageParamsSchema } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
 /**
  * Agent Protocol values: views of Agents, Sessions, turns, messages, approvals,
@@ -80,6 +81,12 @@ const AgentInferenceToolSnapshotSchema = z.strictObject({
   approval: z.enum(['auto', 'ask', 'deny']),
 });
 
+export const AgentImageGenerationSchema = z.strictObject({
+  mode: ImageGenerationModeSchema,
+  paramValues: imageParamsSchema,
+});
+export type AgentImageGeneration = z.infer<typeof AgentImageGenerationSchema>;
+
 /** Immutable, credential-free facts used to construct one Agent Runtime request. */
 export const AgentInferenceSnapshotV1Schema = z.strictObject({
   version: z.literal(1),
@@ -90,6 +97,7 @@ export const AgentInferenceSnapshotV1Schema = z.strictObject({
     apiModelId: z.string().optional(),
     name: z.string(),
   }),
+  imageGeneration: AgentImageGenerationSchema.optional(),
   reasoningEffort: z.string().min(1).optional(),
   parameters: z.strictObject({
     temperature: z.number().finite().optional(),

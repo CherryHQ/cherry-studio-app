@@ -46,6 +46,7 @@ export type ExportImageFrame = {
   label: string;
 };
 export type ExportSignature = {
+  background: string;
   foreground: string;
   logoDataUrl: string;
   brandName: string;

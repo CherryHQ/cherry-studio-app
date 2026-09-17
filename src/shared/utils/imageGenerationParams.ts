@@ -200,6 +200,27 @@ export function isImageParamDraftValid(
   draft: ImageParamDraft,
   resolvedMode: ResolvedImageGenerationMode | undefined,
 ): boolean {
+  const fields = getImageParamFields(resolvedMode);
+  const supports = new Map(fields.map((field) => [field.key as string, field.spec]));
+  for (const [key, value] of Object.entries(draft)) {
+    const spec = supports.get(key);
+    if (!spec) {
+      if (
+        !fields.some(
+          (field) =>
+            field.spec.type === 'size' &&
+            (key === `${field.key}_width` || key === `${field.key}_height`),
+        )
+      )
+        return false;
+      continue;
+    }
+    if (value === undefined || value === null || value === '') continue;
+    const hasCustomSize = fields.some(
+      (field) => field.spec.type === 'size' && (field.spec.pairedEnumKey ?? 'size') === key,
+    );
+    if (!isSupportedValue(value, spec, hasCustomSize)) return false;
+  }
   for (const field of getImageParamFields(resolvedMode)) {
     if (field.spec.type !== 'size') {
       continue;
@@ -215,7 +236,49 @@ export function isImageParamDraftValid(
       return false;
     }
   }
+  if (resolvedMode) {
+    const parsed = buildParamsSchema(
+      { modes: { [resolvedMode.mode]: resolvedMode.definition } },
+      resolvedMode.mode,
+    ).parse(draft);
+    for (const [key, value] of Object.entries(draft)) {
+      if (value !== undefined && value !== null && value !== '' && parsed[key] === undefined)
+        return false;
+    }
+  }
   return true;
+}
+
+/** Admit only canonical request keys, then validate and normalize without losing invalid values. */
+export function prepareImageParamRequest(
+  values: ParamValues,
+  resolvedMode: ResolvedImageGenerationMode | undefined,
+): ParamValues | undefined {
+  const fields = getImageParamFields(resolvedMode);
+  const requestKeys = new Set(
+    fields.filter((field) => field.spec.type !== 'size').map((field) => field.key as string),
+  );
+  if (Object.keys(values).some((key) => !requestKeys.has(key))) return undefined;
+  const draft: ImageParamDraft = { ...values };
+  for (const field of fields) {
+    if (field.spec.type !== 'size') continue;
+    const pairedKey = field.spec.pairedEnumKey ?? 'size';
+    const pairedField = fields.find((item) => item.key === pairedKey);
+    const value = draft[pairedKey];
+    if (pairedField?.spec.type === 'enum' && pairedField.spec.options.includes(String(value)))
+      continue;
+    if (typeof value !== 'string' || !/^\d+x\d+$/.test(value)) continue;
+    const [width, height] = value.split('x').map(Number);
+    draft[pairedKey] = 'custom';
+    draft[`${field.key}_width`] = width;
+    draft[`${field.key}_height`] = height;
+  }
+  if (!isImageParamDraftValid(draft, resolvedMode)) return undefined;
+  return prepareImageParamValues(
+    draft,
+    resolvedMode ? { modes: { [resolvedMode.mode]: resolvedMode.definition } } : undefined,
+    resolvedMode,
+  );
 }
 
 function copyCustomSizeDraft(

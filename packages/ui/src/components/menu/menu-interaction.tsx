@@ -5,6 +5,8 @@ export type MenuInteractionValue = {
   isOpen: boolean;
   close: (afterClose?: () => void) => void;
   registerItem?: (item: View) => () => void;
+  /** Android over-keyboard windows need press recognition in native view coordinates. */
+  shouldUseNativePresses?: boolean;
 };
 
 export const MenuInteraction = createContext<MenuInteractionValue | null>(null);

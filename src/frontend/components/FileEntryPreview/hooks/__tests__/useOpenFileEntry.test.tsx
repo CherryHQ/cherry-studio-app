@@ -8,6 +8,12 @@ import { useOpenFileEntry } from '../useOpenFileEntry';
 const mockPush = jest.fn();
 const mockOpen = jest.fn();
 const mockToast = jest.fn();
+const mockPrepareFileExport = jest.fn();
+
+jest.mock('@/frontend/appShell/imageExport', () => ({
+  prepareFileExport: (...args: unknown[]) => mockPrepareFileExport(...args),
+  useExportSignature: () => ({ brandName: 'Cherry Studio' }),
+}));
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -43,6 +49,12 @@ function Probe() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockOpen.mockResolvedValue(undefined);
+  mockPrepareFileExport.mockImplementation(async ({ entry, uri }) => ({
+    uri,
+    filename: entry.filename,
+    mediaType: entry.mediaType,
+    release() {},
+  }));
   act(() => {
     renderer = create(<Probe />);
   });
@@ -79,4 +91,28 @@ it('allows an explicit system open for an in-app kind and reports failures once'
   expect(mockPush).not.toHaveBeenCalled();
   expect(mockToast).toHaveBeenCalledTimes(1);
   expect(mockToast).toHaveBeenCalledWith({ label: 'filePreview.openFailed', variant: 'danger' });
+});
+
+it('opens the branded image copy externally while retaining the original for in-app viewing', async () => {
+  const imageFile = {
+    entry: FileEntrySchema.parse({ ...entry, filename: 'drawing.jpg', mediaType: 'image/jpeg' }),
+    uri: 'file:///managed/drawing.jpg',
+  };
+  mockPrepareFileExport.mockResolvedValueOnce({
+    uri: 'file:///cache/drawing.png',
+    filename: 'drawing.png',
+    mediaType: 'image/png',
+    release() {},
+  });
+  await act(async () => actions.openFileEntryWithSystem(imageFile));
+  expect(mockOpen).toHaveBeenCalledWith(
+    expect.objectContaining({
+      file: expect.objectContaining({
+        uri: 'file:///cache/drawing.png',
+        displayName: 'drawing.png',
+        extensionLabel: 'PNG',
+      }),
+    }),
+  );
+  expect(imageFile.uri).toBe('file:///managed/drawing.jpg');
 });

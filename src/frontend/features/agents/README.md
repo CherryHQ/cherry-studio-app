@@ -16,7 +16,7 @@ surfaces.
   across the mode change, so releasing the long press cannot open the editor or toggle it again.
   The shared selection toolbar selects all current search results or confirms batch deletion;
   back and Done exit selection. Changing the search clears selection. Agents have no detail screen.
-- The editor's model row opens the shared model-picker bottom sheet. New agents seed the global
+- The editor's model row opens the shared model-picker bottom sheet for text and image models. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
   its two-mode tool-approval preference, and Agent-specific MCP extensions. Inference parameters
@@ -28,7 +28,8 @@ surfaces.
   replaces the stored name. New agents still require an explicit Save to create the record.
 - Calendar, reminders, health, location, and file capabilities are injected uniformly by the Host
   when their system gates pass. The frontend keeps web search as a Session-scoped composer
-  selection; image generation is selected for one submission. Neither is saved on the Agent.
+  selection. Selecting an image model saves that model on the Agent; image parameters belong to
+  each submission. Image-model conversations remain ordinary Agent Sessions in the chat drawer.
 - New agents, including the initial Cherry Agent, default to automatic tool approval. Automatic
   approval promotes only eligible interactive `ask` tools for future turns; it cannot enable a
   missing/disabled tool or bypass system permission and managed-resource checks. Existing agents

@@ -86,8 +86,8 @@ resolved semantic colors, including user bubbles, code surfaces and secondary te
 page freezes width, typography and export time at opening. Theme changes regenerate the preview;
 the active presentation is held while saving or delivering so the current file cannot be replaced. Programmatic input presentation is validated and copied by the HTML renderer.
 
-HTML and image presentation may supply a shared `signature` with a resolved text color, embedded PNG
-logo, brand name and timestamp. Images may also supply an `imageFrame` with a resolved background
+HTML and image presentation may supply a shared `signature` with resolved background/text colors,
+an embedded PNG logo, brand name and timestamp. Images may also supply an `imageFrame` with a resolved background
 color and localized label. These are presentation data, independent of the source document. The
 renderer copies and validates them, escapes text, and includes the signature after the content
 inside `main`. The frontend supplies the signature for both HTML and images, including image-to-HTML
@@ -260,10 +260,13 @@ fullscreen modal using the application theme and its own close action.
 Two or more selected messages default to HTML and offer only HTML and Markdown in the format menu.
 A single selected message defaults to PNG and offers all three formats. The request preserves this
 format policy when thinking content is toggled. Images include straight theme-aware margins and
-conversation content. Both HTML and images end with a compact signature: the Cherry Studio name on
-the left, with the Cherry logo, a fine vertical divider and local export time on the right. The timestamp uses
+conversation content. Both HTML and images end with the common white export signature: the Cherry
+logo and Cherry Studio name on the left, with local export time aligned to the right. Painting and file image delivery share its content and geometry through
+`appShell/imageExport`. Constant color tokens keep the footer white with black text in both themes.
+The timestamp uses
 `YYYY.MM.DD HH:mm` and is frozen at opening across both document snapshots and format changes.
-The baseline signature area is 44 logical points and can grow for larger or wrapped text. The displayed
+The signature has a 56-point minimum height at its 360-point reference width, scales with image
+width, and grows for wrapped text. The displayed
 preview uses the generated image, including the selected message and branding, and scrolls
 vertically. Images exceeding the single-file bounds fall back to a document preview.
 
