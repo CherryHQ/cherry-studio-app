@@ -3,8 +3,10 @@ import * as Sharing from 'expo-sharing';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useExportSignature } from '@/frontend/appShell/imageExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import { shareFile } from '../utils/shareFile';
 
@@ -13,6 +15,7 @@ const logger = loggerService.withContext('FileSharing');
 export function useShareFile(file: ResolvedFile | null) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const signature = useExportSignature();
   const sharing = useRef(false);
   const [isSharing, setIsSharing] = useState(false);
 
@@ -22,7 +25,7 @@ export function useShareFile(file: ResolvedFile | null) {
     setIsSharing(true);
     try {
       if (await Sharing.isAvailableAsync()) {
-        await shareFile(file);
+        await shareFile(file, { ...signature, timestamp: formatExportTimestamp(new Date()) });
       } else {
         toast.show({ label: t('fileViewer.shareUnavailable'), variant: 'danger' });
       }

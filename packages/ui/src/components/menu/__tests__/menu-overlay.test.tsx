@@ -9,8 +9,8 @@ import { KeyboardMenuOverlay, MenuOverlay } from '../menu-overlay';
 
 jest.mock('../menu-focus', () => ({ focusMenuTarget: jest.fn() }));
 jest.mock('react-native-gesture-handler', () => {
-  const { View } = jest.requireActual('react-native');
-  return { GestureHandlerRootView: View };
+  const { Pressable, View } = jest.requireActual('react-native');
+  return { GestureHandlerRootView: View, Pressable };
 });
 jest.mock('react-native', () => {
   const React = jest.requireActual('react');
@@ -113,7 +113,7 @@ describe('menu overlay native boundary', () => {
   });
 });
 
-describe('keyboard-preserving menu overlay', () => {
+describe.each(['ios', 'android'] as const)('keyboard-preserving menu overlay (%s)', (platform) => {
   let renderer: ReactTestRenderer;
   let frames: Map<number, FrameRequestCallback>;
   let nextFrame: number;
@@ -142,6 +142,7 @@ describe('keyboard-preserving menu overlay', () => {
   }
 
   beforeEach(() => {
+    jest.replaceProperty(Platform, 'OS', platform);
     frames = new Map();
     nextFrame = 0;
     jest.spyOn(global, 'requestAnimationFrame').mockImplementation((callback) => {

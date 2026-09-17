@@ -17,12 +17,13 @@ import { v7 as uuidv7 } from 'uuid';
 import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { ToolInputPreviewProvider } from '@/frontend/components/Message';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
+import type { AgentMessageView, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
 import {
   type AgentChatDraftHandoff,
   createAgentChatDraftHandoffState,
 } from './agentChatDraftHandoff';
+import { latestAgentImageResult } from './agentImageResult';
 import { createPendingChatMessages } from './agentMessageProjection';
 import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessionChatClient';
 
@@ -185,6 +186,27 @@ export function useAgentChatSession(sessionId: string | undefined): AgentSession
   return useAgentSessionSelection(client, sessionId, selectSessionState);
 }
 
+/** Retain the result as live messages settle into (or leave) the visible history window. */
+export function useAgentChatImageResult(
+  sessionId: string | undefined,
+  persistedResult: AgentMessageView | undefined,
+) {
+  const { client } = useAgentChatContext();
+  const liveResult = useAgentSessionSelection(client, sessionId, selectImageResult);
+  const [remembered, setRemembered] = useState<{
+    sessionId: string | undefined;
+    message: AgentMessageView | undefined;
+  }>({ sessionId, message: undefined });
+  const candidates = [persistedResult, liveResult, remembered.message].filter(
+    (message): message is AgentMessageView => Boolean(message && message.sessionId === sessionId),
+  );
+  const latest = latestAgentImageResult(candidates);
+  if (remembered.sessionId !== sessionId || remembered.message !== latest) {
+    setRemembered({ sessionId, message: latest });
+  }
+  return latest;
+}
+
 /** Keeps the Draft composer mounted while its accepted first message becomes a Session route. */
 export function useAgentChatDraftHandoff(
   sessionId: string | undefined,
@@ -328,6 +350,9 @@ function useAgentSessionSelection<TValue>(
 
 function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
+}
+function selectImageResult(state: AgentSessionChatState) {
+  return latestAgentImageResult(state.liveMessages);
 }
 function selectSessionState(state: AgentSessionChatState) {
   return state;

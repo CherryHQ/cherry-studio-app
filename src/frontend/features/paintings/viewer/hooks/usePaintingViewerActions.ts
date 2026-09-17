@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useSaveImageToPhotos } from '@/frontend/components/ArtifactPreview';
 import { useResolvedFile, useShareFile } from '@/frontend/components/FileEntryPreview';
-import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { Painting } from '@/shared/data/types/painting';
+import type { ImageParamDraft } from '@/shared/utils/imageGenerationParams';
 
 import { createPaintingOutputAttachmentDraft } from '../../utils/paintingOutputAttachment';
 

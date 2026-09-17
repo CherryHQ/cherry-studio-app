@@ -18,7 +18,9 @@ logging, and the single opening policy shared by the composer, messages, and fil
   `document` to the platform. `openFileEntryWithSystem` is the viewer's explicit escape hatch.
 - `useShareFile`: shares a resolved file with availability checks, busy state, and failure feedback.
 - `shareFile`: copies a resolved file into the share cache and opens the system share sheet for
-  callers such as document export that own availability, cancellation, and feedback.
+  callers such as document export that own availability, cancellation, and feedback. Image sharing
+  and system opening use the shared `appShell/imageExport` signature and PNG descriptor. Completed
+  document images retain their existing signature; non-image file bytes remain unchanged.
 - `PreviewImage`: CherryUI `Image` that degrades to its label with the preview-failed copy, shared by
   the attachment image and painting outputs so neither renders a broken frame.
 

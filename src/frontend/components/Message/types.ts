@@ -1,3 +1,4 @@
+import type { ParamValues } from '@cherrystudio/provider-registry';
 import type { ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
@@ -16,6 +17,8 @@ export type MessageListItem = Readonly<{
     parts?: readonly CherryMessagePart[];
   }>;
   id: string;
+  /** Image request settings captured by this message, independent of the current model. */
+  imageGeneration?: Readonly<{ paramValues: ParamValues }>;
   /** Model identity captured by this message's immutable inference snapshot. */
   model?: Readonly<Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>>;
   role: 'assistant' | 'system' | 'user';

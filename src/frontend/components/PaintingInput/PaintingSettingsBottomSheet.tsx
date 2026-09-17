@@ -14,15 +14,15 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 import type {
   ImageParamDraft,
   ImageParamField,
   ResolvedImageGenerationMode,
-} from '@/frontend/data/paintings/imageGenerationParams';
-import { getImageParamFields } from '@/frontend/data/paintings/imageGenerationParams';
-import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
+} from '@/shared/utils/imageGenerationParams';
+import { getImageParamFields } from '@/shared/utils/imageGenerationParams';
 
-import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
+import { imageParamLabel, imageParamOptionLabel } from './imageGenerationLabels';
 
 const FIELD_GAP = 8;
 // 固定 5 列等宽网格，超出自动换行；cell 恒定方形保证选中态切换时兄弟选项不挪位。

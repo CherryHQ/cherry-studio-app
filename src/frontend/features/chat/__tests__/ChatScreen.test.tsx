@@ -94,6 +94,7 @@ const mockChatControls = {
 };
 
 jest.mock('../runtime', () => ({
+  latestAgentImageResult: jest.requireActual('../runtime/agentImageResult').latestAgentImageResult,
   useAgentChatControls: (input: { agentId?: string; composerKey: number; sessionId?: string }) => {
     chatControlsInput = input;
     return mockChatControls;

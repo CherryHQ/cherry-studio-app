@@ -41,11 +41,13 @@ export function createAgentInferenceModelResolver(
 export function createAgentInferenceSnapshot(input: {
   model: AgentInferenceModelSnapshot;
   options: RuntimeOptions;
+  imageGeneration?: AgentInferenceSnapshotV1['imageGeneration'];
   tools: readonly RuntimeTool[];
 }): AgentInferenceSnapshotV1 {
   return AgentInferenceSnapshotV1Schema.parse({
     version: 1,
     model: input.model,
+    ...(input.imageGeneration ? { imageGeneration: input.imageGeneration } : {}),
     ...(input.options.reasoningEffort !== undefined
       ? { reasoningEffort: input.options.reasoningEffort }
       : {}),
