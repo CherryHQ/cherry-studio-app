@@ -156,6 +156,26 @@ const aliasRoots = (roots) =>
 // @src aliases, re-exports, require(), and dynamic imports cannot bypass them.
 const restrictedImportRules = (patterns, zones = []) => ({
   '@typescript-eslint/no-restricted-imports': ['error', { patterns }],
+  // Package restrictions have no app-local target for no-restricted-paths.
+  // Apply their same regex to literal import()/require() loads as well.
+  'no-restricted-syntax': [
+    patterns.some((pattern) => pattern.regex) ? 'error' : 'off',
+    ...patterns
+      .filter((pattern) => pattern.regex)
+      .map(({ regex, message }) => {
+        // esquery uses / as its regex delimiter; a Unicode escape keeps package slashes literal.
+        const source = regex.replaceAll('/', '\\u002F');
+        return {
+          selector: [
+            `ImportExpression[source.value=/${source}/]`,
+            `ImportExpression[source.type=TemplateLiteral][source.expressions.length=0][source.quasis.0.value.cooked=/${source}/]`,
+            `CallExpression[callee.name=require][arguments.0.value=/${source}/]`,
+            `CallExpression[callee.name=require][arguments.0.type=TemplateLiteral][arguments.0.expressions.length=0][arguments.0.quasis.0.value.cooked=/${source}/]`,
+          ].join(', '),
+          message,
+        };
+      }),
+  ],
   'import/no-restricted-paths': [
     'error',
     {
@@ -230,17 +250,18 @@ const runtimeContractLayer = {
 // bypass alias globs, so the raw directory name is banned as well.
 const piZoneFiles = ['src/backend/ai/agent/runtime/pi/**/*.{ts,tsx}'];
 
-const piIsolation = {
-  group: [
-    '@earendil-works/*',
-    '@earendil-works/*/**',
-    ...aliasRoots(['backend/ai/agent/runtime/pi']),
-    '**/pi',
-    '**/pi/**',
-  ],
-  message:
-    'Pi is one Runtime implementation. Depend on the AgentRuntime contract; only agent/runtime/pi may name Pi modules or @earendil-works packages.',
-};
+const piIsolationMessage =
+  'Pi is one Runtime implementation. Depend on the AgentRuntime contract; only agent/runtime/pi may name Pi modules or @earendil-works packages.';
+const piIsolation = [
+  {
+    regex: '^@earendil-works/',
+    message: piIsolationMessage,
+  },
+  {
+    group: [...aliasRoots(['backend/ai/agent/runtime/pi']), '**/pi', '**/pi/**'],
+    message: piIsolationMessage,
+  },
+];
 
 // `generation/` is the private implementation of AiService: the AI SDK path
 // for non-conversation work. Only `AiService.ts` may reach into it, so the
@@ -295,22 +316,8 @@ const sharedLayer = layerPattern(
   'Shared modules must not depend on an upper layer.',
 );
 
-const platformIndependentPackages = [
-  'react',
-  'react/*',
-  'react-native',
-  'react-native/*',
-  'react-native-*',
-  'react-native-*/*',
-  'expo',
-  'expo-*',
-  'expo-*/*',
-  '@expo/*',
-  '@expo/*/**',
-];
-
 const sharedPlatformIndependence = {
-  group: platformIndependentPackages,
+  regex: '^(?:react(?:/|$)|react-native(?:[-/]|$)|expo(?:[-/]|$)|@expo/)',
   message:
     'Shared contracts, data, AI rules, and utilities must remain platform- and React-independent.',
 };
@@ -394,11 +401,11 @@ module.exports = defineConfig([
   {
     files: ['src/backend/**/*.{ts,tsx}'],
     ignores: [...piZoneFiles, ...aiSdkGenerationZoneFiles],
-    rules: restrictedImportRules([backendLayer, piIsolation, aiSdkGenerationPrivacy]),
+    rules: restrictedImportRules([backendLayer, ...piIsolation, aiSdkGenerationPrivacy]),
   },
   // The facade and its own implementation are the inside of the generation
   // boundary; the Pi ban still applies to them.
-  restrictedImports(aiSdkGenerationZoneFiles, [backendLayer, piIsolation]),
+  restrictedImports(aiSdkGenerationZoneFiles, [backendLayer, ...piIsolation]),
   // The Agent Runtime contract and its FakeRuntime are process-local but must
   // stay independent of the application protocol, persistence, React, and Expo
   // (Runtime dependency rule and conformance item 11 in
@@ -414,7 +421,7 @@ module.exports = defineConfig([
       backendLayer,
       runtimeContractLayer,
       sharedPlatformIndependence,
-      piIsolation,
+      ...piIsolation,
     ]),
   },
   // The Pi implementation honors the same contract constraints but is the one
@@ -443,15 +450,15 @@ module.exports = defineConfig([
   ),
   restrictedImports(
     ['src/backend/services/**/*.{ts,tsx}'],
-    [backendLayer, backendServicesLayer, piIsolation],
+    [backendLayer, backendServicesLayer, ...piIsolation],
   ),
   restrictedImports(
     ['src/backend/data/**/*.{ts,tsx}'],
-    [backendLayer, backendDataLayer, piIsolation],
+    [backendLayer, backendDataLayer, ...piIsolation],
   ),
   restrictedImports(
     ['src/backend/core/**/*.{ts,tsx}'],
-    [backendLayer, backendCoreLayer, piIsolation],
+    [backendLayer, backendCoreLayer, ...piIsolation],
   ),
   // Registration is assembly: this file names every concrete service class —
   // including the Pi Runtime binding — so it keeps only the backend layer rule.
@@ -484,7 +491,7 @@ module.exports = defineConfig([
           '@cherrystudio/universal must not depend on app code; the dependency direction is app -> package.',
       },
       {
-        group: platformIndependentPackages,
+        ...sharedPlatformIndependence,
         message:
           '@cherrystudio/universal mirrors desktop src/shared and must remain platform- and React-independent.',
       },

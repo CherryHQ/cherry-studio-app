@@ -103,8 +103,10 @@ imports and `@src` aliases follow the same rules. Independent `frontend/features
 cannot import each other, including through root barrels or type-only imports. Shared frontend
 owners cannot import page trees. Frontend cannot import AI SDK or database implementation packages;
 `shared/contracts`, `shared/data`, and `shared/utils` remain React- and platform-independent.
+Package restrictions also cover `import()` and `require()` with string literals or template literals
+without substitutions, using the same package patterns as static imports.
 
 The existing composition exceptions remain explicit: `backend/core/application/serviceRegistry.ts`
 may name service implementations, and `piModelResolver.ts` bridges runtime-neutral requests to
 persisted configuration and native transport. Boundary regression cases live in
-`scripts/__tests__/architectureBoundaries.test.ts`.
+`scripts/__tests__/architectureBoundaries.test.ts` and run in both local Jest and PR CI.
