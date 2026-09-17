@@ -39,6 +39,7 @@ function baseRequest(
 ): RuntimeExecutionRequest {
   return {
     turnId,
+    sessionId: 'session-1',
     instructions: 'You are a helpful assistant.',
     model: { providerId: 'fake-provider', modelId: 'fake-model' },
     history: [],

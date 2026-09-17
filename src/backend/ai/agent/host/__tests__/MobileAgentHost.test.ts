@@ -886,6 +886,7 @@ describe('MobileAgentHost', () => {
 
     // The Runtime saw the current Agent definition and the turn input.
     expect(requests[0]).toMatchObject({
+      sessionId: session.id,
       instructions: expect.stringContaining(
         '<agent_instructions>\nBe brief.\n</agent_instructions>',
       ),

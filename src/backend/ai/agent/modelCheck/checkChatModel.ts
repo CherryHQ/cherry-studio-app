@@ -40,6 +40,8 @@ export async function checkChatModel(
         maxOutputTokens: Math.min(model.maxOutputTokens ?? 4096, requiresReasoning ? 4096 : 64),
         reasoningEffort: canDisableReasoning ? 'none' : 'default',
       },
+      // A health check has no conversation; each probe is its own session.
+      sessionId: uuid(),
       tools: [],
       turnId,
     });
