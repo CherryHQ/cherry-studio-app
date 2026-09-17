@@ -53,6 +53,7 @@ import {
   estimatePiLoopContextHeadroomTokens,
   estimatePiMessagesTokens,
   PI_ESTIMATED_CHARACTERS_PER_TOKEN,
+  PI_MIN_OUTPUT_RESERVE_TOKENS,
   planPiContext,
   resolvePiOutputReserveTokens,
   type PiContextCompactionOptions,
@@ -742,7 +743,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
               contextWindow: model.contextWindow,
               maxInputTokens: resolution.maxInputTokens,
               messages: context.messages,
-              outputReserveTokens: resolvePiOutputReserveTokens(model, options?.maxTokens),
+              outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
               systemPrompt: context.systemPrompt ?? '',
               tools: context.tools ?? [],
             }) < 0
@@ -805,7 +806,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           contextWindow: resolution.model.contextWindow,
           maxInputTokens: resolution.maxInputTokens,
           messages,
-          outputReserveTokens,
+          outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
           systemPrompt: modelContext.systemPrompt,
           tools: modelContext.tools ?? [],
         });
