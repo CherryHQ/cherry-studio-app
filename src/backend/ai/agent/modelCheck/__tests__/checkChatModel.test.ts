@@ -59,6 +59,17 @@ describe('chat model connection probe', () => {
     });
   });
 
+  test('passes a credential override only to the probe request', async () => {
+    const probe = createProbe([
+      { type: 'text.delta', partId: 'answer', text: 'OK' },
+      { type: 'completed' },
+    ]);
+    await checkChatModel(probe.runtime, model, { ...probe, apiKeyOverride: 'probe-key' });
+    await checkChatModel(probe.runtime, model, probe);
+    expect(probe.requests[0].apiKeyOverride).toBe('probe-key');
+    expect(probe.requests[1]).not.toHaveProperty('apiKeyOverride');
+  });
+
   test('reserves output for mandatory reasoning and only disables it when the model allows it', async () => {
     for (const selectableEfforts of [
       ['low', 'high'],

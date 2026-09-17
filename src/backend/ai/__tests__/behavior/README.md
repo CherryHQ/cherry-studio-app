@@ -1,8 +1,9 @@
 # AI Behavior Contracts
 
 This suite protects the model-backed `AiService` behavior used during refactoring. It exercises the
-real `AiService -> buildAgentParams -> ai-core -> Agent` path against the AI SDK V3 mock model
-interface from `ai/test`. It does not emulate provider HTTP endpoints or SSE wire formats.
+real `AiService -> ai-core` paths against the AI SDK V3 mock model interface from `ai/test`.
+Text requests use `buildAgentParams`; image requests resolve their connection and build only image
+parameters. It does not emulate provider HTTP endpoints or SSE wire formats.
 
 ## Ownership
 

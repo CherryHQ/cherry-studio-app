@@ -5,11 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { PluginIcon } from '@/frontend/components/PluginIcon';
+import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 
-import { PluginIcon } from './components/PluginIcon';
 import { PluginPage } from './components/PluginPage';
-import { usePluginCatalog } from './usePluginCatalog';
-import { usePluginConnections } from './usePluginConnections';
 
 export function PluginListScreen() {
   const { t } = useTranslation();

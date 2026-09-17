@@ -30,7 +30,7 @@ welcome content scrolls when larger text or a smaller window needs more room.
   Credentials never travel in route parameters.
 - `model/` combines saved models and a cancellable remote preview, filters to supported chat
   models, and accepts a manual model ID when listing is unavailable. Only the selected model
-  is imported. It calls `models.checkChat`, not the AI SDK health check.
+  is imported. It calls `models.checkChat`; settings batch checks use the same bound conversation Runtime.
   It mounts `InlineSearch` together with the page header, matching provider selection before model
   data arrives; loading and empty results do not add or remove native search. Manual entry removes
   search. Both selection pages place the step hint after search and before their content. The model

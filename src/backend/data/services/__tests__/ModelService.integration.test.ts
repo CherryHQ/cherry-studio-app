@@ -67,14 +67,12 @@ describe('ModelService copied provider metadata', () => {
     installProviderRegistryTestSnapshot();
   });
 
-  it.each(['create', 'batch', 'reconcile-dtos', 'reconcile-workflow'] as const)(
+  it.each(['create', 'batch', 'reconcile-workflow'] as const)(
     'inherits the copied preset through %s and every read surface',
     async (path) => {
       const input = { modelId, providerId };
       if (path === 'create') await models.createFromRegistry(input);
       else if (path === 'batch') await models.createDtos([input]);
-      else if (path === 'reconcile-dtos')
-        await models.reconcileForProvider(providerId, { toAdd: [input], toRemove: [] });
       else await models.reconcileProviderModels(providerId, { toAdd: [input] });
 
       const expected = {

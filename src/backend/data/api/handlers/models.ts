@@ -6,7 +6,6 @@ import {
   DeleteModelsQuerySchema,
   ListModelsQuerySchema,
   type ModelSchemas,
-  ReconcileProviderModelsSchema,
   ResolveProviderModelsQuerySchema,
   UpdateModelSchema,
 } from '@/shared/data/api/schemas/models';
@@ -73,30 +72,6 @@ export function createModelHandlers(
       PATCH: async ({ body, params }) => {
         const { modelId, providerId } = parseUniqueId(params.uniqueModelId);
         return service.update(providerId, modelId, UpdateModelSchema.parse(body));
-      },
-    },
-    '/providers/:providerId/models:reconcile': {
-      POST: async ({ body, params }) => {
-        const parsed = ReconcileProviderModelsSchema.parse(body);
-        for (const model of parsed.toAdd) {
-          if (model.providerId !== params.providerId) {
-            throw DataApiErrorFactory.validation({
-              providerId: [
-                `toAdd item providerId '${model.providerId}' does not match URL providerId '${params.providerId}'`,
-              ],
-            });
-          }
-        }
-        for (const uniqueId of parsed.toRemove) {
-          if (parseUniqueId(uniqueId).providerId !== params.providerId) {
-            throw DataApiErrorFactory.validation({
-              toRemove: [
-                `'${uniqueId}' providerId does not match URL providerId '${params.providerId}'`,
-              ],
-            });
-          }
-        }
-        return service.reconcileForProvider(params.providerId, parsed);
       },
     },
     '/providers/:providerId/models:resolve': {

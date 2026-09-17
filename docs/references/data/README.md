@@ -109,7 +109,8 @@ clients may use their concrete SDK dependencies when those dependencies are part
 
 Painting and Provider Data API handlers call the desktop-aligned `PaintingService` and
 `ProviderService` directly; their workflow modules do not repeat CRUD. Model CRUD and the
-`models:reconcile` endpoint remain Data API concerns. MCP mutations use the same module object through
+`models:resolve` endpoint remain Data API concerns. Provider model reconciliation is exposed only
+through `Backend.models.reconcile()`, which refreshes registry defaults before persistence. MCP mutations use the same module object through
 a private mutation interface so persistence changes still warm or invalidate runtime state.
 
 ## Database

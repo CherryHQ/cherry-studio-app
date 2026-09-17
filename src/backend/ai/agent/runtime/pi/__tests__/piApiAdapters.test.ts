@@ -8,8 +8,12 @@ import type { Context, FetchFunction, Model as PiModel } from '@earendil-works/p
 
 import type { Model } from '@/shared/data/types/model';
 
-import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
-import type { PiLanguageEndpointType } from '../piLanguageBinding';
+import {
+  bindPiStream,
+  resolvePiApiAdapter,
+  type PiLanguageEndpointType,
+  type SupportedPiApi,
+} from '../piApiAdapters';
 
 const mockAnthropicStreamSimple = jest.fn();
 const mockGoogleStreamSimple = jest.fn();

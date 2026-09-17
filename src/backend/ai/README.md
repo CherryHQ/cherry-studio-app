@@ -8,7 +8,7 @@ boundaries around it.
 
 ## Backend Ownership
 
-- `AiService.ts` owns non-conversation generation, model listing, model checks, and image generation.
+- `AiService.ts` owns non-conversation generation, model listing, SDK-only probes, and image generation.
   Callers supply an explicit `uniqueModelId`; it does not resolve Agent state or stream chat turns.
 - `generation/` is the private implementation of `AiService`: AI SDK request assembly, provider
   configuration, model listing, Vertex authentication, execution, and mobile usage capture. Nothing
@@ -49,3 +49,5 @@ Current execution and tool boundaries live in
 [Agent Tools And Controlled Resources](../../../docs/references/agent/agent-tools-and-resources.md).
 The approved target structure and migration status for this directory live in
 [Backend AI Target Architecture](../../../docs/references/ai/target-architecture.md).
+
+Settings and onboarding chat checks use `agent/modelCheck` with the bound AgentRuntime.

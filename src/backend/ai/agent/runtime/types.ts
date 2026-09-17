@@ -239,6 +239,8 @@ export interface MessageRuntimeTimingSink {
 }
 
 export type RuntimeExecutionRequest = {
+  /** Probe-only credential override. Never persist it or include it in traces or output events. */
+  apiKeyOverride?: string;
   turnId: string;
   /**
    * Host-owned conversation identity. Providers that key requests on the conversation

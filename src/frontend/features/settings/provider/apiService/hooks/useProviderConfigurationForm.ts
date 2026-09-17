@@ -5,6 +5,7 @@ import { Keyboard } from 'react-native';
 
 import { useQuery } from '@/frontend/data';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import {
   createEmptyProviderFormValues,
@@ -21,7 +22,6 @@ import {
 } from '../utils/providerApiServiceApiKeys';
 import { getEffectiveAuthConfig, shouldShowApiKeys } from '../utils/providerApiServiceAuth';
 import {
-  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   findInvalidCustomProviderEndpointUrl,
   hasConfiguredCustomProviderTextEndpoint,
   isFullyCustomProvider,
@@ -126,10 +126,7 @@ export function useProviderConfigurationForm(providerId: string) {
           }),
         };
         savedEndpointUrls = Object.fromEntries(
-          CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.map((type) => [
-            type,
-            state.endpointUrls[type]?.trim() ?? '',
-          ]),
+          CHAT_ENDPOINT_TYPES.map((type) => [type, state.endpointUrls[type]?.trim() ?? '']),
         );
       } else if (baseUrlEndpoint) {
         updates = { ...updates, ...buildProviderPrimaryBaseUrlUpdates({ baseUrl, provider }) };
@@ -155,7 +152,7 @@ export function useProviderConfigurationForm(providerId: string) {
 
     const models = modelsQuery.data ?? [];
     const removedEndpoints = isCustomProvider
-      ? CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.filter(
+      ? CHAT_ENDPOINT_TYPES.filter(
           (type) =>
             provider.endpointConfigs?.[type]?.baseUrl?.trim() &&
             !updates.endpointConfigs?.[type]?.baseUrl?.trim(),
