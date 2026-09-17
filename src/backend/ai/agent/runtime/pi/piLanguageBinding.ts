@@ -1,3 +1,4 @@
+import { routeToEndpoint } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/provider-registry';
 
 import {
@@ -94,7 +95,7 @@ export function resolvePiLanguageBinding(
     );
   }
 
-  if (configuredBaseUrl.endsWith('#')) {
+  if (routeToEndpoint(configuredBaseUrl).endpoint) {
     return unsupported(
       'custom-endpoint-path',
       'Pi Runtime does not support a separate custom endpoint path.',

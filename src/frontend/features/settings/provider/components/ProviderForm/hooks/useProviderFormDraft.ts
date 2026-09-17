@@ -1,8 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import type { EndpointType } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
-import { normalizeCustomProviderDefaultEndpoint } from '../../../apiService/utils/providerApiServiceEndpointRules';
+import {
+  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
+  hasConfiguredCustomProviderTextEndpoint,
+  normalizeCustomProviderDefaultEndpoint,
+} from '../../../apiService/utils/providerApiServiceEndpointRules';
 import type { ProviderForm, ProviderFormActions } from '../context';
 import { isProviderFormDirty, type ProviderFormValues } from '../utils/providerFormValues';
 
@@ -24,6 +29,7 @@ export function useProviderFormDraft({
   initiallyDirty = false,
   isSubmitting,
   normalizeCustomEndpoints = false,
+  provider,
   sourceKey,
 }: {
   createInitialValues: () => ProviderFormValues;
@@ -32,6 +38,7 @@ export function useProviderFormDraft({
   initiallyDirty?: boolean;
   isSubmitting: boolean;
   normalizeCustomEndpoints?: boolean;
+  provider?: Provider;
   sourceKey: string;
 }): ProviderForm {
   const [seed, setSeed] = useState(() => ({
@@ -89,9 +96,10 @@ export function useProviderFormDraft({
         const endpointUrls = { ...current.endpointUrls, [endpoint]: value };
         return {
           ...current,
-          defaultChatEndpoint: normalizeCustomEndpoints
-            ? normalizeCustomProviderDefaultEndpoint(endpointUrls, current.defaultChatEndpoint)
-            : current.defaultChatEndpoint,
+          defaultChatEndpoint:
+            normalizeCustomEndpoints && hasConfiguredCustomProviderTextEndpoint(endpointUrls)
+              ? normalizeCustomProviderDefaultEndpoint(endpointUrls, current.defaultChatEndpoint)
+              : current.defaultChatEndpoint,
           endpointUrls,
         };
       });
@@ -105,22 +113,43 @@ export function useProviderFormDraft({
         : { ...current, defaultChatEndpoint },
     );
   }, []);
+  const replaceTextEndpoint = useCallback((endpoint: EndpointType) => {
+    setHasEditedEndpointUrls(true);
+    setValues((current) => {
+      if (current.defaultChatEndpoint === endpoint) return current;
+      const baseUrl = current.endpointUrls[current.defaultChatEndpoint] ?? '';
+      const endpointUrls = { ...current.endpointUrls };
+      for (const type of CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES) delete endpointUrls[type];
+      endpointUrls[endpoint] = baseUrl;
+      return { ...current, defaultChatEndpoint: endpoint, endpointUrls };
+    });
+  }, []);
   const actions = useMemo<ProviderFormActions>(
     () => ({
       reset,
+      replaceTextEndpoint,
       setApiKey,
       setAvatarUri,
       setDefaultChatEndpoint,
       setEndpointUrl,
       setName,
     }),
-    [reset, setApiKey, setAvatarUri, setDefaultChatEndpoint, setEndpointUrl, setName],
+    [
+      reset,
+      replaceTextEndpoint,
+      setApiKey,
+      setAvatarUri,
+      setDefaultChatEndpoint,
+      setEndpointUrl,
+      setName,
+    ],
   );
 
   return useMemo(
     () => ({
       actions,
       meta: {
+        provider,
         baseUrlEndpoint: endpointTypes[0] ?? null,
         canSubmit: values.name.trim().length > 0 && !isSubmitting,
         defaultEndpointNeedsRepair: seed.defaultEndpointNeedsRepair,
@@ -132,6 +161,6 @@ export function useProviderFormDraft({
       },
       state: values,
     }),
-    [actions, endpointTypes, hasEditedEndpointUrls, isSubmitting, seed, values],
+    [actions, endpointTypes, hasEditedEndpointUrls, isSubmitting, provider, seed, values],
   );
 }

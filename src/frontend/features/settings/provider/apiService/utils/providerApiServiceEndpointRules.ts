@@ -1,4 +1,9 @@
-import { formatApiHost, withoutTrailingApiVersion } from '@cherrystudio/ai-runtime/provider';
+import {
+  formatApiHost,
+  getProviderBaseUrlIssue,
+  shouldAppendProviderApiVersion,
+  withoutTrailingApiVersion,
+} from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import type { EndpointType } from '@/shared/data/types/model';
@@ -64,18 +69,7 @@ export function canEditProviderEndpoint(provider?: Provider | null): boolean {
 }
 
 export function isValidEndpointBaseUrl(value: string): boolean {
-  const trimmed = value.trim();
-
-  if (!trimmed || trimmed.endsWith('#') || /\s/.test(trimmed)) {
-    return false;
-  }
-
-  try {
-    const url = new URL(trimmed);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
+  return getProviderBaseUrlIssue(value) === null;
 }
 
 export function getConfiguredCustomProviderTextEndpoints(
@@ -108,20 +102,29 @@ export function normalizeCustomProviderDefaultEndpoint(
 export function getCustomProviderEndpointRequestPreview(
   endpointType: CustomProviderTextEndpoint,
   baseUrl: string,
+  provider?: Provider,
 ): string | null {
   if (!isValidEndpointBaseUrl(baseUrl)) {
     return null;
   }
 
+  const adapterFamily = provider?.endpointConfigs?.[endpointType]?.adapterFamily;
+  if (
+    adapterFamily &&
+    !['openai', 'openai-compatible', 'anthropic', 'google'].includes(adapterFamily)
+  )
+    return null;
+
+  const appendApiVersion = shouldAppendProviderApiVersion(provider);
   switch (endpointType) {
     case ENDPOINT_TYPE.ANTHROPIC_MESSAGES:
       return `${withoutTrailingApiVersion(formatApiHost(baseUrl, false))}/v1/messages`;
     case ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT:
       return `${formatApiHost(baseUrl, true, 'v1beta')}/models/{model}:generateContent`;
     case ENDPOINT_TYPE.OPENAI_RESPONSES:
-      return `${formatApiHost(baseUrl)}/responses`;
+      return `${formatApiHost(baseUrl, appendApiVersion)}/responses`;
     default:
-      return `${formatApiHost(baseUrl)}/chat/completions`;
+      return `${formatApiHost(baseUrl, appendApiVersion)}/chat/completions`;
   }
 }
 

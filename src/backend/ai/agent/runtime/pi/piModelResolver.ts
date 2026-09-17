@@ -1,13 +1,11 @@
+import { shouldAppendProviderApiVersion } from '@cherrystudio/ai-runtime/provider';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import {
-  resolveProviderConnection,
-  shouldAppendProviderApiVersion,
-} from '@/backend/ai/provider/providerConnection';
+import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
 import { modelService } from '@/backend/data/services/ModelService';
 import {
   projectRuntimeReasoning,

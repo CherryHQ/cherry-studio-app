@@ -1,12 +1,6 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronUpIcon from '@cherrystudio/app-icons/icons/chevron-up';
-import {
-  Button,
-  Input,
-  OptionPickerBottomSheet,
-  SelectField,
-  TextField,
-} from '@cherrystudio/ui/components';
+import { Button, OptionPickerBottomSheet, SelectField } from '@cherrystudio/ui/components';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +15,7 @@ import type { Provider } from '@/shared/data/types/provider';
 import {
   CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   type CustomProviderTextEndpoint,
-  isValidEndpointBaseUrl,
+  getConfiguredCustomProviderTextEndpoints,
 } from '../../apiService/utils/providerApiServiceEndpointRules';
 import {
   ProviderForm,
@@ -171,29 +165,24 @@ export function ProviderSetupCustomFields() {
   const { actions, meta, state } = useProviderForm('ProviderSetupCustomFields');
   const [isProtocolPickerOpen, setIsProtocolPickerOpen] = useState(false);
   const endpoint = state.defaultChatEndpoint as CustomProviderTextEndpoint;
-  const baseUrl = state.endpointUrls[endpoint] ?? '';
-  const isInvalid = Boolean(baseUrl.trim()) && !isValidEndpointBaseUrl(baseUrl.trim());
+  const [hasMultipleEndpoints] = useState(
+    () => getConfiguredCustomProviderTextEndpoints(state.endpointUrls).length > 1,
+  );
+
+  if (hasMultipleEndpoints) {
+    return (
+      <View className="gap-5">
+        <ProviderForm.Name />
+        <ProviderForm.ApiKey />
+        <ProviderForm.Endpoints />
+      </View>
+    );
+  }
 
   return (
     <View className="gap-5">
       <ProviderForm.Name />
       <ProviderForm.ApiKey />
-      <TextField disabled={meta.isSubmitting} invalid={isInvalid}>
-        <TextField.Label>{t('settings.provider.apiService.baseUrl')}</TextField.Label>
-        <Input
-          accessibilityLabel={t('settings.provider.apiService.baseUrl')}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          onChangeText={(value) => actions.setEndpointUrl(endpoint, value)}
-          placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-          testID="provider-base-url-input"
-          value={baseUrl}
-        />
-        <TextField.Error>
-          {isInvalid ? t('settings.provider.apiService.invalidBaseUrlMessage') : undefined}
-        </TextField.Error>
-      </TextField>
       <SelectField
         accessibilityLabel={t('onboarding.connection.protocol')}
         disabled={meta.isSubmitting}
@@ -207,11 +196,7 @@ export function ProviderSetupCustomFields() {
       </SelectField>
       <OptionPickerBottomSheet
         onClose={() => setIsProtocolPickerOpen(false)}
-        onValueChange={(value) => {
-          const nextEndpoint = value as CustomProviderTextEndpoint;
-          if (!state.endpointUrls[nextEndpoint]) actions.setEndpointUrl(nextEndpoint, baseUrl);
-          actions.setDefaultChatEndpoint(nextEndpoint);
-        }}
+        onValueChange={(value) => actions.replaceTextEndpoint(value as CustomProviderTextEndpoint)}
         open={isProtocolPickerOpen}
         options={CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.map((value) => ({
           label: t(ENDPOINT_LABEL_KEYS[value]),
@@ -221,6 +206,7 @@ export function ProviderSetupCustomFields() {
         size="compact"
         title={t('onboarding.connection.protocol')}
       />
+      <ProviderForm.Endpoint endpoint={endpoint} />
     </View>
   );
 }
