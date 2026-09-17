@@ -246,6 +246,7 @@
   "chat.input.disclaimer": "Yapay zekâ tarafından oluşturulan içerik yalnızca referans amaçlıdır",
   "chat.input.sendError.agentNotFound": "Bu Ajan artık mevcut değil.",
   "chat.input.sendError.executionUnavailable": "Bu Ajanın modeli veya araçları kullanılamıyor. Ajan ayarlarını kontrol edin.",
+  "chat.input.sendError.modelNotConfigured": "Bu Ajan için model yapılandırılmamış. Göndermeden önce bir model seçin.",
   "chat.input.sendError.sessionBusy": "Bu sohbet hâlâ yanıt veriyor. Bitmesini bekleyin, ardından tekrar deneyin.",
   "chat.input.sendError.sessionNotFound": "Bu sohbet artık mevcut değil.",
   "chat.input.sendError.toolCallingUnsupported": "Bu model araç çağrılarını desteklemiyor. Alet destekli bir model seçin ve tekrar deneyin.",

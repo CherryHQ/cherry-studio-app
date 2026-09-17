@@ -244,6 +244,7 @@
   "chat.input.disclaimer": "AI生成コンテンツです。参考情報としてご利用ください",
   "chat.input.sendError.agentNotFound": "このエージェントはもう存在しません。",
   "chat.input.sendError.executionUnavailable": "このエージェントのモデルまたはツールは利用できません。エージェントの設定を確認してください。",
+  "chat.input.sendError.modelNotConfigured": "このエージェントにはモデルが設定されていません。送信する前にモデルを選択してください。",
   "chat.input.sendError.sessionBusy": "このチャットはまだ返信中です。完了するまで待ってから、もう一度試してください。",
   "chat.input.sendError.sessionNotFound": "このチャットはもう存在しません。",
   "chat.input.sendError.toolCallingUnsupported": "このモデルはツール呼び出しをサポートしていません。ツールサポートのあるモデルを選択して、再試行してください。",

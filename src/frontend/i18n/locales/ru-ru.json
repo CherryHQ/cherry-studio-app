@@ -250,6 +250,7 @@
   "chat.input.disclaimer": "Контент сгенерирован ИИ и носит справочный характер",
   "chat.input.sendError.agentNotFound": "Этот Агент больше не существует.",
   "chat.input.sendError.executionUnavailable": "Модель или инструменты этого Агента недоступны. Проверьте настройки Агента.",
+  "chat.input.sendError.modelNotConfigured": "Для этого Агента не настроена модель. Выберите модель перед отправкой.",
   "chat.input.sendError.sessionBusy": "Этот чат все еще отвечает. Подождите, пока он закончится, затем повторите попытку.",
   "chat.input.sendError.sessionNotFound": "Этот чат больше не существует.",
   "chat.input.sendError.toolCallingUnsupported": "Эта модель не поддерживает вызовы инструментов. Выберите модель с поддержкой инструмента и повторите попытку.",

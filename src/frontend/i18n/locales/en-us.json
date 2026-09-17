@@ -246,6 +246,7 @@
   "chat.input.disclaimer": "AI-generated content, for reference only",
   "chat.input.sendError.agentNotFound": "This Agent no longer exists.",
   "chat.input.sendError.executionUnavailable": "This Agent's model or tools are unavailable. Check the Agent settings.",
+  "chat.input.sendError.modelNotConfigured": "This Agent has no model configured. Select a model before sending.",
   "chat.input.sendError.sessionBusy": "This chat is still replying. Wait for it to finish, then try again.",
   "chat.input.sendError.sessionNotFound": "This chat no longer exists.",
   "chat.input.sendError.toolCallingUnsupported": "This model doesn't support tool calls. Choose a model with tool support and try again.",

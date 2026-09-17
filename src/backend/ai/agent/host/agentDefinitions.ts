@@ -10,6 +10,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { agentTable } from '@/backend/data/db/schemas';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import type { AgentToolApprovalMode } from '@/shared/data/types/agent';
 import {
   type AgentCapability,
@@ -31,6 +32,7 @@ export type AgentDefinition = {
 };
 
 export interface AgentDefinitionSource {
+  /** Returns null only for missing Agents; rejects unconfigured models with a protocol error. */
   getAgent(agentId: string): Promise<AgentDefinition | null>;
 }
 
@@ -46,8 +48,15 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
         .from(agentTable)
         .where(and(eq(agentTable.id, agentId), isNull(agentTable.deletedAt)))
         .limit(1);
-      if (!agent?.modelId) {
+      if (!agent) {
         return null;
+      }
+      if (!agent.modelId) {
+        throw new AgentProtocolError({
+          code: 'AGENT_MODEL_NOT_CONFIGURED',
+          message: `Agent has no configured model: ${agentId}`,
+          retryable: false,
+        });
       }
       const { providerId, modelId } = parseUniqueModelId(agent.modelId as UniqueModelId);
       return {

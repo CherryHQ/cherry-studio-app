@@ -244,6 +244,7 @@
   "chat.input.disclaimer": "內容由 AI 生成，僅供參考",
   "chat.input.sendError.agentNotFound": "該 Agent 已不存在。",
   "chat.input.sendError.executionUnavailable": "該 Agent 的模型或工具不可用，請檢查 Agent 設定。",
+  "chat.input.sendError.modelNotConfigured": "此 Agent 尚未設定模型，請先選擇模型再傳送。",
   "chat.input.sendError.sessionBusy": "該對話仍在回復中，請等待完成後重試。",
   "chat.input.sendError.sessionNotFound": "該對話已不存在。",
   "chat.input.sendError.toolCallingUnsupported": "當前模型不支持工具調用，請切換到支持工具的模型後重試。",

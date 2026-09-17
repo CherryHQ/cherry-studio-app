@@ -248,6 +248,7 @@
   "chat.input.disclaimer": "Conteúdo gerado por IA, apenas para referência",
   "chat.input.sendError.agentNotFound": "Este Agente já não existe.",
   "chat.input.sendError.executionUnavailable": "O modelo ou as ferramentas deste Agente não estão disponíveis. Verifique as definições do agente.",
+  "chat.input.sendError.modelNotConfigured": "Este Agente não tem um modelo configurado. Selecione um modelo antes de enviar.",
   "chat.input.sendError.sessionBusy": "Este chat ainda está a responder. Espere terminar e tente novamente.",
   "chat.input.sendError.sessionNotFound": "Este chat já não existe.",
   "chat.input.sendError.toolCallingUnsupported": "Este modelo não suporta chamadas de ferramentas. Escolha um modelo com suporte de ferramenta e tente novamente.",

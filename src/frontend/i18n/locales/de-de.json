@@ -246,6 +246,7 @@
   "chat.input.disclaimer": "KI-generierte Inhalte, nur zur Orientierung",
   "chat.input.sendError.agentNotFound": "Dieser Agent existiert nicht mehr.",
   "chat.input.sendError.executionUnavailable": "Das Modell oder die Tools dieses Agenten sind nicht verfügbar. Überprüfen Sie die Agent-Einstellungen.",
+  "chat.input.sendError.modelNotConfigured": "Für diesen Agenten ist kein Modell konfiguriert. Wählen Sie vor dem Senden ein Modell aus.",
   "chat.input.sendError.sessionBusy": "Dieser Chat antwortet immer noch. Warten Sie, bis der Vorgang abgeschlossen ist, und versuchen Sie es dann erneut.",
   "chat.input.sendError.sessionNotFound": "Dieser Chat existiert nicht mehr.",
   "chat.input.sendError.toolCallingUnsupported": "Dieses Modell unterstützt keine Toolaufrufe. Wählen Sie ein Modell mit Werkzeugunterstützung und versuchen Sie es erneut.",

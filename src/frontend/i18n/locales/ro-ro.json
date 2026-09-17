@@ -248,6 +248,7 @@
   "chat.input.disclaimer": "Conținut generat de IA, doar pentru referință",
   "chat.input.sendError.agentNotFound": "Acest agent nu mai există.",
   "chat.input.sendError.executionUnavailable": "Modelul sau instrumentele acestui agent nu sunt disponibile. Verificați setările Agentului.",
+  "chat.input.sendError.modelNotConfigured": "Acest Agent nu are un model configurat. Selectați un model înainte de a trimite un mesaj.",
   "chat.input.sendError.sessionBusy": "Acest chat încă răspunde. Așteptați să se termine, apoi încercați din nou.",
   "chat.input.sendError.sessionNotFound": "Acest chat nu mai există.",
   "chat.input.sendError.toolCallingUnsupported": "Acest model nu acceptă apeluri de instrumente. Alegeți un model cu suport pentru scule și încercați din nou.",

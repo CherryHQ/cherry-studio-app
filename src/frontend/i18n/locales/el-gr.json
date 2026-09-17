@@ -246,6 +246,7 @@
   "chat.input.disclaimer": "Περιεχόμενο που δημιουργήθηκε από AI, μόνο για αναφορά",
   "chat.input.sendError.agentNotFound": "Αυτός ο Πράκτορας δεν υπάρχει πλέον.",
   "chat.input.sendError.executionUnavailable": "Το μοντέλο ή τα εργαλεία αυτού του πράκτορα δεν είναι διαθέσιμα. Ελέγξτε τις ρυθμίσεις πράκτορα.",
+  "chat.input.sendError.modelNotConfigured": "Δεν έχει ρυθμιστεί μοντέλο για αυτόν τον Πράκτορα. Επιλέξτε ένα μοντέλο πριν από την αποστολή.",
   "chat.input.sendError.sessionBusy": "Αυτή η συνομιλία εξακολουθεί να απαντά. Περιμένετε να τελειώσει και μετά δοκιμάστε ξανά.",
   "chat.input.sendError.sessionNotFound": "Αυτή η συνομιλία δεν υπάρχει πλέον.",
   "chat.input.sendError.toolCallingUnsupported": "Αυτό το μοντέλο δεν υποστηρίζει κλήσεις εργαλείων. Επιλέξτε ένα μοντέλο με υποστήριξη εργαλείων και δοκιμάστε ξανά.",

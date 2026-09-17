@@ -170,6 +170,7 @@ export const AgentErrorViewSchema = z
   .strictObject({
     code: z.enum([
       'AGENT_NOT_FOUND',
+      'AGENT_MODEL_NOT_CONFIGURED',
       'SESSION_NOT_FOUND',
       'MESSAGE_NOT_FOUND',
       'SESSION_BUSY',

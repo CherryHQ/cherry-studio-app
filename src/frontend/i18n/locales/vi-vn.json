@@ -244,6 +244,7 @@
   "chat.input.disclaimer": "Nội dung do AI tạo, chỉ mang tính tham khảo",
   "chat.input.sendError.agentNotFound": "Tác nhân này không còn tồn tại.",
   "chat.input.sendError.executionUnavailable": "Mô hình hoặc công cụ của Tác nhân này không khả dụng. Kiểm tra cài đặt Tác nhân.",
+  "chat.input.sendError.modelNotConfigured": "Tác nhân này chưa được cấu hình mô hình. Hãy chọn một mô hình trước khi gửi.",
   "chat.input.sendError.sessionBusy": "Cuộc trò chuyện này vẫn đang trả lời. Đợi nó chạy xong rồi thử lại.",
   "chat.input.sendError.sessionNotFound": "Cuộc trò chuyện này không còn tồn tại.",
   "chat.input.sendError.toolCallingUnsupported": "Model này không hỗ trợ lệnh gọi công cụ. Chọn một mẫu có hỗ trợ công cụ và thử lại.",
