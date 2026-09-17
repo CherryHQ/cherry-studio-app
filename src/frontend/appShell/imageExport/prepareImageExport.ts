@@ -148,6 +148,8 @@ function createParagraph(
     paragraph.layout(width);
     return paragraph;
   } finally {
-    builder.dispose();
+    // Skia's native ParagraphBuilder omits dispose even though its TS interface declares it.
+    // The web implementation exposes it; native builders are released by the host object's GC.
+    builder.dispose?.();
   }
 }
