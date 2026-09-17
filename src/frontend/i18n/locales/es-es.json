@@ -1265,7 +1265,6 @@
   "settings.provider.apiService.apiKeysHelp": "Separe varias claves con comas.",
   "settings.provider.apiService.apiKeysPlaceholder": "Ingrese la clave API",
   "settings.provider.apiService.apiVersion": "Versión API",
-  "settings.provider.apiService.appendApiVersion": "Añadir {{version}} automáticamente si falta la versión",
   "settings.provider.apiService.authSection": "Autenticación",
   "settings.provider.apiService.baseUrl": "URL base",
   "settings.provider.apiService.baseUrlHelp": "Introduce la URL base. La ruta de la solicitud se añade automáticamente.",

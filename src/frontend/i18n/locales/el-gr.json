@@ -1262,7 +1262,6 @@
   "settings.provider.apiService.apiKeysHelp": "Διαχωρίστε πολλά κλειδιά με κόμματα.",
   "settings.provider.apiService.apiKeysPlaceholder": "Εισαγάγετε το κλειδί API",
   "settings.provider.apiService.apiVersion": "Έκδοση API",
-  "settings.provider.apiService.appendApiVersion": "Αυτόματη προσθήκη {{version}} όταν λείπει η έκδοση",
   "settings.provider.apiService.authSection": "Έλεγχος ταυτότητας",
   "settings.provider.apiService.baseUrl": "Βασικό URL",
   "settings.provider.apiService.baseUrlHelp": "Εισαγάγετε το βασικό URL. Η διαδρομή του αιτήματος προστίθεται αυτόματα.",

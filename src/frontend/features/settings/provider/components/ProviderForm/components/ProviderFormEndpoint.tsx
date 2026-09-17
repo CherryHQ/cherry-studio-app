@@ -1,9 +1,5 @@
-import {
-  getProviderBaseUrlIssue,
-  isWithTrailingSharp,
-  shouldAppendProviderApiVersion,
-} from '@cherrystudio/ai-runtime/provider';
-import { Button, Input, Section, TextField } from '@cherrystudio/ui/components';
+import { getProviderBaseUrlIssue } from '@cherrystudio/ai-runtime/provider';
+import { Button, Input, TextField } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -29,28 +25,12 @@ export function ProviderFormEndpoint({
 }) {
   const { t } = useTranslation();
   const { actions, meta, state } = useProviderForm('ProviderForm.Endpoint');
-  const rawValue = state.endpointUrls[endpoint] ?? '';
-  const value = rawValue.replace(/#\s*$/, '');
-  const issue = value.trim() ? getProviderBaseUrlIssue(rawValue) : null;
+  const value = state.endpointUrls[endpoint] ?? '';
+  const issue = value.trim() ? getProviderBaseUrlIssue(value) : null;
   const fieldLabel = label ?? t('settings.provider.apiService.baseUrl');
-  const appendsVersion = !isWithTrailingSharp(rawValue);
   const requestUrl = isCustomProviderTextEndpointType(endpoint)
-    ? getCustomProviderEndpointRequestPreview(endpoint, rawValue, meta.provider)
+    ? getCustomProviderEndpointRequestPreview(endpoint, value, meta.provider)
     : null;
-  const apiVersion = endpoint === 'google-generate-content' ? '/v1beta' : '/v1';
-  const canChooseVersion =
-    requestUrl !== null &&
-    endpoint !== 'anthropic-messages' &&
-    shouldAppendProviderApiVersion(meta.provider);
-
-  function changeUrl(next: string) {
-    if (!next.trim().replace(/#$/, '').trim()) {
-      actions.setEndpointUrl(endpoint, '');
-      return;
-    }
-    const nextValue = appendsVersion || isWithTrailingSharp(next) ? next : `${next.trimEnd()}#`;
-    actions.setEndpointUrl(endpoint, nextValue);
-  }
 
   return (
     <View className="gap-2">
@@ -71,7 +51,7 @@ export function ProviderFormEndpoint({
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
-          onChangeText={changeUrl}
+          onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
           placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
           testID={label ? `provider-endpoint-${endpoint}-input` : 'provider-base-url-input'}
           value={value}
@@ -102,19 +82,6 @@ export function ProviderFormEndpoint({
             {t('settings.provider.apiService.useBaseUrl')}
           </Button>
         </View>
-      ) : null}
-      {canChooseVersion ? (
-        <Section variant="plain">
-          <Section.SwitchItem
-            density="compact"
-            disabled={meta.isSubmitting}
-            label={t('settings.provider.apiService.appendApiVersion', { version: apiVersion })}
-            onValueChange={(next) =>
-              actions.setEndpointUrl(endpoint, `${value.trim()}${next ? '' : '#'}`)
-            }
-            value={appendsVersion}
-          />
-        </Section>
       ) : null}
       {requestUrl ? <ProviderRequestUrl disabled={meta.isSubmitting} url={requestUrl} /> : null}
     </View>

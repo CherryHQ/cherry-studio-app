@@ -1262,7 +1262,6 @@
   "settings.provider.apiService.apiKeysHelp": "Separate multiple keys with commas.",
   "settings.provider.apiService.apiKeysPlaceholder": "Enter API Key",
   "settings.provider.apiService.apiVersion": "API Version",
-  "settings.provider.apiService.appendApiVersion": "Automatically add {{version}} when missing",
   "settings.provider.apiService.authSection": "Authentication",
   "settings.provider.apiService.baseUrl": "Base URL",
   "settings.provider.apiService.baseUrlHelp": "Enter the base URL. The request path is added automatically.",

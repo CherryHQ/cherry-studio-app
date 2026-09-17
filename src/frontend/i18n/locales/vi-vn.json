@@ -1259,7 +1259,6 @@
   "settings.provider.apiService.apiKeysHelp": "Phân tách nhiều khóa bằng dấu phẩy.",
   "settings.provider.apiService.apiKeysPlaceholder": "Nhập khóa API",
   "settings.provider.apiService.apiVersion": "Phiên bản API",
-  "settings.provider.apiService.appendApiVersion": "Tự động thêm {{version}} khi chưa có phiên bản",
   "settings.provider.apiService.authSection": "Xác thực",
   "settings.provider.apiService.baseUrl": "URL cơ sở",
   "settings.provider.apiService.baseUrlHelp": "Nhập URL cơ sở. Đường dẫn yêu cầu sẽ được thêm tự động.",

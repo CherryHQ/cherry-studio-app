@@ -1259,7 +1259,6 @@
   "settings.provider.apiService.apiKeysHelp": "多個 Key 請用逗號分隔。",
   "settings.provider.apiService.apiKeysPlaceholder": "輸入 API Key",
   "settings.provider.apiService.apiVersion": "API 版本",
-  "settings.provider.apiService.appendApiVersion": "缺少版本號時自動補上 {{version}}",
   "settings.provider.apiService.authSection": "認證",
   "settings.provider.apiService.baseUrl": "Base URL",
   "settings.provider.apiService.baseUrlHelp": "填寫基礎位址，程式會自動附加請求路徑。",

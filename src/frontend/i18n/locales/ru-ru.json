@@ -1268,7 +1268,6 @@
   "settings.provider.apiService.apiKeysHelp": "Разделяйте несколько ключей запятыми.",
   "settings.provider.apiService.apiKeysPlaceholder": "Введите ключ API",
   "settings.provider.apiService.apiVersion": "Версия API",
-  "settings.provider.apiService.appendApiVersion": "Автоматически добавлять {{version}}, если версия не указана",
   "settings.provider.apiService.authSection": "Аутентификация",
   "settings.provider.apiService.baseUrl": "Базовый URL",
   "settings.provider.apiService.baseUrlHelp": "Введите базовый URL. Путь запроса будет добавлен автоматически.",

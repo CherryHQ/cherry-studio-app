@@ -1259,7 +1259,6 @@
   "settings.provider.apiService.apiKeysHelp": "複数のキーはカンマで区切ります。",
   "settings.provider.apiService.apiKeysPlaceholder": "API キーを入力してください",
   "settings.provider.apiService.apiVersion": "APIバージョン",
-  "settings.provider.apiService.appendApiVersion": "バージョンがない場合に {{version}} を自動追加",
   "settings.provider.apiService.authSection": "認証",
   "settings.provider.apiService.baseUrl": "ベース URL",
   "settings.provider.apiService.baseUrlHelp": "ベース URL を入力してください。リクエストパスは自動で追加されます。",

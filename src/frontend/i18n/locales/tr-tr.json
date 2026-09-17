@@ -1262,7 +1262,6 @@
   "settings.provider.apiService.apiKeysHelp": "Birden fazla anahtarı virgülle ayırın.",
   "settings.provider.apiService.apiKeysPlaceholder": "API Anahtarını Girin",
   "settings.provider.apiService.apiVersion": "API Sürümü",
-  "settings.provider.apiService.appendApiVersion": "Sürüm yoksa {{version}} otomatik olarak eklensin",
   "settings.provider.apiService.authSection": "Kimlik Doğrulaması",
   "settings.provider.apiService.baseUrl": "Temel URL",
   "settings.provider.apiService.baseUrlHelp": "Temel URL’yi girin. İstek yolu otomatik olarak eklenir.",

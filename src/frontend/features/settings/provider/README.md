@@ -81,9 +81,9 @@ own initial persistence step. Each screen drives its actions from the same draft
 consume and composes the slots it needs.
 
 Endpoint fields share protocol labels, full request URL previews with explicit copying, and
-correction hints for pasted request paths. Standard OpenAI and Google base URLs expose automatic
-version insertion as a switch; disabling it retains the desktop-compatible trailing `#` in saved
-configuration, while the input and outgoing requests omit the marker. Provider-specific transports
+correction hints for pasted request paths. Base URLs accept the desktop-compatible trailing `#` to
+disable automatic version insertion. The marker remains visible in the input and saved configuration,
+and is removed before outgoing requests. Provider-specific transports
 without a standard URL formatter do not display a guessed request URL.
 
 First-use setup replaces the single selected text endpoint atomically when the protocol changes,

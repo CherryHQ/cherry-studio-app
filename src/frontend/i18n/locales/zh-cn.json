@@ -1259,7 +1259,6 @@
   "settings.provider.apiService.apiKeysHelp": "多个 Key 请用逗号分隔。",
   "settings.provider.apiService.apiKeysPlaceholder": "输入 API Key",
   "settings.provider.apiService.apiVersion": "API Version",
-  "settings.provider.apiService.appendApiVersion": "缺少版本号时自动补 {{version}}",
   "settings.provider.apiService.authSection": "认证",
   "settings.provider.apiService.baseUrl": "Base URL",
   "settings.provider.apiService.baseUrlHelp": "填写基础地址，程序会自动追加请求路径。",

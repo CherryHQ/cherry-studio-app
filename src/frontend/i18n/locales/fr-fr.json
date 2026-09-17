@@ -1265,7 +1265,6 @@
   "settings.provider.apiService.apiKeysHelp": "Séparez les clés multiples par des virgules.",
   "settings.provider.apiService.apiKeysPlaceholder": "Entrez la clé API",
   "settings.provider.apiService.apiVersion": "Version API",
-  "settings.provider.apiService.appendApiVersion": "Ajouter automatiquement {{version}} si la version est absente",
   "settings.provider.apiService.authSection": "Authentification",
   "settings.provider.apiService.baseUrl": "URL de base",
   "settings.provider.apiService.baseUrlHelp": "Saisissez l’URL de base. Le chemin de la requête est ajouté automatiquement.",

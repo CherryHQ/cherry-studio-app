@@ -1265,7 +1265,6 @@
   "settings.provider.apiService.apiKeysHelp": "Separați mai multe chei cu virgule.",
   "settings.provider.apiService.apiKeysPlaceholder": "Introduceți cheia API",
   "settings.provider.apiService.apiVersion": "Versiune API",
-  "settings.provider.apiService.appendApiVersion": "Adaugă automat {{version}} dacă versiunea lipsește",
   "settings.provider.apiService.authSection": "Autentificare",
   "settings.provider.apiService.baseUrl": "URL de bază",
   "settings.provider.apiService.baseUrlHelp": "Introduceți URL-ul de bază. Calea cererii este adăugată automat.",

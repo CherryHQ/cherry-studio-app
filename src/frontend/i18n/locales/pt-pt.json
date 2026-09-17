@@ -1265,7 +1265,6 @@
   "settings.provider.apiService.apiKeysHelp": "Separe várias chaves com vírgulas.",
   "settings.provider.apiService.apiKeysPlaceholder": "Introduza a chave API",
   "settings.provider.apiService.apiVersion": "Versão da API",
-  "settings.provider.apiService.appendApiVersion": "Adicionar {{version}} automaticamente se faltar a versão",
   "settings.provider.apiService.authSection": "Autenticação",
   "settings.provider.apiService.baseUrl": "URL Base",
   "settings.provider.apiService.baseUrlHelp": "Introduza o URL base. O caminho do pedido é adicionado automaticamente.",
