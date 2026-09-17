@@ -5,9 +5,13 @@ type check, automated tests, or device verification were run for this implementa
 
 ## Product Behavior
 
-The HTML file viewer's overflow menu offers **Convert to image (PNG)** and **Convert to image-based
-PPT**. Truncated or empty HTML cannot be converted. Conversion shows progress and cancellation;
-the resulting managed file has Open and Share actions and remains in the file library.
+The HTML file viewer's overflow menu offers **Share as image** and **Share as PPT**. Truncated or empty
+HTML cannot be shared in these formats. Conversion shows a compact spinner, progress label and cancel
+action above the visible HTML content, then opens the system share sheet immediately through the
+shared file export helper. The user stays in the HTML viewer throughout preparation and returns to
+it when dismissing the share sheet.
+The resulting PNG or image-based PPTX remains in the file library. Repeated share actions are
+disabled until the current operation finishes, and cancelled conversions do not open a share sheet.
 
 Conversion renders a fresh copy of the saved HTML at a desktop layout width of 1280 CSS pixels.
 It does not serialize interactive state from the live preview. Authored images, fonts and scripts

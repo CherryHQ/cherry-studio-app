@@ -1,4 +1,10 @@
-import { Button, ContentState, type MenuItem, useToast } from '@cherrystudio/ui/components';
+import {
+  Button,
+  ContentState,
+  type MenuItem,
+  Spinner,
+  useToast,
+} from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
@@ -15,7 +21,6 @@ import { readFileText } from '../utils/readFileText';
 import { FileHtmlBody } from './FileHtmlBody';
 import { FileTextBody } from './FileTextBody';
 import { FileViewerHeader } from './FileViewerHeader';
-import { HtmlConversionResult } from './HtmlConversionResult';
 
 const logger = loggerService.withContext('FileViewer');
 
@@ -60,16 +65,16 @@ export function FileTextViewer({ file, kind }: { file: ResolvedFile; kind: FileE
     if (isHtml && !content.isTruncated) {
       items.push(
         {
-          id: 'convert-to-image',
+          id: 'share-as-image',
           label: t('fileViewer.conversion.image'),
-          disabled: !!conversion.progress || !content.text.trim(),
-          onPress: () => void conversion.convert(content.text, file.entry.filename, 'image'),
+          disabled: conversion.isSharing || !content.text.trim(),
+          onPress: () => void conversion.share(content.text, file.entry.filename, 'image'),
         },
         {
-          id: 'convert-to-pptx',
+          id: 'share-as-pptx',
           label: t('fileViewer.conversion.pptx'),
-          disabled: !!conversion.progress || !content.text.trim(),
-          onPress: () => void conversion.convert(content.text, file.entry.filename, 'pptx'),
+          disabled: conversion.isSharing || !content.text.trim(),
+          onPress: () => void conversion.share(content.text, file.entry.filename, 'pptx'),
         },
       );
       items.push({
@@ -86,16 +91,44 @@ export function FileTextViewer({ file, kind }: { file: ResolvedFile; kind: FileE
   return (
     <>
       <FileViewerHeader file={file} items={items} />
-      {conversion.result && !conversion.progress ? (
-        <HtmlConversionResult file={conversion.result} />
-      ) : null}
-      <View className="flex-1">
-        <View
-          accessibilityElementsHidden={!!conversion.progress}
-          className="flex-1"
-          importantForAccessibility={conversion.progress ? 'no-hide-descendants' : 'auto'}
-          pointerEvents={conversion.progress ? 'none' : 'auto'}
-        >
+      <View className="flex-1 overflow-hidden">
+        {/* Keep capture laid out beneath the opaque viewer so native snapshots retain their size. */}
+        {conversion.surface ? (
+          <ScrollView
+            accessibilityElementsHidden
+            className="absolute inset-0"
+            importantForAccessibility="no-hide-descendants"
+            pointerEvents="none"
+            removeClippedSubviews={false}
+          >
+            {conversion.surface}
+          </ScrollView>
+        ) : null}
+        <View className="flex-1 bg-background">
+          {conversion.progress ? (
+            <View className="flex-row items-center gap-3 px-4 py-2">
+              <Spinner accessible={false} size="sm" />
+              <Text
+                accessibilityLiveRegion="polite"
+                className="flex-1 text-sm text-muted-foreground"
+              >
+                {t(
+                  conversion.progress.stage === 'writing'
+                    ? 'fileViewer.conversion.writing'
+                    : conversion.progress.total
+                      ? 'fileViewer.conversion.capturing'
+                      : 'fileViewer.conversion.preparing',
+                  {
+                    current: conversion.progress.current,
+                    total: conversion.progress.total,
+                  },
+                )}
+              </Text>
+              <Button onPress={conversion.cancel} size="sm" variant="ghost">
+                {t('common.cancel')}
+              </Button>
+            </View>
+          ) : null}
           {textQuery.isPending ? (
             <View className="flex-1 items-center justify-center p-6">
               <ContentState.Loading title={t('fileViewer.loading')} />
@@ -143,40 +176,6 @@ export function FileTextViewer({ file, kind }: { file: ResolvedFile; kind: FileE
             </>
           )}
         </View>
-        {conversion.progress ? (
-          <View className="absolute inset-0 overflow-hidden">
-            <ScrollView
-              accessibilityElementsHidden
-              className="absolute inset-0"
-              importantForAccessibility="no-hide-descendants"
-              pointerEvents="none"
-              removeClippedSubviews={false}
-            >
-              {conversion.surface}
-            </ScrollView>
-            <View className="flex-1 items-center justify-center gap-4 bg-background p-6">
-              <ContentState.Loading
-                title={t(
-                  conversion.progress.stage === 'writing'
-                    ? 'fileViewer.conversion.writing'
-                    : conversion.progress.total
-                      ? 'fileViewer.conversion.capturing'
-                      : 'fileViewer.conversion.preparing',
-                  {
-                    current: conversion.progress.current,
-                    total: conversion.progress.total,
-                  },
-                )}
-              />
-              <Text className="text-center text-sm text-muted-foreground">
-                {t('fileViewer.conversion.description')}
-              </Text>
-              <Button onPress={conversion.cancel} variant="secondary">
-                {t('common.cancel')}
-              </Button>
-            </View>
-          </View>
-        ) : null}
       </View>
     </>
   );

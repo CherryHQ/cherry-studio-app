@@ -1,8 +1,11 @@
 import { useToast } from '@cherrystudio/ui/components';
 import { randomUUID } from 'expo-crypto';
+import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useExportSignature } from '@/frontend/appShell/imageExport';
+import { shareFile } from '@/frontend/components/FileEntryPreview';
 import { useBackendModule } from '@/frontend/data';
 import {
   DocumentExportError,
@@ -10,8 +13,8 @@ import {
   type HtmlConversionContext,
   type HtmlConversionFormat,
 } from '@/shared/contracts/documentExport';
-import type { ResolvedFile } from '@/shared/contracts/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import {
   HtmlConversionSurface,
@@ -25,9 +28,10 @@ export function useHtmlConversion() {
   const module = useBackendModule('documentExport');
   const { t } = useTranslation();
   const { toast } = useToast();
+  const signature = useExportSignature();
   const [request, setRequest] = useState<HtmlCaptureRequest>();
   const [progress, setProgress] = useState<Progress>();
-  const [result, setResult] = useState<ResolvedFile>();
+  const [isSharing, setIsSharing] = useState(false);
   const current = useRef<AbortController | undefined>(undefined);
   const mounted = useRef(true);
   useEffect(() => {
@@ -78,12 +82,20 @@ export function useHtmlConversion() {
     [],
   );
 
-  async function convert(html: string, title: string, format: HtmlConversionFormat) {
+  async function share(html: string, title: string, format: HtmlConversionFormat) {
     if (current.current) return;
     const controller = new AbortController();
     current.current = controller;
+    setIsSharing(true);
     setProgress({ stage: 'capturing', current: 0, total: 0 });
+    let isConverted = false;
     try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      controller.signal.throwIfAborted();
+      if (!isAvailable) {
+        toast.show({ label: t('fileViewer.shareUnavailable'), variant: 'danger' });
+        return;
+      }
       const file = await module.convertHtml(
         { title, format, capture: capture(html) },
         {
@@ -93,10 +105,10 @@ export function useHtmlConversion() {
           },
         },
       );
-      if (mounted.current) {
-        setResult(file);
-        toast.show({ label: t('fileViewer.conversion.saved'), variant: 'success' });
-      }
+      controller.signal.throwIfAborted();
+      isConverted = true;
+      setProgress(undefined);
+      await shareFile(file, { ...signature, timestamp: formatExportTimestamp(new Date()) });
     } catch (error) {
       if (mounted.current) {
         const cancelled =
@@ -104,29 +116,38 @@ export function useHtmlConversion() {
         const limit =
           error instanceof DocumentExportError &&
           ['size-limit', 'image-size-limit'].includes(error.code);
-        if (!cancelled) logger.warn('HTML conversion failed', error as Error);
+        if (!cancelled)
+          logger.warn(
+            isConverted ? 'HTML sharing failed' : 'HTML conversion failed',
+            error as Error,
+          );
         toast.show({
           label: t(
             cancelled
               ? 'fileViewer.conversion.cancelled'
-              : limit
-                ? 'fileViewer.conversion.sizeLimit'
-                : 'fileViewer.conversion.failed',
+              : isConverted
+                ? 'fileViewer.shareFailed'
+                : limit
+                  ? 'fileViewer.conversion.sizeLimit'
+                  : 'fileViewer.conversion.failed',
           ),
           variant: cancelled ? 'default' : 'danger',
         });
       }
     } finally {
       current.current = undefined;
-      if (mounted.current) setProgress(undefined);
+      if (mounted.current) {
+        setIsSharing(false);
+        setProgress(undefined);
+      }
     }
   }
 
   return {
-    convert,
+    share,
+    isSharing,
     cancel: () => current.current?.abort(),
     progress,
-    result,
     surface: request ? <HtmlConversionSurface key={request.id} request={request} /> : null,
   };
 }
