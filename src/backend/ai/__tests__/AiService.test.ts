@@ -162,7 +162,8 @@ describe('AiService.generateImage', () => {
         }),
       ).rejects.toThrow('image request captured');
 
-      const [, providerSettings, params] = jest.mocked(aiCoreGenerateImage).mock.calls[0];
+      const [, providerSettings, params] = jest.mocked(aiCoreGenerateImage).mock
+        .calls[0] as unknown as [string, unknown, { providerOptions?: Record<string, unknown> }];
       expect(providerSettings).toMatchObject({
         apiKey: 'image-key',
         baseURL: 'https://api.example.com/v1',

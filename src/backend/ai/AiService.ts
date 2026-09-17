@@ -14,7 +14,6 @@ import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { LanguageModelUsage, ModelMessage } from 'ai';
-import * as Crypto from 'expo-crypto';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
@@ -40,10 +39,9 @@ import { AiSdkGenerator, buildAgentParams } from './generation';
 import { createAiUsagePlugin } from './generation/aiUsagePlugin';
 import type { BuildAgentParamsDependencies } from './generation/buildAgentParams';
 import { listModels as listProviderModels } from './generation/listModels';
-import { resolveProviderAiSdkConfig } from './generation/providerConfig';
+import { resolveAiSdkServing } from './generation/providerConfig';
 import { VertexAuthClient } from './generation/VertexAuthClient';
 import { normalizeAiError } from './normalizeAiError';
-import { resolveProviderConnection } from './provider/providerConnection';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -68,7 +66,8 @@ export interface AiGenerateResult {
   usage?: LanguageModelUsage;
 }
 
-export interface AiImageRequest extends AiBaseRequest {
+/** Image requests accept transport options only; text generation controls have no image meaning. */
+export interface AiImageRequest extends Pick<AiBaseRequest, 'apiKeyOverride' | 'requestOptions'> {
   usageAttribution?: AiUsageAttribution;
   inputImages?: string[];
   mode: ImageGenerationMode;
@@ -294,22 +293,12 @@ export class AiService extends BaseService {
   async generateImage(request: AiImageRequest): Promise<AiImageResult> {
     const signal = request.requestOptions?.signal;
     const { provider, model } = await this.getProviderAndModel(request);
-    const connection = resolveProviderConnection(provider, model);
-    const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
+    const { sdkConfig, credentialReceipt } = await resolveAiSdkServing({
       provider,
       model,
-      {
-        getAuthConfig: (providerId) => this.services.provider.getAuthConfig(providerId),
-        resolveApiKey: (providerId, override) =>
-          this.services.provider.resolveApiKey(providerId, override),
-      },
-      {
-        apiKeyOverride: request.apiKeyOverride,
-        resolvedConnection: connection,
-        sessionId: Crypto.randomUUID(),
-      },
-    );
-    const sdkModelId = connection.wireModelId;
+      providerService: this.services.provider,
+      apiKeyOverride: request.apiKeyOverride,
+    });
     const { structured, vendorBag } = splitImageParamValues(request.paramValues);
     const registryProviderId = provider.presetProviderId ?? provider.id;
     const vendorTransport = this.services.providerRegistry.getImageGenerationSupport(
@@ -317,11 +306,11 @@ export class AiService extends BaseService {
       model.apiModelId ?? model.modelId,
     )?.modes?.[request.mode]?.vendorTransport;
     const modelDescriptor = vendorTransport?.endpoint
-      ? { ...vendorTransport, id: sdkModelId, mode: request.mode }
+      ? { ...vendorTransport, id: sdkConfig.modelId, mode: request.mode }
       : undefined;
     if (!isImageTransportDescriptorSupported(sdkConfig.providerId, modelDescriptor)) {
       throw new Error(
-        `Unsupported image generation route for ${registryProviderId}: ${sdkModelId}`,
+        `Unsupported image generation route for ${registryProviderId}: ${sdkConfig.modelId}`,
       );
     }
     const transportVendorBag = vendorTransport?.endpoint
@@ -332,7 +321,7 @@ export class AiService extends BaseService {
       : vendorBag;
     const imageProviderOptions = buildImageProviderOptions({
       aiSdkProviderId: sdkConfig.providerId,
-      modelId: sdkModelId,
+      modelId: sdkConfig.modelId,
       paramValues: request.paramValues,
       provider,
       vendorBag: transportVendorBag,
@@ -345,7 +334,7 @@ export class AiService extends BaseService {
     const usageCaptureContext = createCaptureContext({
       provider,
       model,
-      sdkModelId,
+      sdkModelId: sdkConfig.modelId,
       credentialReceipt,
       usageAttribution: request.usageAttribution,
     });
@@ -354,7 +343,7 @@ export class AiService extends BaseService {
       sdkConfig.providerId,
       providerSettings as never,
       {
-        model: sdkModelId,
+        model: sdkConfig.modelId,
         prompt: hasInputImages ? { images: inputImages, text: request.prompt } : request.prompt,
         n: structured.n ?? 1,
         size: resolveImageRequestSize(structured.size) as `${number}x${number}` | undefined,
