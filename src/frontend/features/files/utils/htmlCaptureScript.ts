@@ -37,15 +37,26 @@ export function htmlCaptureSetupScript(id: string, format: HtmlConversionFormat,
       var slides=candidates.filter(function(node){return !node.parentElement.closest('[data-slide],.slide');});
       if(slides.length>${HTML_CONVERSION_MAX_PAGES}){send({phase:'limit'});return;}
       if(slides.length){
-        slides.forEach(function(slide){
+        // Measure every slide in its authored layout before changing any shared ancestor.
+        var slideLayouts=slides.map(function(slide){
+          var display=getComputedStyle(slide).display;
+          var inlineDisplay=slide.style.getPropertyValue('display');
+          var displayPriority=slide.style.getPropertyPriority('display');
+          if(display==='none') set(slide,{display:'block'});
+          var style=getComputedStyle(slide);
+          var layout={slide:slide,display:display==='none'?'block':display,width:style.width,height:style.height};
+          if(display==='none'){
+            if(inlineDisplay) slide.style.setProperty('display',inlineDisplay,displayPriority);
+            else slide.style.removeProperty('display');
+          }
+          return layout;
+        });
+        slideLayouts.forEach(function(layout){
+          var slide=layout.slide;
           for(var parent=slide.parentElement;parent&&parent!==document.documentElement;parent=parent.parentElement){
             set(parent,{display:'block',position:'static',transform:'none',height:'auto','max-height':'none',overflow:'visible'});
           }
-          var style=getComputedStyle(slide);
-          var height=parseFloat(style.height);
-          var display=style.display==='none'?'block':style.display;
-          set(slide,{display:display,position:'relative',top:'auto',left:'auto',right:'auto',bottom:'auto',transform:'none',opacity:'1',visibility:'visible','flex-shrink':'0'});
-          if(height>0) set(slide,{height:height+'px'});
+          set(slide,{display:layout.display,width:layout.width,height:layout.height,position:'relative',top:'auto',left:'auto',right:'auto',bottom:'auto',transform:'none',opacity:'1',visibility:'visible','flex-shrink':'0'});
         });
       }
       await frame();

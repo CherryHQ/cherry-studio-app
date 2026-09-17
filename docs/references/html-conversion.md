@@ -18,9 +18,12 @@ It does not serialize interactive state from the live preview. Authored images, 
 load in the disposable WebView; images and fonts must finish loading before capture. Animations
 and media pause before layout measurement.
 
-- PNG captures the whole document in one image.
+- PNG captures the whole document in one image, then adds the shared brand and timestamp footer
+  before saving. Later sharing reuses this signed file without adding another footer.
 - Outermost `[data-slide]` or `.slide` elements are made visible in document order. Each becomes
-  one PPT slide. For PNG, these elements form one vertical document.
+  one PPT slide. Their widths and heights are measured in the original parent layout before any
+  slides are rearranged; hidden slides are temporarily revealed for measurement. For PNG, these
+  elements form one vertical document.
 - Ordinary HTML without explicit slides is divided vertically into 16:9 pages. Pagination is
   geometric and can cut through text or tables; it does not redesign the content into a deck.
 - PPTX uses a 16:9 canvas. Each captured page is fitted without stretching; differing aspect ratios
@@ -48,8 +51,10 @@ managed file outlives the viewer.
 
 `capturePng` is shared with document export under `frontend/utils`. It uses native temporary PNG
 files and checks actual PNG dimensions without decoding the bitmap in JavaScript. Captured pages
-are capped at 8192 pixels per edge and 16 million pixels; PPT is capped at 64 pages and output at
-128 MiB. The capture timeout is three minutes. PNG dimensions are independent of display density.
+and signed PNG output are capped at 8192 pixels per edge and 16 million pixels; PPT is capped at
+64 pages and output at 128 MiB. PNG signing uses the shared Skia renderer and re-encodes one image;
+both the native capture and signed temporary file are released after consumption or cancellation.
+The capture timeout is three minutes. PNG dimensions are independent of display density.
 
 `imagePresentation` writes image-only PresentationML with the already-installed `fflate/browser`.
 PNG data is copied in 256 KiB chunks into ZIP STORE entries. It avoids Base64, a complete in-memory

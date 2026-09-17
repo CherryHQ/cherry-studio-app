@@ -24,38 +24,38 @@ export async function capturePng(
     signal.throwIfAborted();
     screenshotUri = await captureRef(view, { format: 'png', result: 'tmpfile' });
     signal.throwIfAborted();
-    const handle = new File(screenshotUri).open(FileMode.ReadOnly);
-    try {
-      // Native capture has finished writing the PNG. Its header provides exact
-      // dimensions without reading or decoding the full image into JavaScript.
-      const bytes = handle.readBytes(24);
-      const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      if (
-        bytes.length < 24 ||
-        header.getUint32(0) !== 0x89504e47 ||
-        header.getUint32(4) !== 0x0d0a1a0a ||
-        header.getUint32(8) !== 13 ||
-        header.getUint32(12) !== 0x49484452
-      ) {
-        throw new DocumentExportError('capture-failed');
-      }
-      const width = header.getUint32(16);
-      const height = header.getUint32(20);
-      if (
-        width < 1 ||
-        height < 1 ||
-        Math.abs(width - plan.width) > 1 ||
-        Math.abs(height - plan.height) > 1
-      ) {
-        throw new DocumentExportError('capture-failed');
-      }
-      signal.throwIfAborted();
-      return { uri: screenshotUri, width, height, release };
-    } finally {
-      handle.close();
+    const { width, height } = readPngDimensions(screenshotUri);
+    if (Math.abs(width - plan.width) > 1 || Math.abs(height - plan.height) > 1) {
+      throw new DocumentExportError('capture-failed');
     }
+    signal.throwIfAborted();
+    return { uri: screenshotUri, width, height, release };
   } catch (error) {
     release();
     throw error;
+  }
+}
+
+/** Read exact dimensions without loading or decoding the full PNG in JavaScript. */
+export function readPngDimensions(uri: string) {
+  const handle = new File(uri).open(FileMode.ReadOnly);
+  try {
+    const bytes = handle.readBytes(24);
+    const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (
+      bytes.length < 24 ||
+      header.getUint32(0) !== 0x89504e47 ||
+      header.getUint32(4) !== 0x0d0a1a0a ||
+      header.getUint32(8) !== 13 ||
+      header.getUint32(12) !== 0x49484452
+    ) {
+      throw new DocumentExportError('capture-failed');
+    }
+    const width = header.getUint32(16);
+    const height = header.getUint32(20);
+    if (width < 1 || height < 1) throw new DocumentExportError('capture-failed');
+    return { width, height };
+  } finally {
+    handle.close();
   }
 }

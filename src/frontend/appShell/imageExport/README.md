@@ -19,6 +19,8 @@ Document PNGs already include the same footer during HTML capture. Their `docume
 provenance prevents another decode or a duplicate footer on later delivery. Existing document
 exports are treated as completed artifacts; this does not retrofit their previous footer designs.
 The document pipeline retains its single capture without decoding and re-encoding the long image.
+The HTML file viewer adds the footer with `prepareImageExport` before persisting its captured PNG
+as `document-export`, so subsequent delivery also preserves exactly one signature.
 
 All image export actions use this brand signature, including images accessed through the file viewer.
 No additional AI-generated wording is added. The application preview and managed image used for

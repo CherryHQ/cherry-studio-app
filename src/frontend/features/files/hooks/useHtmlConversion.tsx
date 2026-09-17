@@ -4,12 +4,14 @@ import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useExportSignature } from '@/frontend/appShell/imageExport';
+import { prepareImageExport, useExportSignature } from '@/frontend/appShell/imageExport';
 import { shareFile } from '@/frontend/components/FileEntryPreview';
 import { useBackendModule } from '@/frontend/data';
+import { readPngDimensions } from '@/frontend/utils/capturePng';
 import {
   DocumentExportError,
   type CaptureHtmlPages,
+  type ExportSignature,
   type HtmlConversionContext,
   type HtmlConversionFormat,
 } from '@/shared/contracts/documentExport';
@@ -43,7 +45,7 @@ export function useHtmlConversion() {
   }, []);
 
   const capture = useCallback(
-    (html: string): CaptureHtmlPages =>
+    (html: string, signature: ExportSignature): CaptureHtmlPages =>
       (input) =>
         new Promise((resolve, reject) => {
           input.signal.throwIfAborted();
@@ -53,7 +55,21 @@ export function useHtmlConversion() {
           const request: HtmlCaptureRequest = {
             id: randomUUID(),
             html,
-            input: { ...input, signal: controller.signal },
+            input: {
+              ...input,
+              signal: controller.signal,
+              onPage: async (page, index, total) => {
+                if (input.format === 'pptx') return input.onPage(page, index, total);
+                // Persist the signed image so document-export delivery can safely reuse it.
+                const signed = await prepareImageExport(page, signature);
+                try {
+                  controller.signal.throwIfAborted();
+                  await input.onPage({ ...signed, ...readPngDimensions(signed.uri) }, index, total);
+                } finally {
+                  signed.release();
+                }
+              },
+            },
             started: false,
             abort: (error) => {
               if (settled) return;
@@ -96,8 +112,9 @@ export function useHtmlConversion() {
         toast.show({ label: t('fileViewer.shareUnavailable'), variant: 'danger' });
         return;
       }
+      const exportSignature = { ...signature, timestamp: formatExportTimestamp(new Date()) };
       const file = await module.convertHtml(
-        { title, format, capture: capture(html) },
+        { title, format, capture: capture(html, exportSignature) },
         {
           signal: controller.signal,
           onProgress: (value) => {
@@ -108,7 +125,7 @@ export function useHtmlConversion() {
       controller.signal.throwIfAborted();
       isConverted = true;
       setProgress(undefined);
-      await shareFile(file, { ...signature, timestamp: formatExportTimestamp(new Date()) });
+      await shareFile(file, exportSignature);
     } catch (error) {
       if (mounted.current) {
         const cancelled =
