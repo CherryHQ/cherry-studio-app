@@ -154,6 +154,58 @@ describe('AiService.checkModel', () => {
       expect.objectContaining({ modelId: model.modelId, system: 'test' }),
     );
     expect(mockGenerate).toHaveBeenCalledWith({ prompt: 'hi' }, expect.any(AbortSignal));
+    expect(mockGeneratorConstructor.mock.calls[0][0].providerSettings.headers).not.toHaveProperty(
+      'x-opencode-session',
+    );
+  });
+
+  it.each([
+    ['opencode', undefined, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'openai-compatible'],
+    ['opencode-copy', 'opencode', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'openai-compatible'],
+    ['opencode', undefined, ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'anthropic'],
+    ['opencode-copy', 'opencode', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'anthropic'],
+    ['opencode', undefined, ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai'],
+    ['opencode-copy', 'opencode', ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai'],
+  ] as const)(
+    'gives each %s health probe its own session header on %s / %s',
+    async (id, presetProviderId, endpointType, adapterFamily) => {
+      const provider = createProvider({
+        id,
+        presetProviderId,
+        defaultChatEndpoint: endpointType,
+        endpointConfigs: {
+          [endpointType]: { adapterFamily, baseUrl: 'https://opencode.ai/zen/go/v1' },
+        },
+      });
+      const model = createModel('test-model', { providerId: id, endpointTypes: [endpointType] });
+      const service = new AiService(createServices({ model, provider }));
+
+      await service.checkModel({ uniqueModelId: model.id });
+      await service.checkModel({ uniqueModelId: model.id });
+
+      const [first, second] = mockGeneratorConstructor.mock.calls.map(([params]) => params);
+      expect(first.providerSettings.headers['x-opencode-session']).toEqual(expect.any(String));
+      expect(first.providerSettings.headers['x-opencode-session']).toBe(first.context.requestId);
+      expect(second.providerSettings.headers['x-opencode-session']).toBe(second.context.requestId);
+      expect(first.context.requestId).not.toBe(second.context.requestId);
+    },
+  );
+
+  it('preserves a case-insensitive explicit OpenCode session header during a health probe', async () => {
+    const provider = createProvider({
+      id: 'opencode-copy',
+      presetProviderId: 'opencode',
+      settings: { extraHeaders: { 'X-OpenCode-Session': 'configured-session' } },
+    });
+    const model = createModel('test-model', { providerId: provider.id });
+
+    await new AiService(createServices({ model, provider })).checkModel({
+      uniqueModelId: model.id,
+    });
+
+    const headers = mockGeneratorConstructor.mock.calls[0][0].providerSettings.headers;
+    expect(headers['X-OpenCode-Session']).toBe('configured-session');
+    expect(headers).not.toHaveProperty('x-opencode-session');
   });
 
   it('requires an explicit model id', async () => {

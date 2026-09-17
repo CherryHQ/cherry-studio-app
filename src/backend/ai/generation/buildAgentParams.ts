@@ -84,6 +84,7 @@ export async function buildAgentParams({
     throw new Error(`Mobile AI runtime does not support embedding or rerank models: ${model.id}`);
   }
 
+  const requestId = Crypto.randomUUID();
   const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
     provider,
     model,
@@ -92,7 +93,11 @@ export async function buildAgentParams({
       resolveApiKey: (providerId, override) =>
         services.provider.resolveApiKey(providerId, override),
     },
-    { apiKeyOverride: request.apiKeyOverride, resolvedConnection: connection },
+    {
+      apiKeyOverride: request.apiKeyOverride,
+      resolvedConnection: connection,
+      sessionId: requestId,
+    },
   );
   const endpointType = connection.endpointType;
   const providerOptionsKey = resolveProviderOptionsKey(sdkConfig.providerId, {
@@ -198,7 +203,7 @@ export async function buildAgentParams({
     sdkConfig: { ...sdkConfig, modelId: connection.wireModelId },
     context: {
       abortSignal: request.requestOptions?.signal,
-      requestId: Crypto.randomUUID(),
+      requestId,
     },
     plugins,
     repairToolCall,

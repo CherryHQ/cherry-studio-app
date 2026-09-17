@@ -16,6 +16,7 @@ import type {
   ToolResultMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
+import { v4 as uuid } from 'uuid';
 
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 
@@ -85,6 +86,7 @@ export interface PiRuntimeDependencies {
   resolveModel(
     model: RuntimeExecutionRequest['model'],
     options: RuntimeExecutionRequest['options'],
+    sessionId: string,
   ): PiModelResolution | Promise<PiModelResolution>;
 }
 
@@ -539,6 +541,7 @@ function toolResultOutput(result: ToolResultMessage): RuntimeJsonValue {
 class PiRuntimeSession implements AgentRuntimeSession {
   private activeTurn: ActiveTurn | undefined;
   private closed = false;
+  private readonly sessionId = uuid();
 
   constructor(
     private readonly dependencies: PiRuntimeDependencies,
@@ -642,7 +645,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     let secrets: readonly string[] = attachmentRedactions;
     try {
       const resolution = await raceAbort(
-        this.dependencies.resolveModel(request.model, request.options),
+        this.dependencies.resolveModel(request.model, request.options, this.sessionId),
         turn.abortController.signal,
       );
       secrets = [...resolution.redactionValues, ...attachmentRedactions];

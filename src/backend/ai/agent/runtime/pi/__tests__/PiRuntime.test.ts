@@ -519,6 +519,41 @@ const harness: RuntimeConformanceHarness = {
 };
 
 describe('Pi invocation capture', () => {
+  test('keeps one provider session id across turns and isolates newly opened sessions', async () => {
+    const sessionIds: string[] = [];
+    const resolution = createResolution();
+    const runtime = new PiRuntime(
+      {
+        preflightModel: jest.fn(),
+        resolveModel: (_model, _options, sessionId) => {
+          sessionIds.push(sessionId);
+          return resolution;
+        },
+      },
+      (options) => new TestPiAgent(options, (context) => emitText(context, 'OK')),
+    );
+    const first = await runtime.open();
+    const second = await runtime.open();
+    try {
+      for (const [session, turnId] of [
+        [first, 'turn-1'],
+        [first, 'turn-2'],
+        [second, 'probe'],
+      ] as const) {
+        const events = await collect(session.execute(baseRequest(turnId)));
+        expect(events.at(-1)?.type).toBe('completed');
+      }
+      expect(sessionIds).toHaveLength(3);
+      expect(sessionIds[0]).toEqual(expect.any(String));
+      expect(sessionIds[0]).not.toBe('');
+      expect(sessionIds[1]).toBe(sessionIds[0]);
+      expect(sessionIds[2]).not.toBe(sessionIds[0]);
+    } finally {
+      await first.close();
+      await second.close();
+    }
+  });
+
   test.each(['sync', 'async'] as const)(
     'retains a completed %s provider stream when cancelled before message_end',
     async (mode) => {
