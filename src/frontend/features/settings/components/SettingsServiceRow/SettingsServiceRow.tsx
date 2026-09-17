@@ -4,7 +4,7 @@ import { cn } from '@cherrystudio/ui/utils';
 import type { ImageSource } from 'expo-image';
 import { memo, type ReactNode, useState } from 'react';
 import type { AccessibilityProps } from 'react-native';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
 
@@ -98,10 +98,11 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
         trailing={
           <View className="flex-row items-center gap-2">
             {statusLabel && statusTone === 'success' ? (
-              <View className="h-5 shrink-0 items-center justify-center rounded-lg border border-success-border bg-success-subtle px-1.5">
+              <View className="shrink-0 items-center justify-center rounded-lg border border-success-border bg-success-subtle px-1.5 py-0.5">
                 <Text
                   className="font-medium text-success-subtle-foreground text-xs"
                   numberOfLines={1}
+                  style={styles.statusLabel}
                 >
                   {statusLabel}
                 </Text>
@@ -125,4 +126,11 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
       />
     </View>
   );
+});
+
+const styles = StyleSheet.create({
+  statusLabel: {
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
 });
