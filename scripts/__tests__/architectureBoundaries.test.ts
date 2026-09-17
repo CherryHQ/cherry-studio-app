@@ -2,8 +2,12 @@ import path from 'node:path';
 
 import { ESLint } from 'eslint';
 
+import eslintConfig from '../../eslint.config';
+
 const root = path.resolve(__dirname, '../..');
-const eslint = new ESLint({ cwd: root });
+// ESLint's config discovery uses dynamic import(), which Jest's CommonJS VM cannot execute.
+// Load the real config through Jest and disable discovery without changing the rules under test.
+const eslint = new ESLint({ cwd: root, overrideConfig: eslintConfig, overrideConfigFile: true });
 
 async function boundaryErrors(filePath: string, source: string) {
   const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
