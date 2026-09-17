@@ -90,7 +90,6 @@ import type {
   AgentRuntimeSession,
   RuntimeContextCheckpoint,
   RuntimeEvent,
-  RuntimeExecutionRequest,
   RuntimeUsage,
 } from '../runtime';
 import { raceAbort } from '../runtime';
@@ -107,7 +106,6 @@ import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { buildAgentSystemPrompt } from './agentSystemPrompt';
 import { validateRuntimeContextCheckpoint } from './contextCheckpoints';
-import { compressRuntimeImages, executeWithImageCompressionRetry } from './imageCompressionRetry';
 import type { AgentInferenceModelResolver } from './inferenceSnapshot';
 import { MessageRuntimeTimingCollector } from './MessageRuntimeTimingCollector';
 import {
@@ -853,7 +851,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         contentAttachments: plan.runtimeContentAttachments,
       });
       state.abortController.signal.throwIfAborted();
-      const request: RuntimeExecutionRequest = {
+      const events = state.runtimeSession.execute({
         turnId: state.turn.id,
         sessionId,
         instructions: buildAgentSystemPrompt({
@@ -871,25 +869,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         options: plan.agent.options,
         runtimeTimingSink: state.runtimeTiming.sink,
         trace: state.trace,
-      };
-      const events = executeWithImageCompressionRetry({
-        session: state.runtimeSession,
-        request,
-        signal: state.abortController.signal,
-        prepareRetry: async () => {
-          const compressed = await compressRuntimeImages(
-            this.files,
-            state.resources,
-            runtimeAttachments,
-            state.abortController.signal,
-          );
-          if (!compressed) return undefined;
-          return {
-            ...request,
-            history: toRuntimeHistory(plan.history, compressed),
-            input: toRuntimeInputParts(plan.inputParts, state.resources, compressed),
-          };
-        },
       });
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);

@@ -23,8 +23,6 @@ import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
-import { compressImageDataUrl } from './imageCompression';
-
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
@@ -369,20 +367,15 @@ export async function imageUriToDataUrl(
   uri: string,
   mediaType: string,
   signal?: AbortSignal,
-  options?: { compress?: boolean },
 ): Promise<string> {
   signal?.throwIfAborted();
   if (uri.startsWith('data:')) {
     return uri;
   }
   const file = new File(uri);
-  const resolvedMediaType = resolveMediaType(mediaType, file.type, 'image/*');
-  if (options?.compress) {
-    const compressed = await compressImageDataUrl(uri, resolvedMediaType, signal);
-    if (compressed) return compressed;
-  }
   const base64 = await file.base64();
   signal?.throwIfAborted();
+  const resolvedMediaType = resolveMediaType(mediaType, file.type, 'image/*');
   return `data:${resolvedMediaType};base64,${base64}`;
 }
 
