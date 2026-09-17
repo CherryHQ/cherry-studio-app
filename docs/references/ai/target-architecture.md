@@ -19,7 +19,7 @@ implementation is heading and why.
 - **Drivers, ranked:** comprehension cost, then Runtime replaceability, then desktop-legacy
   removal. When two moves conflict, the higher driver wins.
 - **Pi is the sole conversation trunk.** The AI SDK path serves non-conversation generation only:
-  `AiService` (generate text, generate image, model check, model listing) and the tools that call
+  `AiService` (generate text, generate image, SDK-only probe, model listing) and the tools that call
   back into it.
 - **The Runtime seam stays at `agent/runtime/types.ts`.** It is an in-process execution boundary for
   the local Mobile Agent. Its replacement candidate is a different local loop, not a remote Agent

@@ -12,6 +12,7 @@ export async function checkChatModel(
   runtime: Pick<AgentRuntime, 'open'>,
   model: Model,
   options: {
+    apiKeyOverride?: string;
     onUsage: (report: RuntimeUsageReport, requestId: string) => Promise<void>;
     signal?: AbortSignal;
     timeoutMs?: number;
@@ -31,6 +32,7 @@ export async function checkChatModel(
   try {
     options.signal?.throwIfAborted();
     const events = session.execute({
+      ...(options.apiKeyOverride !== undefined && { apiKeyOverride: options.apiKeyOverride }),
       contextCheckpoint: null,
       history: [],
       input: [{ type: 'text', text: 'Reply with OK.' }],

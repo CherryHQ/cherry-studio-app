@@ -18,6 +18,7 @@ import {
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
 } from '@/shared/utils/modelTokenLimits';
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import { buildModelPricing, type ModelPricingDraft } from './providerModelPricing';
 
@@ -55,13 +56,7 @@ export type ProviderModelAddBuildResult = {
   input?: CreateModelDto;
 };
 
-export const PROVIDER_MODEL_CHAT_ENDPOINT_TYPES = [
-  ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
-  ENDPOINT_TYPE.OPENAI_RESPONSES,
-  ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
-] as const satisfies readonly EndpointType[];
-export type ProviderModelChatEndpointType = (typeof PROVIDER_MODEL_CHAT_ENDPOINT_TYPES)[number];
+export type ProviderModelChatEndpointType = (typeof CHAT_ENDPOINT_TYPES)[number];
 
 export const providerModelAddEndpointOptions = [
   { id: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, labelKey: 'endpoint_type.openai' },
@@ -130,12 +125,10 @@ export function getProviderChatEndpointTypes(
   provider: Pick<Provider, 'defaultChatEndpoint' | 'endpointConfigs'>,
 ): ProviderModelChatEndpointType[] {
   const endpointTypes: ProviderModelChatEndpointType[] = [];
-  const defaultType = PROVIDER_MODEL_CHAT_ENDPOINT_TYPES.find(
-    (type) => type === provider.defaultChatEndpoint,
-  );
+  const defaultType = CHAT_ENDPOINT_TYPES.find((type) => type === provider.defaultChatEndpoint);
   if (defaultType && provider.endpointConfigs?.[defaultType]?.baseUrl?.trim())
     endpointTypes.push(defaultType);
-  for (const type of PROVIDER_MODEL_CHAT_ENDPOINT_TYPES) {
+  for (const type of CHAT_ENDPOINT_TYPES) {
     if (provider.endpointConfigs?.[type]?.baseUrl?.trim() && !endpointTypes.includes(type))
       endpointTypes.push(type);
   }

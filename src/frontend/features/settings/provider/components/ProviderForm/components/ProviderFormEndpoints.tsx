@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
+
 import {
-  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   type CustomProviderTextEndpoint,
   getConfiguredCustomProviderTextEndpoints,
   hasConfiguredCustomProviderTextEndpoint,
@@ -15,8 +16,8 @@ import {
 import { useProviderForm } from '../context';
 import { ProviderFormEndpoint } from './ProviderFormEndpoint';
 
-const COMMON_TEXT_ENDPOINTS = CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.slice(0, 2);
-const ADVANCED_TEXT_ENDPOINTS = CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.slice(2);
+const COMMON_TEXT_ENDPOINTS = CHAT_ENDPOINT_TYPES.slice(0, 2);
+const ADVANCED_TEXT_ENDPOINTS = CHAT_ENDPOINT_TYPES.slice(2);
 
 const endpointLabelKeys = {
   'anthropic-messages': 'settings.provider.apiService.endpointAnthropic',
@@ -38,7 +39,7 @@ export function ProviderFormBaseUrl() {
 
 ProviderFormBaseUrl.displayName = 'ProviderForm.BaseUrl';
 
-/** Four Pi text endpoints for a fully custom provider. */
+/** Four configurable chat endpoints for a fully custom provider. */
 export function ProviderFormTextEndpoints() {
   const { t } = useTranslation();
   const { meta, state } = useProviderForm('ProviderForm.Endpoints');

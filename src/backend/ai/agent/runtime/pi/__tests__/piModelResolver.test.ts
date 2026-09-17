@@ -97,6 +97,31 @@ describe('Pi model resolver', () => {
     resolver = createPiModelResolver();
   });
 
+  test('uses the selected probe key for transport, attribution, and redaction', async () => {
+    const testCase = CASES[0];
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily),
+    );
+    mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+    mockResolveApiKey.mockResolvedValue({
+      apiKeySelection: CREDENTIAL_RECEIPT,
+      value: 'probe-key',
+    });
+    const resolution = await resolver.resolveModel(
+      { modelId: 'test-model', providerId: 'test-provider' },
+      {},
+      'probe-session',
+      'probe-key',
+    );
+    expect(mockResolveApiKey).toHaveBeenCalledWith('test-provider', 'probe-key');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ apiKey: 'probe-key' }),
+    );
+    expect(resolution.redactionValues).toContain('probe-key');
+    expect(resolution.usageContext.credentialReceipt).toEqual(CREDENTIAL_RECEIPT);
+  });
+
   test.each(CASES)('resolves $endpointType through $api', async (testCase) => {
     const provider = makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily);
     const model = makeModel(testCase.endpointType);

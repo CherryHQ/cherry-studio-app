@@ -382,7 +382,7 @@ export class AiService extends BaseService {
 
   // ── API validation ──
 
-  /** Validates models supported by the mobile AI runtime with a short text generation. */
+  /** Probes AI SDK text generation only. Product chat checks use the bound AgentRuntime. */
   async checkModel(request: AiCheckModelRequest): Promise<{ latency: number }> {
     const start = performance.now();
     const timeout = request.timeout ?? 15000;

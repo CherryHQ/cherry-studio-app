@@ -87,6 +87,7 @@ export interface PiRuntimeDependencies {
     model: RuntimeExecutionRequest['model'],
     options: RuntimeExecutionRequest['options'],
     sessionId: string,
+    apiKeyOverride?: string,
   ): PiModelResolution | Promise<PiModelResolution>;
 }
 
@@ -640,14 +641,22 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private async run(request: RuntimeExecutionRequest, turn: ActiveTurn): Promise<void> {
     let unsubscribe: (() => void) | undefined;
-    const attachmentRedactions = attachmentBodies(request);
-    let secrets: readonly string[] = attachmentRedactions;
+    const requestRedactions = [
+      ...attachmentBodies(request),
+      ...(request.apiKeyOverride ? [request.apiKeyOverride] : []),
+    ];
+    let secrets: readonly string[] = requestRedactions;
     try {
       const resolution = await raceAbort(
-        this.dependencies.resolveModel(request.model, request.options, request.sessionId),
+        this.dependencies.resolveModel(
+          request.model,
+          request.options,
+          request.sessionId,
+          request.apiKeyOverride,
+        ),
         turn.abortController.signal,
       );
-      secrets = [...resolution.redactionValues, ...attachmentRedactions];
+      secrets = [...resolution.redactionValues, ...requestRedactions];
       turn.usageContext = resolution.usageContext;
       if (this.settleIfEnding(turn)) return;
       const directTools = request.tools.filter((tool) => tool.ref.source !== 'mcp');
