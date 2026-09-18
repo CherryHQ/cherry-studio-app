@@ -28,6 +28,7 @@ import {
 import { configureObserve } from '@/frontend/appShell/observability';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
+import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { LanguagePreferenceObserver } from '@/frontend/i18n';
@@ -61,6 +62,7 @@ function RootLayout() {
                               <RouteHeaderProvider rootAction="back">
                                 <BackgroundActivityBridge />
                                 <LanguagePreferenceObserver />
+                                <SystemEntryBridge />
                                 <RootStack />
                               </RouteHeaderProvider>
                             </BottomSheetProvider>
@@ -141,6 +143,11 @@ function RootStack() {
       />
       <Stack.Screen name="files/[fileEntryId]" options={{ headerTransparent: false }} />
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="system-share"
+        options={{ headerTransparent: false, gestureEnabled: false }}
+      />
+      <Stack.Screen name="translate" options={{ headerTransparent: false }} />
       <Stack.Screen
         name="document-export"
         options={{

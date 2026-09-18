@@ -1,0 +1,36 @@
+<resources>
+  <string name="cherry_translation_title">Cherry Translate</string>
+  <string name="cherry_translation_target">Translate into</string>
+  <string name="cherry_translation_original">Original</string>
+  <string name="cherry_translation_result">Translation</string>
+  <string name="cherry_translation_running">Translating…</string>
+  <string name="cherry_translation_copy">Copy translation</string>
+  <string name="cherry_translation_copied">Copied</string>
+  <string name="cherry_translation_retry">Retry</string>
+  <string name="cherry_translation_close">Close</string>
+  <string name="cherry_translation_privacy">Cherry does not save translation records.</string>
+  <string name="cherry_translation_setup">Choose a compatible translation model in Cherry → Settings → Model settings, then return here.</string>
+  <string name="cherry_translation_unsupported_provider">This model connection is not supported in the temporary window. Choose an HTTPS OpenAI Chat Completions compatible model with a standard API key in Cherry.</string>
+  <string name="cherry_translation_model_unavailable">The selected translation model is unavailable. Choose another model in Cherry.</string>
+  <string name="cherry_translation_provider_unavailable">The selected model provider is unavailable. Check its settings in Cherry.</string>
+  <string name="cherry_translation_configuration_stale">Translation settings changed. Reopen Cherry to sync them, then retry.</string>
+  <string name="cherry_translation_credentials_unavailable">Unlock your device and open Cherry to sync the translation model credentials.</string>
+  <string name="cherry_translation_invalid_input">Select some text to translate.</string>
+  <string name="cherry_translation_input_too_large">Select a shorter passage (up to 16,000 characters).</string>
+  <string name="cherry_translation_authentication_failed">The model credentials were rejected. Update them in Cherry.</string>
+  <string name="cherry_translation_rate_limited">The model provider is rate limiting requests. Try again later.</string>
+  <string name="cherry_translation_timed_out">Translation timed out. Try again.</string>
+  <string name="cherry_translation_network_unavailable">Could not connect to the model provider. Check your connection and retry.</string>
+  <string name="cherry_translation_invalid_result">The model did not return a complete translation. Try again.</string>
+  <string name="cherry_translation_failed">Translation failed. Check the selected model in Cherry and retry.</string>
+  <string name="cherry_share_title">Share to Cherry</string>
+  <string name="cherry_share_continue">Continue in Cherry</string>
+  <string name="cherry_share_translate">Temporary translation</string>
+  <string name="cherry_share_confirm">Review the shared content in Cherry before sending it to an Agent.</string>
+  <string name="cherry_share_preparing">Preparing shared content…</string>
+  <string name="cherry_share_failed">Could not read this share. Share up to 10 files (25 MB each, 50 MB total) and try again.</string>
+  <string name="cherry_shortcut_chat">New chat</string>
+  <string name="cherry_shortcut_painting">Create image</string>
+  <string name="cherry_new_chat">New chat</string>
+  <string name="cherry_new_painting">New painting</string>
+</resources>

@@ -1,9 +1,10 @@
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
-import type { AgentRuntime } from '@/backend/ai/agent/runtime';
+import { type AgentRuntime, raceAbort } from '@/backend/ai/agent/runtime';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
 } from '@/backend/ai/provider/systemModelSupport';
+import { resolveNativeTranslationConnection } from '@/backend/ai/translation/nativeTranslationConnection';
 import {
   createMcpServerMutations,
   type McpServerMutations,
@@ -43,13 +44,21 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
+import { createSystemEntryModule, createSystemShareImports } from '@/backend/services/systemEntry';
+import {
+  createTranslationModule,
+  TranslationConfigurationRuntime,
+} from '@/backend/services/translation';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;
+  translationConfiguration: TranslationConfigurationRuntime;
+  disposeSystemEntry(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -66,6 +75,7 @@ export function createBackend(
     desktopConnections: DesktopConnectionRuntime;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
+    getInterfaceLanguage?: () => string;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
@@ -191,8 +201,49 @@ export function createBackend(
     },
   });
 
+  const translationConfiguration = new TranslationConfigurationRuntime({
+    preferences: services.preference,
+    getModel: (id) => services.model.getById(id),
+    getProvider: (id) => services.provider.getByProviderId(id),
+    getKeys: (id) => services.provider.listApiKeys(id),
+    getAuth: (id) => services.provider.getAuthConfig(id),
+    getInterfaceLanguage: infrastructure.getInterfaceLanguage ?? (() => 'en-US'),
+    ensureModelCatalog: () => infrastructure.providerRegistryUpdater.ensureReady(),
+    resolveNativeConnection: resolveNativeTranslationConnection,
+  });
+  const translation = createTranslationModule({
+    getAvailability: translationConfiguration.getAvailability,
+    subscribeAvailability: translationConfiguration.subscribeAvailability,
+    subscribeConfigurationChange: translationConfiguration.subscribeInvalidation,
+    generate: (input) => services.ai.generateTemporaryText(input),
+  });
+
+  const findEntrySession = async (id: string) => {
+    try {
+      return await services.agentSession.getById(id);
+    } catch (error) {
+      if (isDataApiError(error) && error.code === ErrorCode.NOT_FOUND) return null;
+      throw error;
+    }
+  };
+  const systemEntry = createSystemEntryModule({
+    agent: services.agent,
+    ensureReady: (signal) =>
+      raceAbort(infrastructure.providerRegistryUpdater.ensureReady(), signal),
+    findSession: findEntrySession,
+    readMessage: async (sessionId, messageId) =>
+      (await services.agentSessionMessage.listByCursor(sessionId, { ids: [messageId] })).items[0] ??
+      null,
+    getAgent: (id) => services.agentData.getById(id),
+    listAgents: async () => (await services.agentData.list({ limit: 500 })).items,
+    imports: createSystemShareImports({ entries: exportFiles, findSession: findEntrySession }),
+  });
+
   return {
+    translationConfiguration,
+    disposeSystemEntry: systemEntry.dispose,
     backend: {
+      systemEntry: systemEntry.module,
       agent: services.agent,
       desktopConnections: infrastructure.desktopConnections,
       documentExport: infrastructure.documentExport,
@@ -213,6 +264,7 @@ export function createBackend(
       profile,
       providers,
       webSearch: services.webSearch,
+      translation,
     },
     dataApiDependencies: {
       agentAvatars,

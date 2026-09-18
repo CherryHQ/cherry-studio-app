@@ -124,6 +124,7 @@
         }
       ],
       "./scripts/withAndroidBackgroundGeneration.js",
+      "./scripts/withSystemIntegration.js",
       "./scripts/withTabletOrientation.js",
       [
         "@sentry/react-native/expo",

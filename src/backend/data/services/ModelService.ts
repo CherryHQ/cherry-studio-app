@@ -6,6 +6,7 @@ import { agentTable, monotonicUpdateTimestamp } from '@/backend/data/db/schemas'
 import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
+import { modelConfigurationChanges } from '@/backend/data/modelConfigurationChanges';
 import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import type {
   CreateModelDto,
@@ -376,6 +377,10 @@ export class ModelService {
    * reference to a particular host generation and a replaced host cannot leave
    * this singleton writing to a closed connection.
    */
+  private withConfigurationWrite<T>(write: (tx: Database) => Promise<T>): Promise<T> {
+    return modelConfigurationChanges.write(() => this.dbService.withWriteTx(write));
+  }
+
   private get dbService() {
     return application.get('DbService');
   }
@@ -466,7 +471,7 @@ export class ModelService {
 
   async create(input: CreateModelInput): Promise<Model> {
     providerRegistryService.assertReady();
-    const row = (await this.dbService.withWriteTx(async (tx) => {
+    const row = (await this.withConfigurationWrite(async (tx) => {
       await assertModelEndpointWrites(tx, [toCreateModelEndpointWrite(input)]);
       return insertWithOrderKey(tx, userModelTable, buildModelInsertValues(input), {
         pkColumn: userModelTable.id,
@@ -482,7 +487,7 @@ export class ModelService {
     }
     providerRegistryService.assertReady();
     const values = inputs.map(buildModelInsertValues);
-    const rows = await this.dbService.withWriteTx(async (tx) => {
+    const rows = await this.withConfigurationWrite(async (tx) => {
       await assertModelEndpointWrites(tx, inputs.map(toCreateModelEndpointWrite));
       const result: UserModelRow[] = [];
       for (const providerId of new Set(values.map((value) => value.providerId))) {
@@ -516,7 +521,7 @@ export class ModelService {
 
   async update(providerId: string, modelId: string, dto: UpdateModelDto): Promise<Model> {
     providerRegistryService.assertReady();
-    return this.dbService.withWriteTx(async (tx) => {
+    return this.withConfigurationWrite(async (tx) => {
       const [existing] = await tx
         .select()
         .from(userModelTable)
@@ -549,7 +554,7 @@ export class ModelService {
       return [];
     }
     providerRegistryService.assertReady();
-    const rows = await this.dbService.withWriteTx(async (tx) => {
+    const rows = await this.withConfigurationWrite(async (tx) => {
       await assertModelEndpointWrites(
         tx,
         items.map(({ patch, providerId }) => ({
@@ -612,7 +617,7 @@ export class ModelService {
     const id = createUniqueModelId(providerId, modelId);
     await this.assertNotUsedAsDefault(id, `delete model ${id}`);
 
-    await this.dbService.withWriteTx(async (tx) => {
+    await this.withConfigurationWrite(async (tx) => {
       await tx
         .update(agentTable)
         .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
@@ -640,7 +645,7 @@ export class ModelService {
       await this.assertNotUsedAsDefault(id, `delete model ${id}`);
     }
 
-    await this.dbService.withWriteTx(async (tx) => {
+    await this.withConfigurationWrite(async (tx) => {
       const existingIds = new Set<string>();
       for (const idChunk of chunks(ids, sqliteBatchSize)) {
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
@@ -792,7 +797,7 @@ export class ModelService {
     });
     const defaultIds = await this.getUserDefaultModelIds();
 
-    return this.dbService.withWriteTx(async (tx) => {
+    return this.withConfigurationWrite(async (tx) => {
       await assertModelEndpointWrites(
         tx,
         toAdd.map((model) => ({ endpointTypes: model.endpointTypes ?? [], providerId })),
