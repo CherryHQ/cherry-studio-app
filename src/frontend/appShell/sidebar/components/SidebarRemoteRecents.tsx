@@ -1,5 +1,4 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { ActionMenu, ContentState, type MenuItem } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { useRouter } from 'expo-router';
@@ -20,6 +19,7 @@ import { AgentAvatar } from '@/frontend/components/Avatar';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 import type { ControllerAgent } from '@/shared/contracts/agent/controller';
 
+import NewConversationIcon from '../../icons/NewConversationIcon';
 import { useSidebarActions } from '../context';
 import { SidebarAgentIconSlot, SidebarRowContent, SIDEBAR_LEADING_SIZE } from './SidebarRowContent';
 
@@ -220,16 +220,20 @@ function RemoteAgentGroup({
   isDefaultExpanded: boolean;
   showLoading: boolean;
 }) {
+  const { t } = useTranslation();
+  const { startRemoteChat } = useChatSource();
+  const { closeDrawer } = useSidebarActions('Remote Agent group');
   const [override, setOverride] = useState<boolean>();
   const expanded = override ?? isDefaultExpanded;
   return (
     <View>
-      <View className="px-2">
+      {/* Sibling targets keep new-chat presses separate from group expansion. */}
+      <View className="flex-row items-center px-2">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={agent.name}
           accessibilityState={{ expanded }}
-          className="active:bg-sidebar-accent"
+          className="min-w-0 flex-1 active:bg-sidebar-accent"
           onPress={() => setOverride((value) => !(value ?? isDefaultExpanded))}
         >
           <SidebarRowContent
@@ -242,12 +246,18 @@ function RemoteAgentGroup({
             <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
               {agent.name}
             </Text>
-            {expanded ? (
-              <ChevronDownIcon className="size-4 text-muted-foreground" />
-            ) : (
-              <ChevronRightIcon className="size-4 text-muted-foreground" />
-            )}
           </SidebarRowContent>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('navigation.newChat')}
+          className="size-11 shrink-0 items-center justify-center rounded-xl active:bg-sidebar-accent"
+          onPress={() => {
+            closeDrawer();
+            startRemoteChat(agent.id);
+          }}
+        >
+          <NewConversationIcon className="size-5 text-sidebar-foreground" />
         </Pressable>
       </View>
       {expanded ? <RemoteSessions agentId={agent.id} showLoading={showLoading} /> : null}
@@ -265,7 +275,7 @@ function RemoteSessions({
   showLoading: boolean;
 }) {
   const { t } = useTranslation();
-  const { remoteTarget, openRemote, startRemoteChat } = useChatSource();
+  const { remoteTarget, openRemote } = useChatSource();
   const { closeDrawer } = useSidebarActions('Remote sessions');
   const query = useRemoteSessions(agentId);
   const [showAll, setShowAll] = useState(false);
@@ -328,19 +338,6 @@ function RemoteSessions({
         <SidebarRowContent leading={leading}>
           <Text className="text-sm text-muted-foreground">{t('session.list.empty')}</Text>
         </SidebarRowContent>
-      ) : null}
-      {agentId ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            closeDrawer();
-            startRemoteChat(agentId);
-          }}
-        >
-          <SidebarRowContent leading={leading}>
-            <Text className="text-sm text-muted-foreground">{t('navigation.newChat')}</Text>
-          </SidebarRowContent>
-        </Pressable>
       ) : null}
       {sessions.length > limit || hasNextPage ? (
         <LoadMore onPress={loadMore} disabled={isFetchingNextPage} grouped={Boolean(agentId)} />
