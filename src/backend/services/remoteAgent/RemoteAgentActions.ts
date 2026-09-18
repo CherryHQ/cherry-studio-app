@@ -50,6 +50,12 @@ const ReceiptSchema = z.object({
 });
 type RecordEntry = z.infer<typeof RecordSchema>;
 
+function projectAction({ action, params }: RecordEntry): ControllerAction {
+  return action.kind === 'respond' && typeof params.interactionId === 'string'
+    ? { ...action, interactionId: params.interactionId }
+    : action;
+}
+
 export class RemoteAgentActions {
   private stopped = false;
   private records: RecordEntry[];
@@ -64,7 +70,7 @@ export class RemoteAgentActions {
   ) {
     const stored = journal.read(binding);
     this.records = stored === undefined ? [] : JournalSchema.parse(JSON.parse(stored)).records;
-    this.snapshot = this.records.map((entry) => entry.action);
+    this.snapshot = this.records.map(projectAction);
   }
   stop() {
     this.stopped = true;
@@ -81,7 +87,7 @@ export class RemoteAgentActions {
     if (this.stopped) return;
     this.journal.write(this.binding, JSON.stringify({ version: 1, records }));
     this.records = records;
-    this.snapshot = records.map((entry) => entry.action);
+    this.snapshot = records.map(projectAction);
     for (const listener of this.listeners) listener();
   }
   async create(

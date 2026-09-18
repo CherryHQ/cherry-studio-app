@@ -1,5 +1,4 @@
 import {
-  Button,
   composerContentGap,
   ContentState,
   getComposerKeyboardStickyOffset,
@@ -44,9 +43,9 @@ import { getTimestampMessageIds } from '../components/ChatWorkspace/messageTimes
 import { RemoteActions } from './RemoteActions';
 import { RemoteChatMessage } from './RemoteChatMessage';
 import { RemoteComposer, type RemotePendingSend } from './RemoteComposer';
-import { RemoteInteractionSheet } from './RemoteInteractionSheet';
 import { RemoteMessageDetails } from './RemoteMessageDetails';
 import type { PresentedMessage } from './remoteMessagePresentation';
+import { RemoteToolApprovals } from './RemoteToolApprovals';
 import { useRemoteConversation } from './useRemoteConversation';
 
 export function RemoteChatScreen() {
@@ -247,7 +246,6 @@ function RemoteConversation({
           { id: `pending-assistant:${pending.id}`, role: 'assistant', status: 'pending', data: {} },
         ]
       : messages;
-  const [interactionId, setInteractionId] = useState<string>();
   const [detailsId, setDetailsId] = useState<string>();
   const { bottom } = useSafeAreaInsets();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
@@ -296,7 +294,6 @@ function RemoteConversation({
         usage={null}
       />
     );
-  const selectedInteraction = snapshot?.interactions.find((item) => item.id === interactionId);
   return (
     <>
       <ComposerDismissArea disabled testID="chat-background">
@@ -339,15 +336,6 @@ function RemoteConversation({
           <View className="max-h-36">
             <ScrollView keyboardShouldPersistTaps="handled">
               <RemoteActions agentId={agent?.id} sessionId={sessionId} />
-              {snapshot?.interactions.map((interaction) => (
-                <Button
-                  key={interaction.id}
-                  variant="outline"
-                  onPress={() => setInteractionId(interaction.id)}
-                >
-                  {t('remoteAgent.interaction', { name: interaction.toolName })}
-                </Button>
-              ))}
             </ScrollView>
           </View>
           <RemoteComposer
@@ -373,20 +361,11 @@ function RemoteConversation({
           </ChatDockFooter>
         </View>
       </ComposerDock>
-      {sessionId && interactionId ? (
-        <RemoteInteractionSheet
-          key={interactionId}
+      {sessionId ? (
+        <RemoteToolApprovals
+          key={`${connectionId}:${connection.sourceKey}:${sessionId}`}
           sessionId={sessionId}
-          interaction={
-            selectedInteraction
-              ? { ...selectedInteraction, canRespond: selectedInteraction.canRespond && current }
-              : {
-                  id: interactionId,
-                  toolName: t('remoteAgent.interactionResolved'),
-                  canRespond: false,
-                }
-          }
-          onClose={() => setInteractionId(undefined)}
+          snapshot={snapshot}
         />
       ) : null}
       {sessionId && detailsId ? (

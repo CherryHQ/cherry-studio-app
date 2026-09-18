@@ -147,6 +147,11 @@ Question UI recognizes the PC's `AskUserQuestion`/`builtin_AskUserQuestion` inpu
 questions, single/multiple selection and free text, and preserves the original input when adding
 answers. Other tools present their original approval input. Decisions obey current `canRespond`;
 already resolved decisions refresh state instead of creating execution locally.
+Pending requests automatically enter the local chat's shared `ToolApprovalSheet`, with the same
+non-dismissible queue and approval actions; there is no separate pending-request button. Single
+and multiple choice questions use CherryUI selection rows. The remote adapter only owns content
+loading, response transport and connection gating. Response targets are projected from persisted
+command parameters so an uncertain or acknowledged response does not reopen from an old snapshot.
 
 Text/JSON detail pages use UTF-8 byte offsets and one content revision. JSON is parsed only after
 all pages arrive. A changed revision restarts from zero once. Artifact chunks are decoded
