@@ -9,7 +9,7 @@ The app owns task counting, content, cancellation, and route selection. A scoped
 adds native visibility handling to the library's existing service. The library still owns Headless
 JS and wake locks; the app adds no service or notification receiver. An
 [`expo-notifications` patch](../../patches/expo-notifications@57.0.17.patch) exposes Android's
-post-presentation event so task acknowledgement can follow asynchronous native delivery.
+post-presentation event so a focused task screen can dismiss asynchronously delivered notifications.
 
 ## Ownership And Behavior
 
@@ -49,11 +49,10 @@ post-presentation event so task acknowledgement can follow asynchronous native d
   delivery that never emits a JavaScript receipt event.
 - `BackgroundActivitySession.finish()` resolves after queued platform delivery. Painting awaits
   it before returning to `JobRuntime`, so execution protection includes the final notification.
-  Android subscribes before scheduling and waits for the matching post-presentation event, with
-  a three-second bound. Foreground return, cancellation, shutdown, and service interruption release
-  that wait. This event confirms a native presentation attempt, not that the user saw the alert.
-  Permission denial skips delivery. Scheduling failures get at most one retry with the same
-  identifier; successful scheduling is never retried because its presentation event is missing.
+  Android attempts notification submission once per attention phase and releases protection after
+  submission settles. It does not wait for a presentation event or retry failed scheduling.
+  Permission denial skips delivery. A successful submission does not guarantee a visible alert;
+  stopping execution immediately afterward can lose a notification. Task results remain persisted.
 - Job execution retains its lease while the dispatcher claims queued successors, including after
   forced cancellation. Serial painting requests therefore hand execution protection to the next
   task without stopping and trying to restart the service in the background.
@@ -94,7 +93,7 @@ decisions in those paths.
 | Presenter requirement | iOS Live Activity | Android notification |
 | --- | --- | --- |
 | `canStartInBackground` | `false`: defer creation until foreground | `true`: represent a task already admitted by the execution runtime |
-| `shouldHoldLeaseUntilDelivery` | `false`: preserve immediate audio-lease release | `true`: retain an existing session lease until its latest update or end settles |
+| `shouldHoldLeaseUntilDelivery` | `false`: preserve immediate audio-lease release | `true`: retain an existing session lease until notification submission settles |
 
 Creating an Android surface does not authorize starting a foreground service from the background;
 the Android execution runtime still owns that restriction. A session never acquires an extra lease
@@ -196,7 +195,7 @@ painting notification delivery before task completion. Additional cases cover fo
 delivery races, post-presentation task cleanup, cold-start navigation, task-versus-draft route
 identity, and legacy task URLs. Library lifecycle coverage exercises stopped-event ordering and
 stale generation rejection, unprotected continuation after failed or hidden admission,
-interruption persistence, and bounded notification delivery/retries. Installed-source guards protect both native patches against dependency upgrades; they do not prove
+interruption persistence, and notification submission without retries or presentation waits. Installed-source guards protect both native patches against dependency upgrades; they do not prove
 Android runtime behavior. Device acceptance should cover foreground/background service transitions,
 notification-shade interaction, rapid return and exit, screen lock, concurrent chat/painting, denied
 notification permission, completion/approval taps from a cold app, and system termination without

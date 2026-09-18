@@ -23,8 +23,6 @@ import type { BackgroundActivityEnvironment } from './BackgroundActivityEnvironm
 import type { BackgroundActivityPresenter } from './presenter';
 
 const ATTENTION_CHANNEL_ID = 'generation-updates';
-const NOTIFICATION_PRESENTATION_TIMEOUT_MS = 3_000;
-const MAX_ATTENTION_ATTEMPTS = 2;
 // Android 15 gives dataSync six background hours, reset on foreground entry.
 // Leave a minute for the domain's normal cancellation and notification drain.
 const BACKGROUND_EXECUTION_LIMIT_MS = (6 * 60 - 1) * 60_000;
@@ -37,10 +35,9 @@ const holdBackgroundExecution = () => new Promise<void>(() => {});
 
 type ActivityProps = BackgroundReplyActivityProps | PaintingActivityProps;
 type ActivityRecord = {
-  attention?: { kind: 'terminal' | 'approval'; failures: number; handled: boolean };
+  attention?: 'terminal' | 'approval';
   cancelled?: boolean;
   deepLinkUrl?: string;
-  finishPresentation?: () => void;
   id: string;
   latestProps: ActivityProps;
   props: ActivityProps;
@@ -106,7 +103,6 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     this.registerDisposable(() => notifications.setNotificationHandler(null));
     this.registerAppStateListener((state) => {
       if (state === 'active') {
-        for (const activity of this.activities) activity.finishPresentation?.();
         this.backgroundStartedAt = undefined;
         this.backgroundLimitReached = false;
         this.unprotected = false;
@@ -155,7 +151,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   createPresenter<Props extends ActivityProps>(): BackgroundActivityPresenter<Props> {
     return {
       // A queued task can join an already-running service in the background.
-      // Service admission stays in this runtime; final delivery needs its lease.
+      // Hold protection only through notification submission, never through presentation.
       canStartInBackground: true,
       shouldHoldLeaseUntilDelivery: true,
       clearOrphans: async () => 0,
@@ -170,7 +166,6 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         this.scheduleReconcile();
         return {
           update: (nextProps, context) => {
-            if (record.latestProps.phase !== nextProps.phase) record.finishPresentation?.();
             record.latestProps = nextProps;
             const occurredInBackground =
               context?.phaseStartedInBackground ?? AppState.currentState === 'background';
@@ -178,7 +173,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
               if (!this.activities.has(record) || this.disposed) return;
               const previousPhase = record.props.phase;
               record.props = nextProps;
-              if (record.attention?.kind === 'terminal' && !isTerminal(nextProps.phase)) {
+              if (record.attention === 'terminal' && !isTerminal(nextProps.phase)) {
                 record.attention = undefined;
                 await this.notifications?.dismissNotificationAsync(record.id);
               }
@@ -197,10 +192,8 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
             });
           },
           end: (policy, finalProps, context) => {
-            if (record.latestProps.phase !== finalProps.phase) record.finishPresentation?.();
             record.latestProps = finalProps;
             record.cancelled = policy !== 'default' || finalProps.phase === 'cancelled';
-            if (record.cancelled) record.finishPresentation?.();
             const occurredInBackground =
               context?.phaseStartedInBackground ?? AppState.currentState === 'background';
             return this.enqueue(async () => {
@@ -227,7 +220,6 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     this.disposed = true;
     this.clearDeadline();
     this.leases.clear();
-    for (const activity of this.activities) activity.finishPresentation?.();
     await this.enqueue(async () => {
       await this.stopService();
       await Promise.all(
@@ -341,104 +333,43 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     const notifications = this.notifications;
     if (!notifications || this.disposed || record.props.phase === 'cancelled') return;
     const kind = terminal ? 'terminal' : 'approval';
-    if (record.attention?.kind !== kind) {
-      record.attention = { kind, failures: 0, handled: false };
-    }
-    const attention = record.attention;
-    if (attention.handled) return;
+    if (record.attention === kind || record.cancelled || record.latestProps !== record.props)
+      return;
     const phase = record.props.phase;
     const requiresAttention = phase === 'awaiting-approval' || phase === 'failed';
-    // Only successful foreground completion stays silent after a queued delivery.
-    // Approval and failure must still reach the user if they have since left.
-    while (attention.failures < MAX_ATTENTION_ATTEMPTS) {
-      if (this.disposed || record.cancelled || record.latestProps !== record.props) return;
-      if ((!occurredInBackground && !requiresAttention) || AppState.currentState !== 'background') {
-        attention.handled = true;
-        if (AppState.currentState === 'active' && requiresAttention) {
-          this.environment.onForegroundAttention({
-            detail: record.props.detail,
-            phase,
-            title: record.props.title,
-            url: record.deepLinkUrl,
-          });
-        }
-        return;
-      }
-      let delivery: ReturnType<AndroidBackgroundActivityRuntime['waitForPresentation']> | undefined;
-      try {
-        const permission = await notifications.getPermissionsAsync();
-        if (this.disposed || record.cancelled || record.latestProps !== record.props) return;
-        if (AppState.currentState !== 'background') {
-          continue;
-        }
-        if (!permission.granted) {
-          attention.handled = true;
-          return;
-        }
-        delivery = this.waitForPresentation(record);
-        await notifications.scheduleNotificationAsync({
-          identifier: record.id,
-          content: {
-            title: record.props.title.slice(0, 120),
-            body: [record.props.detail, record.props.preview]
-              .filter(Boolean)
-              .join('\n')
-              .slice(0, 600),
-            data: {
-              deliveryId: delivery.id,
-              owner: BACKGROUND_NOTIFICATION_OWNER,
-              terminal,
-              url: record.deepLinkUrl,
-            },
-          },
-          trigger: { channelId: ATTENTION_CHANNEL_ID },
-        });
-        // A successful schedule must never be replayed merely because presentation
-        // was suppressed, the app returned, or its confirmation timed out.
-        attention.handled = true;
-        await delivery.promise;
-        return;
-      } catch (error) {
-        attention.failures += 1;
-        if (attention.failures >= MAX_ATTENTION_ATTEMPTS) {
-          logger.error('Background notification delivery failed', error as Error, {
-            operation: 'background.notification.schedule',
-            phase,
-          });
-          throw error;
-        }
-      } finally {
-        delivery?.finish();
-      }
+    // Foreground completion stays silent even if delivery runs after background entry.
+    if (!occurredInBackground && !requiresAttention) {
+      record.attention = kind;
+      return;
     }
-  }
-
-  private waitForPresentation(record: ActivityRecord) {
-    // A surface reuses its notification identifier across approval, retries, and turns.
-    // A late event from an earlier delivery must not release the current delivery's lease.
-    const id = this.nextId++;
-    let finish!: () => void;
-    const presented = new Promise<void>((resolve) => {
-      finish = resolve;
+    const permission =
+      AppState.currentState === 'background'
+        ? await notifications.getPermissionsAsync()
+        : undefined;
+    if (this.disposed || record.cancelled || record.latestProps !== record.props) return;
+    // Consume this phase before scheduling: failures and later title updates never replay it.
+    record.attention = kind;
+    if (AppState.currentState !== 'background') {
+      if (AppState.currentState === 'active' && requiresAttention) {
+        this.environment.onForegroundAttention({
+          detail: record.props.detail,
+          phase,
+          title: record.props.title,
+          url: record.deepLinkUrl,
+        });
+      }
+      return;
+    }
+    if (!permission?.granted) return;
+    await notifications.scheduleNotificationAsync({
+      identifier: record.id,
+      content: {
+        title: record.props.title.slice(0, 120),
+        body: [record.props.detail, record.props.preview].filter(Boolean).join('\n').slice(0, 600),
+        data: { owner: BACKGROUND_NOTIFICATION_OWNER, terminal, url: record.deepLinkUrl },
+      },
+      trigger: { channelId: ATTENTION_CHANNEL_ID },
     });
-    const subscription = this.notifications!.addNotificationPresentedListener((notification) => {
-      if (
-        notification.request.identifier === record.id &&
-        notification.request.content.data?.deliveryId === id
-      )
-        finish();
-    });
-    const timer = setTimeout(finish, NOTIFICATION_PRESENTATION_TIMEOUT_MS);
-    record.finishPresentation = finish;
-    return {
-      id,
-      finish,
-      promise: presented.finally(() => {
-        clearTimeout(timer);
-        subscription.remove();
-        if (record.finishPresentation === finish) record.finishPresentation = undefined;
-      }),
-    };
   }
 
   private armDeadline(): void {
@@ -469,7 +400,6 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     this.interrupting = true;
     const leases = [...this.leases];
     this.leases.clear();
-    for (const activity of this.activities) activity.finishPresentation?.();
     if (leases.length > 0) {
       logger.error('Background execution interrupted', reason, {
         operation: 'background.execution.interrupt',

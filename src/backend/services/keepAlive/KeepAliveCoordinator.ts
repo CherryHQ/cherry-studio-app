@@ -17,7 +17,7 @@ export type KeepAliveLease = {
 export type KeepAliveSource = {
   /**
    * Holds background execution for the caller. `onInterrupt` fires when the
-   * platform denies or revokes execution before release; sources that cannot be revoked
+   * platform revokes execution before release; sources that cannot be revoked
    * never call it.
    */
   acquire(tag: string, onInterrupt?: (reason: Error) => void | Promise<void>): KeepAliveLease;
