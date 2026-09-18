@@ -96,7 +96,10 @@ native renderer. A part that has streamed keeps the streaming renderer for its f
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
 the same theme tokens, syntax palette, LaTeX flags, and typography scale. Native streaming mode ends
 with each part, releasing pending tail blocks and requesting a final layout even when the text
-itself is unchanged. Product code supplies the active font size step and decides how links open:
+itself is unchanged. Product code supplies the active font size step, decides how links open, and
+passes the native copy-menu labels already translated. The renderer presents those menus itself, on
+text selections and on Markdown tables, so omitting the labels leaves the library's English
+defaults:
 
 ```tsx
 <MarkdownText
@@ -104,6 +107,7 @@ itself is unchanged. Product code supplies the active font size step and decides
   isStreaming={isStreaming}
   markdown={markdown}
   onLinkPress={openLink}
+  selectionMenuLabels={selectionMenuLabels}
 />;
 ```
 

@@ -424,6 +424,7 @@
   "common.clear": "Golește",
   "common.close": "Închide",
   "common.copy": "Copiază",
+  "common.copyAsMarkdown": "Copiază ca Markdown",
   "common.delete": "Șterge",
   "common.discard": "Renunțați",
   "common.done": "Gata",

@@ -427,6 +427,7 @@
   "common.clear": "Очистить",
   "common.close": "Закрыть",
   "common.copy": "Копировать",
+  "common.copyAsMarkdown": "Копировать как Markdown",
   "common.delete": "Удалить",
   "common.discard": "Отбросить",
   "common.done": "Готово",
