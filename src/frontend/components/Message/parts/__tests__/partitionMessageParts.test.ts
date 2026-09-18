@@ -1,6 +1,6 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import { partitionMessageParts } from '../partitionMessageParts';
+import { groupMessageProcessItems, partitionMessageParts } from '../partitionMessageParts';
 
 function file(id: string): CherryMessagePart {
   return {
@@ -15,6 +15,46 @@ function file(id: string): CherryMessagePart {
 function text(value: string): CherryMessagePart {
   return { text: value, type: 'text' };
 }
+
+describe('groupMessageProcessItems', () => {
+  test('compresses repeated calls and intervening reasoning without crossing narration', () => {
+    const parts = [
+      text('First phase'),
+      reasoning('plan'),
+      tool('read-1'),
+      reasoning('next'),
+      tool('read-2'),
+      text('Second phase'),
+      tool('write'),
+      reasoning('finish'),
+    ];
+    const items = parts.map((part, index) => ({ part, index, key: `source-${index}` }));
+    const groups = groupMessageProcessItems(items);
+
+    expect(groups.map((group) => group.kind)).toEqual(['part', 'tools', 'part', 'tools']);
+    const runs = groups.filter((group) => group.kind === 'tools');
+    expect(runs.map((group) => group.tools.length)).toEqual([2, 1]);
+    expect(runs.map((group) => group.items.map((item) => item.key))).toEqual([
+      ['source-1', 'source-2', 'source-3', 'source-4'],
+      ['source-6', 'source-7'],
+    ]);
+    expect(groups.flatMap((group) => (group.kind === 'part' ? [group.item] : group.items))).toEqual(
+      items,
+    );
+  });
+
+  test('leaves tool-free reasoning unchanged and keeps a growing run anchored to its first part', () => {
+    const first = { part: reasoning('plan'), index: 0, key: 'reasoning-id' };
+    expect(groupMessageProcessItems([first])).toEqual([{ kind: 'part', item: first }]);
+    const run = [first, { part: tool('read'), index: 1, key: 'read-id' }];
+    const groups = groupMessageProcessItems([
+      ...run,
+      { part: tool('write'), index: 2, key: 'write-id' },
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].kind === 'tools' && groups[0].items[0]).toBe(first);
+  });
+});
 
 describe('partitionMessageParts', () => {
   test('keeps turn-start markers visible and in-loop markers between their tools', () => {

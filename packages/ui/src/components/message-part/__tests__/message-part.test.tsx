@@ -307,7 +307,7 @@ describe('MessagePart', () => {
     expect(renderer!.root.findByProps({ children: 'File details' })).toBeDefined();
   });
 
-  it('keeps a running tool group expanded and folds it once complete', () => {
+  it('keeps tool groups collapsed while running and after completion until pressed', () => {
     const steps = (
       <>
         <Text>step one</Text>
@@ -322,8 +322,7 @@ describe('MessagePart', () => {
       );
     });
 
-    // Live run: steps visible without any press, title shimmering.
-    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
     expect(renderer!.root.findByProps({ accessibilityHint: 'shimmer' }).props.children).toBe(
       'Working with tools…',
     );
@@ -336,13 +335,12 @@ describe('MessagePart', () => {
       );
     });
 
-    // Settled run folds to its summary until the reader asks for the steps.
     expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
     expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
   });
 
-  it('lets a manual toggle override the running default of a tool group', () => {
+  it('keeps a manually opened tool group open after completion', () => {
     act(() => {
       renderer = create(
         <MessagePart.ToolGroup
@@ -358,10 +356,37 @@ describe('MessagePart', () => {
     });
 
     act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
-    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
     expect(renderer!.root.findByProps({ children: '1 failed' }).props.className).toContain(
       'text-error',
     );
+    act(() => {
+      renderer!.update(
+        <MessagePart.ToolGroup state="complete" testID="group" title="2 operations">
+          <Text>step</Text>
+          <Text>second step</Text>
+        </MessagePart.ToolGroup>,
+      );
+    });
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
+  });
+
+  it('preserves reading an open run when it first enters the completed process', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.Process
+          defaultExpanded
+          state="complete"
+          title="Thinking process"
+          testID="process"
+        >
+          <Text>Opened tool history</Text>
+        </MessagePart.Process>,
+      );
+    });
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(1);
+    act(() => renderer!.root.findByProps({ testID: 'process-trigger' }).props.onPress());
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(0);
   });
 
   it('renders the pending response as an active, accessible status row', () => {

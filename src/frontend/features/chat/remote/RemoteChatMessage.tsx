@@ -15,6 +15,7 @@ import {
 import { RemoteArtifact } from './RemoteArtifact';
 import { type PresentedMessage, withRemoteToolSummaries } from './remoteMessagePresentation';
 import { RemoteToolPart } from './RemoteToolPart';
+import { getRemoteToolTitle } from './remoteToolTitle';
 
 export function RemoteChatMessage({
   message,
@@ -34,6 +35,7 @@ export function RemoteChatMessage({
   onDetails(id: string): void;
 }) {
   const { t } = useTranslation();
+  const getToolTitle = useCallback((name: string) => getRemoteToolTitle(name, t), [t]);
   const { controller, connectionId } = useRemoteAgent();
   const connection = useRemoteConnection();
   const { remote } = message;
@@ -96,7 +98,7 @@ export function RemoteChatMessage({
   const hasAccessories = hasError || summaries.isError || canExpand;
 
   return (
-    <ToolRendererProvider renderTool={renderTool}>
+    <ToolRendererProvider getToolTitle={getToolTitle} renderTool={renderTool}>
       <ChatMessage
         assistantPresentation={assistantPresentation}
         isMessageActionsEnabled

@@ -54,35 +54,20 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
         />
       ))}
       {process.length > 0 ? (
-        isStreaming ? (
-          <View className="gap-1">
-            {process.map(({ index, part }) => (
-              <MessagePartRenderer
-                isStreaming
-                key={getMessagePartKey(message, part, index)}
-                messageId={message.id}
-                messageParts={parts}
-                part={part}
-                renderMode={renderMode}
-                resolvedText={citations.textByPartIndex.get(index)}
-              />
-            ))}
-          </View>
-        ) : (
-          <ContextMenuExclusion>
-            <ProcessGroupPart
-              citationText={citations.textByPartIndex}
-              items={process.map(({ index, part }) => ({
-                index,
-                key: getMessagePartKey(message, part, index),
-                part,
-              }))}
-              message={message}
-              messageParts={parts}
-              renderMode={renderMode}
-            />
-          </ContextMenuExclusion>
-        )
+        <ContextMenuExclusion>
+          <ProcessGroupPart
+            key={message.id}
+            citationText={citations.textByPartIndex}
+            items={process.map(({ index, part }) => ({
+              index,
+              key: getMessagePartKey(message, part, index),
+              part,
+            }))}
+            message={message}
+            messageParts={parts}
+            renderMode={renderMode}
+          />
+        </ContextMenuExclusion>
       ) : null}
       {body.map((item) =>
         item.part.type === 'file' ? (

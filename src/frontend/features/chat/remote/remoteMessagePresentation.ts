@@ -63,7 +63,11 @@ export function withRemoteToolSummaries(
         ? { ...base, state, errorText: '' }
         : state === 'output-available'
           ? { ...base, state, output: undefined }
-          : { ...base, state };
+          : state === 'approval-requested'
+            ? { ...base, state, approval: { id: detail.id } }
+            : state === 'output-denied'
+              ? { ...base, state, approval: { id: detail.id, approved: false } }
+              : { ...base, state };
     entries.push({ key: detail.id, part });
   }
   entries.sort((a, b) => (order.get(a.key) ?? Infinity) - (order.get(b.key) ?? Infinity));
@@ -80,7 +84,8 @@ export function withRemoteToolSummaries(
 function remoteToolState(detail: ControllerDetail, isStreaming: boolean) {
   if (detail.state === 'output-error' || detail.fields.some((field) => field.name === 'error'))
     return 'output-error';
-  if (detail.state === 'output-denied') return 'output-available';
+  if (detail.state === 'output-denied') return 'output-denied';
+  if (detail.state === 'approval-requested') return 'approval-requested';
   if (detail.state === 'output-available' || detail.fields.some((field) => field.name === 'output'))
     return 'output-available';
   if (!isStreaming) return 'output-available';
