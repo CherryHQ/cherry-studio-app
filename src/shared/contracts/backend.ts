@@ -1,4 +1,5 @@
 import type { AgentProtocol } from './agent';
+import type { AgentControllerModule } from './agent/controller';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DocumentExportModule } from './documentExport';
 import type { FileModule } from './file';
@@ -13,6 +14,7 @@ import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
   readonly agent: AgentProtocol;
+  readonly agentController: AgentControllerModule;
   readonly desktopConnections: DesktopConnectionsModule;
   readonly documentExport: DocumentExportModule;
   readonly file: FileModule;

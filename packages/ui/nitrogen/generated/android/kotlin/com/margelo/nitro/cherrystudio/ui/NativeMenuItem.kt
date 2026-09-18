@@ -20,6 +20,9 @@ import java.util.Objects
 data class NativeMenuItem(
   @DoNotStrip
   @Keep
+  val group: String,
+  @DoNotStrip
+  @Keep
   val checked: NativeMenuCheckedState,
   @DoNotStrip
   @Keep
@@ -42,7 +45,8 @@ data class NativeMenuItem(
   override fun equals(other: Any?): Boolean {
     if (this === other) return true
     if (other !is NativeMenuItem) return false
-    return Objects.deepEquals(this.checked, other.checked)
+    return Objects.deepEquals(this.group, other.group)
+      && Objects.deepEquals(this.checked, other.checked)
       && Objects.deepEquals(this.destructive, other.destructive)
       && Objects.deepEquals(this.disabled, other.disabled)
       && Objects.deepEquals(this.icon, other.icon)
@@ -52,6 +56,7 @@ data class NativeMenuItem(
 
   override fun hashCode(): Int {
     return arrayOf<Any?>(
+      group,
       checked,
       destructive,
       disabled,
@@ -69,8 +74,8 @@ data class NativeMenuItem(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(checked: NativeMenuCheckedState, destructive: Boolean, disabled: Boolean, icon: NativeMenuIcon, id: String, label: String): NativeMenuItem {
-      return NativeMenuItem(checked, destructive, disabled, icon, id, label)
+    private fun fromCpp(group: String, checked: NativeMenuCheckedState, destructive: Boolean, disabled: Boolean, icon: NativeMenuIcon, id: String, label: String): NativeMenuItem {
+      return NativeMenuItem(group, checked, destructive, disabled, icon, id, label)
     }
   }
 }

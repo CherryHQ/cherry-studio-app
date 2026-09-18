@@ -174,7 +174,7 @@ describe('DesktopConnectionRuntime', () => {
     store.remove.mockRejectedValueOnce(new Error('database busy'));
     await expect(runtime.remove(id, signal())).rejects.toThrow('database busy');
     await expect(runtime.remove(id, signal())).resolves.toBeUndefined();
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(2);
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(4);
     expect(store.remove).toHaveBeenCalledTimes(2);
   });
 
@@ -184,7 +184,7 @@ describe('DesktopConnectionRuntime', () => {
     expect(SecureStore.setItemAsync).toHaveBeenNthCalledWith(1, key, 'new-token', {
       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
-    expect(SecureStore.setItemAsync).toHaveBeenNthCalledWith(2, key, 'old-token', {
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(key, 'old-token', {
       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
   });

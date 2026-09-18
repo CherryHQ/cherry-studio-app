@@ -33,7 +33,7 @@ type AssistantMessageActions = {
   shareAssistantMessage: (input: { messageId: string }) => void;
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
   /** Copies the transcript up to this message into a new chat and opens it. */
-  forkFromAssistantMessage: (input: { messageId: string }) => void;
+  forkFromAssistantMessage?: (input: { messageId: string }) => void;
 };
 
 const AssistantMessageActionsStateContext = createContext<AssistantMessageActionsState | null>(
@@ -73,6 +73,62 @@ export function AssistantMessageActionsProvider({
   );
   // Already in cache: the chat screen resolves this same Session to render.
   const sourceTitle = useAgentSession(sessionId).data?.title?.trim();
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  const forkFromAssistantMessage = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      if (!sessionId) {
+        return;
+      }
+      // An unnamed source stays unnamed, so the fork keeps the empty title that
+      // lets auto-naming name it from its own first message. A prefix alone
+      // would block that forever.
+      const title = sourceTitle
+        ? t('chat.fork.sessionTitle', { title: sourceTitle }).slice(0, SESSION_TITLE_MAX_LENGTH)
+        : undefined;
+
+      void forkSession({ fromMessageId: messageId, sessionId, title }).catch((error) => {
+        logger.error('Fork assistant message failed', error as Error);
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        toast.show({ label: t('chat.messageActions.forkFailed'), variant: 'danger' });
+      });
+    },
+    [forkSession, sessionId, sourceTitle, t, toast],
+  );
+
+  return (
+    <ChatMessageActionsProvider
+      isAssistantToolbarEnabled={isAssistantToolbarEnabled}
+      onShare={shareAssistantMessage}
+      onFork={forkFromAssistantMessage}
+    >
+      {children}
+    </ChatMessageActionsProvider>
+  );
+}
+
+/** Presentation actions shared by local and PC-owned conversations. */
+export function ChatMessageActionsProvider({
+  children,
+  isAssistantToolbarEnabled,
+  onShare: shareAssistantMessage,
+  onFork: forkFromAssistantMessage,
+}: PropsWithChildren<{
+  isAssistantToolbarEnabled: boolean;
+  onShare: AssistantMessageActions['shareAssistantMessage'];
+  onFork?: AssistantMessageActions['forkFromAssistantMessage'];
+}>) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
   const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyOperationIdRef = useRef(0);
@@ -112,31 +168,6 @@ export function AssistantMessageActionsProvider({
         });
     },
     [t, toast],
-  );
-
-  const forkFromAssistantMessage = useCallback(
-    ({ messageId }: { messageId: string }) => {
-      if (!sessionId) {
-        return;
-      }
-      // An unnamed source stays unnamed, so the fork keeps the empty title that
-      // lets auto-naming name it from its own first message. A prefix alone
-      // would block that forever.
-      const title = sourceTitle
-        ? t('chat.fork.sessionTitle', { title: sourceTitle }).slice(0, SESSION_TITLE_MAX_LENGTH)
-        : undefined;
-
-      void forkSession({ fromMessageId: messageId, sessionId, title }).catch((error) => {
-        logger.error('Fork assistant message failed', error as Error);
-
-        if (!isMountedRef.current) {
-          return;
-        }
-
-        toast.show({ label: t('chat.messageActions.forkFailed'), variant: 'danger' });
-      });
-    },
-    [forkSession, sessionId, sourceTitle, t, toast],
   );
 
   const stateValue = useMemo(

@@ -28,14 +28,26 @@ export type ChatExportOptions = {
   };
 };
 
-export function isChatMessageExportable(message: AgentMessageView) {
+export type ChatExportMessage = Pick<
+  AgentMessageView,
+  'id' | 'role' | 'status' | 'parts' | 'stats'
+> & {
+  createdAt?: string;
+  truncated?: boolean;
+  attachments?: readonly { name: string; mediaType?: string }[];
+};
+
+export function isChatMessageExportable(message: ChatExportMessage) {
   return (
-    message.role !== 'system' && message.status !== 'pending' && message.status !== 'streaming'
+    !message.truncated &&
+    message.role !== 'system' &&
+    message.status !== 'pending' &&
+    message.status !== 'streaming'
   );
 }
 
 export function toChatExportDocument(
-  messages: readonly AgentMessageView[],
+  messages: readonly ChatExportMessage[],
   options: ChatExportOptions,
 ): ExportDocument {
   if (messages.length > DOCUMENT_EXPORT_MAX_SECTIONS) throw new DocumentExportError('size-limit');
@@ -99,6 +111,8 @@ export function toChatExportDocument(
           url: source.url,
         })),
       });
+    for (const attachment of message.attachments ?? [])
+      blocks.push({ kind: 'attachment', ...attachment });
     const metadata: { label: string; value: string }[] = [];
     if (message.status !== 'success')
       metadata.push({

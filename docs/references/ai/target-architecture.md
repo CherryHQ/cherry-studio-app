@@ -1,7 +1,6 @@
 # Backend AI Target Architecture
 
-Status: **local target state landed 2026-08-28; future PC Agent Controller boundary planned but not
-implemented** (see [Migration Status](#migration-status)).
+Status: **local target state landed 2026-08-28; PC Agent Controller version 2 implemented, pending device verification** (see [Migration Status](#migration-status)).
 
 This reference records the approved target structure for `src/backend/ai`, the seam rules that keep
 the conversation Runtime replaceable, and the success criteria each migration pull request is
@@ -24,7 +23,7 @@ implementation is heading and why.
 - **The Runtime seam stays at `agent/runtime/types.ts`.** It is an in-process execution boundary for
   the local Mobile Agent. Its replacement candidate is a different local loop, not a remote Agent
   service.
-- **Future PC Agent control sits at the application-protocol boundary.** A mobile-owned adapter
+- **PC Agent control sits at the application-protocol boundary.** A mobile-owned adapter
   receives PC Runtime DTOs and events and maps them into the versioned Agent Protocol representation
   consumed by the application. The integration neither requires nor depends on the PC implementing
   the local TypeScript `AgentProtocol` interface or exposing the mobile `AgentRuntime`; the PC
@@ -104,7 +103,7 @@ New module and directory names are chosen at implementation time following
    normalized Runtime shape; each Runtime maps that shape into its own messages. Neither side
    imports the other's mapping.
 
-## Planned PC Agent Controller Boundary
+## PC Agent Controller Boundary
 
 PC Agent control does not extend the local Runtime seam across a network transport:
 
@@ -124,14 +123,18 @@ event/snapshot translation, ordering, replay, and conversion into the applicatio
 not execute PC tools, persist a second authoritative Session, translate PC objects into
 `RuntimeTool` callbacks, or make the PC conform to Pi or mobile Runtime internals.
 
-The Agent Client will continue to consume one application-facing protocol shape. Local Sessions are
-served by the Mobile Agent Host; future PC Sessions will be served through the PC adapter. Mobile
+The Agent Client consumes versioned application contracts. Local Sessions are
+served by the Mobile Agent Host; PC Sessions use the version 2 PC adapter. Mobile
 renders a temporary projection and sends user intent back to the PC; conversation and execution
 state stay authoritative on the PC. Any local storage for PC data is a cache or projection whose
 invalidation and replay rules must be specified with the adapter contract. The application
 extension must be versioned rather than representing a PC Session as the current `{ kind: 'local' }`
 execution target. A global source registry is intentionally deferred until a concrete multi-PC
 product flow requires one.
+
+The current implementation uses encrypted WebSocket snapshots and re-queries history, with no PC
+event replay. See [PC Agent Controller](../agent/pc-agent-controller.md) for implementation boundaries
+and the remaining PC work.
 
 ## Success Criteria
 

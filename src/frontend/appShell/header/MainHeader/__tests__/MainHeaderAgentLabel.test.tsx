@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { Agent } from '@/shared/data/types/agent';
 
-import { MainHeaderAgentButton, useMainHeaderAgent } from '../MainHeaderAgentButton';
+import { MainHeaderAgentLabel, useMainHeaderAgent } from '../MainHeaderAgentLabel';
 
 const mockPush = jest.fn();
 const mockSetParams = jest.fn();
@@ -54,7 +54,7 @@ jest.mock('@/frontend/hooks/agent', () => ({
 function Harness() {
   const { agent } = useMainHeaderAgent();
 
-  return agent ? <MainHeaderAgentButton agent={agent} onPress={jest.fn()} /> : null;
+  return agent ? <MainHeaderAgentLabel agent={agent} /> : null;
 }
 
 function NewSessionHarness() {
@@ -67,7 +67,7 @@ function makeAgent(): Agent {
   return { id: 'agent-1', name: 'Peanut' } as Agent;
 }
 
-describe('MainHeaderAgentButton', () => {
+describe('MainHeaderAgentLabel', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
@@ -92,9 +92,10 @@ describe('MainHeaderAgentButton', () => {
       renderer = create(<Harness />);
     });
 
-    expect(
-      renderer?.root.findByProps({ testID: 'current-agent-button' }).props.accessibilityLabel,
-    ).toBe('Peanut');
+    const label = renderer?.root.findByProps({ testID: 'current-agent-label' });
+    expect(label?.props.accessibilityLabel).toBe('Peanut');
+    expect(label?.props.accessibilityRole).toBe('text');
+    expect(label?.props.onPress).toBeUndefined();
   });
 
   it('waits for the Session entity to resolve its Agent', async () => {
@@ -104,7 +105,7 @@ describe('MainHeaderAgentButton', () => {
       renderer = create(<Harness />);
     });
 
-    expect(renderer?.root.findAllByProps({ testID: 'current-agent-button' })).toHaveLength(0);
+    expect(renderer?.root.findAllByProps({ testID: 'current-agent-label' })).toHaveLength(0);
   });
 
   it('starts a new Session with the current Agent', async () => {

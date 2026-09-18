@@ -22,9 +22,16 @@ import { createPastedImageAttachmentDraft } from '../utils/composerAttachments';
 type ComposerFieldProps = Pick<
   ComposerInputProps,
   'onBlur' | 'onFocus' | 'placeholder' | 'style' | 'testID'
->;
+> & { attachmentMode?: 'images' | 'text-only' };
 
-export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: ComposerFieldProps) {
+export function ComposerField({
+  onBlur,
+  onFocus,
+  placeholder,
+  style,
+  testID,
+  attachmentMode = 'images',
+}: ComposerFieldProps) {
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
@@ -34,11 +41,11 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
 
   const handlePaste = useCallback(
     (payload: PasteEventPayload) => {
-      if (payload.type === 'images' && payload.uris.length > 0) {
+      if (attachmentMode === 'images' && payload.type === 'images' && payload.uris.length > 0) {
         addAttachments(payload.uris.map(createPastedImageAttachmentDraft));
       }
     },
-    [addAttachments],
+    [addAttachments, attachmentMode],
   );
 
   // A tool mention is the only link this field can contain — nothing here

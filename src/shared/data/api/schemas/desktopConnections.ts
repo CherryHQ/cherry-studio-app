@@ -25,7 +25,17 @@ function isIpAddress(value: string): boolean {
   );
 }
 
+export const DesktopRemoteAgentSchema = z.object({
+  protocolVersion: z.number().int().positive(),
+  instanceId: z.string().uuid(),
+  port: z.number().int().min(1).max(65_535),
+  path: z.string().regex(/^\/(?!\/)[^?#\s]*$/),
+  serverPublicKey: z.string().regex(/^[A-Za-z0-9+/]{43}=$/),
+});
+export type DesktopRemoteAgent = z.infer<typeof DesktopRemoteAgentSchema>;
+
 export const DesktopPairingQrSchema = z.object({
+  remoteAgent: DesktopRemoteAgentSchema.optional(),
   code: z.string().regex(/^[a-f\d]{32}$/i),
   ips: z.array(z.string().refine(isIpAddress, 'Invalid IP address')).min(1),
   name: z.string().min(1).max(128),

@@ -14,3 +14,5 @@ export {
   type RouteHeaderRootAction,
   useRouteHeaderLeadingAction,
 } from './RouteHeader';
+
+export { MainHeaderView } from './MainHeader/MainHeaderView/MainHeaderView';

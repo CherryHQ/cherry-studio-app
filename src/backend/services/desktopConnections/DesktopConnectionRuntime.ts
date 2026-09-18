@@ -1,10 +1,12 @@
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
+import * as z from 'zod';
 
 import {
   AppStatePolicy,
   BaseService,
   DependsOn,
+  Emitter,
   Injectable,
   Phase,
   ServicePhase,
@@ -22,6 +24,7 @@ import {
   AuthorizationError,
   baseUrlsFromQr,
   desktopError,
+  discoverRemoteAgent,
   fetchSnapshot,
   pairDesktop,
   PairingRejectedError,
@@ -33,6 +36,14 @@ type ConnectionStore = Pick<
 >;
 const EXCLUDED_PROVIDER_IDS = new Set(['cherryai', 'gpustack', 'lmstudio', 'ollama', 'ovms']);
 const tokenKey = (id: string) => `desktop-connection-token.${id}`;
+const agentKey = (id: string) => `desktop-connection-agent.${id}`;
+const AgentBindingSchema = z.object({
+  generation: z.uuid(),
+  identity: z
+    .object({ instanceId: z.string().min(1), serverPublicKey: z.string().min(1) })
+    .optional(),
+});
+type AgentBinding = z.infer<typeof AgentBindingSchema>;
 const TOKEN_STORE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
 /** Owns paired credentials and in-flight work; drains before the originating database closes. */
@@ -46,6 +57,65 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   private stopped = false;
   private readonly controllers = new Set<AbortController>();
   private tail: Promise<unknown> = Promise.resolve();
+  private readonly changeListeners = this.registerDisposable(new Emitter<string>());
+
+  subscribeCredentials(listener: (id: string) => void): () => void {
+    const subscription = this.changeListeners.event(listener);
+    return () => subscription.dispose();
+  }
+
+  /** Backend-only credential handoff; credentials never cross the frontend contract. */
+  prepareAgentConnection(id: string, signal: AbortSignal) {
+    return this.run(signal, async (store, signal) => {
+      const connection = await store.getRow(id);
+      const token = await SecureStore.getItemAsync(tokenKey(id));
+      const stored = await SecureStore.getItemAsync(agentKey(id));
+      if (!token || !stored)
+        throw desktopError('agent-pairing-required', 'Pair this device again for Agent access');
+      let binding: AgentBinding;
+      try {
+        binding = AgentBindingSchema.parse(JSON.parse(stored));
+      } catch {
+        throw desktopError('agent-pairing-required', 'Pair this device again for Agent access');
+      }
+      const urls = [
+        connection.activeBaseUrl,
+        ...connection.baseUrls.filter((url) => url !== connection.activeBaseUrl),
+      ].filter((url) => /^\d+\.\d+\.\d+\.\d+$/.test(new URL(url).hostname));
+      const { baseUrl, descriptor } = await discoverRemoteAgent(urls, token, signal).catch(
+        async (error: unknown) => {
+          if (error instanceof AuthorizationError) {
+            await store.updateStatus(id, { status: 'needs-repair' }, signal);
+            throw desktopError('auth-revoked', 'This device authorization was revoked');
+          }
+          throw error;
+        },
+      );
+      if (descriptor.protocolVersion !== 1)
+        throw desktopError('agent-version', 'Unsupported Agent protocol version');
+      if (
+        binding.identity &&
+        (binding.identity.instanceId !== descriptor.instanceId ||
+          binding.identity.serverPublicKey !== descriptor.serverPublicKey)
+      ) {
+        throw desktopError('agent-identity-changed', 'The paired desktop identity changed');
+      }
+      if (!binding.identity) {
+        binding.identity = {
+          instanceId: descriptor.instanceId,
+          serverPublicKey: descriptor.serverPublicKey,
+        };
+        await SecureStore.setItemAsync(agentKey(id), JSON.stringify(binding), TOKEN_STORE_OPTIONS);
+      }
+      signal.throwIfAborted();
+      return {
+        descriptor,
+        token,
+        generation: binding.generation,
+        url: `ws://${new URL(baseUrl).hostname}:${descriptor.port}${descriptor.path}`,
+      };
+    });
+  }
 
   configure(store: ConnectionStore, ensureModelRegistryReady: () => Promise<void>): void {
     this.store = store;
@@ -67,13 +137,26 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       signal.throwIfAborted();
       const key = tokenKey(id);
       const previousToken = await SecureStore.getItemAsync(key);
+      const previousBinding = await SecureStore.getItemAsync(agentKey(id));
       signal.throwIfAborted();
       // The queue serializes credential replacement with removal and snapshot reads.
       // Once a credential write starts, finish or compensate it even if the caller leaves.
       try {
         await SecureStore.setItemAsync(key, paired.token, TOKEN_STORE_OPTIONS);
+        const binding: AgentBinding = {
+          generation: Crypto.randomUUID(),
+          ...(qr.remoteAgent
+            ? {
+                identity: {
+                  instanceId: qr.remoteAgent.instanceId,
+                  serverPublicKey: qr.remoteAgent.serverPublicKey,
+                },
+              }
+            : {}),
+        };
+        await SecureStore.setItemAsync(agentKey(id), JSON.stringify(binding), TOKEN_STORE_OPTIONS);
         signal.throwIfAborted();
-        return await store.savePair(
+        const connection = await store.savePair(
           {
             id,
             baseUrls,
@@ -84,7 +167,12 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           Boolean(qr.connectionId),
           signal,
         );
+        this.changeListeners.fire(id);
+        return connection;
       } catch (error) {
+        if (previousBinding)
+          await SecureStore.setItemAsync(agentKey(id), previousBinding, TOKEN_STORE_OPTIONS);
+        else await SecureStore.deleteItemAsync(agentKey(id));
         if (previousToken) {
           await SecureStore.setItemAsync(key, previousToken, TOKEN_STORE_OPTIONS);
         } else {
@@ -101,6 +189,8 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       // Delete the credential first. Failure leaves a visible, retryable row.
       // Both deletes are idempotent, including a retry after the SQL delete failed.
       await SecureStore.deleteItemAsync(tokenKey(id));
+      await SecureStore.deleteItemAsync(agentKey(id));
+      this.changeListeners.fire(id);
       await store.remove(id);
     });
   }

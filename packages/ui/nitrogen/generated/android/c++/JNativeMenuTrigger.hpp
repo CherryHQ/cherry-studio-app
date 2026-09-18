@@ -15,7 +15,7 @@ namespace margelo::nitro::cherrystudio::ui {
   using namespace facebook;
 
   /**
-   * The C++ JNI bridge between the C++ enum "NativeMenuTrigger" and the the Kotlin enum "NativeMenuTrigger".
+   * The C++ JNI bridge between the C++ enum "NativeMenuTrigger" and the Kotlin enum "NativeMenuTrigger".
    */
   struct JNativeMenuTrigger final: public jni::JavaClass<JNativeMenuTrigger> {
   public:

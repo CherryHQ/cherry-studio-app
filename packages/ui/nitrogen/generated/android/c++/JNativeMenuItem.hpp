@@ -21,7 +21,7 @@ namespace margelo::nitro::cherrystudio::ui {
   using namespace facebook;
 
   /**
-   * The C++ JNI bridge between the C++ struct "NativeMenuItem" and the the Kotlin data class "NativeMenuItem".
+   * The C++ JNI bridge between the C++ struct "NativeMenuItem" and the Kotlin data class "NativeMenuItem".
    */
   struct JNativeMenuItem final: public jni::JavaClass<JNativeMenuItem> {
   public:
@@ -35,6 +35,8 @@ namespace margelo::nitro::cherrystudio::ui {
     [[nodiscard]]
     NativeMenuItem toCpp() const {
       static const auto clazz = javaClassStatic();
+      static const auto fieldGroup = clazz->getField<jni::JString>("group");
+      jni::local_ref<jni::JString> group = this->getFieldValue(fieldGroup);
       static const auto fieldChecked = clazz->getField<JNativeMenuCheckedState>("checked");
       jni::local_ref<JNativeMenuCheckedState> checked = this->getFieldValue(fieldChecked);
       static const auto fieldDestructive = clazz->getField<jboolean>("destructive");
@@ -48,6 +50,7 @@ namespace margelo::nitro::cherrystudio::ui {
       static const auto fieldLabel = clazz->getField<jni::JString>("label");
       jni::local_ref<jni::JString> label = this->getFieldValue(fieldLabel);
       return NativeMenuItem(
+        group->toStdString(),
         checked->toCpp(),
         static_cast<bool>(destructive),
         static_cast<bool>(disabled),
@@ -63,11 +66,12 @@ namespace margelo::nitro::cherrystudio::ui {
      */
     [[maybe_unused]]
     static jni::local_ref<JNativeMenuItem::javaobject> fromCpp(const NativeMenuItem& value) {
-      using JSignature = JNativeMenuItem(jni::alias_ref<JNativeMenuCheckedState>, jboolean, jboolean, jni::alias_ref<JNativeMenuIcon>, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
+      using JSignature = JNativeMenuItem(jni::alias_ref<jni::JString>, jni::alias_ref<JNativeMenuCheckedState>, jboolean, jboolean, jni::alias_ref<JNativeMenuIcon>, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
         clazz,
+        jni::make_jstring(value.group),
         JNativeMenuCheckedState::fromCpp(value.checked),
         value.destructive,
         value.disabled,

@@ -1,93 +1,89 @@
-import { fetch as expoFetch } from 'expo/fetch';
+import { createHttpClient, HttpError } from '@/backend/services/http';
 
-import { fetchSnapshot, requestWithTimeout } from '../desktopConnectionClient';
+import { AuthorizationError, discoverRemoteAgent, fetchSnapshot } from '../desktopConnectionClient';
 
-jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
+jest.mock('@/backend/services/http', () => ({
+  ...jest.requireActual('@/backend/services/http'),
+  createHttpClient: jest.fn(),
+}));
 jest.mock('@/backend/utils/defaultAppHeaders', () => ({ defaultAppHeaders: () => ({}) }));
+const request = jest.fn();
+const addresses = ['http://192.168.1.2', 'http://192.168.1.3'];
 
-const mockFetch = jest.mocked(expoFetch);
+beforeEach(() => {
+  jest.resetAllMocks();
+  jest.mocked(createHttpClient).mockReturnValue({ request });
+});
 
-function stalledBody() {
-  mockFetch.mockImplementationOnce(
-    async (_url, init) =>
-      ({
-        ok: true,
-        status: 200,
-        json: () =>
-          new Promise((_resolve, reject) => {
-            init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), {
-              once: true,
-            });
-          }),
-      }) as Response as Awaited<ReturnType<typeof expoFetch>>,
-  );
-}
-
-describe('desktop connection request lifetime', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-    jest.resetAllMocks();
-  });
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
-  it('keeps the deadline active after headers arrive until the body is read', async () => {
-    stalledBody();
-    const request = requestWithTimeout(
-      'http://192.168.1.2/providers',
-      {},
-      (response) => response.json(),
-      new AbortController().signal,
-    );
-    const assertion = expect(request).rejects.toMatchObject({ name: 'AbortError' });
-    await jest.advanceTimersByTimeAsync(4_000);
-    await assertion;
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('cancels a stalled body without trying the next desktop address', async () => {
-    stalledBody();
-    const controller = new AbortController();
-    const request = fetchSnapshot(
-      ['http://192.168.1.2', 'http://192.168.1.3'],
-      'token',
-      controller.signal,
-    );
-    const assertion = expect(request).rejects.toMatchObject({ name: 'AbortError' });
-    await jest.advanceTimersByTimeAsync(0);
-    controller.abort();
-    await assertion;
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('prohibits redirects and releases the timer after a successful body', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ version: 1, providers: [] }),
-    } as Response as Awaited<ReturnType<typeof expoFetch>>);
-    const controller = new AbortController();
-    const removeListener = jest.spyOn(controller.signal, 'removeEventListener');
+describe('desktop HTTP policy', () => {
+  it('tries another paired address after the shared transport times out', async () => {
+    request.mockRejectedValueOnce(new HttpError('timeout', { kind: 'timeout' }));
+    request.mockResolvedValueOnce({ data: { version: 1, providers: [] } });
     await expect(
-      fetchSnapshot(['http://192.168.1.2'], 'token', controller.signal),
-    ).resolves.toMatchObject({ payload: { version: 1, providers: [] } });
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://192.168.1.2/v1/export/providers',
-      expect.objectContaining({ redirect: 'error', headers: { Authorization: 'Bearer token' } }),
-    );
-    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
-    expect(jest.getTimerCount()).toBe(0);
-    removeListener.mockRestore();
+      fetchSnapshot(addresses, 'token', new AbortController().signal),
+    ).resolves.toMatchObject({
+      baseUrl: addresses[1],
+      payload: { version: 1, providers: [] },
+    });
+    expect(createHttpClient).toHaveBeenNthCalledWith(2, {
+      baseUrl: addresses[1],
+      timeoutMs: 4000,
+      headers: { Authorization: 'Bearer token' },
+    });
+  });
+
+  it('cancels without trying the next address', async () => {
+    const caller = new AbortController();
+    request.mockImplementationOnce(async () => {
+      caller.abort();
+      throw new HttpError('cancelled', { kind: 'cancelled' });
+    });
+    await expect(fetchSnapshot(addresses, 'token', caller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry revoked authorization on another address', async () => {
+    request.mockRejectedValueOnce(new HttpError('revoked', { kind: 'http', status: 403 }));
+    await expect(
+      fetchSnapshot(addresses, 'token', new AbortController().signal),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('binds credentials to the selected route and prohibits redirects', async () => {
+    request.mockResolvedValueOnce({ data: { version: 1, providers: [] } });
+    const caller = new AbortController();
+    await fetchSnapshot(addresses, 'token', caller.signal);
+    expect(createHttpClient).toHaveBeenCalledWith({
+      baseUrl: addresses[0],
+      timeoutMs: 4000,
+      headers: { Authorization: 'Bearer token' },
+    });
+    expect(request).toHaveBeenCalledWith({
+      method: 'GET',
+      path: '/v1/export/providers',
+      signal: caller.signal,
+      redirect: 'error',
+      maxResponseBytes: 16 * 1024 * 1024,
+    });
   });
 
   it('does not start a request for an already cancelled caller', async () => {
-    const controller = new AbortController();
-    controller.abort();
+    const caller = new AbortController();
+    caller.abort();
+    await expect(fetchSnapshot(addresses, 'token', caller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(createHttpClient).not.toHaveBeenCalled();
+  });
+
+  it('keeps service unavailability distinct from revoked pairing', async () => {
+    request.mockRejectedValueOnce(new HttpError('disabled', { kind: 'http', status: 503 }));
     await expect(
-      fetchSnapshot(['http://192.168.1.2'], 'token', controller.signal),
-    ).rejects.toMatchObject({ name: 'AbortError' });
-    expect(mockFetch).not.toHaveBeenCalled();
+      discoverRemoteAgent(addresses, 'token', new AbortController().signal),
+    ).rejects.toMatchObject({ details: { reason: 'agent-unavailable' } });
+    expect(request).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,6 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import GitForkIcon from '@cherrystudio/app-icons/icons/git-fork';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -84,33 +84,37 @@ export function MenuContent({
           }}
           progress={progress}
         >
-          {items.map((item) => (
-            <MenuRow
-              accessibilityRole={item.checked === undefined ? 'menuitem' : 'checkbox'}
-              accessibilityState={{ checked: item.checked }}
-              destructive={item.destructive}
-              disabled={item.disabled}
-              key={item.id}
-              label={item.label}
-              onPress={item.onPress}
-              icon={
-                item.icon === 'branch' ? (
-                  <GitForkIcon
-                    className={cn(
-                      'size-5',
-                      item.destructive ? 'text-destructive' : 'text-foreground',
-                    )}
-                  />
-                ) : undefined
-              }
-              trailing={
-                item.checked !== undefined ? (
-                  <View accessible={false} className="size-5">
-                    {item.checked ? <CheckIcon className="size-5 text-foreground" /> : null}
-                  </View>
-                ) : undefined
-              }
-            />
+          {items.map((item, index) => (
+            <Fragment key={item.id}>
+              {index > 0 && item.group !== items[index - 1]?.group ? (
+                <View className="mx-3 my-1 h-px bg-border" />
+              ) : null}
+              <MenuRow
+                accessibilityRole={item.checked === undefined ? 'menuitem' : 'checkbox'}
+                accessibilityState={{ checked: item.checked }}
+                destructive={item.destructive}
+                disabled={item.disabled}
+                label={item.label}
+                onPress={item.onPress}
+                icon={
+                  item.icon === 'branch' ? (
+                    <GitForkIcon
+                      className={cn(
+                        'size-5',
+                        item.destructive ? 'text-destructive' : 'text-foreground',
+                      )}
+                    />
+                  ) : undefined
+                }
+                trailing={
+                  item.checked !== undefined ? (
+                    <View accessible={false} className="size-5">
+                      {item.checked ? <CheckIcon className="size-5 text-foreground" /> : null}
+                    </View>
+                  ) : undefined
+                }
+              />
+            </Fragment>
           ))}
         </MenuPanel>
       </Animated.View>

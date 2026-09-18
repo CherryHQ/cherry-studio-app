@@ -19,6 +19,7 @@ import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { AudioKeepAliveSource } from '@/backend/services/keepAlive/AudioKeepAliveSource';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
+import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
@@ -44,6 +45,7 @@ export const services = {
   CacheService,
   DbService,
   DesktopConnectionRuntime,
+  RemoteAgentRuntime,
   DocumentExportRuntime,
   PreferenceService,
   BackgroundActivityEnvironment,

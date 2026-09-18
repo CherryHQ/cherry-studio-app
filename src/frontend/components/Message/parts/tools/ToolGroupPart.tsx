@@ -1,57 +1,77 @@
 import { MessagePart } from '@cherrystudio/ui/components';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { CherryMessagePart } from '@/shared/data/types/message';
-
 import { useMessageListDisclosureToggle } from '../../list/MessageListDisclosureContext';
-import { ToolPartRenderer } from './ToolPartRenderer';
-import { deriveToolGroupSummary, type ToolMessagePart } from './toolPartState';
-
-type ToolGroupItem = {
-  key: string;
-  part: ToolMessagePart;
-};
+import {
+  deriveToolGroupSummary,
+  getToolDisplayState,
+  getToolGroupStatusText,
+  type ToolMessagePart,
+} from './toolPartState';
+import { useToolTitle } from './ToolRendererContext';
+import { useToolGroupActivity } from './useToolGroupActivity';
 
 type ToolGroupPartProps = {
-  items: readonly ToolGroupItem[];
-  messageParts?: readonly CherryMessagePart[];
+  children: ReactNode;
+  expanded: boolean;
+  isStreaming: boolean;
+  isThinking: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  tools: readonly ToolMessagePart[];
 };
 
-/**
- * One collapsed row for a run of consecutive tool calls. While the run is live
- * the individual steps stay visible below the header; once it settles the group
- * folds down to its summary so the answer stays the visual subject of the
- * message. Failed or denied steps surface on the summary and are never hidden.
- */
-export function ToolGroupPart({ items, messageParts }: ToolGroupPartProps) {
+/** Keep the lightweight summary visible; tool detail readers only mount after a press. */
+export function ToolGroupPart({
+  children,
+  expanded,
+  isStreaming,
+  isThinking,
+  onExpandedChange,
+  tools,
+}: ToolGroupPartProps) {
   const { t } = useTranslation();
+  const getTitle = useToolTitle();
   const handleDisclosureToggle = useMessageListDisclosureToggle();
-  const { dangerCount, state, tone, warningCount } = deriveToolGroupSummary(
-    items.map((item) => item.part),
-  );
-
-  const title =
-    state === 'running'
-      ? t('chat.toolGroup.running')
-      : t('chat.toolGroup.title', { count: items.length });
-  const statusText =
-    dangerCount > 0
-      ? t('chat.toolGroup.failedCount', { count: dangerCount })
-      : warningCount > 0
-        ? t('chat.toolGroup.deniedCount', { count: warningCount })
+  const summary = deriveToolGroupSummary(tools);
+  const isRunning = isStreaming && (isThinking || summary.state === 'running');
+  const activeTool = tools.findLast((part) => getToolDisplayState(part) === 'running');
+  const awaitingTool = tools.findLast((part) => part.state === 'approval-requested');
+  const titles = [...new Set(tools.map(getTitle))];
+  const completedActivity =
+    titles.length === 1
+      ? titles[0]
+      : titles.length === 2
+        ? t('chat.toolGroup.activities', { first: titles[0], second: titles[1] })
         : undefined;
+  const activity = awaitingTool
+    ? getTitle(awaitingTool)
+    : isRunning
+      ? isThinking
+        ? t('chat.reasoningStatus.thinking')
+        : activeTool
+          ? getTitle(activeTool)
+          : t('chat.toolGroup.running')
+      : completedActivity;
+  const stableActivity = useToolGroupActivity(
+    activity,
+    isRunning && summary.approvalCount === 0 && summary.dangerCount === 0,
+  );
+  const title = stableActivity
+    ? t('chat.toolGroup.summary', { activity: stableActivity, count: tools.length })
+    : t('chat.toolGroup.title', { count: tools.length });
 
   return (
     <MessagePart.ToolGroup
+      expanded={expanded}
       onDisclosureToggle={handleDisclosureToggle}
-      state={state}
-      statusText={statusText}
-      statusTone={tone}
+      onExpandedChange={onExpandedChange}
+      state={isRunning ? 'running' : 'complete'}
+      statusText={getToolGroupStatusText(summary, t)}
+      statusTone={summary.tone}
       title={title}
     >
-      {items.map(({ key, part }) => (
-        <ToolPartRenderer key={key} messageParts={messageParts} part={part} />
-      ))}
+      {children}
     </MessagePart.ToolGroup>
   );
 }

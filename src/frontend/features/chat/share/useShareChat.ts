@@ -1,4 +1,5 @@
 import { useToast } from '@cherrystudio/ui/components';
+import type { Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
@@ -10,9 +11,25 @@ import { DocumentExportError } from '@/shared/contracts/documentExport';
 import type { ListAgentSessionMessagesQueryParams } from '@/shared/data/api/schemas/agentSessionMessages';
 
 import { ChatExportError, loadChatExportMessages } from './loadChatExportMessages';
-import { toChatExportDocument, type ChatExportOptions } from './toChatExportDocument';
+import {
+  toChatExportDocument,
+  type ChatExportMessage,
+  type ChatExportOptions,
+} from './toChatExportDocument';
 
-export function useShareChat(sessionId?: string) {
+export type ChatShareSource = {
+  load(
+    messageIds: readonly string[],
+    signal: AbortSignal,
+  ): Promise<{
+    messages: ChatExportMessage[];
+    title?: string;
+    assistantName?: string;
+    returnTo: Href;
+  }>;
+};
+
+export function useShareChat(sessionId?: string, source?: ChatShareSource) {
   const api = useApiClient();
   const { open } = useDocumentExport();
   const { t } = useTranslation();
@@ -42,26 +59,36 @@ export function useShareChat(sessionId?: string) {
       setIsSharing(true);
       void (async () => {
         try {
-          const readPage = (query: ListAgentSessionMessagesQueryParams) =>
-            api.get(`/agent-sessions/${sessionId}/messages`, {
-              query,
-              signal: controller.signal,
-            });
-          const [messages, sourceSession] = await Promise.all([
-            loadChatExportMessages(messageIds, readPage, controller.signal),
-            api.get(`/agent-sessions/${sessionId}`, { signal: controller.signal }),
-          ]);
+          const data = source
+            ? await source.load(messageIds, controller.signal)
+            : await (async () => {
+                const readPage = (query: ListAgentSessionMessagesQueryParams) =>
+                  api.get(`/agent-sessions/${sessionId}/messages`, {
+                    query,
+                    signal: controller.signal,
+                  });
+                const [messages, sourceSession] = await Promise.all([
+                  loadChatExportMessages(messageIds, readPage, controller.signal),
+                  api.get(`/agent-sessions/${sessionId}`, { signal: controller.signal }),
+                ]);
+                const agent = await api.get(`/agents/${sourceSession.agentId}`, {
+                  signal: controller.signal,
+                });
+                return {
+                  messages,
+                  title: sourceSession.title,
+                  assistantName: agent.name,
+                  returnTo: chatHref({ kind: 'session', sessionId }),
+                };
+              })();
           controller.signal.throwIfAborted();
-          const agent = await api.get(`/agents/${sourceSession.agentId}`, {
-            signal: controller.signal,
-          });
-          controller.signal.throwIfAborted();
+          const { messages } = data;
           const options: ChatExportOptions = {
-            title: sourceSession.title.trim() || t('chat.share.documentTitle'),
+            title: data.title?.trim() || t('chat.share.documentTitle'),
             includeProcess: true,
             labels: {
               user: t('chat.share.user'),
-              assistant: agent.name || t('chat.share.assistant'),
+              assistant: data.assistantName || t('chat.share.assistant'),
               process: (seconds) => t('chat.process.duration', { seconds }),
               reasoning: t('chat.reasoningStatus.thought'),
               file: t('chat.share.file'),
@@ -95,7 +122,7 @@ export function useShareChat(sessionId?: string) {
                   },
                 }
               : undefined,
-            returnTo: chatHref({ kind: 'session', sessionId }),
+            returnTo: data.returnTo,
           });
           if (outcome === 'busy' && mounted.current)
             toast.show({ label: t('documentExport.errors.busy'), variant: 'danger' });
@@ -117,7 +144,7 @@ export function useShareChat(sessionId?: string) {
         }
       })();
     },
-    [api, open, sessionId, t, toast],
+    [api, open, sessionId, source, t, toast],
   );
   const cancelShare = useCallback(() => loading.current?.abort(), []);
   return { shareChat, isSharing, cancelShare };

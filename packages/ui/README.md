@@ -72,7 +72,8 @@ also includes `open` for callers that use one error reporter for both operations
 logging, or translation dependency.
 
 `FileAttachmentPreview` is the compact horizontal result variant. It requires the same `onPress`
-callback while showing a filename and caller-supplied category label; square
+callback while showing filename metadata and a caller-supplied category label. It accepts metadata
+without a resolved URI, and `disabled` covers pending transfers or unavailable sources; square
 thumbnail callers continue to use `FilePreview`.
 
 `FilePreview` has four explicit visual variants. The default `thumbnail` uses the plugin and
@@ -148,6 +149,11 @@ translations, file identifiers, or application navigation:
 `MessagePart.Process` is the inline disclosure used for one total-duration row before an answer.
 The product adapter supplies its localized duration and every visible pre-result child; the
 primitive owns the quiet divider, running shimmer, disclosure state, and compact chevron.
+`defaultExpanded` preserves reading when a live tool group enters the completed process, and
+`statusText`/`statusTone` keep exceptions visible while the process is folded.
+`MessagePart.ToolGroup` defaults closed regardless of running state. Its optional controlled
+`expanded`/`onExpandedChange` pair lets a message retain group state across outer disclosure
+unmounts; new calls and completion never override the reader's choice.
 
 `MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
 already communicates live progress. The running state, status text, and detail action remain intact;
@@ -846,3 +852,6 @@ If the root app adds or removes the workspace dependency, also update
 ```sh
 pnpm install --lockfile-only
 ```
+
+`MenuItem.group` groups contiguous actions into sections. Android draws the shared panel separator;
+iOS maps sections to inline native menus. Omitted groups preserve the existing flat menu.

@@ -28,15 +28,22 @@ export type MessagePartReasoningProps = {
 
 export type MessagePartProcessProps = {
   children: ReactNode;
+  /** Preserve a reader's open tool group when the live process first settles. */
+  defaultExpanded?: boolean;
   /** Runs before a reader-initiated inline disclosure toggle. */
   onDisclosureToggle?: () => void;
   state: 'complete' | 'running';
+  statusText?: string;
+  statusTone?: MessagePartTone;
   title: string;
   testID?: string;
 };
 
 export type MessagePartToolGroupProps = {
   children: ReactNode;
+  /** Optional controlled state retained by the message across process folding. */
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
   /** Runs before a reader-initiated inline disclosure toggle. */
   onDisclosureToggle?: () => void;
   state: 'complete' | 'running';

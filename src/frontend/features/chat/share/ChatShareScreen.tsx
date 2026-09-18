@@ -1,15 +1,22 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button, ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  RemoteAgentProvider,
+  useRemoteAgent,
+  useRemoteAgents,
+  useRemoteConnection,
+} from '@/frontend/appShell/remoteAgent';
 import { useAgentMessageHistoryWindow } from '@/frontend/hooks/agent';
+import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import type { AgentMessageView } from '@/shared/contracts/agent';
 
 import { chatShareMessagePreview } from './chatShareMessagePreview';
 import {
@@ -19,7 +26,8 @@ import {
   useChatShareSelectionState,
   useIsChatMessageSelected,
 } from './ChatShareSelectionProvider';
-import { isChatMessageExportable } from './toChatExportDocument';
+import { createRemoteChatShareSource, toRemoteChatExportMessage } from './remoteChatShare';
+import { type ChatExportMessage, isChatMessageExportable } from './toChatExportDocument';
 
 const LIST_STYLE = { flex: 1 };
 const LIST_CONTENT_STYLE = { paddingHorizontal: 20, paddingBottom: 12, gap: 8 };
@@ -27,9 +35,15 @@ const KEEP_VISIBLE_POSITION = { data: true, size: true };
 
 export function ChatShareScreen() {
   const params = useLocalSearchParams<{
+    connectionId?: string | string[];
+    sourceKey?: string | string[];
+    agentId?: string | string[];
     sessionId?: string | string[];
     messageId?: string | string[];
   }>();
+  const connectionId = getSingleRouteParam(params.connectionId);
+  const sourceKey = getSingleRouteParam(params.sourceKey);
+  const agentId = getSingleRouteParam(params.agentId);
   const sessionId = getSingleRouteParam(params.sessionId);
   const messageId = getSingleRouteParam(params.messageId);
   const { t } = useTranslation();
@@ -55,7 +69,16 @@ export function ChatShareScreen() {
         </Text>
         <View className="size-11" />
       </View>
-      {sessionId ? (
+      {sessionId && connectionId ? (
+        <RemoteAgentProvider connectionId={connectionId}>
+          <RemoteShareContent
+            sessionId={sessionId}
+            sourceKey={sourceKey}
+            agentId={agentId}
+            messageId={messageId}
+          />
+        </RemoteAgentProvider>
+      ) : sessionId ? (
         <ChatShareSelectionProvider
           key={JSON.stringify([sessionId, messageId])}
           sessionId={sessionId}
@@ -64,7 +87,7 @@ export function ChatShareScreen() {
           <Text className="px-5 pb-3 text-muted-foreground text-sm">
             {t('chat.share.selectionHint')}
           </Text>
-          <ChatShareMessages sessionId={sessionId} messageId={messageId} />
+          <LocalChatShareMessages sessionId={sessionId} messageId={messageId} />
           <ChatShareControls />
         </ChatShareSelectionProvider>
       ) : (
@@ -74,13 +97,137 @@ export function ChatShareScreen() {
   );
 }
 
-function ChatShareMessages({ sessionId, messageId }: { sessionId: string; messageId?: string }) {
-  const { t } = useTranslation();
+function LocalChatShareMessages({
+  sessionId,
+  messageId,
+}: {
+  sessionId: string;
+  messageId?: string;
+}) {
   const history = useAgentMessageHistoryWindow(sessionId, { messageId });
-  const messages = useMemo(
-    () => history.messages.filter((message) => message.role !== 'system'),
-    [history.messages],
+  return <ChatShareMessages history={history} messageId={messageId} />;
+}
+
+type ShareHistory = Pick<
+  AgentMessageHistoryWindow,
+  | 'dataKey'
+  | 'isLoadingInitial'
+  | 'isLoadingOlder'
+  | 'isLoadingNewer'
+  | 'error'
+  | 'retry'
+  | 'hasNewerMessages'
+> & {
+  messages: readonly ChatExportMessage[];
+  loadOlder?: () => Promise<void>;
+  loadNewer?: () => Promise<void>;
+};
+
+function RemoteShareContent({
+  sessionId,
+  sourceKey,
+  agentId,
+  messageId,
+}: {
+  sessionId: string;
+  sourceKey?: string;
+  agentId?: string;
+  messageId?: string;
+}) {
+  const { t } = useTranslation();
+  const { controller, connectionId } = useRemoteAgent();
+  const connection = useRemoteConnection();
+  const agents = useRemoteAgents();
+  const sameSource = Boolean(sourceKey) && sourceKey === connection.sourceKey;
+  const history = useInfiniteQuery({
+    queryKey: ['agentController', connectionId, sourceKey, sessionId, 'history'],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) => controller.history(sessionId, pageParam, signal),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    enabled: sameSource && connection.status === 'ready',
+    retry: false,
+  });
+  const messages = [
+    ...new Map(
+      history.data?.pages
+        .flatMap((page) => page.items)
+        .map((message) => [message.id, toRemoteChatExportMessage(message)]),
+    ).values(),
+  ].toReversed();
+  const needsMessage = Boolean(messageId && !messages.some((message) => message.id === messageId));
+  useEffect(() => {
+    if (
+      sameSource &&
+      needsMessage &&
+      history.hasNextPage &&
+      !history.isFetchingNextPage &&
+      !history.isError
+    )
+      void history.fetchNextPage();
+  }, [sameSource, needsMessage, history]);
+  if (!sameSource || connection.status !== 'ready')
+    return (
+      <ContentState.Error
+        title={t('remoteAgent.disconnected')}
+        primaryAction={{ children: t('common.retry'), onPress: () => controller.reconnect() }}
+      />
+    );
+  if (history.isLoading || (needsMessage && history.hasNextPage && !history.isError))
+    return (
+      <View className="flex-1 justify-center p-5">
+        <ContentState.Loading />
+      </View>
+    );
+  const source = createRemoteChatShareSource(
+    controller,
+    { connectionId, sourceKey, sessionId, agentId },
+    agents.agents.find((agent) => agent.id === agentId)?.name,
   );
+  return (
+    <ChatShareSelectionProvider
+      key={`${connectionId}:${sourceKey}:${sessionId}:${messageId}`}
+      sessionId={sessionId}
+      initialMessageId={
+        messages.some((message) => message.id === messageId && isChatMessageExportable(message))
+          ? messageId
+          : undefined
+      }
+      source={source}
+    >
+      <Text className="px-5 pb-3 text-muted-foreground text-sm">
+        {t('chat.share.selectionHint')}
+      </Text>
+      <ChatShareMessages
+        messageId={messageId}
+        history={{
+          messages,
+          dataKey: `pc:${connectionId}:${sourceKey}:${sessionId}`,
+          isLoadingInitial:
+            history.isLoading || (needsMessage && Boolean(history.hasNextPage) && !history.isError),
+          error: history.error ?? undefined,
+          retry: async () => {
+            await history.refetch();
+          },
+          isLoadingOlder: history.isFetchingNextPage,
+          isLoadingNewer: false,
+          hasNewerMessages: false,
+          loadNewer: undefined,
+          loadOlder:
+            history.hasNextPage && !history.isFetchingNextPage
+              ? async () => {
+                  await history.fetchNextPage();
+                }
+              : undefined,
+        }}
+      />
+      <ChatShareControls />
+    </ChatShareSelectionProvider>
+  );
+}
+
+function ChatShareMessages({ history, messageId }: { history: ShareHistory; messageId?: string }) {
+  const { t } = useTranslation();
+  const messages = history.messages.filter((message) => message.role !== 'system');
 
   if (history.isLoadingInitial)
     return (
@@ -142,7 +289,7 @@ function ChatShareMessages({ sessionId, messageId }: { sessionId: string; messag
 const ChatShareMessageRow = memo(function ChatShareMessageRow({
   message,
 }: {
-  message: AgentMessageView;
+  message: ChatExportMessage;
 }) {
   const { t, i18n } = useTranslation();
   const { isSharing } = useChatShareSelectionState();
@@ -179,9 +326,15 @@ const ChatShareMessageRow = memo(function ChatShareMessageRow({
             {role}
           </Text>
           <Text className="shrink text-muted-foreground text-xs" numberOfLines={1}>
-            {isChatMessageExportable(message)
-              ? new Date(message.createdAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language)
-              : t('chat.share.unsettled')}
+            {message.truncated
+              ? t('remoteAgent.truncated')
+              : !isChatMessageExportable(message)
+                ? t('chat.share.unsettled')
+                : message.createdAt
+                  ? new Date(message.createdAt).toLocaleString(
+                      i18n.resolvedLanguage ?? i18n.language,
+                    )
+                  : ''}
           </Text>
         </View>
         <Text className="text-muted-foreground text-sm" numberOfLines={4}>
@@ -215,10 +368,10 @@ function ChatShareControls() {
   );
 }
 
-function messageKey(message: AgentMessageView) {
+function messageKey(message: ChatExportMessage) {
   return message.id;
 }
-function renderMessage({ item }: LegendListRenderItemProps<AgentMessageView>) {
+function renderMessage({ item }: LegendListRenderItemProps<ChatExportMessage>) {
   return <ChatShareMessageRow message={item} />;
 }
 function closeSelection() {

@@ -15,7 +15,7 @@ namespace margelo::nitro::cherrystudio::ui {
   using namespace facebook;
 
   /**
-   * The C++ JNI bridge between the C++ enum "NativeMenuCheckedState" and the the Kotlin enum "NativeMenuCheckedState".
+   * The C++ JNI bridge between the C++ enum "NativeMenuCheckedState" and the Kotlin enum "NativeMenuCheckedState".
    */
   struct JNativeMenuCheckedState final: public jni::JavaClass<JNativeMenuCheckedState> {
   public:
