@@ -991,6 +991,113 @@ describe('MobileAgentHost', () => {
     });
   });
 
+  test.each(['completed', 'cancelled', 'failed'] as const)(
+    'projects %s compaction in place and persists only completed anchors',
+    async (outcome) => {
+      const compaction = {
+        id: 'compaction-1',
+        phase: 'tool-loop' as const,
+        status: 'running' as const,
+        startedAt: 1,
+        inputTokensBefore: 112_000,
+      };
+      const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+        controller.emit({
+          type: 'part.add',
+          index: 0,
+          part: { id: 'before', type: 'text', text: 'Before', state: 'done' },
+        });
+        controller.emit({ type: 'context.compaction', compaction });
+        if (outcome !== 'cancelled') {
+          controller.emit({
+            type: 'context.compaction',
+            compaction: {
+              ...compaction,
+              status: outcome,
+              completedAt: 2,
+              ...(outcome === 'completed'
+                ? { inputTokensAfter: 20_000 }
+                : { reason: 'summary-failed' as const }),
+            },
+          });
+          controller.emit({
+            type: 'part.add',
+            index: 1,
+            part: { id: 'after', type: 'text', text: 'After', state: 'done' },
+          });
+        }
+        controller.emit({ type: outcome === 'cancelled' ? 'cancelled' : 'completed' });
+      });
+      const host = createHost(runtime);
+      const session = await createStoredSession();
+      const events: AgentEvent[] = [];
+      await host.observeSession(session.id, (event) => events.push(event));
+      await host.submitMessage({
+        ...messageIds(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Continue.' }],
+      });
+      await waitFor(
+        () => events.some((event) => event.type === 'message.finalized'),
+        'context terminal',
+      );
+      const updates = events.flatMap((event) =>
+        event.type === 'message.delta' &&
+        (event.delta.op === 'part.add' || event.delta.op === 'part.replace') &&
+        event.delta.part.type === 'data-compaction-anchor'
+          ? [event.delta]
+          : [],
+      );
+      expect(updates[0]).toMatchObject({
+        op: 'part.add',
+        index: 1,
+        part: { data: { status: 'compacting', phase: 'in-loop' } },
+      });
+      if (outcome !== 'cancelled') {
+        // The anchor occupies a transcript slot the Runtime's own part count does not know about.
+        expect(
+          events.flatMap((event) =>
+            event.type === 'message.delta' &&
+            event.delta.op === 'part.add' &&
+            event.delta.part.id === 'after'
+              ? [event.delta.index]
+              : [],
+          ),
+        ).toEqual([2]);
+        expect(updates[1]).toMatchObject({
+          op: 'part.replace',
+          part: {
+            id: updates[0].part.id,
+            data: { status: outcome === 'completed' ? 'done' : 'skipped' },
+          },
+        });
+      }
+      const message = (await store.listMessages(session.id))[1];
+      if (outcome === 'completed') {
+        expect(message.parts).toMatchObject([
+          { id: 'before' },
+          {
+            id: updates[0].part.id,
+            type: 'data-compaction-anchor',
+            data: {
+              status: 'done',
+              phase: 'in-loop',
+              trigger: 'auto',
+              startedAt: '1970-01-01T00:00:00.001Z',
+              completedAt: '1970-01-01T00:00:00.002Z',
+              preTokens: 112_000,
+              postTokens: 20_000,
+              durationMs: 1,
+            },
+          },
+          { id: 'after' },
+        ]);
+      } else {
+        expect(message.parts.some((part) => part.type === 'data-compaction-anchor')).toBe(false);
+      }
+    },
+  );
+
   test('persists a completed checkpoint and replays it after Host recreation', async () => {
     const checkpoint = {
       version: 1 as const,

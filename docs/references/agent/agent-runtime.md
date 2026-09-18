@@ -389,7 +389,35 @@ checkpoint for that fallback. Cancellation still ends the turn, and oversized or
 never sent merely because compaction failed.
 
 Initial compaction is not the last admission check. Before Pi continues after a tool batch, the
-Runtime uses the latest valid provider usage plus subsequent messages when available. That usage
+Runtime applies the same soft compaction trigger, summarizes the older context, and retains the
+recent tool-call/result pairs. It replaces Pi's next context without replaying any tool. Each batch
+gets at most one compaction attempt; failure falls back only when the original context still fits.
+The retained tail is sent verbatim, so when it alone exceeds the input budget the Runtime fails with
+`context_window_exceeded` without requesting a summary.
+Loop summaries are execution-local: they do not create durable replay cursors into the active turn,
+whose model-only tool messages differ from the persisted application transcript. The next fresh
+turn reconstructs from the last durable preflight checkpoint and the complete transcript tail.
+
+Pi's default message conversion drops `compactionSummary` messages. The Runtime installs its own
+conversion so every summary, preflight or in-loop, reaches the provider as the opening user message;
+a compacted request never starts with an assistant message.
+
+`context.compaction` carries a turn-local `id`, `phase` (`preflight` or
+`tool-loop`), `status` (`running`, `completed`, `failed`, or `cancelled`), `startedAt`, optional
+`completedAt`, `inputTokensBefore`, optional `inputTokensAfter`, and an optional closed `reason`
+(`summary-failed`, `insufficient-reduction`, or `cancelled`). The event never exposes summary text,
+and request-context measurements stay inside the Runtime until a consumer needs them.
+The Host projects compaction into ordered `data-compaction-anchor` parts using Desktop field names and ISO timestamps. Runtime `running` maps
+to `compacting`, `completed` to `done`, and failed/cancelled attempts to `skipped`. Only completed
+anchors are persisted; summaries and detailed failure reasons stay behind the Runtime boundary.
+
+Content estimates retain Pi's ASCII heuristic and reserve two tokens per non-ASCII code point,
+including system instructions and tool schemas. This is a conservative multilingual heuristic,
+not a model tokenizer or a guarantee against provider-side overflow. The provider request boundary
+also checks this input budget and clamps the requested output to the remaining total window minus
+4,096 tokens, respecting both the caller's cap and the model's maximum output capability.
+Within a live loop, the Runtime uses the latest valid provider usage plus subsequent messages
+when available. That usage
 already covers the old system prompt, tool schemas, and images; only unmeasured images and newly
 introduced tool definitions receive additional reserves. Without valid usage, those costs are
 estimated from content. A continuation that no longer fits the hard budget stops as
@@ -509,6 +537,7 @@ type RuntimeEvent =
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }
   | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
+  | { type: 'context.compaction'; compaction: RuntimeContextCompaction }
   | {
       type: 'usage'
       requestId: string

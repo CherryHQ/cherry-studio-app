@@ -213,6 +213,11 @@ type AgentMessageView = {
 type AgentMessagePart =
   | {
       id: string
+      type: 'data-compaction-anchor'
+      data: CompactionAnchorData
+    }
+  | {
+      id: string
       type: 'text' | 'reasoning'
       text: string
       state: 'streaming' | 'done'
@@ -522,6 +527,36 @@ there is no untyped patch object.
 
 Durable facts commit before their events publish. Streaming deltas are ephemeral; a fresh observer
 gets the accumulated streaming message from the snapshot.
+
+Compaction history uses Desktop-compatible `data-compaction-anchor` parts, in transcript order:
+
+```ts
+type CompactionAnchorData = {
+  status: 'compacting' | 'done' | 'skipped'
+  phase: 'turn-start' | 'in-loop' | 'agent-session'
+  trigger?: 'manual' | 'auto'
+  startedAt?: string // ISO timestamp
+  completedAt?: string // ISO timestamp
+  preTokens?: number
+  postTokens?: number
+  durationMs?: number
+  foldedCount?: number
+}
+```
+
+The Host inserts one `compacting` part per attempt using `part.add`, then replaces that same id with
+`done` or `skipped`. Every `part.add` index is the Host transcript position, so parts that follow an
+anchor keep their order for live observers. Each attempt has a distinct id. Only completed anchors enter streaming snapshots
+and terminal persistence; skipped, cancelled, or still-running attempts leave no historical marker.
+Completed anchors survive later turn failure or interruption. Recovery also removes transient anchors.
+The Mobile path emits `turn-start` for preflight folds and `in-loop` between tool batches, with
+`trigger: 'auto'`; `agent-session` and `manual` retain their Desktop vocabulary without adding commands.
+Optional measurements are omitted when unavailable; Mobile does not infer `foldedCount` from tool parts.
+
+Turn-start anchors render as a dashed separator outside the process disclosure. In-loop anchors remain
+inside the process at their original position. The marker has no detail disclosure and never contains
+summary text or tool payloads. The model-history adapter excludes these presentation parts. A marker
+records an event; it does not turn an execution-local summary into a durable checkpoint.
 
 ## Snapshot and recovery
 

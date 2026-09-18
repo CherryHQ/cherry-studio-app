@@ -173,6 +173,59 @@ describe.each([
     harness.cleanup();
   });
 
+  test('preserves multiple Desktop compaction anchors and their order through persisted reads', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Continue', state: 'done' }],
+    });
+    const parts = [
+      {
+        id: 'compaction-anchor:1',
+        type: 'data-compaction-anchor' as const,
+        data: {
+          status: 'done' as const,
+          phase: 'turn-start' as const,
+          preTokens: 112_000,
+          postTokens: 20_000,
+        },
+      },
+      { id: 'text-1', type: 'text' as const, state: 'done' as const, text: 'Working' },
+      {
+        id: 'compaction-anchor:2',
+        type: 'data-compaction-anchor' as const,
+        data: {
+          status: 'done' as const,
+          phase: 'in-loop' as const,
+          trigger: 'auto' as const,
+          startedAt: '2026-09-18T00:00:00.000Z',
+          completedAt: '2026-09-18T00:00:01.000Z',
+          preTokens: 110_000,
+          postTokens: 30_000,
+          durationMs: 1_000,
+        },
+      },
+      { id: 'text-2', type: 'text' as const, state: 'done' as const, text: 'Answer' },
+    ];
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      parts,
+    });
+    expect((await store.listMessages(session.id))[1].parts).toEqual(parts);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts,
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    expect((await store.listMessages(session.id))[1].parts).toEqual(parts);
+  });
+
   test('legacy empty Session lifecycle: seed, get, rename, delete', async () => {
     const created = await harness.createEmptySession({ agentId });
     expect(created.agentId).toBe(agentId);

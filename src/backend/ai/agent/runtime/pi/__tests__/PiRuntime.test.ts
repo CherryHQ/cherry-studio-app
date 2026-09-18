@@ -520,6 +520,38 @@ const harness: RuntimeConformanceHarness = {
 };
 
 describe('Pi invocation capture', () => {
+  test('clamps the provider output cap using multilingual input estimates', async () => {
+    const runtime = createTestRuntime();
+    let outputCap: number | undefined;
+    const holder = arrange(runtime, async (context) => {
+      const stream = await context.options.streamFn(holder.resolution.model, {
+        systemPrompt: context.options.initialState?.systemPrompt,
+        messages: [context.prompt],
+      });
+      await stream.result();
+      await emitText(context, 'Done.');
+    });
+    holder.resolution.model = { ...holder.resolution.model, maxTokens: 128_000 };
+    holder.resolution.streamFn = (_model, _context, options) => {
+      outputCap = options?.maxTokens;
+      const stream = new AssistantMessageEventStream();
+      stream.end(assistantMessage());
+      return stream;
+    };
+    const session = await runtime.open();
+    const events = await collect(
+      session.execute(
+        baseRequest('multilingual-output-cap', {
+          input: [{ type: 'text', text: '中'.repeat(50_000) }],
+          options: { maxOutputTokens: 64_000 },
+        }),
+      ),
+    );
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(outputCap).toBeLessThanOrEqual(128_000 - 100_000 - 4_096);
+    expect(outputCap).toBeGreaterThanOrEqual(1_024);
+    await session.close();
+  });
   test('keeps session identity and credential overrides scoped to each request', async () => {
     const sessionIds: string[] = [];
     const apiKeyOverrides: (string | undefined)[] = [];
@@ -1417,7 +1449,7 @@ describe('PiRuntime mapping', () => {
 
     expect(summaryCalls).toBe(0);
     expect(holder.lastOptions).toBeUndefined();
-    expect(events).toEqual([
+    expect(events.filter((event) => event.type === 'failed')).toEqual([
       expect.objectContaining({
         type: 'failed',
         error: expect.objectContaining({ code: 'context_window_exceeded' }),
@@ -1481,6 +1513,75 @@ describe('PiRuntime mapping', () => {
           retryable: false,
         },
       },
+    ]);
+    await session.close();
+  });
+
+  test('continues the real tool loop after compaction without re-executing completed tools', async () => {
+    const resolution = createResolution();
+    resolution.model = { ...resolution.model, contextWindow: 16_384 };
+    const requests: PiMessage[][] = [];
+    resolution.streamFn = (_model, context) => {
+      requests.push([...context.messages]);
+      const toolCall = requests.length <= 2;
+      const message = assistantMessage({
+        content: toolCall
+          ? [{ type: 'toolCall', id: `lookup-${requests.length}`, name: 'lookup', arguments: {} }]
+          : [{ type: 'text', text: 'The answer is ready.' }],
+        stopReason: toolCall ? 'toolUse' : 'stop',
+        usage: usage(0, 0),
+      });
+      const stream = new AssistantMessageEventStream();
+      stream.push({ type: 'start', partial: message });
+      stream.push({ type: 'done', reason: toolCall ? 'toolUse' : 'stop', message });
+      return stream;
+    };
+    const execute = jest.fn(async ({ toolCallId }: { toolCallId: string }) => ({
+      value: 'x'.repeat(toolCallId === 'lookup-1' ? 36_000 : 12_000),
+      artifacts: [],
+    }));
+    const runtime = new PiRuntime(
+      { preflightModel: jest.fn(), resolveModel: () => resolution },
+      (options) => new Agent(options),
+      DEFAULT_PI_RUNTIME_LIMITS,
+      {
+        completeSimple: summaryCompletion('Condensed prior result.'),
+        settings: { enabled: true, reserveTokens: 4_096, keepRecentTokens: 2_000 },
+      },
+    );
+    const session = await runtime.open();
+    const events = await collect(
+      session.execute(
+        baseRequest('loop-compaction', {
+          tools: [
+            {
+              ref: { source: 'builtin', capabilityId: 'lookup' },
+              providerName: 'lookup',
+              displayName: 'Lookup',
+              description: 'Lookup records.',
+              inputSchema: { type: 'object', properties: {} },
+              approval: 'auto',
+              execute,
+            },
+          ],
+        }),
+      ),
+    );
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(requests).toHaveLength(3);
+    // Providers reject a request that opens with an assistant message.
+    expect(requests[2][0].role).toBe('user');
+    expect(JSON.stringify(requests[2][0])).toContain('Condensed prior result.');
+    expect(
+      requests[2]
+        .filter((message) => message.role === 'toolResult')
+        .map((message) => message.toolCallId),
+    ).toEqual(['lookup-2']);
+    expect(events.some((event) => event.type === 'context.checkpoint')).toBe(false);
+    expect(events.filter((event) => event.type === 'context.compaction')).toMatchObject([
+      { compaction: { phase: 'tool-loop', status: 'running' } },
+      { compaction: { phase: 'tool-loop', status: 'completed' } },
     ]);
     await session.close();
   });
@@ -2210,7 +2311,7 @@ describe('PiRuntime mapping', () => {
       const streamFn = holder.lastOptions?.streamFn;
       if (!streamFn) throw new Error('Pi stream function was not installed.');
 
-      streamFn(holder.resolution.model, undefined as never, { signal: upstream.signal } as never);
+      streamFn(holder.resolution.model, { messages: [] }, { signal: upstream.signal } as never);
       expect(providerSignal?.aborted).toBe(false);
 
       const cancelling = session.cancel('turn-stuck-cancel');

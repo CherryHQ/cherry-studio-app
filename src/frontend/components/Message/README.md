@@ -129,6 +129,12 @@ body. Earlier prose, reasoning, and tool calls all enter the timed process discl
 followed by a tool is therefore treated as intermediate narration, not as the result. Provider-
 executed web searches render nothing; source and file parts retain their dedicated result rows.
 
+Automatic context compaction uses the Desktop-compatible `data-compaction-anchor` part. Turn-start
+markers stay visible as dashed separators before the process disclosure; in-loop markers remain
+between the corresponding tool steps inside it. Running markers show progress, completed markers
+show the estimated tokens saved when available, and skipped markers render nothing. The marker
+itself has no press target or detail disclosure. Summary text remains private to the Runtime.
+
 ### Detail Content Status
 
 Detail content currently accepts arbitrary React children. Raw text, structured values, source
@@ -143,7 +149,7 @@ lives beside `MessagePartDetail` in `packages/ui/src/components/message-part/com
 ### Renderer Inventory And Visual Acceptance
 
 The visible non-tool part adapters are Text, Reasoning, Code, Compact, Error, Translation, File,
-Source URL/group, and Unknown. Pending is an assistant-row state rather than a persisted part
+Compaction Anchor, Source URL/group, and Unknown. Pending is an assistant-row state rather than a persisted part
 adapter. Video data, source-document, step-start, and provider-owned web-search parts intentionally
 render no separate message-list content.
 

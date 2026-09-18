@@ -3,11 +3,15 @@ import type { AssistantMessage, Model, Models, ToolResultMessage } from '@earend
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 
 import {
+  convertPiMessagesToLlm,
   estimatePiLoopContextHeadroomTokens,
+  estimatePiMessagesTokens,
+  measurePiContext,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
   PI_IMAGE_CONTEXT_TOKEN_RESERVE,
   PI_MIN_OUTPUT_RESERVE_TOKENS,
   planPiContext,
+  planPiLoopContext,
 } from '../contextCompaction';
 import type { PiConversation } from '../modelMessages';
 
@@ -277,6 +281,24 @@ describe('Pi live context accounting', () => {
     tools: [tool],
   };
 
+  test('reserves multilingual text without inflating already measured content', () => {
+    const chinese: AgentMessage = { role: 'user', content: '你好世界', timestamp: 0 };
+    expect(estimatePiMessagesTokens([chinese])).toBe(8);
+    expect(estimatePiMessagesTokens([{ ...chinese, content: 'abcd' }])).toBe(1);
+    const before = measurePiContext({ ...context, messages: [chinese, measured] });
+    const after = measurePiContext({ ...context, messages: [chinese, measured, chinese] });
+    expect(before.inputTokens).toBe(50_000);
+    expect(after.inputTokens - before.inputTokens).toBe(8);
+  });
+
+  test('reports input admission separately from billed tokens', () => {
+    const usage = measurePiContext({ ...context, systemPrompt: '', tools: [], messages: [] });
+    expect(usage).toMatchObject({ inputTokens: 0, inputTokenLimit: 122_880 });
+    expect(
+      measurePiContext({ ...context, maxInputTokens: 8_000, messages: [measured] }),
+    ).toMatchObject({ inputTokenLimit: 6_976 });
+  });
+
   test('does not add measured system, tools, or old images a second time', () => {
     expect(estimatePiLoopContextHeadroomTokens({ ...context, messages: [image, measured] })).toBe(
       128_000 - 50_000 - PI_MIN_OUTPUT_RESERVE_TOKENS - PI_CONTEXT_SAFETY_MARGIN_TOKENS,
@@ -321,5 +343,165 @@ describe('Pi live context accounting', () => {
     const withPrefix = estimatePiLoopContextHeadroomTokens(empty);
 
     expect(withoutPrefix - withPrefix).toBeGreaterThanOrEqual(20_000);
+  });
+});
+
+describe('Pi tool-loop compaction', () => {
+  function pair(id: string, text: string): AgentMessage[] {
+    return [
+      response({
+        content: [{ type: 'toolCall', id, name: 'lookup', arguments: {} }],
+        stopReason: 'toolUse',
+      }),
+      {
+        role: 'toolResult',
+        toolCallId: id,
+        toolName: 'lookup',
+        content: [{ type: 'text', text }],
+        isError: false,
+        timestamp: 3,
+      },
+    ];
+  }
+
+  function loop(
+    messages: AgentMessage[],
+    overrides: Partial<Parameters<typeof planPiLoopContext>[0]> = {},
+  ) {
+    return planPiLoopContext({
+      messages,
+      systemPrompt: 'Help the user.',
+      model: { ...model, contextWindow: 16_384 },
+      models: { completeSimple: async () => response() },
+      options: { settings: { enabled: true, reserveTokens: 4_096, keepRecentTokens: 2_000 } },
+      redactSummary: (text) => text,
+      signal: new AbortController().signal,
+      thinkingLevel: 'off',
+      tools: [],
+      ...overrides,
+    });
+  }
+
+  function messages(): AgentMessage[] {
+    return [
+      { role: 'user', content: 'Find the answer.', timestamp: 0 },
+      ...pair('old', 'x'.repeat(36_000)),
+      ...pair('recent', 'y'.repeat(12_000)),
+    ];
+  }
+
+  test('shrinks an active turn while retaining the newest complete tool pair and emitting no durable cursor', async () => {
+    const updates: unknown[] = [];
+    const result = await loop(messages(), { onCompaction: (update) => updates.push(update) });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.message);
+    expect(result.checkpoint).toBeNull();
+    expect(result.messages.map((message) => message.role)).toEqual([
+      'compactionSummary',
+      'assistant',
+      'toolResult',
+    ]);
+    expect(result.messages[1]).toMatchObject({
+      content: [{ type: 'toolCall', id: 'recent' }],
+      usage: { totalTokens: 0 },
+    });
+    expect(result.messages[2]).toMatchObject({ toolCallId: 'recent' });
+    expect(updates).toEqual([
+      expect.objectContaining({ status: 'running' }),
+      expect.objectContaining({ status: 'completed', inputTokensAfter: expect.any(Number) }),
+    ]);
+  });
+
+  test('keeps previous goals when compacting another prefix of the same active turn', async () => {
+    const requests: string[] = [];
+    await loop(
+      [
+        {
+          role: 'compactionSummary',
+          summary: 'KEEP_EARLIER_GOAL',
+          tokensBefore: 20_000,
+          timestamp: 0,
+        },
+        ...messages(),
+      ],
+      {
+        models: {
+          completeSimple: async (_model, context) => {
+            requests.push(JSON.stringify(context));
+            return response();
+          },
+        },
+      },
+    );
+    expect(requests.some((request) => request.includes('KEEP_EARLIER_GOAL'))).toBe(true);
+  });
+
+  test('retains sendable context when summarization fails and reports the failed attempt', async () => {
+    const original = messages();
+    const updates: unknown[] = [];
+    const result = await loop(original, {
+      model: { ...model, contextWindow: 24_000 },
+      options: { settings: { enabled: true, reserveTokens: 13_000, keepRecentTokens: 2_000 } },
+      models: {
+        completeSimple: async () => response({ stopReason: 'error', errorMessage: 'Unavailable' }),
+      },
+      onCompaction: (update) => updates.push(update),
+    });
+    expect(result).toMatchObject({ ok: true, messages: original, checkpoint: null });
+    expect(updates.at(-1)).toMatchObject({ status: 'failed', reason: 'summary-failed' });
+  });
+
+  test('sends the summary to the provider as the opening user message', async () => {
+    const result = await loop(messages());
+    if (!result.ok) throw new Error(result.message);
+    const request = convertPiMessagesToLlm(result.messages);
+    expect(request.map((message) => message.role)).toEqual(['user', 'assistant', 'toolResult']);
+    expect(JSON.stringify(request[0])).toContain('<summary>');
+  });
+
+  test('does not pay for a summary when the newest tool batch alone overflows', async () => {
+    const completeSimple = jest.fn(async () => response());
+    const updates: unknown[] = [];
+    const result = await loop(
+      [
+        { role: 'user', content: 'Find the answer.', timestamp: 0 },
+        ...pair('old', 'x'.repeat(12_000)),
+        ...pair('recent', 'y'.repeat(80_000)),
+      ],
+      { models: { completeSimple }, onCompaction: (update) => updates.push(update) },
+    );
+    expect(result).toMatchObject({ ok: false, code: 'context_window_exceeded' });
+    expect(completeSimple).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
+  });
+
+  test('does not return oversized context when summarization fails', async () => {
+    const result = await loop(messages(), {
+      models: {
+        completeSimple: async () => response({ stopReason: 'error', errorMessage: 'Unavailable' }),
+      },
+    });
+    expect(result).toMatchObject({ ok: false, code: 'context_compaction_failed' });
+  });
+
+  test('cancels in-flight loop compaction without publishing a replacement context', async () => {
+    const controller = new AbortController();
+    const updates: unknown[] = [];
+    await expect(
+      loop(messages(), {
+        signal: controller.signal,
+        models: {
+          completeSimple: async () => {
+            controller.abort(new Error('Cancelled'));
+            return response();
+          },
+        },
+        onCompaction: (update) => updates.push(update),
+      }),
+    ).rejects.toThrow('Cancelled');
+    expect(updates.at(-1)).toMatchObject({ status: 'cancelled', reason: 'cancelled' });
+    expect(updates.some((update) => (update as { status: string }).status === 'completed')).toBe(
+      false,
+    );
   });
 });

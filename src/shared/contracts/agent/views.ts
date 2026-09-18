@@ -6,6 +6,7 @@ import * as z from 'zod';
  * `./index.ts` for the protocol overview.
  */
 
+import { CompactionAnchorDataSchema } from '@/shared/data/types/compaction';
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
@@ -324,6 +325,11 @@ const AgentToolMessagePartSchema = z
   });
 
 export const AgentMessagePartSchema = z.union([
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('data-compaction-anchor'),
+    data: CompactionAnchorDataSchema,
+  }),
   z.strictObject({
     id: z.string().min(1),
     type: z.enum(['text', 'reasoning']),

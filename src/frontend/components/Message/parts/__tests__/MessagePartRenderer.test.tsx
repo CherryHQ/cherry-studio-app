@@ -8,6 +8,7 @@ import { TextPart } from '../TextPart';
 
 jest.mock('../CodePart', () => ({ CodePart: () => null }));
 jest.mock('../CompactPart', () => ({ CompactPart: () => null }));
+jest.mock('../CompactionAnchorPart', () => ({ CompactionAnchorPart: () => null }));
 jest.mock('../ErrorPart', () => ({ ErrorPart: () => null }));
 jest.mock('../FilePart', () => ({ FilePart: () => null }));
 jest.mock('../ReasoningPart', () => ({ ReasoningPart: () => null }));

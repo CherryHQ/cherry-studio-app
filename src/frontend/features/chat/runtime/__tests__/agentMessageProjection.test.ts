@@ -28,6 +28,30 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('preserves compaction identity, data and position in live and reopened history', () => {
+    const anchor = {
+      id: 'compaction-anchor:turn-1:1',
+      type: 'data-compaction-anchor' as const,
+      data: { phase: 'in-loop' as const, status: 'compacting' as const },
+    };
+    const original = message('assistant-1', {
+      parts: [anchor, { id: 'answer', type: 'text', text: 'Answer', state: 'done' }],
+    });
+    const cache = createAgentMessageListProjectionCache();
+    const live = toAgentMessageListItem(original, cache);
+    const completed = {
+      ...anchor,
+      data: { ...anchor.data, status: 'done' as const, preTokens: 100_000, postTokens: 20_000 },
+    };
+    const reopened = toAgentMessageListItem(
+      { ...original, status: 'success', parts: [completed, original.parts[1]] },
+      cache,
+    );
+    expect(reopened?.data.partKeys).toEqual(live?.data.partKeys);
+    expect(reopened?.data.parts?.[0]).toEqual(completed);
+    expect(reopened?.data.parts?.[1]).toBe(live?.data.parts?.[1]);
+  });
+
   test('keeps image request settings on pending and reopened assistant messages', () => {
     const imageGeneration = { mode: 'generate' as const, paramValues: { aspectRatio: '16:9' } };
     const [, pending] = createPendingChatMessages({

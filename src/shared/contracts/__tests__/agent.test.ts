@@ -22,6 +22,38 @@ function roundTrip<T>(value: T): unknown {
 }
 
 describe('Agent Session status contract', () => {
+  test('round-trips Desktop compaction parts with one outer id and no summary payload', () => {
+    const part = {
+      id: 'compaction-anchor:turn-1:1',
+      type: 'data-compaction-anchor',
+      data: {
+        status: 'done',
+        phase: 'in-loop',
+        trigger: 'auto',
+        startedAt: '2026-09-18T00:00:00.000Z',
+        completedAt: '2026-09-18T00:00:01.000Z',
+        preTokens: 112_000,
+        postTokens: 30_000,
+        durationMs: 1_000,
+        foldedCount: 6,
+      },
+    };
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+    expect(AgentMessageDeltaSchema.parse(roundTrip({ op: 'part.add', index: 2, part }))).toEqual({
+      op: 'part.add',
+      index: 2,
+      part,
+    });
+    for (const data of [
+      { ...part.data, summary: 'Private history' },
+      { ...part.data, status: 'completed' },
+      { ...part.data, phase: 'tool-loop' },
+      { ...part.data, startedAt: 1 },
+      { ...part.data, preTokens: -1 },
+    ]) {
+      expect(AgentMessagePartSchema.safeParse({ ...part, data }).success).toBe(false);
+    }
+  });
   test('round-trips immutable status snapshots without admitting transcript or error payloads', () => {
     const input = { status: 'awaiting-approval', turnId: 'turn-1' };
     const snapshot = AgentSessionStatusSchema.parse(roundTrip(input));

@@ -98,6 +98,7 @@ import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
+  omitTransientCompactionParts,
   settleStreamingTextParts,
 } from '../sessionStore/messageSettlement';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
@@ -115,6 +116,7 @@ import {
   toAgentErrorView,
   toAgentMessagePart,
   toAgentUsageView,
+  toCompactionAnchorPart,
 } from './runtimeProjection';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
@@ -977,6 +979,25 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     event: RuntimeEvent,
   ): Promise<boolean> {
     switch (event.type) {
+      case 'context.compaction': {
+        const part = toCompactionAnchorPart(event.compaction, state.turn.id);
+        const index = state.assistantMessage.parts.findIndex((item) => item.id === part.id);
+        if (index < 0) {
+          state.assistantMessage.parts.push(part);
+        } else {
+          state.assistantMessage.parts[index] = part;
+        }
+        this.publish(sessionId, {
+          type: 'message.delta',
+          messageId: state.assistantMessage.id,
+          delta:
+            index < 0
+              ? { op: 'part.add', index: state.assistantMessage.parts.length - 1, part }
+              : { op: 'part.replace', part },
+        });
+        if (part.data.status === 'done') this.requestSnapshot(sessionId, state);
+        return false;
+      }
       case 'part.add': {
         const part = toAgentMessagePart(event.part);
         if (part.type === 'file') {
@@ -992,7 +1013,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.publish(sessionId, {
           type: 'message.delta',
           messageId: state.assistantMessage.id,
-          delta: { op: 'part.add', index: event.index, part },
+          // Host-owned compaction anchors shift later parts past the Runtime's own count.
+          delta: { op: 'part.add', index: state.assistantMessage.parts.length - 1, part },
         });
         return false;
       }
@@ -1134,7 +1156,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       completedAt: timingSnapshot.completedAt ?? Math.max(timingSnapshot.startedAt, terminalAt),
     };
     const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
-      settleStreamingTextParts(state.assistantMessage.parts),
+      settleStreamingTextParts(omitTransientCompactionParts(state.assistantMessage.parts)),
       'The turn ended before this tool call completed.',
     );
     if (outcome === 'failed' && error) {
@@ -1244,7 +1266,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     try {
       await this.store.updateStreamingAssistantMessage({
         assistantMessageId: assistantMessage.id,
-        parts: assistantMessage.parts,
+        parts: omitTransientCompactionParts(assistantMessage.parts),
       });
     } catch (error) {
       logger.warn('Agent streaming message write failed; recovery fidelity reduced', {
