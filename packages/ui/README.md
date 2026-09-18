@@ -149,6 +149,11 @@ translations, file identifiers, or application navigation:
 `MessagePart.Process` is the inline disclosure used for one total-duration row before an answer.
 The product adapter supplies its localized duration and every visible pre-result child; the
 primitive owns the quiet divider, running shimmer, disclosure state, and compact chevron.
+`defaultExpanded` preserves reading when a live tool group enters the completed process, and
+`statusText`/`statusTone` keep exceptions visible while the process is folded.
+`MessagePart.ToolGroup` defaults closed regardless of running state. Its optional controlled
+`expanded`/`onExpandedChange` pair lets a message retain group state across outer disclosure
+unmounts; new calls and completion never override the reader's choice.
 
 `MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
 already communicates live progress. The running state, status text, and detail action remain intact;

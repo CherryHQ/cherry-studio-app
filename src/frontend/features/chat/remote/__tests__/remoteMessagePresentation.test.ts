@@ -64,3 +64,23 @@ it('keeps newly streamed text after the last known tool while its directory is c
   expect(result.data.parts?.[1]).toMatchObject({ state: 'input-streaming' });
   expect(withRemoteToolSummaries(original, [])).toBe(original);
 });
+
+it.each(['approval-requested', 'output-denied'] as const)(
+  'preserves %s in the lightweight projection so collapsed groups expose it',
+  (state) => {
+    const original = presentRemoteMessage({ ...message, status: 'streaming' });
+    const result = withRemoteToolSummaries(original, [
+      {
+        id: 'tool-id',
+        type: 'tool',
+        name: 'Bash',
+        state,
+        fields: [{ name: 'input', resource: 'private-arguments' }],
+      },
+    ]);
+    expect(result.data.parts?.find((part) => part.type === 'dynamic-tool')).toMatchObject({
+      state,
+    });
+    expect(JSON.stringify(result.data)).not.toContain('private-arguments');
+  },
+);

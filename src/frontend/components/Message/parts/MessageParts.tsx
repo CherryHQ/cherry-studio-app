@@ -48,37 +48,21 @@ export function MessageParts({
   return (
     <View className="gap-4">
       {process.length > 0 ? (
-        isStreaming ? (
-          <View className="gap-1">
-            {process.map(({ index, part }) => (
-              <MessagePartRenderer
-                isStreaming
-                isTextSelectionEnabled={isTextSelectionEnabled}
-                key={getMessagePartKey(message, part, index)}
-                messageId={message.id}
-                messageParts={parts}
-                part={part}
-                renderMode={renderMode}
-                resolvedText={citations.textByPartIndex.get(index)}
-              />
-            ))}
-          </View>
-        ) : (
-          <ContextMenuExclusion>
-            <ProcessGroupPart
-              citationText={citations.textByPartIndex}
-              isTextSelectionEnabled={isTextSelectionEnabled}
-              items={process.map(({ index, part }) => ({
-                index,
-                key: getMessagePartKey(message, part, index),
-                part,
-              }))}
-              message={message}
-              messageParts={parts}
-              renderMode={renderMode}
-            />
-          </ContextMenuExclusion>
-        )
+        <ContextMenuExclusion>
+          <ProcessGroupPart
+            key={message.id}
+            citationText={citations.textByPartIndex}
+            isTextSelectionEnabled={isTextSelectionEnabled}
+            items={process.map(({ index, part }) => ({
+              index,
+              key: getMessagePartKey(message, part, index),
+              part,
+            }))}
+            message={message}
+            messageParts={parts}
+            renderMode={renderMode}
+          />
+        </ContextMenuExclusion>
       ) : null}
       {body.map((item) => (
         <MessagePartRenderer
