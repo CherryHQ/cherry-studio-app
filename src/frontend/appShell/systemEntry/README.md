@@ -6,3 +6,8 @@ The backend owns admission, imports, deduplication, and native replies; this mod
 and localized feedback. Route parameters carry memory-only handoff tokens, never shared text or
 file paths. A share review owns dismissal once presented. Temporary translation content is cleared
 when its page loses focus or the application backgrounds.
+
+Agent-index synchronization is enabled only when the backend exposes `refreshShortcuts` for native
+consumers (currently iOS App Intents). It runs once the Agent query succeeds, on Agent changes, and
+on foreground entry; router readiness only starts the action consumer. Translation opens directly
+from the share preview and never enters the native action queue.

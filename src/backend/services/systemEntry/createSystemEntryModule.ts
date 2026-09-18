@@ -36,6 +36,7 @@ export function createSystemEntryModule(dependencies: Dependencies): {
   dispose(): Promise<void>;
 } {
   const native = dependencies.native === undefined ? getSystemIntegration() : dependencies.native;
+  const publishAgents = native?.publishAgents?.bind(native);
   const sessions = new Map<string, SystemEntrySession>();
   const closing = new Set<Promise<void>>();
   let disposed = false;
@@ -71,11 +72,9 @@ export function createSystemEntryModule(dependencies: Dependencies): {
           }
         : entry.kind === 'chat.ask'
           ? { kind: entry.kind, agentId: entry.agentId, text: entry.text! }
-          : entry.kind === 'translation.translate'
-            ? { kind: entry.kind, text: entry.text!, targetLanguage: entry.targetLanguage }
-            : entry.kind === 'chat.open'
-              ? { kind: entry.kind, agentId: entry.agentId }
-              : { kind: 'painting.open' };
+          : entry.kind === 'chat.open'
+            ? { kind: entry.kind, agentId: entry.agentId }
+            : { kind: 'painting.open' };
 
     function finish() {
       closed = true;
@@ -249,13 +248,6 @@ export function createSystemEntryModule(dependencies: Dependencies): {
 
   return {
     module: {
-      getCapabilities: () => ({
-        shares: !!native,
-        translationWindow: false,
-        translationProvider: false,
-        shortcuts: false,
-        ...native?.getCapabilities(),
-      }),
       subscribePending(listener) {
         const subscription = native?.addListener('onPending', listener);
         return () => subscription?.remove();
@@ -289,12 +281,14 @@ export function createSystemEntryModule(dependencies: Dependencies): {
           return session;
         }
       },
-      async refreshShortcuts() {
-        if (!native || disposed) return;
-        await native.publishAgents(
-          (await dependencies.listAgents()).map(({ id, name }) => ({ id, name })),
-        );
-      },
+      refreshShortcuts: publishAgents
+        ? async () => {
+            if (disposed) return;
+            await publishAgents(
+              (await dependencies.listAgents()).map(({ id, name }) => ({ id, name })),
+            );
+          }
+        : undefined,
     },
     async dispose() {
       disposed = true;

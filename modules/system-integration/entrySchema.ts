@@ -36,12 +36,6 @@ export const nativeSystemEntrySchema = z
       text,
       files: z.array(file).max(10),
     }),
-    z.strictObject({
-      ...base,
-      kind: z.literal('translation.translate'),
-      text: text.min(1).max(16_000),
-      targetLanguage: z.string().max(64).optional(),
-    }),
   ])
   .superRefine((entry, context) => {
     if (entry.kind !== 'share.receive') return;

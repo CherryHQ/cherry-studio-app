@@ -10,7 +10,7 @@ import { useAgentsApi } from '@/frontend/hooks/agent';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { SystemEntrySession } from '@/shared/contracts';
 
-import { createSystemEntryHandoff, createTranslationHandoff } from './systemEntryHandoff';
+import { createSystemEntryHandoff } from './systemEntryHandoff';
 
 /** One consumer handles both cold-start claims and foreground notifications after bootstrap opens. */
 export function SystemEntryBridge() {
@@ -19,11 +19,15 @@ export function SystemEntryBridge() {
   const navigation = useRootNavigationState();
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { agents } = useAgentsApi();
+  const { refreshShortcuts } = module;
+  const {
+    agents,
+    query: { isSuccess },
+  } = useAgentsApi({ enabled: !!refreshShortcuts });
 
   useEffect(() => {
-    void module.refreshShortcuts().catch(() => {});
-  }, [module, agents]);
+    if (isSuccess) void refreshShortcuts?.().catch(() => {});
+  }, [refreshShortcuts, agents, isSuccess]);
 
   useEffect(() => {
     if (!navigation?.key) return;
@@ -86,15 +90,6 @@ export function SystemEntryBridge() {
                   params: { handoff: createSystemEntryHandoff(session) },
                 });
                 break;
-              case 'translation.translate': {
-                const handoff = createTranslationHandoff({
-                  text: action.text,
-                  targetLanguage: action.targetLanguage,
-                });
-                await session.complete();
-                if (!stopped) router.push({ pathname: '/translate', params: { handoff } });
-                break;
-              }
             }
           } catch {
             if (!stopped) toast.show({ label: t('systemEntry.failed'), variant: 'danger' });
@@ -111,17 +106,16 @@ export function SystemEntryBridge() {
         if (pendingNotification && !stopped) void drain();
       }
     };
-    const refresh = () => {
-      void module.refreshShortcuts().catch(() => {});
-      void drain();
-    };
     const stopPending = module.subscribePending(() => {
       void drain();
     });
     const foreground = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh();
+      if (state === 'active') {
+        void module.refreshShortcuts?.().catch(() => {});
+        void drain();
+      }
     });
-    refresh();
+    void drain();
     return () => {
       stopped = true;
       stopPending();

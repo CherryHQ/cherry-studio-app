@@ -43,13 +43,13 @@
 
 | 用户入口 | 业务动作 | 展示与执行位置 | 是否保存业务记录 |
 | --- | --- | --- | --- |
-| Android 外部划词 → Cherry 翻译 | `translation.translate` | 原生对话框式 Activity（Android 承载窗口的页面组件），保留来源应用上下文 | 否 |
-| iOS 外部划词 → 翻译 | `translation.translate` | iOS 18.4+ 的系统翻译扩展界面；用户需先将 Cherry 设为默认翻译应用 | 否 |
-| 分享纯文本 → 临时翻译 | `translation.translate` | 分享扩展或主应用中的临时翻译界面 | 原生分享界面选翻译不落盘；已暂存普通分享在应用内转为翻译时删除暂存 |
+| Android 外部划词 → Cherry 翻译 | 临时翻译 | 原生对话框式 Activity（Android 承载窗口的页面组件），保留来源应用上下文 | 否 |
+| iOS 外部划词 → 翻译 | 临时翻译 | iOS 18.4+ 的系统翻译扩展界面；用户需先将 Cherry 设为默认翻译应用 | 否 |
+| 分享纯文本 → 临时翻译 | 临时翻译 | 分享扩展或主应用中的临时翻译界面 | 原生分享界面选翻译不落盘；已暂存普通分享在应用内转为翻译时删除暂存 |
 | 分享文本、链接、图片、文件 → Cherry | `share.receive` | Android 进入应用预览；iOS 扩展先接收暂存，用户打开 Cherry 后继续预览与发送 | 仅确认导入/发送后成为正式文件或聊天；此前是有时限的暂存 |
 | iOS 快捷指令：新聊天 | `chat.open` | 前台打开指定 Agent 的新草稿 | 首次发送前不创建聊天 |
 | iOS 快捷指令：询问 Cherry | `chat.ask` | 前台交给现有 Agent，支持原有工具审批；成功完成时返回文本 | 是，属于普通聊天 |
-| iOS 快捷指令：翻译文本 | `translation.translate` | 原生短时执行，完成后返回文本；不依赖聊天运行实例 | Cherry 不保存；结果交还快捷指令 |
+| iOS 快捷指令：翻译文本 | 临时翻译 | 原生短时执行，完成后返回文本；不依赖聊天运行实例 | Cherry 不保存；结果交还快捷指令 |
 | Android 长按图标：新聊天 / 绘画 | `chat.open` / `painting.open` | 主应用对应页面 | 打开页面本身不产生生成记录 |
 
 划词首版只提供翻译。翻译窗口显示原文、目标语言、结果、当前模型，并支持复制、重试、关闭和长文本滚动。
@@ -133,10 +133,10 @@ type SystemAction =
   | { kind: 'chat.open'; agentId?: string }
   | { kind: 'chat.ask'; agentId?: string; text: string }
   | { kind: 'painting.open' }
-  | { kind: 'share.receive'; text: string; files: readonly SharedFileSummary[] }
-  | { kind: 'translation.translate'; text: string; targetLanguage?: string };
+  | { kind: 'share.receive'; text: string; files: readonly SharedFileSummary[] };
 ```
 
+- 临时翻译不进入系统动作队列：原生入口直接执行，应用内分享预览通过内存句柄打开翻译页。
 - 分享动作提供正文及附件摘要（标识、名称、媒体类型、大小），不暴露本地文件路径。
   页面通过内存句柄领取会话，正文、文件内容和密钥不进入路由 URL。
 - `chat.ask` 仅允许来自应用声明的快捷指令入口。普通链接、分享 Intent（Android 系统动作消息）
@@ -150,10 +150,9 @@ type SystemAction =
 
 ```ts
 interface SystemEntryModule {
-  getCapabilities(): SystemEntryCapabilities;
   subscribePending(listener: () => void): () => void;
   claimNext(): Promise<SystemEntrySession | null>;
-  refreshShortcuts(): Promise<void>;
+  refreshShortcuts?(): Promise<void>;
 }
 
 interface SystemEntrySession {
@@ -173,6 +172,10 @@ App Shell（负责全应用导航和启动衔接的前端层）在后端与路�
 `complete()` 表示目标已接管，不能解释为“AI 已完成”；询问仅在最终回答成功时回复原生调用者。
 `dismiss()` 丢弃普通分享，`dispose()` 释放未消费的分享领取权、取消此入口拥有的询问。
 `settled` 让唯一消费者串行处理交接，所有者退出时先等待取消中的接收流程完成。
+
+`refreshShortcuts` 仅在原生端需要助手索引时提供。目前只有 iOS App Intents 消费该索引；
+Android 使用静态桌面快捷入口，不查询或发布助手列表。首次同步由助手查询就绪触发，
+之后在助手列表变化或应用回到前台时刷新，路由就绪不再重复刷新。
 
 原生适配器的入队与快捷指令结果回传是模块实现依赖，不额外暴露给任意前端调用者。
 仅为有限系统入口服务，不提供公共 HTTP 服务或通用 RPC（跨进程任意方法调用）入口。

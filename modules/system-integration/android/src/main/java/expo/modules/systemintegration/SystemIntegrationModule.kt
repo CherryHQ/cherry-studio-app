@@ -37,6 +37,5 @@ class SystemIntegrationModule : Module() {
     AsyncFunction("releaseEntry") { id: String -> SystemEntryStore.release(id) }
     AsyncFunction("completeEntry") Coroutine { id: String -> withContext(Dispatchers.IO) { SystemEntryStore.complete(context, id) } }
     AsyncFunction("finishIntent") { _: String, _: Map<String, Any?> -> Unit }
-    AsyncFunction("publishAgents") { _: List<Map<String, String>> -> Unit }
   }
 }
