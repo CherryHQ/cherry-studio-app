@@ -5,8 +5,6 @@
 
 import * as z from 'zod';
 
-import { MessageContextStateSchema } from '@/shared/data/types/message';
-
 import {
   AgentApprovalViewSchema,
   AgentCapabilitiesSchema,
@@ -19,10 +17,6 @@ import {
 } from './views';
 
 export const AgentMessageDeltaSchema = z.union([
-  z.strictObject({
-    op: z.literal('context.update'),
-    context: MessageContextStateSchema,
-  }),
   z.strictObject({
     op: z.literal('part.add'),
     index: z.number().int().nonnegative(),

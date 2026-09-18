@@ -10,16 +10,13 @@ import {
 } from '@earendil-works/pi-agent-core/compaction';
 import type {
   Api as PiApi,
+  Message as PiLlmMessage,
   Model as PiModel,
   Models,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
-import type {
-  RuntimeContextCheckpoint,
-  RuntimeContextCompaction,
-  RuntimeContextUsage,
-} from '../types';
+import type { RuntimeContextCheckpoint, RuntimeContextCompaction } from '../types';
 import type { PiConversation, PiHistoryTurn } from './modelMessages';
 
 const PI_CONTEXT_CHECKPOINT_KIND = 'pi-context-compaction';
@@ -70,8 +67,14 @@ type PiContextPlanInput = {
   signal: AbortSignal;
   thinkingLevel: Parameters<typeof compact>[5];
   tools: readonly PiToolSchema[];
-  onUsage?: (usage: RuntimeContextUsage) => void;
   onCompaction?: (update: PiCompactionUpdate) => void;
+};
+
+/** Request context size, separate from accumulated billing usage. */
+export type PiContextUsage = {
+  inputTokens: number;
+  inputTokenLimit: number;
+  safetyMarginTokens: number;
 };
 
 export type PiCompactionUpdate = Pick<
@@ -209,8 +212,7 @@ export function measurePiContext(input: {
   outputReserveTokens: number;
   systemPrompt: string;
   tools: readonly PiToolSchema[];
-  settings?: CompactionSettings;
-}): RuntimeContextUsage {
+}): PiContextUsage {
   const estimate = estimatePiContextTokens(input.messages);
   const unmeasuredMessages =
     estimate.lastUsageIndex === null
@@ -232,8 +234,6 @@ export function measurePiContext(input: {
         : input.tools.filter((tool) => addedToolNames.has(tool.name)),
   });
 
-  const window = Math.min(input.contextWindow, input.maxInputTokens ?? input.contextWindow);
-  const settings = input.settings ?? resolveCompactionSettings(window);
   return {
     inputTokens:
       estimate.tokens +
@@ -244,16 +244,7 @@ export function measurePiContext(input: {
       0,
       resolveContextBudget(input) - fixedCosts.outputReserveTokens - fixedCosts.safetyMarginTokens,
     ),
-    contextWindow: input.contextWindow,
-    compactionThresholdTokens: Math.max(
-      0,
-      window -
-        Math.max(settings.reserveTokens, input.outputReserveTokens) -
-        fixedCosts.safetyMarginTokens,
-    ),
-    outputReserveTokens: fixedCosts.outputReserveTokens,
     safetyMarginTokens: fixedCosts.safetyMarginTokens,
-    source: estimate.lastUsageIndex === null ? 'estimated' : 'provider-assisted',
   };
 }
 
@@ -377,7 +368,6 @@ async function planProjectedContext(
       outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
       systemPrompt: input.systemPrompt,
       tools: input.tools,
-      settings,
     });
   const before = measure(projected.messages);
   if (input.options?.estimateHistoryTokens) {
@@ -386,7 +376,6 @@ async function planProjectedContext(
       estimatePiMessagesTokens(projected.messages);
     before.inputTokens = Math.max(0, before.inputTokens);
   }
-  input.onUsage?.(before);
   const canSendWithoutCompaction = before.inputTokens <= before.inputTokenLimit;
   const unchanged: PiContextPlan = {
     ok: true,
@@ -465,6 +454,12 @@ async function planProjectedContext(
           previousSummary: undefined,
         }
       : cherryPreparation;
+  // The retained tail is sent verbatim. When it alone overflows, a summary
+  // cannot make the request fit, so do not pay for one.
+  if (!canSendWithoutCompaction) {
+    const retained = measure(withoutPrefixUsage(cherryPreparation.retainedTail));
+    if (retained.inputTokens > retained.inputTokenLimit) return overflow;
+  }
   const report = (
     status: RuntimeContextCompaction['status'],
     reason?: RuntimeContextCompaction['reason'],
@@ -521,23 +516,7 @@ async function planProjectedContext(
   const summary = input.redactSummary(result.value.summary);
   const messages = [
     createCompactionSummary(summary, result.value.tokensBefore),
-    ...result.value.retainedTail.map((message) =>
-      // Provider usage includes the discarded prefix. Estimate the compacted
-      // content until the next live response reports usage for the new context.
-      message.role === 'assistant'
-        ? {
-            ...message,
-            usage: {
-              ...message.usage,
-              input: 0,
-              output: 0,
-              cacheRead: 0,
-              cacheWrite: 0,
-              totalTokens: 0,
-            },
-          }
-        : message,
-    ),
+    ...withoutPrefixUsage(result.value.retainedTail),
   ];
   const after = measure(messages);
   if (after.inputTokens > after.inputTokenLimit || after.inputTokens >= before.inputTokens) {
@@ -559,7 +538,6 @@ async function planProjectedContext(
     result.value.tokensBefore,
   );
   report('completed', undefined, after.inputTokens);
-  input.onUsage?.(after);
   return {
     ok: true,
     messages,
@@ -734,8 +712,60 @@ function parseCheckpointPayload(value: unknown): PiCheckpointPayload | null {
   };
 }
 
+/**
+ * Provider usage includes the discarded prefix. Estimate the compacted content
+ * until the next live response reports usage for the new context.
+ */
+function withoutPrefixUsage(messages: readonly AgentMessage[]): AgentMessage[] {
+  return messages.map((message) =>
+    message.role === 'assistant'
+      ? {
+          ...message,
+          usage: {
+            ...message.usage,
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+          },
+        }
+      : message,
+  );
+}
+
 function createCompactionSummary(summary: string, tokensBefore: number): AgentMessage {
   return { role: 'compactionSummary', summary, tokensBefore, timestamp: Date.now() };
+}
+
+/**
+ * Pi's default conversion drops summary messages, so a compacted request would
+ * lose all earlier context and could open with an assistant message.
+ */
+export function convertPiMessagesToLlm(messages: AgentMessage[]): PiLlmMessage[] {
+  return messages.flatMap((message): PiLlmMessage[] => {
+    switch (message.role) {
+      case 'compactionSummary':
+        return [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `The conversation history before this point was compacted into the following summary:\n\n<summary>\n${message.summary}\n</summary>`,
+              },
+            ],
+            timestamp: message.timestamp,
+          },
+        ];
+      case 'user':
+      case 'assistant':
+      case 'toolResult':
+        return [message];
+      default:
+        return [];
+    }
+  });
 }
 
 function serializeTool(tool: PiToolSchema): string {

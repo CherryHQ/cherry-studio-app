@@ -1004,6 +1004,7 @@ describe('MobileAgentHost', () => {
       const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
         controller.emit({
           type: 'part.add',
+          index: 0,
           part: { id: 'before', type: 'text', text: 'Before', state: 'done' },
         });
         controller.emit({ type: 'context.compaction', compaction });
@@ -1021,6 +1022,7 @@ describe('MobileAgentHost', () => {
           });
           controller.emit({
             type: 'part.add',
+            index: 1,
             part: { id: 'after', type: 'text', text: 'After', state: 'done' },
           });
         }
@@ -1052,6 +1054,16 @@ describe('MobileAgentHost', () => {
         part: { data: { status: 'compacting', phase: 'in-loop' } },
       });
       if (outcome !== 'cancelled') {
+        // The anchor occupies a transcript slot the Runtime's own part count does not know about.
+        expect(
+          events.flatMap((event) =>
+            event.type === 'message.delta' &&
+            event.delta.op === 'part.add' &&
+            event.delta.part.id === 'after'
+              ? [event.delta.index]
+              : [],
+          ),
+        ).toEqual([2]);
         expect(updates[1]).toMatchObject({
           op: 'part.replace',
           part: {
@@ -1083,7 +1095,6 @@ describe('MobileAgentHost', () => {
       } else {
         expect(message.parts.some((part) => part.type === 'data-compaction-anchor')).toBe(false);
       }
-      expect(message.stats?.context).toBeUndefined();
     },
   );
 

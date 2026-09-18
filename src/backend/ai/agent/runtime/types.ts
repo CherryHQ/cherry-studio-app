@@ -197,17 +197,6 @@ export type RuntimeContextCheckpoint = {
   payload: RuntimeJsonValue;
 };
 
-/** Request context size, separate from accumulated billing usage. */
-export type RuntimeContextUsage = {
-  inputTokens: number;
-  inputTokenLimit: number;
-  contextWindow: number;
-  compactionThresholdTokens: number;
-  outputReserveTokens: number;
-  safetyMarginTokens: number;
-  source: 'estimated' | 'provider-assisted';
-};
-
 export type RuntimeContextCompaction = {
   id: string;
   phase: 'preflight' | 'tool-loop';
@@ -389,7 +378,6 @@ export type RuntimeEvent =
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }
   | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
-  | { type: 'context.usage'; usage: RuntimeContextUsage }
   | { type: 'context.compaction'; compaction: RuntimeContextCompaction }
   | ({ type: 'usage' } & RuntimeUsageReport)
   | { type: 'completed' }

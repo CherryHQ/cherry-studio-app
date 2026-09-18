@@ -3,6 +3,7 @@ import type { AssistantMessage, Model, Models, ToolResultMessage } from '@earend
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 
 import {
+  convertPiMessagesToLlm,
   estimatePiLoopContextHeadroomTokens,
   estimatePiMessagesTokens,
   measurePiContext,
@@ -286,21 +287,16 @@ describe('Pi live context accounting', () => {
     expect(estimatePiMessagesTokens([{ ...chinese, content: 'abcd' }])).toBe(1);
     const before = measurePiContext({ ...context, messages: [chinese, measured] });
     const after = measurePiContext({ ...context, messages: [chinese, measured, chinese] });
-    expect(before).toMatchObject({ inputTokens: 50_000, source: 'provider-assisted' });
+    expect(before.inputTokens).toBe(50_000);
     expect(after.inputTokens - before.inputTokens).toBe(8);
   });
 
-  test('reports input admission and compaction thresholds separately from billed tokens', () => {
+  test('reports input admission separately from billed tokens', () => {
     const usage = measurePiContext({ ...context, systemPrompt: '', tools: [], messages: [] });
-    expect(usage).toMatchObject({
-      inputTokens: 0,
-      inputTokenLimit: 122_880,
-      compactionThresholdTokens: 110_592,
-      source: 'estimated',
-    });
+    expect(usage).toMatchObject({ inputTokens: 0, inputTokenLimit: 122_880 });
     expect(
       measurePiContext({ ...context, maxInputTokens: 8_000, messages: [measured] }),
-    ).toMatchObject({ inputTokenLimit: 6_976, compactionThresholdTokens: 2_880 });
+    ).toMatchObject({ inputTokenLimit: 6_976 });
   });
 
   test('does not add measured system, tools, or old images a second time', () => {
@@ -453,6 +449,30 @@ describe('Pi tool-loop compaction', () => {
     });
     expect(result).toMatchObject({ ok: true, messages: original, checkpoint: null });
     expect(updates.at(-1)).toMatchObject({ status: 'failed', reason: 'summary-failed' });
+  });
+
+  test('sends the summary to the provider as the opening user message', async () => {
+    const result = await loop(messages());
+    if (!result.ok) throw new Error(result.message);
+    const request = convertPiMessagesToLlm(result.messages);
+    expect(request.map((message) => message.role)).toEqual(['user', 'assistant', 'toolResult']);
+    expect(JSON.stringify(request[0])).toContain('<summary>');
+  });
+
+  test('does not pay for a summary when the newest tool batch alone overflows', async () => {
+    const completeSimple = jest.fn(async () => response());
+    const updates: unknown[] = [];
+    const result = await loop(
+      [
+        { role: 'user', content: 'Find the answer.', timestamp: 0 },
+        ...pair('old', 'x'.repeat(12_000)),
+        ...pair('recent', 'y'.repeat(80_000)),
+      ],
+      { models: { completeSimple }, onCompaction: (update) => updates.push(update) },
+    );
+    expect(result).toMatchObject({ ok: false, code: 'context_window_exceeded' });
+    expect(completeSimple).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
   });
 
   test('does not return oversized context when summarization fails', async () => {

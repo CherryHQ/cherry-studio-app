@@ -75,7 +75,7 @@ describe('AI usage analytics', () => {
       INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent-1', 'Agent', 'a', 1, 1);
       INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session-1', 'agent-1', 1, 1, 1);
       INSERT INTO agent_session_message (id, session_id, role, data, status, stats, created_at, updated_at)
-      VALUES ('message-1', 'session-1', 'assistant', '{"version":1,"parts":[]}', 'success', '{"runtimeTiming":{"startedAt":1,"completedAt":1000,"spans":[]},"contextTokens":42,"context":{"usage":{"inputTokens":42,"inputTokenLimit":122880,"contextWindow":128000,"compactionThresholdTokens":110592,"outputReserveTokens":4096,"safetyMarginTokens":1024,"source":"estimated"}}}', 1, 1);
+      VALUES ('message-1', 'session-1', 'assistant', '{"version":1,"parts":[]}', 'success', '{"runtimeTiming":{"startedAt":1,"completedAt":1000,"spans":[]},"contextTokens":42}', 1, 1);
     `);
     const ref = { kind: 'agent-session' as const, id: 'message-1' };
     const first = invocation(
@@ -157,17 +157,6 @@ describe('AI usage analytics', () => {
       expect(JSON.parse(row.stats)).toEqual({
         ...projection,
         contextTokens: 42,
-        context: {
-          usage: {
-            inputTokens: 42,
-            inputTokenLimit: 122_880,
-            contextWindow: 128_000,
-            compactionThresholdTokens: 110_592,
-            outputReserveTokens: 4_096,
-            safetyMarginTokens: 1_024,
-            source: 'estimated',
-          },
-        },
         runtimeTiming: { startedAt: 1, completedAt: 1000, spans: [] },
       });
       expect(JSON.parse(row.usage)).toEqual({

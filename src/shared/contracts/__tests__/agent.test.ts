@@ -22,33 +22,6 @@ function roundTrip<T>(value: T): unknown {
 }
 
 describe('Agent Session status contract', () => {
-  test('round-trips context measurements without summary payloads', () => {
-    const context = {
-      usage: {
-        inputTokens: 30_000,
-        inputTokenLimit: 122_880,
-        contextWindow: 128_000,
-        compactionThresholdTokens: 110_592,
-        outputReserveTokens: 4_096,
-        safetyMarginTokens: 1_024,
-        source: 'provider-assisted',
-      },
-    };
-    const delta = { op: 'context.update', context };
-    expect(AgentMessageDeltaSchema.parse(roundTrip(delta))).toEqual(delta);
-    expect(
-      AgentMessageDeltaSchema.safeParse({
-        ...delta,
-        context: { ...context, summary: 'Private history' },
-      }).success,
-    ).toBe(false);
-    expect(
-      AgentMessageDeltaSchema.safeParse({
-        ...delta,
-        context: { ...context, usage: { ...context.usage, inputTokens: -1 } },
-      }).success,
-    ).toBe(false);
-  });
   test('round-trips Desktop compaction parts with one outer id and no summary payload', () => {
     const part = {
       id: 'compaction-anchor:turn-1:1',

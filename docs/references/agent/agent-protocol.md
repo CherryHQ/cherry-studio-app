@@ -520,7 +520,6 @@ type AgentMessageDelta =
   | { op: 'part.add'; index: number; part: AgentMessagePart }
   | { op: 'text.append'; partId: string; text: string }
   | { op: 'part.replace'; part: AgentMessagePart }
-  | { op: 'context.update'; context: MessageContextState }
 ```
 
 `text.append` applies only to text and reasoning parts. State changes replace the addressed part;
@@ -528,10 +527,6 @@ there is no untyped patch object.
 
 Durable facts commit before their events publish. Streaming deltas are ephemeral; a fresh observer
 gets the accumulated streaming message from the snapshot.
-
-Message statistics optionally carry `context.usage`, the latest request-context measurement.
-A `message.delta` with `op: 'context.update'` replaces this context value; terminal messages persist
-it separately from accumulated invocation usage. Process death may lose uncommitted measurements.
 
 Compaction history uses Desktop-compatible `data-compaction-anchor` parts, in transcript order:
 
@@ -550,7 +545,8 @@ type CompactionAnchorData = {
 ```
 
 The Host inserts one `compacting` part per attempt using `part.add`, then replaces that same id with
-`done` or `skipped`. Each attempt has a distinct id. Only completed anchors enter streaming snapshots
+`done` or `skipped`. Every `part.add` index is the Host transcript position, so parts that follow an
+anchor keep their order for live observers. Each attempt has a distinct id. Only completed anchors enter streaming snapshots
 and terminal persistence; skipped, cancelled, or still-running attempts leave no historical marker.
 Completed anchors survive later turn failure or interruption. Recovery also removes transient anchors.
 The Mobile path emits `turn-start` for preflight folds and `in-loop` between tool batches, with

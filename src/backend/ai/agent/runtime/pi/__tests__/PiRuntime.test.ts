@@ -1570,7 +1570,9 @@ describe('PiRuntime mapping', () => {
     expect(events.at(-1)).toEqual({ type: 'completed' });
     expect(execute).toHaveBeenCalledTimes(2);
     expect(requests).toHaveLength(3);
-    expect(JSON.stringify(requests[2])).toContain('Condensed prior result.');
+    // Providers reject a request that opens with an assistant message.
+    expect(requests[2][0].role).toBe('user');
+    expect(JSON.stringify(requests[2][0])).toContain('Condensed prior result.');
     expect(
       requests[2]
         .filter((message) => message.role === 'toolResult')
@@ -2221,9 +2223,14 @@ describe('PiRuntime mapping', () => {
 
     const events = await collect(session.execute(request));
 
-    expect(
-      events.filter((event) => event.type !== 'context.usage').map((event) => event.type),
-    ).toEqual(['usage', 'part.add', 'text.delta', 'part.replace', 'usage', 'completed']);
+    expect(events.map((event) => event.type)).toEqual([
+      'usage',
+      'part.add',
+      'text.delta',
+      'part.replace',
+      'usage',
+      'completed',
+    ]);
     const reports = events.filter((event) => event.type === 'usage');
     expect(reports).toHaveLength(2);
     expect(new Set(reports.map((report) => report.requestId)).size).toBe(2);
@@ -2304,7 +2311,7 @@ describe('PiRuntime mapping', () => {
       const streamFn = holder.lastOptions?.streamFn;
       if (!streamFn) throw new Error('Pi stream function was not installed.');
 
-      streamFn(holder.resolution.model, undefined as never, { signal: upstream.signal } as never);
+      streamFn(holder.resolution.model, { messages: [] }, { signal: upstream.signal } as never);
       expect(providerSignal?.aborted).toBe(false);
 
       const cancelling = session.cancel('turn-stuck-cancel');
@@ -3841,7 +3848,7 @@ describe('PiRuntime mapping', () => {
 
     const events = await collect(session.execute(baseRequest('turn-timeout')));
 
-    expect(events.filter((event) => event.type !== 'context.usage')).toEqual([
+    expect(events).toEqual([
       {
         type: 'failed',
         error: {

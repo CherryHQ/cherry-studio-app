@@ -6,7 +6,6 @@ export type {
   RuntimeArtifact,
   RuntimeCapabilities,
   RuntimeContextCheckpoint,
-  RuntimeContextUsage,
   RuntimeContextCompaction,
   RuntimeDescriptor,
   RuntimeDocumentAttachmentPart,

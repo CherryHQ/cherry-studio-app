@@ -97,38 +97,6 @@ function protocolWithObservation(
 }
 
 describe('AgentSessionChatClient', () => {
-  test('projects context updates without replacing transcript parts or billing statistics', async () => {
-    let listener: ((event: AgentEvent) => void) | undefined;
-    const initial = assistantMessage();
-    initial.stats = { totalTokens: 900 };
-    const client = new AgentSessionChatClient(
-      protocolWithObservation(async (_id, next) => {
-        listener = next;
-        return { snapshot: { ...snapshot(), streamingMessage: initial }, unsubscribe: jest.fn() };
-      }),
-    );
-    await client.observe('session-1');
-    const context = {
-      usage: {
-        inputTokens: 30_000,
-        inputTokenLimit: 122_880,
-        contextWindow: 128_000,
-        compactionThresholdTokens: 110_592,
-        outputReserveTokens: 4_096,
-        safetyMarginTokens: 1_024,
-        source: 'estimated' as const,
-      },
-    };
-    listener?.({
-      type: 'message.delta',
-      messageId: initial.id,
-      delta: { op: 'context.update', context },
-    });
-    expect(client.getState('session-1').liveMessages[0]).toMatchObject({
-      parts: initial.parts,
-      stats: { totalTokens: 900, context },
-    });
-  });
   test('starts a durable Session without leaving an ownerless observation before navigation', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),

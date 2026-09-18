@@ -32,7 +32,6 @@ import type {
   AgentRuntimeSession,
   MessageRuntimeTimingSink,
   RuntimeContextCompaction,
-  RuntimeContextUsage,
   RuntimeDescriptor,
   RuntimeDocumentAttachmentPart,
   RuntimeError,
@@ -51,6 +50,7 @@ import type {
   RuntimeUsageContext,
 } from '../types';
 import {
+  convertPiMessagesToLlm,
   estimatePiLoopContextHeadroomTokens,
   estimatePiMessagesTokens,
   estimatePiMessageTokens,
@@ -803,9 +803,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       const contextCallbacks = (phase: RuntimeContextCompaction['phase']) => {
         let activity: Pick<RuntimeContextCompaction, 'id' | 'startedAt'> | undefined;
         return {
-          onUsage: (usage: RuntimeContextUsage) => {
-            this.emit(turn, { type: 'context.usage', usage });
-          },
           onCompaction: (update: PiCompactionUpdate) => {
             if (update.status === 'running') {
               activity = { id: `compaction-${++compactionSequence}`, startedAt: Date.now() };
@@ -867,15 +864,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
           outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
           systemPrompt: modelContext.systemPrompt,
           tools: modelContext.tools ?? [],
-          settings: this.contextOptions.settings,
         });
         turn.modelContextHeadroomTokens = usage.inputTokenLimit - usage.inputTokens;
-        this.emit(turn, { type: 'context.usage', usage });
       };
       updateModelContextHeadroom([...contextPlan.messages, conversation.prompt]);
       const agentOptions: AgentOptions = {
         afterToolCall: async ({ toolCall }) =>
           turn.failedToolCalls.has(toolCall.id) ? { isError: true } : undefined,
+        convertToLlm: convertPiMessagesToLlm,
         initialState: {
           messages: contextPlan.messages,
           model: resolution.model,

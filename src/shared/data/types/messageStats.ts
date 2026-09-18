@@ -40,29 +40,13 @@ export const MessageRuntimeTimingSchema = z.strictObject({
 export type MessageRuntimeTiming = z.infer<typeof MessageRuntimeTimingSchema>;
 export type MessageRuntimeSpan = MessageRuntimeTiming['spans'][number];
 
-export const MessageContextUsageSchema = z.strictObject({
-  inputTokens: z.number().nonnegative(),
-  inputTokenLimit: z.number().nonnegative(),
-  contextWindow: z.number().positive(),
-  compactionThresholdTokens: z.number().nonnegative(),
-  outputReserveTokens: z.number().nonnegative(),
-  safetyMarginTokens: z.number().nonnegative(),
-  source: z.enum(['estimated', 'provider-assisted']),
-});
-
-export const MessageContextStateSchema = z.strictObject({
-  usage: MessageContextUsageSchema.optional(),
-});
-export type MessageContextState = z.infer<typeof MessageContextStateSchema>;
-
 export const MessageStatsSchema = z.strictObject({
   // Token and provider fields are materialized from immutable usage records.
-  // The session owner writes runtimeTiming, contextTokens, and context.
+  // The session owner writes runtimeTiming and contextTokens.
   inputTokens: z.number().optional(),
   outputTokens: z.number().optional(),
   totalTokens: z.number().optional(),
   contextTokens: z.number().optional(),
-  context: MessageContextStateSchema.optional(),
   inputTokenDetails: z
     .strictObject({
       noCacheTokens: z.number().optional(),
@@ -97,5 +81,5 @@ export const MessageStatsSchema = z.strictObject({
 });
 export type MessageStats = z.infer<typeof MessageStatsSchema>;
 export type MessageRuntimeStatsInput = Readonly<
-  Pick<MessageStats, 'runtimeTiming' | 'contextTokens' | 'context'>
+  Pick<MessageStats, 'runtimeTiming' | 'contextTokens'>
 >;

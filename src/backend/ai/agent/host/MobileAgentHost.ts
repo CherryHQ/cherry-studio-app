@@ -84,7 +84,6 @@ import { AiRequestError } from '@/shared/contracts/aiFailure';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
-import { MessageContextStateSchema } from '@/shared/data/types/message';
 
 import { traceErrorAttributes, type TraceRecorder, type TraceSpan } from '../../observability';
 import type { ManagedFileResolver, TurnResourceLedger } from '../resources/managedFileResolver';
@@ -980,16 +979,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     event: RuntimeEvent,
   ): Promise<boolean> {
     switch (event.type) {
-      case 'context.usage': {
-        const context = MessageContextStateSchema.parse({ usage: event.usage });
-        state.assistantMessage.stats = { ...state.assistantMessage.stats, context };
-        this.publish(sessionId, {
-          type: 'message.delta',
-          messageId: state.assistantMessage.id,
-          delta: { op: 'context.update', context },
-        });
-        return false;
-      }
       case 'context.compaction': {
         const part = toCompactionAnchorPart(event.compaction, state.turn.id);
         const index = state.assistantMessage.parts.findIndex((item) => item.id === part.id);
@@ -1024,7 +1013,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.publish(sessionId, {
           type: 'message.delta',
           messageId: state.assistantMessage.id,
-          delta: { op: 'part.add', index: event.index, part },
+          // Host-owned compaction anchors shift later parts past the Runtime's own count.
+          delta: { op: 'part.add', index: state.assistantMessage.parts.length - 1, part },
         });
         return false;
       }
@@ -1158,7 +1148,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       error = { code: 'INTERRUPTED', message: interruption.message, retryable: true };
     }
     const terminalAt = Date.now();
-    const context = state.assistantMessage.stats?.context;
     state.runtimeTiming.closeOpenSpans(terminalAt);
     state.runtimeTiming.complete(terminalAt);
     const timingSnapshot = state.runtimeTiming.snapshot();
@@ -1191,10 +1180,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       usage: state.usage ? toAgentUsageView(state.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
-      runtimeStats: {
-        runtimeTiming,
-        ...(context ? { context, contextTokens: context.usage?.inputTokens } : {}),
-      },
+      runtimeStats: { runtimeTiming },
     });
     const turn: AgentTurnView = {
       ...state.turn,

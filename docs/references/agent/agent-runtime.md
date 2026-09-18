@@ -392,19 +392,22 @@ Initial compaction is not the last admission check. Before Pi continues after a 
 Runtime applies the same soft compaction trigger, summarizes the older context, and retains the
 recent tool-call/result pairs. It replaces Pi's next context without replaying any tool. Each batch
 gets at most one compaction attempt; failure falls back only when the original context still fits.
+The retained tail is sent verbatim, so when it alone exceeds the input budget the Runtime fails with
+`context_window_exceeded` without requesting a summary.
 Loop summaries are execution-local: they do not create durable replay cursors into the active turn,
 whose model-only tool messages differ from the persisted application transcript. The next fresh
 turn reconstructs from the last durable preflight checkpoint and the complete transcript tail.
 
-`context.usage` carries `inputTokens`, `inputTokenLimit`, `contextWindow`,
-`compactionThresholdTokens`, `outputReserveTokens`, `safetyMarginTokens`, and `source`
-(`estimated` or `provider-assisted`). These are request-context measurements, not accumulated
-invocation usage. `context.compaction` carries a turn-local `id`, `phase` (`preflight` or
+Pi's default message conversion drops `compactionSummary` messages. The Runtime installs its own
+conversion so every summary, preflight or in-loop, reaches the provider as the opening user message;
+a compacted request never starts with an assistant message.
+
+`context.compaction` carries a turn-local `id`, `phase` (`preflight` or
 `tool-loop`), `status` (`running`, `completed`, `failed`, or `cancelled`), `startedAt`, optional
 `completedAt`, `inputTokensBefore`, optional `inputTokensAfter`, and an optional closed `reason`
-(`summary-failed`, `insufficient-reduction`, or `cancelled`). Neither event exposes summary text.
-The Host projects usage into `stats.context.usage` and compaction into ordered
-`data-compaction-anchor` parts using Desktop field names and ISO timestamps. Runtime `running` maps
+(`summary-failed`, `insufficient-reduction`, or `cancelled`). The event never exposes summary text,
+and request-context measurements stay inside the Runtime until a consumer needs them.
+The Host projects compaction into ordered `data-compaction-anchor` parts using Desktop field names and ISO timestamps. Runtime `running` maps
 to `compacting`, `completed` to `done`, and failed/cancelled attempts to `skipped`. Only completed
 anchors are persisted; summaries and detailed failure reasons stay behind the Runtime boundary.
 
@@ -534,7 +537,6 @@ type RuntimeEvent =
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }
   | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
-  | { type: 'context.usage'; usage: RuntimeContextUsage }
   | { type: 'context.compaction'; compaction: RuntimeContextCompaction }
   | {
       type: 'usage'

@@ -1079,7 +1079,6 @@ async function rebuildMessageUsageProjectionTx(
     ...(message.stats?.contextTokens !== undefined
       ? { contextTokens: message.stats.contextTokens }
       : {}),
-    ...(message.stats?.context ? { context: message.stats.context } : {}),
     ...projection,
   };
   await db
