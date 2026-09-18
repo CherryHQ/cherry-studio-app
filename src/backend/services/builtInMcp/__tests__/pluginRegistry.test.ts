@@ -7,6 +7,7 @@ import {
 } from '../pluginDefinition';
 import {
   createPluginRegistry,
+  getBuiltInPluginCatalog,
   getPluginDefinition,
   resolveBuiltInPluginGuides,
 } from '../pluginRegistry';
@@ -40,6 +41,7 @@ function definition(id: string): PluginDefinition {
         kind: 'interactive',
         interaction: 'polling',
         stages: ['consent'],
+        applicationFields: [{ id: 'clientId', secret: false, maxLength: 128 }],
         createRuntime: () => {
           throw new Error('Must not start from catalog reads');
         },
@@ -379,6 +381,48 @@ it.each([
     expect(guide.content).toContain(`## ${heading}`);
   },
 );
+
+it('exposes Slack user-token entry without an interactive authorization method', () => {
+  const slack = getBuiltInPluginCatalog().find(({ id }) => id === 'slack')!;
+  expect(slack.authMethods).toEqual([
+    {
+      id: 'personal_token',
+      kind: 'credentials',
+      requiresDisconnect: true,
+      fields: [{ id: 'token', secret: true, maxLength: 16_384, pattern: '^xoxp-\\S+$' }],
+    },
+  ]);
+});
+
+it('keeps Slack mutation workflows out of a read-only selection', () => {
+  const slack = getPluginDefinition('slack')!;
+  const selections = Object.entries(slack.tools).map(([rawToolName, effect]) => ({
+    pluginId: 'slack',
+    serverId: 'slack-connection',
+    rawToolName,
+    effect,
+  }));
+  const [readOnly] = resolveBuiltInPluginGuides(
+    selections.filter(({ effect }) => effect === 'read'),
+  );
+  const [complete] = resolveBuiltInPluginGuides(selections);
+  expect(readOnly.content).toContain('## Search with context');
+  for (const heading of [
+    'Create a conversation',
+    'Send a message',
+    'Draft a message',
+    'Schedule a message',
+    'React to a message',
+    'Choose a document or list',
+    'Update a canvas',
+    'Update a list schema',
+    'Add a list record',
+    'Update a list record',
+  ]) {
+    expect(readOnly.content).not.toContain(`## ${heading}`);
+    expect(complete.content).toContain(`## ${heading}`);
+  }
+});
 
 it('keeps DingTalk mutation workflows out of a read-only connection', () => {
   const dingtalk = getPluginDefinition('dingtalk')!;
