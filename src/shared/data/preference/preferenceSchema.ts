@@ -48,6 +48,7 @@ export interface PreferenceSchema {
   'feature.translate.model_id': string | null;
 
   'file.document_parser.mode': DocumentParserMode;
+  'file.export.watermark_enabled': boolean;
 
   'agent.session_naming.enabled': boolean;
   'agent.session_naming.model_id': string | null;
@@ -78,6 +79,7 @@ export const PreferenceDefaults = {
   'feature.translate.model_id': null,
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
+  'file.export.watermark_enabled': true,
 
   'agent.session_naming.enabled': true,
   'agent.session_naming.model_id': null,

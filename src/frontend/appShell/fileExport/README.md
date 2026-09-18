@@ -6,9 +6,12 @@ components and pages consume this module; this module does not import page code.
 ## Configuration
 
 Application entry points accept `FileExportOptions`: `{ watermark?: 'cherry' | 'none' }`.
-The shared default is `cherry`; there is no user-facing configuration control. `useDocumentExport().open`
-accepts the same `watermark` parameter for every offered format. `useHtmlConversion(options)` also
-uses it for PNG and PPTX. PPTX applies the footer only to the final captured slide, without adding a slide.
+Omitted styles follow the global Share watermark setting (`file.export.watermark_enabled`), which
+defaults to enabled and lives under Settings > General. `useExportWatermarkStyle` resolves this
+preference; explicit `cherry` or `none` options override it for that request.
+`useDocumentExport().open` freezes the resolved style for
+every offered format. `useHtmlConversion(options)` also uses it for PNG and PPTX. PPTX applies the
+footer only to the final captured slide, without adding a slide.
 
 `useExportWatermark` resolves the selected style into an `ExportWatermark` once per operation.
 The `cherry` variant carries the original artwork, constant white/black colors, brand and a frozen
@@ -25,9 +28,9 @@ SVG files also pass through with their original bytes, filename and media type f
 opening, without a footer, because the image renderer only decodes bitmaps.
 The in-app preview and original image used for editing retain their bytes.
 
-Watermark selection belongs to the current export request, not file metadata. It is not persisted
-and requires no database changes. Existing `document-export` files are completed outputs: ordinary
-sharing and photo saving reuse their exact bytes, whether the generating request used `cherry` or
+The global preference is persisted; each export resolves its own watermark selection without adding
+file metadata. Existing `document-export` files are completed outputs: ordinary sharing and photo
+saving reuse their exact bytes, whether the generating request used `cherry` or
 `none`. Choosing a different style requires a new export from source; `none` does not remove a footer
 already baked into pixels or authored content.
 

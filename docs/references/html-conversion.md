@@ -18,9 +18,10 @@ It does not serialize interactive state from the live preview. Authored images, 
 load in the disposable WebView; images and fonts must finish loading before capture. Animations
 and media pause before layout measurement.
 
-- The code-only `watermark` option defaults to `cherry`; `none` skips the footer. There is no UI
-  watermark control. PNG appends the footer to the whole-document capture. PPTX appends it only to
-  the final slide, without adding a slide. Watermark selection applies before saving;
+- The `watermark` option follows the global Share watermark setting, enabled by default, unless
+  explicitly set to `cherry` or `none`. `none` skips the footer. PNG appends the footer to the
+  whole-document capture. PPTX appends it only to the final slide, without adding a slide.
+  Watermark selection applies before saving;
   later sharing reuses the completed bytes without adding another footer.
 - Outermost `[data-slide]` or `.slide` elements are made visible in document order. Each becomes
   one PPT slide. Their widths and heights are measured in the original parent layout before any

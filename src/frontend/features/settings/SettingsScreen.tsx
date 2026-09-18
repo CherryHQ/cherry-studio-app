@@ -4,8 +4,8 @@ import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
 import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import PackageIcon from '@cherrystudio/app-icons/icons/package';
-import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
+import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import ShieldIcon from '@cherrystudio/app-icons/icons/shield';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
@@ -85,10 +85,10 @@ export default function SettingsScreen() {
           </Section>
           <Section>
             <Section.Item
-              label={t('settings.appearance.title')}
-              leading={<PaletteIcon className="size-4 text-foreground" />}
+              label={t('settings.general.title')}
+              leading={<Settings2Icon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
-              testID="settings-appearance"
+              testID="settings-general"
             />
             {Platform.OS === 'ios' || Platform.OS === 'android' ? (
               <Section.Item

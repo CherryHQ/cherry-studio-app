@@ -1,5 +1,5 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { OptionPickerBottomSheet, Section } from '@cherrystudio/ui/components';
+import { OptionPickerBottomSheet, Section, useToast } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -15,19 +15,30 @@ import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
 export default function AppearanceSettingsScreen() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const router = useRouter();
   const [isLanguagePickerOpen, setIsLanguagePickerOpen] = useState(false);
   const [fontSizeStep] = usePreference('ui.font_size_step');
+  const [isWatermarkEnabled, setIsWatermarkEnabled] = usePreference(
+    'file.export.watermark_enabled',
+  );
   const normalizedFontSizeStep = normalizeFontSizeStep(fontSizeStep);
   const settingPreferences = useSettingPreferences();
   const languageLabel = settingPreferences.language.options.find(
     (option) => option.value === settingPreferences.language.value,
   )?.label;
+
+  const changeWatermark = (value: boolean) => {
+    void setIsWatermarkEnabled(value).catch(() => {
+      toast.show({ label: t('settings.exportWatermark.saveFailed'), variant: 'danger' });
+    });
+  };
+
   return (
     <>
       <SettingsScrollPage
         contentClassName="gap-6"
-        headerProps={{ title: t('settings.appearance.title') }}
+        headerProps={{ title: t('settings.general.title') }}
       >
         <Section title={t('settings.items.theme')}>
           <Section.Item testID="theme-preview-section-item">
@@ -55,6 +66,12 @@ export default function AppearanceSettingsScreen() {
                 <ChevronRightIcon className="size-5 text-foreground" />
               </View>
             }
+          />
+          <Section.SwitchItem
+            label={t('settings.exportWatermark.title')}
+            onValueChange={changeWatermark}
+            testID="settings-export-watermark"
+            value={isWatermarkEnabled}
           />
         </Section>
       </SettingsScrollPage>

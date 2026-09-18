@@ -16,8 +16,9 @@ starts. The existing numbered message treatment, Cherry signature and frozen loc
 inside the export. HTML retains its document presentation and window-derived width.
 
 The frontend supplies one resolved `watermark` for HTML and images, preserved during format fallback.
-The code-only request option defaults to `cherry`; `none` omits the brand footer from both the
-preview and saved output, including Markdown. The image-only `imageFrame` uses the document background
+The request follows the global Share watermark setting, enabled by default, unless the caller
+explicitly selects `cherry` or `none`. `none` omits the brand footer from both the preview and saved
+output, including Markdown. The image-only `imageFrame` uses the document background
 and label. Image content spans the output width with ordinary text padding and no decorative outer frame.
 With Cherry watermarks, Markdown preview and saved text use the
 same separated brand/time footer without logo bytes. The signature appears at the end of the
