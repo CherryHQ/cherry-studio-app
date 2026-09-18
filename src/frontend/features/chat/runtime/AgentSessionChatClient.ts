@@ -65,6 +65,8 @@ function createSessionState(sessionId: string): AgentSessionChatState {
 
 function applyMessageDelta(message: AgentMessageView, delta: AgentMessageDelta): AgentMessageView {
   switch (delta.op) {
+    case 'context.update':
+      return { ...message, stats: { ...message.stats, context: delta.context } };
     case 'part.add': {
       const parts = [...message.parts];
       parts.splice(Math.min(delta.index, parts.length), 0, delta.part);

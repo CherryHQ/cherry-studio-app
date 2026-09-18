@@ -31,7 +31,11 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
   message: MessageListItem;
 }) {
   const { t } = useTranslation();
-  const isPendingEmptyMessage = message.status === 'pending' && !message.data.parts?.length;
+  const isPendingEmptyMessage =
+    message.status === 'pending' &&
+    !message.data.parts?.some(
+      (part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped',
+    );
 
   if (isPendingEmptyMessage && message.imageGeneration) {
     return <PendingImageMessage settings={message.imageGeneration} />;

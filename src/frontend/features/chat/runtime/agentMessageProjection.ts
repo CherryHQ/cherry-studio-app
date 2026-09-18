@@ -141,6 +141,8 @@ function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'tool' }>['o
 
 function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   switch (part.type) {
+    case 'data-compaction-anchor':
+      return part;
     case 'text':
       return part.pluginReferences?.length
         ? withCherryMeta(

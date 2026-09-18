@@ -84,6 +84,7 @@ import { AiRequestError } from '@/shared/contracts/aiFailure';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
+import { MessageContextStateSchema } from '@/shared/data/types/message';
 
 import { traceErrorAttributes, type TraceRecorder, type TraceSpan } from '../../observability';
 import type { ManagedFileResolver, TurnResourceLedger } from '../resources/managedFileResolver';
@@ -98,6 +99,7 @@ import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
+  omitTransientCompactionParts,
   settleStreamingTextParts,
 } from '../sessionStore/messageSettlement';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
@@ -115,6 +117,7 @@ import {
   toAgentErrorView,
   toAgentMessagePart,
   toAgentUsageView,
+  toCompactionAnchorPart,
 } from './runtimeProjection';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
@@ -977,6 +980,35 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     event: RuntimeEvent,
   ): Promise<boolean> {
     switch (event.type) {
+      case 'context.usage': {
+        const context = MessageContextStateSchema.parse({ usage: event.usage });
+        state.assistantMessage.stats = { ...state.assistantMessage.stats, context };
+        this.publish(sessionId, {
+          type: 'message.delta',
+          messageId: state.assistantMessage.id,
+          delta: { op: 'context.update', context },
+        });
+        return false;
+      }
+      case 'context.compaction': {
+        const part = toCompactionAnchorPart(event.compaction, state.turn.id);
+        const index = state.assistantMessage.parts.findIndex((item) => item.id === part.id);
+        if (index < 0) {
+          state.assistantMessage.parts.push(part);
+        } else {
+          state.assistantMessage.parts[index] = part;
+        }
+        this.publish(sessionId, {
+          type: 'message.delta',
+          messageId: state.assistantMessage.id,
+          delta:
+            index < 0
+              ? { op: 'part.add', index: state.assistantMessage.parts.length - 1, part }
+              : { op: 'part.replace', part },
+        });
+        if (part.data.status === 'done') this.requestSnapshot(sessionId, state);
+        return false;
+      }
       case 'part.add': {
         const part = toAgentMessagePart(event.part);
         if (part.type === 'file') {
@@ -1126,6 +1158,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       error = { code: 'INTERRUPTED', message: interruption.message, retryable: true };
     }
     const terminalAt = Date.now();
+    const context = state.assistantMessage.stats?.context;
     state.runtimeTiming.closeOpenSpans(terminalAt);
     state.runtimeTiming.complete(terminalAt);
     const timingSnapshot = state.runtimeTiming.snapshot();
@@ -1134,7 +1167,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       completedAt: timingSnapshot.completedAt ?? Math.max(timingSnapshot.startedAt, terminalAt),
     };
     const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
-      settleStreamingTextParts(state.assistantMessage.parts),
+      settleStreamingTextParts(omitTransientCompactionParts(state.assistantMessage.parts)),
       'The turn ended before this tool call completed.',
     );
     if (outcome === 'failed' && error) {
@@ -1158,7 +1191,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       usage: state.usage ? toAgentUsageView(state.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
-      runtimeStats: { runtimeTiming },
+      runtimeStats: {
+        runtimeTiming,
+        ...(context ? { context, contextTokens: context.usage?.inputTokens } : {}),
+      },
     });
     const turn: AgentTurnView = {
       ...state.turn,
@@ -1244,7 +1280,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     try {
       await this.store.updateStreamingAssistantMessage({
         assistantMessageId: assistantMessage.id,
-        parts: assistantMessage.parts,
+        parts: omitTransientCompactionParts(assistantMessage.parts),
       });
     } catch (error) {
       logger.warn('Agent streaming message write failed; recovery fidelity reduced', {

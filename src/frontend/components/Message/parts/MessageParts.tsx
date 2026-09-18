@@ -40,13 +40,21 @@ export function MessageParts({
     return null;
   }
 
-  const { body, files, process } = partitionMessageParts(parts);
+  const { boundaries, body, files, process } = partitionMessageParts(parts);
   const isSettled = message.status !== 'pending';
   const isStreaming = !isSettled;
   const showSources = isSettled && parts.some((part) => part.type === 'source-url');
 
   return (
     <View className="gap-4">
+      {boundaries.map(({ index, part }) => (
+        <MessagePartRenderer
+          isStreaming={isStreaming}
+          isTextSelectionEnabled={false}
+          key={getMessagePartKey(message, part, index)}
+          part={part}
+        />
+      ))}
       {process.length > 0 ? (
         isStreaming ? (
           <View className="gap-1">

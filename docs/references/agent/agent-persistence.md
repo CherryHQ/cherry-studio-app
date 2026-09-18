@@ -229,7 +229,7 @@ recency; no `orderKey`).
 | `data` | text (json) | NOT NULL | `{ version: 1, parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
 | `usage` | text (json) | NULL | Assistant messages only |
-| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming` |
+| `stats` | text (json) | NULL | `MessageStats`; executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, plus request-context measurements in `context.usage`; completed compaction markers live in `parts` |
 | `error` | text (json) | NULL | Turn-level `AgentErrorView`, including the versioned failure snapshot when available; projected into `AgentTurnView.error`, not part of the message view |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |

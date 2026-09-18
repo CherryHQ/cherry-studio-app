@@ -4,6 +4,7 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import type { ResolvedCitationText } from './citations';
 import { CodePart } from './CodePart';
+import { CompactionAnchorPart } from './CompactionAnchorPart';
 import { CompactPart } from './CompactPart';
 import { ErrorPart } from './ErrorPart';
 import { FilePart } from './FilePart';
@@ -40,6 +41,8 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
   }
 
   switch (part.type) {
+    case 'data-compaction-anchor':
+      return <CompactionAnchorPart data={part.data} />;
     case 'text':
       return (
         <TextPart
