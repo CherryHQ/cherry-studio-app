@@ -9,6 +9,16 @@ Time to First Render comes from `ObserveRoot.wrap` in `src/app/_layout.tsx`; nav
 from the Expo Router integration `configureObserve` enables. Only TTI needs a caller, and it must
 come from inside a screen, so entry routes mount `StartupInteractiveMarker` themselves.
 
+## EAS Insights App Usage
+
+`expo-insights` automatically reports native app launch events to the EAS project identified by
+`extra.eas.projectId`. It needs no JavaScript initialization or EAS Update configuration. These
+events populate Insights → App usage; Observe's performance metrics are separate. The Sentry
+error-reporting switch does not control Insights.
+
+This native dependency requires a new installation package before devices can report usage.
+Existing packages do not gain reporting from a Metro reload or JavaScript update.
+
 ## Sentry
 
 `configureSentry` connects JavaScript error reporting to the app-owned
