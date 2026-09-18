@@ -25,7 +25,7 @@ Only the current chat's Agent starts expanded, falling back to the first Agent w
 selected. Tapping an Agent's header toggles its conversations without navigating; multiple groups
 can stay open, and explicit toggles take precedence over the default. Only expanded groups query
 Sessions by their Agent id, show ten initially, and own independent "Load more" actions.
-Conversation rows retain selection, status, navigation, rename, and deletion. Agent headers only
+Conversation rows retain selection, status, navigation, rename, and deletion. Agent header labels
 toggle their groups. The existing dock's "New chat" action opens a draft, where the user can
 select an Agent.
 Within Agent groups, Agent names, conversation titles, and pagination actions share one text
@@ -37,6 +37,10 @@ The existing Conversations/Agents action menu has a second Local/Remote section.
 keeps the source-specific view mode and last chat target. `SidebarRemoteRecents` supplies PC Agent
 groups and conversations with the shared row geometry; its device menu appears only when multiple
 devices are saved and only switches the active PC; device management stays in Settings.
+Remote Agent headers show the existing new-chat icon on the right instead of a disclosure chevron.
+The avatar/name area toggles the group; the separate icon target closes the drawer and opens that
+Agent's draft without toggling the group. The action stays available while the group is collapsed
+or its conversations are loading. Conversation lists contain no extra new-chat row.
 A connected PC is represented by a green status dot beside the view/source
 heading, with the device name retained in its accessibility label. Connection problems keep their
 message and recovery action. Source switching stays inside the drawer chat stack. Remote mode does
@@ -45,6 +49,6 @@ not route into the local Agent editor or local full-text search.
 Controller acquisition and loaded content share the same header frame, including a reserved status
 dot slot. One 200 ms loading-feedback delay spans controller acquisition, connection, and the first
 list request; it never delays data. Normal connecting/reconnecting states do not insert a banner
-above the list. Pending queries do not render empty or new-chat rows, and cached lists remain
+above the list. Pending queries do not render empty rows, and cached lists remain
 visible if a background refresh fails. Device discovery must finish before showing the unpaired
 empty state.
