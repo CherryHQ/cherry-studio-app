@@ -32,7 +32,7 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
       state={isThinking ? 'running' : 'complete'}
       statusText={statusText}
     >
-      <PartMarkdown isStreaming={isStreaming} markdown={part.text} selectable />
+      <PartMarkdown isStreaming={isStreaming} markdown={part.text} />
     </MessagePart.Reasoning>
   );
 }

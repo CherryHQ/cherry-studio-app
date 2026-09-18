@@ -421,6 +421,7 @@
   "common.clear": "Καθαρισμός",
   "common.close": "Κλείσιμο",
   "common.copy": "Αντιγραφή",
+  "common.copyAsMarkdown": "Αντιγραφή ως Markdown",
   "common.delete": "Διαγραφή",
   "common.discard": "Απορρίψτε",
   "common.done": "Έγινε",

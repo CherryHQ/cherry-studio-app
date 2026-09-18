@@ -418,6 +418,7 @@
   "common.clear": "クリア",
   "common.close": "閉じる",
   "common.copy": "コピー",
+  "common.copyAsMarkdown": "Markdown としてコピー",
   "common.delete": "削除",
   "common.discard": "破棄",
   "common.done": "完了",

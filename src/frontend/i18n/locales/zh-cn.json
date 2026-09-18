@@ -418,6 +418,7 @@
   "common.clear": "清除",
   "common.close": "关闭",
   "common.copy": "复制",
+  "common.copyAsMarkdown": "复制为 Markdown",
   "common.delete": "删除",
   "common.discard": "放弃",
   "common.done": "完成",

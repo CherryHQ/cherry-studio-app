@@ -19,7 +19,6 @@ import { UnknownPart } from './UnknownPart';
 type MessagePartRendererProps = {
   messageId?: string;
   isStreaming: boolean;
-  isTextSelectionEnabled: boolean;
   messageParts?: readonly CherryMessagePart[];
   part: CherryMessagePart;
   renderMode?: MessagePartRenderMode;
@@ -28,7 +27,6 @@ type MessagePartRendererProps = {
 
 export const MessagePartRenderer = memo(function MessagePartRenderer({
   isStreaming,
-  isTextSelectionEnabled,
   messageId,
   messageParts,
   part,
@@ -44,7 +42,6 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
       return (
         <TextPart
           isStreaming={isStreaming && part.state !== 'done'}
-          isTextSelectionEnabled={isTextSelectionEnabled}
           part={part}
           renderMode={renderMode}
           resolvedText={resolvedText}
@@ -53,31 +50,13 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
     case 'reasoning':
       return <ReasoningPart isStreaming={isStreaming && part.state !== 'done'} part={part} />;
     case 'data-code':
-      return (
-        <CodePart
-          isStreaming={isStreaming}
-          isTextSelectionEnabled={isTextSelectionEnabled}
-          part={part}
-        />
-      );
+      return <CodePart isStreaming={isStreaming} part={part} />;
     case 'data-compact':
-      return (
-        <CompactPart
-          isStreaming={isStreaming}
-          isTextSelectionEnabled={isTextSelectionEnabled}
-          part={part}
-        />
-      );
+      return <CompactPart isStreaming={isStreaming} part={part} />;
     case 'data-error':
       return <ErrorPart part={part} />;
     case 'data-translation':
-      return (
-        <TranslationPart
-          isStreaming={isStreaming}
-          isTextSelectionEnabled={isTextSelectionEnabled}
-          part={part}
-        />
-      );
+      return <TranslationPart isStreaming={isStreaming} part={part} />;
     case 'data-video':
       return null;
     case 'file':
@@ -100,7 +79,6 @@ function areMessagePartRendererPropsEqual(
   if (
     previous.isStreaming !== next.isStreaming ||
     previous.messageId !== next.messageId ||
-    previous.isTextSelectionEnabled !== next.isTextSelectionEnabled ||
     previous.part !== next.part ||
     previous.renderMode !== next.renderMode ||
     previous.resolvedText?.markdown !== next.resolvedText?.markdown ||

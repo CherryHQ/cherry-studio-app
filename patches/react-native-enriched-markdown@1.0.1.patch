@@ -71,29 +71,6 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/TableCo
        overScrollMode = View.OVER_SCROLL_NEVER
        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
        addView(
-@@ -207,10 +208,7 @@
-         val cellBg =
-           CellBackgroundView(context).apply {
-             configure(rowBg, tableStyle.borderColor, tableStyle.borderWidth)
--            setOnLongClickListener { view ->
--              showContextMenu(view)
--              true
--            }
-+            // Tables scroll; whole-message copy belongs to the message actions.
-             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-           }
- 
-@@ -288,10 +286,6 @@
-             Layout.Alignment.ALIGN_OPPOSITE -> Gravity.END
-             else -> Gravity.START
-           }
--        setOnLongClickListener { view ->
--          showContextMenu(view)
--          true
--        }
-       }
-     val horizontalPadding = tableStyle.cellPaddingHorizontal
-     val verticalPadding = tableStyle.cellPaddingVertical
 diff --git a/ios/views/ENRMTableIOSGridView.m b/ios/views/ENRMTableIOSGridView.m
 --- a/ios/views/ENRMTableIOSGridView.m
 +++ b/ios/views/ENRMTableIOSGridView.m
@@ -126,7 +103,7 @@ diff --git a/ios/views/ENRMTableIOSGridView.m b/ios/views/ENRMTableIOSGridView.m
  
 +- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
 +{
-+  // Plain cells have no press action and must leave scrolling eligible.
++  // Plain cells have no link action and must leave scrolling eligible.
 +  return [self linkURLAtPoint:[touch locationInView:self]] != nil;
 +}
 +
@@ -136,17 +113,7 @@ diff --git a/ios/views/ENRMTableIOSGridView.m b/ios/views/ENRMTableIOSGridView.m
 diff --git a/ios/views/TableContainerView.m b/ios/views/TableContainerView.m
 --- a/ios/views/TableContainerView.m
 +++ b/ios/views/TableContainerView.m
-@@ -290,8 +290,7 @@
-   };
-   _gridContainer = iosGridView;
-   [_scrollView addSubview:_gridContainer];
--  UIContextMenuInteraction *contextMenu = [[UIContextMenuInteraction alloc] initWithDelegate:self];
--  [_gridContainer addInteraction:contextMenu];
-+  // Tables are scroll surfaces; whole-message copy belongs to the message actions.
- #endif
- }
- 
-@@ -623,11 +622,17 @@
+@@ -623,11 +623,17 @@
  - (void)layoutSubviews
  {
    [super layoutSubviews];
@@ -165,7 +132,7 @@ diff --git a/ios/views/TableContainerView.m b/ios/views/TableContainerView.m
  
    if (tableOverflows) {
      UIEdgeInsets inset = UIEdgeInsetsMake(0, overhang, 0, overhang);
-@@ -645,6 +650,10 @@
+@@ -645,6 +651,10 @@
      _scrollView.contentSize = CGSizeMake(MAX(_totalTableWidth, containerWidth), _totalTableHeight);
      _scrollView.scrollEnabled = (_totalTableWidth > containerWidth);
      _gridContainer.frame = CGRectMake(overhang + alignOffset, 0, _totalTableWidth, _totalTableHeight);

@@ -418,6 +418,7 @@
   "common.clear": "Rõ ràng",
   "common.close": "Đóng",
   "common.copy": "Sao chép",
+  "common.copyAsMarkdown": "Sao chép dưới dạng Markdown",
   "common.delete": "Xóa",
   "common.discard": "Loại bỏ",
   "common.done": "Xong",

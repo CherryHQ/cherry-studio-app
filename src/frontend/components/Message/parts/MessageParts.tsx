@@ -11,7 +11,6 @@ import { ProcessGroupPart } from './ProcessGroupPart';
 import { SourceGroup } from './SourceGroup';
 
 type MessagePartsProps = {
-  isTextSelectionEnabled: boolean;
   message: MessageListItem;
   renderMode?: MessagePartRenderMode;
 };
@@ -26,11 +25,7 @@ function getMessagePartKey(
   return message.data.partKeys?.[index] ?? `${message.id}-${part.type}-${index}`;
 }
 
-export function MessageParts({
-  isTextSelectionEnabled,
-  message,
-  renderMode = 'markdown',
-}: MessagePartsProps) {
+export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsProps) {
   const parts = message.data.parts;
   // Parts keep their identity across renders (see the projection cache), so the
   // resolved text and source-number map stay stable for their consumers too.
@@ -53,7 +48,6 @@ export function MessageParts({
             {process.map(({ index, part }) => (
               <MessagePartRenderer
                 isStreaming
-                isTextSelectionEnabled={isTextSelectionEnabled}
                 key={getMessagePartKey(message, part, index)}
                 messageId={message.id}
                 messageParts={parts}
@@ -67,7 +61,6 @@ export function MessageParts({
           <ContextMenuExclusion>
             <ProcessGroupPart
               citationText={citations.textByPartIndex}
-              isTextSelectionEnabled={isTextSelectionEnabled}
               items={process.map(({ index, part }) => ({
                 index,
                 key: getMessagePartKey(message, part, index),
@@ -83,7 +76,6 @@ export function MessageParts({
       {body.map((item) => (
         <MessagePartRenderer
           isStreaming={isStreaming}
-          isTextSelectionEnabled={isTextSelectionEnabled}
           key={getMessagePartKey(message, item.part, item.index)}
           messageId={message.id}
           messageParts={parts}

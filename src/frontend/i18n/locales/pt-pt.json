@@ -424,6 +424,7 @@
   "common.clear": "Limpar",
   "common.close": "Fechar",
   "common.copy": "Copiar",
+  "common.copyAsMarkdown": "Copiar como Markdown",
   "common.delete": "Eliminar",
   "common.discard": "Descartar",
   "common.done": "Concluído",

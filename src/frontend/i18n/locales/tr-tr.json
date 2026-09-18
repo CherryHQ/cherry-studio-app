@@ -421,6 +421,7 @@
   "common.clear": "Temizle",
   "common.close": "Kapat",
   "common.copy": "Kopyala",
+  "common.copyAsMarkdown": "Markdown olarak kopyala",
   "common.delete": "Sil",
   "common.discard": "At",
   "common.done": "Bitti",
