@@ -34,6 +34,15 @@ module.exports = {
   // them out of the Haste map so package names remain unique during tests.
   modulePathIgnorePatterns: ['<rootDir>/.context/', '<rootDir>/.local/'],
   moduleNameMapper: {
+    // pnpm installs several peer-resolved copies of `expo`, and which copy a
+    // package like `@expo/ui` links to shifts whenever the lockfile is
+    // re-resolved. jest-expo neutralises Expo.fx's dev-server side effects with
+    // `jest.mock('expo/src/async-require/messageSocket')`, which only covers the
+    // copy it resolves; any suite reaching a different copy crashes on
+    // `getDevServer` because the react-native mock reports a null scriptURL.
+    // Collapse every `expo` request onto the root copy, the same way the
+    // react-native preset pins `^react-native($|/.*)`.
+    '^expo($|/.*)$': '<rootDir>/node_modules/expo$1',
     // These patched Pi subpaths intentionally expose ESM through import-only
     // conditions. Jest resolves the app tests as CommonJS, so point it at the
     // same published files directly and let babel-jest transform them below.
