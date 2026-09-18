@@ -15,7 +15,6 @@ import { PartMarkdown } from './PartMarkdown';
 
 type TextPartProps = {
   isStreaming: boolean;
-  isTextSelectionEnabled: boolean;
   part: Extract<CherryMessagePart, { type: 'text' }>;
   renderMode?: MessagePartRenderMode;
   resolvedText?: ResolvedCitationText;
@@ -47,15 +46,7 @@ function renderMentionSegments(segments: readonly MentionSegment[]) {
  * reaching for a renderer would start parsing everything else the user typed
  * along with it.
  */
-function PlainTextWithMentions({
-  isTextSelectionEnabled,
-  text,
-  references,
-}: {
-  isTextSelectionEnabled: boolean;
-  text: string;
-  references?: unknown[];
-}) {
+function PlainTextWithMentions({ text, references }: { text: string; references?: unknown[] }) {
   const segments = splitPluginReferences(text, references);
   const color = useThemeColor('primary');
   const { theme } = useUniwind();
@@ -64,11 +55,7 @@ function PlainTextWithMentions({
   const iconSize = (textStyle.fontSize ?? 16) * fontScale;
 
   return (
-    <Text
-      className="text-base text-foreground"
-      accessibilityLabel={text}
-      selectable={isTextSelectionEnabled}
-    >
+    <Text className="text-base text-foreground" accessibilityLabel={text} selectable>
       {segments.map((segment) => {
         if (!segment.reference) return renderMentionSegments(splitToolMentions(segment.text));
         const icon = getPluginInlineIcon(segment.reference.pluginId, theme);
@@ -96,7 +83,6 @@ function PlainTextWithMentions({
 
 export function TextPart({
   isStreaming,
-  isTextSelectionEnabled,
   part,
   renderMode = 'markdown',
   resolvedText,
@@ -107,16 +93,11 @@ export function TextPart({
     <ContextMenuExclusion>
       {renderMode === 'plainText' ? (
         <PlainTextWithMentions
-          isTextSelectionEnabled={isTextSelectionEnabled}
           text={resolvedText?.plainText ?? part.text}
           references={readCherryMeta(part)?.references}
         />
       ) : (
-        <PartMarkdown
-          isStreaming={isStreaming}
-          markdown={resolvedText?.markdown ?? part.text}
-          selectable={isTextSelectionEnabled}
-        />
+        <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />
       )}
     </ContextMenuExclusion>
   );

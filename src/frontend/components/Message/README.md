@@ -285,8 +285,10 @@ child's tap, native selection, or scrolling behavior.
 | Video/source-document/step-start parts | No rendered touch target |
 
 Text selection uses React Native `Text` for user messages and the existing Markdown renderer for
-assistant messages. The system owns the long-press threshold, selection handles, and selection-menu
-timing; the app adds no second hold timer or movement threshold. The text exclusion remains mounted
+assistant messages. Message text is always selectable; there is no per-message selection toggle,
+because a message whose text cannot be selected has no remaining way to copy part of an answer. The
+system owns the long-press threshold, selection handles, and selection-menu timing; the app adds no
+second hold timer or movement threshold. The text exclusion remains mounted
 during streaming and after completion, so settling does not remount the native text. Streamdown
 retains its upstream selection policy while processing streamed content. Selection is local to each
 native text segment and cannot span independent Markdown blocks or message parts; whole-message

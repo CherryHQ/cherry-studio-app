@@ -35,7 +35,7 @@ describe('UserMessage', () => {
 
     expect(renderer.root.findAllByType(ScrollView)).toHaveLength(0);
     expect(renderer.root.findByType('MessageParts').props).toEqual(
-      expect.objectContaining({ isTextSelectionEnabled: true, message, renderMode: 'plainText' }),
+      expect.objectContaining({ message, renderMode: 'plainText' }),
     );
   });
 

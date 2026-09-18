@@ -40,9 +40,7 @@ describe('MessagePartRenderer', () => {
     let renderer: ReactTestRenderer | undefined;
 
     act(() => {
-      renderer = create(
-        <MessagePartRenderer isStreaming={false} isTextSelectionEnabled part={part} />,
-      );
+      renderer = create(<MessagePartRenderer isStreaming={false} part={part} />);
     });
 
     expect(renderer?.toJSON()).toBeNull();
@@ -56,7 +54,6 @@ describe('MessagePartRenderer', () => {
       renderer = create(
         <MessagePartRenderer
           isStreaming={false}
-          isTextSelectionEnabled
           messageParts={[part]}
           part={part}
           resolvedText={firstResolvedText}
@@ -69,7 +66,6 @@ describe('MessagePartRenderer', () => {
       renderer?.update(
         <MessagePartRenderer
           isStreaming={false}
-          isTextSelectionEnabled
           messageParts={[part, { state: 'streaming', text: 'New text', type: 'text' }]}
           part={part}
           resolvedText={{ ...firstResolvedText }}
@@ -89,7 +85,7 @@ describe('MessagePartRenderer', () => {
       let renderer: ReactTestRenderer | undefined;
 
       act(() => {
-        renderer = create(<MessagePartRenderer isStreaming isTextSelectionEnabled part={part} />);
+        renderer = create(<MessagePartRenderer isStreaming part={part} />);
       });
       const block = renderer!.root.findByType(component);
       expect(block.props.isStreaming).toBe(true);
@@ -98,7 +94,6 @@ describe('MessagePartRenderer', () => {
         renderer!.update(
           <MessagePartRenderer
             isStreaming
-            isTextSelectionEnabled
             messageParts={[
               completePart,
               { state: 'streaming', text: '正在查询', type: 'reasoning' },
