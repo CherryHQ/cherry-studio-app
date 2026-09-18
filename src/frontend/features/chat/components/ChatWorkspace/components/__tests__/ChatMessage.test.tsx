@@ -82,7 +82,7 @@ describe('ChatMessage', () => {
     expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'assistant-1', text: 'Answer' });
     act(() => menu.items[1].onPress());
     expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'assistant-1' });
-    expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(false);
+    expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(true);
   });
 
   test('copies user text and shares the selected user message through the existing actions', () => {

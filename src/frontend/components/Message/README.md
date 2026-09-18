@@ -265,22 +265,32 @@ and stable render identity.
 
 ## Message Interaction Ownership
 
-The chat's menu uses the platform's default long-press timing and covers ordinary message content
-and whitespace. Android places the menu near the long-press pointer with screen-edge adjustment;
-iOS delegates placement to UIKit. Child-owned regions use CherryUI's `ContextMenuExclusion`;
-this disables the Android ancestor recognizer or withholds iOS native menu items for that touch without changing
-the child's tap, native selection, or scrolling behavior.
+The chat's whole-message menu uses the platform's default long-press timing and covers the message
+header and whitespace outside text and other child-owned regions, including user-bubble padding.
+Android places the menu near the long-press pointer with screen-edge adjustment; iOS delegates
+placement to UIKit. Child-owned regions use CherryUI's `ContextMenuExclusion`; this disables the
+Android ancestor recognizer or withholds iOS native menu items for that touch without changing the
+child's tap, native selection, or scrolling behavior.
 
 | Region | Interaction owner |
 | --- | --- |
-| User bubble and main answer | Message copy/share menu; main-answer partial selection is disabled when actions are enabled |
+| User text and main answer | Excluded text region; native text selection and selection menus retain ownership, independently of message actions |
+| Message header and whitespace outside excluded regions | Whole-message copy/share menu |
 | Process, reasoning, tool summaries and inline file-output panes | Excluded process region; disclosures, detail sheets, selection and inner scrolling retain ownership |
 | User attachments and generated artifacts | Excluded attachment region; file/image preview controls retain ownership |
 | Sources and error feedback | Excluded region; source list, external links, error details and local selection retain ownership |
 | Assistant copy/fork/share toolbar and usage details | Excluded toolbar region |
 | Markdown links, checkboxes and spoilers | Native renderer handles the inline target; native cancellation must prevent a second action on release |
-| Fenced code and Markdown tables | Native renderer owns code copy/menu and nested scrolling; the existing table patch removes the table-wide copy menu |
+| Fenced code and Markdown tables | Native renderer owns block copy menus and nested scrolling inside the excluded text or process region |
 | Video/source-document/step-start parts | No rendered touch target |
+
+Text selection uses React Native `Text` for user messages and the existing Markdown renderer for
+assistant messages. The system owns the long-press threshold, selection handles, and selection-menu
+timing; the app adds no second hold timer or movement threshold. The text exclusion remains mounted
+during streaming and after completion, so settling does not remount the native text. Streamdown
+retains its upstream selection policy while processing streamed content. Selection is local to each
+native text segment and cannot span independent Markdown blocks or message parts; whole-message
+copy remains available through message actions.
 
 Android code menus explicitly cancel ancestor gesture recognizers before presenting. This also
 covers short, non-scrolling code blocks; moving focus to the native popup alone does not cancel

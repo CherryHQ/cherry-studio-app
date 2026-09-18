@@ -1,3 +1,4 @@
+import { ContextMenuExclusion } from '@cherrystudio/ui/components';
 import { Image, Text, useWindowDimensions } from 'react-native';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
@@ -46,7 +47,15 @@ function renderMentionSegments(segments: readonly MentionSegment[]) {
  * reaching for a renderer would start parsing everything else the user typed
  * along with it.
  */
-function PlainTextWithMentions({ text, references }: { text: string; references?: unknown[] }) {
+function PlainTextWithMentions({
+  isTextSelectionEnabled,
+  text,
+  references,
+}: {
+  isTextSelectionEnabled: boolean;
+  text: string;
+  references?: unknown[];
+}) {
   const segments = splitPluginReferences(text, references);
   const color = useThemeColor('primary');
   const { theme } = useUniwind();
@@ -55,7 +64,11 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
   const iconSize = (textStyle.fontSize ?? 16) * fontScale;
 
   return (
-    <Text className="text-base text-foreground" accessibilityLabel={text}>
+    <Text
+      className="text-base text-foreground"
+      accessibilityLabel={text}
+      selectable={isTextSelectionEnabled}
+    >
       {segments.map((segment) => {
         if (!segment.reference) return renderMentionSegments(splitToolMentions(segment.text));
         const icon = getPluginInlineIcon(segment.reference.pluginId, theme);
@@ -88,20 +101,23 @@ export function TextPart({
   renderMode = 'markdown',
   resolvedText,
 }: TextPartProps) {
-  if (renderMode === 'plainText') {
-    return (
-      <PlainTextWithMentions
-        text={resolvedText?.plainText ?? part.text}
-        references={readCherryMeta(part)?.references}
-      />
-    );
-  }
-
+  // Native selection, links and block menus own touches inside the text region.
+  // Keep the boundary mounted while streaming so completion preserves the native text.
   return (
-    <PartMarkdown
-      isStreaming={isStreaming}
-      markdown={resolvedText?.markdown ?? part.text}
-      selectable={isTextSelectionEnabled}
-    />
+    <ContextMenuExclusion>
+      {renderMode === 'plainText' ? (
+        <PlainTextWithMentions
+          isTextSelectionEnabled={isTextSelectionEnabled}
+          text={resolvedText?.plainText ?? part.text}
+          references={readCherryMeta(part)?.references}
+        />
+      ) : (
+        <PartMarkdown
+          isStreaming={isStreaming}
+          markdown={resolvedText?.markdown ?? part.text}
+          selectable={isTextSelectionEnabled}
+        />
+      )}
+    </ContextMenuExclusion>
   );
 }
