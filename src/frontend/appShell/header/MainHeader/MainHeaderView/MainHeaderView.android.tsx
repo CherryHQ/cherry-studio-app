@@ -1,25 +1,23 @@
 import MaskedView from '@react-native-masked-view/masked-view';
 import { BlurView } from 'expo-blur';
 import { Stack } from 'expo-router';
-import { type RefObject } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { HeaderActionGroup } from '../components/HeaderActionGroup/HeaderActionGroup';
-import { mainHeaderRowHeight } from '../headerScreenOptions';
-import { MainHeaderAgentButton } from './MainHeaderAgentButton';
-import { useMainHeaderActions } from './useMainHeaderActions';
-import { useMainHeaderAgentPicker } from './useMainHeaderAgentPicker';
+import { HeaderActionGroup } from '../../components/HeaderActionGroup/HeaderActionGroup';
+import { mainHeaderRowHeight } from '../../headerScreenOptions';
+import { MainHeaderAgentLabel } from '../MainHeaderAgentLabel';
+import { useMainHeaderActions } from '../useMainHeaderActions';
+import type { MainHeaderViewProps } from './MainHeaderView.types';
 
 const HEADER_HORIZONTAL_INSET = 16;
 const HEADER_BLUR_INTENSITY = 24;
 
-export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
+export function MainHeaderView({ agent, onNewChat, blurTarget }: MainHeaderViewProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
-  const { agent, currentAgentId, leadingAction, rightActions } = useMainHeaderActions();
-  const { agentPickerSheet, openAgentPicker } = useMainHeaderAgentPicker(currentAgentId);
+  const { leadingAction, rightActions } = useMainHeaderActions(onNewChat);
   const horizontalInset = HEADER_HORIZONTAL_INSET + Math.max(insets.left, insets.right);
 
   return (
@@ -69,7 +67,7 @@ export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> 
                 {/* The header already blurs the chat underneath. Keep this tint
                     translucent so the capsule shares that blur without another pass. */}
                 <View className="absolute inset-0 rounded-full bg-card/70" pointerEvents="none" />
-                <MainHeaderAgentButton agent={agent} onPress={openAgentPicker} />
+                <MainHeaderAgentLabel agent={agent} />
               </View>
             ) : null}
           </View>
@@ -78,7 +76,6 @@ export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> 
           </View>
         </View>
       </View>
-      {agentPickerSheet}
     </>
   );
 }

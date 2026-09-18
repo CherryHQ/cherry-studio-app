@@ -89,3 +89,9 @@ export {
   type AgentView,
   type JsonValue,
 } from './views';
+
+export type {
+  AgentController,
+  AgentControllerModule,
+  AgentControllerConnection,
+} from './controller';

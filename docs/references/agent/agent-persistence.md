@@ -54,7 +54,7 @@ The Agent Data API, `Backend.agent`, and frontend surfaces share these current c
 protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
 Mobile Agent has one execution target and one engine: `local → Pi` in this mobile app. Application
 composition injects Pi directly into the Host, so there is no implementation choice to persist. The
-planned PC Agent Controller does not represent PC execution as a local Runtime binding or extend the
+PC Agent Controller does not represent PC execution as a local Runtime binding or extend the
 current local execution-target value. PC Agent Sessions remain authoritative on the PC. A mobile
 adapter may map them into Agent Protocol values for the application, but it does not copy them into
 these tables as a second source of truth. Any offline cache or projection requires a separate

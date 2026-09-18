@@ -3,7 +3,7 @@ import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { type ReactNode, useMemo } from 'react';
 import { View } from 'react-native';
 
-import { useStartNewChat } from '@/frontend/appShell/navigation/chat';
+import { useChatSource, useStartNewChat } from '@/frontend/appShell/navigation/chat';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import { useSessionSearch } from '../hooks/useSessionSearch';
@@ -27,6 +27,7 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
   const router = useRouter();
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
+  const { source, setViewMode, startRemoteChat } = useChatSource();
 
   const actions = useMemo<SidebarActions>(
     () => ({
@@ -36,6 +37,10 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
         openSessionSearch();
       },
       navigateAgents: () => {
+        if (source === 'remote') {
+          setViewMode('agents');
+          return;
+        }
         navigation.closeDrawer();
         router.push('/agents');
       },
@@ -57,10 +62,11 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
       },
       startNewChat: () => {
         navigation.closeDrawer();
-        void startNewChat();
+        if (source === 'remote') startRemoteChat();
+        else void startNewChat();
       },
     }),
-    [navigation, openSessionSearch, router, startNewChat],
+    [navigation, openSessionSearch, router, source, setViewMode, startRemoteChat, startNewChat],
   );
 
   return (

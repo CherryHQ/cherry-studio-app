@@ -177,7 +177,24 @@ private final class CherryMenuContainerView: UIView, UIContextMenuInteractionDel
             }
         }
 
-        return UIMenu(children: actions)
+        guard items.contains(where: { !$0.group.isEmpty }) else {
+            return UIMenu(children: actions)
+        }
+        var sections: [UIMenuElement] = []
+        var children: [UIMenuElement] = []
+        var group = items.first?.group
+        for (index, item) in items.enumerated() {
+            if item.group != group {
+                sections.append(UIMenu(options: .displayInline, children: children))
+                children = []
+                group = item.group
+            }
+            children.append(actions[index])
+        }
+        if !children.isEmpty {
+            sections.append(UIMenu(options: .displayInline, children: children))
+        }
+        return UIMenu(children: sections)
     }
 
     func contextMenuInteraction(

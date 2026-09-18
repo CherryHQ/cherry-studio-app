@@ -13,12 +13,12 @@ import {
   chatHref,
   type ChatRouteParamsInput,
   parseChatRoute,
+  useChatSource,
 } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import {
   SessionListProvider,
   SessionStatus,
-  type SessionViewMode,
   useSessionListActions,
   useSessionActionAlerts,
   useSessionListSessions,
@@ -29,12 +29,12 @@ import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions
 import type { Agent } from '@/shared/data/types/agent';
 
 import { useSidebarActions } from '../context';
+import { SidebarRemoteRecents } from './SidebarRemoteRecents';
+import { SidebarAgentIconSlot, SidebarRowContent, SIDEBAR_LEADING_SIZE } from './SidebarRowContent';
 
 type SidebarRecentsProps = {
   registerEndReachedHandler: (handler?: () => void) => void;
 };
-
-const SIDEBAR_LEADING_SIZE = 28;
 
 function useSidebarChatTarget() {
   // The drawer sits outside the chat screen's local route context.
@@ -44,70 +44,73 @@ function useSidebarChatTarget() {
   return pathname === '/' && route.status === 'ready' ? route.target : undefined;
 }
 
-/** Only Agent groups reserve an icon column; ordinary conversation rows have no leading slot. */
-function SidebarAgentIconSlot({ children }: { children?: ReactNode }) {
-  return (
-    <View className="shrink-0 items-center" style={{ width: SIDEBAR_LEADING_SIZE }}>
-      {children}
-    </View>
-  );
-}
-
-function SidebarRowContent({
-  children,
-  className,
-  leading,
-}: {
-  children: ReactNode;
-  className?: string;
-  leading?: ReactNode;
-}) {
-  return (
-    <View className={cn('flex-row items-center gap-3 rounded-xl px-3 py-2.5', className)}>
-      {leading}
-      <View className="min-w-0 flex-1 flex-row items-center gap-2">{children}</View>
-    </View>
-  );
-}
-
 export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<SessionViewMode>('sessions');
+  const { source, selectSource, viewMode: mode, setViewMode: setMode } = useChatSource();
   const isSessionMode = mode === 'sessions';
   const modeLabel = t(isSessionMode ? 'navigation.sessions' : 'navigation.agents');
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
         checked: isSessionMode,
+        group: 'view',
         id: 'show-sessions',
         label: t('navigation.sessions'),
         onPress: () => setMode('sessions'),
       },
       {
         checked: !isSessionMode,
+        group: 'view',
         id: 'show-agents',
         label: t('navigation.agents'),
         onPress: () => setMode('agents'),
       },
+      {
+        group: 'source',
+        checked: source === 'local',
+        id: 'source-local',
+        label: t('navigation.local'),
+        onPress: () => selectSource('local'),
+      },
+      {
+        group: 'source',
+        checked: source === 'remote',
+        id: 'source-remote',
+        label: t('navigation.remote'),
+        onPress: () => selectSource('remote'),
+      },
     ],
-    [isSessionMode, t],
+    [isSessionMode, setMode, source, selectSource, t],
   );
 
+  const header = (
+    <ActionMenu items={menuItems}>
+      <View
+        accessibilityLabel={t('navigation.chooseSidebarView')}
+        accessibilityRole="button"
+        className="min-h-10 flex-row items-center gap-1.5"
+        testID="sidebar-recents-mode-toggle"
+      >
+        <Text className="text-muted-foreground text-sm">
+          {modeLabel}
+          {source === 'remote' ? ` · ${t('navigation.remote')}` : ''}
+        </Text>
+        <ChevronDownIcon className="size-4 text-muted-foreground" />
+      </View>
+    </ActionMenu>
+  );
+  if (source === 'remote') {
+    return (
+      <SidebarRemoteRecents
+        header={header}
+        mode={mode}
+        registerEndReachedHandler={registerEndReachedHandler}
+      />
+    );
+  }
   return (
     <>
-      <View className="px-5 pt-4 pb-1">
-        <ActionMenu items={menuItems}>
-          <View
-            accessibilityLabel={t('navigation.chooseSidebarView')}
-            accessibilityRole="button"
-            className="min-h-10 flex-row items-center gap-1.5"
-            testID="sidebar-recents-mode-toggle"
-          >
-            <Text className="text-muted-foreground text-sm">{modeLabel}</Text>
-            <ChevronDownIcon className="size-4 text-muted-foreground" />
-          </View>
-        </ActionMenu>
-      </View>
+      <View className="px-5 pt-4 pb-1">{header}</View>
       {isSessionMode ? (
         <SessionListProvider>
           <SidebarRecentSessionList registerEndReachedHandler={registerEndReachedHandler} />

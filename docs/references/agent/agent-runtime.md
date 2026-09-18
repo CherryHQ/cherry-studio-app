@@ -33,14 +33,14 @@ Promotion to a workspace package happens only when a real independent consumer e
 Mobile Agent accepts only the `local` execution target. Application composition injects one Pi
 Runtime directly into the Host. There is no Runtime registry, no implementation-selection Router,
 and no persisted Runtime binding. Agent configuration, Session configuration, model selection, and
-tool availability never select another engine or execution device. The planned PC Agent Controller
+tool availability never select another engine or execution device. The PC Agent Controller
 does not change this local Runtime seam.
 
-Future PC Agent control does not add a `RemoteRuntime` to this process. A mobile-owned adapter sits
+PC Agent control does not add a `RemoteRuntime` to this process. A mobile-owned adapter sits
 at the application-protocol boundary, converts PC-owned snapshots and events into Agent Protocol
 values, and leaves execution and authoritative Session state on the PC. The adapter's transport is
 defined separately. The local Host never turns PC tools into `RuntimeTool` callbacks. See
-[Agent Architecture](./README.md#planned-pc-agent-controller-boundary).
+[Agent Architecture](./README.md#pc-agent-controller-boundary).
 
 The Agent's instructions, model, and MCP bindings, plus application-owned system capabilities, are
 resolved afresh for every turn. After freezing the tool snapshot, the Host combines fixed mobile

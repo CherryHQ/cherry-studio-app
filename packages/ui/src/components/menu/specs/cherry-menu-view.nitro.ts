@@ -10,6 +10,7 @@ export type NativeMenuCheckedState = 'none' | 'off' | 'on';
 export type NativeMenuIcon = 'none' | 'branch';
 
 export interface NativeMenuItem {
+  group: string;
   checked: NativeMenuCheckedState;
   destructive: boolean;
   disabled: boolean;

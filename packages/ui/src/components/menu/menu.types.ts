@@ -7,6 +7,8 @@ export type MenuAnchor = { height: number; pageX: number; pageY: number; width: 
 export type MenuIcon = 'branch';
 
 export type MenuItem = Readonly<{
+  /** Contiguous items with the same group share a section. */
+  group?: string;
   checked?: boolean;
   destructive?: boolean;
   disabled?: boolean;

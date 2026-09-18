@@ -62,6 +62,12 @@ export type FilePreviewProps = {
   variant?: FilePreviewVariant;
 };
 
-export type FileAttachmentPreviewProps = Omit<FilePreviewProps, 'badge' | 'size' | 'variant'> & {
+export type FileAttachmentPreviewProps = Omit<
+  FilePreviewProps,
+  'badge' | 'file' | 'size' | 'variant'
+> & {
   categoryLabel: string;
+  disabled?: boolean;
+  /** The row can display metadata before the caller resolves the file bytes. */
+  file?: Pick<FilePreviewFile, 'displayName' | 'extensionLabel'> | null;
 };

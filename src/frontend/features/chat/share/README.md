@@ -49,3 +49,8 @@ capability. Opening the preview renders the selection's default format without t
 changing the format or switch renders the selected snapshot as needed. Image output uses a fixed-width layout at
 3x density and sequential page capture, without source-image byte, pixel or count caps. Device resources determine practical
 capacity. Image conversion failures prepare HTML; HTML failures retain the complete Markdown preview.
+
+Remote chats use the same selection controls and exporter through a `ChatShareSource` loader.
+The loader re-reads chosen messages from the bound controller and checks pairing identity before
+and after each page. Remote resources never become local file IDs; artifacts export as named
+attachments. Truncated messages are shown but cannot be selected as complete export content.

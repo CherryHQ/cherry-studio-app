@@ -41,6 +41,29 @@ describe('ProcessGroupPart', () => {
     renderer = undefined;
   });
 
+  test('does not invent a duration for remote messages without timing metadata', () => {
+    const part = { state: 'done' as const, text: 'Reasoning', type: 'reasoning' as const };
+    const message: MessageListItem = {
+      id: 'remote-reply',
+      role: 'assistant',
+      status: 'success',
+      data: { parts: [part] },
+    };
+    act(() => {
+      renderer = create(
+        <ProcessGroupPart
+          citationText={new Map()}
+          isTextSelectionEnabled
+          items={[{ index: 0, key: 'reasoning', part }]}
+          message={message}
+          messageParts={[part]}
+          renderMode="markdown"
+        />,
+      );
+    });
+    expect(renderer!.root.findByType('MessagePartProcess').props.title).toBe('chat.process.title');
+  });
+
   test('uses runtime timing and excludes overlapping approval waits', () => {
     const part = { state: 'done' as const, text: 'Reasoning', type: 'reasoning' as const };
     const message: MessageListItem = {

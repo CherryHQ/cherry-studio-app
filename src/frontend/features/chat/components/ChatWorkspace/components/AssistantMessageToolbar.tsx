@@ -55,14 +55,16 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
-      <Button
-        accessibilityLabel={t('chat.messageActions.fork')}
-        icon={<SplitIcon className="text-muted-foreground" size={15} />}
-        onPress={() => forkFromAssistantMessage({ messageId: message.id })}
-        size="xs"
-        testID="assistant-message-fork"
-        variant="ghost"
-      />
+      {forkFromAssistantMessage ? (
+        <Button
+          accessibilityLabel={t('chat.messageActions.fork')}
+          icon={<SplitIcon className="text-muted-foreground" size={15} />}
+          onPress={() => forkFromAssistantMessage({ messageId: message.id })}
+          size="xs"
+          testID="assistant-message-fork"
+          variant="ghost"
+        />
+      ) : null}
       <Button
         accessibilityLabel={t('chat.share.title')}
         icon={<ShareIcon className="text-muted-foreground" size={15} />}

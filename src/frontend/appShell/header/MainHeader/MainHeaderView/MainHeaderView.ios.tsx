@@ -1,17 +1,15 @@
 import { Stack, useIsPreview } from 'expo-router';
 
-import { HeaderAction } from '../components/HeaderAction';
-import { HeaderActionGroup } from '../components/HeaderActionGroup/HeaderActionGroup';
-import { headerScreenOptions } from '../headerScreenOptions';
-import { MainHeaderAgentButton } from './MainHeaderAgentButton';
-import { useMainHeaderActions } from './useMainHeaderActions';
-import { useMainHeaderAgentPicker } from './useMainHeaderAgentPicker';
+import { HeaderAction } from '../../components/HeaderAction';
+import { HeaderActionGroup } from '../../components/HeaderActionGroup/HeaderActionGroup';
+import { headerScreenOptions } from '../../headerScreenOptions';
+import { MainHeaderAgentLabel } from '../MainHeaderAgentLabel';
+import { useMainHeaderActions } from '../useMainHeaderActions';
+import type { MainHeaderViewProps } from './MainHeaderView.types';
 
-export function MainHeader() {
+export function MainHeaderView({ agent, onNewChat }: MainHeaderViewProps) {
   const isPreview = useIsPreview();
-  const { agent, currentAgentId, leadingAction, rightActions } = useMainHeaderActions();
-  const { agentPickerSheet, openAgentPicker } = useMainHeaderAgentPicker(currentAgentId);
-
+  const { leadingAction, rightActions } = useMainHeaderActions(onNewChat);
   if (isPreview) {
     return null;
   }
@@ -39,12 +37,11 @@ export function MainHeader() {
         <Stack.Toolbar.Spacer hidden={!agent} width={4} />
         {agent ? (
           <Stack.Toolbar.View>
-            <MainHeaderAgentButton agent={agent} onPress={openAgentPicker} />
+            <MainHeaderAgentLabel agent={agent} />
           </Stack.Toolbar.View>
         ) : null}
       </Stack.Toolbar>
       <HeaderActionGroup actions={rightActions} placement="right" />
-      {agentPickerSheet}
     </>
   );
 }

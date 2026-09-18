@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { Keyboard, Pressable, Text } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 
 import {
   type ChatRouteParamsInput,
@@ -34,18 +34,21 @@ export function useMainHeaderAgent() {
     void startNewChat();
   }, [agent, router, startNewChat]);
 
-  return { agent, currentAgentId, openNewSession };
+  return { agent, openNewSession };
 }
 
-export function MainHeaderAgentButton({ agent, onPress }: { agent: Agent; onPress: () => void }) {
+export function MainHeaderAgentLabel({
+  agent,
+}: {
+  agent: Pick<Agent, 'name'> & Partial<Pick<Agent, 'avatar' | 'avatarUri'>>;
+}) {
   return (
-    <Pressable
+    <View
+      accessible
       accessibilityLabel={agent.name}
-      accessibilityRole="button"
-      className="min-h-10 max-w-56 min-w-0 shrink flex-row items-center gap-2 rounded-full px-3 py-1 active:opacity-60"
-      hitSlop={8}
-      onPress={onPress}
-      testID="current-agent-button"
+      accessibilityRole="text"
+      className="min-h-10 max-w-56 min-w-0 shrink flex-row items-center gap-2 rounded-full px-3 py-1"
+      testID="current-agent-label"
     >
       <AgentAvatar avatar={agent.avatar} name={agent.name} size={24} uri={agent.avatarUri} />
       <Text
@@ -56,6 +59,6 @@ export function MainHeaderAgentButton({ agent, onPress }: { agent: Agent; onPres
       >
         {agent.name}
       </Text>
-    </Pressable>
+    </View>
   );
 }
