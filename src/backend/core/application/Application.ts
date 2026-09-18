@@ -1,3 +1,5 @@
+import { loggerService } from '@logger';
+
 import type { TeardownSummary } from '../lifecycle/types';
 import type { ApplicationHost } from './ApplicationHost';
 import type { ServiceRegistry } from './serviceRegistry';
@@ -51,7 +53,8 @@ class Application {
    * so a database connection or job claim is never held by two generations at
    * once. Concurrent calls queue rather than interleave.
    *
-   * If `start()` rejects, no host is installed and the error propagates.
+   * If `start()` rejects, its resources are released before the host is cleared
+   * and the original startup error propagates.
    */
   async install(host: ApplicationHost): Promise<void> {
     await this.enqueue(async () => {
@@ -73,9 +76,17 @@ class Application {
       try {
         await host.start();
       } catch (error) {
-        // A host that failed to start is not installed — callers that catch the
-        // rejection must not find a half-initialized graph behind `get()`.
-        this.host = null;
+        // Keep this generation resolvable while partially initialized services
+        // release their resources, just as during an ordinary uninstall.
+        try {
+          await host.dispose();
+        } catch (cleanupError) {
+          loggerService
+            .withContext('Application')
+            .error('Startup rollback failed', cleanupError as Error);
+        } finally {
+          this.host = null;
+        }
         throw error;
       }
     });

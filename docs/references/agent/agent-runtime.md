@@ -117,6 +117,10 @@ tool part for observation recovery and interruption; the full input is published
 limits, and native tool support. The Host calls it before reservation; provider SDK model objects,
 credentials, endpoints, and headers remain private to the Runtime adapter. Pi preflight and final
 model resolution read the same mobile model/provider services and enforce the same endpoint rules.
+Isolated model probes may supply `apiKeyOverride` to check the user-selected key. The adapter
+materializes and attributes that credential for this request only; ordinary conversation requests
+leave selection inside the adapter. The override never enters transcript or inference snapshots,
+trace attributes, or output events.
 
 Preflight reports the independent input limit, bounded by the total context window, without
 subtracting the model's maximum output capability. The SDK dynamically fits the actual output cap
@@ -180,6 +184,8 @@ type RuntimeToolCall = {
 }
 
 type RuntimeExecutionRequest = {
+  // Used only by isolated model probes; never persisted or included in traces or events.
+  apiKeyOverride?: string
   turnId: string
   // Host-prepared application prompt: mobile Runtime rules, App language, and Agent instructions.
   instructions: string

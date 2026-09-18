@@ -304,6 +304,68 @@ describe('application.install', () => {
     expect(incoming.state).toBe('ready');
   });
 
+  it('rolls back failed and successful peers before releasing their dependency', async () => {
+    let failedResourceOpen = false;
+    let peerResourceOpen = false;
+
+    @Injectable('PartiallyOpened')
+    @DependsOn(['Connection'])
+    class PartiallyOpened extends BaseService {
+      constructor(_connection: Connection) {
+        super();
+      }
+
+      protected async onInit(): Promise<void> {
+        failedResourceOpen = true;
+        await Promise.resolve();
+        throw new Error('migration failed after opening');
+      }
+
+      protected onStop(): void {
+        const connection = application.get('Connection' as never) as Connection;
+        journal.push(`PartiallyOpened:stop:${connection.open}`);
+        failedResourceOpen = false;
+      }
+    }
+
+    @Injectable('OpenedPeer')
+    @DependsOn(['Connection'])
+    class OpenedPeer extends BaseService {
+      constructor(_connection: Connection) {
+        super();
+      }
+
+      protected onInit(): void {
+        peerResourceOpen = true;
+      }
+
+      protected onStop(): void {
+        const connection = application.get('Connection' as never) as Connection;
+        journal.push(`OpenedPeer:stop:${connection.open}`);
+        peerResourceOpen = false;
+      }
+    }
+
+    const host = new ApplicationHost({ services: [Connection, PartiallyOpened, OpenedPeer] });
+    await expect(application.install(host)).rejects.toThrow('migration failed after opening');
+
+    expect(failedResourceOpen).toBe(false);
+    expect(peerResourceOpen).toBe(false);
+    expect(journal).toEqual([
+      'Connection:open',
+      'OpenedPeer:stop:true',
+      'PartiallyOpened:stop:true',
+      'Connection:close',
+    ]);
+    expect(host.state).toBe('disposed');
+    expect(application.hasHost).toBe(false);
+
+    await host.dispose();
+    expect(journal.filter((entry) => entry === 'Connection:close')).toHaveLength(1);
+    await application.install(new ApplicationHost({ services: [Connection] }));
+    expect((application.get('Connection' as never) as Connection).open).toBe(true);
+  });
+
   it('serializes concurrent installs', async () => {
     const first = new ApplicationHost({ services: [Connection] });
     const second = new ApplicationHost({ services: [Connection] });

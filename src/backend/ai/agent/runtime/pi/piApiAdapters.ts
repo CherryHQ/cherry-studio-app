@@ -3,7 +3,6 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type { FetchFunction } from '@earendil-works/pi-ai';
 
-import type { PiLanguageEndpointType } from './piLanguageBinding';
 import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
 
 export type SupportedPiApi =
@@ -21,7 +20,7 @@ type PiApiAdapter = {
   supportsCustomFetch: boolean;
 };
 
-const PI_API_ADAPTERS: Record<PiLanguageEndpointType, PiApiAdapter> = {
+const PI_API_ADAPTERS = {
   [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
     api: 'anthropic-messages',
     formatBaseUrl: (baseUrl) => withoutTrailingApiVersion(formatApiHost(baseUrl, false)),
@@ -54,7 +53,15 @@ const PI_API_ADAPTERS: Record<PiLanguageEndpointType, PiApiAdapter> = {
         .streamSimple as unknown as PiStreamFn,
     supportsCustomFetch: true,
   },
-};
+} satisfies Record<string, PiApiAdapter>;
+
+export type PiLanguageEndpointType = keyof typeof PI_API_ADAPTERS;
+
+export function isPiLanguageEndpointType(
+  endpointType: string | undefined,
+): endpointType is PiLanguageEndpointType {
+  return endpointType !== undefined && Object.hasOwn(PI_API_ADAPTERS, endpointType);
+}
 
 export function resolvePiApiAdapter(endpointType: PiLanguageEndpointType): PiApiAdapter {
   return PI_API_ADAPTERS[endpointType];

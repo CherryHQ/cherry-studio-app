@@ -35,8 +35,8 @@ import {
   type PaintingInputSubmission,
   PaintingInputProvider,
 } from '@/frontend/components/PaintingInput';
-import { usePluginCatalog, usePluginConnections } from '@/frontend/features/plugin';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
+import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';

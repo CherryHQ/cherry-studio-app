@@ -3,12 +3,12 @@ import type { TFunction } from 'i18next';
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import {
   getProviderChatEndpointTypes,
   getProviderModelEndpointLabelKey,
   type ProviderModelChatEndpointType,
-  PROVIDER_MODEL_CHAT_ENDPOINT_TYPES,
 } from './providerModelAdd';
 
 export const PROVIDER_DEFAULT_ENDPOINT_SELECTION = 'provider-default';
@@ -92,5 +92,5 @@ export function shouldShowProviderModelEndpointPicker({
 function isProviderModelChatEndpoint(
   endpointType: EndpointType,
 ): endpointType is ProviderModelChatEndpointType {
-  return PROVIDER_MODEL_CHAT_ENDPOINT_TYPES.some((candidate) => candidate === endpointType);
+  return CHAT_ENDPOINT_TYPES.some((candidate) => candidate === endpointType);
 }

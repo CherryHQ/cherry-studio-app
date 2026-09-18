@@ -520,14 +520,16 @@ const harness: RuntimeConformanceHarness = {
 };
 
 describe('Pi invocation capture', () => {
-  test('resolves the model with the Host session id of each turn', async () => {
+  test('keeps session identity and credential overrides scoped to each request', async () => {
     const sessionIds: string[] = [];
+    const apiKeyOverrides: (string | undefined)[] = [];
     const resolution = createResolution();
     const runtime = new PiRuntime(
       {
         preflightModel: jest.fn(),
-        resolveModel: (_model, _options, sessionId) => {
+        resolveModel: (_model, _options, sessionId, apiKeyOverride) => {
           sessionIds.push(sessionId);
+          apiKeyOverrides.push(apiKeyOverride);
           return resolution;
         },
       },
@@ -535,15 +537,19 @@ describe('Pi invocation capture', () => {
     );
     const session = await runtime.open();
     try {
-      for (const [turnId, sessionId] of [
-        ['turn-1', 'session-a'],
-        ['turn-2', 'session-a'],
-        ['probe', 'session-b'],
+      for (const [turnId, sessionId, apiKeyOverride] of [
+        ['turn-1', 'session-a', undefined],
+        ['probe', 'session-b', 'probe-key'],
+        ['turn-2', 'session-a', undefined],
       ] as const) {
-        const events = await collect(session.execute(baseRequest(turnId, { sessionId })));
+        const events = await collect(
+          session.execute(baseRequest(turnId, { sessionId, apiKeyOverride })),
+        );
         expect(events.at(-1)?.type).toBe('completed');
+        expect(JSON.stringify(events)).not.toContain('probe-key');
       }
-      expect(sessionIds).toEqual(['session-a', 'session-a', 'session-b']);
+      expect(sessionIds).toEqual(['session-a', 'session-b', 'session-a']);
+      expect(apiKeyOverrides).toEqual([undefined, 'probe-key', undefined]);
     } finally {
       await session.close();
     }

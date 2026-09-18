@@ -11,9 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { Provider } from '@/shared/data/types/provider';
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import {
-  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   type CustomProviderTextEndpoint,
   getConfiguredCustomProviderTextEndpoints,
 } from '../../apiService/utils/providerApiServiceEndpointRules';
@@ -198,7 +198,7 @@ export function ProviderSetupCustomFields() {
         onClose={() => setIsProtocolPickerOpen(false)}
         onValueChange={(value) => actions.replaceTextEndpoint(value as CustomProviderTextEndpoint)}
         open={isProtocolPickerOpen}
-        options={CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.map((value) => ({
+        options={CHAT_ENDPOINT_TYPES.map((value) => ({
           label: t(ENDPOINT_LABEL_KEYS[value]),
           value,
         }))}
