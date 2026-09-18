@@ -100,6 +100,8 @@ export type ControllerAction = Readonly<{
   agentId?: string;
   userMessageId?: string;
   sessionId?: string;
+  /** Response target, projected from the persisted command parameters. */
+  interactionId?: string;
   text?: string;
   status:
     | 'confirming'

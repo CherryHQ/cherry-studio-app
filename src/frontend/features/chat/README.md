@@ -90,6 +90,12 @@ pass them to deferred content explicitly; the sheet host does not inherit the ro
 `remoteToolTitle` maps the PC Pi, DSH and Claude native tool names to Mobile translations, shared
 by tool rows and interaction sheets. It reuses existing file, web and meta-tool titles, and keeps
 unknown/custom MCP names intact. Display mapping never changes the controller's tool identity.
+Local and remote approvals use `components/ToolApprovalSheet`: pending requests open automatically,
+one at a time, without a separate interaction button. The shared sheet owns approval actions,
+question forms, and non-dismissible presentation. Remote adaptation supplies deferred input,
+optional denial reasons, connection gating, and PC responses. Submitted response commands suppress
+the same request while its receipt is pending or its old snapshot remains visible, including after
+navigation or reconnection. Question choices use CherryUI single-choice rows and selection marks.
 Successful action receipts, repeated outgoing text, and the generic message-details
 footer are omitted. Failures, unresolved actions, downloadable files, and the full-text entry for
 truncated messages remain available. The controller has no message-level execution metadata or

@@ -1,43 +1,62 @@
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
+
+import {
+  formatToolApprovalAnswer,
+  type ToolApprovalAnswer,
+  type ToolApprovalQuestion,
+  ToolApprovalQuestions,
+} from './ToolApprovalQuestions';
 
 const ignoreClose = () => undefined;
 
 export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
-  messageId: string;
-  toolCallId: string;
   displayName: string;
+  questions?: readonly ToolApprovalQuestion[];
 };
 
-type ToolApprovalRespondInput = {
+export type ToolApprovalRespondInput = {
   approvalId: string;
   approved: boolean;
-  messageId: string;
+  answers?: Record<string, string>;
 };
 
 type ToolApprovalSheetProps = {
   approvals: readonly PendingToolApproval[];
   isOpen: boolean;
-  onCancel: () => Promise<void>;
+  canRespond?: boolean;
+  children?: ReactNode;
+  onCancel?: () => Promise<void>;
   onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
 };
 
-/** Shows one AI SDK tool approval at a time, regardless of the tool's source. */
+/** Shows one tool approval or question form at a time, regardless of its source. */
 export function ToolApprovalSheet({
   approvals,
   isOpen,
+  canRespond = true,
+  children,
   onCancel,
   onRespond,
 }: ToolApprovalSheetProps) {
   const { t } = useTranslation();
   // Keep the last request mounted during the sheet's close animation.
   const [lastApproval, setLastApproval] = useState<PendingToolApproval | undefined>(approvals[0]);
-  if (approvals[0] && approvals[0].approvalId !== lastApproval?.approvalId) {
+  const [response, setResponse] = useState({
+    approvalId: approvals[0]?.approvalId,
+    answers: {} as Record<string, ToolApprovalAnswer>,
+    isSubmitting: false,
+  });
+  const submitting = useRef(new Set<string>());
+  if (approvals[0] && approvals[0] !== lastApproval) {
     setLastApproval(approvals[0]);
+  }
+  if (approvals[0] && approvals[0].approvalId !== response.approvalId) {
+    setResponse({ approvalId: approvals[0].approvalId, answers: {}, isSubmitting: false });
   }
   const approval = approvals[0] ?? lastApproval;
 
@@ -45,26 +64,75 @@ export function ToolApprovalSheet({
     return null;
   }
 
+  const isCurrent = isOpen && approvals[0]?.approvalId === approval.approvalId;
+  const canDecide = isCurrent && canRespond && !response.isSubmitting;
+  const allAnswered =
+    approval.questions?.every((question) =>
+      formatToolApprovalAnswer(response.answers[question.question]).trim(),
+    ) ?? true;
+  const submit = async (action: 'allow' | 'deny' | 'stop') => {
+    const { approvalId } = approval;
+    if (
+      !isCurrent ||
+      submitting.current.has(approvalId) ||
+      (action === 'stop' ? !onCancel : !canDecide || (action === 'allow' && !allAnswered))
+    ) {
+      return;
+    }
+    submitting.current.add(approvalId);
+    setResponse((current) => ({ ...current, isSubmitting: true }));
+    try {
+      if (action === 'stop') {
+        await onCancel?.();
+      } else {
+        await onRespond({
+          approvalId,
+          approved: action === 'allow',
+          ...(action === 'allow' && approval.questions
+            ? {
+                answers: Object.fromEntries(
+                  approval.questions.map((question) => [
+                    question.question,
+                    formatToolApprovalAnswer(response.answers[question.question]),
+                  ]),
+                ),
+              }
+            : {}),
+        });
+      }
+    } finally {
+      submitting.current.delete(approvalId);
+      setResponse((current) =>
+        current.approvalId === approvalId ? { ...current, isSubmitting: false } : current,
+      );
+    }
+  };
+
   return (
     <BottomSheet
       dismissible={false}
       footer={
         <ToolApprovalSheetActions
-          key={approval.approvalId}
-          approval={approval}
-          onCancel={onCancel}
-          onRespond={onRespond}
+          canRespond={canDecide}
+          canSubmit={allAnswered}
+          isSubmitting={response.isSubmitting}
+          onCancel={onCancel && isCurrent ? () => void submit('stop') : undefined}
+          onRespond={(approved) => void submit(approved ? 'allow' : 'deny')}
+          submitLabel={t(
+            approval.questions ? 'remoteAgent.submitAnswers' : 'chat.tool.approval.allow',
+          )}
         />
       }
       onClose={ignoreClose}
       open={isOpen}
-      size="medium"
+      size={approval.questions ? 'large' : 'medium'}
       title={t('chat.tool.approval.title')}
     >
       <ScrollView
         key={approval.approvalId}
         className="min-h-0 flex-1"
         contentContainerClassName="gap-4 px-6 pt-2 pb-4"
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-1">
@@ -80,59 +148,65 @@ export function ToolApprovalSheet({
             </Text>
           ) : null}
         </View>
-        <ApprovalArgumentsPreview input={approval.input} />
+        {approval.questions ? (
+          <ToolApprovalQuestions
+            disabled={!canDecide}
+            questions={approval.questions}
+            answers={response.answers}
+            onAnswer={(question, answer) =>
+              setResponse((current) => ({
+                ...current,
+                answers: { ...current.answers, [question]: answer },
+              }))
+            }
+          />
+        ) : (
+          <ApprovalArgumentsPreview input={approval.input} />
+        )}
+        {children}
       </ScrollView>
     </BottomSheet>
   );
 }
 
 function ToolApprovalSheetActions({
-  approval,
+  canRespond,
+  canSubmit,
+  isSubmitting,
   onCancel,
   onRespond,
+  submitLabel,
 }: {
-  approval: PendingToolApproval;
-  onCancel: () => Promise<void>;
-  onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
+  canRespond: boolean;
+  canSubmit: boolean;
+  isSubmitting: boolean;
+  onCancel?: () => void;
+  onRespond: (approved: boolean) => void;
+  submitLabel: string;
 }) {
   const { t } = useTranslation();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const submit = async (action: 'allow' | 'deny' | 'stop') => {
-    if (isSubmitting) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      if (action === 'stop') {
-        await onCancel();
-        return;
-      }
-      await onRespond({
-        approvalId: approval.approvalId,
-        approved: action === 'allow',
-        messageId: approval.messageId,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <View className="gap-4">
-      <Button disabled={isSubmitting} onPress={() => void submit('stop')} variant="secondary">
-        <Button.Label>{t('chat.input.action.stopGenerating')}</Button.Label>
-      </Button>
+      {onCancel ? (
+        <Button disabled={isSubmitting} onPress={onCancel} variant="secondary">
+          <Button.Label>{t('chat.input.action.stopGenerating')}</Button.Label>
+        </Button>
+      ) : null}
       <View className="flex-row gap-3">
         <View className="flex-1">
-          <Button disabled={isSubmitting} onPress={() => void submit('deny')} variant="destructive">
+          <Button disabled={!canRespond} onPress={() => onRespond(false)} variant="destructive">
             <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
           </Button>
         </View>
         <View className="flex-1">
-          <Button disabled={isSubmitting} onPress={() => void submit('allow')} variant="default">
-            <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
+          <Button
+            disabled={!canRespond || !canSubmit}
+            loading={isSubmitting}
+            onPress={() => onRespond(true)}
+            variant="default"
+          >
+            <Button.Label>{submitLabel}</Button.Label>
           </Button>
         </View>
       </View>

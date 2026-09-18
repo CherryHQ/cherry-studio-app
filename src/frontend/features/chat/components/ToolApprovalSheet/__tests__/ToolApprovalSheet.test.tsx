@@ -1,4 +1,4 @@
-import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Input, Section } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -21,6 +21,18 @@ jest.mock('@cherrystudio/ui/components', () => {
     return <MockView {...props}>{children}</MockView>;
   }
   MockButton.Label = MockText;
+  function MockInput(props: object) {
+    return <MockView {...props} />;
+  }
+  function MockSection({ children }: { children?: ReactNode }) {
+    return <MockView>{children}</MockView>;
+  }
+  MockSection.Item = function MockItem(props: object) {
+    return <MockView {...props} />;
+  };
+  MockSection.RadioItem = function MockRadioItem(props: object) {
+    return <MockView {...props} />;
+  };
 
   function MockBottomSheet({
     children,
@@ -41,6 +53,9 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     BottomSheet: MockBottomSheet,
     Button: MockButton,
+    Input: MockInput,
+    Section: MockSection,
+    SelectionIndicator: () => null,
   };
 });
 
@@ -52,8 +67,6 @@ function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingTool
   return {
     approvalId: 'approval-1',
     input: { query: 'cherry' },
-    messageId: 'assistant-1',
-    toolCallId: 'call-1',
     displayName: 'Server One: Search docs',
     ...overrides,
   };
@@ -69,6 +82,7 @@ describe('ToolApprovalSheet', () => {
   function render(
     overrides: {
       approvals?: readonly PendingToolApproval[];
+      canRespond?: boolean;
       onCancel?: () => Promise<void>;
       onRespond?: () => Promise<void>;
     } = {},
@@ -76,7 +90,13 @@ describe('ToolApprovalSheet', () => {
     const onCancel = jest.fn(overrides.onCancel ?? (async () => undefined));
     const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
     const element = (approvals: readonly PendingToolApproval[]) => (
-      <ToolApprovalSheet approvals={approvals} isOpen onCancel={onCancel} onRespond={onRespond} />
+      <ToolApprovalSheet
+        approvals={approvals}
+        canRespond={overrides.canRespond}
+        isOpen
+        onCancel={onCancel}
+        onRespond={onRespond}
+      />
     );
 
     act(() => {
@@ -120,13 +140,10 @@ describe('ToolApprovalSheet', () => {
 
     await press(allowLabel);
 
-    // These three ids are the entire payload: the runtime matches the decision
-    // back to the paused message and to the SDK's own approval by them, so a
-    // wrong one settles nothing and the turn stays stuck.
+    // Each source resolves the pending tool using this approval identity.
     expect(onRespond).toHaveBeenCalledWith({
       approvalId: 'approval-1',
       approved: true,
-      messageId: 'assistant-1',
     });
   });
 
@@ -167,7 +184,6 @@ describe('ToolApprovalSheet', () => {
     expect(onRespond).toHaveBeenCalledWith({
       approvalId: 'approval-1',
       approved: false,
-      messageId: 'assistant-1',
     });
   });
 
@@ -247,7 +263,6 @@ describe('ToolApprovalSheet', () => {
       makeApproval({
         approvalId: 'approval-2',
         displayName: 'Server Two: Create file',
-        toolCallId: 'call-2',
       }),
     ]);
 
@@ -257,7 +272,7 @@ describe('ToolApprovalSheet', () => {
 
   test('says how many approvals are still queued behind this one', () => {
     render({
-      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2', toolCallId: 'call-2' })],
+      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2' })],
     });
 
     expect(renderedTexts()).toContain('chat.tool.approval.pendingCount {"count":2}');
@@ -265,13 +280,12 @@ describe('ToolApprovalSheet', () => {
 
   test('advances to the next approval without closing the sheet', () => {
     const { rerender } = render({
-      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2', toolCallId: 'call-2' })],
+      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2' })],
     });
 
     rerender([
       makeApproval({
         approvalId: 'approval-2',
-        toolCallId: 'call-2',
         displayName: 'Server Two: Create file',
       }),
     ]);
@@ -291,5 +305,56 @@ describe('ToolApprovalSheet', () => {
 
     expect(renderedTexts()).toContain('Get current location');
     expect(renderedTexts()).not.toContain('location_get_current');
+  });
+
+  test('blocks unavailable decisions while allowing the turn to be stopped', async () => {
+    const { onCancel, onRespond } = render({ canRespond: false });
+
+    expect(findButton(allowLabel)?.props.disabled).toBe(true);
+    expect(findButton(denyLabel)?.props.disabled).toBe(true);
+    await press(allowLabel);
+    await press(denyLabel);
+    expect(onRespond).not.toHaveBeenCalled();
+    await press(stopLabel);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  test('requires every answer and resets the form when advancing to another request', async () => {
+    const questions = [
+      { question: 'Choose one', multiple: false, options: [{ label: 'A' }, { label: 'B' }] },
+      { question: 'Choose several', multiple: true, options: [{ label: 'C' }, { label: 'D' }] },
+    ];
+    const { onRespond, rerender } = render({ approvals: [makeApproval({ questions })] });
+    const submitLabel = 'remoteAgent.submitAnswers';
+    expect(findButton(submitLabel)?.props.disabled).toBe(true);
+    await press(submitLabel);
+    expect(onRespond).not.toHaveBeenCalled();
+
+    act(() => renderer.root.findAllByType(Section.RadioItem)[0].props.onPress());
+    act(() => renderer.root.findAllByType(Input)[0].props.onChangeText('Custom choice'));
+    expect(renderer.root.findAllByType(Section.RadioItem)[0].props.selected).toBe(false);
+    expect(findButton(submitLabel)?.props.disabled).toBe(true);
+    act(() => renderer.root.findAllByType(Section.Item)[0].props.onPress());
+    act(() => renderer.root.findAllByType(Section.Item)[1].props.onPress());
+    act(() => renderer.root.findAllByType(Section.Item)[0].props.onPress());
+    act(() => renderer.root.findAllByType(Input)[1].props.onChangeText('Extra choice'));
+
+    await press(submitLabel);
+    expect(onRespond).toHaveBeenCalledWith({
+      approvalId: 'approval-1',
+      approved: true,
+      answers: { 'Choose one': 'Custom choice', 'Choose several': 'D, Extra choice' },
+    });
+
+    rerender([makeApproval({ approvalId: 'approval-2', questions })]);
+    expect(findButton(submitLabel)?.props.disabled).toBe(true);
+    expect(renderer.root.findAllByType(Input).map((input) => input.props.value)).toEqual(['', '']);
+  });
+
+  test('retains asynchronously loaded arguments during the close animation', () => {
+    const { rerender } = render({ approvals: [makeApproval({ input: undefined })] });
+    rerender([makeApproval({ input: { command: 'ls' } })]);
+    rerender([]);
+    expect(renderedTexts()).toContain(JSON.stringify({ command: 'ls' }, null, 2));
   });
 });

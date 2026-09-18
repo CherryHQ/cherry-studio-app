@@ -60,6 +60,26 @@ it('never re-executes a receipt already admitted by the PC', async () => {
   expect(request).toHaveBeenCalledTimes(2);
 });
 
+it('keeps an approval response associated with its request through recovery', async () => {
+  const { port } = journal();
+  const request = jest.fn().mockRejectedValue(new RemoteAgentError('REQUEST_TIMEOUT', true));
+  const original = new RemoteAgentActions('pc:pair', port, request, () => {});
+  const action = await original.create('respond', 'interactions.respond', {
+    sessionId: 'session',
+    interactionId: 'approval-1',
+    response: { approved: true },
+  });
+  expect(action).toMatchObject({ interactionId: 'approval-1', status: 'confirming' });
+  original.stop();
+
+  const recoveredRequest = jest.fn().mockResolvedValue({ status: 'applied' });
+  const recovered = new RemoteAgentActions('pc:pair', port, recoveredRequest, () => {});
+  expect(recovered.get()[0]).toMatchObject({ interactionId: 'approval-1', status: 'confirming' });
+  await recovered.retry(action.id);
+  expect(recovered.get()[0]).toMatchObject({ interactionId: 'approval-1', status: 'applied' });
+  expect(recoveredRequest.mock.calls).toEqual([['commands.get', { commandId: action.id }]]);
+});
+
 it('retains an interrupted command receipt without treating it as a fresh send', async () => {
   const { port } = journal();
   const request = jest

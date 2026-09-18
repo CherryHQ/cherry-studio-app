@@ -206,11 +206,9 @@ export function ChatWorkspace({
       live.pendingApprovals.map((approval) => ({
         approvalId: approval.id,
         input: approval.input,
-        messageId: live.activeTurn?.assistantMessageId ?? '',
-        toolCallId: approval.toolCallId,
         displayName: approval.displayName,
       })),
-    [live.activeTurn?.assistantMessageId, live.pendingApprovals],
+    [live.pendingApprovals],
   );
   const handleApprovalRespond = useCallback(
     async (input: { approvalId: string; approved: boolean }) => {
