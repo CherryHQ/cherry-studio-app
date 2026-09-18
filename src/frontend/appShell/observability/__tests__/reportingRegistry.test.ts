@@ -1,4 +1,4 @@
-const mockConfigureSentry = jest.fn();
+const mockConfigureSentry = jest.fn().mockResolvedValue(undefined);
 const mockConfigureObserve = jest.fn();
 const mockObserveImported = jest.fn();
 const mockWarn = jest.fn();

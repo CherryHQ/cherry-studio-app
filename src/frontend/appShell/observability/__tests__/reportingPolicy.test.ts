@@ -39,10 +39,9 @@ describe('outbound reporting policy', () => {
       expect(getReportingPolicy(service)).toEqual({
         environment: 'production',
         enabled: true,
-        reason: null,
       });
       mockExtra.reporting = { environment: 'production', services: { [service]: false } };
-      expect(getReportingPolicy(service).reason).toBe('disabled');
+      expect(getReportingPolicy(service).enabled).toBe(false);
       mockExtra.reporting = { environment: 'production' };
       expect(getReportingPolicy(service).enabled).toBe(false);
     },
@@ -56,7 +55,7 @@ describe('outbound reporting policy', () => {
         services: { sentry: true, observe: true, insights: true },
       };
       for (const service of Object.keys(services) as (keyof typeof services)[]) {
-        expect(getReportingPolicy(service).reason).toBe('non-production');
+        expect(getReportingPolicy(service).enabled).toBe(false);
       }
     },
   );
@@ -69,11 +68,11 @@ describe('outbound reporting policy', () => {
 
   test('debug bundles and Storybook cannot open a production configuration', () => {
     Object.defineProperty(globalThis, '__DEV__', { value: true });
-    expect(getReportingPolicy('observe').reason).toBe('development');
+    expect(getReportingPolicy('observe').enabled).toBe(false);
     Object.defineProperty(globalThis, '__DEV__', { value: false });
     process.env.EXPO_PUBLIC_STORYBOOK_ENABLED = 'true';
     for (const service of Object.keys(services) as (keyof typeof services)[]) {
-      expect(getReportingPolicy(service).reason).toBe('storybook');
+      expect(getReportingPolicy(service).enabled).toBe(false);
     }
   });
 });

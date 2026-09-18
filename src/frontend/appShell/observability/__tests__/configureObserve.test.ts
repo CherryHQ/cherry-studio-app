@@ -1,32 +1,36 @@
 import { readFileSync } from 'node:fs';
 
-import { configureObserve } from '../configureObserve';
-
+type ObserveAdapter = typeof import('../configureObserve');
 const mockConfigure = jest.fn();
-const mockGetObserve = jest.fn();
-const mockPolicy = { environment: 'preview', enabled: false };
-jest.mock('../getObserve', () => ({ getObserve: () => mockGetObserve() }));
-jest.mock('../reportingPolicy', () => ({ getReportingPolicy: () => mockPolicy }));
-
-beforeEach(() => {
-  mockConfigure.mockClear();
-  mockGetObserve.mockReturnValue({ Observe: { configure: mockConfigure } });
+const mockNativeModule = jest.fn();
+const mockSdkLoaded = jest.fn();
+jest.mock('expo', () => ({ requireOptionalNativeModule: mockNativeModule }));
+jest.mock('expo-observe', () => {
+  mockSdkLoaded();
+  return { Observe: { configure: mockConfigure } };
 });
+jest.mock('../reportingPolicy', () => ({
+  getReportingPolicy: () => ({ environment: 'preview', enabled: false }),
+}));
 
-test('closes dispatch when JS configuration disables a linked SDK', () => {
-  configureObserve();
-  expect(mockConfigure).toHaveBeenCalledWith({
-    environment: 'preview',
-    dispatchingEnabled: false,
-    dispatchInDebug: false,
-    integrations: { 'expo-router': true },
+test.each([false, true])('optional Observe SDK (linked: %s)', (isLinked) => {
+  jest.clearAllMocks();
+  mockNativeModule.mockReturnValue(isLinked ? {} : null);
+  jest.isolateModules(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- isolate native module availability
+    const { configureObserve } = require('../configureObserve') as ObserveAdapter;
+    configureObserve();
+    expect(mockSdkLoaded).toHaveBeenCalledTimes(isLinked ? 1 : 0);
+    expect(mockConfigure).toHaveBeenCalledTimes(isLinked ? 1 : 0);
+    if (isLinked) {
+      expect(mockConfigure).toHaveBeenCalledWith({
+        environment: 'preview',
+        dispatchingEnabled: false,
+        dispatchInDebug: false,
+        integrations: { 'expo-router': true },
+      });
+    }
   });
-});
-
-test('does not configure an SDK excluded from the binary', () => {
-  mockGetObserve.mockReturnValue(null);
-  configureObserve();
-  expect(mockConfigure).not.toHaveBeenCalled();
 });
 
 // The Expo Router integration fetches the main session on every page focus.

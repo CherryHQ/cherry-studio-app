@@ -168,8 +168,6 @@ Android builds compile `expo-image-picker` and `expo-notifications` from source 
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
-Observe and Insights use Expo's supported autolinking exclusions for production-only reporting;
-they require no reporting patches or forced source builds.
 
 ### iOS Build 26 Crash Patches
 

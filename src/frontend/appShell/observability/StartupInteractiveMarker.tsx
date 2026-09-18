@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { getObserve } from './getObserve';
-
-const observe = getObserve();
+import { observe } from './configureObserve';
 
 export function StartupInteractiveMarker() {
   return observe ? <ObserveInteractiveMarker /> : null;

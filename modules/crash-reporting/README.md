@@ -5,10 +5,6 @@ filtering. The app-shell [observability module](../../src/frontend/appShell/obse
 owns JavaScript capture, logging, subscriptions, and the settings-facing API. This module does not
 implement its own crash recorder or upload protocol.
 
-Its config plugin embeds Sentry's production-only flag from the shared observability registry.
-Missing configuration denies reporting. Observe and Insights use a separate autolinking config
-plugin; this module does not initialize or transport those services.
-
 ## Native ownership
 
 - `app.plugin.js` embeds public production/DSN configuration and the shared startup policy. The
