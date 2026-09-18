@@ -3,13 +3,17 @@ import { readFileSync } from 'node:fs';
 import { configureObserve } from '../configureObserve';
 
 const mockConfigure = jest.fn();
+const mockGetObserve = jest.fn();
 const mockPolicy = { environment: 'preview', enabled: false };
-jest.mock('expo-observe', () => ({
-  Observe: { configure: (...args: unknown[]) => mockConfigure(...args) },
-}));
+jest.mock('../getObserve', () => ({ getObserve: () => mockGetObserve() }));
 jest.mock('../reportingPolicy', () => ({ getReportingPolicy: () => mockPolicy }));
 
-test('closes dispatch in preview while preserving local Router timing', () => {
+beforeEach(() => {
+  mockConfigure.mockClear();
+  mockGetObserve.mockReturnValue({ Observe: { configure: mockConfigure } });
+});
+
+test('closes dispatch when JS configuration disables a linked SDK', () => {
   configureObserve();
   expect(mockConfigure).toHaveBeenCalledWith({
     environment: 'preview',
@@ -17,6 +21,12 @@ test('closes dispatch in preview while preserving local Router timing', () => {
     dispatchInDebug: false,
     integrations: { 'expo-router': true },
   });
+});
+
+test('does not configure an SDK excluded from the binary', () => {
+  mockGetObserve.mockReturnValue(null);
+  configureObserve();
+  expect(mockConfigure).not.toHaveBeenCalled();
 });
 
 // The Expo Router integration fetches the main session on every page focus.

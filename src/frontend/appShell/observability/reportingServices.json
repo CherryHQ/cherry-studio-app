@@ -7,11 +7,11 @@
   "observe": {
     "enabled": true,
     "phase": "layout",
-    "nativeFlag": "CherryObserveReportingEnabled"
+    "nativePackage": "expo-observe"
   },
   "insights": {
     "enabled": true,
     "phase": "native",
-    "nativeFlag": "CherryInsightsReportingEnabled"
+    "nativePackage": "expo-insights"
   }
 }

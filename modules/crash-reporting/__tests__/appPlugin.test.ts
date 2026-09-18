@@ -82,9 +82,7 @@ describe('native startup reporting configuration', () => {
           entry['android:value'],
         ]),
       );
-      for (const { nativeFlag } of Object.values(services)) {
-        expect(config.info[nativeFlag]).toBe(profile === 'production');
-      }
+      expect(config.info[services.sentry.nativeFlag]).toBe(profile === 'production');
       expect(config.info.CherryCrashReportingDsn).toBe(
         profile === 'production' ? process.env.EXPO_PUBLIC_SENTRY_DSN : '',
       );
@@ -108,14 +106,12 @@ describe('native startup reporting configuration', () => {
       info: {},
       application: { 'meta-data': [] },
     });
-    for (const { nativeFlag } of Object.values(services)) {
-      expect(config.info[nativeFlag]).toBe(false);
-    }
+    expect(config.info[services.sentry.nativeFlag]).toBe(false);
     expect(config.info.CherryCrashReportingDsn).toBe('');
   });
 
   test.each(Object.keys(services) as (keyof typeof services)[])(
-    'disables only the selected service in a production binary: %s',
+    'the Sentry native flag follows its own service setting: %s',
     (disabled) => {
       const config = plugin({
         extra: {
@@ -127,17 +123,13 @@ describe('native startup reporting configuration', () => {
         info: {},
         application: { 'meta-data': [] },
       });
-      for (const [name, { nativeFlag }] of Object.entries(services)) {
-        expect(config.info[nativeFlag]).toBe(name !== disabled);
-      }
+      expect(config.info[services.sentry.nativeFlag]).toBe(disabled !== 'sentry');
     },
   );
 
   test('missing configuration never enables any native sender', () => {
     const config = plugin({ extra: {}, info: {}, application: { 'meta-data': [] } });
-    for (const { nativeFlag } of Object.values(services)) {
-      expect(config.info[nativeFlag]).toBe(false);
-    }
+    expect(config.info[services.sentry.nativeFlag]).toBe(false);
     expect(config.info.CherryCrashReportingDsn).toBe('');
   });
 });

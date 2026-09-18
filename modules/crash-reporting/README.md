@@ -5,9 +5,9 @@ filtering. The app-shell [observability module](../../src/frontend/appShell/obse
 owns JavaScript capture, logging, subscriptions, and the settings-facing API. This module does not
 implement its own crash recorder or upload protocol.
 
-Its config plugin also embeds the shared observability registry's production-only flags for EAS
-Observe and Insights. Their versioned dependency patches enforce those flags at native send gates;
-this module does not initialize or transport those services. Missing flags deny reporting.
+Its config plugin embeds Sentry's production-only flag from the shared observability registry.
+Missing configuration denies reporting. Observe and Insights use a separate autolinking config
+plugin; this module does not initialize or transport those services.
 
 ## Native ownership
 

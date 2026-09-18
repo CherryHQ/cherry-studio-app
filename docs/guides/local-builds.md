@@ -11,9 +11,10 @@ The existing `eas-build-post-install` hook builds the workspace packages during 
 | `production` | Enabled per service registry; Sentry additionally requires a DSN and current user consent | Enabled for Sentry; requires an upload token |
 
 The shared [reporting registry](../../src/frontend/appShell/observability/reportingServices.json)
-owns per-service build flags. Native metadata enforces this policy before JS starts and during
-background sends; debug binaries remain disabled. Changing native reporting policy requires a new
-installation package. See [Observability](../../src/frontend/appShell/observability/README.md).
+owns per-service build flags. Sentry uses immutable native metadata and rejects debug binaries.
+The reporting autolinking plugin excludes Observe and Insights from non-production native projects,
+including their automatic startup and background senders. Those builds also omit local Observe
+metrics. Changing native reporting policy requires a new installation package. See [Observability](../../src/frontend/appShell/observability/README.md).
 
 ## Prerequisites
 
@@ -163,11 +164,12 @@ Babel. Keep those settings when updating Hermes. Worklets 0.10.2 remains within 
 supported 0.10.x range; removing the experimental mode requires a separate change to streaming
 Markdown processing.
 
-Android builds compile `expo-image-picker`, `expo-notifications`, `expo-observe`, and `expo-insights` from source through
+Android builds compile `expo-image-picker` and `expo-notifications` from source through
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. The App Metrics patch retains the main session's
-JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`. Observe
-and Insights are pinned to their patched versions to retain the native production-only send gates.
+JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
+Observe and Insights use Expo's supported autolinking exclusions for production-only reporting;
+they require no reporting patches or forced source builds.
 
 ### iOS Build 26 Crash Patches
 

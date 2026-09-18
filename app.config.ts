@@ -47,7 +47,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
-    plugins: [...(config.plugins ?? []), './modules/crash-reporting/app.plugin.js']
+    plugins: [
+      ...(config.plugins ?? []),
+      './modules/crash-reporting/app.plugin.js',
+      './scripts/withReportingAutolinking.js',
+    ]
       .filter((plugin) => {
         const name = Array.isArray(plugin) ? plugin[0] : plugin;
         return name !== '@sentry/react-native/expo' || reporting.services.sentry;

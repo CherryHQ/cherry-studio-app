@@ -1,5 +1,12 @@
-import { useObserve } from 'expo-observe';
 import { useEffect, useRef } from 'react';
+
+import { getObserve } from './getObserve';
+
+const observe = getObserve();
+
+export function StartupInteractiveMarker() {
+  return observe ? <ObserveInteractiveMarker /> : null;
+}
 
 /**
  * Reports Time to Interactive for a cold-start entry screen.
@@ -17,8 +24,8 @@ import { useEffect, useRef } from 'react';
  * a fixed product constant that would add the same offset to every device and
  * flatten the metric's spread.
  */
-export function StartupInteractiveMarker() {
-  const { markInteractive } = useObserve();
+function ObserveInteractiveMarker() {
+  const { markInteractive } = observe!.useObserve();
   const hasMarkedRef = useRef(false);
 
   useEffect(() => {

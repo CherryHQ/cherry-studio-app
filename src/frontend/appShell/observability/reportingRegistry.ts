@@ -6,7 +6,7 @@ import services from './reportingServices.json';
 const logger = loggerService.withContext('Reporting');
 type ObserveAdapter = typeof import('./configureObserve');
 
-// Insights starts in native code, using the same registry's embedded flag. It has no JS initializer.
+// Insights starts natively when included by the build policy; it has no JS initializer.
 const initializers = {
   sentry: configureSentry,
   observe: () => {

@@ -10,9 +10,7 @@
       "android": {
         "buildFromSource": [
           "expo-notifications",
-          "expo-image-picker",
-          "expo-observe",
-          "expo-insights"
+          "expo-image-picker"
         ]
       }
     }
@@ -131,7 +129,7 @@
     "expo-image": "~57.0.4",
     "expo-image-manipulator": "~57.0.16",
     "expo-image-picker": "57.0.16",
-    "expo-insights": "57.0.18",
+    "expo-insights": "~57.0.18",
     "expo-intent-launcher": "~57.0.1",
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.9",
@@ -139,7 +137,7 @@
     "expo-location": "~57.0.16",
     "expo-media-library": "~57.0.4",
     "expo-notifications": "57.0.17",
-    "expo-observe": "57.0.20",
+    "expo-observe": "~57.0.20",
     "expo-paste-input": "0.2.2",
     "expo-router": "57.0.20",
     "expo-secure-store": "~57.0.3",

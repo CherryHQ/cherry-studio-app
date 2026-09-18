@@ -7,17 +7,10 @@ module.exports = (config) => {
   const reporting = config.extra?.reporting;
   const isProduction =
     reporting?.environment === 'production' && process.env.EXPO_PUBLIC_STORYBOOK_ENABLED !== 'true';
-  const flags = Object.fromEntries(
-    Object.entries(services).map(([name, service]) => [
-      service.nativeFlag,
-      isProduction && service.enabled && reporting?.services?.[name] === true,
-    ]),
-  );
+  const enabled = isProduction && services.sentry.enabled && reporting?.services?.sentry === true;
   const metadata = {
-    ...flags,
-    CherryCrashReportingDsn: flags.CherryCrashReportingEnabled
-      ? process.env.EXPO_PUBLIC_SENTRY_DSN || ''
-      : '',
+    [services.sentry.nativeFlag]: enabled,
+    CherryCrashReportingDsn: enabled ? process.env.EXPO_PUBLIC_SENTRY_DSN || '' : '',
     CherryCrashReportingConsentVersion: policy.consentVersion,
     CherryCrashReportingBreadcrumbs: policy.breadcrumbCodes.join('|'),
     CherryCrashReportingMaxBreadcrumbs: policy.maxBreadcrumbs,
