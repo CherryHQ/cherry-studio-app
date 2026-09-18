@@ -178,8 +178,8 @@ contract; the sync manifest remains unbaselined and was not advanced.
 Changed TypeScript files pass Oxlint and ESLint; changed source/locale files are formatted with Oxfmt.
 Regression sources cover current command receipts, preservation of command IDs during recovery,
 and live-message/approval projections. Obsolete input/task code, fixtures and labels are removed.
-The full repository lint attempt reported unresolved existing `@cherrystudio/ai-core` package imports
-(the workspace package has not been built). Only lint and formatting are authorized for this task. Tests, typecheck, builds, simulators and
+Full repository lint and formatting pass after synchronizing with `main`; existing lint warnings
+remain. Only lint and formatting are authorized for this task. Tests, typecheck, builds, simulators and
 manual UI checks are deliberately not run. New secure-channel and action-recovery tests, plus updated desktop HTTP/runtime and bootstrap
 fixtures, must be run by the user with the relevant suites before release. Native crypto/WebSocket behavior,
 weak-network recovery and the full PC/mobile product flow still require device verification.

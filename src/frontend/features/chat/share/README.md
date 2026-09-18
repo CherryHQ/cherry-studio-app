@@ -34,9 +34,10 @@ the document. The export page receives only a source-owned label and documents; 
 
 The adapter preserves plain user text and supplies bubble/message presentation hints. HTML uses
 the chat hierarchy: right-aligned questions and full-width answers. Framed PNG uses numbered
-message sections. Both include the same white Cherry brand signature at the bottom. The conversation
+message sections. Both follow the global Share watermark setting, enabled by default, and use the
+same white Cherry brand signature at the bottom when enabled. The conversation
 title remains the exported filename and document title without adding an article heading above the exchange.
-Markdown ends with a separated brand-name and export-time row using the same signature data.
+When enabled, Markdown ends with a separated brand-name and export-time row using the same signature data.
 
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
 `chat.process.duration` and `chat.reasoningStatus.thought` translations, and elapsed time uses the

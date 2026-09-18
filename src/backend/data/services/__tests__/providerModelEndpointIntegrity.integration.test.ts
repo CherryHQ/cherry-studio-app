@@ -185,7 +185,7 @@ describe('custom provider model endpoint integrity', () => {
     },
   );
 
-  it('requires a configured Pi text default when custom endpoint settings are written', async () => {
+  it('requires a configured chat default when custom endpoint settings are written', async () => {
     await expect(
       providers.create({
         defaultChatEndpoint: 'openai-responses',

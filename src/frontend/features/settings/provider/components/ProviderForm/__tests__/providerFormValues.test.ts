@@ -47,7 +47,7 @@ describe('provider form values', () => {
     });
   });
 
-  it('offers all Pi text endpoints for a fully custom provider', () => {
+  it('offers all configurable chat endpoints for a fully custom provider', () => {
     expect(resolveProviderFormEndpointTypes(createTestProvider())).toEqual([
       'openai-chat-completions',
       'anthropic-messages',

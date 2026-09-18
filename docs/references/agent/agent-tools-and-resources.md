@@ -354,6 +354,9 @@ retry; cancellation still propagates without becoming a cached failure.
 
 ### System Health
 
+- Health is currently exposed only on iOS. Android omits health permission settings, the Agent
+  capability switch, and runtime tools, including their permission-status lookups. Native Android
+  integration and historical health tool results are retained.
 - [Health Access](../../../modules/health-access/README.md) owns native read authorization;
   `src/backend/services/permissions` maps its results to the shared permission contract. Data
   queries remain in `src/backend/services/device/health.ts` using Nitro HealthKit.
@@ -361,10 +364,9 @@ retry; cancellation still propagates without becoming a cached failure.
   aggregate failures. Failed queries must not resolve as empty data or a measured zero; the caller
   marks the affected metric as `error` while retaining successful metrics. This patch and the iOS
   calendar requester patch require a new native build.
-- Android awaits the runtime permission callback on Android 14+ and the Health Connect activity
-  result on earlier versions, then reads grants per data type. Settings open Health Connect
-  management even when all permissions are already granted.
-  Unsupported devices hide the capability; a missing or outdated provider retains an install path.
+- The retained Android implementation awaits the runtime permission callback on Android 14+ and
+  the Health Connect activity result on earlier versions, then reads grants per data type. Its
+  settings handler opens Health Connect management even when all permissions are already granted.
 - Apple Health never discloses whether a read permission was granted. `requested` means the system
   no longer needs to ask, and settings explain how to review access in Apple Health.
 - Summaries request only selected metrics, skip known denied metrics, and preserve successful

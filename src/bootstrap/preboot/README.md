@@ -20,8 +20,8 @@ here merely because they run early.
 
 ## Current Modules
 
-- `abortSignal.ts` supplies the missing `AbortSignal.throwIfAborted()` behavior required by MCP tool
-  execution.
+- `abortSignal.ts` preserves cancellation reasons for interruption settlement and supplies
+  `AbortSignal.throwIfAborted()` for MCP tool execution on React Native's legacy controller.
 - `blob.ts` installs Expo's Blob implementation on the Hermes global.
 - `webCrypto.ts` installs `crypto.getRandomValues`/`crypto.randomUUID` from expo-crypto; the `uuid`
   package behind Drizzle id column defaults reads the bare `crypto` global that Hermes lacks.

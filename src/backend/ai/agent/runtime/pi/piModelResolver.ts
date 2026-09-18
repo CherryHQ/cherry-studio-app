@@ -44,11 +44,16 @@ export function createPiModelResolver(): PiRuntimeDependencies {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
     },
-    async resolveModel(runtimeModel, runtimeOptions, sessionId): Promise<PiModelResolution> {
+    async resolveModel(
+      runtimeModel,
+      runtimeOptions,
+      sessionId,
+      apiKeyOverride,
+    ): Promise<PiModelResolution> {
       const { adapter, connection, model, preflight, provider } =
         await resolveConfiguredPiModel(runtimeModel);
 
-      const selectedApiKey = await providerService.resolveApiKey(provider.id);
+      const selectedApiKey = await providerService.resolveApiKey(provider.id, apiKeyOverride);
       if (!selectedApiKey.value.trim()) {
         throw new PiModelResolutionError(
           'invalid_api_key',

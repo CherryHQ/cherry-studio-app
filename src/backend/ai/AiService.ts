@@ -7,7 +7,6 @@ import {
 import {
   buildImageProviderOptions,
   isImageTransportDescriptorSupported,
-  mergeImageProviderOptions,
   splitImageParamValues,
 } from '@cherrystudio/ai-runtime/image';
 import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
@@ -40,6 +39,7 @@ import { AiSdkGenerator, buildAgentParams } from './generation';
 import { createAiUsagePlugin } from './generation/aiUsagePlugin';
 import type { BuildAgentParamsDependencies } from './generation/buildAgentParams';
 import { listModels as listProviderModels } from './generation/listModels';
+import { resolveAiSdkServing } from './generation/providerConfig';
 import { VertexAuthClient } from './generation/VertexAuthClient';
 import { normalizeAiError } from './normalizeAiError';
 
@@ -66,7 +66,8 @@ export interface AiGenerateResult {
   usage?: LanguageModelUsage;
 }
 
-export interface AiImageRequest extends AiBaseRequest {
+/** Image requests accept transport options only; text generation controls have no image meaning. */
+export interface AiImageRequest extends Pick<AiBaseRequest, 'apiKeyOverride' | 'requestOptions'> {
   usageAttribution?: AiUsageAttribution;
   inputImages?: string[];
   mode: ImageGenerationMode;
@@ -291,8 +292,13 @@ export class AiService extends BaseService {
 
   async generateImage(request: AiImageRequest): Promise<AiImageResult> {
     const signal = request.requestOptions?.signal;
-    const { sdkConfig, credentialReceipt, model, options, provider } =
-      await this.buildAgentParamsFor(request);
+    const { provider, model } = await this.getProviderAndModel(request);
+    const { sdkConfig, credentialReceipt } = await resolveAiSdkServing({
+      provider,
+      model,
+      providerService: this.services.provider,
+      apiKeyOverride: request.apiKeyOverride,
+    });
     const { structured, vendorBag } = splitImageParamValues(request.paramValues);
     const registryProviderId = provider.presetProviderId ?? provider.id;
     const vendorTransport = this.services.providerRegistry.getImageGenerationSupport(
@@ -320,10 +326,6 @@ export class AiService extends BaseService {
       provider,
       vendorBag: transportVendorBag,
     });
-    const mergedProviderOptions = mergeImageProviderOptions(
-      options.providerOptions,
-      imageProviderOptions,
-    );
     const inputImages = request.inputImages ?? [];
     const hasInputImages = inputImages.length > 0;
     const providerSettings = hasInputImages
@@ -349,7 +351,9 @@ export class AiService extends BaseService {
         seed: structured.seed,
         maxRetries: request.requestOptions?.maxRetries ?? 0,
         abortSignal: signal,
-        ...(mergedProviderOptions && { providerOptions: mergedProviderOptions }),
+        ...(Object.keys(imageProviderOptions).length > 0 && {
+          providerOptions: imageProviderOptions,
+        }),
         ...(request.requestOptions?.headers && {
           headers: stripUndefinedHeaders(request.requestOptions.headers),
         }),
@@ -382,7 +386,7 @@ export class AiService extends BaseService {
 
   // ── API validation ──
 
-  /** Validates models supported by the mobile AI runtime with a short text generation. */
+  /** Probes AI SDK text generation only. Product chat checks use the bound AgentRuntime. */
   async checkModel(request: AiCheckModelRequest): Promise<{ latency: number }> {
     const start = performance.now();
     const timeout = request.timeout ?? 15000;

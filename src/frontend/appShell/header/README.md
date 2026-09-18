@@ -44,7 +44,9 @@ This module owns Expo Router header adapters used by the app screens.
   Agent's avatar, so the chat identifies its Agent the same way the Agent list does. A compact
   avatar and medium-weight single-line name sit in a capsule beside the leading menu action on
   the left on both platforms, without a disclosure chevron. iOS lets the native toolbar own the
-  glass material where supported, with a spacer separating the capsule from the menu action;
+  glass material where supported, with a spacer separating the capsule from the menu action.
+  The Expo Router patch preserves spacer indices when converting header items, so native screens
+  inserts each spacer between the intended custom views instead of before both buttons;
   Android draws a borderless translucent card tint over the header's existing blur,
   in the flexible space between the action groups. The capsule reuses that blur without another
   blur view or sampling target; Android versions below 12 retain the translucent material fallback.

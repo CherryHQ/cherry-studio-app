@@ -15,7 +15,7 @@ Mobile has two AI execution paths:
 
 - Conversation turns run on `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` under
   `src/backend/ai/agent/runtime/pi`.
-- Non-conversation text generation, model checks, model listing, and image generation run through
+- Non-conversation text generation, SDK-only probes, model listing, and image generation run through
   `AiService` and the AI SDK.
 
 Desktop code is admitted only when all of the following are true:

@@ -133,10 +133,16 @@ index 46375fd98ce4dc36efa6a3f5f0fb9a199f297280..068775c3a8f06a003b986a7e3f144704
  
      @SuppressWarnings("unused")
 diff --git a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
-index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe60e5495e5 100644
+index 963b7889356454d12c150398631a3d493f53b5b2..a4292e153e50ed5144e892dfc370eca8e6302439 100644
 --- a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
 +++ b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
-@@ -15,15 +15,61 @@ import androidx.annotation.NonNull;
+@@ -10,20 +10,67 @@ import android.content.Intent;
+ import android.net.Uri;
+ import android.os.Build;
+ import android.os.Bundle;
++import android.util.Log;
+ 
+ import androidx.annotation.NonNull;
  import androidx.annotation.Nullable;
  import androidx.core.app.NotificationCompat;
  import androidx.core.app.ServiceCompat;
@@ -199,7 +205,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
  
      @SuppressLint("UnspecifiedImmutableFlag")
      @NonNull
-@@ -37,6 +83,8 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+@@ -37,6 +84,8 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
          Intent notificationIntent;
          if (linkingURI != null) {
              notificationIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(linkingURI));
@@ -208,7 +214,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
          } else {
              //as RN works on single activity architecture - we don't need to find current activity on behalf of react context
              notificationIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-@@ -59,7 +107,9 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+@@ -59,7 +108,9 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
                  .setSmallIcon(iconInt)
                  .setContentIntent(contentIntent)
                  .setOngoing(true)
@@ -219,7 +225,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
                  .setColor(color);
  
          final Bundle progressBarBundle = bgOptions.getProgressBar();
-@@ -92,28 +142,50 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+@@ -92,28 +143,50 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
          if (extras == null) {
              throw new IllegalArgumentException("Extras cannot be null");
          }
@@ -238,20 +244,20 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
 +            taskName = extras.getString("taskName");
 +            createNotificationChannel(currentOptions.getTaskTitle(), currentOptions.getTaskDesc());
 +        }
-+        if (!updateForeground()) return START_NOT_STICKY;
++        updateForeground();
 +        // Content and visibility changes do not create another Headless JS task.
 +        if (!update) super.onStartCommand(intent, flags, startId);
 +        return START_NOT_STICKY;
 +    }
  
-+    private boolean updateForeground() {
-+        if (currentOptions == null) return true;
++    private void updateForeground() {
++        if (currentOptions == null) return;
 +        if (isAppVisible()) {
 +            if (foreground) {
 +                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
 +                foreground = false;
 +            }
-+            return true;
++            return;
 +        }
 +        final Notification notification = buildNotification(this, currentOptions);
          try {
@@ -270,16 +276,17 @@ index 963b7889356454d12c150398631a3d493f53b5b2..6d46dc14d2e96f36f43bfe3454a3afe6
          } catch (RuntimeException e) {
              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                      && e instanceof android.app.ForegroundServiceStartNotAllowedException) {
-                 // Android 12+: not allowed to start foreground service from background
+-                // Android 12+: not allowed to start foreground service from background
 -                stopSelf(startId);
 -                return START_NOT_STICKY;
-+                stopSelf();
-+                return false;
++                // Android 12+ refused promotion. The started service keeps the task
++                // until Android stops it; destruction then reports the interruption.
++                Log.w("RNBackgroundActions", "Foreground promotion refused", e);
++                return;
              }
              throw e;
          }
 -        return super.onStartCommand(intent, flags, startId);
-+        return true;
      }
  
      @Override
@@ -317,7 +324,7 @@ index cc9906f27b2d988ec01fc07e4096ec24b075b22e..9deaaf22e58b7bb5a31b04d376842bf8
      private _generateTask;
      /**
 diff --git a/src/index.js b/src/index.js
-index b744e685308297bb3e0f250ae18ec43c5ff2f971..92b895557a529374f2b5f0820ee9cf09a6df79cc 100644
+index b744e685308297bb3e0f250ae18ec43c5ff2f971..c34030cccb7a2cdf9332d46372f6ae4c9fab1e10 100644
 --- a/src/index.js
 +++ b/src/index.js
 @@ -12,7 +12,7 @@ import EventEmitter from 'eventemitter3';
@@ -378,7 +385,7 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..92b895557a529374f2b5f0820ee9cf09
          } else {
              await RNBackgroundActions.start(this._currentOptions);
              this._isRunning = true;
-@@ -94,11 +113,13 @@ class BackgroundServer extends EventEmitter {
+@@ -94,14 +113,18 @@ class BackgroundServer extends EventEmitter {
       * @private
       * @template T
       * @param {(taskData?: T) => Promise<void>} task
@@ -393,8 +400,14 @@ index b744e685308297bb3e0f250ae18ec43c5ff2f971..92b895557a529374f2b5f0820ee9cf09
 +            if (Platform.OS === 'android' && self._activeTaskName !== taskName) return;
              await new Promise((resolve) => {
                  self._stopTask = resolve;
-                 task(parameters).then(() => self.stop());
-@@ -129,9 +150,11 @@ class BackgroundServer extends EventEmitter {
+-                task(parameters).then(() => self.stop());
++                task(parameters).then(() => {
++                    if (Platform.OS !== 'android' || self._activeTaskName === taskName) return self.stop();
++                });
+             });
+         };
+     }
+@@ -129,9 +152,11 @@ class BackgroundServer extends EventEmitter {
       * @returns {Promise<void>}
       */
      async stop() {

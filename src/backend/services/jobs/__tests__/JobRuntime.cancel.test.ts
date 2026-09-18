@@ -2,6 +2,7 @@ import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 import { uninstallTestHost } from '@/backend/core/application/testHost';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import { JOB_ERROR_CODES } from '@/shared/data/api/schemas/jobs';
 
 import { DISPOSE_DRAIN_TIMEOUT_MS } from '../JobRuntime';
@@ -50,7 +51,7 @@ describe('JobRuntime cancel & dispose', () => {
     ).rejects.toMatchObject({ code: JOB_ERROR_CODES.CANCEL_REASON_TOO_LONG });
   });
 
-  it('a platform lease interruption persists cancellation and prevents retries', async () => {
+  it('a platform lease interruption persists failure and prevents retries', async () => {
     let interrupt: ((reason: Error) => void | Promise<void>) | undefined;
     let signal: AbortSignal | undefined;
     const held = makeHoldHandler(makeGate(), { executionClass: 'user-continued' });
@@ -79,15 +80,51 @@ describe('JobRuntime cancel & dispose', () => {
     );
     const handle = await enqueueTest(runtime, 'internal.hold', {}, { maxAttempts: 3 });
     await waitFor(() => signal !== undefined);
-    const interruption = interrupt!(new Error('Android foreground service expired'));
+    const interruption = interrupt!(new KeepAliveInterruptionError('service-stopped'));
     expect(signal!.aborted).toBe(true);
     await interruption;
     const finished = await handle.finished;
-    expect(finished.status).toBe('cancelled');
-    expect(finished.error).toMatchObject({ code: JOB_ERROR_CODES.CANCELLED, retryable: false });
+    expect(finished.status).toBe('failed');
+    expect(finished.error).toMatchObject({ code: JOB_ERROR_CODES.INTERRUPTED, retryable: false });
+    expect(finished.attempt).toBe(0);
     expect((await jobService.getById(handle.id))?.cancelRequested).toBe(true);
     await waitFor(() => release.mock.calls.length === 1);
     expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it('forces an interrupted stubborn handler to failure without accepting its late output', async () => {
+    const gate = makeGate();
+    let interrupt!: (reason: Error) => void | Promise<void>;
+    const execute = jest.fn(makeStubbornHandler(gate).execute);
+    const { jobService, runtime } = await setup(
+      [
+        [
+          'internal.stubborn',
+          makeStubbornHandler(gate, { execute, executionClass: 'user-continued' }),
+        ],
+      ],
+      {
+        keepAlive: {
+          acquire: (_tag, onInterrupt) => {
+            interrupt = onInterrupt!;
+            return { release() {} };
+          },
+        },
+      },
+    );
+    const handle = await enqueueTest(runtime, 'internal.stubborn', {}, { maxAttempts: 3 });
+    await waitFor(() => execute.mock.calls.length === 1);
+    try {
+      await interrupt(new KeepAliveInterruptionError('execution-limit'));
+      expect(await handle.finished).toMatchObject({
+        status: 'failed',
+        error: { code: JOB_ERROR_CODES.INTERRUPTED, retryable: false },
+      });
+    } finally {
+      gate.release();
+    }
+    await runtime._doStop();
+    expect(await jobService.getById(handle.id)).toMatchObject({ status: 'failed', output: null });
   });
 
   it('cancels a delayed job immediately without running it', async () => {

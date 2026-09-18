@@ -53,7 +53,8 @@ installation packages. Both default to development and load `.env` and `.env.loc
 process. See [Local EAS Builds](./local-builds.md) for native tools, output options, build profiles,
 Sentry configuration, and [app variants](./local-builds.md#app-variants).
 
-Development and preview packages do not report to Sentry or upload build-time debug artifacts.
+Development and preview packages do not report to Sentry, EAS Observe, or EAS Insights, or upload
+build-time debug artifacts. The shared reporting registry controls production eligibility.
 Sentry credentials are only needed for production monitoring.
 
 ## Validation And Contributions

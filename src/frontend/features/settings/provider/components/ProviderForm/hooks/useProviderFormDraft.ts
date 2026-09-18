@@ -2,9 +2,9 @@ import { useCallback, useMemo, useState } from 'react';
 
 import type { EndpointType } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import {
-  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   hasConfiguredCustomProviderTextEndpoint,
   normalizeCustomProviderDefaultEndpoint,
 } from '../../../apiService/utils/providerApiServiceEndpointRules';
@@ -119,7 +119,7 @@ export function useProviderFormDraft({
       if (current.defaultChatEndpoint === endpoint) return current;
       const baseUrl = current.endpointUrls[current.defaultChatEndpoint] ?? '';
       const endpointUrls = { ...current.endpointUrls };
-      for (const type of CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES) delete endpointUrls[type];
+      for (const type of CHAT_ENDPOINT_TYPES) delete endpointUrls[type];
       endpointUrls[endpoint] = baseUrl;
       return { ...current, defaultChatEndpoint: endpoint, endpointUrls };
     });

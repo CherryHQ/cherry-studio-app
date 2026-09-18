@@ -33,3 +33,17 @@ index 10a8e1827..260d76c00 100644
          }
      }
      else if ('src' in props && props.src) {
+diff --git a/build/react-navigation/native-stack/views/useHeaderConfigProps.js b/build/react-navigation/native-stack/views/useHeaderConfigProps.js
+index 578fa679c6f1137fb550d2d8fd36d86897b241e6..5915a3f8f39aece65492171858375108a111284f 100644
+--- a/build/react-navigation/native-stack/views/useHeaderConfigProps.js
++++ b/build/react-navigation/native-stack/views/useHeaderConfigProps.js
+@@ -20,7 +20,8 @@ const processBarButtonItems = (items, colors, fonts) => {
+             if (item.spacing == null) {
+                 throw new Error(`Spacing item must have a 'spacing' property defined: ${JSON.stringify(item)}`);
+             }
+-            return item;
++            // Native screens inserts spacers among custom views using this index.
++            return { ...item, index };
+         }
+         if (item.type === 'button' || item.type === 'menu') {
+             if (item.type === 'menu' && item.menu == null) {

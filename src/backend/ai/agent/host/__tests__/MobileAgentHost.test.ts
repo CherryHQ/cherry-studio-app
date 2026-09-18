@@ -4,9 +4,12 @@
  * conformance suite; durable-adapter behavior is outside this suite.
  */
 
+import { createRequire } from 'node:module';
+
 import { v7 as uuidv7 } from 'uuid';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply/backgroundReplyTypes';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
   AgentEventSchema,
   AgentProtocolError,
@@ -39,6 +42,28 @@ import type { AgentImageGenerationPort } from '../agentImageGeneration';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { MobileAgentHost } from '../MobileAgentHost';
+
+const originalAbortController = globalThis.AbortController;
+const originalAbortSignal = globalThis.AbortSignal;
+
+beforeAll(() => {
+  // Node preserves abort reasons natively; use RN's controller and the app's
+  // preboot setup so interruption persistence exercises the device contract.
+  const abortPath = createRequire(require.resolve('react-native/package.json')).resolve(
+    'abort-controller/dist/abort-controller',
+  );
+  jest.isolateModules(() => {
+    const legacy = jest.requireActual(abortPath);
+    globalThis.AbortController = legacy.AbortController;
+    globalThis.AbortSignal = legacy.AbortSignal;
+    jest.requireActual('@/bootstrap/preboot/abortSignal');
+  });
+});
+
+afterAll(() => {
+  globalThis.AbortController = originalAbortController;
+  globalThis.AbortSignal = originalAbortSignal;
+});
 
 const AGENT_ID = 'agent-under-test';
 const FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000001';
@@ -513,9 +538,12 @@ describe('MobileAgentHost', () => {
         kind === 'new'
           ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
           : host.submitMessage(input);
-      const reason = new Error('Background service admission failed');
-      const rejected = expect(submitting).rejects.toThrow(reason);
-      backgroundReply.acquirePreparation.mock.calls[0]![0](reason);
+      const rejected = expect(submitting).rejects.toMatchObject({
+        view: { code: 'INTERRUPTED', retryable: true },
+      });
+      backgroundReply.acquirePreparation.mock.calls[0]![0](
+        new KeepAliveInterruptionError('service-stopped'),
+      );
       prepared.resolve();
       await rejected;
       expect(
@@ -2139,9 +2167,14 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
-  test('background interruption waits for cancelled turn persistence', async () => {
+  test('background interruption preserves partial output and waits for failed turn persistence', async () => {
     const started = createDeferred();
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'Partial reply', state: 'streaming' },
+      });
       started.resolve();
       if (!controller.signal.aborted) {
         await new Promise<void>((resolve) => {
@@ -2168,15 +2201,24 @@ describe('MobileAgentHost', () => {
 
     let drained = false;
     const interrupt = backgroundReply.startTurn.mock.calls[0]![0].onInterrupt!;
-    const interrupted = Promise.resolve(interrupt(new Error('Background time limit'))).then(() => {
+    const interrupted = Promise.resolve(
+      interrupt(new KeepAliveInterruptionError('execution-limit')),
+    ).then(() => {
       drained = true;
     });
-    await waitFor(() => finalize.mock.calls.length > 0, 'cancelled message persistence to start');
+    await waitFor(() => finalize.mock.calls.length > 0, 'interrupted message persistence to start');
     expect(drained).toBe(false);
     persistence.resolve();
     await interrupted;
-    expect((await store.listMessages(session.id))[1]?.status).toBe('cancelled');
-    expect(host.getSessionStatus(session.id)?.status).toBe('cancelled');
+    expect((await store.listMessages(session.id))[1]).toMatchObject({
+      status: 'error',
+      parts: [
+        { id: 'text-1', type: 'text', text: 'Partial reply', state: 'done' },
+        { type: 'error', error: { code: 'INTERRUPTED', retryable: true } },
+      ],
+    });
+    expect(host.getSessionStatus(session.id)?.status).toBe('failed');
+    expect(backgroundReplyTurn.finish).toHaveBeenCalledWith('failed', expect.any(Object));
   });
 
   test('stops active turns before draining Host-owned lifecycle work', async () => {

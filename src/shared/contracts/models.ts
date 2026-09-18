@@ -47,6 +47,7 @@ export type ReconcileModelsResult = {
 export type ModelHealthStatus = 'checking' | 'failed' | 'pending' | 'success';
 
 export type ModelHealthResult = {
+  reason?: ChatModelCheckFailure;
   error?: string;
   latency?: number;
   model: Model;
@@ -78,6 +79,7 @@ export type ChatModelCheckResult =
 
 export interface ModelsModule {
   checkChat(input: { modelId: UniqueModelId; signal?: AbortSignal }): Promise<ChatModelCheckResult>;
+  /** Sequential chat-runtime probes, with optional selected credential and incremental results. */
   checkHealth(input: CheckModelsHealthInput): Promise<ModelHealthResult[]>;
   pull(providerId: string, signal?: AbortSignal): Promise<ModelPullResult>;
   reconcile(providerId: string, input: ReconcileModelsInput): Promise<ReconcileModelsResult>;

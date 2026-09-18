@@ -9,7 +9,7 @@ The app owns task counting, content, cancellation, and route selection. A scoped
 adds native visibility handling to the library's existing service. The library still owns Headless
 JS and wake locks; the app adds no service or notification receiver. An
 [`expo-notifications` patch](../../patches/expo-notifications@57.0.17.patch) exposes Android's
-post-presentation event so task acknowledgement can follow asynchronous native delivery.
+post-presentation event so a focused task screen can dismiss asynchronously delivered notifications.
 
 ## Ownership And Behavior
 
@@ -18,6 +18,10 @@ post-presentation event so task acknowledgement can follow asynchronous native d
   Concurrent chat and painting work share one execution service. It becomes a `dataSync` foreground
   service only while the application is not visible. The last lease stops it.
 - Chat acquires a preference-gated preparation lease before its first asynchronous admission step.
+  Execution protection is best effort and never gates submission. Work admitted while the
+  application is hidden, or whose service start fails, keeps running unprotected and is reported
+  as an error; one failed admission is not retried until the next foreground entry or until
+  leases drain. Such work ends through its own result or a real platform revocation.
   The generated turn acquires its session lease before preparation releases, so leaving during
   model/tool preparation does not defer the first service start until the app is already backgrounded.
   A failed preparation releases its lease without creating a task surface or starting generation.
@@ -45,12 +49,19 @@ post-presentation event so task acknowledgement can follow asynchronous native d
   delivery that never emits a JavaScript receipt event.
 - `BackgroundActivitySession.finish()` resolves after queued platform delivery. Painting awaits
   it before returning to `JobRuntime`, so execution protection includes the final notification.
+  Android attempts notification submission once per attention phase and releases protection after
+  submission settles. It does not wait for a presentation event or retry failed scheduling.
+  Permission denial skips delivery. A successful submission does not guarantee a visible alert;
+  stopping execution immediately afterward can lose a notification. Task results remain persisted.
 - Job execution retains its lease while the dispatcher claims queued successors, including after
   forced cancellation. Serial painting requests therefore hand execution protection to the next
   task without stopping and trying to restart the service in the background.
 - Platform interruption aborts domain work before asynchronous cancellation writes. Chat waits for
   its current turn's persistence to finish; completed old updates and budget cancellation cannot
   release execution protection owned by newer work.
+  It persists a failed reply with `INTERRUPTED` and retains partial content. Painting persists
+  `JOB_INTERRUPTED` without automatic retries and ends its activity as failed. User cancellation
+  remains cancelled and silent. Failure notifications are best effort while the process is alive.
   Native service destruction also clears the library's running state before notifying this runtime
   to interrupt its current leases. Expected stops and events from an older service generation do
   not interrupt newer work. New foreground tasks can start protection after cancellation drains.
@@ -82,7 +93,7 @@ decisions in those paths.
 | Presenter requirement | iOS Live Activity | Android notification |
 | --- | --- | --- |
 | `canStartInBackground` | `false`: defer creation until foreground | `true`: represent a task already admitted by the execution runtime |
-| `shouldHoldLeaseUntilDelivery` | `false`: preserve immediate audio-lease release | `true`: retain an existing session lease until its latest update or end settles |
+| `shouldHoldLeaseUntilDelivery` | `false`: preserve immediate audio-lease release | `true`: retain an existing session lease until notification submission settles |
 
 Creating an Android surface does not authorize starting a foreground service from the background;
 the Android execution runtime still owns that restriction. A session never acquires an extra lease
@@ -122,18 +133,19 @@ playback, boot restarts, exact alarms, full-screen intents, or promoted Live Upd
 Android 15+ limits `dataSync` background execution to six hours; bringing the app to the foreground
 resets its budget. The adapter interrupts work one minute before that boundary, drains normal
 cancellation, and stops the library service. More background jobs are interrupted until the app
-returns to the foreground. This timer is an application cutoff. If native `onTimeout` or a rejected
-foreground promotion stops the service first, the patched destruction event interrupts current work
-while JavaScript remains alive. It does not restart paid requests. Whole-process termination still
-requires reconciliation at the next process start.
+returns to the foreground. This timer is an application cutoff. If native `onTimeout` or the system
+stops the service first, the patched destruction event interrupts current work while JavaScript
+remains alive. A refused foreground promotion does not stop it: the service logs it and stays a
+started service, so a short task can still finish; Android stops that service once the application
+is idle in the background, and only that destruction interrupts the work. Neither path restarts
+paid requests. Whole-process termination still requires reconciliation at the next process start.
 See [Android service timeouts](https://developer.android.com/develop/background-work/services/fgs/timeout).
 
 The notification permission is requested in context after a task's service admission attempt, even
 if admission failed. If the app leaves before the prompt, returning while the service runs requests
 it. A native request error permits a later attempt; a user's denial does not cause repeated prompts
 within the runtime. Denial does not prevent the foreground service, but Android hides its notification
-from the ordinary drawer. A rejected service start interrupts its unprotected callers instead of
-leaving them running with a lease that has no native execution protection.
+from the ordinary drawer.
 See [notification permission behavior](https://developer.android.com/develop/ui/compose/notifications/notification-permission).
 
 The app declares `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, `WAKE_LOCK`, and
@@ -182,7 +194,8 @@ background-budget reset/cancellation, approval cleanup, single completion delive
 painting notification delivery before task completion. Additional cases cover foreground event
 delivery races, post-presentation task cleanup, cold-start navigation, task-versus-draft route
 identity, and legacy task URLs. Library lifecycle coverage exercises stopped-event ordering and
-stale generation rejection. Installed-source guards protect both native patches against dependency upgrades; they do not prove
+stale generation rejection, unprotected continuation after failed or hidden admission,
+interruption persistence, and notification submission without retries or presentation waits. Installed-source guards protect both native patches against dependency upgrades; they do not prove
 Android runtime behavior. Device acceptance should cover foreground/background service transitions,
 notification-shade interaction, rapid return and exit, screen lock, concurrent chat/painting, denied
 notification permission, completion/approval taps from a cold app, and system termination without

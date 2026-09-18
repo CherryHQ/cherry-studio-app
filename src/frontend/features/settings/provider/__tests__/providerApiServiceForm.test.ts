@@ -219,7 +219,7 @@ describe('provider API service form helpers', () => {
     });
   });
 
-  it('updates all Pi text endpoints while preserving unknown endpoint metadata', () => {
+  it('updates all configurable chat endpoints while preserving unknown endpoint metadata', () => {
     expect(
       buildProviderTextEndpointUpdates({
         defaultChatEndpoint: 'anthropic-messages',

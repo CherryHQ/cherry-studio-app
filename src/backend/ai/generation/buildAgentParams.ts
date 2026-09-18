@@ -26,7 +26,6 @@ import {
   type EndpointType,
 } from '@cherrystudio/provider-registry';
 import { type ToolCallRepairFunction, type ToolSet } from 'ai';
-import * as Crypto from 'expo-crypto';
 
 import {
   projectRuntimeReasoning,
@@ -40,7 +39,7 @@ import type { Provider } from '@/shared/data/types/provider';
 import { resolveProviderConnection } from '../provider/providerConnection';
 import type { AiSdkGeneratorOptions } from './AiSdkGenerator';
 import { createCustomParamsFetch } from './customParamsFetch';
-import { resolveProviderAiSdkConfig } from './providerConfig';
+import { resolveAiSdkServing } from './providerConfig';
 
 export interface BuildAgentParamsDependencies {
   provider: Pick<ProviderService, 'getAuthConfig' | 'resolveApiKey'>;
@@ -65,7 +64,7 @@ export interface BuiltAgentParams {
   credentialReceipt: ServingCredentialReceipt;
 }
 
-/** Build the assistant-less AI SDK request used by naming, checks, and paintings. */
+/** Build the assistant-less AI SDK text request used by naming and checks. */
 export async function buildAgentParams({
   request,
   services,
@@ -84,21 +83,13 @@ export async function buildAgentParams({
     throw new Error(`Mobile AI runtime does not support embedding or rerank models: ${model.id}`);
   }
 
-  const requestId = Crypto.randomUUID();
-  const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
+  const { sdkConfig, credentialReceipt, requestId } = await resolveAiSdkServing({
     provider,
     model,
-    {
-      getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
-      resolveApiKey: (providerId, override) =>
-        services.provider.resolveApiKey(providerId, override),
-    },
-    {
-      apiKeyOverride: request.apiKeyOverride,
-      resolvedConnection: connection,
-      sessionId: requestId,
-    },
-  );
+    providerService: services.provider,
+    apiKeyOverride: request.apiKeyOverride,
+    connection,
+  });
   const endpointType = connection.endpointType;
   const providerOptionsKey = resolveProviderOptionsKey(sdkConfig.providerId, {
     actualProviderId: provider.id,
@@ -210,7 +201,7 @@ export async function buildAgentParams({
 
   return {
     credentialReceipt,
-    sdkConfig: { ...sdkConfig, modelId: connection.wireModelId },
+    sdkConfig,
     context: {
       abortSignal: request.requestOptions?.signal,
       requestId,
