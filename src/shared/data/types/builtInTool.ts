@@ -139,10 +139,12 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     agentCapability: 'health',
     permissionScopes: HEALTH_PERMISSION_SCOPES.filter((scope) => scope !== 'health.workouts.read'),
     permissionMatch: 'any',
+    platforms: ['ios'],
   }),
   describe('health_list_workouts', 'auto', {
     agentCapability: 'health',
     permissionScopes: ['health.workouts.read'],
+    platforms: ['ios'],
   }),
   describe('location_get_current', 'auto', {
     agentCapability: 'location',

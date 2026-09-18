@@ -19,5 +19,7 @@ This page tree owns the settings home and every page reached beneath `/settings`
 - `hooks/` and `utils/` contain behavior shared by settings child pages.
 - `about/`, `appearance/`, `fontSize/`, `notifications/`, `permissions/`, and `profile/` each own one
   direct child page.
+- `appearance/` is presented as General settings and owns theme, app language, font size, and Share
+  watermark settings. It retains the existing `/settings/appearance` route.
 - `model/`, `mcp/`, `provider/`, and `webSearch/` remain under `settings/` because they implement
   `/settings/*` page flows. Their own nested routes continue as child directories.

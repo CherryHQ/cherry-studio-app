@@ -22,6 +22,7 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 4 },
   AndroidNotificationVisibility: { PRIVATE: 0 },
   dismissNotificationAsync: jest.fn(async () => {}),
+  getPermissionsAsync: jest.fn(),
   getPresentedNotificationsAsync: jest.fn(async () => []),
   requestPermissionsAsync: jest.fn(),
   scheduleNotificationAsync: jest.fn(async ({ identifier }: { identifier: string }) => identifier),
@@ -68,6 +69,10 @@ beforeEach(async () => {
   });
   native.updateNotification.mockResolvedValue(undefined);
   notices.getPresentedNotificationsAsync.mockResolvedValue([]);
+  notices.getPermissionsAsync.mockResolvedValue({
+    granted: true,
+  } as notifications.NotificationPermissionsStatus);
+  notices.scheduleNotificationAsync.mockImplementation(async ({ identifier }) => identifier!);
   notices.requestPermissionsAsync.mockResolvedValue({
     granted: false,
   } as notifications.NotificationPermissionsStatus);
@@ -81,55 +86,33 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
-test('a rejected service start interrupts unprotected work and still requests notification permission', async () => {
-  const failure = new Error('Native service admission failed');
-  native.start.mockRejectedValueOnce(failure);
+test('a failed service start leaves work running unprotected and retries after the next foreground entry', async () => {
+  native.start.mockRejectedValueOnce(new Error('Native service admission failed'));
   const interrupted = jest.fn();
+  const surface = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('preparing'));
   runtime.acquire('chat', interrupted);
   await flush();
-  expect(interrupted).toHaveBeenCalledTimes(1);
-  expect(interrupted).toHaveBeenCalledWith(failure);
   expect(running).toBe(false);
   expect(notices.requestPermissionsAsync).toHaveBeenCalledTimes(1);
-  runtime.acquire('next-task');
-  await flush();
-  expect(running).toBe(true);
-});
-
-test('a failed restart interrupts tasks admitted while earlier cancellation drains', async () => {
-  const firstFailure = new Error('Initial admission failed');
-  const restartFailure = new Error('Recovery admission failed');
-  native.start.mockRejectedValueOnce(firstFailure).mockRejectedValueOnce(restartFailure);
-  const surface = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('preparing'));
-  let finishCancellation!: () => void;
-  const cancellation = new Promise<void>((resolve) => {
-    finishCancellation = resolve;
-  });
-  const oldInterrupted = jest.fn(async () => {
-    await cancellation;
-    await surface.end('immediate', props('cancelled'));
-  });
-  runtime.acquire('old-task', oldInterrupted);
-  await flush();
-  expect(oldInterrupted).toHaveBeenCalledWith(firstFailure);
-
-  const newInterrupted = jest.fn();
-  runtime.acquire('new-task', newInterrupted);
-  await flush();
+  // Content updates must not turn one failed admission into a retry loop.
+  await surface.update(props('responding'));
   expect(native.start).toHaveBeenCalledTimes(1);
-  expect(newInterrupted).not.toHaveBeenCalled();
-
-  finishCancellation();
+  setAppState('background');
+  setAppState('active');
   await flush();
   expect(native.start).toHaveBeenCalledTimes(2);
-  expect(oldInterrupted).toHaveBeenCalledTimes(1);
-  expect(newInterrupted).toHaveBeenCalledTimes(1);
-  expect(newInterrupted).toHaveBeenCalledWith(restartFailure);
-  expect(running).toBe(false);
+  expect(running).toBe(true);
+  expect(interrupted).not.toHaveBeenCalled();
+});
 
-  runtime.acquire('later-task');
+test('a failed start does not block protection for work admitted after the unprotected work ends', async () => {
+  native.start.mockRejectedValueOnce(new Error('Native service admission failed'));
+  const unprotected = runtime.acquire('chat');
   await flush();
-  expect(native.start).toHaveBeenCalledTimes(3);
+  unprotected.release();
+  runtime.acquire('next-task');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(2);
   expect(running).toBe(true);
 });
 
@@ -202,17 +185,20 @@ test('shares the library service across concurrent tasks and stops on the last r
   expect(native.stop).toHaveBeenCalledTimes(1);
 });
 
-test('starts only while visible and continues updating after backgrounding', async () => {
+test('work admitted while hidden runs unprotected until the app returns, then continues in background', async () => {
   setAppState('background');
+  const interrupted = jest.fn();
   const surface = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('preparing'));
-  runtime.acquire('chat');
+  runtime.acquire('chat', interrupted);
   await flush();
   expect(native.start).not.toHaveBeenCalled();
+  expect(interrupted).not.toHaveBeenCalled();
   setAppState('active');
   await flush();
   setAppState('background');
   await surface.update(props('responding'));
   expect(native.start).toHaveBeenCalledTimes(1);
+  expect(interrupted).not.toHaveBeenCalled();
   expect(native.updateNotification).toHaveBeenLastCalledWith(
     expect.objectContaining({ taskDesc: 'responding' }),
   );
@@ -258,6 +244,124 @@ test('delivers completion once and does not repost it when a final title arrives
     expect.objectContaining({
       content: expect.objectContaining({ data: expect.objectContaining({ terminal: true }) }),
       trigger: { channelId: 'generation-updates' },
+    }),
+  );
+});
+
+test('a superseding title during permission lookup uses only the latest content', async () => {
+  let allow!: () => void;
+  notices.getPermissionsAsync.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        allow = () => resolve({ granted: true } as notifications.NotificationPermissionsStatus);
+      }),
+  );
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  setAppState('background');
+  const oldDelivery = surface.update(props('completed'));
+  await flush();
+  const finalDelivery = surface.end('default', { ...props('completed'), title: 'Final title' });
+  allow();
+  await Promise.all([oldDelivery, finalDelivery]);
+  expect(notices.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+  expect(notices.scheduleNotificationAsync).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      content: expect.objectContaining({ title: 'Final title' }),
+    }),
+  );
+});
+
+test('a failed notification is not retried by later updates or completion', async () => {
+  notices.scheduleNotificationAsync.mockRejectedValueOnce(new Error('Scheduling unavailable'));
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  setAppState('background');
+  await expect(surface.update(props('failed'))).rejects.toThrow('Scheduling unavailable');
+  await surface.update({ ...props('failed'), title: 'Late title' });
+  await surface.end('default', props('failed'));
+  expect(notices.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+});
+
+test('final delivery settles after submission without a native presentation event or timer', async () => {
+  let submit!: () => void;
+  notices.scheduleNotificationAsync.mockImplementationOnce(
+    ({ identifier }) =>
+      new Promise((resolve) => {
+        submit = () => resolve(identifier!);
+      }),
+  );
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  setAppState('background');
+  let settled = false;
+  const delivery = surface.end('default', props('completed')).then(() => {
+    settled = true;
+  });
+  await flush();
+  expect(settled).toBe(false);
+  submit();
+  await flush();
+  expect(settled).toBe(true);
+  await delivery;
+  expect(notices.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+});
+
+test.each(['foreground', 'cancelled'] as const)(
+  'suppresses pending notification submission after %s during permission lookup',
+  async (ending) => {
+    let allow!: () => void;
+    notices.getPermissionsAsync.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          allow = () => resolve({ granted: true } as notifications.NotificationPermissionsStatus);
+        }),
+    );
+    const surface = runtime
+      .createPresenter<BackgroundReplyActivityProps>()
+      .start(props('responding'));
+    setAppState('background');
+    const delivery = surface.update(props('completed'));
+    await flush();
+    let cancellation: Promise<void> | undefined;
+    if (ending === 'foreground') setAppState('active');
+    else cancellation = surface.end('immediate', props('cancelled'));
+    allow();
+    await delivery;
+    await cancellation;
+    expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+  },
+);
+
+test('denied notification permission skips delivery without waiting for presentation', async () => {
+  notices.getPermissionsAsync.mockResolvedValue({
+    granted: false,
+  } as notifications.NotificationPermissionsStatus);
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  setAppState('background');
+  await surface.end('default', props('completed'));
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('a quickly completed next turn on the same surface gets its own terminal notification', async () => {
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  setAppState('background');
+  await surface.update(props('completed'));
+  const resuming = surface.update(props('preparing'));
+  const completed = surface.update({ ...props('completed'), title: 'Next reply' });
+  await Promise.all([resuming, completed]);
+  expect(notices.dismissNotificationAsync).toHaveBeenCalledTimes(1);
+  expect(notices.scheduleNotificationAsync).toHaveBeenCalledTimes(2);
+  expect(notices.scheduleNotificationAsync).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      content: expect.objectContaining({ title: 'Next reply' }),
     }),
   );
 });

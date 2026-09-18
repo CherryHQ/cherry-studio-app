@@ -14,6 +14,9 @@ if (process.env.EXPO_PUBLIC_STORYBOOK_ENABLED === 'true') {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- import would hoist
   require('./.rnstorybook');
 } else {
+  // Install reporting before Expo Router evaluates route modules and the root layout.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- ordering is intentional
+  require('./src/frontend/appShell/observability/startup');
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- import would hoist
   require('expo-router/entry');
 }

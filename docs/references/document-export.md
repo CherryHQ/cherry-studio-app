@@ -90,8 +90,9 @@ the incomplete directory and retains the previous artifact. `save` accepts only 
 Repeated Markdown rendering reuses the current file when available and its complete text, including
 the signature, matches.
 
-HTML and image presentation share an optional resolved `watermark`. The application defaults to
-`cherry`; the code-only `none` option omits the brand footer from every preview and output format.
+HTML and image presentation share an optional resolved `watermark`. The application follows the
+global Share watermark setting, enabled by default. Explicit `cherry` or `none` options override
+that preference; `none` omits the brand footer from every preview and output format.
 The Cherry variant contains a `signature` with resolved background/text colors, the embedded Cherry
 logo, brand name and frozen timestamp. The frontend supplies the shared white
 footer with black text used by painting and file image exports. The renderer copies and validates
