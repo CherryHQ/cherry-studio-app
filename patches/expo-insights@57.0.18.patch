@@ -1,0 +1,39 @@
+diff --git a/ios/InsightsModule.swift b/ios/InsightsModule.swift
+--- a/ios/InsightsModule.swift
++++ b/ios/InsightsModule.swift
+@@ -62,6 +62,10 @@
+    Sends the `APP_LAUNCH` event.
+    */
+   private func dispatchLaunchEvent() async throws {
++    // App-owned build policy. Missing configuration and debug binaries never send.
++    guard !EXAppDefines.APP_DEBUG,
++      Bundle.main.object(forInfoDictionaryKey: "CherryInsightsReportingEnabled") as? Bool == true
++    else { return }
+     guard let manifest = appContext?.constants?.constants()["manifest"] as? [String: Any] else {
+       log.warn("Insights: Unable to read the manifest")
+       return
+diff --git a/android/src/main/java/expo/modules/insights/ExpoInsightsModule.kt b/android/src/main/java/expo/modules/insights/ExpoInsightsModule.kt
+--- a/android/src/main/java/expo/modules/insights/ExpoInsightsModule.kt
++++ b/android/src/main/java/expo/modules/insights/ExpoInsightsModule.kt
+@@ -1,5 +1,6 @@
+ package expo.modules.insights
+ 
++import android.content.pm.ApplicationInfo
+ import android.content.pm.PackageInfo
+ import android.content.pm.PackageManager
+ import android.net.Uri
+@@ -42,6 +43,14 @@
+    * Sends the [APP_LAUNCH_EVENT] event.
+    */
+   private suspend fun dispatchLaunchEvent() {
++    // Read the installed binary, not the JS manifest: OTA updates cannot open this gate.
++    val context = appContext.reactContext ?: return
++    val allowed = runCatching {
++      val info = context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
++      info.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 &&
++        info.metaData?.getBoolean("CherryInsightsReportingEnabled") == true
++    }.getOrDefault(false)
++    if (!allowed) return
+     val manifestString = appContext.service<ConstantsInterface>()?.constants?.get("manifest") as? String
+     if (manifestString.isNullOrEmpty()) {
+       Log.w("ExpoInsights", "Unable to read the manifest")

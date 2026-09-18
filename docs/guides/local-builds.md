@@ -4,11 +4,16 @@ Use `pnpm build:local` to create an Android or iOS installation package on your 
 `eas build --local`, defaults to the `development` profile, and forwards EAS build arguments.
 The existing `eas-build-post-install` hook builds the workspace packages during the build.
 
-| Build profile | Sentry reporting | Sentry source-map and debug-symbol uploads |
+| Build profile | Outbound reporting (Sentry / Observe / Insights) | Sentry source-map and debug-symbol uploads |
 | --- | --- | --- |
 | `development` / `development-simulator` | Disabled | Disabled |
 | `preview` | Disabled | Disabled |
-| `production` | Enabled with a DSN, current user consent, and outside development mode | Enabled; requires an upload token |
+| `production` | Enabled per service registry; Sentry additionally requires a DSN and current user consent | Enabled for Sentry; requires an upload token |
+
+The shared [reporting registry](../../src/frontend/appShell/observability/reportingServices.json)
+owns per-service build flags. Native metadata enforces this policy before JS starts and during
+background sends; debug binaries remain disabled. Changing native reporting policy requires a new
+installation package. See [Observability](../../src/frontend/appShell/observability/README.md).
 
 ## Prerequisites
 
@@ -158,10 +163,11 @@ Babel. Keep those settings when updating Hermes. Worklets 0.10.2 remains within 
 supported 0.10.x range; removing the experimental mode requires a separate change to streaming
 Markdown processing.
 
-Android builds compile `expo-image-picker` and `expo-notifications` from source through
+Android builds compile `expo-image-picker`, `expo-notifications`, `expo-observe`, and `expo-insights` from source through
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. The App Metrics patch retains the main session's
-JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
+JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`. Observe
+and Insights are pinned to their patched versions to retain the native production-only send gates.
 
 ### iOS Build 26 Crash Patches
 

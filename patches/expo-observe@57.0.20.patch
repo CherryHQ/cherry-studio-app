@@ -1,0 +1,49 @@
+diff --git a/ios/Observability.swift b/ios/Observability.swift
+--- a/ios/Observability.swift
++++ b/ios/Observability.swift
+@@ -257,6 +257,10 @@
+   }
+ 
+   private static func shouldDispatch() -> Bool {
++    // An immutable binary gate also covers lifecycle flushes before JS configuration.
++    guard !EXAppDefines.APP_DEBUG,
++      Bundle.main.object(forInfoDictionaryKey: "CherryObserveReportingEnabled") as? Bool == true
++    else { return false }
+     let isJsDev = ObserveUserDefaults.bundleDefaults?.isJsDev ?? false
+     let isDev = EXAppDefines.APP_DEBUG || isJsDev
+     return Self.shouldDispatch(
+diff --git a/android/src/main/java/expo/modules/observe/ObservabilityManager.kt b/android/src/main/java/expo/modules/observe/ObservabilityManager.kt
+--- a/android/src/main/java/expo/modules/observe/ObservabilityManager.kt
++++ b/android/src/main/java/expo/modules/observe/ObservabilityManager.kt
+@@ -1,6 +1,8 @@
+ package expo.modules.observe
+ 
+ import android.content.Context
++import android.content.pm.ApplicationInfo
++import android.content.pm.PackageManager
+ import android.util.Log
+ import expo.modules.easclient.EASClientID
+ import expo.modules.observe.storage.PendingLogsManager
+@@ -86,6 +88,13 @@
+   private val currentTimeMs: () -> Long = { TimeUtils.getWallClockMillis() },
+   private val dispatchChunkSize: Int = DISPATCH_CHUNK_SIZE
+ ) {
++  // Shared by the foreground owner and WorkManager, including sends without a JS runtime.
++  private val isReportingAllowed = runCatching {
++    val info = context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
++    info.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 &&
++      info.metaData?.getBoolean("CherryObserveReportingEnabled") == true
++  }.getOrDefault(false)
++
+   private val eventDispatcher = EventDispatcher(
+     context = context,
+     projectId = projectId,
+@@ -334,7 +343,7 @@
+     // bundle should be treated as dev for dispatch-gating.
+     val isJsDev = ObservePreferences.getBundleDefaults(context)?.isJsDev ?: false
+     val isDev = isDebugBuild || isJsDev
+-    return dispatchingEnabled && isInSample() && (!isDev || dispatchInDebug)
++    return isReportingAllowed && dispatchingEnabled && isInSample() && (!isDev || dispatchInDebug)
+   }
+ 
+   suspend fun cleanup() {

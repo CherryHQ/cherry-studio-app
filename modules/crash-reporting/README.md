@@ -5,6 +5,10 @@ filtering. The app-shell [observability module](../../src/frontend/appShell/obse
 owns JavaScript capture, logging, subscriptions, and the settings-facing API. This module does not
 implement its own crash recorder or upload protocol.
 
+Its config plugin also embeds the shared observability registry's production-only flags for EAS
+Observe and Insights. Their versioned dependency patches enforce those flags at native send gates;
+this module does not initialize or transport those services. Missing flags deny reporting.
+
 ## Native ownership
 
 - `app.plugin.js` embeds public production/DSN configuration and the shared startup policy. The
@@ -22,6 +26,8 @@ implement its own crash recorder or upload protocol.
   Android transport gate still applies to them; on iOS, stopping the SDK on revocation drops them.
 - A process-wide owner survives Expo module recreation during JS reloads. A running grant is
   revoked if a reload changes the disclosure version or removes the production/DSN gate.
+  Every native `configure` call also checks the immutable binary flag and native debug status,
+  so JS configuration cannot turn on reporting in a development or preview package.
 - `setConsent(true)` persists the disclosure version (Android also persists the grant time) and, in
   production builds, starts the SDK at once. `setConsent(false)` closes the capture and transport
   gates, stops the SDK, persists a `disabled` marker, and removes the report cache. Both may repeat

@@ -2,6 +2,15 @@ import ExpoModulesCore
 import Foundation
 import Sentry
 
+// An OTA or JS reload may close this gate, but can never enable a non-production binary.
+private let isCrashReportingAllowed: Bool = {
+  #if DEBUG
+  return false
+  #else
+  return Bundle.main.object(forInfoDictionaryKey: "CherryCrashReportingEnabled") as? Bool == true
+  #endif
+}()
+
 public class CrashReportingModule: Module {
   public func definition() -> ModuleDefinition {
     Name("CrashReporting")
@@ -25,15 +34,10 @@ public class CrashReportingAppDelegateSubscriber: ExpoAppDelegateSubscriber {
     willFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
     let config = Bundle.main.infoDictionary ?? [:]
-    #if DEBUG
-    let isProduction = false
-    #else
-    let isProduction = config["CherryCrashReportingEnabled"] as? Bool == true
-    #endif
     // Configuration records a fixed failure state; reporting must never prevent app startup.
     _ = try? CrashReportingState.shared.configure(
       dsn: config["CherryCrashReportingDsn"] as? String ?? "",
-      isProduction: isProduction,
+      isProduction: isCrashReportingAllowed,
       version: config["CherryCrashReportingConsentVersion"] as? String ?? ""
     )
     return true
@@ -66,7 +70,7 @@ private final class CrashReportingState {
       controlLock.unlock()
     }
     self.dsn = dsn
-    canCapture = isProduction && !dsn.isEmpty
+    canCapture = isCrashReportingAllowed && isProduction && !dsn.isEmpty
     if configured {
       if version != consentVersion || (!canCapture && isActive) {
         gateLock.withLock { consentVersion = version }

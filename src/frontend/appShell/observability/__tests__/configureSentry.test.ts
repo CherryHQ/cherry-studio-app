@@ -25,7 +25,9 @@ jest.mock('../../../../../modules/crash-reporting', () => ({
 jest.mock('@logger', () => ({ loggerService: { setErrorReporter: mockSetReporter } }));
 jest.mock('expo-constants', () => ({
   __esModule: true,
-  default: { expoConfig: { extra: { sentryEnvironment: 'production' } } },
+  default: {
+    expoConfig: { extra: { reporting: { environment: 'production', services: { sentry: true } } } },
+  },
 }));
 jest.mock('@sentry/react-native', () => ({
   init: (options: { beforeSend: typeof mockBeforeSend; enabled: boolean }) => {

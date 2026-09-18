@@ -1,20 +1,53 @@
 # Observability
 
-This App Shell module owns the app's EAS Observe and Sentry integrations. Sentry starts through
-`startup.ts` at the app entry, before Expo Router loads route modules. EAS Observe configuration
-remains at module scope in the root layout.
+This App Shell module owns outbound Sentry, EAS Observe, and EAS Insights reporting.
+`reportingServices.json` is the static registry: it declares each service's build-time enable flag,
+initialization phase, and native metadata key. `app.config.ts` resolves it into `extra.reporting`,
+and the crash-reporting config plugin writes matching immutable flags into Info.plist and the
+Android manifest. Only production profiles enable them; development, preview, and Storybook do not.
+
+`configureReporting('entry')` starts Sentry through `startup.ts`, before Expo Router loads route
+modules. `configureReporting('layout')` initializes Observe before screens mount; its Router/React
+dependencies are loaded only in that phase. Insights starts natively and has no JS initializer.
+`wrapReportingRoot` keeps SDK wrappers inside this module. Business code continues using existing
+logging and startup markers, with no per-feature environment checks or event fan-out.
+
+`getReportingPolicy(service)` exposes JS eligibility and a disabled reason, not proof of native
+activation or server delivery. Missing configuration fails closed. All native senders also check
+the installed binary's flag and reject debug binaries, independently of JS and persisted SDK state.
+JS can further restrict Sentry and Observe but cannot enable a non-production binary. Insights
+uses its native launch gate. Observe's native gate also covers its Android background worker when
+no JS runtime is running.
+
+To disable a service for a build, change its registry `enabled` flag and create a new installation
+package. JS/OTA configuration alone cannot change Insights' native launch behavior. The versioned
+`expo-observe` and `expo-insights` patches add the native gates; Android builds these dependencies
+from source so precompiled binaries cannot bypass them. Keep dependency versions pinned and review
+the patch guards on upgrades. Sentry source-map and symbol uploads use the same build policy.
+
+This centralizes outbound reporting only. Local AI diagnostic traces and usage records are
+unchanged. The privacy switch still controls Sentry alone; Observe and Insights have no new user
+switch. Observe still captures its default JS exceptions, so this does not remove overlap with
+Sentry or apply Sentry's event filter to Observe.
 
 ## EAS Observe
 
-Time to First Render comes from `ObserveRoot.wrap` in `src/app/_layout.tsx`; navigation timings come
-from the Expo Router integration `configureObserve` enables. Only TTI needs a caller, and it must
-come from inside a screen, so entry routes mount `StartupInteractiveMarker` themselves.
+Time to First Render comes from the `ObserveRoot.wrap` composed by `wrapReportingRoot`; navigation
+timings come from the Expo Router integration `configureObserve` enables. Only TTI needs a caller,
+and it must come from inside a screen, so entry routes mount `StartupInteractiveMarker` themselves.
+
+`configureObserve` explicitly sets the build environment, `dispatchInDebug: false`, and
+`dispatchingEnabled` from the shared policy. Router timing stays configured in every build for
+local diagnostics; production eligibility controls sending. Native gates close the interval before
+JS configuration and cannot be overridden by `dispatchInDebug` or saved SDK preferences. Disabled
+dispatch uses the SDK's existing pending-metric/log drop behavior.
 
 ## EAS Insights App Usage
 
-`expo-insights` automatically reports native app launch events to the EAS project identified by
-`extra.eas.projectId`. It needs no JavaScript initialization or EAS Update configuration. These
-events populate Insights → App usage; Observe's performance metrics are separate. The Sentry
+`expo-insights` automatically reports native app launch events from an enabled production binary to
+the EAS project identified by `extra.eas.projectId`. Its patched native launch sender checks the
+embedded flag before creating a request. It needs no JavaScript initialization or EAS Update
+configuration. These events populate Insights → App usage; Observe's performance metrics are separate. The Sentry
 error-reporting switch does not control Insights.
 
 This native dependency requires a new installation package before devices can report usage.
@@ -100,17 +133,19 @@ UserDefaults, system boot time, and file timestamp API reasons from the
 These declarations are the app's baseline; React Native aggregates additional API reasons from
 native dependencies during CocoaPods installation.
 
-Reporting and native initialization require a current grant, `extra.sentryEnvironment === 'production'`,
-a configured `EXPO_PUBLIC_SENTRY_DSN`, and a bundle running outside development mode. `app.config.ts` supplies the
-build's `PROFILE` through `extra.sentryEnvironment`. Development and preview packages never enable
+Sentry reporting and native initialization require a current grant, the shared production reporting
+policy, a configured `EXPO_PUBLIC_SENTRY_DSN`, and a bundle running outside development mode.
+Native `configure` rechecks the installed binary's gate even when called from JS. `app.config.ts`
+supplies the build's `PROFILE` through `extra.reporting.environment`; `extra.sentryEnvironment`
+remains for existing build-display consumers. Development and preview packages never enable
 reporting, even when a DSN is present.
 
 Changes to `modules/crash-reporting` require a new native installation package. Ship this change
 with that package: an OTA update cannot add the module or replace an already running legacy native
 SDK. The new JS integration does not initialize Sentry when the native module is absent.
 
-`app.config.ts` includes the Sentry Expo plugin only for `PROFILE=production`, so generated
-development and preview native projects have no Sentry source-map or debug-symbol upload hooks.
+`app.config.ts` includes the Sentry Expo plugin only when its production registry entry is enabled,
+so generated development and preview native projects have no Sentry source-map or debug-symbol upload hooks.
 The Sentry dependency remains installed across profiles; disabling reporting and uploads does not
 remove its native code from the app.
 
@@ -128,3 +163,10 @@ Sentry behavior, and native regeneration when switching profiles.
 Before release, authorized acceptance must verify early JS/native capture, saved opt-outs, and
 source-map/debug-symbol matching against the installed build. Native initialization and actual
 server ingestion are not established by lint or JS tests alone.
+
+The unified policy additionally needs authorized device/network acceptance on both platforms:
+development, preview, Storybook, and missing native flags must send nothing to any of the three
+destinations, including on first launch, JS reload, and background dispatch of retained Observe
+events. An enabled production package must still deliver each service's normal data. A saved Sentry
+opt-out must continue suppressing only Sentry. Regression suites protect JS policy, startup order,
+native config generation, and installed dependency patches; they do not establish native delivery.

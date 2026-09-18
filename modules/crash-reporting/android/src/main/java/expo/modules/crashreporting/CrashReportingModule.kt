@@ -1,6 +1,7 @@
 package expo.modules.crashreporting
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.util.AtomicFile
 import expo.modules.kotlin.modules.Module
@@ -63,14 +64,18 @@ internal object CrashReportingState {
 
   private fun configureOwner(context: Context, dsn: String, isProduction: Boolean, version: String): Map<String, Any> {
     this.context = context
-    val metadata = context.packageManager.getApplicationInfo(
+    val applicationInfo = context.packageManager.getApplicationInfo(
       context.packageName, PackageManager.GET_META_DATA
-    ).metaData
+    )
+    val metadata = applicationInfo.metaData
     breadcrumbCodes = (metadata?.getString("CherryCrashReportingBreadcrumbs") ?: "")
       .split('|').filter { it.isNotEmpty() }.toSet()
     breadcrumbLimit = metadata?.getInt("CherryCrashReportingMaxBreadcrumbs", 20) ?: 20
     this.dsn = dsn
-    canCapture = isProduction && dsn.isNotEmpty()
+    // JS can close the gate but cannot enable a non-production or debuggable binary.
+    canCapture = isProduction && dsn.isNotEmpty() &&
+      applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 &&
+      metadata?.getBoolean("CherryCrashReportingEnabled") == true
     if (configured) {
       if (version != consentVersion || (!canCapture && active)) {
         consentVersion = version

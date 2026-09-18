@@ -1,14 +1,23 @@
 const { AndroidConfig, withAndroidManifest, withInfoPlist } = require('expo/config-plugins');
 const policy = require('./reportingPolicy.json');
+const services = require('../../src/frontend/appShell/observability/reportingServices.json');
 
 // Only public ingestion configuration belongs in the binary. Never embed SENTRY_AUTH_TOKEN.
 module.exports = (config) => {
-  const enabled =
-    config.extra?.sentryEnvironment === 'production' &&
-    process.env.EXPO_PUBLIC_STORYBOOK_ENABLED !== 'true';
+  const reporting = config.extra?.reporting;
+  const isProduction =
+    reporting?.environment === 'production' && process.env.EXPO_PUBLIC_STORYBOOK_ENABLED !== 'true';
+  const flags = Object.fromEntries(
+    Object.entries(services).map(([name, service]) => [
+      service.nativeFlag,
+      isProduction && service.enabled && reporting?.services?.[name] === true,
+    ]),
+  );
   const metadata = {
-    CherryCrashReportingDsn: enabled ? process.env.EXPO_PUBLIC_SENTRY_DSN || '' : '',
-    CherryCrashReportingEnabled: enabled,
+    ...flags,
+    CherryCrashReportingDsn: flags.CherryCrashReportingEnabled
+      ? process.env.EXPO_PUBLIC_SENTRY_DSN || ''
+      : '',
     CherryCrashReportingConsentVersion: policy.consentVersion,
     CherryCrashReportingBreadcrumbs: policy.breadcrumbCodes.join('|'),
     CherryCrashReportingMaxBreadcrumbs: policy.maxBreadcrumbs,

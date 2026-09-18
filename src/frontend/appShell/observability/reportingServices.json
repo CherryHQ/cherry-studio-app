@@ -1,0 +1,17 @@
+{
+  "sentry": {
+    "enabled": true,
+    "phase": "entry",
+    "nativeFlag": "CherryCrashReportingEnabled"
+  },
+  "observe": {
+    "enabled": true,
+    "phase": "layout",
+    "nativeFlag": "CherryObserveReportingEnabled"
+  },
+  "insights": {
+    "enabled": true,
+    "phase": "native",
+    "nativeFlag": "CherryInsightsReportingEnabled"
+  }
+}
