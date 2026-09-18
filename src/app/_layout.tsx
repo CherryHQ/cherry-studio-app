@@ -25,7 +25,7 @@ import {
   paintingRouteId,
   paintingViewerHeaderShown,
 } from '@/frontend/appShell/navigation';
-import { configureObserve, configureSentry } from '@/frontend/appShell/observability';
+import { configureObserve } from '@/frontend/appShell/observability';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { QueryProvider } from '@/frontend/data';
@@ -40,7 +40,6 @@ void SplashScreen.preventAutoHideAsync().catch(() => {});
 // The router integration has to be live before the first screen mounts, so this
 // runs at module scope alongside the splash screen hold rather than in an effect.
 configureObserve();
-void configureSentry();
 
 const RootGestureView = withUniwind(GestureHandlerRootView);
 

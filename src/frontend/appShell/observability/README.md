@@ -1,7 +1,8 @@
 # Observability
 
-This App Shell module owns the app's EAS Observe and Sentry integrations. The root layout runs
-their configuration at module scope, before the first screen mounts.
+This App Shell module owns the app's EAS Observe and Sentry integrations. Sentry starts through
+`startup.ts` at the app entry, before Expo Router loads route modules. EAS Observe configuration
+remains at module scope in the root layout.
 
 ## EAS Observe
 
@@ -15,18 +16,21 @@ come from inside a screen, so entry routes mount `StartupInteractiveMarker` them
 [native crash reporting module](../../../../modules/crash-reporting/README.md). The root layout
 composes `Sentry.wrap` with `ObserveRoot.wrap`. iOS crashes, Android Java/NDK crashes, native hang
 detection, and JavaScript uncaught errors remain supported. Performance tracing, session replay,
-session tracking, breadcrumbs, screenshots, view hierarchies, and log streaming are disabled.
+session tracking, automatic breadcrumbs, screenshots, view hierarchies, and log streaming are disabled.
 
 ### Consent
 
 Settings places Privacy settings and About us in the same group, with Privacy settings first.
-Privacy settings opens a page with one Send anonymous error reports switch. First use defaults to
-on; a saved `disabled` marker keeps manual opt-outs off across relaunches. Stale grants stay off.
+Privacy settings retains the existing Send anonymous error reports switch. First use defaults to
+on; a saved `disabled` marker keeps manual opt-outs off across relaunches. The policy
+version remains `20260915`, preserving existing settings through this update. Stale grants stay off.
 A grant is the stored `SENTRY_CONSENT_VERSION`;
 Android also stores when the grant began so older system ANR history is rejected. The native module
 stores this outside SQLite and excludes it from backups, so database startup failures do not
 prevent reading an existing grant. This is consent to diagnostic reporting, not acceptance of a
-complete legal privacy policy. Bump the version when that scope changes.
+complete legal privacy policy. The shared `modules/crash-reporting/reportingPolicy.json` owns the
+version and fixed startup codes. This change preserves the existing policy version and adds only
+startup-stage diagnostics; future collection-policy changes need an explicit migration decision.
 
 Enabling starts native and JavaScript reporting immediately in production builds; other builds only
 record the choice. Disabling closes the JS gate immediately, revokes the native gate, stops the SDK,
@@ -41,10 +45,15 @@ bridge call rejects, JS stays paused and the switch restores the last saved choi
 JavaScript uses `autoInitializeNativeSdk: false`: only the native module may initialize the native
 SDKs. A JS `beforeSend` cannot filter native crashes, and JavaScript envelopes reach the native
 transport on both platforms without passing the native `beforeSend`, so `sentryEvent.ts` is the only
-filter for JS events. The root layout's module-scope call starts native configuration, but consent
-lookup, cache cleanup, and native SDK startup run off the JS thread; JavaScript reporting begins when
-they resolve, and the settings switch stays unavailable until then. Failures before that point are
-outside this capture window. Missing native code or unreadable consent fails closed.
+filter for JS events. Native lifecycle hooks configure the owner before React starts, using the
+embedded production/DSN configuration and saved setting. At the JS entry, `configureSentry` reads
+native status synchronously and installs capture immediately when ready. Async configuration still
+reconciles JS reloads and supports older native clients. Missing native code or unreadable settings
+fail closed. Errors before the native hook/SDK starts remain outside the capture window.
+
+Native fatal exceptions from React Native remain as a fallback, even when a JS handler exists:
+handler installation does not prove delivery. Duplicate JS/native reports are possible. iOS exception
+names that embed the JS error message are replaced with `ReactNativeFatal`.
 
 ### Payload and error logs
 
@@ -53,6 +62,12 @@ free-form fields from structured crash events instead. Reports retain error type
 and selected OS/device categories. Free-form exception messages are replaced. Request details,
 user identity, arbitrary contexts, source snippets, locals, log messages, and raw error properties
 are excluded. JS envelopes retain event items only; attachments do not bypass the event filter.
+
+Reports may retain at most 20 manual breadcrumbs, containing only fixed startup-stage codes and
+timestamps. There are no page, route-parameter, foreground/background, or render-retry records.
+JS and native filters rebuild these entries from the shared allowlist; RN's scope synchronization
+forwards them to native. Revocation clears JS breadcrumbs and native caches. Fixed framework error
+categories and Data API error codes supplement stacks without retaining free-form messages.
 
 `LoggerService` has a disposable error reporter without a Sentry dependency. Only production error
 logs that pass an actual `Error` with a stack and name a fixed `operation` are reported; every other
@@ -99,3 +114,7 @@ Sentry also works with local EAS builds; cloud workers are not required. Use `pn
 load `.env` and `.env.local` into the build process before EAS creates its source archive. See
 [Local EAS Builds](../../../../docs/guides/local-builds.md) for production credentials, profile-specific
 Sentry behavior, and native regeneration when switching profiles.
+
+Before release, authorized acceptance must verify early JS/native capture, saved opt-outs, and
+source-map/debug-symbol matching against the installed build. Native initialization and actual
+server ingestion are not established by lint or JS tests alone.

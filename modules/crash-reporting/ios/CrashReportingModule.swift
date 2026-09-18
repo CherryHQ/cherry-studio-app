@@ -7,14 +7,36 @@ public class CrashReportingModule: Module {
     Name("CrashReporting")
     // Consent lookup, cache cleanup, and SDK startup do disk work; keep them off the JS thread.
     AsyncFunction("configure") {
-      (dsn: String, isProduction: Bool, version: String) throws -> [String: Bool] in
+      (dsn: String, isProduction: Bool, version: String) throws -> [String: Any] in
       try CrashReportingState.shared.configure(
         dsn: dsn, isProduction: isProduction, version: version)
     }
     Function("getStatus") { CrashReportingState.shared.status() }
-    AsyncFunction("setConsent") { (enabled: Bool) throws -> [String: Bool] in
+    AsyncFunction("setConsent") { (enabled: Bool) throws -> [String: Any] in
       try CrashReportingState.shared.setConsent(enabled)
     }
+  }
+}
+
+public class CrashReportingAppDelegateSubscriber: ExpoAppDelegateSubscriber {
+  // willFinish runs before the app's didFinish callback creates the React Native root.
+  public func application(
+    _ application: UIApplication,
+    willFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    let config = Bundle.main.infoDictionary ?? [:]
+    #if DEBUG
+    let isProduction = false
+    #else
+    let isProduction = config["CherryCrashReportingEnabled"] as? Bool == true
+    #endif
+    // Configuration records a fixed failure state; reporting must never prevent app startup.
+    _ = try? CrashReportingState.shared.configure(
+      dsn: config["CherryCrashReportingDsn"] as? String ?? "",
+      isProduction: isProduction,
+      version: config["CherryCrashReportingConsentVersion"] as? String ?? ""
+    )
+    return true
   }
 }
 
@@ -29,26 +51,41 @@ private final class CrashReportingState {
   // Read by SDK callbacks under gateLock; written only while holding controlLock.
   private var granted = false
   private var active = false
+  private var initialization = "not_started"
 
-  func configure(dsn: String, isProduction: Bool, version: String) throws -> [String: Bool] {
+  func configure(dsn: String, isProduction: Bool, version: String) throws -> [String: Any] {
     controlLock.lock()
-    defer { controlLock.unlock() }
+    var succeeded = false
+    defer {
+      if !succeeded {
+        setGate(granted: false, active: false)
+        SentrySDK.close()
+        gateLock.withLock { initialization = "failed" }
+        configured = false
+      }
+      controlLock.unlock()
+    }
     self.dsn = dsn
     canCapture = isProduction && !dsn.isEmpty
     if configured {
       if version != consentVersion || (!canCapture && isActive) {
-        consentVersion = version
+        gateLock.withLock { consentVersion = version }
         try revoke()
+      } else if canCapture && isGranted && !isActive {
+        start()
       }
+      succeeded = true
       return status()
     }
     configured = true
-    consentVersion = version
-    if !FileManager.default.fileExists(atPath: try consentFile().path) {
+    gateLock.withLock { consentVersion = version }
+    let file = try consentFile()
+    // Apply the default only on first use. Never overwrite an opt-out or an existing policy record.
+    if !version.isEmpty && !FileManager.default.fileExists(atPath: file.path) {
       try cleanCaches()
-      try consentVersion.write(to: consentFile(), atomically: true, encoding: .utf8)
+      try version.write(to: file, atomically: true, encoding: .utf8)
     }
-    if (try? String(contentsOf: consentFile(), encoding: .utf8)) == version {
+    if !version.isEmpty && (try? String(contentsOf: file, encoding: .utf8)) == version {
       setGate(granted: true, active: false)
     } else {
       // Nothing recorded without a grant for this disclosure may be sent, including legacy reports.
@@ -57,10 +94,14 @@ private final class CrashReportingState {
     if isGranted && canCapture {
       start()
     }
+    gateLock.withLock {
+      initialization = active ? "ready" : (granted && canCapture ? "failed" : "inactive")
+    }
+    succeeded = true
     return status()
   }
 
-  func setConsent(_ enabled: Bool) throws -> [String: Bool] {
+  func setConsent(_ enabled: Bool) throws -> [String: Any] {
     controlLock.lock()
     defer { controlLock.unlock() }
     if !enabled {
@@ -85,8 +126,20 @@ private final class CrashReportingState {
     try cleanCaches()
   }
 
-  func status() -> [String: Bool] {
-    gateLock.withLock { ["enabled": granted, "active": active && granted] }
+  func status() -> [String: Any] {
+    gateLock.withLock {
+      [
+        "enabled": granted, "active": active && granted,
+        "consentVersion": consentVersion, "initialization": initialization,
+      ]
+    }
+  }
+
+  private func addBreadcrumb(_ code: String) {
+    guard isActive && isGranted, crashBreadcrumbCodes.contains(code) else { return }
+    let crumb = Breadcrumb(level: .info, category: "app.diagnostic")
+    crumb.message = code
+    SentrySDK.addBreadcrumb(crumb)
   }
 
   private var isGranted: Bool { gateLock.withLock { granted } }
@@ -96,6 +149,7 @@ private final class CrashReportingState {
     gateLock.withLock {
       self.granted = granted
       self.active = active
+      initialization = active ? "starting" : "inactive"
     }
   }
 
@@ -136,7 +190,8 @@ private final class CrashReportingState {
       options.sendDefaultPii = false
       options.experimental.enableLogs = false
       options.sendClientReports = false
-      options.maxBreadcrumbs = 0
+      options.maxBreadcrumbs = UInt(crashBreadcrumbLimit)
+      options.beforeBreadcrumb = { sanitizeCrashBreadcrumb($0) }
       options.enableAutoBreadcrumbTracking = false
       options.enableNetworkBreadcrumbs = false
       options.enableSwizzling = false
@@ -154,6 +209,10 @@ private final class CrashReportingState {
     }
     if !SentrySDK.isEnabled {
       setGate(granted: true, active: false)
+      gateLock.withLock { initialization = "failed" }
+    } else {
+      gateLock.withLock { initialization = "ready" }
     }
+    addBreadcrumb("startup.native")
   }
 }

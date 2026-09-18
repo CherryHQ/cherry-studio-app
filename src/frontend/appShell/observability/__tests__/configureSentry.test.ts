@@ -9,7 +9,11 @@ const mockNative = {
   setConsent: jest.fn<Promise<CrashReportingStatus>, [boolean]>(),
 };
 const mockOptions = { enabled: true };
-const mockClient = { getOptions: () => mockOptions, on: jest.fn() };
+const mockClient = {
+  getOptions: () => mockOptions,
+  on: jest.fn(),
+};
+const mockClearBreadcrumbs = jest.fn();
 const mockInit = jest.fn();
 const mockRemoveReporter = jest.fn();
 const mockSetReporter = jest.fn(() => mockRemoveReporter);
@@ -24,11 +28,15 @@ jest.mock('expo-constants', () => ({
   default: { expoConfig: { extra: { sentryEnvironment: 'production' } } },
 }));
 jest.mock('@sentry/react-native', () => ({
-  init: (options: { beforeSend: typeof mockBeforeSend }) => {
+  init: (options: { beforeSend: typeof mockBeforeSend; enabled: boolean }) => {
     mockBeforeSend = options.beforeSend;
     mockInit(options);
+    mockOptions.enabled = options.enabled;
   },
   getClient: () => mockClient,
+  getCurrentScope: () => ({ clearBreadcrumbs: mockClearBreadcrumbs }),
+  getIsolationScope: () => ({ clearBreadcrumbs: mockClearBreadcrumbs }),
+  addBreadcrumb: jest.fn(),
   captureException: jest.fn(),
   reactNativeErrorHandlersIntegration: jest.fn(),
   nativeLinkedErrorsIntegration: jest.fn(),
@@ -45,6 +53,7 @@ jest.mock('@sentry/react-native', () => ({
 function loadReporting(): Reporting {
   let reporting: Reporting | undefined;
   jest.isolateModules(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- reload module state per test
     reporting = require('../configureSentry') as Reporting;
   });
   if (!reporting) throw new Error('configureSentry did not load');
@@ -68,6 +77,8 @@ describe('Sentry consent lifecycle', () => {
     mockStatus.enabled = false;
     mockStatus.active = false;
     mockOptions.enabled = true;
+    mockNative.getStatus.mockImplementation(() => mockStatus);
+    mockInit.mockReset();
     mockNative.configure.mockImplementation(() => Promise.resolve(mockStatus));
   });
 
@@ -229,5 +240,70 @@ describe('Sentry consent lifecycle', () => {
     expect(filterEnvelope).toBeDefined();
     filterEnvelope(envelope);
     expect(envelope[1]).toEqual([eventItem]);
+  });
+
+  test('installs JS capture before returning from entry for the existing 20260915 grant', async () => {
+    const reporting = loadReporting();
+    mockNative.getStatus.mockReturnValue({
+      enabled: true,
+      active: true,
+      consentVersion: '20260915',
+      initialization: 'ready',
+    } as CrashReportingStatus);
+    mockNative.configure.mockResolvedValue({ enabled: true, active: true });
+    const configuring = reporting.configureSentry();
+    expect(mockInit).toHaveBeenCalledTimes(1);
+    expect(mockBeforeSend?.(event, {})).not.toBeNull();
+    await configuring;
+    expect(mockInit).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not trust a native grant for a different disclosure', async () => {
+    mockNative.getStatus.mockReturnValue({
+      enabled: true,
+      active: true,
+      consentVersion: 'old',
+      initialization: 'ready',
+    } as CrashReportingStatus);
+    const reporting = loadReporting();
+    const configuring = reporting.configureSentry();
+    expect(mockInit).not.toHaveBeenCalled();
+    await configuring;
+    expect(mockInit).not.toHaveBeenCalled();
+  });
+
+  test('pauses JS reporting after initialization failure and retries after a new grant', async () => {
+    mockStatus.enabled = true;
+    mockStatus.active = true;
+    mockInit.mockImplementationOnce(() => {
+      throw new Error('private initialization detail');
+    });
+    const reporting = loadReporting();
+    await reporting.configureSentry();
+    expect(mockOptions.enabled).toBe(false);
+    expect(mockSetReporter).not.toHaveBeenCalled();
+    mockNative.setConsent.mockResolvedValue({ enabled: true, active: true });
+    await reporting.setSentryConsent(true);
+    expect(mockInit).toHaveBeenCalledTimes(2);
+    expect(mockOptions.enabled).toBe(true);
+    expect(mockSetReporter).toHaveBeenCalledTimes(1);
+    expect(mockBeforeSend?.(event, {})).not.toBeNull();
+  });
+
+  test('drops all envelope items after revocation and clears breadcrumbs', async () => {
+    mockStatus.enabled = true;
+    mockStatus.active = true;
+    const reporting = loadReporting();
+    await reporting.configureSentry();
+    const filterEnvelope = mockClient.on.mock.calls.find(
+      ([name]) => name === 'beforeEnvelope',
+    )?.[1];
+    mockNative.setConsent.mockResolvedValue({ enabled: false, active: false });
+    await reporting.setSentryConsent(false);
+    const envelope = [{}, [[{ type: 'event' }, event]]];
+    expect(filterEnvelope).toBeDefined();
+    filterEnvelope(envelope);
+    expect(envelope[1]).toEqual([]);
+    expect(mockClearBreadcrumbs).toHaveBeenCalled();
   });
 });

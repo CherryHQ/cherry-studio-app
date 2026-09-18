@@ -3,10 +3,16 @@ import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
 
 import { getCrashReporting, type CrashReportingStatus } from '../../../../modules/crash-reporting';
-import { isExpectedSentryError, sanitizeSentryEvent, sentryIdentifier } from './sentryEvent';
+import policy from '../../../../modules/crash-reporting/reportingPolicy.json';
+import {
+  isExpectedSentryError,
+  sanitizeSentryBreadcrumb,
+  sanitizeSentryEvent,
+  sentryIdentifier,
+} from './sentryEvent';
 
 // Bump when the displayed collection scope changes. Previous grants then stop authorizing reports.
-export const SENTRY_CONSENT_VERSION = '20260915';
+export const SENTRY_CONSENT_VERSION = policy.consentVersion;
 
 type SentryConsentStatus = CrashReportingStatus & { available: boolean };
 type SentryRuntime = { dsn: string | undefined; environment: string; isProduction: boolean };
@@ -18,6 +24,16 @@ let runtime: SentryRuntime = { dsn: undefined, environment: '', isProduction: fa
 let removeErrorReporter: (() => void) | undefined;
 let javaScriptReportingInitialized = false;
 let configureGeneration = 0;
+
+export function recordSentryBreadcrumb(code: string): void {
+  if (!status.active || !policy.breadcrumbCodes.includes(code)) return;
+  try {
+    // RN SDK 7.11 synchronizes isolation-scope breadcrumbs to native during init.
+    Sentry.addBreadcrumb({ category: 'app.diagnostic', message: code, level: 'info' });
+  } catch {
+    // Diagnostics must not interrupt startup or navigation.
+  }
+}
 
 export function getSentryConsentStatus(): SentryConsentStatus {
   return status;
@@ -46,6 +62,8 @@ function pauseJavaScriptReporting() {
   if (client) client.getOptions().enabled = false;
   removeErrorReporter?.();
   removeErrorReporter = undefined;
+  Sentry.getCurrentScope().clearBreadcrumbs();
+  Sentry.getIsolationScope().clearBreadcrumbs();
 }
 
 export async function setSentryConsent(enabled: boolean): Promise<void> {
@@ -69,8 +87,8 @@ export async function setSentryConsent(enabled: boolean): Promise<void> {
 }
 
 /**
- * Starts consent lookup, cache cleanup, and native SDK startup off the JS thread. The returned
- * promise settles once JavaScript reporting is configured; callers at module scope may ignore it.
+ * Install JS capture synchronously when native startup has already established a current grant.
+ * Older clients fall back to asynchronous native configuration and remain closed until it answers.
  */
 export function configureSentry(): Promise<void> {
   const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -86,10 +104,24 @@ export function configureSentry(): Promise<void> {
   nativeReporting = null;
   publishStatus({ enabled: false, active: false, available: false });
 
+  let native: ReturnType<typeof getCrashReporting>;
+  try {
+    native = getCrashReporting();
+    if (!native) {
+      return Promise.resolve();
+    }
+    const current = native.getStatus();
+    if (current.consentVersion === SENTRY_CONSENT_VERSION && current.initialization === 'ready') {
+      nativeReporting = native;
+      publishStatus({ ...current, available: true });
+      if (status.active) resumeJavaScriptReporting();
+    }
+  } catch {
+    return Promise.resolve();
+  }
+
   return Promise.resolve()
     .then(() => {
-      const native = getCrashReporting();
-      if (!native) return;
       return native
         .configure(dsn ?? '', runtime.isProduction, SENTRY_CONSENT_VERSION)
         .then((next) => {
@@ -101,16 +133,27 @@ export function configureSentry(): Promise<void> {
         });
     })
     .catch(() => {
-      // Missing native code, unreadable consent, or failed cache cleanup must fail closed.
+      if (generation !== configureGeneration) return;
+      pauseJavaScriptReporting();
+      publishStatus({ enabled: false, active: false, available: false });
+      nativeReporting = null;
     });
 }
 
 function resumeJavaScriptReporting() {
+  try {
+    initializeJavaScriptReporting();
+  } catch {
+    pauseJavaScriptReporting();
+  }
+}
+
+function initializeJavaScriptReporting() {
   if (javaScriptReportingInitialized) {
     const client = Sentry.getClient();
-    if (client) client.getOptions().enabled = true;
+    if (!client) throw new Error('Sentry client unavailable');
+    client.getOptions().enabled = true;
   } else {
-    javaScriptReportingInitialized = true;
     Sentry.init({
       dsn: runtime.dsn,
       enabled: true,
@@ -128,7 +171,8 @@ function resumeJavaScriptReporting() {
       enableStallTracking: false,
       enableLogs: false,
       tracePropagationTargets: [],
-      maxBreadcrumbs: 0,
+      maxBreadcrumbs: policy.maxBreadcrumbs,
+      beforeBreadcrumb: sanitizeSentryBreadcrumb,
       defaultIntegrations: false,
       integrations: [
         Sentry.reactNativeErrorHandlersIntegration(),
@@ -143,16 +187,20 @@ function resumeJavaScriptReporting() {
       ],
       beforeSend: (event, hint) =>
         status.active && !isExpectedSentryError(hint.originalException)
-          ? sanitizeSentryEvent(event)
+          ? sanitizeSentryEvent(event, hint.originalException)
           : null,
     });
 
+    const client = Sentry.getClient();
+    if (!client) throw new Error('Sentry client unavailable');
     // Envelopes can carry attachments independently of beforeSend's event payload.
-    Sentry.getClient()?.on('beforeEnvelope', (envelope) => {
+    client.on('beforeEnvelope', (envelope) => {
       envelope[1] = envelope[1].filter(
-        ([header]) => header.type === 'event',
+        ([header]) => status.active && header.type === 'event',
       ) as (typeof envelope)[1];
     });
+    javaScriptReportingInitialized = true;
+    recordSentryBreadcrumb('startup.javascript');
   }
 
   removeErrorReporter?.();
