@@ -72,7 +72,8 @@ also includes `open` for callers that use one error reporter for both operations
 logging, or translation dependency.
 
 `FileAttachmentPreview` is the compact horizontal result variant. It requires the same `onPress`
-callback while showing a filename and caller-supplied category label; square
+callback while showing filename metadata and a caller-supplied category label. It accepts metadata
+without a resolved URI, and `disabled` covers pending transfers or unavailable sources; square
 thumbnail callers continue to use `FilePreview`.
 
 `FilePreview` has four explicit visual variants. The default `thumbnail` uses the plugin and
@@ -924,3 +925,6 @@ If the root app adds or removes the workspace dependency, also update
 ```sh
 pnpm install --lockfile-only
 ```
+
+`MenuItem.group` groups contiguous actions into sections. Android draws the shared panel separator;
+iOS maps sections to inline native menus. Omitted groups preserve the existing flat menu.

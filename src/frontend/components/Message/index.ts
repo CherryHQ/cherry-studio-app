@@ -1,4 +1,5 @@
 export { MessageList } from './MessageList';
+export { ToolRendererProvider } from './parts/tools/ToolRendererContext';
 export {
   ToolInputPreviewProvider,
   type ToolInputPreviewSource,

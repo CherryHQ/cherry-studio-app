@@ -17,6 +17,7 @@ import {
   type ToolMessagePart,
 } from './toolPartState';
 import { UserQuestionPart } from './UserQuestionPart';
+import { useToolRenderer } from './ToolRendererContext';
 import { WebSearchToolPart } from './WebSearchToolPart';
 import { isWriteFileToolPart, WriteFileToolPart } from './WriteFileToolPart';
 
@@ -27,6 +28,9 @@ type ToolPartRendererProps = {
 };
 
 export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRendererProps) {
+  const renderTool = useToolRenderer();
+  if (renderTool) return renderTool(part);
+
   if (isProviderWebSearchToolPart(part)) {
     return null;
   }

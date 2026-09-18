@@ -41,13 +41,12 @@ type AssistantMessageActionsState = {
 };
 
 type AssistantMessageActions = {
-  retryAssistantMessage: (input: { messageId: string }) => void;
+  retryAssistantMessage?: (input: { messageId: string }) => void;
   shareAssistantMessage: (input: { messageId: string }) => void;
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
   /** Copies the transcript up to this message into a new chat and opens it. */
-  forkFromAssistantMessage: (input: { messageId: string }) => void;
-  /** Confirms, then removes the pressed message's whole exchange. */
-  deleteMessageTurn: (input: { turnId: string }) => void;
+  forkFromAssistantMessage?: (input: { messageId: string }) => void;
+  deleteMessageTurn?: (input: { turnId: string }) => void;
 };
 
 const AssistantMessageActionsStateContext = createContext<AssistantMessageActionsState | null>(
@@ -101,47 +100,13 @@ export function AssistantMessageActionsProvider({
   );
   // Already in cache: the chat screen resolves this same Session to render.
   const sourceTitle = useAgentSession(sessionId).data?.title?.trim();
-  const [copiedMessageId, setCopiedMessageId] = useState<string>();
-  const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copyOperationIdRef = useRef(0);
   const isMountedRef = useRef(true);
-
-  const copyAssistantMessage = useCallback(
-    ({ messageId, text }: { messageId: string; text: string }) => {
-      const copyOperationId = ++copyOperationIdRef.current;
-      void Clipboard.setStringAsync(text)
-        .then(() => {
-          if (!isMountedRef.current || copyOperationId !== copyOperationIdRef.current) {
-            return;
-          }
-
-          if (copiedFeedbackTimerRef.current !== null) {
-            clearTimeout(copiedFeedbackTimerRef.current);
-          }
-
-          setCopiedMessageId(messageId);
-          copiedFeedbackTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current) {
-              return;
-            }
-
-            copiedFeedbackTimerRef.current = null;
-            setCopiedMessageId(undefined);
-          }, COPIED_FEEDBACK_DURATION_MS);
-        })
-        .catch((error) => {
-          logger.error('Copy assistant message failed', error as Error);
-
-          if (!isMountedRef.current || copyOperationId !== copyOperationIdRef.current) {
-            return;
-          }
-
-          toast.show({ label: t('chat.messageActions.copyFailed'), variant: 'danger' });
-        });
-    },
-    [t, toast],
-  );
-
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const forkFromAssistantMessage = useCallback(
     ({ messageId }: { messageId: string }) => {
       if (!sessionId) {
@@ -214,15 +179,101 @@ export function AssistantMessageActionsProvider({
     [isSessionBusy, retryMessage, sessionId, t, toast],
   );
 
+  return (
+    <ChatMessageActionsProvider
+      isAssistantToolbarEnabled={isAssistantToolbarEnabled}
+      onShare={shareAssistantMessage}
+      onFork={forkFromAssistantMessage}
+      onDelete={deleteMessageTurn}
+      onRetry={retryAssistantMessage}
+      isDeleteDisabled={isSessionBusy || !sessionId}
+      isRetryDisabled={isSessionBusy || !sessionId}
+      retryableMessageId={retryableMessageId}
+    >
+      {children}
+    </ChatMessageActionsProvider>
+  );
+}
+
+/** Presentation actions shared by local and PC-owned conversations. */
+export function ChatMessageActionsProvider({
+  children,
+  isAssistantToolbarEnabled,
+  onShare: shareAssistantMessage,
+  onFork: forkFromAssistantMessage,
+  onDelete: deleteMessageTurn,
+  onRetry: retryAssistantMessage,
+  isDeleteDisabled = true,
+  isRetryDisabled = true,
+  retryableMessageId,
+}: PropsWithChildren<{
+  isAssistantToolbarEnabled: boolean;
+  onShare: AssistantMessageActions['shareAssistantMessage'];
+  onFork?: AssistantMessageActions['forkFromAssistantMessage'];
+  onDelete?: AssistantMessageActions['deleteMessageTurn'];
+  onRetry?: AssistantMessageActions['retryAssistantMessage'];
+  isDeleteDisabled?: boolean;
+  isRetryDisabled?: boolean;
+  retryableMessageId?: string;
+}>) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [copiedMessageId, setCopiedMessageId] = useState<string>();
+  const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyOperationIdRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  const copyAssistantMessage = useCallback(
+    ({ messageId, text }: { messageId: string; text: string }) => {
+      const copyOperationId = ++copyOperationIdRef.current;
+      void Clipboard.setStringAsync(text)
+        .then(() => {
+          if (!isMountedRef.current || copyOperationId !== copyOperationIdRef.current) {
+            return;
+          }
+
+          if (copiedFeedbackTimerRef.current !== null) {
+            clearTimeout(copiedFeedbackTimerRef.current);
+          }
+
+          setCopiedMessageId(messageId);
+          copiedFeedbackTimerRef.current = setTimeout(() => {
+            if (!isMountedRef.current) {
+              return;
+            }
+
+            copiedFeedbackTimerRef.current = null;
+            setCopiedMessageId(undefined);
+          }, COPIED_FEEDBACK_DURATION_MS);
+        })
+        .catch((error) => {
+          logger.error('Copy assistant message failed', error as Error);
+
+          if (!isMountedRef.current || copyOperationId !== copyOperationIdRef.current) {
+            return;
+          }
+
+          toast.show({ label: t('chat.messageActions.copyFailed'), variant: 'danger' });
+        });
+    },
+    [t, toast],
+  );
+
   const stateValue = useMemo(
     () => ({
       copiedMessageId,
       isAssistantToolbarEnabled,
-      isDeleteDisabled: isSessionBusy || !sessionId,
-      isRetryDisabled: isSessionBusy || !sessionId,
+      isDeleteDisabled,
+      isRetryDisabled,
       ...(retryableMessageId ? { retryableMessageId } : {}),
     }),
-    [copiedMessageId, isAssistantToolbarEnabled, isSessionBusy, retryableMessageId, sessionId],
+    [
+      copiedMessageId,
+      isAssistantToolbarEnabled,
+      isDeleteDisabled,
+      isRetryDisabled,
+      retryableMessageId,
+    ],
   );
   const actionsValue = useMemo(
     () => ({

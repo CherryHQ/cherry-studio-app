@@ -105,3 +105,8 @@ export {
   type AgentUserAnswer,
   type AgentRespondQuestionInput,
 } from './userQuestion';
+export type {
+  AgentController,
+  AgentControllerModule,
+  AgentControllerConnection,
+} from './controller';

@@ -5,6 +5,7 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useChatSource } from '@/frontend/appShell/navigation/chat';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
@@ -22,6 +23,7 @@ export function SidebarHeader() {
   const { t } = useTranslation();
   const { openSearch } = useSidebarActions('SidebarHeader');
   const insets = useSafeAreaInsets();
+  const { source } = useChatSource();
   const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
 
   return (
@@ -39,24 +41,26 @@ export function SidebarHeader() {
         <Text className="flex-1 font-semibold text-2xl text-sidebar-foreground" numberOfLines={1}>
           Cherry Studio
         </Text>
-        <Surface interactive shape="circle">
-          <Pressable
-            accessibilityLabel={t('session.search.placeholder')}
-            accessibilityRole="button"
-            hitSlop={4}
-            onPress={openSearch}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              height: appSidebar.headerRowHeight,
-              justifyContent: 'center',
-              opacity: pressed ? 0.6 : 1,
-              width: appSidebar.headerRowHeight,
-            })}
-            testID="sidebar-search"
-          >
-            <SearchIcon className="size-5 text-sidebar-foreground" />
-          </Pressable>
-        </Surface>
+        {source === 'local' ? (
+          <Surface interactive shape="circle">
+            <Pressable
+              accessibilityLabel={t('session.search.placeholder')}
+              accessibilityRole="button"
+              hitSlop={4}
+              onPress={openSearch}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                height: appSidebar.headerRowHeight,
+                justifyContent: 'center',
+                opacity: pressed ? 0.6 : 1,
+                width: appSidebar.headerRowHeight,
+              })}
+              testID="sidebar-search"
+            >
+              <SearchIcon className="size-5 text-sidebar-foreground" />
+            </Pressable>
+          </Surface>
+        ) : null}
       </View>
     </View>
   );

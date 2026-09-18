@@ -534,7 +534,7 @@ JavaScript tool execution, arbitrary filesystem paths, local MCP processes, and 
 trees are explicit mobile exclusions. Streamable HTTP MCP and device/application capability
 adapters are semantic ports.
 
-The planned PC Agent Controller may reuse the normalized application presentation of a tool or
+The PC Agent Controller reuses the normalized application presentation of a tool or
 approval, but PC tools remain owned and executed by the PC Agent Runtime. The mobile adapter maps
 their opaque identities, lifecycle, approval requests, and resource results into Agent Protocol
 values; it does not register them as local `RuntimeTool` callbacks. They are different from a local

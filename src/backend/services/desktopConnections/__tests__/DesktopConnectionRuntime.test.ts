@@ -154,6 +154,27 @@ describe('DesktopConnectionRuntime', () => {
     await runtime._doDestroy();
   });
 
+  it('blocks the legacy Agent transport without invalidating the pairing or exporting credentials', async () => {
+    await expect(runtime.prepareAgentConnection(id, signal())).rejects.toMatchObject({
+      details: { reason: 'agent-version' },
+    });
+    expect(connect).not.toHaveBeenCalled();
+    expect(store.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('notifies credential consumers only after removal succeeds', async () => {
+    const changes: string[] = [];
+    const unsubscribe = runtime.subscribeCredentials((connectionId) => changes.push(connectionId));
+    store.remove.mockRejectedValueOnce(new Error('database busy'));
+    await expect(runtime.remove(id, signal())).rejects.toThrow('database busy');
+    expect(changes).toEqual([]);
+    await runtime.remove(id, signal());
+    expect(changes).toEqual([id]);
+    unsubscribe();
+    await runtime.remove(id, signal());
+    expect(changes).toEqual([id]);
+  });
+
   it('claims the invitation, reports the verification code, then stores the approved grants', async () => {
     let polls = 0;
     const session = createSession({
@@ -175,9 +196,12 @@ describe('DesktopConnectionRuntime', () => {
     });
     connect.mockResolvedValue(session as never);
     const onClaim = jest.fn();
+    const changes: string[] = [];
+    runtime.subscribeCredentials((connectionId) => changes.push(connectionId));
 
     await expect(runtime.pair(pairing, signal(), onClaim)).resolves.toEqual(connection);
 
+    expect(changes).toEqual([id]);
     expect(onClaim).toHaveBeenCalledWith({
       verificationCode: '123456',
       expiresAt: '2026-09-22T00:02:00.000Z',

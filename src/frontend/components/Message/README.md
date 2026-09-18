@@ -24,8 +24,12 @@ history, message rows and parts, viewport following, and scroll restoration.
   slot is unconditional, including while the placeholder is up; an accessory holds the message and
   decides for itself when to appear.
 - `UserMessage` owns standard user content, including managed attachments and the text bubble.
+  Its attachment slot lets source-owned files reuse the same placement above the bubble.
 - `getBuiltInToolDisplay` exposes the shared title and platform-specific icon used by
   feature-owned tool approval UI.
+- `ToolRendererProvider` lets a source supply tool detail loading and presentation inside the
+  shared process layout. Without a provider, tools keep the local built-in dispatch. Source-owned
+  renderers compose `MessagePart.Tool`; remote data never enters the local tool adapters.
 
 A feature composes an explicit role variant and gives `MessageList` a stable `renderMessage`.
 LegendList refreshes mounted rows through `itemKey`, `data`, and `extraData`; changing the renderer
@@ -111,9 +115,10 @@ precedence over that fallback.
 
 Reasoning expands inline: `MessagePart.Reasoning` owns the toggle and the left-rail container its
 markdown renders into, so a reader keeps their place in the transcript. While a response streams,
-its process parts remain visible without a total-duration wrapper. Once the response settles,
-intermediate prose, reasoning, and tools move into one collapsed `MessagePart.Process`
-row whose label is the message's total wall-clock duration. Expanding it reveals the original parts in order. Source
+its process parts remain visible without a total-duration wrapper. Once the response settles, every
+visible transcript part except the final result text moves into one collapsed `MessagePart.Process`
+row whose label is the message's total wall-clock duration. Expanding it reveals the original parts in order.
+Messages without timing metadata use a plain process title instead of an invented duration. Source
 groups use a borderless row of overlapping favicons and their source count, while their expanded
 views must use `MessagePart.Detail`. The source group stays out of layout while the assistant is
 streaming and appears once the message reaches any terminal status. New

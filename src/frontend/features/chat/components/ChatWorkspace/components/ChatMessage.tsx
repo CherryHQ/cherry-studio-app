@@ -5,7 +5,7 @@ import {
   ContextMenuExclusion,
   type MenuItem,
 } from '@cherrystudio/ui/components';
-import { memo, type ReactElement } from 'react';
+import { memo, type ReactElement, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -29,11 +29,17 @@ type ChatMessageProps = {
   isScreenReaderEnabled?: boolean;
   message: MessageListItem;
   shouldShowTimestamp: boolean;
+  attachments?: ReactNode;
+  accessories?: ReactNode;
+  usage?: ReactNode;
 };
 
 function renderChatAssistantMessage(
   message: MessageListItem,
   presentation: AssistantMessagePresentation,
+  attachments: ReactNode,
+  accessories: ReactNode,
+  usage: ReactNode,
 ) {
   return (
     <View className="w-full gap-2.5">
@@ -60,12 +66,14 @@ function renderChatAssistantMessage(
         </View>
       </View>
       <AssistantMessage message={message}>
+        {attachments}
+        {accessories}
         {message.status !== 'pending' ? (
           <BackgroundPressExclusion>
             <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
               <AssistantMessageToolbar message={message} />
               <View className="min-w-0 max-w-full flex-1 items-end">
-                <AssistantMessageUsage message={message} />
+                {usage === undefined ? <AssistantMessageUsage message={message} /> : usage}
               </View>
             </ContextMenuExclusion>
           </BackgroundPressExclusion>
@@ -99,13 +107,19 @@ export const ChatMessage = memo(function ChatMessage({
   isScreenReaderEnabled = false,
   message,
   shouldShowTimestamp,
+  attachments,
+  accessories,
+  usage,
 }: ChatMessageProps) {
   const createdAt = shouldShowTimestamp ? formatMessageCreatedAt(message.createdAt) : undefined;
   const content =
     message.role === 'user' ? (
-      <UserMessage message={message} />
+      <View className="gap-2">
+        <UserMessage attachments={attachments} message={message} />
+        {accessories}
+      </View>
     ) : (
-      renderChatAssistantMessage(message, assistantPresentation)
+      renderChatAssistantMessage(message, assistantPresentation, attachments, accessories, usage)
     );
 
   return (

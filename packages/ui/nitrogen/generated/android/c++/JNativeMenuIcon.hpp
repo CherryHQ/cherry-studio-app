@@ -15,7 +15,7 @@ namespace margelo::nitro::cherrystudio::ui {
   using namespace facebook;
 
   /**
-   * The C++ JNI bridge between the C++ enum "NativeMenuIcon" and the the Kotlin enum "NativeMenuIcon".
+   * The C++ JNI bridge between the C++ enum "NativeMenuIcon" and the Kotlin enum "NativeMenuIcon".
    */
   struct JNativeMenuIcon final: public jni::JavaClass<JNativeMenuIcon> {
   public:

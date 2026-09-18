@@ -8,6 +8,7 @@ import {
   AppStatePolicy,
   BaseService,
   DependsOn,
+  Emitter,
   Injectable,
   Phase,
   ServicePhase,
@@ -19,6 +20,7 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import {
   type DesktopImportSelectionsDto,
   type DesktopPairingClaim,
+  type DesktopRemoteAgent,
   DesktopProvidersSnapshotSchema,
   type PairDesktopConnectionDto,
   PairDesktopConnectionSchema,
@@ -75,6 +77,24 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   private readonly controllers = new Set<AbortController>();
   private tail: Promise<unknown> = Promise.resolve();
 
+  private readonly changeListeners = this.registerDisposable(new Emitter<string>());
+
+  subscribeCredentials(listener: (id: string) => void): () => void {
+    const subscription = this.changeListeners.event(listener);
+    return () => subscription.dispose();
+  }
+
+  /** The prototype must not receive credentials until its Agent protocol is migrated. */
+  prepareAgentConnection(
+    id: string,
+    signal: AbortSignal,
+  ): Promise<{ descriptor: DesktopRemoteAgent; token: string; generation: string; url: string }> {
+    return this.run('agent', signal, async (store) => {
+      await store.getRow(id);
+      throw desktopError('agent-version', 'Agent access requires the Noise JSON-RPC adapter');
+    });
+  }
+
   configure(store: ConnectionStore, ensureModelRegistryReady: () => Promise<void>): void {
     this.store = store;
     this.ensureModelRegistryReady = ensureModelRegistryReady;
@@ -106,7 +126,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
         for (;;) {
           const decision = await session.request('pairing.get', { claimId: claim.claimId }, signal);
           if (decision.status === 'approved') {
-            return store.savePair(
+            const connection = await store.savePair(
               {
                 addresses: [session.address, ...qr.ips.filter((ip) => ip !== session.address)],
                 desktopIdentity: qr.desktopIdentity,
@@ -119,6 +139,8 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               Boolean(qr.connectionId),
               signal,
             );
+            this.changeListeners.fire(id);
+            return connection;
           }
           if (decision.status === 'rejected') {
             throw desktopError('pairing-rejected', 'The desktop rejected this device');
@@ -143,6 +165,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     return this.run('remove', signal, async (store, signal) => {
       signal.throwIfAborted();
       await store.remove(id);
+      this.changeListeners.fire(id);
     });
   }
 

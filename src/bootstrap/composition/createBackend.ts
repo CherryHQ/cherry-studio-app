@@ -43,6 +43,7 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
+import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
@@ -66,6 +67,7 @@ export function createBackend(
     dbService: DbService;
     documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
+    agentController: RemoteAgentRuntime;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
   },
@@ -73,6 +75,7 @@ export function createBackend(
   const { dbService } = infrastructure;
   // Capture this host's database; late work never resolves a replacement host.
   const exportFiles = new FileEntryService(dbService);
+  infrastructure.agentController.configure(infrastructure.desktopConnections, exportFiles);
   infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
   infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService), () =>
     infrastructure.providerRegistryUpdater.ensureReady(),
@@ -202,6 +205,7 @@ export function createBackend(
     backend: {
       systemEntry: systemEntry.module,
       agent: services.agent,
+      agentController: infrastructure.agentController,
       desktopConnections: infrastructure.desktopConnections,
       documentExport: infrastructure.documentExport,
       file: {

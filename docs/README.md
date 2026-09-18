@@ -49,7 +49,7 @@ They are the source of truth for how the repository works today.
 | [Built-In MCP Integrations](./references/agent/built-in-mcp-design.md) | As-built GitHub, Amap and Feishu cloud MCP connectors, GitHub and Feishu browser authorization, the plugin registry and the six-platform scope |
 | [Built-In MCP Roadmap](./references/agent/built-in-mcp-roadmap.md) | Implemented authorization decisions and future multi-account, HTTP reuse, direct-API transport and instruction-resource designs |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Pi Agent provider resolution and non-conversation AI SDK generation |
-| [Backend AI Target Architecture](./references/ai/target-architecture.md) | As-built local AI structure and the planned PC Agent Controller boundary |
+| [Backend AI Target Architecture](./references/ai/target-architecture.md) | As-built local AI structure and the PC Agent Controller boundary |
 | [Desktop AI Package Reuse](./references/ai/desktop-package-reuse.md) | Selective semantic ports, provider admission, Pi boundaries, and image-runtime reuse |
 | [Provider Serving Boundaries](./references/ai/provider-serving-boundaries.md) | Shared Provider connection facts and capability-specific language and image execution boundaries |
 | [Background Activity Presentation](./references/background-activity-presentation.md) | Live Activity and notification presentation windows, settled-surface retirement, and per-destination limits |

@@ -6,12 +6,13 @@ import type { FileAttachmentPreviewProps } from '../file-preview.types';
 
 export function FileAttachmentPreview({
   categoryLabel,
+  disabled = false,
   file,
   labels,
   onPress,
 }: FileAttachmentPreviewProps) {
   const handlePress = () => {
-    if (!file) return;
+    if (!file || disabled) return;
 
     onPress();
   };
@@ -20,9 +21,9 @@ export function FileAttachmentPreview({
     <Pressable
       accessibilityLabel={file?.displayName ?? labels.unavailable}
       accessibilityRole="button"
-      accessibilityState={!file ? { disabled: true } : undefined}
+      accessibilityState={!file || disabled ? { disabled: true } : undefined}
       className="active:opacity-70"
-      disabled={!file}
+      disabled={!file || disabled}
       onPress={handlePress}
       style={{ width: '100%' }}
     >

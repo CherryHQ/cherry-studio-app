@@ -114,6 +114,7 @@
     "@xmldom/xmldom": "0.9.12",
     "ai": "^6.0.143",
     "axios": "^1.19.0",
+    "base64-js": "1.5.1",
     "drizzle-orm": "^0.45.2",
     "expo": "~57.0.21",
     "expo-asset": "~57.0.16",
@@ -196,6 +197,7 @@
     "tailwind-variants": "^3.2.2",
     "tailwindcss": "^4.3.0",
     "tokenx": "^1.1.0",
+    "tweetnacl": "1.0.3",
     "uniwind": "^1.6.4",
     "uuid": "^14.0.0",
     "zod": "^4.4.3"

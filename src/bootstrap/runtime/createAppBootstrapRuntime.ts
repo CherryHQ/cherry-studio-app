@@ -22,6 +22,7 @@ import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnect
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
+import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
@@ -101,6 +102,7 @@ export function createAppBootstrapRuntime(
   const desktopConnections = host.container.get<DesktopConnectionRuntime>(
     'DesktopConnectionRuntime',
   );
+  const agentController = host.container.get<RemoteAgentRuntime>('RemoteAgentRuntime');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
@@ -122,6 +124,7 @@ export function createAppBootstrapRuntime(
     dbService,
     documentExport,
     desktopConnections,
+    agentController,
     languageServing,
     providerRegistryUpdater,
   });

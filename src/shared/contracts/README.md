@@ -23,6 +23,10 @@ of these paths.
 Resource operations remain Data API endpoints even when their implementations use SQLite or a
 backend data module. Do not add a `Backend` module merely to avoid defining an endpoint.
 
+The PC `agentController` is a retained, authenticated observation/command workflow. Its source-bound
+reads and pagination are temporary PC projections, not CRUD for local Agent persistence; see
+[PC Agent Controller](../../../docs/references/agent/pc-agent-controller.md).
+
 ## Admission Rules
 
 A new contract belongs here only when it cannot be expressed cleanly through the Data API or

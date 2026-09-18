@@ -38,7 +38,10 @@ export function ProcessGroupPart({
   });
   const persistedDurationMs = getMessageProcessDurationMs(message.stats, reasoningDurations);
   const seconds = Math.max(1, Math.round((persistedDurationMs ?? 0) / 1000));
-  const title = t('chat.process.duration', { seconds });
+  const title =
+    persistedDurationMs === undefined
+      ? t('chat.process.title')
+      : t('chat.process.duration', { seconds });
 
   return (
     <MessagePart.Process onDisclosureToggle={handleDisclosureToggle} state="complete" title={title}>

@@ -3,11 +3,8 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { mainHeaderRowHeight } from '@/frontend/appShell/header';
-import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
-import { MessageList, type MessageListItem } from '@/frontend/components/Message';
+import { type MessageListItem } from '@/frontend/components/Message';
 import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
 import type { AgentUserAnswer } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -24,20 +21,16 @@ import {
 } from '../../runtime';
 import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
 import { UserQuestionSheet } from '../UserQuestionSheet';
+import { ChatTranscript } from './ChatTranscript';
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
-import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessage } from './components/ChatMessage';
-import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
 import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
-import {
-  shouldWaitForInitialHistoryLayout,
-  useMessageListInitialRenderGate,
-} from './hooks/useMessageListInitialRenderGate';
+import { shouldWaitForInitialHistoryLayout } from './hooks/useMessageListInitialRenderGate';
+import { getTimestampMessageIds } from './messageTimestamps';
 
 const logger = loggerService.withContext('AgentChatWorkspace');
-const MESSAGE_TIME_INTERVAL_MS = 5 * 60 * 1000;
 
 type ChatWorkspaceProps = {
   enteringUserMessageId?: string;
@@ -89,8 +82,6 @@ export function ChatWorkspace({
   const live = useAgentChatSession(sessionId);
   const listKey = sessionId ?? pendingSend?.sessionId;
   const client = useAgentChatActions();
-  const headerHeight = useHeaderHeight();
-  const { top: safeAreaTop } = useSafeAreaInsets();
   const { t } = useTranslation();
   const { toast } = useToast();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
@@ -269,14 +260,6 @@ export function ChatWorkspace({
         isLoadingInitial,
         messageCount: messages.length,
       }));
-  const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
-    renderGateKey: dataKey ?? listKey,
-    requiresInitialHistoryLayout,
-  });
-  const contentTopInset = resolveHeaderContentInset(
-    headerHeight,
-    safeAreaTop + mainHeaderRowHeight,
-  );
 
   if (!sessionId && listMessages.length === 0) {
     return (
@@ -316,16 +299,16 @@ export function ChatWorkspace({
 
   return (
     <View className="flex-1 bg-chat-background">
-      <ChatOlderMessagesIndicator isLoading={isLoadingOlder || isLoadingNewer} />
       <AssistantMessageActionsProvider
         key={`assistant-actions-${listKey}`}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
         retryableMessageId={retryableMessageId}
         sessionId={sessionId}
       >
-        <MessageList
+        <ChatTranscript
+          requiresInitialLayout={requiresInitialHistoryLayout}
+          isLoadingMore={isLoadingOlder || isLoadingNewer}
           contentBottomInset={contentBottomInset}
-          contentTopInset={contentTopInset}
           dataKey={dataKey ?? listKey}
           enteringMessageId={enteringUserMessageId ?? live.enteringUserMessageId}
           extraData={messageListExtraData}
@@ -339,7 +322,6 @@ export function ChatWorkspace({
           onLoadOlder={loadOlder}
           onLoadNewer={loadNewer}
           onReturnToLatest={returnToLatest}
-          onReady={markListLoaded}
           renderMessage={renderChatMessage}
         />
       </AssistantMessageActionsProvider>
@@ -360,26 +342,4 @@ export function ChatWorkspace({
       />
     </View>
   );
-}
-
-function getTimestampMessageIds(messages: readonly MessageListItem[]): ReadonlySet<string> {
-  const ids = new Set<string>();
-  let previousTimestamp: number | undefined;
-
-  for (const message of messages) {
-    if (message.role === 'system' || !message.createdAt) continue;
-
-    const timestamp = new Date(message.createdAt).getTime();
-    if (Number.isNaN(timestamp)) continue;
-
-    if (
-      previousTimestamp === undefined ||
-      timestamp - previousTimestamp >= MESSAGE_TIME_INTERVAL_MS
-    ) {
-      ids.add(message.id);
-    }
-    previousTimestamp = timestamp;
-  }
-
-  return ids;
 }
