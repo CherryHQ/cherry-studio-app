@@ -147,8 +147,9 @@ and slow development startup. See the [Expo SDK 57 release notes](https://expo.d
 Existing development clients must be rebuilt to receive the engine update.
 
 Keep the version-specific patches for Expo Router, Calendar, Notifications, Image Picker, App Metrics,
-Reanimated, Metro, and Metro Runtime when updating dependencies. The upgraded patched direct
-dependencies use exact versions so an unrelated install cannot select a newer unpatched release.
+Widgets, React Native, Screens, Reanimated, Metro, and Metro Runtime when updating dependencies.
+The upgraded patched direct dependencies use exact versions so an unrelated install cannot select
+a newer unpatched release.
 Metro 0.84.5 is selected by Expo's Metro dependency; its patches support the existing Worklets Bundle
 Mode integration.
 
@@ -161,3 +162,23 @@ Android builds compile `expo-image-picker` and `expo-notifications` from source 
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
+
+### iOS Build 26 Crash Patches
+
+- Screens 4.26.2 iterates over a copy of the header subviews. Synchronous shadow-state updates
+  can mount or unmount children during this loop, invalidating an enumeration of the live array.
+- React Native 0.86.3 enables the existing scheduler delegate invalidation guard for the stable
+  release level. Pending render/command callbacks skip delegates invalidated during teardown or
+  replacement. This is the mitigation from [React Native #56680](https://github.com/facebook/react-native/pull/56680),
+  not a guarantee against every concurrent delegate lifetime race. iOS already uses
+  `buildReactNativeFromSource`, which is required for this native header patch to take effect.
+- Widgets 57.0.18 reads `isActivityFullscreen` only on iOS 18 and newer, returning `false` on older
+  systems. Build 26's five iOS 17.6.1 widget samples all return to binary offset `0x24bf98` after
+  calling this missing weak-linked WidgetKit getter. Although the SDK declares it available earlier,
+  [Apple's developer forum](https://developer.apple.com/forums/thread/763594) also reports the missing
+  getter on iOS 17. The widget pod compiles this Swift source into the extension.
+
+These patches require a new native build; an OTA update cannot deliver them. The separate iOS 27.2
+widget sample aborts in `RBSConnection._handshake`, not on its AttributeGraph thread. Its report
+does not include the system's abort message, so it remains unresolved; none of these patches is
+claimed to fix that system-service handshake failure.
