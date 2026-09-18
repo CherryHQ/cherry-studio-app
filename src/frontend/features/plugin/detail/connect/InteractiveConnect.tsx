@@ -12,6 +12,7 @@ import { PluginPage } from '../../components/PluginPage';
 import { CredentialFields, hasEveryField } from './CredentialFields';
 import { useInteractiveConnect } from './useInteractiveConnect';
 
+/** Presents provider authorization and account review, with optional application entry. */
 export function InteractiveConnect({
   entry,
   method,

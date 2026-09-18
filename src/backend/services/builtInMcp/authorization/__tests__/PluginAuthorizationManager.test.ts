@@ -32,9 +32,10 @@ function runtimeFixture(): PluginAuthorizationRuntime {
   };
 }
 
-it('owns independent runtimes and observers for multiple interactive methods and stops all of them', async () => {
+it('owns polling and native runtimes independently and stops both without requiring native callbacks', async () => {
   const first = runtimeFixture();
   const second = runtimeFixture();
+  delete second.poll;
   const plugin: PluginDefinition = {
     catalog: {
       id: 'future',
@@ -58,7 +59,7 @@ it('owns independent runtimes and observers for multiple interactive methods and
       {
         id: 'enterprise_oauth',
         kind: 'interactive',
-        interaction: 'polling',
+        interaction: 'native',
         stages: ['tenant', 'approval'],
         createRuntime: () => second,
         createRequestAuthorization: () => ({ apply() {} }),

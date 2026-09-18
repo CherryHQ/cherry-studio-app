@@ -13,6 +13,7 @@ import { amapPlugin } from './plugins/amap';
 import { dingtalkPlugin } from './plugins/dingtalk';
 import { feishuPlugin } from './plugins/feishu';
 import { githubPlugin } from './plugins/github';
+import { gmailPlugin } from './plugins/gmail';
 import { notionPlugin } from './plugins/notion';
 import { wecomPlugin } from './plugins/wecom';
 
@@ -31,7 +32,7 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
       methodIds.add(method.id);
       if (method.kind === 'credentials') validateFields(id, method.fields);
       else {
-        if (method.interaction !== 'polling' && method.interaction !== 'callback')
+        if (!['polling', 'callback', 'native'].includes(method.interaction))
           throw new Error(`Invalid authorization interaction: ${id}/${method.id}`);
         if (!method.stages.length || new Set(method.stages).size !== method.stages.length)
           throw new Error(`Invalid authorization stages: ${id}/${method.id}`);
@@ -152,6 +153,7 @@ const registry = createPluginRegistry([
   githubPlugin,
   amapPlugin,
   feishuPlugin,
+  gmailPlugin,
   dingtalkPlugin,
   notionPlugin,
   wecomPlugin,
