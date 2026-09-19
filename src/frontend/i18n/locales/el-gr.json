@@ -1060,6 +1060,7 @@
   "settings.desktopConnection.error.unauthorized": "Ο υπολογιστής δεν αποδέχτηκε αυτό το διακριτικό συσκευής. Συνδυάστε το ξανά.",
   "settings.desktopConnection.error.unknown": "Η λειτουργία απέτυχε. Προσπαθήστε ξανά.",
   "settings.desktopConnection.error.unreachable": "Δεν ήταν δυνατή η σύνδεση στον υπολογιστή. Βεβαιωθείτε ότι και οι δύο συσκευές βρίσκονται στο ίδιο τοπικό δίκτυο.",
+  "settings.desktopConnection.error.unreachable.ios": "Δεν ήταν δυνατή η σύνδεση στον υπολογιστή. Ελέγξτε ότι οι δύο συσκευές μπορούν να επικοινωνούν μεταξύ τους και επιτρέψτε στο Cherry Studio στις Ρυθμίσεις › Απόρρητο και ασφάλεια › Τοπικό δίκτυο.",
   "settings.desktopConnection.error.unsupported-auth": "Το κινητό δεν υποστηρίζει τη μέθοδο ελέγχου ταυτότητας αυτού του παρόχου.",
   "settings.desktopConnection.error.unsupported-version": "Αυτή η έκδοση πρωτοκόλλου διαμόρφωσης υπολογιστή δεν υποστηρίζεται.",
   "settings.deviceConnections.empty": "Δεν υπάρχει συνδεδεμένος υπολογιστής",

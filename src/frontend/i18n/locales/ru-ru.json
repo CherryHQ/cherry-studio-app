@@ -1068,6 +1068,7 @@
   "settings.desktopConnection.error.unauthorized": "ПК не принял этот токен устройства. Подключите его еще раз.",
   "settings.desktopConnection.error.unknown": "Операция не удалась. Попробуйте еще раз.",
   "settings.desktopConnection.error.unreachable": "Не удалось подключиться к ПК. Убедитесь, что оба устройства находятся в одной локальной сети.",
+  "settings.desktopConnection.error.unreachable.ios": "Не удалось подключиться к ПК. Проверьте, могут ли устройства связываться друг с другом, и разрешите Cherry Studio в разделе «Настройки» › «Конфиденциальность и безопасность» › «Локальная сеть».",
   "settings.desktopConnection.error.unsupported-auth": "Mobile не поддерживает метод аутентификации этого провайдера.",
   "settings.desktopConnection.error.unsupported-version": "Данная версия протокола конфигурации ПК не поддерживается.",
   "settings.deviceConnections.empty": "Нет подключенного ПК",

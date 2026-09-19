@@ -1056,6 +1056,7 @@
   "settings.desktopConnection.error.unauthorized": "PC はこのデバイス トークンを受け入れませんでした。再度ペアリングしてください。",
   "settings.desktopConnection.error.unknown": "操作は失敗しました。もう一度やり直してください。",
   "settings.desktopConnection.error.unreachable": "PC に接続できませんでした。両方のデバイスが同じローカル ネットワーク上にあることを確認してください。",
+  "settings.desktopConnection.error.unreachable.ios": "PC に接続できませんでした。デバイス同士が通信できるか確認し、設定 › プライバシーとセキュリティ › ローカルネットワーク で Cherry Studio を許可してください。",
   "settings.desktopConnection.error.unsupported-auth": "モバイルは、このプロバイダーの認証方法をサポートしていません。",
   "settings.desktopConnection.error.unsupported-version": "この PC 構成プロトコルのバージョンはサポートされていません。",
   "settings.deviceConnections.empty": "PC が接続されていません",

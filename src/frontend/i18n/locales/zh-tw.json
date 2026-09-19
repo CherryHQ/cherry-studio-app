@@ -1056,6 +1056,7 @@
   "settings.desktopConnection.error.unauthorized": "PC 未接受當前設備令牌，請重新配對。",
   "settings.desktopConnection.error.unknown": "操作失敗，請重試。",
   "settings.desktopConnection.error.unreachable": "無法連接 PC，請確認兩台設備位於同一局域網。",
+  "settings.desktopConnection.error.unreachable.ios": "無法連接 PC。請確認兩台設備能否互相連線，並在「設定」›「隱私權與安全性」›「本地網路」允許 Cherry Studio。",
   "settings.desktopConnection.error.unsupported-auth": "移動端暫不支持此供應商的認證方式。",
   "settings.desktopConnection.error.unsupported-version": "PC 的配置協議版本暫不受支持。",
   "settings.deviceConnections.empty": "還沒有已連接的 PC",
