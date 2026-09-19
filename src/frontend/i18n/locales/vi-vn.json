@@ -1056,6 +1056,7 @@
   "settings.desktopConnection.error.unauthorized": "PC không chấp nhận mã thông báo thiết bị này. Ghép nối nó một lần nữa.",
   "settings.desktopConnection.error.unknown": "Thao tác không thành công. Hãy thử lại.",
   "settings.desktopConnection.error.unreachable": "Không thể kết nối với PC. Đảm bảo cả hai thiết bị đều nằm trên cùng một mạng cục bộ.",
+  "settings.desktopConnection.error.unreachable.ios": "Không thể kết nối với PC. Kiểm tra xem hai thiết bị có thể kết nối với nhau không và cho phép Cherry Studio trong Cài đặt › Quyền riêng tư & Bảo mật › Mạng cục bộ.",
   "settings.desktopConnection.error.unsupported-auth": "Thiết bị di động không hỗ trợ phương thức xác thực của nhà cung cấp này.",
   "settings.desktopConnection.error.unsupported-version": "Phiên bản giao thức cấu hình PC này không được hỗ trợ.",
   "settings.deviceConnections.empty": "Không có PC được kết nối",

@@ -1060,6 +1060,7 @@
   "settings.desktopConnection.error.unauthorized": "Der PC hat dieses Geräte-Token nicht akzeptiert. Koppeln Sie es erneut.",
   "settings.desktopConnection.error.unknown": "Der Vorgang ist fehlgeschlagen. Versuchen Sie es erneut.",
   "settings.desktopConnection.error.unreachable": "Es konnte keine Verbindung zum PC hergestellt werden. Stellen Sie sicher, dass sich beide Geräte im selben lokalen Netzwerk befinden.",
+  "settings.desktopConnection.error.unreachable.ios": "Verbindung zum PC nicht möglich. Prüfen Sie, ob sich beide Geräte gegenseitig erreichen, und erlauben Sie Cherry Studio unter Einstellungen › Datenschutz & Sicherheit › Lokales Netzwerk.",
   "settings.desktopConnection.error.unsupported-auth": "Mobile unterstützt die Authentifizierungsmethode dieses Anbieters nicht.",
   "settings.desktopConnection.error.unsupported-version": "Diese PC-Konfigurationsprotokollversion wird nicht unterstützt.",
   "settings.deviceConnections.empty": "Kein angeschlossener PC",

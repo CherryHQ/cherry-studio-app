@@ -1064,6 +1064,7 @@
   "settings.desktopConnection.error.unauthorized": "PC-ul nu a acceptat acest token de dispozitiv. Asociați-l din nou.",
   "settings.desktopConnection.error.unknown": "Operația a eșuat. Încearcă din nou.",
   "settings.desktopConnection.error.unreachable": "Nu s-a putut conecta la PC. Asigurați-vă că ambele dispozitive sunt în aceeași rețea locală.",
+  "settings.desktopConnection.error.unreachable.ios": "Nu s-a putut conecta la PC. Verificați dacă dispozitivele pot comunica între ele și permiteți Cherry Studio în Setări › Confidențialitate și securitate › Rețea locală.",
   "settings.desktopConnection.error.unsupported-auth": "Mobile nu acceptă metoda de autentificare a acestui furnizor.",
   "settings.desktopConnection.error.unsupported-version": "Această versiune a protocolului de configurare pentru PC nu este acceptată.",
   "settings.deviceConnections.empty": "Niciun PC conectat",
