@@ -61,6 +61,14 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         );
       }
 
+      let azureApiVersion: string | undefined;
+      if (adapter.api === 'azure-openai-responses') {
+        const authConfig = await providerService.getAuthConfig(provider.id);
+        const configuredVersion =
+          authConfig?.type === 'iam-azure' ? authConfig.apiVersion : provider.settings.apiVersion;
+        azureApiVersion = configuredVersion?.trim() || undefined;
+      }
+
       const modelId = connection.wireModelId;
       const headers = { ...connection.headers };
       if (
@@ -134,6 +142,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         },
         temperature: runtimeOptions.temperature,
         timeoutMs: DEFAULT_PI_TIMEOUT_MS,
+        azureApiVersion,
       });
       const capturedContext = createAiUsageCaptureContext({
         credentialReceipt: selectedApiKey.apiKeySelection,
@@ -181,7 +190,7 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
 
   const connection = resolveProviderConnection(provider, model);
   const piBinding = requirePiLanguageBinding(resolvePiLanguageBinding(provider, connection));
-  const adapter = resolvePiApiAdapter(piBinding.endpointType);
+  const adapter = resolvePiApiAdapter(piBinding.endpointType, connection.adapterFamily);
 
   return {
     adapter,
