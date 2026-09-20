@@ -1060,6 +1060,7 @@
   "settings.desktopConnection.error.unauthorized": "Bilgisayar bu aygıt belirtecini kabul etmedi. Tekrar eşleştirin.",
   "settings.desktopConnection.error.unknown": "İşlem başarısız oldu. Tekrar deneyin.",
   "settings.desktopConnection.error.unreachable": "PC'ye bağlanılamadı. Her iki cihazın da aynı yerel ağda olduğundan emin olun.",
+  "settings.desktopConnection.error.unreachable.ios": "PC'ye bağlanılamadı. Cihazların birbirine erişebildiğini doğrulayın ve Ayarlar › Gizlilik ve Güvenlik › Yerel Ağ bölümünde Cherry Studio'ya izin verin.",
   "settings.desktopConnection.error.unsupported-auth": "Mobil bu sağlayıcının kimlik doğrulama yöntemini desteklemiyor.",
   "settings.desktopConnection.error.unsupported-version": "Bu PC yapılandırma protokolü sürümü desteklenmiyor.",
   "settings.deviceConnections.empty": "Bağlı bilgisayar yok",

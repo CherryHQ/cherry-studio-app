@@ -1064,6 +1064,7 @@
   "settings.desktopConnection.error.unauthorized": "O PC não aceitou este token de dispositivo. Emparelhe novamente.",
   "settings.desktopConnection.error.unknown": "A operação falhou. Tente novamente.",
   "settings.desktopConnection.error.unreachable": "Não foi possível ligar ao PC. Certifique-se de que ambos os dispositivos estão na mesma rede local.",
+  "settings.desktopConnection.error.unreachable.ios": "Não foi possível ligar ao PC. Verifique se ambos os dispositivos conseguem comunicar entre si e permita o Cherry Studio em Definições › Privacidade e segurança › Rede local.",
   "settings.desktopConnection.error.unsupported-auth": "O telemóvel não suporta o método de autenticação deste fornecedor.",
   "settings.desktopConnection.error.unsupported-version": "Esta versão do protocolo de configuração de PC não é suportada.",
   "settings.deviceConnections.empty": "Nenhum PC ligado",

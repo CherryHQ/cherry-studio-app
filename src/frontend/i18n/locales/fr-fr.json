@@ -1064,6 +1064,7 @@
   "settings.desktopConnection.error.unauthorized": "Le PC n'a pas accepté ce jeton de périphérique. Associez-le à nouveau.",
   "settings.desktopConnection.error.unknown": "L'opération a échoué. Essayer à nouveau.",
   "settings.desktopConnection.error.unreachable": "Impossible de se connecter au PC. Assurez-vous que les deux appareils sont sur le même réseau local.",
+  "settings.desktopConnection.error.unreachable.ios": "Impossible de se connecter au PC. Vérifiez que les deux appareils peuvent communiquer et autorisez Cherry Studio dans Réglages › Confidentialité et sécurité › Réseau local.",
   "settings.desktopConnection.error.unsupported-auth": "Mobile ne prend pas en charge la méthode d'authentification de ce fournisseur.",
   "settings.desktopConnection.error.unsupported-version": "Cette version du protocole de configuration PC n'est pas prise en charge.",
   "settings.deviceConnections.empty": "Aucun PC connecté",
