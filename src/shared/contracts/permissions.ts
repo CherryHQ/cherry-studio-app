@@ -52,6 +52,8 @@ export type PermissionStatuses = Partial<Record<DevicePermissionScope, DevicePer
 export interface PermissionsModule {
   getStatuses(scopes: readonly DevicePermissionScope[]): Promise<PermissionStatuses>;
   openSystemSettings(permission?: DevicePermission): Promise<void>;
+  /** Attempts to prompt on iOS. False means the native module is missing; true is not a grant. */
+  requestLocalNetworkAccess(signal?: AbortSignal): Promise<boolean>;
   /** Cancellation skips queued and subsequent prompts; an open system sheet must still settle. */
   request(
     scopes: readonly DevicePermissionScope[],
