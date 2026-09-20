@@ -13,6 +13,8 @@ const mockRetry = jest.fn(async () => undefined);
 const mockReconcilePersistedMessages = jest.fn();
 const mockRespondApproval = jest.fn(async () => undefined);
 const mockCancelTurn = jest.fn(async () => undefined);
+const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+let mockIsSessionBusy = false;
 const mockForkSession = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockToastShow = jest.fn();
@@ -31,6 +33,7 @@ let mockAgentChatSession: {
   hasHistoryBeforeActiveTurn?: boolean;
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
+  retryingMessageId?: string;
   sessionId: string;
   status: 'ready';
 };
@@ -75,6 +78,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,
     ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
+    useAlert: () => ({ alert: { confirm: jest.fn() } }),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
@@ -149,6 +153,10 @@ jest.mock('../../../runtime', () => ({
       ...live.filter((message) => !persistedIds.has(message.id)),
     ];
   },
+  // The pending projection is the behaviour under test, not a test double.
+  projectRetryingMessage: jest.requireActual<
+    typeof import('../../../runtime/agentMessageProjection')
+  >('../../../runtime/agentMessageProjection').projectRetryingMessage,
   toAgentMessageListItems: (messages: readonly AgentMessageView[]) =>
     messages
       .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -163,7 +171,10 @@ jest.mock('../../../runtime', () => ({
     reconcilePersistedMessages: mockReconcilePersistedMessages,
     respondApproval: mockRespondApproval,
   }),
+  useAgentChatDeleteTurn: () => jest.fn(),
   useAgentChatFork: () => mockForkSession,
+  useAgentChatRetry: () => mockRetryMessage,
+  useAgentChatBusy: () => mockIsSessionBusy,
   useAgentChatSession: () => mockAgentChatSession,
 }));
 
@@ -272,6 +283,7 @@ describe('ChatWorkspace message rendering integration', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsSessionBusy = false;
     mockAgentChatSession = {
       activeTurn: null,
       liveMessages: [],
@@ -422,6 +434,18 @@ describe('ChatWorkspace message rendering integration', () => {
     const renderMessage = mockMessageListProps?.renderMessage;
     act(() => renderer?.update(createWorkspaceElement(false, messages)));
     expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
+  });
+
+  test('empties the retrying answer while admission runs, so the wait reads as pending', () => {
+    const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    mockAgentChatSession = { ...mockAgentChatSession, retryingMessageId: 'assistant-1' };
+
+    renderer = renderWorkspace(false, messages);
+
+    expect(mockMessageListProps?.messages).toEqual([
+      expect.objectContaining({ id: 'user-1', status: 'success' }),
+      expect.objectContaining({ id: 'assistant-1', status: 'pending', data: { parts: [] } }),
+    ]);
   });
 
   test('composes the assistant toolbar for settled assistant messages', () => {

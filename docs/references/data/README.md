@@ -109,7 +109,8 @@ clients may use their concrete SDK dependencies when those dependencies are part
 
 Painting and Provider Data API handlers call the desktop-aligned `PaintingService` and
 `ProviderService` directly; their workflow modules do not repeat CRUD. Model CRUD and the
-`models:reconcile` endpoint remain Data API concerns. MCP mutations use the same module object through
+`models:resolve` endpoint remain Data API concerns. Provider model reconciliation is exposed only
+through `Backend.models.reconcile()`, which refreshes registry defaults before persistence. MCP mutations use the same module object through
 a private mutation interface so persistence changes still warm or invalidate runtime state.
 
 ## Database
@@ -213,11 +214,11 @@ journaled under `app_state` keys prefixed with `seed:`.
 When nothing is saved, first use automatically downloads `models.json` and `provider-models.json`
 in the background; China locale/zone signals prefer GitCode and other devices prefer GitHub, with
 fallback to the other source. Startup never contacts the network once a snapshot is saved. The only
-later refresh trigger is opening a provider's model list, which silently downloads a newer catalog
-and keeps the saved one when offline or unchanged. The app does not bundle these model files. Model
-selection, model editing, and model calls require a downloaded snapshot; welcome, provider
-configuration, and history remain accessible. Model workflows present a retry action when the
-initial download fails.
+later refresh trigger is opening a provider's model list. Applying a newer catalog while that list
+is visible shows a global success toast at the top of the screen. Offline or unchanged catalogs
+keep the saved snapshot without a toast. The app does not bundle these model files. Model selection,
+model editing, and model calls require a downloaded snapshot; welcome, provider configuration, and
+history remain accessible. Model workflows present a retry action when the initial download fails.
 
 Complete, validated snapshots occupy two alternating files in persistent document storage. Writes
 replace the inactive slot, preserving the active snapshot even when the filesystem's overwrite/move

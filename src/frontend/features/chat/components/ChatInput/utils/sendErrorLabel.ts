@@ -7,12 +7,14 @@ import { type AgentErrorView, AgentProtocolError } from '@/shared/contracts/agen
  */
 const SEND_ERROR_LABEL_KEYS: Partial<Record<AgentErrorView['code'], string>> = {
   AGENT_NOT_FOUND: 'chat.input.sendError.agentNotFound',
+  AGENT_MODEL_NOT_CONFIGURED: 'chat.input.sendError.modelNotConfigured',
   ATTACHMENT_INVALID: 'chat.input.attachmentsRejected',
   ATTACHMENT_NO_TEXT: 'chat.input.attachmentNoText',
   ATTACHMENT_METADATA_MISMATCH: 'chat.input.attachmentUnavailable',
   ATTACHMENT_UNAVAILABLE: 'chat.input.attachmentUnavailable',
   CAPABILITY_UNSUPPORTED: 'chat.input.sendError.unsupported',
   EXECUTION_UNAVAILABLE: 'chat.input.sendError.executionUnavailable',
+  INTERRUPTED: 'chat.errorPart.interrupted.message',
   SESSION_BUSY: 'chat.input.sendError.sessionBusy',
   SESSION_NOT_FOUND: 'chat.input.sendError.sessionNotFound',
   TOOL_CALLING_UNSUPPORTED: 'chat.input.sendError.toolCallingUnsupported',

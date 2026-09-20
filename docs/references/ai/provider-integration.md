@@ -48,10 +48,11 @@ cancellation, output import, and cleanup. See
 `AiService` remains a private, desktop-aligned backend adapter for non-conversation operations:
 
 - `generateText()` for short internal generations such as Session naming;
-- `listModels()` and `checkModel()` for provider settings;
+- `listModels()` for provider discovery and `checkModel()` for internal AI SDK probes;
 - `generateImage()` for painting jobs.
 
-It is not exposed through `Backend` or frontend context. Every request supplies an explicit
+Settings and onboarding chat checks use the bound AgentRuntime through `Backend.models`.
+`AiService` is not exposed through `Backend` or frontend context. Every request supplies an explicit
 `uniqueModelId`; `AiService` does not resolve an Assistant, Topic, or default-model fallback.
 
 ## Provider And Model Records
@@ -75,6 +76,12 @@ Pi and AI SDK request construction. It resolves the effective endpoint, endpoint
 family, normalized wire model id, gateway provider-options key, and mobile/Provider request
 headers. It does not select API keys or IAM/OAuth credentials. Because configured extra headers may
 contain sensitive values, the result remains in memory and must not be persisted or logged.
+
+A trailing `#` on a base URL disables automatic API-version insertion. Standard base-URL formatting
+removes that marker before Pi, AI SDK, and model-list requests use the address. Full request-path
+overrides remain a separate AI SDK contract and are not admitted by Pi or the provider setup form;
+the form offers a base-URL correction instead. URL validation rejects query parameters, credentials,
+and nonempty fragments because these cannot safely receive an appended request path.
 
 For language models, Pi consumes the resolved connection through `resolvePiLanguageBinding()` and
 requires a typed compatibility result before selecting a credential. AI SDK configuration consumes

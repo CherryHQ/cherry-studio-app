@@ -112,7 +112,9 @@ export function useProviderModelCheck({
         });
       } else {
         alert.show({
-          description: result.error || t('settings.provider.models.checkFailedStatus'),
+          description: result.reason
+            ? t(`onboarding.check.${result.reason}`)
+            : result.error || t('settings.provider.models.checkFailedStatus'),
           title: t('settings.provider.models.checkFailed'),
         });
       }

@@ -106,6 +106,17 @@ describe('Pi registry request parameters', () => {
     ).not.toHaveProperty('reasoning_effort');
   });
 
+  test('uses the OpenAI Responses reasoning shape for Azure Responses', () => {
+    const result = apply(
+      'azure-openai-responses',
+      REASONING_FORMAT_PROFILES['openai-responses'].wire,
+      'high',
+      { reasoning_effort: 'low' },
+    );
+    expect(result.reasoning).toEqual({ effort: 'high' });
+    expect(result).not.toHaveProperty('reasoning_effort');
+  });
+
   test('uses a provider-declared switch instead of Pi URL heuristics', () => {
     const profile: ReasoningWireProfile = {
       off: {

@@ -24,12 +24,24 @@ const markdownThemeVariables = [
   '--font-mono',
 ];
 
+/**
+ * Native copy menus are presented by the renderer itself, on text selections and
+ * on Markdown tables. Their labels are product copy, so product code passes them
+ * in translated; omitting them leaves the library's English defaults, which is
+ * only ever acceptable in stories.
+ */
+export type MarkdownSelectionMenuLabels = {
+  copy: string;
+  copyAsMarkdown: string;
+};
+
 export type MarkdownTextProps = {
   fontSizeStep: TypographySizeStep;
   isStreaming?: boolean;
   markdown: string;
   onLinkPress: (url: string) => void;
   selectable?: boolean;
+  selectionMenuLabels?: MarkdownSelectionMenuLabels;
 };
 
 /**
@@ -111,6 +123,7 @@ export function MarkdownText({
   markdown,
   onLinkPress,
   selectable = true,
+  selectionMenuLabels,
 }: MarkdownTextProps) {
   const { theme } = useUniwind();
   const [
@@ -148,6 +161,14 @@ export function MarkdownText({
   // blocks and forcing a final layout even when the Markdown hasn't changed.
   const MarkdownRenderer = isStreaming || hasStreamed ? StreamdownText : EnrichedMarkdownText;
   const handleLinkPress = ({ url }: LinkPressEvent) => onLinkPress(url);
+  const selectionMenuConfig = useMemo(
+    () =>
+      selectionMenuLabels && {
+        copy: { label: selectionMenuLabels.copy },
+        copyAsMarkdown: { label: selectionMenuLabels.copyAsMarkdown },
+      },
+    [selectionMenuLabels],
+  );
   const markdownStyle = useMemo<MarkdownStyle>(() => {
     const typography = createMarkdownTypographyStyle(fontSizeStep, monoFontFamily);
 
@@ -246,6 +267,7 @@ export function MarkdownText({
       md4cFlags={{ latexMath: true, superscript: true, underline: false }}
       onLinkPress={handleLinkPress}
       selectable={selectable}
+      selectionMenuConfig={selectionMenuConfig}
       streamingAnimation={isStreaming}
     />
   );

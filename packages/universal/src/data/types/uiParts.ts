@@ -52,6 +52,21 @@ export interface CompactPartData {
   compactedContent: string;
 }
 
+/** Desktop-compatible timeline marker; summary text stays private to the runtime. */
+export interface CompactionAnchorData {
+  status: 'compacting' | 'done' | 'skipped';
+  phase: 'turn-start' | 'in-loop' | 'agent-session';
+  trigger?: 'manual' | 'auto';
+  startedAt?: string;
+  completedAt?: string;
+  preTokens?: number;
+  postTokens?: number;
+  durationMs?: number;
+  foldedCount?: number;
+}
+
+export type CompactionAnchorPartData = CompactionAnchorData;
+
 export interface CodePartData {
   content: string;
   language: string;
@@ -60,6 +75,7 @@ export interface CodePartData {
 export type CherryDataPartTypes = {
   code: CodePartData;
   compact: CompactPartData;
+  'compaction-anchor': CompactionAnchorPartData;
   error: ErrorPartData;
   translation: TranslationPartData;
   video: VideoPartData;

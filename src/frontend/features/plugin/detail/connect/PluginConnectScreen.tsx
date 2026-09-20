@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { usePluginCatalog } from '@/frontend/hooks/plugin';
 import { PluginIdSchema, type PluginCatalogEntry } from '@/shared/data/types/plugin';
 
-import { usePluginCatalog } from '../../usePluginCatalog';
 import { CredentialConnect } from './CredentialConnect';
 import { InteractiveConnect } from './InteractiveConnect';
 

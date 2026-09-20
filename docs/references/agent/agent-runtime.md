@@ -117,6 +117,20 @@ tool part for observation recovery and interruption; the full input is published
 limits, and native tool support. The Host calls it before reservation; provider SDK model objects,
 credentials, endpoints, and headers remain private to the Runtime adapter. Pi preflight and final
 model resolution read the same mobile model/provider services and enforce the same endpoint rules.
+Isolated model probes may supply `apiKeyOverride` to check the user-selected key. The adapter
+materializes and attributes that credential for this request only; ordinary conversation requests
+leave selection inside the adapter. The override never enters transcript or inference snapshots,
+trace attributes, or output events.
+
+Preflight reports the independent input limit, bounded by the total context window, without
+subtracting the model's maximum output capability. The SDK dynamically fits the actual output cap
+to each request's remaining context, keeping 4,096 tokens clear of the window before sizing output.
+Hard admission therefore retains the safety margin plus an output reserve that covers that clamp
+and a usable answer of at least 1,024 tokens; an admitted request is never reduced to a one-token
+response. The compaction reserve (at most 16,384 tokens and 20% of the window) is a soft trigger,
+not a sending limit, and never drops below the admission reserve, so a small window reaches
+compaction before the hard limit rejects it. Output space outside an independent input cap does not
+reduce that input cap again.
 
 Capabilities describe what the engine contract can represent. In particular, `tools: true` means
 Pi can run a tool loop; it does not mean any effective tool will enter the turn. The Host derives
@@ -170,6 +184,8 @@ type RuntimeToolCall = {
 }
 
 type RuntimeExecutionRequest = {
+  // Used only by isolated model probes; never persisted or included in traces or events.
+  apiKeyOverride?: string
   turnId: string
   // Host-prepared application prompt: mobile Runtime rules, App language, and Agent instructions.
   instructions: string
@@ -177,6 +193,8 @@ type RuntimeExecutionRequest = {
   history: RuntimeHistoryTurn[]
   contextCheckpoint: RuntimeContextCheckpoint | null
   input: RuntimeInputPart[]
+  // Retained assistant tool-call/result prefix for an explicit manual retry.
+  resume?: RuntimeMessagePart[]
   tools: RuntimeTool[]
   options: RuntimeOptions
   trace?: TraceSpan
@@ -353,10 +371,12 @@ invalid, incompatible, oversized, or orphaned candidate—the Host supplies the 
 history. Pi owns all later selection, formatting, and compaction policy.
 
 Pi estimates reconstructed history with `pi-agent-core`'s content estimator. Persisted assistant
-usage aggregates multiple requests for analytics and is never a context-size measurement. The adapter adds system
-instructions, current input, tool schemas, image reserves, requested output, and a fixed safety
-margin before calling Pi's `shouldCompact`. A current input whose fixed costs alone exceed the
-window fails before the first model call.
+usage aggregates multiple requests for analytics and is never a context-size measurement. The adapter
+adds system instructions, current input, tool schemas, image reserves, and a fixed safety margin
+before calling Pi's `shouldCompact`. Historical image reserves follow the checkpoint-projected
+history; they are removable history costs, not part of the current input's fixed cost. A current
+input whose fixed costs exceed the hard budget fails before the first model call. Crossing the
+compaction trigger alone never proves that a request cannot be sent.
 
 On compaction, Pi owns the cut point, `previousSummary` merge, retained tail, and split-turn prefix
 summary. Checkpoint payloads store the redacted summary and an optional structural resume cursor;
@@ -365,9 +385,44 @@ durable Turns. A split-turn cursor reconstructs the retained suffix from the Hos
 Turn so tool calls and results remain paired after restart. Summary calls reuse the current model
 transport, credentials, timeout, and cancellation signal, and emit separate invocation usage reports attributed to the active Turn.
 
+If automatic compaction fails, cannot prepare a summary, or produces a summary that does not fit,
+the Runtime keeps the original projected context when it still fits the hard budget. It emits no
+checkpoint for that fallback. Cancellation still ends the turn, and oversized original context is
+never sent merely because compaction failed.
+
 Initial compaction is not the last admission check. Before Pi continues after a tool batch, the
-Runtime re-estimates the live assistant request and tool-result messages together with system,
-tool-schema, attachment, output, and safety reserves. A continuation that no longer fits stops as
+Runtime applies the same soft compaction trigger, summarizes the older context, and retains the
+recent tool-call/result pairs. It replaces Pi's next context without replaying any tool. Each batch
+gets at most one compaction attempt; failure falls back only when the original context still fits.
+The retained tail is sent verbatim, so when it alone exceeds the input budget the Runtime fails with
+`context_window_exceeded` without requesting a summary.
+Loop summaries are execution-local: they do not create durable replay cursors into the active turn,
+whose model-only tool messages differ from the persisted application transcript. The next fresh
+turn reconstructs from the last durable preflight checkpoint and the complete transcript tail.
+
+Pi's default message conversion drops `compactionSummary` messages. The Runtime installs its own
+conversion so every summary, preflight or in-loop, reaches the provider as the opening user message;
+a compacted request never starts with an assistant message.
+
+`context.compaction` carries a turn-local `id`, `phase` (`preflight` or
+`tool-loop`), `status` (`running`, `completed`, `failed`, or `cancelled`), `startedAt`, optional
+`completedAt`, `inputTokensBefore`, optional `inputTokensAfter`, and an optional closed `reason`
+(`summary-failed`, `insufficient-reduction`, or `cancelled`). The event never exposes summary text,
+and request-context measurements stay inside the Runtime until a consumer needs them.
+The Host projects compaction into ordered `data-compaction-anchor` parts using Desktop field names and ISO timestamps. Runtime `running` maps
+to `compacting`, `completed` to `done`, and failed/cancelled attempts to `skipped`. Only completed
+anchors are persisted; summaries and detailed failure reasons stay behind the Runtime boundary.
+
+Content estimates retain Pi's ASCII heuristic and reserve two tokens per non-ASCII code point,
+including system instructions and tool schemas. This is a conservative multilingual heuristic,
+not a model tokenizer or a guarantee against provider-side overflow. The provider request boundary
+also checks this input budget and clamps the requested output to the remaining total window minus
+4,096 tokens, respecting both the caller's cap and the model's maximum output capability.
+Within a live loop, the Runtime uses the latest valid provider usage plus subsequent messages
+when available. That usage
+already covers the old system prompt, tool schemas, and images; only unmeasured images and newly
+introduced tool definitions receive additional reserves. Without valid usage, those costs are
+estimated from content. A continuation that no longer fits the hard budget stops as
 `context_window_exceeded` before another provider request. Model-only catalog results additionally
 consume this live headroom while they are produced. At assistant response completion, only the new
 response content is deducted; that request's input was already budgeted before execution.
@@ -484,6 +539,7 @@ type RuntimeEvent =
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }
   | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
+  | { type: 'context.compaction'; compaction: RuntimeContextCompaction }
   | {
       type: 'usage'
       requestId: string
@@ -670,7 +726,13 @@ boundary; shutdown joins admissions before closing Runtime Sessions.
 Local execution depends on the Mobile JavaScript process. If the process is suspended or killed and
 the turn cannot reach a terminal event, startup reconciliation marks the persisted placeholder and
 turn as interrupted and terminalizes every non-terminal persisted tool part as `interrupted`.
-Version 1 has no resume API or background-execution guarantee.
+There is no automatic process resumption or background-execution guarantee. Manual answer retry
+starts a fresh execution with an optional `resume` prefix. Pi adds the original user input and
+retained assistant tool-call/result pairs to its initial context and calls `continue()`; replayed
+parts do not emit output events or execute tools. This current-turn prefix participates in context
+admission and is never summarized away as completed history. `resume` carries only model-visible
+parts, so a retained prefix that projects to nothing — an assistant artifact is never replayed —
+is sent as a plain restart rather than an empty continuation.
 
 History projection never sends an unanswered approval or another dangling tool call to Pi. A
 persisted `denied`, `error`, or `interrupted` tool part contributes its paired normalized tool result;

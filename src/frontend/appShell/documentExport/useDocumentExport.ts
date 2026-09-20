@@ -1,6 +1,7 @@
 import { type Href, router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 
+import { useExportWatermarkStyle } from '@/frontend/appShell/fileExport';
 import { useBackendModule } from '@/frontend/data';
 import type {
   DocumentExportInput,
@@ -13,12 +14,13 @@ import { createDocumentExportRequest, finishDocumentExportRequest } from './docu
 
 export function useDocumentExport() {
   const module = useBackendModule('documentExport');
+  const defaultWatermark = useExportWatermarkStyle();
   const open = useCallback(
     async ({
       input,
       initialFormat = 'image',
       allowedFormats,
-      watermark,
+      watermark = defaultWatermark,
       option,
       returnTo,
     }: {
@@ -26,7 +28,7 @@ export function useDocumentExport() {
       initialFormat?: ExportFormat;
       /** Formats offered for this source, in menu order. Defaults to all formats. */
       allowedFormats?: readonly [ExportFormat, ...ExportFormat[]];
-      /** Defaults to the Cherry footer; none omits it from every offered format. */
+      /** Defaults to the global preference; none omits the footer from every offered format. */
       watermark?: ExportWatermarkStyle;
       /** An initially unchecked source option, with a complete document for its unchecked state. */
       option?: { label: string; uncheckedInput: DocumentExportInput };
@@ -62,7 +64,7 @@ export function useDocumentExport() {
       await request.outcome;
       return 'closed';
     },
-    [module],
+    [module, defaultWatermark],
   );
   return useMemo(() => ({ open }), [open]);
 }

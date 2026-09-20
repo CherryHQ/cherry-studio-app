@@ -5,6 +5,7 @@ import {
   type EndpointType,
 } from '@cherrystudio/provider-registry';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
@@ -19,6 +20,7 @@ type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
 
 const mockGetModelById = jest.fn();
 const mockGetProviderById = jest.fn();
+const mockGetAuthConfig = jest.fn();
 const mockResolveApiKey = jest.fn();
 const mockBoundStreamFn = jest.fn();
 const mockBindPiStream = jest.fn<ReturnType<BindPiStream>, Parameters<BindPiStream>>();
@@ -28,6 +30,7 @@ jest.mock('@/backend/data/services/ModelService', () => ({
 }));
 jest.mock('@/backend/data/services/ProviderService', () => ({
   providerService: {
+    getAuthConfig: (...args: unknown[]) => mockGetAuthConfig(...args),
     getByProviderId: (...args: unknown[]) => mockGetProviderById(...args),
     resolveApiKey: (...args: unknown[]) => mockResolveApiKey(...args),
   },
@@ -88,12 +91,38 @@ describe('Pi model resolver', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAuthConfig.mockResolvedValue(null);
     mockResolveApiKey.mockResolvedValue({
       apiKeySelection: CREDENTIAL_RECEIPT,
       value: 'secret-key',
     });
     mockBindPiStream.mockResolvedValue(mockBoundStreamFn);
     resolver = createPiModelResolver();
+  });
+
+  test('uses the selected probe key for transport, attribution, and redaction', async () => {
+    const testCase = CASES[0];
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily),
+    );
+    mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+    mockResolveApiKey.mockResolvedValue({
+      apiKeySelection: CREDENTIAL_RECEIPT,
+      value: 'probe-key',
+    });
+    const resolution = await resolver.resolveModel(
+      { modelId: 'test-model', providerId: 'test-provider' },
+      {},
+      'probe-session',
+      'probe-key',
+    );
+    expect(mockResolveApiKey).toHaveBeenCalledWith('test-provider', 'probe-key');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ apiKey: 'probe-key' }),
+    );
+    expect(resolution.redactionValues).toContain('probe-key');
+    expect(resolution.usageContext.credentialReceipt).toEqual(CREDENTIAL_RECEIPT);
   });
 
   test.each(CASES)('resolves $endpointType through $api', async (testCase) => {
@@ -151,6 +180,31 @@ describe('Pi model resolver', () => {
         temperature: 0.25,
         timeoutMs: 600_000,
       }),
+    );
+  });
+
+  test('resolves Azure Responses and forwards the Azure API version', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_RESPONSES,
+      'https://resource.openai.azure.com/openai',
+      'azure-responses',
+    );
+    provider.authMethods = undefined;
+    provider.authType = 'iam-azure';
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
+    mockGetAuthConfig.mockResolvedValue({ type: 'iam-azure', apiVersion: '2025-04-01-preview' });
+
+    const resolution = await resolve(resolver, { maxOutputTokens: 1024 });
+
+    expect(resolution.model).toMatchObject({
+      api: 'azure-openai-responses',
+      baseUrl: 'https://resource.openai.azure.com/openai',
+    });
+    expect(mockGetAuthConfig).toHaveBeenCalledWith('test-provider');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.objectContaining({ api: 'azure-openai-responses' }),
+      expect.objectContaining({ azureApiVersion: '2025-04-01-preview' }),
     );
   });
 
@@ -310,10 +364,49 @@ describe('Pi model resolver', () => {
 
     const resolution = await resolve(resolver, { maxOutputTokens: 1024 });
 
-    expect(toPiModelPreflight(model).maxInputTokens).toBe(96_000);
+    expect(toPiModelPreflight(model).maxInputTokens).toBe(120_000);
     expect(resolution.maxInputTokens).toBe(120_000);
     expect(resolution.model.contextWindow).toBe(128_000);
     expect(resolution.model.maxTokens).toBe(32_000);
+  });
+
+  test('preserves input capacity and the output capability when both span the full context', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_RESPONSES;
+    const model = makeModel(endpoint, {
+      apiModelId: 'grok-4.5',
+      contextWindow: 500_000,
+      maxOutputTokens: 500_000,
+    });
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(endpoint, 'https://api.x.ai/v1', 'xai-responses'),
+    );
+    mockGetModelById.mockResolvedValue(model);
+
+    const preflight = await resolver.preflightModel({
+      providerId: 'test-provider',
+      modelId: model.modelId,
+    });
+    const resolution = await resolve(resolver);
+
+    expect(preflight).toMatchObject({
+      contextWindow: 500_000,
+      maxInputTokens: 500_000,
+      maxOutputTokens: 500_000,
+    });
+    expect(resolution.model.maxTokens).toBe(500_000);
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ maxTokens: 500_000 }),
+    );
+    const shortRequest = buildBaseOptions(resolution.model, {
+      messages: [{ role: 'user', content: '测试', timestamp: 1 }],
+    });
+    const longerRequest = buildBaseOptions(resolution.model, {
+      messages: [{ role: 'user', content: 'x'.repeat(100_000), timestamp: 1 }],
+    });
+    expect(shortRequest.maxTokens).toBeGreaterThan(16_384);
+    expect(shortRequest.maxTokens).toBeLessThan(500_000);
+    expect(longerRequest.maxTokens).toBeLessThan(shortRequest.maxTokens!);
   });
 
   test.each([{ id: 'perplexity' }, { id: 'copied-perplexity', presetProviderId: 'perplexity' }])(
@@ -373,7 +466,7 @@ describe('Pi model resolver', () => {
     ).resolves.toMatchObject({
       contextWindow: 128_000,
       inputModalities: ['text', 'image'],
-      maxInputTokens: 123_904,
+      maxInputTokens: 128_000,
       maxOutputTokens: 4_096,
       supportsTools: true,
     });
@@ -381,7 +474,7 @@ describe('Pi model resolver', () => {
     expect(mockBindPiStream).not.toHaveBeenCalled();
   });
 
-  test('bounds input capacity by both the model limit and reserved output', () => {
+  test('bounds the independent input limit by the total context window', () => {
     expect(
       toPiModelPreflight(
         makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES, {
@@ -390,7 +483,7 @@ describe('Pi model resolver', () => {
           maxOutputTokens: 4_000,
         }),
       ),
-    ).toMatchObject({ contextWindow: 16_000, maxInputTokens: 12_000, maxOutputTokens: 4_000 });
+    ).toMatchObject({ contextWindow: 16_000, maxInputTokens: 16_000, maxOutputTokens: 4_000 });
   });
 
   test('uses the existing per-model gateway route', async () => {

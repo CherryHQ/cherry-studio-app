@@ -5,6 +5,7 @@ import {
   type AppBootstrapRuntime,
   createAppBootstrapRuntime,
 } from '@/bootstrap/runtime/createAppBootstrapRuntime';
+import { recordSentryBreadcrumb } from '@/frontend/appShell/observability';
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
@@ -76,15 +77,18 @@ async function initializeApp({
   setState: (state: AppBootstrapState) => void;
 }) {
   try {
+    recordSentryBreadcrumb('startup.bootstrap');
     await runtime.initialize();
 
     if (!isDisposed()) {
+      recordSentryBreadcrumb('startup.ready');
       setState({ status: 'ready' });
       // Off the startup critical path: fire once the gate opens.
       void runtime.runPostReadyTasks();
     }
   } catch (error) {
     if (!isDisposed()) {
+      recordSentryBreadcrumb('startup.failed');
       logger.error('Application initialization failed', toError(error), {
         operation: 'app.initialize',
       });

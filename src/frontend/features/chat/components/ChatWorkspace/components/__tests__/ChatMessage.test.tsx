@@ -8,6 +8,7 @@ import { ChatMessage } from '../ChatMessage';
 
 const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
 const mockCopyMessage = jest.fn();
+const mockDeleteMessageTurn = jest.fn();
 const mockShareMessage = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -19,6 +20,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
 jest.mock('../../context/AssistantMessageActionsProvider', () => ({
   useAssistantMessageActions: () => ({
     copyAssistantMessage: mockCopyMessage,
+    deleteMessageTurn: mockDeleteMessageTurn,
     shareAssistantMessage: mockShareMessage,
   }),
 }));
@@ -82,7 +84,6 @@ describe('ChatMessage', () => {
     expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'assistant-1', text: 'Answer' });
     act(() => menu.items[1].onPress());
     expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'assistant-1' });
-    expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(false);
   });
 
   test('copies user text and shares the selected user message through the existing actions', () => {
@@ -169,12 +170,25 @@ describe('ChatMessage', () => {
     expect(renderer!.root.findAllByType('Button')).toHaveLength(0);
   });
 
+  test('keeps the long-press menu free of destructive actions', () => {
+    act(() => {
+      renderer = create(renderMessage({ ...createMessage('success'), turnId: 'turn-1' }));
+    });
+
+    // Deleting a turn lives on the assistant toolbar. A long press competes
+    // with native text selection and lands wherever the finger reaches, so it
+    // must not be able to remove anything.
+    const items = mockContextMenu.mock.lastCall![0].items;
+    expect(items.map((item) => item.id)).toEqual(['copy', 'share']);
+    expect(items.some((item) => item.destructive)).toBe(false);
+    expect(mockDeleteMessageTurn).not.toHaveBeenCalled();
+  });
+
   test('keeps native text selection available when message actions are disabled', () => {
     act(() => {
       renderer = create(renderMessage(createMessage('success'), false));
     });
 
-    expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(true);
     expect(mockContextMenu).not.toHaveBeenCalled();
   });
 

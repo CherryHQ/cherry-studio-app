@@ -354,6 +354,9 @@ retry; cancellation still propagates without becoming a cached failure.
 
 ### System Health
 
+- Health is currently exposed only on iOS. Android omits health permission settings, the Agent
+  capability switch, and runtime tools, including their permission-status lookups. Native Android
+  integration and historical health tool results are retained.
 - [Health Access](../../../modules/health-access/README.md) owns native read authorization;
   `src/backend/services/permissions` maps its results to the shared permission contract. Data
   queries remain in `src/backend/services/device/health.ts` using Nitro HealthKit.
@@ -361,16 +364,23 @@ retry; cancellation still propagates without becoming a cached failure.
   aggregate failures. Failed queries must not resolve as empty data or a measured zero; the caller
   marks the affected metric as `error` while retaining successful metrics. This patch and the iOS
   calendar requester patch require a new native build.
-- Android awaits the runtime permission callback on Android 14+ and the Health Connect activity
-  result on earlier versions, then reads grants per data type. Settings open Health Connect
-  management even when all permissions are already granted.
-  Unsupported devices hide the capability; a missing or outdated provider retains an install path.
+- The retained Android implementation awaits the runtime permission callback on Android 14+ and
+  the Health Connect activity result on earlier versions, then reads grants per data type. Its
+  settings handler opens Health Connect management even when all permissions are already granted.
 - Apple Health never discloses whether a read permission was granted. `requested` means the system
   no longer needs to ask, and settings explain how to review access in Apple Health.
 - Summaries request only selected metrics, skip known denied metrics, and preserve successful
   metrics when another query fails. Absent data is `null` in range summaries, with per-metric
   `no-data` or `error` states; it must not be interpreted as zero activity. Daily results omit
   missing values. Queries remain subject to the system's history limits.
+- Quantity reads take the native aggregate first and fetch raw samples only to settle a zero,
+  which is where a measured zero and a missing record still differ and where the raw fetch is
+  cheap. Fetching raw samples for the whole range first exceeds the native timeout on dense
+  metrics such as step count, active energy, and heart rate. Daily results aggregate one query
+  per calendar day in the device's timezone rather than bucketing raw samples by UTC date.
+- A metric marked `error` carries the native failure reason alongside its state. A timeout, an
+  unmapped type, and a revoked grant are different faults with the same state, and the device log
+  is not available where the result is read.
 
 ### Image Generation
 

@@ -1,9 +1,4 @@
-import type {
-  CategoryDataPoint,
-  HealthKit,
-  QuantityDataPoint,
-  WorkoutDataPoint,
-} from 'react-native-nitro-healthkit';
+import type { CategoryDataPoint, HealthKit, WorkoutDataPoint } from 'react-native-nitro-healthkit';
 
 import { HEALTH_DATA_TYPES } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -101,6 +96,7 @@ async function getRangeHealthSummary(
   end: Date,
 ) {
   const metricStates: Partial<Record<HealthMetricName, MetricState>> = {};
+  const metricErrors: Partial<Record<HealthMetricName, string>> = {};
   const entries = await Promise.all(
     metrics.map(async (metric) => {
       const unit = metric === 'sleep' ? 'hours' : quantityMetrics[metric].unit;
@@ -113,31 +109,18 @@ async function getRangeHealthSummary(
           metricStates[metric] = samples.length ? 'available' : 'no-data';
           return [metric, { unit, value: samples.length ? sumSleepHours(samples) : null }] as const;
         }
-        const config = quantityMetrics[metric];
-        // The native aggregate collapses absent samples into zero. Check existence
-        // without replacing HealthKit/Health Connect's aggregation with raw sums.
-        const samples = await withNativeToolTimeout(
-          healthKit.getQuantityData(config.identifier, start, end, null, false),
-          `${metric} availability query`,
-        );
-        if (!samples.length) {
-          metricStates[metric] = 'no-data';
-          return [metric, { unit, value: null }] as const;
-        }
-        const value = await withNativeToolTimeout(
-          healthKit.getAggregatedQuantity(config.identifier, start, end, config.aggregation, false),
-          `${metric} query`,
-        );
-        metricStates[metric] = 'available';
+        const value = await readQuantity(healthKit, metric, start, end);
+        metricStates[metric] = value === null ? 'no-data' : 'available';
         return [metric, { unit, value }] as const;
       } catch (error) {
         logger.warn('Health metric query failed', { metric, error });
         metricStates[metric] = 'error';
+        metricErrors[metric] = describeError(error);
         return [metric, { unit, value: null }] as const;
       }
     }),
   );
-  return { data: Object.fromEntries(entries), metricStates };
+  return { data: Object.fromEntries(entries), metricStates, ...reportErrors(metricErrors) };
 }
 
 async function getDailyHealthData(
@@ -148,6 +131,7 @@ async function getDailyHealthData(
 ) {
   const daily = new Map<string, Record<string, { unit: string; value: number }>>();
   const metricStates: Partial<Record<HealthMetricName, MetricState>> = {};
+  const metricErrors: Partial<Record<HealthMetricName, string>> = {};
   await Promise.all(
     metrics.map(async (metric) => {
       try {
@@ -159,17 +143,23 @@ async function getDailyHealthData(
           metricStates[metric] = samples.length ? 'available' : 'no-data';
           applyDailySleep(daily, samples);
         } else {
-          const config = quantityMetrics[metric];
-          const samples = await withNativeToolTimeout(
-            healthKit.getQuantityData(config.identifier, start, end, null, false),
-            `${metric} query`,
-          );
-          metricStates[metric] = samples.length ? 'available' : 'no-data';
-          applyDailyQuantity(daily, metric, config, samples);
+          const { unit } = quantityMetrics[metric];
+          let found = false;
+          // One aggregate per day instead of one raw fetch for the whole range:
+          // the native per-day value is what the caller asked for, and the range
+          // fetch it replaces is what made dense metrics exceed the timeout.
+          for (const day of localDays(start, end)) {
+            const value = await readQuantity(healthKit, metric, day.start, day.end);
+            if (value === null) continue;
+            found = true;
+            daily.set(day.key, { ...daily.get(day.key), [metric]: { unit, value } });
+          }
+          metricStates[metric] = found ? 'available' : 'no-data';
         }
       } catch (error) {
         logger.warn('Daily health metric query failed', { metric, error });
         metricStates[metric] = 'error';
+        metricErrors[metric] = describeError(error);
       }
     }),
   );
@@ -178,29 +168,65 @@ async function getDailyHealthData(
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([date, metrics]) => ({ date, metrics })),
     metricStates,
+    ...reportErrors(metricErrors),
   };
 }
 
-function applyDailyQuantity(
-  daily: Map<string, Record<string, { unit: string; value: number }>>,
+/**
+ * The native aggregate reports an empty range as zero, so a zero result alone
+ * cannot tell a measured zero from a missing record. Settle it with a raw
+ * existence query, which is cheap exactly when it runs: a zero aggregate means
+ * the range holds few or no samples. Probing first instead would fetch every
+ * sample in the range, and dense metrics such as heart rate or step count
+ * exceed the native timeout long before that completes on a real device.
+ */
+async function readQuantity(
+  healthKit: HealthKit,
   metric: Exclude<HealthMetricName, 'sleep'>,
-  config: { aggregation: 'average' | 'sum'; unit: string },
-  samples: QuantityDataPoint[],
-) {
-  const buckets = new Map<string, number[]>();
-  for (const sample of samples) {
-    const date = new Date(sample.startDate).toISOString().slice(0, 10);
-    buckets.set(date, [...(buckets.get(date) ?? []), sample.value]);
+  start: Date,
+  end: Date,
+): Promise<number | null> {
+  const config = quantityMetrics[metric];
+  const value = await withNativeToolTimeout(
+    healthKit.getAggregatedQuantity(config.identifier, start, end, config.aggregation, false),
+    `${metric} query`,
+  );
+  if (value !== 0) return value;
+  const samples = await withNativeToolTimeout(
+    healthKit.getQuantityData(config.identifier, start, end, null, false),
+    `${metric} availability query`,
+  );
+  return samples.length ? 0 : null;
+}
+
+/**
+ * `error` alone cannot be acted on: a native timeout, a missing type, and a
+ * revoked grant all read the same. Carry the reason so the failure is
+ * diagnosable from the tool result instead of only from a device log.
+ */
+function describeError(error: unknown) {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 200);
+}
+
+/** Absent rather than empty, so a successful read carries no failure field. */
+function reportErrors(metricErrors: Partial<Record<HealthMetricName, string>>) {
+  return Object.keys(metricErrors).length > 0 ? { metricErrors } : {};
+}
+
+/** Calendar days in the device's timezone, clipped to the requested range. */
+function* localDays(start: Date, end: Date) {
+  let cursor = start;
+  while (cursor < end) {
+    const midnight = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+    const next = midnight < end ? midnight : end;
+    yield { end: next, key: localDateKey(cursor), start: cursor };
+    cursor = next;
   }
-  for (const [date, values] of buckets) {
-    const sum = values.reduce((total, value) => total + value, 0);
-    const day = daily.get(date) ?? {};
-    day[metric] = {
-      unit: config.unit,
-      value: config.aggregation === 'sum' ? sum : sum / values.length,
-    };
-    daily.set(date, day);
-  }
+}
+
+function localDateKey(date: Date) {
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${`${date.getDate()}`.padStart(2, '0')}`;
 }
 
 function applyDailySleep(
@@ -209,7 +235,7 @@ function applyDailySleep(
 ) {
   for (const sample of samples) {
     if (!isAsleepSample(sample)) continue;
-    const date = new Date(sample.startDate).toISOString().slice(0, 10);
+    const date = localDateKey(new Date(sample.startDate));
     const day = daily.get(date) ?? {};
     day.sleep = {
       unit: 'hours',

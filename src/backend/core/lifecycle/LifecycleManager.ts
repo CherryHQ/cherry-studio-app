@@ -117,12 +117,14 @@ export class LifecycleManager {
       const results = await Promise.allSettled(
         layer.map((serviceName) => this.initializeService(serviceName)),
       );
+      // Failed initialization can already own resources. Include every settled
+      // peer before propagating a failure so rollback visits the entire layer.
+      this.initializationOrder.push(...layer);
       for (const result of results) {
         if (result.status === 'rejected') {
           throw result.reason;
         }
       }
-      this.initializationOrder.push(...layer);
     }
 
     logger.info(

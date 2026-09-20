@@ -196,7 +196,7 @@ describe('capability-aware painting input', () => {
     );
   });
 
-  it('pauses automatic references across incompatible models but blocks explicit references', () => {
+  it('pauses automatic references but lets explicit incompatibilities reach submit feedback', async () => {
     mockModel = { ...mockModel, imageGeneration: { modes: { generate: { supports: {} } } } };
     update();
     expect(mockSurfaceProps.canSend).toBe(true);
@@ -206,7 +206,8 @@ describe('capability-aware painting input', () => {
     act(() => mockSession.reference.select(image('first')));
     mockModel = { ...mockModel, imageGeneration: { modes: { generate: { supports: {} } } } };
     update();
-    expect(mockSurfaceProps.canSend).toBe(false);
+    expect(mockSurfaceProps.canSend).toBe(true);
+    await expect(send()).rejects.toThrow('images-unsupported');
   });
 
   it('gives manual images priority without exceeding a single-image model limit', async () => {
@@ -247,7 +248,7 @@ describe('capability-aware painting input', () => {
     expect(mockSurfaceProps.canSend).toBe(false);
   });
 
-  it('keeps parameter drafts across text controls and preserves invalid input for correction', () => {
+  it('keeps parameter drafts across text controls while leaving submit available', () => {
     mockModel = {
       ...mockModel,
       imageGeneration: {
@@ -259,11 +260,11 @@ describe('capability-aware painting input', () => {
     act(() =>
       mockSession.setParameterDraft(key, { modelId: mockModel.id, values: { numImages: 20 } }),
     );
-    expect(mockSurfaceProps.canSend).toBe(false);
+    expect(mockSurfaceProps.canSend).toBe(true);
     update({ showText: true });
     update();
     expect(mockSession.parameterDrafts[key].values).toEqual({ numImages: 20 });
-    expect(mockSurfaceProps.canSend).toBe(false);
+    expect(mockSurfaceProps.canSend).toBe(true);
   });
 
   it('restores a visited mode default after editing the other mode', () => {

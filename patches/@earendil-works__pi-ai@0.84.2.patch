@@ -301,3 +301,28 @@ index fe1f336d89b4cdb500956b9431ed4306c3182d49..4e9d42f588626f21d7258a35cf23080a
 +			"types": "./dist/utils/validation.d.ts",
 +			"import": "./dist/utils/validation.js"
 +		},
+diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-responses.js
+--- a/dist/api/azure-openai-responses.js
++++ b/dist/api/azure-openai-responses.js
+@@ -1,5 +1,6 @@
+ import { AzureOpenAI } from "openai";
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+@@ -109,7 +110,13 @@
+                 delete block.customInput;
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
++            const normalizedError = normalizeProviderError(error);
+             output.errorMessage = formatAzureOpenAIError(error);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }

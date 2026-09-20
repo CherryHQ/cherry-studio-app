@@ -25,6 +25,19 @@ describe('provider configuration prerequisites', () => {
     expect(getProviderConfigurationIssue({ ...provider, authOptional: true }, [])).toBeNull();
   });
 
+  it('allows version suppression but rejects a complete request path as a base URL', () => {
+    const withBaseUrl = (baseUrl: string) => ({
+      ...provider,
+      endpointConfigs: { 'openai-chat-completions': { baseUrl } },
+    });
+    expect(
+      getProviderConfigurationIssue(withBaseUrl('https://example.test/gateway#'), [key]),
+    ).toBeNull();
+    expect(
+      getProviderConfigurationIssue(withBaseUrl('https://example.test/v1/chat/completions'), [key]),
+    ).toBe('invalid-endpoint');
+  });
+
   it('does not substitute a different endpoint for an invalid explicit default', () => {
     expect(
       getProviderConfigurationIssue({ ...provider, defaultChatEndpoint: 'anthropic-messages' }, [

@@ -3,14 +3,14 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type { FetchFunction } from '@earendil-works/pi-ai';
 
-import type { PiLanguageEndpointType } from './piLanguageBinding';
 import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
 
 export type SupportedPiApi =
   | 'anthropic-messages'
   | 'google-generative-ai'
   | 'openai-completions'
-  | 'openai-responses';
+  | 'openai-responses'
+  | 'azure-openai-responses';
 
 type PiStreamFn = AgentOptions['streamFn'];
 
@@ -21,7 +21,16 @@ type PiApiAdapter = {
   supportsCustomFetch: boolean;
 };
 
-const PI_API_ADAPTERS: Record<PiLanguageEndpointType, PiApiAdapter> = {
+const AZURE_RESPONSES_ADAPTER: PiApiAdapter = {
+  api: 'azure-openai-responses',
+  formatBaseUrl: (baseUrl) => formatApiHost(baseUrl, false),
+  loadStreamSimple: async () =>
+    (await import('@earendil-works/pi-ai/api/azure-openai-responses'))
+      .streamSimple as unknown as PiStreamFn,
+  supportsCustomFetch: true,
+};
+
+const PI_API_ADAPTERS = {
   [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
     api: 'anthropic-messages',
     formatBaseUrl: (baseUrl) => withoutTrailingApiVersion(formatApiHost(baseUrl, false)),
@@ -54,9 +63,23 @@ const PI_API_ADAPTERS: Record<PiLanguageEndpointType, PiApiAdapter> = {
         .streamSimple as unknown as PiStreamFn,
     supportsCustomFetch: true,
   },
-};
+} satisfies Record<string, PiApiAdapter>;
 
-export function resolvePiApiAdapter(endpointType: PiLanguageEndpointType): PiApiAdapter {
+export type PiLanguageEndpointType = keyof typeof PI_API_ADAPTERS;
+
+export function isPiLanguageEndpointType(
+  endpointType: string | undefined,
+): endpointType is PiLanguageEndpointType {
+  return endpointType !== undefined && Object.hasOwn(PI_API_ADAPTERS, endpointType);
+}
+
+export function resolvePiApiAdapter(
+  endpointType: PiLanguageEndpointType,
+  adapterFamily?: string,
+): PiApiAdapter {
+  if (endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES && adapterFamily === 'azure-responses') {
+    return AZURE_RESPONSES_ADAPTER;
+  }
   return PI_API_ADAPTERS[endpointType];
 }
 
@@ -69,6 +92,7 @@ type PiStreamBinding = {
   requestParameters?: PiRequestParameters;
   temperature?: number;
   timeoutMs: number;
+  azureApiVersion?: string;
 };
 
 export async function bindPiStream(
@@ -80,9 +104,12 @@ export async function bindPiStream(
   return (model, context, options) => {
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
     const temperature = options?.temperature ?? binding.temperature;
-    return streamSimple(model, context, {
+    const streamOptions = {
       ...options,
       apiKey: binding.apiKey,
+      ...(adapter.api === 'azure-openai-responses' && binding.azureApiVersion
+        ? { azureApiVersion: binding.azureApiVersion }
+        : {}),
       fetch: adapter.supportsCustomFetch ? binding.fetch : undefined,
       headers: { ...options?.headers, ...binding.headers },
       maxRetries: binding.maxRetries,
@@ -103,6 +130,7 @@ export async function bindPiStream(
       signal: options?.signal,
       temperature,
       timeoutMs: binding.timeoutMs,
-    });
+    } as Parameters<PiStreamFn>[2];
+    return streamSimple(model, context, streamOptions);
   };
 }

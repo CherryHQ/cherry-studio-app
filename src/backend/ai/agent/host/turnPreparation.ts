@@ -87,6 +87,12 @@ export type TurnPlan = {
   /** False only for a truly empty Session; drives first-message auto-naming. */
   hasMessages: boolean;
   history: AgentMessageView[];
+  /**
+   * Present only for an explicit answer retry. `resumeParts` is the recorded
+   * assistant prefix the replacement execution keeps; it is empty when the
+   * answer restarts from the original question alone.
+   */
+  retry?: { resumeParts: AgentMessagePart[] };
   inferenceSnapshot: ReturnType<typeof createAgentInferenceSnapshot>;
   /** Canonicalized input parts: file parts rewritten to verified managed facts. */
   inputParts: AgentInputPart[];
@@ -151,8 +157,41 @@ export async function prepareTurn(
     fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
   }
 
+  const { storedTurnContext, runtimeContextCheckpoint } = await loadTurnContext(
+    dependencies,
+    sessionId,
+    signal,
+  );
+
+  return prepareResolvedTurn(
+    dependencies,
+    parsed,
+    session,
+    configuredAgent,
+    storedTurnContext,
+    runtimeContextCheckpoint,
+    documentParserMode,
+    signal,
+  );
+}
+
+/**
+ * Resolve the stored compaction checkpoint and the history it anchors. Every
+ * turn — submission or retry — reads history through this path, so no caller
+ * replays a full transcript the Runtime has already summarized.
+ */
+export async function loadTurnContext(
+  dependencies: Pick<TurnPreparationDependencies, 'store'>,
+  sessionId: string,
+  signal: AbortSignal,
+  /** A retry skips the answer it replaces: that summary describes discarded content. */
+  excludeCheckpointMessageId?: string,
+): Promise<{
+  storedTurnContext: StoredRuntimeTurnContext;
+  runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
+}> {
   const storedContextCandidate = await raceAbort(
-    dependencies.store.getLatestContextCheckpoint(sessionId),
+    dependencies.store.getLatestContextCheckpoint(sessionId, excludeCheckpointMessageId),
     signal,
   );
   const checkpointValidation = storedContextCandidate
@@ -163,8 +202,6 @@ export async function prepareTurn(
     dependencies.store.loadRuntimeTurnContext(sessionId, requestedCheckpoint?.anchorTurnId ?? null),
     signal,
   );
-  const runtimeContextCheckpoint =
-    requestedCheckpoint && storedTurnContext.anchorFound ? requestedCheckpoint : null;
   const runtimeContextIssue =
     checkpointValidation?.issue ??
     (requestedCheckpoint && !storedTurnContext.anchorFound
@@ -177,17 +214,11 @@ export async function prepareTurn(
       sessionId,
     });
   }
-
-  return prepareResolvedTurn(
-    dependencies,
-    parsed,
-    session,
-    configuredAgent,
+  return {
     storedTurnContext,
-    runtimeContextCheckpoint,
-    documentParserMode,
-    signal,
-  );
+    runtimeContextCheckpoint:
+      requestedCheckpoint && storedTurnContext.anchorFound ? requestedCheckpoint : null,
+  };
 }
 
 export async function prepareInitialTurn(
@@ -225,7 +256,7 @@ export async function prepareInitialTurn(
   );
 }
 
-async function prepareResolvedTurn(
+export async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput | AgentStartSessionInput,
   session: Pick<AgentSessionView, 'agentId' | 'executionTarget' | 'title'>,

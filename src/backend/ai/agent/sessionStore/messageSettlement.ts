@@ -2,6 +2,13 @@ import type { AgentErrorView, AgentMessagePart } from '@/shared/contracts/agent'
 
 import { createInterruptedToolResult } from '../runtime';
 
+/** Only completed folds belong to persisted history, including interrupted turns. */
+export function omitTransientCompactionParts(parts: AgentMessagePart[]): AgentMessagePart[] {
+  return parts.filter(
+    (part) => part.type !== 'data-compaction-anchor' || part.data.status === 'done',
+  );
+}
+
 export function interruptNonTerminalToolParts(
   parts: AgentMessagePart[],
   reason: string,
@@ -45,7 +52,10 @@ export function settleInterruptedAssistantParts(
   errorPartId: string,
 ): AgentMessagePart[] {
   return [
-    ...interruptNonTerminalToolParts(settleStreamingTextParts(parts), error.message),
+    ...interruptNonTerminalToolParts(
+      settleStreamingTextParts(omitTransientCompactionParts(parts)),
+      error.message,
+    ),
     { id: errorPartId, type: 'error', error },
   ];
 }

@@ -5,8 +5,10 @@ Only a request ID enters navigation. This owner retains the transient handoff un
 rejects overlapping requests, releases abandoned navigation, and waits for session cleanup before
 admitting the next request. The backend runtime remains the application-shutdown backstop.
 
-The code-only `watermark` option defaults to `cherry`; `none` omits the footer in every offered
-format and its preview. The request retains this choice; no watermark control is shown.
+The `watermark` option defaults to the global Share watermark setting, which starts enabled.
+Explicit `cherry` or `none` overrides that preference; `none` omits the footer in every offered
+format and its preview. The request retains the resolved choice; the export page has no separate
+watermark control.
 
 Image is the default format. A source can supply `allowedFormats` and `initialFormat`; the handoff
 replaces an unsupported initial format with the first allowed format. The preview offers only

@@ -18,8 +18,8 @@ Provider + Model records
 ResolvedProviderConnection
         |
         +-- Language serving
-        |     +-- Pi binding (conversation and tool loop)
-        |     `-- AI SDK binding (generateText and model checks)
+        |     +-- Pi binding (conversation, tool loop, and product chat checks)
+        |     `-- AI SDK binding (generateText and SDK-only probes)
         |
         `-- Image serving
               `-- image parameters, edit input, transport, polling, and artifact handling
@@ -82,6 +82,19 @@ never sees the decision. System model support asks the bound Runtime through
 `LanguageServingSupport`, so replacing the Runtime replaces that answer with it. AI SDK language
 configuration and image models consume the connection facts directly.
 
+Mobile's standard configurable chat protocol vocabulary lives in
+`shared/utils/providerEndpoints.ts`. Forms and data integrity checks share it; it is not a Runtime
+allowlist. Data checks configured routing references and preserves opaque desktop-compatible
+endpoints outside that vocabulary. Pi derives its supported endpoints from its actual API adapter
+map and still checks adapter family, authentication, and connection details independently.
+
+Both settings `models.checkHealth()` and onboarding `models.checkChat()` probe the bound
+conversation Runtime with no transcript or tools. Settings retains its selected API key, timeout,
+cancellation, and incremental results. A probe key is an ephemeral request override; credential
+selection still belongs to the binding, and neither traces nor persisted messages may contain it.
+`AiService.checkModel()` remains an internal AI SDK text-generation probe and does not establish
+chat readiness.
+
 The Pi binding owns only Pi mechanics:
 
 - endpoint/protocol family to Pi API-family mapping;
@@ -108,6 +121,12 @@ Image generation keeps its existing independent pipeline:
 - Provider-model overrides declare Provider delivery routing;
 - the image executor owns generate/edit inputs, canonical parameter splitting, vendor options,
   submit/poll/cancel behavior, downloads, and managed artifacts.
+
+AI SDK text and image requests share only `resolveAiSdkServing`, which returns the connection,
+selected credentials, and wire model and carries no request parameters. `AiService.generateImage`
+builds image parameters from that result, and `AiImageRequest` accepts transport options only. Text
+options such as `systemMessageMode`, `store`, and reasoning or service-tier controls must not be
+merged into image requests.
 
 An image-only transport must not be added to the language binding. A language-only transport must
 not acquire image parameter or artifact responsibilities.

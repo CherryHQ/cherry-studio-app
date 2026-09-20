@@ -1,45 +1,29 @@
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { EndpointConfigs } from '@/shared/data/types/provider';
+import {
+  CHAT_ENDPOINT_TYPES,
+  type ChatEndpointType,
+  isChatEndpointType,
+} from '@/shared/utils/providerEndpoints';
 
-export const PI_TEXT_ENDPOINT_TYPES = [
-  ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
-  ENDPOINT_TYPE.OPENAI_RESPONSES,
-  ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
-] as const satisfies readonly EndpointType[];
-
-export type PiTextEndpointType = (typeof PI_TEXT_ENDPOINT_TYPES)[number];
-
-const PI_TEXT_ENDPOINT_TYPE_SET = new Set<EndpointType>(PI_TEXT_ENDPOINT_TYPES);
-
-export function isPiTextEndpointType(
-  endpointType: EndpointType | null | undefined,
-): endpointType is PiTextEndpointType {
-  return endpointType !== null && endpointType !== undefined
-    ? PI_TEXT_ENDPOINT_TYPE_SET.has(endpointType)
-    : false;
-}
-
-export function hasConfiguredPiTextEndpoint(
+export function hasConfiguredChatEndpoint(
   endpointConfigs: EndpointConfigs | null | undefined,
   endpointType: EndpointType | null | undefined,
-): endpointType is PiTextEndpointType {
+): endpointType is ChatEndpointType {
   return (
-    isPiTextEndpointType(endpointType) && Boolean(endpointConfigs?.[endpointType]?.baseUrl?.trim())
+    isChatEndpointType(endpointType) && Boolean(endpointConfigs?.[endpointType]?.baseUrl?.trim())
   );
 }
 
-export function getRemovedPiTextEndpoints(
+export function getRemovedConfiguredChatEndpoints(
   currentEndpointConfigs: EndpointConfigs | null | undefined,
   nextEndpointConfigs: EndpointConfigs | null | undefined,
-): PiTextEndpointType[] {
-  return PI_TEXT_ENDPOINT_TYPES.filter(
+): ChatEndpointType[] {
+  return CHAT_ENDPOINT_TYPES.filter(
     (endpointType) =>
-      hasConfiguredPiTextEndpoint(currentEndpointConfigs, endpointType) &&
-      !hasConfiguredPiTextEndpoint(nextEndpointConfigs, endpointType),
+      hasConfiguredChatEndpoint(currentEndpointConfigs, endpointType) &&
+      !hasConfiguredChatEndpoint(nextEndpointConfigs, endpointType),
   );
 }
 
@@ -50,11 +34,11 @@ export function assertCustomProviderEndpointConfiguration({
   defaultChatEndpoint: EndpointType | null | undefined;
   endpointConfigs: EndpointConfigs | null | undefined;
 }): void {
-  if (!hasConfiguredPiTextEndpoint(endpointConfigs, defaultChatEndpoint)) {
+  if (!hasConfiguredChatEndpoint(endpointConfigs, defaultChatEndpoint)) {
     throw DataApiErrorFactory.validation(
       {
         defaultChatEndpoint: [
-          'Custom providers require a Pi text default endpoint with a configured Base URL',
+          'Custom providers require a chat default endpoint with a configured Base URL',
         ],
       },
       'Custom provider endpoint configuration is invalid',
@@ -78,11 +62,11 @@ export function assertCustomProviderModelEndpointTypes({
     return;
   }
 
-  // Unknown or non-Pi endpoint values are retained as opaque desktop-compatible
-  // data. Only explicit Pi routing claims are constrained here.
+  // Endpoints outside Mobile's configuration vocabulary remain opaque desktop-compatible data.
+  // Validate chat routing references independently of the bound Runtime.
   if (
-    isPiTextEndpointType(endpointType) &&
-    !hasConfiguredPiTextEndpoint(endpointConfigs, endpointType)
+    isChatEndpointType(endpointType) &&
+    !hasConfiguredChatEndpoint(endpointConfigs, endpointType)
   ) {
     throw DataApiErrorFactory.validation(
       {

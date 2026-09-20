@@ -79,7 +79,9 @@ function protocolWithObservation(
   return {
     cancelTurn: jest.fn(),
     deleteSession: jest.fn(),
+    deleteTurn: jest.fn(),
     forkSession: jest.fn(),
+    retryMessage: jest.fn(),
     getSessionStatus: jest.fn<
       ReturnType<AgentProtocol['getSessionStatus']>,
       Parameters<AgentProtocol['getSessionStatus']>
@@ -97,6 +99,71 @@ function protocolWithObservation(
 }
 
 describe('AgentSessionChatClient', () => {
+  test('rejects a second retry or send during retry admission and releases the guard on failure', async () => {
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    let rejectRetry!: (error: Error) => void;
+    protocol.retryMessage.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectRetry = reject;
+        }),
+    );
+    const client = new AgentSessionChatClient(protocol);
+    const unsubscribe = client.subscribe('session-1', () => undefined);
+    const first = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
+    const rejected = expect(first).rejects.toThrow('preflight failed');
+    await client.observe('session-1');
+    await client.refresh('session-1');
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+    await expect(
+      client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+    await expect(
+      client.submitMessage({
+        sessionId: 'session-1',
+        userMessageId: 'new-user',
+        assistantMessageId: 'new-answer',
+        parts: [{ type: 'text', text: 'next' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+    rejectRetry(new Error('preflight failed'));
+    await rejected;
+    expect(client.getState('session-1').isSubmitting).toBe(false);
+    expect(protocol.retryMessage).toHaveBeenCalledTimes(1);
+    expect(protocol.submitMessage).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  test('marks the answer as retrying from the press until admission settles, across a refresh', async () => {
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    let admitRetry!: () => void;
+    protocol.retryMessage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          admitRetry = () => resolve();
+        }),
+    );
+    const client = new AgentSessionChatClient(protocol);
+    const unsubscribe = client.subscribe('session-1', () => undefined);
+    const retry = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
+
+    expect(client.getState('session-1').retryingMessageId).toBe('assistant-1');
+    // A re-observation mid-admission must not drop the projection.
+    await client.refresh('session-1');
+    expect(client.getState('session-1').retryingMessageId).toBe('assistant-1');
+
+    admitRetry();
+    await retry;
+    expect(client.getState('session-1').retryingMessageId).toBeUndefined();
+    unsubscribe();
+  });
+
   test('starts a durable Session without leaving an ownerless observation before navigation', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),
@@ -228,6 +295,37 @@ describe('AgentSessionChatClient', () => {
     listener?.({ type: 'message.created', message: assistantMessage() });
 
     expect(onSessionChanged).toHaveBeenCalledTimes(1);
+    expect(onSessionChanged).toHaveBeenCalledWith('session-1');
+  });
+
+  test('drops a deleted turn from live state and refreshes the durable transcript', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const onSessionChanged = jest.fn();
+    const onTranscriptChanged = jest.fn();
+    const client = new AgentSessionChatClient(protocol, { onSessionChanged, onTranscriptChanged });
+    await client.observe('session-1');
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.finalized', message: assistantMessage() });
+    expect(client.getState('session-1').liveMessages).toHaveLength(2);
+
+    await client.deleteTurn('session-1', 'turn-1');
+    expect(protocol.deleteTurn).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+    });
+
+    onTranscriptChanged.mockClear();
+    onSessionChanged.mockClear();
+    listener?.({ type: 'turn.deleted', turnId: 'turn-1', messageIds: ['user-1', 'assistant-1'] });
+
+    // The rows are gone from the live overlay, so the refetched window is the
+    // only thing left describing the transcript.
+    expect(client.getState('session-1').liveMessages).toEqual([]);
+    expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
     expect(onSessionChanged).toHaveBeenCalledWith('session-1');
   });
 
@@ -494,6 +592,11 @@ describe('AgentSessionChatClient', () => {
     listener?.({ type: 'message.created', message: userMessage() });
     listener?.({ type: 'message.created', message: assistantMessage() });
     listener?.({ type: 'message.finalized', message: finalizedAssistant });
+
+    client.reconcilePersistedMessages('session-1', [
+      { ...finalizedAssistant, turnId: 'previous-attempt' },
+    ]);
+    expect(client.getState('session-1').liveMessages).toContain(finalizedAssistant);
 
     client.reconcilePersistedMessages('session-1', [userMessage(), finalizedAssistant]);
 

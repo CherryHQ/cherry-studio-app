@@ -86,25 +86,47 @@ describe('react-native-enriched-markdown iOS patch', () => {
 });
 
 describe('react-native-enriched-markdown Android input patch', () => {
-  const patch = readFileSync(
-    `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
-    'utf8',
-  );
+  const inputRoot = `${process.cwd()}/node_modules/react-native-enriched-markdown/android/src/main/java/com/swmansion/enriched/markdown/input`;
+  const input = readFileSync(`${inputRoot}/EnrichedMarkdownTextInputView.kt`, 'utf8');
 
-  test('absorbs only the framework long-press cursor-controller null pointer', () => {
-    expect(patch).toContain('+  override fun performLongClick(): Boolean =');
-    expect(patch).toContain(
-      '!top.className.startsWith("android.widget.Editor") || top.methodName != "performLongClick"',
+  // Installed-source upgrade guards. Jest cannot execute Android Editor's reentrant
+  // selection callbacks; these do not establish recovery on a device.
+  test('APP-A consumes a cursor-update null pointer without catching unrelated touch failures', () => {
+    const touch = input
+      .split('override fun onTouchEvent(ev: MotionEvent): Boolean {')[1]
+      ?.split('override fun performClick()')[0];
+
+    expect(touch).toMatch(
+      /return try\s*\{\s*super\.onTouchEvent\(ev\)\s*\} catch \(e: NullPointerException\)/,
     );
-    expect(patch).toContain('+        throw e');
+    expect(touch).toMatch(
+      /val top = e\.stackTrace\.firstOrNull\(\)\s*if \(top == null \|\| top\.className != "android.widget.Editor" \|\| top\.methodName != "updateCursorPosition"\)\s*\{\s*throw e\s*\}/,
+    );
+    expect(touch).toMatch(/Log\.w\([^\n]+\)\s*\/\/[^\n]+\s*true\s*\}/);
+  });
+
+  test('APP-R and APP-G consume only the two known framework long-press null pointers', () => {
+    const longPress = input
+      .split('override fun performLongClick(): Boolean =')[1]
+      ?.split('override fun scrollTo(')[0];
+
+    expect(longPress).toMatch(
+      /try\s*\{\s*super\.performLongClick\(\)\s*\} catch \(e: NullPointerException\)/,
+    );
+    expect(longPress).toMatch(
+      /val top = e\.stackTrace\.firstOrNull\(\)\s*if \(top == null \|\| top\.className != "android.widget.Editor" \|\|\s*\(top\.methodName != "performLongClick" && top\.methodName != "selectCurrentWordAndStartDrag"\)\s*\)\s*\{\s*throw e\s*\}/,
+    );
+    // A handled long press must not dispatch an extra click on ACTION_UP.
+    expect(longPress).toMatch(/Log\.w\([^\n]+\)\s*\/\/[^\n]+\s*true\s*\}/);
   });
 
   test('measures an immutable snapshot instead of the live Editable', () => {
-    expect(patch).toContain('+    val text: SpannedString?,');
-    expect(patch).toContain('+    val textSnapshot = text?.let { SpannedString(it) }');
-    expect(patch).toContain('+    val size = measure(cachedWidth, textSnapshot, paint)');
-    expect(patch).toContain(
-      '+    data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))',
+    const measurement = readFileSync(`${inputRoot}/layout/InputMeasurementStore.kt`, 'utf8');
+    expect(measurement).toContain('val text: SpannedString?,');
+    expect(measurement).toContain('val textSnapshot = text?.let { SpannedString(it) }');
+    expect(measurement).toContain('val size = measure(cachedWidth, textSnapshot, paint)');
+    expect(measurement).toContain(
+      'data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))',
     );
   });
 });

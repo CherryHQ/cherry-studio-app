@@ -21,6 +21,10 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
 }));
 
+jest.mock('@/frontend/components/Avatar', () => ({
+  AgentAvatar: () => null,
+}));
+
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   chatRouteParams: (target: { agentId: string; kind: string; sessionId?: string }) => ({
     agentId: target.agentId,

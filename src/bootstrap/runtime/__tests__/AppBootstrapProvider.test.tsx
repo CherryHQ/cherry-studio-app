@@ -17,6 +17,8 @@ jest.mock('expo-splash-screen', () => ({
   hideAsync: () => mockHideAsync(),
 }));
 
+jest.mock('@/frontend/appShell/observability', () => ({ recordSentryBreadcrumb: jest.fn() }));
+
 // The injected runtime keeps native SQLite and the concrete backend graph out
 // of this provider-level test.
 jest.mock('@/bootstrap/runtime/createAppBootstrapRuntime', () => ({

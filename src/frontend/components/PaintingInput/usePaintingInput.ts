@@ -14,7 +14,6 @@ import { useResolvedFile } from '@/frontend/components/FileEntryPreview';
 import { useBackendModule } from '@/frontend/data';
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import type { Model } from '@/shared/data/types/model';
-import { validateFileAttachments } from '@/shared/utils/fileAttachmentPolicy';
 import {
   type ImageParamDraft,
   isImageParamDraftValid,
@@ -24,7 +23,6 @@ import {
 import {
   createPaintingGenerationStrategy,
   PaintingGenerationError,
-  type PaintingGenerationIssue,
 } from '@/shared/utils/paintingGenerationStrategy';
 
 import type { PaintingInputSubmission } from './PaintingInput';
@@ -98,27 +96,19 @@ export function usePaintingInput({
   useEffect(() => {
     if (modelId && mode) setParameterDraft(parameterKey, { modelId, values: paramValues });
   }, [mode, modelId, parameterKey, paramValues, setParameterDraft]);
-  let issue: PaintingGenerationIssue | undefined = strategy.inputIssue(submittedAttachments.length);
-  if (!issue && strategy.requiresPrompt(submittedAttachments.length) && !draft.trim())
-    issue = { code: 'prompt-required' };
-  if (!issue && !isImageParamDraftValid(paramValues, resolvedMode))
-    issue = { code: 'invalid-parameters' };
-  let attachmentIssue: FileAttachmentError | undefined;
-  try {
-    validateFileAttachments(
-      submittedAttachments.filter(isComposerAttachmentReady).map(toFileFact),
-      strategy.attachmentTarget,
-    );
-  } catch (error) {
-    if (error instanceof FileAttachmentError) attachmentIssue = error;
-    else throw error;
-  }
   const isCheckingReference = Boolean(referenceAttachment && resolvedReference.isLoading);
   const isReferenceUnavailable = Boolean(
     referenceAttachment && !resolvedReference.isLoading && !referenceFact,
   );
-  const canSend =
-    !issue && !attachmentIssue && !isCheckingReference && !isReferenceUnavailable && !isSubmitting;
+  // Model, attachment, and parameter compatibility are submit-time feedback,
+  // just like the chat composer. Keep the action available whenever this draft
+  // represents an operation; ComposerSurface will restore the draft and report
+  // the typed issue if the strategy rejects it.
+  const hasSendIntent =
+    draft.trim().length > 0 ||
+    submittedAttachments.length > 0 ||
+    !strategy.requiresPrompt(submittedAttachments.length);
+  const canSend = hasSendIntent && !isCheckingReference && !isReferenceUnavailable && !isSubmitting;
 
   return {
     strategy,

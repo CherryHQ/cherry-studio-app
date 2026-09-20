@@ -27,13 +27,22 @@ module.exports = {
     // The desktop-sync audits spawn hundreds of real git subprocesses against
     // fixture repos in tmpdir (~13s of the run). They guard against desktop
     // drift, which is a local-sync concern rather than a per-PR one, so PR CI
-    // skips them and a full local run still covers them.
-    ...(process.env.PRCI ? ['/scripts/__tests__/'] : []),
+    // skips tooling suites except the architecture rules that protect every PR.
+    ...(process.env.PRCI ? ['/scripts/__tests__/(?!architectureBoundaries\\.test\\.ts$)'] : []),
   ],
   // Local build/export artifacts can contain copied workspace packages. Keep
   // them out of the Haste map so package names remain unique during tests.
   modulePathIgnorePatterns: ['<rootDir>/.context/', '<rootDir>/.local/'],
   moduleNameMapper: {
+    // pnpm installs several peer-resolved copies of `expo`, and which copy a
+    // package like `@expo/ui` links to shifts whenever the lockfile is
+    // re-resolved. jest-expo neutralises Expo.fx's dev-server side effects with
+    // `jest.mock('expo/src/async-require/messageSocket')`, which only covers the
+    // copy it resolves; any suite reaching a different copy crashes on
+    // `getDevServer` because the react-native mock reports a null scriptURL.
+    // Collapse every `expo` request onto the root copy, the same way the
+    // react-native preset pins `^react-native($|/.*)`.
+    '^expo($|/.*)$': '<rootDir>/node_modules/expo$1',
     // These patched Pi subpaths intentionally expose ESM through import-only
     // conditions. Jest resolves the app tests as CommonJS, so point it at the
     // same published files directly and let babel-jest transform them below.
@@ -41,6 +50,8 @@ module.exports = {
       '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/agent.js',
     '^@earendil-works/pi-agent-core/compaction$':
       '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js',
+    '^@earendil-works/pi-ai/api/(.*)$':
+      '<rootDir>/node_modules/@earendil-works/pi-ai/dist/api/$1.js',
     '^@earendil-works/pi-ai/utils/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-ai/dist/utils/$1.js',
     '^@cherrystudio/ui/background-activity/ios$':

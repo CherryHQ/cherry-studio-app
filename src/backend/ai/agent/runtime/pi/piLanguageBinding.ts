@@ -1,4 +1,5 @@
-import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/provider-registry';
+import { routeToEndpoint } from '@cherrystudio/ai-runtime/provider';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import {
   resolveProviderConnection,
@@ -7,12 +8,7 @@ import {
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-const PI_LANGUAGE_ENDPOINT_TYPES = [
-  ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
-  ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
-  ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  ENDPOINT_TYPE.OPENAI_RESPONSES,
-] as const;
+import { isPiLanguageEndpointType, type PiLanguageEndpointType } from './piApiAdapters';
 
 const NON_STANDARD_PI_ADAPTER_FAMILIES = new Set([
   'azure',
@@ -21,8 +17,6 @@ const NON_STANDARD_PI_ADAPTER_FAMILIES = new Set([
   'google-vertex',
   'google-vertex-anthropic',
 ]);
-
-export type PiLanguageEndpointType = (typeof PI_LANGUAGE_ENDPOINT_TYPES)[number];
 
 export type LanguageServingCompatibilityCode =
   | 'custom-endpoint-path'
@@ -58,7 +52,16 @@ export function resolvePiLanguageBinding(
   provider: Provider,
   connection: ResolvedProviderConnection,
 ): PiLanguageBinding {
-  if (connection.adapterFamily && NON_STANDARD_PI_ADAPTER_FAMILIES.has(connection.adapterFamily)) {
+  const supportsAzureResponses =
+    connection.adapterFamily === 'azure-responses' &&
+    connection.endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES &&
+    provider.authType === 'iam-azure';
+
+  if (
+    connection.adapterFamily &&
+    NON_STANDARD_PI_ADAPTER_FAMILIES.has(connection.adapterFamily) &&
+    !supportsAzureResponses
+  ) {
     return unsupported(
       'unsupported-adapter-family',
       `Pi Runtime does not support provider adapter family: ${connection.adapterFamily}.`,
@@ -72,7 +75,7 @@ export function resolvePiLanguageBinding(
     );
   }
 
-  if (provider.authType !== 'api-key') {
+  if (!supportsAzureResponses && provider.authType !== 'api-key') {
     return unsupported(
       'unsupported-auth-type',
       `Pi Runtime does not support provider authentication type: ${provider.authType}.`,
@@ -94,7 +97,7 @@ export function resolvePiLanguageBinding(
     );
   }
 
-  if (configuredBaseUrl.endsWith('#')) {
+  if (routeToEndpoint(configuredBaseUrl).endpoint) {
     return unsupported(
       'custom-endpoint-path',
       'Pi Runtime does not support a separate custom endpoint path.',
@@ -131,12 +134,6 @@ export function requirePiLanguageBinding(
     throw new LanguageServingCompatibilityError(binding.issue);
   }
   return binding;
-}
-
-function isPiLanguageEndpointType(
-  endpointType: EndpointType | undefined,
-): endpointType is PiLanguageEndpointType {
-  return PI_LANGUAGE_ENDPOINT_TYPES.some((supported) => supported === endpointType);
 }
 
 function unsupported(code: LanguageServingCompatibilityCode, message: string): PiLanguageBinding {

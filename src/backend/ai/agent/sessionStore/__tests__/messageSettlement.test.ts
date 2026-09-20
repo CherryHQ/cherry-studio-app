@@ -6,6 +6,18 @@ import {
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
 describe('message settlement', () => {
+  test('recovery retains completed compactions without leaving a spinner or a skipped marker', () => {
+    const parts = (['compacting', 'done', 'skipped'] as const).map((status) => ({
+      id: status,
+      type: 'data-compaction-anchor' as const,
+      data: { phase: 'in-loop' as const, status },
+    }));
+    expect(settleInterruptedAssistantParts(parts, INTERRUPTED, 'error-turn-1')).toEqual([
+      parts[1],
+      { id: 'error-turn-1', type: 'error', error: INTERRUPTED },
+    ]);
+  });
+
   test.each(['input-streaming', 'input-available', 'awaiting-approval', 'running'] as const)(
     'terminalizes %s tool state with no pending approval',
     (state) => {
