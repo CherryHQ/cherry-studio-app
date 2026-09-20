@@ -43,6 +43,16 @@ const CASES: { api: SupportedPiApi; expected: Record<string, unknown> }[] = [
     },
   },
   {
+    api: 'azure-openai-responses',
+    expected: {
+      tools: [expect.objectContaining({ name: 'lookup' })],
+      tool_choice: 'none',
+      input: expect.arrayContaining([
+        expect.objectContaining({ type: 'function_call_output', output: 'Collected evidence' }),
+      ]),
+    },
+  },
+  {
     api: 'google-generative-ai',
     expected: {
       config: {

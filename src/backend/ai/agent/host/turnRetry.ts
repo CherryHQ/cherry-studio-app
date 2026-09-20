@@ -33,6 +33,9 @@ export function retryAssistantParts(message: AgentMessageView): AgentMessagePart
     (part, index) =>
       index <= lastToolIndex &&
       part.type !== 'error' &&
+      // The replacement plans context from scratch and emits its own anchors;
+      // the previous attempt's describe a compaction that no longer applies.
+      part.type !== 'data-compaction-anchor' &&
       (part.type !== 'tool' || (part.input !== undefined && part.output !== undefined)),
   );
 }

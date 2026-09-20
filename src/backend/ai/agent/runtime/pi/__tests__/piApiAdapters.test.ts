@@ -19,6 +19,7 @@ const mockAnthropicStreamSimple = jest.fn();
 const mockGoogleStreamSimple = jest.fn();
 const mockOpenAiCompletionsStreamSimple = jest.fn();
 const mockOpenAiResponsesStreamSimple = jest.fn();
+const mockAzureResponsesStreamSimple = jest.fn();
 
 const mockStreamResult = { id: 'stream' };
 const mockFetch = jest.fn() as unknown as FetchFunction;
@@ -124,6 +125,36 @@ describe('Pi API adapters', () => {
         signal,
         temperature: 0.2,
         timeoutMs: 60_000,
+      }),
+    );
+  });
+
+  test('selects and binds the Azure Responses adapter for the Azure family', async () => {
+    const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_RESPONSES, 'azure-responses');
+    expect(adapter.api).toBe('azure-openai-responses');
+    expect(adapter.formatBaseUrl('https://resource.openai.azure.com/openai')).toBe(
+      'https://resource.openai.azure.com/openai',
+    );
+    jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockAzureResponsesStreamSimple);
+    mockAzureResponsesStreamSimple.mockReturnValue(mockStreamResult);
+
+    const streamFn = await bindPiStream(adapter, {
+      apiKey: 'azure-key',
+      azureApiVersion: '2025-04-01-preview',
+      fetch: mockFetch,
+      headers: {},
+      maxRetries: 0,
+      maxTokens: 2048,
+      timeoutMs: 60_000,
+    });
+    const model = { api: 'azure-openai-responses' } as PiModel<SupportedPiApi>;
+    expect(streamFn(model, context)).toBe(mockStreamResult);
+    expect(mockAzureResponsesStreamSimple).toHaveBeenCalledWith(
+      model,
+      context,
+      expect.objectContaining({
+        apiKey: 'azure-key',
+        azureApiVersion: '2025-04-01-preview',
       }),
     );
   });

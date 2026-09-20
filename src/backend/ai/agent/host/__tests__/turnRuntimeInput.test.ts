@@ -6,6 +6,41 @@ const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
 describe('Turn Runtime input assembly', () => {
+  test('timeline compaction markers never enter model history', () => {
+    const message: AgentMessageView = {
+      id: 'assistant-1',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'assistant',
+      status: 'success',
+      usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      stats: null,
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+      parts: [
+        {
+          id: 'anchor',
+          type: 'data-compaction-anchor',
+          data: {
+            phase: 'turn-start',
+            status: 'done',
+            preTokens: 100_000,
+            postTokens: 20_000,
+          },
+        },
+        { id: 'text', type: 'text', state: 'done', text: 'Answer' },
+      ],
+    };
+    expect(toRuntimeHistory([message])).toEqual([
+      {
+        turnId: 'turn-1',
+        messages: [{ role: 'assistant', parts: [{ type: 'text', text: 'Answer' }] }],
+      },
+    ]);
+  });
+
   test('preserves explicit plugin intent in model input and user history without display metadata', () => {
     const part = {
       type: 'text' as const,

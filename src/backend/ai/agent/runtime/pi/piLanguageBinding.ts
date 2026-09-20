@@ -1,4 +1,5 @@
 import { routeToEndpoint } from '@cherrystudio/ai-runtime/provider';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import {
   resolveProviderConnection,
@@ -51,7 +52,16 @@ export function resolvePiLanguageBinding(
   provider: Provider,
   connection: ResolvedProviderConnection,
 ): PiLanguageBinding {
-  if (connection.adapterFamily && NON_STANDARD_PI_ADAPTER_FAMILIES.has(connection.adapterFamily)) {
+  const supportsAzureResponses =
+    connection.adapterFamily === 'azure-responses' &&
+    connection.endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES &&
+    provider.authType === 'iam-azure';
+
+  if (
+    connection.adapterFamily &&
+    NON_STANDARD_PI_ADAPTER_FAMILIES.has(connection.adapterFamily) &&
+    !supportsAzureResponses
+  ) {
     return unsupported(
       'unsupported-adapter-family',
       `Pi Runtime does not support provider adapter family: ${connection.adapterFamily}.`,
@@ -65,7 +75,7 @@ export function resolvePiLanguageBinding(
     );
   }
 
-  if (provider.authType !== 'api-key') {
+  if (!supportsAzureResponses && provider.authType !== 'api-key') {
     return unsupported(
       'unsupported-auth-type',
       `Pi Runtime does not support provider authentication type: ${provider.authType}.`,

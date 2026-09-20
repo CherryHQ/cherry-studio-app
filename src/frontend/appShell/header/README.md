@@ -34,17 +34,19 @@ This module owns Expo Router header adapters used by the app screens.
 - `headerScreenOptions` owns native top-header invariants. Top headers are separator-free on both
   platforms, and self-drawn headers do not add bottom borders or elevation.
 - Top-bar controls share one Cherry action size and grouping contract. iOS lets the native toolbar
-  draw its system background. Android supplies the matching fallback surface: one action forms a
-  circle when it is an icon, while a label action and adjacent actions form a capsule. The visible
-  surface stays 36dp tall inside non-overlapping Android touch targets; short label targets keep a
-  64dp minimum width so their inset surface cannot collapse into a circle. Default surfaces use the
-  card token and a compact shadow so their complete outline remains visible against the header;
-  inverse surfaces use constant contrast because they sit over uncontrolled media.
+  draw its shared glass background where supported and adds token-colored translucent surfaces on
+  older systems. Android supplies the matching fallback surface: one action forms a circle when it
+  is an icon, while a label action and adjacent actions form a capsule. The visible surface stays
+  36dp tall inside non-overlapping Android touch targets; short label targets keep a 64dp minimum
+  width so their inset surface cannot collapse into a circle. Default surfaces use the card token
+  and a compact shadow so their complete outline remains visible against the header; inverse
+  surfaces use constant contrast because they sit over uncontrolled media.
 - `MainHeaderAgentButton` is the one exception to the black-icon rule: it carries the current
   Agent's avatar, so the chat identifies its Agent the same way the Agent list does. A compact
   avatar and medium-weight single-line name sit in a capsule beside the leading menu action on
   the left on both platforms, without a disclosure chevron. iOS lets the native toolbar own the
-  glass material where supported, with a spacer separating the capsule from the menu action.
+  glass material where supported, and older iOS versions add a progressive blur and translucent
+  action surfaces behind the native toolbar; a spacer separates the capsule from the menu action.
   The Expo Router patch preserves spacer indices when converting header items, so native screens
   inserts each spacer between the intended custom views instead of before both buttons;
   Android draws a borderless translucent card tint over the header's existing blur,

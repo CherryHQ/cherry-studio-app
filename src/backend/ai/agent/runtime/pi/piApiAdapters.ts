@@ -9,7 +9,8 @@ export type SupportedPiApi =
   | 'anthropic-messages'
   | 'google-generative-ai'
   | 'openai-completions'
-  | 'openai-responses';
+  | 'openai-responses'
+  | 'azure-openai-responses';
 
 type PiStreamFn = AgentOptions['streamFn'];
 
@@ -18,6 +19,15 @@ type PiApiAdapter = {
   formatBaseUrl(baseUrl: string, appendApiVersion?: boolean): string;
   loadStreamSimple(): Promise<PiStreamFn>;
   supportsCustomFetch: boolean;
+};
+
+const AZURE_RESPONSES_ADAPTER: PiApiAdapter = {
+  api: 'azure-openai-responses',
+  formatBaseUrl: (baseUrl) => formatApiHost(baseUrl, false),
+  loadStreamSimple: async () =>
+    (await import('@earendil-works/pi-ai/api/azure-openai-responses'))
+      .streamSimple as unknown as PiStreamFn,
+  supportsCustomFetch: true,
 };
 
 const PI_API_ADAPTERS = {
@@ -63,7 +73,13 @@ export function isPiLanguageEndpointType(
   return endpointType !== undefined && Object.hasOwn(PI_API_ADAPTERS, endpointType);
 }
 
-export function resolvePiApiAdapter(endpointType: PiLanguageEndpointType): PiApiAdapter {
+export function resolvePiApiAdapter(
+  endpointType: PiLanguageEndpointType,
+  adapterFamily?: string,
+): PiApiAdapter {
+  if (endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES && adapterFamily === 'azure-responses') {
+    return AZURE_RESPONSES_ADAPTER;
+  }
   return PI_API_ADAPTERS[endpointType];
 }
 
@@ -76,6 +92,7 @@ type PiStreamBinding = {
   requestParameters?: PiRequestParameters;
   temperature?: number;
   timeoutMs: number;
+  azureApiVersion?: string;
 };
 
 export async function bindPiStream(
@@ -87,9 +104,12 @@ export async function bindPiStream(
   return (model, context, options) => {
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
     const temperature = options?.temperature ?? binding.temperature;
-    return streamSimple(model, context, {
+    const streamOptions = {
       ...options,
       apiKey: binding.apiKey,
+      ...(adapter.api === 'azure-openai-responses' && binding.azureApiVersion
+        ? { azureApiVersion: binding.azureApiVersion }
+        : {}),
       fetch: adapter.supportsCustomFetch ? binding.fetch : undefined,
       headers: { ...options?.headers, ...binding.headers },
       maxRetries: binding.maxRetries,
@@ -110,6 +130,7 @@ export async function bindPiStream(
       signal: options?.signal,
       temperature,
       timeoutMs: binding.timeoutMs,
-    });
+    } as Parameters<PiStreamFn>[2];
+    return streamSimple(model, context, streamOptions);
   };
 }

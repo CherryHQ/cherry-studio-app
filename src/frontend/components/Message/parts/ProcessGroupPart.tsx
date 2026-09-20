@@ -16,7 +16,6 @@ type ProcessGroupItem = MessageProcessItem & { key: string };
 
 type ProcessGroupPartProps = {
   citationText: ReadonlyMap<number, ResolvedCitationText>;
-  isTextSelectionEnabled: boolean;
   items: readonly ProcessGroupItem[];
   message: MessageListItem;
   messageParts: readonly CherryMessagePart[];
@@ -25,7 +24,6 @@ type ProcessGroupPartProps = {
 
 export function ProcessGroupPart({
   citationText,
-  isTextSelectionEnabled,
   items,
   message,
   messageParts,
@@ -47,7 +45,6 @@ export function ProcessGroupPart({
       {items.map(({ index, key, part }) => (
         <MessagePartRenderer
           isStreaming={false}
-          isTextSelectionEnabled={isTextSelectionEnabled}
           key={key}
           messageId={message.id}
           messageParts={messageParts}

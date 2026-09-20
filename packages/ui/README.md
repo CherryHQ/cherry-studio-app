@@ -96,7 +96,10 @@ native renderer. A part that has streamed keeps the streaming renderer for its f
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
 the same theme tokens, syntax palette, LaTeX flags, and typography scale. Native streaming mode ends
 with each part, releasing pending tail blocks and requesting a final layout even when the text
-itself is unchanged. Product code supplies the active font size step and decides how links open:
+itself is unchanged. Product code supplies the active font size step, decides how links open, and
+passes the native copy-menu labels already translated. The renderer presents those menus itself, on
+text selections and on Markdown tables, so omitting the labels leaves the library's English
+defaults:
 
 ```tsx
 <MarkdownText
@@ -104,13 +107,14 @@ itself is unchanged. Product code supplies the active font size step and decides
   isStreaming={isStreaming}
   markdown={markdown}
   onLinkPress={openLink}
+  selectionMenuLabels={selectionMenuLabels}
 />;
 ```
 
 The enriched-renderer patch keeps overflowing tables horizontally scrollable across layout
-updates and exposes native scroll indicators. Table cells do not open a copy menu; whole-message
-copy stays with the message actions. Standalone code blocks have a 192-point maximum height,
-including their header, in both native layout and shadow measurement. Short blocks keep their
+updates and exposes native scroll indicators. Tables retain the upstream native copy menu;
+whole-message copy stays with the message actions. Standalone code blocks have a 192-point maximum
+height, including their header, in both native layout and shadow measurement. Short blocks keep their
 natural height; longer blocks keep their complete content in a native vertical scroll viewport
 with horizontal scrolling for long lines. The limit applies during streaming and after completion,
 including reasoning and final answers. Code-pane drags use native scroll recognition and cancel
