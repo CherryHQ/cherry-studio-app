@@ -1,6 +1,7 @@
 import { requireOptionalNativeModule, type SharedObject } from 'expo';
 
 type PairingRequest = SharedObject & {
+  release(): void;
   post(
     url: string,
     headers: Record<string, string>,
