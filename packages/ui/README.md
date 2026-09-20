@@ -111,7 +111,29 @@ defaults:
 />;
 ```
 
-The enriched-renderer patch keeps overflowing tables horizontally scrollable across layout
+Streaming updates use the Desktop cadence at the chat-state owner: 100 ms for small
+messages, increasing with accumulated text length to at most 3 seconds. Terminal events
+publish immediately. The Streamdown dependency patch allows one repair job and one latest
+pending input per mounted renderer and publishes completed results within the same raw-source
+generation. Replacement, clear, or repair-option changes start a new generation and remount
+the native renderer; ordinary appends and completion retain it. This lets Android accept
+repaired snapshots whose temporary closing delimiters change, while old-generation results
+cannot return after replacement. It preserves full Markdown parsing; there is no tail-only
+parser or persisted-content truncation.
+
+The Android enriched-renderer patch similarly coalesces pending render requests instead of
+queuing every full-text snapshot. It stops text/block fades past 64 * 1024 UTF-16 code units
+without disabling native streaming filters or completion layout. Inline message disclosures
+mount into natural layout immediately and unmount when closed; their visibility never waits
+for a Markdown measurement or a height-animation callback.
+
+Android streaming-status changes invalidate in-flight render jobs and schedule another render
+even when the text is unchanged. Applying that result also invalidates Fabric/Yoga measurement
+so completion or cancellation releases filtered tails and pending code-block presentation.
+The native coalescer relies on Streamdown's generation key for source replacement isolation;
+streaming callers that bypass Streamdown must key their native renderer by source generation.
+
+The enriched-renderer patch also keeps overflowing tables horizontally scrollable across layout
 updates and exposes native scroll indicators. Tables retain the upstream native copy menu;
 whole-message copy stays with the message actions. Standalone code blocks have a 192-point maximum
 height, including their header, in both native layout and shadow measurement. Short blocks keep their

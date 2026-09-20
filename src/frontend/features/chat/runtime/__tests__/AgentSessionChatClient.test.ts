@@ -399,7 +399,7 @@ describe('AgentSessionChatClient', () => {
       });
 
       expect(onChange).not.toHaveBeenCalled();
-      jest.advanceTimersByTime(16);
+      jest.advanceTimersByTime(100);
       expect(onChange).toHaveBeenCalledTimes(1);
       expect(client.getState('session-1').liveMessages[0]?.parts).toEqual([
         { id: 'text-1', state: 'streaming', text: 'Hello world', type: 'text' },
@@ -409,6 +409,68 @@ describe('AgentSessionChatClient', () => {
       jest.useRealTimers();
     }
   });
+
+  test.each([
+    [400_000, 200],
+    [8_000_000, 3000],
+  ])(
+    'spaces out %i characters without postponing an existing %i ms deadline',
+    async (length, interval) => {
+      jest.useFakeTimers();
+      let release = () => {};
+      try {
+        let listener: ((event: AgentEvent) => void) | undefined;
+        const text = 'a'.repeat(length);
+        const message: AgentMessageView = {
+          ...assistantMessage(),
+          parts: [{ id: 'reasoning-1', state: 'streaming', text, type: 'reasoning' }],
+        };
+        const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+          listener = nextListener;
+          return { snapshot: { ...snapshot(), streamingMessage: message }, unsubscribe: jest.fn() };
+        });
+        const client = new AgentSessionChatClient(protocol);
+        await client.observe('session-1');
+        const onChange = jest.fn();
+        release = client.subscribe('session-1', onChange);
+        const append = (value: string) =>
+          listener?.({
+            type: 'message.delta',
+            messageId: 'assistant-1',
+            delta: { op: 'text.append', partId: 'reasoning-1', text: value },
+          });
+        onChange.mockClear();
+        append('b');
+        jest.advanceTimersByTime(interval - 1);
+        expect(onChange).not.toHaveBeenCalled();
+        append('c');
+        jest.advanceTimersByTime(2);
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+          text: `${text}bc`,
+        });
+
+        append('d');
+        listener?.({
+          type: 'message.finalized',
+          message: {
+            ...message,
+            status: 'cancelled',
+            parts: [{ id: 'reasoning-1', type: 'reasoning', state: 'done', text: `${text}bcd` }],
+          },
+        });
+        expect(onChange).toHaveBeenCalledTimes(2);
+        expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+          text: `${text}bcd`,
+        });
+        jest.advanceTimersByTime(3000);
+        expect(onChange).toHaveBeenCalledTimes(2);
+      } finally {
+        release();
+        jest.useRealTimers();
+      }
+    },
+  );
 
   test('publishes tool previews only to the matching content subscriber and preserves list identity', async () => {
     let listener: ((event: AgentEvent) => void) | undefined;
@@ -567,7 +629,7 @@ describe('AgentSessionChatClient', () => {
         parts: [{ text: 'Complete' }],
         status: 'success',
       });
-      jest.advanceTimersByTime(16);
+      jest.advanceTimersByTime(100);
       expect(onChange).toHaveBeenCalledTimes(1);
     } finally {
       release();

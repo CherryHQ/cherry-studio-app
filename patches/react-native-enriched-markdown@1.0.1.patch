@@ -950,3 +950,225 @@ index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..9d6f22f128ed6d3498445e9d633aefb1
    }
  
    private fun initialMeasure(
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
+index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c42352385c97e96 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
+@@ -63,10 +63,25 @@ class EnrichedMarkdown
+     }
+ 
+     private var currentRenderId = 0L
++    // Main-thread-owned: at most one worker job, with props holding the latest
++    // pending input instead of retaining a queue of growing Markdown snapshots.
++    private var renderInFlight = false
++    private var renderRequested = false
++    private var disposed = false
+     private val segmentViews = mutableListOf<View>()
+     private val segmentSignatures = mutableListOf<Long>()
+     private val dirtyFlags = EnumSet.noneOf(DirtyFlag::class.java)
++    private var streamingGeneration = 0L
+     var streamingAnimation: Boolean = false
++      set(value) {
++        if (field == value) return
++        field = value
++        // A status-only completion must release filtered tails and invalidate
++        // in-flight streaming work, including a quick stop/start transition.
++        streamingGeneration++
++        dirtyFlags += DirtyFlag.FORCE_HEIGHT
++        renderPending = true
++      }
+ 
+     // used to force a Yoga re-measure when a block image resolves its box height
+     var stateWrapper: StateWrapper? = null
+@@ -343,19 +358,31 @@ class EnrichedMarkdown
+     }
+ 
+     private fun scheduleRenderIfNeeded() {
+-      if (currentMarkdown.isNotEmpty()) scheduleRender()
++      scheduleRender()
+     }
+ 
+     private fun scheduleRender() {
++      if (disposed) return
++      val renderId = ++currentRenderId
++      if (renderInFlight) {
++        renderRequested = true
++        return
++      }
+       val style = markdownStyle ?: return
+-      val markdown = currentMarkdown.takeIf { it.isNotEmpty() } ?: return
++      val markdown = currentMarkdown
++      val flags = md4cFlags
+       val isStreaming = streamingAnimation
++      val generation = streamingGeneration
+       val tableMode = tableStreamingMode
+       val codeBlockMode = codeBlockStreamingMode
+-
+-      val renderId = ++currentRenderId
++      val linkPress = onLinkPressCallback
++      val linkLongPress = onLinkLongPressCallback
++      renderInFlight = true
++      renderRequested = false
+ 
+       executor.execute {
++        var renderedSegments: List<RenderedSegment> = emptyList()
++        var hasPendingCodeBlock = false
+         try {
+           val filtered =
+             if (isStreaming) {
+@@ -364,33 +391,39 @@ class EnrichedMarkdown
+               null
+             }
+           val renderableMarkdown = filtered?.markdown ?: markdown
+-          val hasPendingCodeBlock = filtered?.endsInsideOpenCodeFence ?: false
+-
+-          if (renderableMarkdown.isEmpty()) {
+-            postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
+-            return@execute
++          hasPendingCodeBlock = filtered?.endsInsideOpenCodeFence ?: false
++          val ast = if (renderableMarkdown.isEmpty()) null else parser.parseMarkdown(renderableMarkdown, flags)
++          if (ast != null) {
++            renderedSegments =
++              MarkdownSegmentRenderer.render(
++                splitASTIntoSegments(ast),
++                style,
++                context,
++                linkPress,
++                linkLongPress,
++              )
+           }
+-
+-          val ast =
+-            parser.parseMarkdown(renderableMarkdown, md4cFlags) ?: run {
+-              postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
+-              return@execute
+-            }
+-
+-          val segments = splitASTIntoSegments(ast)
+-          val renderedSegments =
+-            MarkdownSegmentRenderer.render(
+-              segments,
+-              style,
+-              context,
+-              onLinkPressCallback,
+-              onLinkLongPressCallback,
+-            )
+-
+-          postToMain(renderId) { applyRenderedSegments(renderedSegments, style, hasPendingCodeBlock) }
+         } catch (e: Exception) {
+           Log.e(TAG, "Render failed", e)
+-          postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
++        }
++
++        mainHandler.post {
++          renderInFlight = false
++          if (!disposed) {
++            // Streamdown keys this view by the raw-source generation, remounting
++            // on replacement/clear. Within that lifetime remend may rewrite the
++            // suffix, so repaired-text prefix matching would starve progress.
++            // This serial worker preserves result order; status changes also
++            // invalidate jobs even when the Markdown itself did not change.
++            val compatibleStream =
++              isStreaming && streamingAnimation &&
++                markdownStyle === style && md4cFlags == flags &&
++                tableStreamingMode == tableMode && codeBlockStreamingMode == codeBlockMode
++            if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {
++              applyRenderedSegments(renderedSegments, style, hasPendingCodeBlock)
++            }
++            if (renderRequested) scheduleRender()
++          }
+         }
+       }
+     }
+@@ -453,6 +486,16 @@ class EnrichedMarkdown
+           requestLayout()
+         }
+       }
++      if (forceHeight) {
++        // requestLayout only updates Android's view tree. Explicitly invalidate
++        // Fabric/Yoga as well when a status-only change releases a hidden tail.
++        MeasurementStore.invalidate(id)
++        stateWrapper?.let { wrapper ->
++          val state = Arguments.createMap()
++          state.putInt("forceHeightRecalculationCounter", ++forceHeightRecalculationCounter)
++          wrapper.updateState(state)
++        }
++      }
+     }
+ 
+     private fun viewMatchesSegmentKind(
+@@ -497,7 +540,7 @@ class EnrichedMarkdown
+           val tableView = view as TableContainerView
+           val previousRowCount = tableView.rowCount
+           tableView.applyTableNode(segment.node)
+-          if (streamingAnimation && !isReducedMotionEnabled(context)) {
++          if (shouldAnimateStreaming && !isReducedMotionEnabled(context)) {
+             tableView.animateNewRows(previousRowCount, BLOCK_FADE_DURATION_MS)
+           }
+         }
+@@ -517,11 +560,16 @@ class EnrichedMarkdown
+       }
+     }
+ 
++    // Keep streaming parsing/finalization semantics when large content stops
++    // animating, just as Desktop separates isStreaming from per-word animation.
++    private val shouldAnimateStreaming: Boolean
++      get() = streamingAnimation && currentMarkdown.length <= MAX_ANIMATED_CONTENT_LENGTH
++
+     private fun animateNewView(
+       view: View,
+       segment: RenderedSegment,
+     ) {
+-      if (!streamingAnimation) return
++      if (!shouldAnimateStreaming) return
+       when (segment) {
+         is RenderedSegment.Text -> animateTextViewTail(view as EnrichedMarkdownInternalText, 0)
+         is RenderedSegment.Table, is RenderedSegment.Math, is RenderedSegment.CodeBlock -> animateBlockViewFadeIn(view)
+@@ -532,14 +580,14 @@ class EnrichedMarkdown
+       view: EnrichedMarkdownInternalText,
+       tailStart: Int,
+     ) {
+-      if (!streamingAnimation) return
++      if (!shouldAnimateStreaming) return
+       val textLength = view.text?.length ?: 0
+       if (textLength <= tailStart) return
+       TailFadeInAnimator(view).animate(tailStart, textLength)
+     }
+ 
+     private fun animateBlockViewFadeIn(view: View) {
+-      if (!streamingAnimation) return
++      if (!shouldAnimateStreaming) return
+       if (isReducedMotionEnabled(context)) return
+       view.alpha = 0f
+       view
+@@ -635,15 +683,6 @@ class EnrichedMarkdown
+       }
+     }
+ 
+-    private fun postToMain(
+-      renderId: Long,
+-      action: () -> Unit,
+-    ) {
+-      mainHandler.post {
+-        if (renderId == currentRenderId) action()
+-      }
+-    }
+-
+     override fun onLayout(
+       changed: Boolean,
+       l: Int,
+@@ -729,11 +768,14 @@ class EnrichedMarkdown
+     }
+ 
+     fun cleanup() {
++      disposed = true
++      renderRequested = false
+       executor.shutdownNow()
+     }
+ 
+     companion object {
+       private const val TAG = "EnrichedMarkdown"
+       private const val BLOCK_FADE_DURATION_MS = 200L
++      private const val MAX_ANIMATED_CONTENT_LENGTH = 64 * 1024
+     }
+   }
