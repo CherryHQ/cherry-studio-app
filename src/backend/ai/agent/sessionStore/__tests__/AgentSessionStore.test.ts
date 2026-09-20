@@ -24,7 +24,7 @@ import type {
   AgentSessionView,
 } from '@/shared/contracts/agent';
 
-import type { AgentSessionStore } from '../AgentSessionStore';
+import type { AgentSessionStore, FinalizeAssistantMessageInput } from '../AgentSessionStore';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import { SqliteAgentSessionStore } from '../SqliteAgentSessionStore';
 
@@ -710,6 +710,115 @@ describe.each([
     ).toEqual({ status: 'fork-point-unsettled' });
   });
 
+  test('deleteTurn removes one exchange and leaves the rest of the transcript intact', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const turns: Awaited<ReturnType<typeof settleTurn>>[] = [];
+    for (const text of ['one', 'two', 'three']) {
+      turns.push(await settleTurn(store, session.id, text));
+    }
+
+    const result = await store.deleteTurn({ sessionId: session.id, turnId: turns[1].turnId });
+
+    expect(result).toEqual({
+      deletedMessageIds: expect.arrayContaining([
+        turns[1].userMessage.id,
+        turns[1].assistantMessage.id,
+      ]),
+      status: 'deleted',
+    });
+    const remaining = await store.listMessages(session.id);
+    expect(remaining.map((message) => message.turnId)).toEqual([
+      turns[0].turnId,
+      turns[0].turnId,
+      turns[2].turnId,
+      turns[2].turnId,
+    ]);
+    // The rows around the gap are untouched, not renumbered or restamped.
+    expect(remaining.at(-1)?.id).toBe(turns[2].assistantMessage.id);
+  });
+
+  test('deleteTurn keeps a checkpoint anchored before it and drops one that may cover it', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const first = await settleTurn(store, session.id, 'one');
+    const second = await settleTurn(store, session.id, 'two');
+    // The newest row carries a checkpoint whose summary reaches back to the
+    // first turn, which is how a compacted Session actually looks.
+    const third = await settleTurn(store, session.id, 'three', {
+      version: 1,
+      anchorTurnId: first.turnId,
+      payload: 'ctx',
+    });
+
+    // The deleted turn is newer than the anchor, so the summary cannot contain
+    // it and the cheap replay path survives.
+    expect(await store.deleteTurn({ sessionId: session.id, turnId: second.turnId })).toMatchObject({
+      status: 'deleted',
+    });
+    expect(await store.getLatestContextCheckpoint(session.id)).toEqual({
+      assistantMessageId: third.assistantMessage.id,
+      checkpoint: { version: 1, anchorTurnId: first.turnId, payload: 'ctx' },
+    });
+
+    // Deleting the anchor turn itself leaves a summary that may still quote it,
+    // so the checkpoint goes and the next turn replays the full transcript.
+    expect(await store.deleteTurn({ sessionId: session.id, turnId: first.turnId })).toMatchObject({
+      status: 'deleted',
+    });
+    expect(await store.getLatestContextCheckpoint(session.id)).toBeNull();
+    expect(await store.listMessages(session.id)).toHaveLength(2);
+  });
+
+  test('deleteTurn refuses an unknown session, a foreign turn, and an unsettled turn', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const other = await harness.createEmptySession({ agentId });
+    const settled = await settleTurn(store, session.id, 'one');
+    const running = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
+    });
+
+    expect(await store.deleteTurn({ sessionId: 'missing', turnId: settled.turnId })).toEqual({
+      status: 'session-not-found',
+    });
+    expect(await store.deleteTurn({ sessionId: session.id, turnId: 'missing' })).toEqual({
+      status: 'turn-not-found',
+    });
+    // A turn id only belongs to the Session that reserved it.
+    expect(await store.deleteTurn({ sessionId: other.id, turnId: settled.turnId })).toEqual({
+      status: 'turn-not-found',
+    });
+    // Refused whole: the user row is settled, but its assistant placeholder is
+    // still being written and would be stranded by a partial delete.
+    expect(await store.deleteTurn({ sessionId: session.id, turnId: running.turnId })).toEqual({
+      status: 'turn-unsettled',
+    });
+    expect(await store.listMessages(session.id)).toHaveLength(4);
+  });
+
+  test('deleteTurn clears a fork boundary that pointed at a deleted message', async () => {
+    const source = await harness.createEmptySession({ agentId });
+    await settleTurn(store, source.id, 'one');
+    const original = await store.listMessages(source.id);
+    const forked = await store.forkSession({
+      sessionId: source.id,
+      fromMessageId: original[1].id,
+    });
+    expect(forked.status).toBe('forked');
+    if (forked.status !== 'forked') return;
+    expect(forked.session.forkBoundaryMessageId).not.toBeNull();
+
+    const copied = await store.listMessages(forked.session.id);
+    const result = await store.deleteTurn({
+      sessionId: forked.session.id,
+      turnId: copied[0].turnId ?? '',
+    });
+
+    expect(result.status).toBe('deleted');
+    expect((await store.getSession(forked.session.id))?.forkBoundaryMessageId).toBeNull();
+  });
+
   test('loads a checkpoint tail separately from full-transcript authorization indexes', async () => {
     const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({
@@ -1224,6 +1333,43 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     expect(search('harbor').map((row) => row.id)).toEqual([finalized.assistantMessage.id]);
   });
 
+  test('deleting a turn drops its rows from the search index and rewinds Session activity', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const kept = await settleTurn(store, session.id, 'quantum sailboat');
+    const readActivity = () =>
+      (
+        raw
+          .prepare('SELECT last_activity_at AS lastActivityAt FROM agent_session WHERE id = ?')
+          .get(session.id) as { lastActivityAt: number }
+      ).lastActivityAt;
+    const keptActivity = readActivity();
+    const removed = await settleTurn(store, session.id, 'emerald harbor');
+    expect(readActivity()).toBeGreaterThan(keptActivity);
+
+    const search = (term: string) =>
+      raw
+        .prepare(
+          `SELECT m.id FROM agent_session_message m
+           JOIN agent_session_message_fts fts ON m.fts_rowid = fts.rowid
+           WHERE agent_session_message_fts MATCH ?`,
+        )
+        .all(term)
+        .map((row) => (row as { id: string }).id);
+    expect(search('emerald')).toContain(removed.userMessage.id);
+
+    await store.deleteTurn({ sessionId: session.id, turnId: removed.turnId });
+
+    // The AFTER DELETE trigger keeps FTS consistent without an explicit reindex.
+    expect(search('emerald')).toEqual([]);
+    expect(search('quantum')).toContain(kept.userMessage.id);
+    // Activity rewinds to the newest surviving row: a deleted turn is not
+    // activity, and Session list ordering is recency.
+    expect(readActivity()).toBe(keptActivity);
+  });
+
   test('a fork indexes its copied rows and outlives the source it cites', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
@@ -1584,4 +1730,29 @@ function hybridRow(row: Record<string, unknown>): unknown[] {
 
 function messageIds() {
   return { userMessageId: uuidv7(), assistantMessageId: uuidv7() };
+}
+
+/** One complete submission, settled, so turn-level assertions have a subject. */
+async function settleTurn(
+  store: AgentSessionStore,
+  sessionId: string,
+  text: string,
+  contextCheckpoint: FinalizeAssistantMessageInput['contextCheckpoint'] = null,
+) {
+  const reserved = await store.reserveSubmission({
+    ...messageIds(),
+    ...RESERVATION_FACTS,
+    sessionId,
+    userParts: [{ id: 'input-0', type: 'text', text, state: 'done' }],
+  });
+  await store.finalizeAssistantMessage({
+    assistantMessageId: reserved.assistantMessage.id,
+    status: 'success',
+    parts: [{ id: 'text-1', type: 'text', text: `re: ${text}`, state: 'done' }],
+    usage: null,
+    error: null,
+    contextCheckpoint,
+    runtimeStats: { runtimeTiming: terminalTiming() },
+  });
+  return reserved;
 }

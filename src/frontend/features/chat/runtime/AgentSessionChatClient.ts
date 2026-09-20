@@ -236,6 +236,14 @@ export class AgentSessionChatClient {
     return session;
   }
 
+  /**
+   * The removal reaches live state through the Session's own `turn.deleted`
+   * event, so a caller that is already observing needs no separate reconcile.
+   */
+  async deleteTurn(sessionId: string, turnId: string): Promise<void> {
+    await this.protocol.deleteTurn({ sessionId, turnId });
+  }
+
   async submitMessage(input: AgentSubmitMessageInput) {
     const { sessionId } = input;
     const entry = this.getEntry(sessionId);
@@ -458,6 +466,25 @@ export class AgentSessionChatClient {
         this.commitLiveMessages(entry);
         this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
+      case 'turn.deleted': {
+        for (const messageId of event.messageIds) {
+          entry.liveMessages.delete(messageId);
+          this.toolInputPreviews.clearMessage(messageId);
+        }
+        // The last turn this generation ran may be the one that just left the
+        // transcript; keeping its view would report a turn nothing can show.
+        const isActiveTurnDeleted = entry.state.activeTurn?.id === event.turnId;
+        this.commitLiveMessages(entry, {
+          ...(isActiveTurnDeleted ? { activeTurn: null, pendingApprovals: [] } : {}),
+          ...(entry.state.enteringUserMessageId &&
+          event.messageIds.includes(entry.state.enteringUserMessageId)
+            ? { enteringUserMessageId: undefined }
+            : {}),
+        });
+        this.options.onTranscriptChanged?.(entry.state.sessionId);
+        this.options.onSessionChanged?.(entry.state.sessionId);
+        return;
+      }
       case 'approval.requested':
         this.updateState(entry, {
           ...entry.state,

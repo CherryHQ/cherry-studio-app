@@ -3447,6 +3447,85 @@ describe('MobileAgentHost', () => {
     ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
   });
 
+  test('deletes a settled turn, publishes it, and refuses to delete across a live turn', async () => {
+    const released = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        controller.emit({
+          type: 'part.add',
+          index: 0,
+          part: { id: 'text-1', type: 'text', text: 'First answer', state: 'done' },
+        });
+      })
+      .script(async (controller) => {
+        controller.emit({
+          type: 'part.add',
+          index: 0,
+          part: { id: 'text-2', type: 'text', text: 'Second answer', state: 'done' },
+        });
+        await released.promise;
+      });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    const first = await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the first turn to settle');
+    const second = await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Again.' }],
+    });
+
+    // A live turn owns the whole Session, so even deleting an older settled
+    // turn waits: its rows are what that turn will be replayed against.
+    await expect(
+      host.deleteTurn({ sessionId: session.id, turnId: first.turnId }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+
+    released.resolve();
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[3]?.status === 'success',
+      'the second turn to settle',
+    );
+
+    events.length = 0;
+    await host.deleteTurn({ sessionId: session.id, turnId: first.turnId });
+
+    expect(events).toEqual([
+      {
+        type: 'turn.deleted',
+        turnId: first.turnId,
+        messageIds: [first.userMessageId, first.assistantMessageId],
+      },
+    ]);
+    const remaining = await store.listMessages(session.id);
+    expect(remaining.map((message) => message.id)).toEqual([
+      second.userMessageId,
+      second.assistantMessageId,
+    ]);
+    // The latest turn ran in this generation, so its status snapshot survives
+    // a deletion that did not touch it.
+    expect(host.getSessionStatus(session.id)).toMatchObject({ turnId: second.turnId });
+
+    await host.deleteTurn({ sessionId: session.id, turnId: second.turnId });
+    // Deleting the turn the status describes leaves nothing to report.
+    expect(host.getSessionStatus(session.id)).toBeNull();
+    expect(await store.listMessages(session.id)).toEqual([]);
+
+    await expect(
+      host.deleteTurn({ sessionId: session.id, turnId: first.turnId }),
+    ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+    await expect(
+      host.deleteTurn({ sessionId: 'missing', turnId: first.turnId }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
+  });
+
   test('fails closed on unknown sessions, agents, and unsupported input', async () => {
     const host = hostWithText(['unused']);
 

@@ -31,11 +31,13 @@ export {
 export {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
+  AgentDeleteTurnInputSchema,
   AgentForkSessionInputSchema,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
+  type AgentDeleteTurnInput,
   type AgentForkSessionInput,
   type AgentStartSessionInput,
   type AgentSubmitMessageInput,

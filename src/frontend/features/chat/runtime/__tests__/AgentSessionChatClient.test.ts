@@ -79,6 +79,7 @@ function protocolWithObservation(
   return {
     cancelTurn: jest.fn(),
     deleteSession: jest.fn(),
+    deleteTurn: jest.fn(),
     forkSession: jest.fn(),
     getSessionStatus: jest.fn<
       ReturnType<AgentProtocol['getSessionStatus']>,
@@ -228,6 +229,37 @@ describe('AgentSessionChatClient', () => {
     listener?.({ type: 'message.created', message: assistantMessage() });
 
     expect(onSessionChanged).toHaveBeenCalledTimes(1);
+    expect(onSessionChanged).toHaveBeenCalledWith('session-1');
+  });
+
+  test('drops a deleted turn from live state and refreshes the durable transcript', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const onSessionChanged = jest.fn();
+    const onTranscriptChanged = jest.fn();
+    const client = new AgentSessionChatClient(protocol, { onSessionChanged, onTranscriptChanged });
+    await client.observe('session-1');
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.finalized', message: assistantMessage() });
+    expect(client.getState('session-1').liveMessages).toHaveLength(2);
+
+    await client.deleteTurn('session-1', 'turn-1');
+    expect(protocol.deleteTurn).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+    });
+
+    onTranscriptChanged.mockClear();
+    onSessionChanged.mockClear();
+    listener?.({ type: 'turn.deleted', turnId: 'turn-1', messageIds: ['user-1', 'assistant-1'] });
+
+    // The rows are gone from the live overlay, so the refetched window is the
+    // only thing left describing the transcript.
+    expect(client.getState('session-1').liveMessages).toEqual([]);
+    expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
     expect(onSessionChanged).toHaveBeenCalledWith('session-1');
   });
 

@@ -54,6 +54,7 @@ import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAli
 import {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
+  AgentDeleteTurnInputSchema,
   AgentForkSessionInputSchema,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
@@ -65,6 +66,7 @@ import {
   AgentToolInputPreviewSchema,
   type AgentApprovalView,
   type AgentCapabilities,
+  type AgentDeleteTurnInput,
   type AgentErrorView,
   type AgentEvent,
   type AgentExecutionTarget,
@@ -500,6 +502,39 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       case 'forked':
         return result.session;
     }
+  }
+
+  async deleteTurn(input: AgentDeleteTurnInput): Promise<void> {
+    const parsed = AgentDeleteTurnInputSchema.parse(input);
+    // Same clean-cut rule as a fork: rows a live turn is still writing must
+    // not disappear underneath it, and the Session is the unit that is busy.
+    this.assertIdle(parsed.sessionId);
+
+    const result = await this.store.deleteTurn(parsed);
+    switch (result.status) {
+      case 'session-not-found':
+        fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
+        break;
+      case 'turn-not-found':
+        fail('MESSAGE_NOT_FOUND', `Turn does not exist in this session: ${parsed.turnId}`);
+        break;
+      case 'turn-unsettled':
+        fail('SESSION_BUSY', 'The turn has not settled yet.');
+        break;
+      case 'deleted':
+        break;
+    }
+
+    // The status snapshot describes the latest turn this generation ran. Once
+    // that turn's rows are gone it would report a turn nothing can observe.
+    if (this.getSessionStatus(parsed.sessionId)?.turnId === parsed.turnId) {
+      this.updateSessionStatus(parsed.sessionId, null);
+    }
+    this.publish(parsed.sessionId, {
+      type: 'turn.deleted',
+      turnId: parsed.turnId,
+      messageIds: result.deletedMessageIds,
+    });
   }
 
   async renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView> {

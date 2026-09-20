@@ -394,6 +394,7 @@ interface AgentProtocol {
 
   renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
+  deleteTurn(input: { sessionId: string; turnId: string }): Promise<void>
   forkSession(input: {
     sessionId: string
     fromMessageId: string
@@ -493,6 +494,17 @@ navigates to it and observes it like any other Session.
 and the Host has no locale: it resolves the app language only to tell a naming model which language
 to write in, and never composes user-visible text itself.
 
+`deleteTurn` removes one settled turn from a Session. The unit is the turn because replayed
+history pairs every `tool-call` with its `tool-result`; the client resolves the pressed message to
+its turn rather than deleting a row. The Host refuses the operation while the Session has an
+active turn — the same clean-cut rule a fork applies — and refuses a turn whose own rows have not
+settled. It clears any context checkpoint that may have summarized the removed turn, then
+publishes `turn.deleted` so observers drop the rows from live state.
+
+Deletion is not an undo. A turn's tool calls already changed the one real world, and erasing their
+record does not reverse them; the Agent simply no longer sees that it made them. Regenerating or
+retrying a question remains a fork (see [Branching](#branching)).
+
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;
 the protocol does not need event sequence, host epoch, replay buffers, or revision counters in
@@ -508,6 +520,7 @@ type AgentEvent =
   | { type: 'message.created'; message: AgentMessageView }
   | { type: 'message.delta'; messageId: string; delta: AgentMessageDelta }
   | { type: 'message.finalized'; message: AgentMessageView }
+  | { type: 'turn.deleted'; turnId: string; messageIds: string[] }
   | { type: 'approval.requested'; approval: AgentApprovalView }
   | { type: 'approval.resolved'; approval: AgentApprovalView }
 

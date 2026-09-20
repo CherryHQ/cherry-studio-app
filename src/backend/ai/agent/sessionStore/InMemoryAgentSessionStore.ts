@@ -11,6 +11,8 @@ import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/share
 
 import type {
   AgentSessionStore,
+  DeleteTurnInput,
+  DeleteTurnResult,
   FinalizeAssistantMessageInput,
   ForkSessionInput,
   ForkSessionResult,
@@ -63,6 +65,15 @@ function createSessionView(input: {
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+}
+
+/** The payload stays opaque; only the anchor the Host itself validates is read. */
+function readCheckpointAnchorTurnId(checkpoint: unknown): string | null {
+  if (typeof checkpoint !== 'object' || checkpoint === null || !('anchorTurnId' in checkpoint)) {
+    return null;
+  }
+  const { anchorTurnId } = checkpoint;
+  return typeof anchorTurnId === 'string' ? anchorTurnId : null;
 }
 
 /**
@@ -269,6 +280,58 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     this.sessions.set(session.id, forkedSession);
     this.messages.set(session.id, forkedTranscript);
     return { session: cloneJson(forkedSession), status: 'forked' };
+  }
+
+  async deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult> {
+    const session = this.sessions.get(input.sessionId);
+    if (!session) {
+      return { status: 'session-not-found' };
+    }
+
+    const transcript = this.messages.get(input.sessionId) ?? [];
+    const firstIndex = transcript.findIndex((stored) => stored.view.turnId === input.turnId);
+    if (firstIndex < 0) {
+      return { status: 'turn-not-found' };
+    }
+    const deleted = transcript.filter((stored) => stored.view.turnId === input.turnId);
+    if (deleted.some((stored) => UNSETTLED_MESSAGE_STATUSES.has(stored.view.status))) {
+      return { status: 'turn-unsettled' };
+    }
+
+    // Synchronous section: the checkpoint reset and the removal commit
+    // together or not at all.
+    // A summary covers everything up to its anchor turn, so only a checkpoint
+    // anchored strictly before the deleted turn can be replayed afterwards.
+    for (const stored of transcript) {
+      if (stored.contextCheckpoint === null) {
+        continue;
+      }
+      const anchorTurnId = readCheckpointAnchorTurnId(stored.contextCheckpoint);
+      const anchorIndex =
+        anchorTurnId === null
+          ? -1
+          : transcript.findIndex((entry) => entry.view.turnId === anchorTurnId);
+      if (anchorIndex < 0 || anchorIndex >= firstIndex) {
+        stored.contextCheckpoint = null;
+      }
+    }
+
+    const deletedMessageIds = deleted.map((stored) => stored.view.id);
+    this.messages.set(
+      input.sessionId,
+      transcript.filter((stored) => stored.view.turnId !== input.turnId),
+    );
+    if (
+      session.forkBoundaryMessageId !== null &&
+      deletedMessageIds.includes(session.forkBoundaryMessageId)
+    ) {
+      this.sessions.set(input.sessionId, {
+        ...session,
+        forkBoundaryMessageId: null,
+        updatedAt: nowIso(),
+      });
+    }
+    return { deletedMessageIds, status: 'deleted' };
   }
 
   async reserveInitialSubmission(

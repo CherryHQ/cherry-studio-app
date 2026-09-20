@@ -8,6 +8,7 @@ import { ChatMessage } from '../ChatMessage';
 
 const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
 const mockCopyMessage = jest.fn();
+const mockDeleteMessageTurn = jest.fn();
 const mockShareMessage = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -19,6 +20,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
 jest.mock('../../context/AssistantMessageActionsProvider', () => ({
   useAssistantMessageActions: () => ({
     copyAssistantMessage: mockCopyMessage,
+    deleteMessageTurn: mockDeleteMessageTurn,
     shareAssistantMessage: mockShareMessage,
   }),
 }));
@@ -167,6 +169,30 @@ describe('ChatMessage', () => {
       renderer = create(renderMessage({ ...createMessage(status), role }, enabled, true));
     });
     expect(renderer!.root.findAllByType('Button')).toHaveLength(0);
+  });
+
+  test('offers a destructive delete only for rows that belong to a turn', () => {
+    act(() => {
+      renderer = create(renderMessage(createMessage('success')));
+    });
+
+    // A row with no turn — synthetic, or not yet reserved — has nothing whose
+    // deletion would keep the transcript replayable.
+    expect(mockContextMenu.mock.lastCall![0].items.map((item) => item.id)).toEqual([
+      'copy',
+      'share',
+    ]);
+
+    act(() => {
+      renderer?.update(renderMessage({ ...createMessage('success'), turnId: 'turn-1' }));
+    });
+
+    const menu = mockContextMenu.mock.lastCall![0];
+    expect(menu.items.map((item) => item.id)).toEqual(['copy', 'share', 'delete']);
+    expect(menu.items[2].destructive).toBe(true);
+    act(() => menu.items[2].onPress());
+    // The pressed message is an assistant row, but the whole exchange goes.
+    expect(mockDeleteMessageTurn).toHaveBeenCalledWith({ turnId: 'turn-1' });
   });
 
   test('keeps native text selection available when message actions are disabled', () => {

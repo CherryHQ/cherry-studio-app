@@ -4,6 +4,7 @@ export {
   type PendingChatSend,
   useAgentChatActions,
   useAgentChatControls,
+  useAgentChatDeleteTurn,
   useAgentChatDraftHandoff,
   useAgentChatFork,
   useAgentChatImageResult,

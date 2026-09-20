@@ -24,6 +24,8 @@ import {
 
 import type {
   AgentSessionStore,
+  DeleteTurnInput,
+  DeleteTurnResult,
   FinalizeAssistantMessageInput,
   ForkSessionInput,
   ForkSessionResult,
@@ -308,6 +310,119 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
       return { session: toAgentSessionView(forkedWithBoundary), status: 'forked' };
     });
+  }
+
+  async deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult> {
+    const result = await this.dbService.withWriteTx(async (tx): Promise<DeleteTurnResult> => {
+      const [session] = await tx
+        .select({ id: agentSessionTable.id })
+        .from(agentSessionTable)
+        .where(eq(agentSessionTable.id, input.sessionId))
+        .limit(1);
+      if (!session) {
+        return { status: 'session-not-found' };
+      }
+
+      const turnRows = await tx
+        .select({
+          createdAt: agentSessionMessageTable.createdAt,
+          id: agentSessionMessageTable.id,
+          status: agentSessionMessageTable.status,
+        })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.turnId, input.turnId),
+          ),
+        )
+        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+      if (turnRows.length === 0) {
+        return { status: 'turn-not-found' };
+      }
+      if (
+        turnRows.some((row) =>
+          (UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(row.status),
+        )
+      ) {
+        return { status: 'turn-unsettled' };
+      }
+
+      // Checkpoint summaries cover everything up to their anchor turn, and the
+      // store cannot read inside the opaque payload. Any checkpoint whose
+      // anchor does not sit strictly before this turn may therefore have
+      // absorbed it, so it is dropped rather than replayed. An anchor that no
+      // longer resolves fails the same test and is cleared with them.
+      const [firstRow] = turnRows;
+      await tx
+        .update(agentSessionMessageTable)
+        .set({ contextCheckpoint: null })
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            isNotNull(agentSessionMessageTable.contextCheckpoint),
+            sql`NOT EXISTS (
+              SELECT 1 FROM agent_session_message AS anchor
+              WHERE anchor.session_id = ${input.sessionId}
+                AND anchor.turn_id = json_extract(${agentSessionMessageTable.contextCheckpoint}, '$.anchorTurnId')
+                AND (anchor.created_at < ${firstRow.createdAt}
+                  OR (anchor.created_at = ${firstRow.createdAt} AND anchor.id < ${firstRow.id})))`,
+          ),
+        );
+
+      const deletedMessageIds = turnRows.map((row) => row.id);
+      // The boundary column is application-owned, so the delete below would
+      // otherwise leave this Session pointing at a row that no longer exists.
+      await tx
+        .update(agentSessionTable)
+        .set({ forkBoundaryMessageId: null })
+        .where(
+          and(
+            eq(agentSessionTable.id, input.sessionId),
+            inArray(agentSessionTable.forkBoundaryMessageId, deletedMessageIds),
+          ),
+        );
+
+      await tx
+        .delete(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.turnId, input.turnId),
+          ),
+        );
+
+      // Deleting the newest turn must give the Session back its previous
+      // activity time; list ordering is recency, and a deleted turn is no
+      // longer activity. Deleting an older turn recomputes the same value.
+      const [newest] = await tx
+        .select({
+          createdAt: agentSessionMessageTable.createdAt,
+          role: agentSessionMessageTable.role,
+          stats: agentSessionMessageTable.stats,
+        })
+        .from(agentSessionMessageTable)
+        .where(eq(agentSessionMessageTable.sessionId, input.sessionId))
+        .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
+        .limit(1);
+      if (newest) {
+        await tx
+          .update(agentSessionTable)
+          .set({
+            lastActivityAt:
+              newest.role === 'assistant'
+                ? (newest.stats?.runtimeTiming?.completedAt ?? newest.createdAt)
+                : newest.createdAt,
+          })
+          .where(eq(agentSessionTable.id, input.sessionId));
+      }
+
+      return { deletedMessageIds, status: 'deleted' };
+    });
+    if (result.status === 'deleted') {
+      publishDataApiChanges(['/agent-sessions', `/agent-sessions/${input.sessionId}`]);
+    }
+    return result;
   }
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {

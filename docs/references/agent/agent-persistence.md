@@ -125,8 +125,13 @@ boundary, not in `AgentService`: resolving it is file-system work under `backend
 an Agent is refused while Sessions exist (`RESTRICT`). `agent_session` hard-deletes and cascades
 messages — matching the store port's `deleteSession` contract. Before deleting rows, the Host
 installs a per-Session barrier, waits any already-admitted submission to install its turn state,
-then cancels and drains that turn. New submissions fail closed until deletion finishes. Messages
-are never deleted individually in V1.
+then cancels and drains that turn. New submissions fail closed until deletion finishes.
+
+Inside a Session the deletable unit is the turn, never the single message: replayed history pairs
+every `tool-call` with its `tool-result`, so half a turn is not a transcript any provider accepts.
+`deleteTurn` hard-deletes the turn's rows, and the Host refuses it while the Session is busy for
+the same reason a fork is refused. Deletion erases the record, not the side effects the record
+describes; nothing a tool already did is undone.
 
 **MCP bindings are mobile-owned Agent configuration.** `agent_tool_binding` stores a stable MCP
 `(serverId, rawToolName?)` identity, its enabled state, approval policy, and an optional display
@@ -316,6 +321,15 @@ projection:
   whole copy runs inside the serialized write transaction.
   The boundary is Session metadata rather than a synthetic Message, so it does not enter FTS,
   transcript pagination counts, Runtime history, or recursive fork copies.
+- Deleting a turn clears, in the same transaction, every checkpoint in that Session whose anchor
+  does not sit strictly before the deleted turn — including anchors the deletion itself orphans.
+  A summary covers everything up to its anchor, and its text is opaque to the store, so a
+  checkpoint that may have absorbed the deleted content cannot be replayed without putting that
+  content back in front of the model. The cost is a full replay, and usually a fresh compaction,
+  on the next turn. The Session's own `forkBoundaryMessageId` is cleared when it names a deleted
+  row, and `lastActivityAt` rewinds to the newest surviving message, since a deleted turn is no
+  longer activity to sort by. The FTS delete trigger keeps the index consistent with no extra
+  work; `ai_usage_record` rows are a separate ledger and deliberately survive.
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full

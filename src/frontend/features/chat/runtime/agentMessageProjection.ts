@@ -306,6 +306,7 @@ export function toAgentMessageListItem(
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),
+    ...(message.turnId ? { turnId: message.turnId } : {}),
   } satisfies MessageListItem;
   cache?.itemsByMessageId.set(message.id, { item, source: message });
   return item;

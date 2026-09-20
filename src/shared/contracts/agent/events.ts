@@ -49,6 +49,12 @@ export const AgentEventSchema = z.union([
     delta: AgentMessageDeltaSchema,
   }),
   z.strictObject({ type: z.literal('message.finalized'), message: AgentMessageViewSchema }),
+  /** One settled turn left the transcript; its rows are gone, not superseded. */
+  z.strictObject({
+    type: z.literal('turn.deleted'),
+    turnId: z.string().min(1),
+    messageIds: z.array(z.string().min(1)).min(1),
+  }),
   z.strictObject({ type: z.literal('approval.requested'), approval: AgentApprovalViewSchema }),
   z.strictObject({ type: z.literal('approval.resolved'), approval: AgentApprovalViewSchema }),
 ]);

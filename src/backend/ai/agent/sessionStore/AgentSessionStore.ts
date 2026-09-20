@@ -74,6 +74,24 @@ export type ForkSessionResult =
   | { status: 'message-not-found' }
   | { status: 'fork-point-unsettled' };
 
+export type DeleteTurnInput = {
+  sessionId: string;
+  /** Deletion is turn-scoped: a lone message would orphan its tool pairing. */
+  turnId: string;
+};
+
+/**
+ * Distinguishes a missing Session, a turn that is not in it, and a turn whose
+ * rows have not settled. The last case is refused rather than partially
+ * applied: removing a placeholder that a live turn is still writing would
+ * leave that turn persisting into a transcript it no longer belongs to.
+ */
+export type DeleteTurnResult =
+  | { status: 'deleted'; deletedMessageIds: string[] }
+  | { status: 'session-not-found' }
+  | { status: 'turn-not-found' }
+  | { status: 'turn-unsettled' };
+
 export type UpdateStreamingAssistantMessageInput = {
   assistantMessageId: string;
   /** The Host's current in-memory projection of the assistant message parts. */
@@ -139,6 +157,19 @@ export interface AgentSessionStore {
    * turn is started: the new Session is idle.
    */
   forkSession(input: ForkSessionInput): Promise<ForkSessionResult>;
+
+  /**
+   * Atomically removes one turn's messages from a Session. The unit is the
+   * turn, not the message: a replayed transcript pairs every `tool-call` with
+   * its `tool-result`, and half a turn cannot be sent to a provider.
+   *
+   * Any context checkpoint whose summary covers the removed turn is cleared in
+   * the same transaction. The summary text is opaque to the store, so a
+   * checkpoint anchored at or after the deleted turn is assumed to contain it;
+   * dropping the checkpoint costs a full replay on the next turn and is the
+   * only way to keep deleted content out of the model's context.
+   */
+  deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult>;
 
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
 

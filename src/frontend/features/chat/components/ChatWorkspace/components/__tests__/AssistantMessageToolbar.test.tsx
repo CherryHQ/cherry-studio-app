@@ -28,11 +28,13 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     Button: (props: object) => createElement('Button', props),
+    useAlert: () => ({ alert: { confirm: jest.fn() } }),
     useToast: () => ({ toast: { show: jest.fn() } }),
   };
 });
 
 jest.mock('../../../../runtime', () => ({
+  useAgentChatDeleteTurn: () => jest.fn(),
   useAgentChatFork: () => mockForkSession,
 }));
 

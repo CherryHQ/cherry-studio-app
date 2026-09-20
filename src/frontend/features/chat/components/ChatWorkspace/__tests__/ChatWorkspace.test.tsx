@@ -75,6 +75,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,
     ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
+    useAlert: () => ({ alert: { confirm: jest.fn() } }),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
@@ -163,6 +164,7 @@ jest.mock('../../../runtime', () => ({
     reconcilePersistedMessages: mockReconcilePersistedMessages,
     respondApproval: mockRespondApproval,
   }),
+  useAgentChatDeleteTurn: () => jest.fn(),
   useAgentChatFork: () => mockForkSession,
   useAgentChatSession: () => mockAgentChatSession,
 }));
