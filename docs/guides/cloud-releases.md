@@ -11,7 +11,6 @@ tagging. The workflows build the tagged source with the EAS `production` profile
 | Location | Setting | Purpose |
 | --- | --- | --- |
 | GitHub Actions secret | `EXPO_TOKEN` | Access to this EAS project's builds and submissions |
-| GitHub Actions secret | `GITCODE_TOKEN` | GitCode personal access token with Git push, release, and attachment permissions for `CherryHQ/cherry-studio-app` |
 | GitHub Actions | Built-in `GITHUB_TOKEN` | `contents: write` for generating release notes and publishing the GitHub release |
 | EAS credentials | Android production keystore | Sign APKs with the existing production identity |
 | EAS credentials | iOS production signing and App Store Connect API key | Sign and upload iOS builds without prompts |
@@ -34,16 +33,14 @@ Both workflows pin EAS CLI to `24.4.2`; update them together when upgrading it.
 2. Download its signed ARM64 APK, check the archive, and generate `SHA256SUMS`.
 3. Save the APK, checksums, and generated release notes as the `android-release` Actions artifact
    for 30 days. The filename is `cherry-studio-<app-version>-<Shanghai-date>-android.apk`.
-4. Publish the same files and notes through independent GitHub and GitCode jobs.
+4. Publish the files and notes to GitHub Releases.
 
-GitHub prepares a draft, attaches the files, and publishes it automatically. GitCode synchronizes
-only the release tag and its reachable commits, creates the release, then uploads its attachments
-using the official upload URL API. A GitCode release may be briefly visible before all attachments
-are ready. The workflow verifies their contents after upload.
+GitHub prepares a draft, attaches the files, and publishes it automatically. GitCode releases are
+published manually from the matching tag using the same APK, `SHA256SUMS`, and release notes from
+the GitHub release.
 
-Tags with a prerelease suffix are marked as prereleases on both hosts. Plain version tags publish
-regular releases. Neither publishing job replaces an existing attachment with different contents;
-a conflicting GitCode tag also fails instead of being force-pushed.
+Tags with a prerelease suffix are marked as prereleases on GitHub. Plain version tags publish regular
+releases. The workflow does not replace an existing attachment with different contents.
 
 The shared notes describe Android installation and explain that iOS distribution is independent.
 Once a TestFlight public invitation link is available, it can be added to both release pages.
@@ -63,13 +60,6 @@ not configure groups or submit the app for an App Store public release.
 - If a publishing job fails, fix its credentials or service error and choose **Re-run failed jobs**
   in GitHub Actions. Successful build jobs are reused, so publishing retries use the same APK or
   iOS build ID without a new EAS build.
-- Partial Android uploads are resumable. Matching attachments are reused; missing files are uploaded.
-  If a file differs, inspect the existing release and use a new version tag for a replacement build.
-- GitCode uploads stop if throughput stays below 1 KiB/s for 60 seconds, with a 15-minute limit
-  per attempt. Transport failures and temporary HTTP errors are retried up to three attempts with
-  fresh upload URLs. Before retrying, the job checks whether the attachment already arrived and
-  verifies its checksum. Logs include the filename, attempt, HTTP status, bytes sent, and speed;
-  signed URLs and upload headers are not logged.
 - Before retrying an interrupted iOS submission, check its EAS submission page and App Store Connect.
   If Apple already received it, do not upload it again. A failed EAS submission can also be retried
   from EAS without building another IPA.
@@ -82,5 +72,3 @@ not configure groups or submit the app for an App Store public release.
 
 - [EAS CI builds](https://docs.expo.dev/build/building-on-ci/)
 - [EAS iOS submissions](https://docs.expo.dev/submit/ios/)
-- [GitCode release creation](https://docs.gitcode.com/docs/apis/post-api-v-5-repos-owner-repo-releases/)
-- [GitCode attachment uploads](https://docs.gitcode.com/docs/apis/get-api-v-5-repos-owner-repo-releases-tag-upload-url/)
