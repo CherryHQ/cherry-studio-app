@@ -1279,8 +1279,6 @@
   "settings.provider.account.saveFirst": "請先儲存 API 金鑰的修改，再登入或登出。",
   "settings.provider.account.signInHint": "使用供應商帳號登入此裝置。",
   "settings.provider.account.title": "{{name}} 帳號",
-  "settings.provider.account.topUp": "儲值",
-  "settings.provider.account.topUpHint": "請在瀏覽器中完成付款，返回應用程式後將重新整理餘額。",
   "settings.provider.actions.add": "新增模型供應商",
   "settings.provider.add.endpoint.anthropic": "Anthropic Messages",
   "settings.provider.add.endpoint.gemini": "Google Gemini",

@@ -1289,8 +1289,6 @@
   "settings.provider.account.saveFirst": "Guarda los cambios de las claves API antes de iniciar o cerrar sesión.",
   "settings.provider.account.signInHint": "Inicia sesión en tu cuenta del proveedor en este dispositivo.",
   "settings.provider.account.title": "Cuenta de {{name}}",
-  "settings.provider.account.topUp": "Recargar",
-  "settings.provider.account.topUpHint": "Completa el pago en el navegador. El saldo se actualizará cuando vuelvas a la aplicación.",
   "settings.provider.actions.add": "Agregar proveedor de modelo",
   "settings.provider.add.endpoint.anthropic": "Mensajes Antrópicos",
   "settings.provider.add.endpoint.gemini": "Google Géminis",

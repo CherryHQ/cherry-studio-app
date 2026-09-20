@@ -49,7 +49,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/frontend/data', () => ({
   useBackendModule: () => ({
     accounts: {
-      getCapabilities: () => ({ signIn: false, apiKeys: false, balance: false, topUp: false }),
+      getCapabilities: () => ({ signIn: false, apiKeys: false, balance: false }),
     },
   }),
   useQuery: () => ({ data: mockModels, isPending: false, isError: false }),

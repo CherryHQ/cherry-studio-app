@@ -79,6 +79,4 @@ export const cherryInAccountDefinition = {
       email: profile?.email ?? null,
     };
   },
-  // The current official page has no documented return parameter; browser return stays optional.
-  getTopUpUrl: () => `${ACCOUNT_HOST}/console/topup`,
 } satisfies ProviderAccountDefinition;

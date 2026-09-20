@@ -1294,8 +1294,6 @@
   "settings.provider.account.saveFirst": "Сохраните изменения API-ключей перед входом или выходом.",
   "settings.provider.account.signInHint": "Войдите в свой аккаунт провайдера на этом устройстве.",
   "settings.provider.account.title": "Аккаунт {{name}}",
-  "settings.provider.account.topUp": "Пополнить",
-  "settings.provider.account.topUpHint": "Завершите оплату в браузере. Баланс обновится, когда вы вернётесь в приложение.",
   "settings.provider.actions.add": "Добавить поставщика моделей",
   "settings.provider.add.endpoint.anthropic": "Антропные сообщения",
   "settings.provider.add.endpoint.gemini": "Google Близнецы",

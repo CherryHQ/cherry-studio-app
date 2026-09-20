@@ -21,12 +21,10 @@ function subject() {
       cancel: jest.fn(),
       receiveRedirect: jest.fn(),
       refresh: jest.fn(),
-      getTopUpUrl: jest.fn(),
       getCapabilities: jest.fn(() => ({
         signIn: false,
         apiKeys: false,
         balance: false,
-        topUp: false,
       })),
       logout: jest.fn(),
     },

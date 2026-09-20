@@ -1289,8 +1289,6 @@
   "settings.provider.account.saveFirst": "Enregistrez les modifications des clés API avant de vous connecter ou de vous déconnecter.",
   "settings.provider.account.signInHint": "Connectez-vous à votre compte fournisseur sur cet appareil.",
   "settings.provider.account.title": "Compte {{name}}",
-  "settings.provider.account.topUp": "Recharger",
-  "settings.provider.account.topUpHint": "Effectuez le paiement dans votre navigateur. Votre solde sera actualisé à votre retour dans l’application.",
   "settings.provider.actions.add": "Ajouter un fournisseur de modèles",
   "settings.provider.add.endpoint.anthropic": "Messages anthropiques",
   "settings.provider.add.endpoint.gemini": "Google Gémeaux",

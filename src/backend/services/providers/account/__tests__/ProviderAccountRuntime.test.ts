@@ -35,7 +35,6 @@ const definition = {
   getApiKeys: jest.fn(),
   getBalance: jest.fn(),
   getProfile: jest.fn(),
-  getTopUpUrl: jest.fn(),
 } satisfies ProviderAccountDefinition;
 
 const providerId = 'installed-provider';
@@ -76,10 +75,6 @@ beforeEach(() => {
   });
   jest.mocked(definition.getBalance).mockResolvedValue({ amount: 12.5, currency: 'EUR' });
   jest.mocked(definition.getProfile).mockResolvedValue({ displayName: 'Account', email: null });
-  definition.getTopUpUrl.mockImplementation(
-    ({ returnUrl }: { returnUrl: string }) =>
-      `https://billing.provider.test/topup?return_to=${encodeURIComponent(returnUrl)}`,
-  );
   store = {
     get: jest.fn(async (id: string) => ({
       id,
@@ -223,22 +218,17 @@ it('derives capabilities from the registered adapter and resolves installed copi
     signIn: true,
     apiKeys: true,
     balance: true,
-    topUp: true,
   });
   expect(runtime.getCapabilities({ id: 'unregistered' })).toEqual({
     signIn: false,
     apiKeys: false,
     balance: false,
-    topUp: false,
   });
-  runtime.configure(store, [
-    { ...definition, getApiKeys: undefined, getBalance: undefined, getTopUpUrl: undefined },
-  ]);
+  runtime.configure(store, [{ ...definition, getApiKeys: undefined, getBalance: undefined }]);
   expect(runtime.getCapabilities({ id: 'fixture' })).toEqual({
     signIn: true,
     apiKeys: false,
     balance: false,
-    topUp: false,
   });
 });
 
@@ -257,9 +247,7 @@ it('does not dispatch an authorization code to a different adapter after the pro
 });
 
 it('supports profile-only accounts without model keys or balance and renews their rejected token', async () => {
-  runtime.configure(store, [
-    { ...definition, getApiKeys: undefined, getBalance: undefined, getTopUpUrl: undefined },
-  ]);
+  runtime.configure(store, [{ ...definition, getApiKeys: undefined, getBalance: undefined }]);
   await runtime.begin(providerId);
   await runtime.receiveRedirect(callback);
   expect(account?.ownedKeys).toEqual([]);
@@ -273,14 +261,4 @@ it('supports profile-only accounts without model keys or balance and renews thei
   expect(oauth.refresh).toHaveBeenCalledTimes(1);
   expect(definition.getProfile).toHaveBeenLastCalledWith('rotated-access', expect.any(AbortSignal));
   expect(definition.getBalance).not.toHaveBeenCalled();
-});
-
-it('supplies the shared navigation return to recharge adapters and rejects unsupported recharge', async () => {
-  const url = new URL(await runtime.getTopUpUrl(providerId));
-  expect(url.origin).toBe('https://billing.provider.test');
-  expect(url.searchParams.get('return_to')).toBe(
-    `cherrystudio-dev://settings/provider/${providerId}`,
-  );
-  runtime.configure(store, [{ ...definition, getTopUpUrl: undefined }]);
-  await expect(runtime.getTopUpUrl(providerId)).rejects.toMatchObject({ reason: 'unsupported' });
 });

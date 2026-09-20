@@ -73,11 +73,6 @@ export function getProviderOauthApplication(clientId: string): ProviderOauthAppl
   return parsed.data;
 }
 
-/** A navigation-only recharge return; no payment result is trusted from this URL. */
-export function getProviderAccountReturnUrl(providerId: string): string {
-  return `${nativeScheme()}://settings/provider/${encodeURIComponent(providerId)}`;
-}
-
 const base64Url = (value: string) =>
   value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const randomValue = () => base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));

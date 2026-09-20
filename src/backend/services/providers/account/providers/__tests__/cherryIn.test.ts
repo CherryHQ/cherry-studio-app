@@ -35,7 +35,3 @@ it('adapts the PC key envelopes and remaining quota to the shared account contra
     }),
   ]);
 });
-
-it('uses the existing recharge page without inventing a return parameter', () => {
-  expect(cherryInAccountDefinition.getTopUpUrl()).toBe('https://open.cherryin.ai/console/topup');
-});

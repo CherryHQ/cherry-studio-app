@@ -1284,8 +1284,6 @@
   "settings.provider.account.saveFirst": "Oturum açmadan veya kapatmadan önce API anahtarı değişikliklerini kaydedin.",
   "settings.provider.account.signInHint": "Bu cihazda sağlayıcı hesabınızda oturum açın.",
   "settings.provider.account.title": "{{name}} hesabı",
-  "settings.provider.account.topUp": "Bakiye yükle",
-  "settings.provider.account.topUpHint": "Ödemeyi tarayıcınızda tamamlayın. Uygulamaya döndüğünüzde bakiyeniz yenilenir.",
   "settings.provider.actions.add": "Model sağlayıcı ekle",
   "settings.provider.add.endpoint.anthropic": "Antropik Mesajlar",
   "settings.provider.add.endpoint.gemini": "Google İkizler",

@@ -51,37 +51,15 @@ export function ProviderAccountPanel({
               </Text>
             </>
           ) : null}
-          {capabilities.topUp || capabilities.balance ? (
-            <View className="flex-row gap-3">
-              {capabilities.topUp ? (
-                <View className="flex-1">
-                  <Button
-                    disabled={account.busy}
-                    onPress={() => void account.topUp()}
-                    variant="secondary"
-                  >
-                    {t('settings.provider.account.topUp')}
-                  </Button>
-                </View>
-              ) : null}
-              {capabilities.balance ? (
-                <View className="flex-1">
-                  <Button
-                    disabled={account.busy || account.refreshing}
-                    loading={account.refreshing}
-                    onPress={() => void account.refresh()}
-                    variant="secondary"
-                  >
-                    {t('settings.provider.account.refresh')}
-                  </Button>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-          {capabilities.topUp && capabilities.balance ? (
-            <Text className="text-sm text-muted-foreground">
-              {t('settings.provider.account.topUpHint')}
-            </Text>
+          {capabilities.balance ? (
+            <Button
+              disabled={account.busy || account.refreshing}
+              loading={account.refreshing}
+              onPress={() => void account.refresh()}
+              variant="secondary"
+            >
+              {t('settings.provider.account.refresh')}
+            </Button>
           ) : null}
           <Button
             disabled={changesDisabled || account.busy}

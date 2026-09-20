@@ -25,7 +25,7 @@ import {
   type StoredProviderAccount,
   type PendingProviderAuthorization,
 } from './providerAccountStorage';
-import { getProviderAccountReturnUrl, providerAccountError } from './providerOauth';
+import { providerAccountError } from './providerOauth';
 
 const SIGNED_OUT: ProviderAccountStatus = {
   signedIn: false,
@@ -231,19 +231,6 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
     }).finally(() => this.refreshes.delete(providerId));
     this.refreshes.set(providerId, result);
     return result;
-  }
-
-  getTopUpUrl(providerId: string) {
-    return this.run(async () => {
-      const { definition } = await this.requireProvider(providerId);
-      if (!definition.getTopUpUrl) throw new ProviderAccountError('unsupported');
-      const url = new URL(
-        definition.getTopUpUrl({ returnUrl: getProviderAccountReturnUrl(providerId) }),
-      );
-      if (url.protocol !== 'https:' || url.username || url.password)
-        throw new ProviderAccountError('configuration');
-      return url.href;
-    });
   }
 
   logout(providerId: string) {

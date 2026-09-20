@@ -1284,8 +1284,6 @@
   "settings.provider.account.saveFirst": "Speichern Sie Ihre Änderungen an den API-Schlüsseln, bevor Sie sich an- oder abmelden.",
   "settings.provider.account.signInHint": "Melden Sie sich auf diesem Gerät bei Ihrem Anbieterkonto an.",
   "settings.provider.account.title": "{{name}}-Konto",
-  "settings.provider.account.topUp": "Aufladen",
-  "settings.provider.account.topUpHint": "Schließen Sie die Zahlung im Browser ab. Ihr Guthaben wird aktualisiert, wenn Sie zur App zurückkehren.",
   "settings.provider.actions.add": "Modellanbieter hinzufügen",
   "settings.provider.add.endpoint.anthropic": "Anthropische Botschaften",
   "settings.provider.add.endpoint.gemini": "Google Gemini",

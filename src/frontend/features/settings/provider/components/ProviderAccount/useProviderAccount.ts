@@ -2,8 +2,8 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { clearInitialURL } from 'expo-linking';
 import { useFocusEffect } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Keyboard, Linking } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { Keyboard } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import {
@@ -42,7 +42,6 @@ export function useProviderAccount(
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const acting = useRef(false);
-  const topUpPending = useRef(false);
   const status = useQuery({
     queryKey: queryKeys.providers.account(providerId),
     queryFn: () => accounts.getStatus(providerId),
@@ -72,22 +71,6 @@ export function useProviderAccount(
       void refresh();
     }, [refresh]),
   );
-  useEffect(() => {
-    let wasAway = AppState.currentState !== 'active';
-    const listener = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') {
-        wasAway = true;
-      } else if (wasAway) {
-        wasAway = false;
-        if (topUpPending.current) {
-          topUpPending.current = false;
-          void refresh();
-        }
-      }
-    });
-    return () => listener.remove();
-  }, [refresh]);
-
   async function act(action: () => Promise<void>) {
     if (acting.current) return;
     acting.current = true;
@@ -127,16 +110,6 @@ export function useProviderAccount(
       await refresh();
     });
   const logout = () => act(() => accounts.logout(providerId));
-  const topUp = async () => {
-    topUpPending.current = true;
-    try {
-      // The adapter supplies the official URL and any supported return parameter.
-      await Linking.openURL(await accounts.getTopUpUrl(providerId));
-    } catch {
-      topUpPending.current = false;
-      setError('request');
-    }
-  };
 
   return {
     busy,
@@ -146,6 +119,5 @@ export function useProviderAccount(
     refresh,
     refreshing,
     status,
-    topUp,
   };
 }

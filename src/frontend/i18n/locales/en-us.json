@@ -1284,8 +1284,6 @@
   "settings.provider.account.saveFirst": "Save your API key changes before signing in or out.",
   "settings.provider.account.signInHint": "Sign in to your provider account on this device.",
   "settings.provider.account.title": "{{name}} account",
-  "settings.provider.account.topUp": "Top up",
-  "settings.provider.account.topUpHint": "Complete payment in your browser. Your balance refreshes when you return to the app.",
   "settings.provider.actions.add": "Add model provider",
   "settings.provider.add.endpoint.anthropic": "Anthropic Messages",
   "settings.provider.add.endpoint.gemini": "Google Gemini",

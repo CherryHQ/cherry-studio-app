@@ -1284,8 +1284,6 @@
   "settings.provider.account.saveFirst": "Αποθηκεύστε τις αλλαγές στα κλειδιά API πριν συνδεθείτε ή αποσυνδεθείτε.",
   "settings.provider.account.signInHint": "Συνδεθείτε στον λογαριασμό σας στον πάροχο από αυτή τη συσκευή.",
   "settings.provider.account.title": "Λογαριασμός {{name}}",
-  "settings.provider.account.topUp": "Προσθήκη χρημάτων",
-  "settings.provider.account.topUpHint": "Ολοκληρώστε την πληρωμή στο πρόγραμμα περιήγησης. Το υπόλοιπό σας ανανεώνεται όταν επιστρέφετε στην εφαρμογή.",
   "settings.provider.actions.add": "Προσθήκη παρόχου μοντέλου",
   "settings.provider.add.endpoint.anthropic": "Anthropic Messages\n\n[[0010] Google Gemini",
   "settings.provider.add.endpoint.gemini": "Google Gemini",

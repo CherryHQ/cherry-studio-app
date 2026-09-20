@@ -1279,8 +1279,6 @@
   "settings.provider.account.saveFirst": "Vui lòng lưu các thay đổi đối với khóa API trước khi đăng nhập hoặc đăng xuất.",
   "settings.provider.account.signInHint": "Đăng nhập vào tài khoản nhà cung cấp trên thiết bị này.",
   "settings.provider.account.title": "Tài khoản {{name}}",
-  "settings.provider.account.topUp": "Nạp tiền",
-  "settings.provider.account.topUpHint": "Hoàn tất thanh toán trong trình duyệt. Số dư sẽ được làm mới khi bạn quay lại ứng dụng.",
   "settings.provider.actions.add": "Thêm nhà cung cấp mô hình",
   "settings.provider.add.endpoint.anthropic": "Thông Điệp Nhân Loại",
   "settings.provider.add.endpoint.gemini": "Google Song Tử",

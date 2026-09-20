@@ -55,7 +55,7 @@ describe('DesktopConnectionService provider synchronization', () => {
     testDb = createTestDb(new DatabaseSync(':memory:'));
     service = new DesktopConnectionService(testDb.dbService, (provider) => {
       const supported = (provider.presetProviderId ?? provider.id) === 'cherryin';
-      return { signIn: supported, apiKeys: supported, balance: supported, topUp: supported };
+      return { signIn: supported, apiKeys: supported, balance: supported };
     });
     await service.savePair(
       {

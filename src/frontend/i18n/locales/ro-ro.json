@@ -1289,8 +1289,6 @@
   "settings.provider.account.saveFirst": "Salvați modificările cheilor API înainte de autentificare sau deconectare.",
   "settings.provider.account.signInHint": "Autentificați-vă în contul furnizorului pe acest dispozitiv.",
   "settings.provider.account.title": "Cont {{name}}",
-  "settings.provider.account.topUp": "Alimentați contul",
-  "settings.provider.account.topUpHint": "Finalizați plata în browser. Soldul se actualizează când reveniți în aplicație.",
   "settings.provider.actions.add": "Adăugați furnizorul de modele",
   "settings.provider.add.endpoint.anthropic": "Mesaje antropice",
   "settings.provider.add.endpoint.gemini": "Google Gemeni",

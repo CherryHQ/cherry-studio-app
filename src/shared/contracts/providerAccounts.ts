@@ -7,7 +7,6 @@ export type ProviderAccountCapabilities = {
   signIn: boolean;
   apiKeys: boolean;
   balance: boolean;
-  topUp: boolean;
 };
 
 export type ProviderAccountErrorReason =
@@ -50,6 +49,5 @@ export interface ProviderAccountsModule {
   cancel(attemptId: string): Promise<void>;
   receiveRedirect(url: string): Promise<string | null>;
   refresh(providerId: string): Promise<ProviderAccountStatus>;
-  getTopUpUrl(providerId: string): Promise<string>;
   logout(providerId: string): Promise<void>;
 }

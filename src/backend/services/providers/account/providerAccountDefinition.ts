@@ -17,8 +17,6 @@ export type ProviderAccountDefinition = {
     token: string,
     signal: AbortSignal,
   ): Promise<{ displayName: string | null; email: string | null }>;
-  /** Use returnUrl only when the provider documents a supported return parameter. */
-  getTopUpUrl?(context: { returnUrl: string }): string;
 };
 
 export function getAccountCapabilities(
@@ -28,6 +26,5 @@ export function getAccountCapabilities(
     signIn: !!definition,
     apiKeys: !!definition?.getApiKeys,
     balance: !!definition?.getBalance,
-    topUp: !!definition?.getTopUpUrl,
   };
 }

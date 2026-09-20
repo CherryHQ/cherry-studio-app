@@ -1279,8 +1279,6 @@
   "settings.provider.account.saveFirst": "ログインまたはログアウトする前に、APIキーの変更を保存してください。",
   "settings.provider.account.signInHint": "この端末でプロバイダーのアカウントにログインしてください。",
   "settings.provider.account.title": "{{name}}アカウント",
-  "settings.provider.account.topUp": "チャージ",
-  "settings.provider.account.topUpHint": "ブラウザーで支払いを完了してください。アプリに戻ると残高が更新されます。",
   "settings.provider.actions.add": "モデルプロバイダーを追加",
   "settings.provider.add.endpoint.anthropic": "人間的なメッセージ",
   "settings.provider.add.endpoint.gemini": "Google Gemini",
