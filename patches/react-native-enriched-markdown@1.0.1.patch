@@ -851,10 +851,10 @@ index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb06
    if (tmp_color != map.end()) {
      fromRawValue(context, tmp_color->second, result.color);
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..bb59ce3a39ac5f47820fe4a36d37589ae1a9d0a3 100644
+index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..65e12dc8d75546a29504dda877cbc3996b73df11 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-@@ -8,6 +8,7 @@ import android.graphics.Color
+@@ -8,6 +8,7 @@
  import android.os.Build
  import android.text.Editable
  import android.text.InputType
@@ -862,28 +862,47 @@ index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..bb59ce3a39ac5f47820fe4a36d37589a
  import android.util.TypedValue
  import android.view.Gravity
  import android.view.KeyEvent
-@@ -290,6 +291,21 @@ class EnrichedMarkdownTextInputView(
+@@ -285,10 +286,39 @@
+         }
+       }
+     }
+-    return super.onTouchEvent(ev)
++    // CHERRY-STUDIO-APP-A: selection callbacks can clear TextView's layout while
++    // Editor is positioning the dragged cursor. Only absorb that framework NPE.
++    return try {
++      super.onTouchEvent(ev)
++    } catch (e: NullPointerException) {
++      val top = e.stackTrace.firstOrNull()
++      if (top == null || top.className != "android.widget.Editor" || top.methodName != "updateCursorPosition") {
++        throw e
++      }
++      Log.w("EnrichedMarkdownTextInputView", "Framework cursor layout unavailable during touch", e)
++      // Keep this touch consumed; do not retry a partially processed selection change.
++      true
++    }
+   }
  
    override fun performClick(): Boolean = super.performClick()
- 
++
 +  // Selection callbacks can invalidate Editor's cursor controller during a long press.
-+  // Backport https://github.com/software-mansion/enriched-markdown/pull/738.
++  // Extend https://github.com/software-mansion/enriched-markdown/pull/738 for CHERRY-STUDIO-APP-R.
 +  override fun performLongClick(): Boolean =
 +    try {
 +      super.performLongClick()
 +    } catch (e: NullPointerException) {
 +      val top = e.stackTrace.firstOrNull()
-+      if (top == null || !top.className.startsWith("android.widget.Editor") || top.methodName != "performLongClick") {
++      if (top == null || top.className != "android.widget.Editor" ||
++        (top.methodName != "performLongClick" && top.methodName != "selectCurrentWordAndStartDrag")
++      ) {
 +        throw e
 +      }
 +      Log.w("EnrichedMarkdownTextInputView", "Framework cursor controller unavailable during long press", e)
 +      // Mark the long press handled so ACTION_UP does not dispatch an extra click.
 +      true
 +    }
-+
+ 
    // In auto-grow mode (scrollEnabled=false) TextView's internal bringPointIntoView
    // scrolls content before Fabric has resized the view, causing a visible flicker.
-   override fun scrollTo(
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
 index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..9d6f22f128ed6d3498445e9d633aefb16459b6fe 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt

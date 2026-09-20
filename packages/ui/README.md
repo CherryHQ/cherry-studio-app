@@ -647,6 +647,14 @@ Only platform-divergent material and text metrics use `.ios` / `.android` files.
 collapse behavior stay shared. `Composer.Input` forwards every paste to `onPaste`; the caller decides
 which payloads to use.
 
+The Android enriched-input patch guards the observed framework null pointers during cursor dragging
+(`Editor.updateCursorPosition`) and long-press selection (`Editor.performLongClick` and
+`Editor.selectCurrentWordAndStartDrag`). Only those top stack frames are handled; other exceptions
+still propagate. The failed interaction is consumed without retrying a partially applied selection
+change. These native guards require a new installation package; a JavaScript update cannot apply
+them. The composer native-patch suite checks the installed sources, while recovery and subsequent
+editing still need device acceptance. See [the stability tracker](https://github.com/CherryHQ/cherry-studio-app/issues/1011).
+
 Rows above the field follow composition order rather than named slots. Use `Composer.Collapsible`
 only when a conditional row should animate the surface height:
 
