@@ -4,6 +4,7 @@ import background from 'react-native-background-actions';
 
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { AndroidBackgroundActivityRuntime } from '../AndroidBackgroundActivityRuntime';
 
@@ -495,6 +496,23 @@ test('unexpected native destruction interrupts every protected task without rest
   runtime.acquire('new-task');
   await flush();
   expect(native.start).toHaveBeenCalledTimes(2);
+});
+
+test('expected native interruption does not enter error reporting', async () => {
+  const reporter = jest.fn();
+  const removeReporter = loggerService.setErrorReporter(reporter);
+  try {
+    runtime.acquire('chat');
+    await flush();
+    setAppState('background');
+    running = false;
+    for (const listener of serviceStoppedListeners) listener();
+    await flush();
+
+    expect(reporter).not.toHaveBeenCalled();
+  } finally {
+    removeReporter();
+  }
 });
 
 test('a new foreground task survives cancellation draining after native service loss', async () => {
