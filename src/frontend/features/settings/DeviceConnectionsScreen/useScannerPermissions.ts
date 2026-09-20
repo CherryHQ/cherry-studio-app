@@ -8,7 +8,6 @@ import { canRequestDevicePermission, type DevicePermissionStatus } from '@/share
 const CAMERA_PERMISSION_SCOPES = ['camera.read'] as const;
 type ScannerPermissions = {
   camera?: DevicePermissionStatus;
-  error?: 'request-failed';
   isPreparing: boolean;
 };
 
@@ -27,11 +26,9 @@ export function useScannerPermissions() {
       preparation.current = controller;
       ready.current = false;
       setStatuses({ isPreparing: true });
-      let hasPreparedNetwork = false;
       try {
         await permissions.requestLocalNetworkAccess(controller.signal);
         controller.signal.throwIfAborted();
-        hasPreparedNetwork = true;
         let camera = (await permissions.getStatuses(CAMERA_PERMISSION_SCOPES))['camera.read'];
         controller.signal.throwIfAborted();
         if (
@@ -43,20 +40,19 @@ export function useScannerPermissions() {
           ];
         }
         controller.signal.throwIfAborted();
-        // Best-effort prompt preparation is complete; pairing owns connectivity failures.
-        ready.current = true;
         setStatuses({ camera, isPreparing: false });
       } catch {
         if (!controller.signal.aborted) {
-          ready.current = hasPreparedNetwork;
           setStatuses({
             camera: { state: 'error', canAskAgain: false },
-            error: hasPreparedNetwork ? undefined : 'request-failed',
             isPreparing: false,
           });
         }
       } finally {
-        if (preparation.current === controller) preparation.current = null;
+        if (preparation.current === controller) {
+          preparation.current = null;
+          ready.current = !controller.signal.aborted;
+        }
       }
     },
     [permissions],
@@ -88,8 +84,7 @@ export function useScannerPermissions() {
     }, [prepare]),
   );
 
-  const canSubmit = () =>
-    focused.current && AppState.currentState === 'active' && !preparation.current && ready.current;
+  const canSubmit = () => focused.current && AppState.currentState === 'active' && ready.current;
 
   return { ...statuses, canSubmit, isActive, prepare };
 }

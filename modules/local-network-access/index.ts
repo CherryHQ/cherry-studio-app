@@ -9,7 +9,7 @@ type PairingRequest = SharedObject & {
   cancel(): Promise<void>;
 };
 
-export type LocalNetworkAccessModule = {
+type LocalNetworkAccessModule = {
   /** Best-effort prompt trigger; completion does not report authorization. */
   request(): Promise<void>;
   PairingRequest: new () => PairingRequest;

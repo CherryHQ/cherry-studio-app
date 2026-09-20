@@ -1096,7 +1096,6 @@
   "settings.deviceConnections.scan.pair": "Ζεύγος",
   "settings.deviceConnections.scan.permissionDescription": "Απαιτείται πρόσβαση στην κάμερα για σάρωση. Μπορείτε ακόμα να επικολλήσετε το περιεχόμενο QR παρακάτω.",
   "settings.deviceConnections.scan.permissionTitle": "Η κάμερα δεν είναι διαθέσιμη",
-  "settings.deviceConnections.scan.preparingPermissions": "Προετοιμασία πρόσβασης στο τοπικό δίκτυο και την κάμερα…",
   "settings.deviceConnections.scan.title": "Σύνδεση υπολογιστή",
   "settings.deviceConnections.status.needs-repair": "Ξανασύζευξη",
   "settings.deviceConnections.status.paired": "Ζεύγος",

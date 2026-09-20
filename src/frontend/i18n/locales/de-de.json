@@ -1096,7 +1096,6 @@
   "settings.deviceConnections.scan.pair": "Paar",
   "settings.deviceConnections.scan.permissionDescription": "Zum Scannen ist Kamerazugriff erforderlich. Sie können den QR-Inhalt weiterhin unten einfügen.",
   "settings.deviceConnections.scan.permissionTitle": "Kamera nicht verfügbar",
-  "settings.deviceConnections.scan.preparingPermissions": "Netzwerk- und Kamerazugriff werden vorbereitet…",
   "settings.deviceConnections.scan.title": "PC anschließen",
   "settings.deviceConnections.status.needs-repair": "Erneut koppeln",
   "settings.deviceConnections.status.paired": "Gepaart",

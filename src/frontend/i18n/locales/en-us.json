@@ -1096,7 +1096,6 @@
   "settings.deviceConnections.scan.pair": "Pair",
   "settings.deviceConnections.scan.permissionDescription": "Camera access is needed to scan. You can still paste the QR content below.",
   "settings.deviceConnections.scan.permissionTitle": "Camera unavailable",
-  "settings.deviceConnections.scan.preparingPermissions": "Preparing network and camera access…",
   "settings.deviceConnections.scan.title": "Connect PC",
   "settings.deviceConnections.status.needs-repair": "Pair again",
   "settings.deviceConnections.status.paired": "Paired",

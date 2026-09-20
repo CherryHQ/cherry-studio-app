@@ -1101,7 +1101,6 @@
   "settings.deviceConnections.scan.pair": "Par",
   "settings.deviceConnections.scan.permissionDescription": "O acesso à câmara é necessário para digitalizar. Pode ainda colar o conteúdo QR abaixo.",
   "settings.deviceConnections.scan.permissionTitle": "Câmara indisponível",
-  "settings.deviceConnections.scan.preparingPermissions": "A preparar o acesso à rede local e à câmara…",
   "settings.deviceConnections.scan.title": "Ligar PC",
   "settings.deviceConnections.status.needs-repair": "Parear novamente",
   "settings.deviceConnections.status.paired": "Emparelhado",

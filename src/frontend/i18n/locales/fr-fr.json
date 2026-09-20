@@ -1101,7 +1101,6 @@
   "settings.deviceConnections.scan.pair": "Paire",
   "settings.deviceConnections.scan.permissionDescription": "L'accès à la caméra est nécessaire pour numériser. Vous pouvez toujours coller le contenu QR ci-dessous.",
   "settings.deviceConnections.scan.permissionTitle": "Caméra indisponible",
-  "settings.deviceConnections.scan.preparingPermissions": "Préparation de l’accès au réseau local et à la caméra…",
   "settings.deviceConnections.scan.title": "Connecter le PC",
   "settings.deviceConnections.status.needs-repair": "Associer à nouveau",
   "settings.deviceConnections.status.paired": "Jumelé",

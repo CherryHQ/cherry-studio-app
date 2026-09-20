@@ -132,7 +132,6 @@ async function requestPairing(url: string, body: string, signal: AbortSignal) {
     throw error;
   } finally {
     signal.removeEventListener('abort', cancel);
-    await request.cancel().catch(() => undefined);
     request.release();
   }
 }

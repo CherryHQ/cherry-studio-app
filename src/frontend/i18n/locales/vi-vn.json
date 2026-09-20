@@ -1091,7 +1091,6 @@
   "settings.deviceConnections.scan.pair": "Cặp",
   "settings.deviceConnections.scan.permissionDescription": "Cần có quyền truy cập vào máy ảnh để quét. Bạn vẫn có thể dán nội dung QR bên dưới.",
   "settings.deviceConnections.scan.permissionTitle": "Máy ảnh không có sẵn",
-  "settings.deviceConnections.scan.preparingPermissions": "Đang chuẩn bị quyền truy cập mạng cục bộ và camera…",
   "settings.deviceConnections.scan.title": "Kết nối PC",
   "settings.deviceConnections.status.needs-repair": "Ghép nối lại",
   "settings.deviceConnections.status.paired": "Đã ghép nối",

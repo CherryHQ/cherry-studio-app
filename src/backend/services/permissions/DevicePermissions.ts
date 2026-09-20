@@ -18,10 +18,7 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { getHealthAccess, type HealthAccessModule } from '../../../../modules/health-access';
-import {
-  getLocalNetworkAccess,
-  type LocalNetworkAccessModule,
-} from '../../../../modules/local-network-access';
+import { getLocalNetworkAccess } from '../../../../modules/local-network-access';
 
 const logger = loggerService.withContext('DevicePermissions');
 const unsupported: DevicePermissionStatus = {
@@ -43,7 +40,6 @@ export class DevicePermissions implements PermissionsModule {
 
   constructor(
     private readonly loadHealthAccess: () => HealthAccessModule | null = getHealthAccess,
-    private readonly loadLocalNetworkAccess: () => LocalNetworkAccessModule | null = getLocalNetworkAccess,
   ) {}
 
   async getStatuses(scopes: readonly DevicePermissionScope[]): Promise<PermissionStatuses> {
@@ -87,12 +83,12 @@ export class DevicePermissions implements PermissionsModule {
       signal?.throwIfAborted();
       // The app targets Android SDK 36, where INTERNET already grants local access.
       if (Platform.OS !== 'ios') return;
-      const access = this.loadLocalNetworkAccess();
-      if (!access) {
-        logger.debug('Local network prompt preparation is unavailable in this native client');
-        return;
+      try {
+        await getLocalNetworkAccess()?.request();
+      } catch (error) {
+        // Preparation is best-effort; the actual pairing request owns connectivity errors.
+        logger.warn('Local network prompt preparation failed', { error });
       }
-      await access.request();
       signal?.throwIfAborted();
     });
     // Allow the network sheet to finish before requesting camera/Agent permissions.

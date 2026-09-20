@@ -5,17 +5,15 @@ import Foundation
 /// Mutable state and URLSession completions are confined to the main queue.
 final class PairingRequest: SharedObject, @unchecked Sendable {
   private var session: URLSession?
-  private var task: URLSessionDataTask?
   private var promise: Promise?
-  private var started = false
-  private var cancelled = false
+  private var isConsumed = false
 
   func post(url: URL, headers: [String: String], body: String, promise: Promise) {
-    guard !cancelled, !started else {
+    guard !isConsumed else {
       promise.reject("ERR_PAIRING_CANCELLED", "Pairing request is no longer available")
       return
     }
-    started = true
+    isConsumed = true
     guard url.scheme == "http", url.host != nil, url.path == "/pair",
       url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
       promise.reject("ERR_PAIRING_URL", "Invalid desktop pairing URL")
@@ -34,11 +32,10 @@ final class PairingRequest: SharedObject, @unchecked Sendable {
     request.httpMethod = "POST"
     request.httpBody = Data(body.utf8)
     request.allHTTPHeaderFields = headers
-    let task = session.dataTask(with: request) { [weak self] data, response, error in
+    session.dataTask(with: request) { [weak self] data, response, error in
       DispatchQueue.main.async {
         guard let self, let promise = self.promise else { return }
         self.promise = nil
-        self.task = nil
         self.session?.finishTasksAndInvalidate()
         self.session = nil
         if error != nil {
@@ -53,15 +50,11 @@ final class PairingRequest: SharedObject, @unchecked Sendable {
           promise.reject("ERR_PAIRING_RESPONSE", "Invalid desktop pairing response")
         }
       }
-    }
-    self.task = task
-    task.resume()
+    }.resume()
   }
 
   func cancel() {
-    cancelled = true
-    task?.cancel()
-    task = nil
+    isConsumed = true
     session?.invalidateAndCancel()
     session = nil
     promise?.reject("ERR_PAIRING_CANCELLED", "Desktop pairing request cancelled")

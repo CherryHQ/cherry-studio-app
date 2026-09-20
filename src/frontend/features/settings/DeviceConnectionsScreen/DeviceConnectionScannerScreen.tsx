@@ -28,22 +28,15 @@ export function DeviceConnectionScannerScreen({
   const router = useRouter();
   const { toast } = useToast();
   const permissions = useBackendModule('permissions');
-  const {
-    camera,
-    error: permissionError,
-    isPreparing,
-    isActive,
-    canSubmit,
-    prepare,
-  } = useScannerPermissions();
+  const { camera, isPreparing, isActive, canSubmit, prepare } = useScannerPermissions();
   const [manualValue, setManualValue] = useState('');
   const [hasScanned, setHasScanned] = useState(false);
   const [scanError, setScanError] = useState<string>();
   const scanInFlight = useRef(false);
   const mounted = useRef(false);
   const { isPairing, pair } = useDesktopConnectionActions();
-  const isReady = isActive && !isPreparing && !permissionError;
-  const showCamera = !isPreparing && !permissionError && !scanError && camera?.state === 'granted';
+  const isReady = isActive && !isPreparing;
+  const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
 
   useEffect(() => {
     mounted.current = true;
@@ -119,14 +112,7 @@ export function DeviceConnectionScannerScreen({
         }
       >
         {isPreparing ? (
-          <ContentState.Loading title={t('settings.deviceConnections.scan.preparingPermissions')} />
-        ) : permissionError ? (
-          <View className="flex-1 justify-center px-6">
-            <ContentState.Error
-              title={t('settings.permissions.actionFailed')}
-              primaryAction={{ children: t('common.retry'), onPress: () => void prepare() }}
-            />
-          </View>
+          <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
         ) : scanError ? (
           <View className="flex-1 justify-center px-6">
             <ContentState.Error

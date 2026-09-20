@@ -1096,7 +1096,6 @@
   "settings.deviceConnections.scan.pair": "Çift",
   "settings.deviceConnections.scan.permissionDescription": "Tarama için kamera erişimi gerekiyor. Yine de QR içeriğini aşağıya yapıştırabilirsiniz.",
   "settings.deviceConnections.scan.permissionTitle": "Kamera kullanılamıyor",
-  "settings.deviceConnections.scan.preparingPermissions": "Yerel ağ ve kamera erişimi hazırlanıyor…",
   "settings.deviceConnections.scan.title": "PC'yi bağlayın",
   "settings.deviceConnections.status.needs-repair": "Tekrar eşleştir",
   "settings.deviceConnections.status.paired": "Eşleştirildi",

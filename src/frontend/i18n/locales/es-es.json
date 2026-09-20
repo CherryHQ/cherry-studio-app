@@ -1101,7 +1101,6 @@
   "settings.deviceConnections.scan.pair": "Pareja",
   "settings.deviceConnections.scan.permissionDescription": "Se necesita acceso a la cámara para escanear. Aún puedes pegar el contenido QR a continuación.",
   "settings.deviceConnections.scan.permissionTitle": "Cámara no disponible",
-  "settings.deviceConnections.scan.preparingPermissions": "Preparando el acceso a la red local y a la cámara…",
   "settings.deviceConnections.scan.title": "Conectar PC",
   "settings.deviceConnections.status.needs-repair": "Emparejar de nuevo",
   "settings.deviceConnections.status.paired": "Emparejado",
