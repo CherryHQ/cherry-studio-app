@@ -1,4 +1,4 @@
-import FilterIcon from '@cherrystudio/app-icons/icons/filter';
+import ListFilterIcon from '@cherrystudio/app-icons/icons/list-filter';
 import { ActionMenu, BottomSheet, Button, SearchField } from '@cherrystudio/ui/components';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -197,7 +197,7 @@ function ModelPickerDrawerContent({
           >
             <Button
               accessibilityLabel={t('common.filter')}
-              icon={<FilterIcon />}
+              icon={<ListFilterIcon />}
               size="sm"
               testID="model-picker-filter"
               variant="ghost"
