@@ -160,29 +160,32 @@ function getEnabledDesktopProviders(snapshot: DesktopProvidersSnapshot) {
   // Preserve support for version 1 snapshots that omit explicit enabled flags.
   return snapshot.providers
     .filter((provider) => provider.isEnabled !== false)
-    .map((provider) => ({
-      ...provider,
-      models: provider.models.filter((model) => model.isEnabled !== false),
-    }));
+    .map((provider) => {
+      // Preview and import must validate the same keys that will be written.
+      const seenKeyIds = new Set<string>();
+      const seenKeyValues = new Set<string>();
+      const apiKeys = provider.apiKeys.filter((apiKey) => {
+        if (seenKeyIds.has(apiKey.id) || seenKeyValues.has(apiKey.key)) return false;
+        seenKeyIds.add(apiKey.id);
+        seenKeyValues.add(apiKey.key);
+        return true;
+      });
+      return {
+        ...provider,
+        apiKeys,
+        models: provider.models.filter((model) => model.isEnabled !== false),
+      };
+    });
 }
 
 function mapProvider(provider: DesktopProviderSnapshot): Omit<InsertUserProviderRow, 'orderKey'> {
-  const seenKeyIds = new Set<string>();
-  const seenKeyValues = new Set<string>();
-  const apiKeys = provider.apiKeys.filter((apiKey) => {
-    if (seenKeyIds.has(apiKey.id) || seenKeyValues.has(apiKey.key)) return false;
-    seenKeyIds.add(apiKey.id);
-    seenKeyValues.add(apiKey.key);
-    return true;
-  });
-
   const presetProviderId = resolvePresetProviderId(provider);
   const defaultChatEndpoint =
     provider.defaultChatEndpoint ??
     (provider.apiHost ? endpointFromProviderType(provider.type) : null);
   return {
     apiFeatures: mapApiFeatures(provider),
-    apiKeys,
+    apiKeys: provider.apiKeys,
     authConfig: parseSupportedAuthConfig(provider.authConfig),
     defaultChatEndpoint,
     endpointConfigs: mapEndpointConfigs(provider),

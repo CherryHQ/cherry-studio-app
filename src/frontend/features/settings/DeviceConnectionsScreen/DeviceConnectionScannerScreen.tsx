@@ -1,4 +1,4 @@
-import { Button, ContentState, Input, useAlert, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState, Input, useToast } from '@cherrystudio/ui/components';
 import { CameraView } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -9,7 +9,6 @@ import { RouteHeader } from '@/frontend/appShell/header';
 import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { useBackendModule } from '@/frontend/data';
 import { useDesktopConnectionActions } from '@/frontend/hooks/useDesktopConnections';
-import { useDevicePermissionStatuses } from '@/frontend/hooks/useDevicePermissionStatuses';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
 import {
@@ -18,8 +17,7 @@ import {
 } from '@/shared/data/api/schemas/desktopConnections';
 
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
-
-const CAMERA_PERMISSION_SCOPES = ['camera.read'] as const;
+import { useScannerPermissions } from './useScannerPermissions';
 
 export function DeviceConnectionScannerScreen({
   setupIntent,
@@ -28,46 +26,47 @@ export function DeviceConnectionScannerScreen({
   const connectionId = getSingleRouteParam(params.connectionId);
   const { t } = useTranslation();
   const router = useRouter();
-  const { alert } = useAlert();
   const { toast } = useToast();
   const permissions = useBackendModule('permissions');
-  const { refresh, statuses } = useDevicePermissionStatuses(CAMERA_PERMISSION_SCOPES);
-  const permission = statuses['camera.read'];
-  const hasRequestedPermission = useRef(false);
-  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+  const { camera, isPreparing, isActive, canSubmit, prepare } = useScannerPermissions();
   const [manualValue, setManualValue] = useState('');
   const [hasScanned, setHasScanned] = useState(false);
+  const [scanError, setScanError] = useState<string>();
   const scanInFlight = useRef(false);
+  const mounted = useRef(false);
   const { isPairing, pair } = useDesktopConnectionActions();
-
-  const requestCameraPermission = useCallback(async () => {
-    setIsRequestingPermission(true);
-    try {
-      await permissions.request(CAMERA_PERMISSION_SCOPES);
-      await refresh();
-    } catch {
-      toast.show({ label: t('settings.permissions.actionFailed'), variant: 'danger' });
-    } finally {
-      setIsRequestingPermission(false);
-    }
-  }, [permissions, refresh, t, toast]);
+  const isReady = isActive && !isPreparing;
+  const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
 
   useEffect(() => {
-    if (
-      permission?.state === 'undetermined' &&
-      canRequestDevicePermission(permission) &&
-      !hasRequestedPermission.current
-    ) {
-      hasRequestedPermission.current = true;
-      void requestCameraPermission();
-    }
-  }, [permission, requestCameraPermission]);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const retryScan = () => {
+    scanInFlight.current = false;
+    setScanError(undefined);
+    setHasScanned(false);
+  };
+
+  const openSystemSettings = () => {
+    void permissions.openSystemSettings().catch(() => {
+      toast.show({ label: t('settings.permissions.actionFailed'), variant: 'danger' });
+    });
+  };
 
   const submit = useCallback(
     async (qr: DesktopPairingQr) => {
       try {
         const connection = await pair({ ...qr, ...(connectionId ? { connectionId } : {}) });
-        if (!connection) return;
+        if (!mounted.current) return;
+        if (!connection) {
+          scanInFlight.current = false;
+          setHasScanned(false);
+          return;
+        }
         router.replace({
           params: { connectionId: connection.id },
           pathname:
@@ -76,50 +75,60 @@ export function DeviceConnectionScannerScreen({
               : '/settings/device-connections/sync-guide',
         });
       } catch (error) {
-        scanInFlight.current = false;
-        alert.show({ title: desktopConnectionErrorMessage(error, t) });
-        setHasScanned(false);
+        if (mounted.current) setScanError(desktopConnectionErrorMessage(error, t));
       }
     },
-    [alert, connectionId, pair, router, setupIntent, t],
+    [connectionId, pair, router, setupIntent, t],
   );
 
   const parseAndSubmit = useCallback(
     (value: string) => {
-      if (scanInFlight.current) return;
+      if (!canSubmit() || scanInFlight.current) return;
+      // Native scan events and manual submits can arrive before React commits loading state.
+      // Keep this latch closed through errors; only an explicit retry can re-arm the scanner.
       scanInFlight.current = true;
+      setHasScanned(true);
       try {
         const parsed = DesktopPairingQrSchema.safeParse(JSON.parse(value));
         if (!parsed.success) {
           throw new Error('invalid QR');
         }
-        setHasScanned(true);
         void submit(parsed.data);
       } catch {
-        scanInFlight.current = false;
-        alert.show({ title: t('settings.deviceConnections.scan.invalidQr') });
-        setHasScanned(false);
+        setScanError(t('settings.deviceConnections.scan.invalidQr'));
       }
     },
-    [alert, submit, t],
+    [canSubmit, submit, t],
   );
 
   return (
     <View className="flex-1 bg-grouped-background">
       <RouteHeader title={t('settings.deviceConnections.scan.title')} />
-      <View className="min-h-0 flex-1 overflow-hidden bg-black">
-        {!permission || isRequestingPermission ? (
+      <View
+        className={
+          showCamera
+            ? 'min-h-0 flex-1 overflow-hidden bg-black'
+            : 'min-h-0 flex-1 overflow-hidden bg-grouped-background'
+        }
+      >
+        {isPreparing ? (
           <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
-        ) : permission.state === 'granted' ? (
+        ) : scanError ? (
+          <View className="flex-1 justify-center px-6">
+            <ContentState.Error
+              primaryAction={{ children: t('common.retry'), onPress: retryScan }}
+              title={scanError}
+            />
+          </View>
+        ) : camera?.state === 'granted' ? (
           <>
             <CameraView
-              active={!isPairing}
+              active={isReady && !hasScanned && !isPairing}
               barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
               onBarcodeScanned={
-                hasScanned || isPairing
+                !isReady || hasScanned || isPairing
                   ? undefined
                   : ({ data }) => {
-                      setHasScanned(true);
                       parseAndSubmit(data);
                     }
               }
@@ -134,21 +143,15 @@ export function DeviceConnectionScannerScreen({
             <ContentState.Empty
               description={t('settings.deviceConnections.scan.permissionDescription')}
               primaryAction={
-                canRequestDevicePermission(permission)
+                canRequestDevicePermission(camera) || camera?.state === 'error'
                   ? {
                       children: t('settings.deviceConnections.scan.allowCamera'),
-                      onPress: () => void requestCameraPermission(),
+                      onPress: () => void prepare(true),
                     }
-                  : permission.state === 'denied'
+                  : camera?.state === 'denied'
                     ? {
                         children: t('settings.permissions.openSystemSettings'),
-                        onPress: () =>
-                          void permissions.openSystemSettings('camera').catch(() => {
-                            toast.show({
-                              label: t('settings.permissions.actionFailed'),
-                              variant: 'danger',
-                            });
-                          }),
+                        onPress: openSystemSettings,
                       }
                     : undefined
               }
@@ -165,6 +168,7 @@ export function DeviceConnectionScannerScreen({
           accessibilityLabel={t('settings.deviceConnections.scan.manualEntry')}
           autoCapitalize="none"
           autoCorrect={false}
+          editable={isReady && !hasScanned}
           multiline
           onChangeText={setManualValue}
           onSubmitEditing={() => {
@@ -179,7 +183,7 @@ export function DeviceConnectionScannerScreen({
           value={manualValue}
         />
         <Button
-          disabled={!manualValue.trim()}
+          disabled={!isReady || hasScanned || !manualValue.trim()}
           loading={isPairing}
           onPress={() => parseAndSubmit(manualValue.trim())}
         >

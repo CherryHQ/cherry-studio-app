@@ -1,0 +1,7 @@
+{
+  "platforms": ["apple"],
+  "apple": {
+    "podspecPath": "ios/LocalNetworkAccess.podspec",
+    "modules": ["LocalNetworkAccessModule"]
+  }
+}
