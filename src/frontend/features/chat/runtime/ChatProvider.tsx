@@ -17,7 +17,11 @@ import { v7 as uuidv7 } from 'uuid';
 import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { ToolInputPreviewProvider } from '@/frontend/components/Message';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import type { AgentMessageView, AgentSubmitMessageInput } from '@/shared/contracts/agent';
+import type {
+  AgentMessageView,
+  AgentRetryMessageInput,
+  AgentSubmitMessageInput,
+} from '@/shared/contracts/agent';
 
 import {
   type AgentChatDraftHandoff,
@@ -25,7 +29,11 @@ import {
 } from './agentChatDraftHandoff';
 import { latestAgentImageResult } from './agentImageResult';
 import { createPendingChatMessages } from './agentMessageProjection';
-import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessionChatClient';
+import {
+  AgentSessionChatClient,
+  isAgentSessionBusy,
+  type AgentSessionChatState,
+} from './AgentSessionChatClient';
 
 type AgentChatSendInput = AgentSubmitMessageInput & {
   agentId?: string;
@@ -40,6 +48,11 @@ export type PendingChatSend = Readonly<{
   messages: ReturnType<typeof createPendingChatMessages>;
 }>;
 
+type AgentChatDeleteTurnInput = {
+  sessionId: string;
+  turnId: string;
+};
+
 type AgentChatForkInput = {
   fromMessageId: string;
   sessionId: string;
@@ -50,7 +63,9 @@ type AgentChatForkInput = {
 type AgentChatContextValue = {
   client: AgentSessionChatClient;
   completeDraftHandoff: (sessionId: string) => void;
+  deleteTurn: (input: AgentChatDeleteTurnInput) => Promise<void>;
   forkSession: (input: AgentChatForkInput) => Promise<void>;
+  retryMessage: (input: AgentRetryMessageInput) => Promise<void>;
   getDraftHandoff: (sessionId: string | undefined) => AgentChatDraftHandoff | undefined;
   sendMessage: (input: AgentChatSendInput) => Promise<void>;
 };
@@ -126,6 +141,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
     },
     [client, draftHandoff, navigation, queryClient],
   );
+  const deleteTurn = useCallback(
+    async ({ sessionId, turnId }: AgentChatDeleteTurnInput) => {
+      await client.deleteTurn(sessionId, turnId);
+    },
+    [client],
+  );
   const forkSession = useCallback(
     async ({ fromMessageId, sessionId, title }: AgentChatForkInput) => {
       const session = await client.forkSession(sessionId, fromMessageId, title);
@@ -134,15 +155,21 @@ export function ChatProvider({ children }: PropsWithChildren) {
     },
     [client, navigation, queryClient],
   );
+  const retryMessage = useCallback(
+    (input: AgentRetryMessageInput) => client.retryMessage(input),
+    [client],
+  );
   const value = useMemo(
     () => ({
       client,
       completeDraftHandoff: draftHandoff.complete,
+      deleteTurn,
       forkSession,
+      retryMessage,
       getDraftHandoff: draftHandoff.get,
       sendMessage,
     }),
-    [client, draftHandoff, forkSession, sendMessage],
+    [client, deleteTurn, draftHandoff, forkSession, retryMessage, sendMessage],
   );
 
   return (
@@ -232,6 +259,7 @@ export function useAgentChatControls(input: {
   const { agentId, composerKey, sessionId } = input;
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
+  const isSessionBusy = useAgentSessionSelection(client, sessionId, selectSessionBusy);
   const [submission, setSubmission] = useState<{
     composerKey: number;
     userMessageId: string;
@@ -309,16 +337,12 @@ export function useAgentChatControls(input: {
     pendingSend,
     enteringUserMessageId: currentSubmission?.userMessageId,
     canSend:
-      pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready'))
+      isSessionBusy ||
+      (pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready')))
         ? false
         : undefined,
     isApprovalPending: activeTurnStatus === 'awaiting-approval',
-    isBusy:
-      activeTurnStatus !== undefined &&
-      activeTurnStatus !== 'completed' &&
-      activeTurnStatus !== 'failed' &&
-      activeTurnStatus !== 'cancelled' &&
-      activeTurnStatus !== 'interrupted',
+    isBusy: isSessionBusy,
     sendMessage: send,
   };
 }
@@ -330,6 +354,19 @@ export function useAgentChatActions() {
 /** Forks a Session at one message and navigates to the copy. */
 export function useAgentChatFork() {
   return useAgentChatContext().forkSession;
+}
+
+/** Removes one settled turn from the observed Session's transcript. */
+export function useAgentChatDeleteTurn() {
+  return useAgentChatContext().deleteTurn;
+}
+
+export function useAgentChatRetry() {
+  return useAgentChatContext().retryMessage;
+}
+
+export function useAgentChatBusy(sessionId: string | undefined) {
+  return useAgentSessionSelection(useAgentChatContext().client, sessionId, selectSessionBusy);
 }
 
 function useAgentSessionSelection<TValue>(
@@ -351,6 +388,7 @@ function useAgentSessionSelection<TValue>(
 function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
 }
+const selectSessionBusy = isAgentSessionBusy;
 function selectImageResult(state: AgentSessionChatState) {
   return latestAgentImageResult(state.liveMessages);
 }

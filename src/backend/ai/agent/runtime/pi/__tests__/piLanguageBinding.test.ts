@@ -12,6 +12,25 @@ import {
 } from '../piLanguageBinding';
 
 describe('resolvePiLanguageBinding', () => {
+  it('accepts Azure Responses with Azure IAM credentials', () => {
+    const provider = createProvider({
+      authMethods: undefined,
+      authType: 'iam-azure',
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_RESPONSES]: {
+          adapterFamily: 'azure-responses',
+          baseUrl: 'https://resource.openai.azure.com/openai',
+        },
+      },
+    });
+    expect(
+      resolvePiLanguageBinding(
+        provider,
+        resolveProviderConnection(provider, createModel(ENDPOINT_TYPE.OPENAI_RESPONSES)),
+      ),
+    ).toEqual({ endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES, status: 'supported' });
+  });
+
   it('accepts a base URL with automatic version insertion disabled', () => {
     const provider = createProvider({
       endpointConfigs: {
@@ -67,6 +86,20 @@ describe('resolvePiLanguageBinding', () => {
           [ENDPOINT_TYPE.OPENAI_RESPONSES]: {
             adapterFamily: 'azure-responses',
             baseUrl: 'https://azure.example.com',
+          },
+        },
+      }),
+    },
+    {
+      code: 'unsupported-adapter-family',
+      provider: createProvider({
+        authMethods: undefined,
+        authType: 'iam-azure',
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+            adapterFamily: 'azure',
+            baseUrl: 'https://resource.openai.azure.com/openai',
           },
         },
       }),

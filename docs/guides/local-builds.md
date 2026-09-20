@@ -4,11 +4,17 @@ Use `pnpm build:local` to create an Android or iOS installation package on your 
 `eas build --local`, defaults to the `development` profile, and forwards EAS build arguments.
 The existing `eas-build-post-install` hook builds the workspace packages during the build.
 
-| Build profile | Sentry reporting | Sentry source-map and debug-symbol uploads |
+| Build profile | Outbound reporting (Sentry / Observe / Insights) | Sentry source-map and debug-symbol uploads |
 | --- | --- | --- |
 | `development` / `development-simulator` | Disabled | Disabled |
 | `preview` | Disabled | Disabled |
-| `production` | Enabled with a DSN, current user consent, and outside development mode | Enabled; requires an upload token |
+| `production` | Enabled per service registry; Sentry additionally requires a DSN and current user consent | Enabled for Sentry; requires an upload token |
+
+The shared [reporting registry](../../src/frontend/appShell/observability/reportingServices.json)
+owns per-service build flags. Sentry uses immutable native metadata and rejects debug binaries.
+The reporting autolinking plugin excludes Observe and Insights from non-production native projects,
+including their automatic startup and background senders. Those builds also omit local Observe
+metrics. Changing native reporting policy requires a new installation package. See [Observability](../../src/frontend/appShell/observability/README.md).
 
 ## Prerequisites
 

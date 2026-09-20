@@ -60,6 +60,21 @@ export const AgentForkSessionInputSchema = z.strictObject({
   title: z.string().min(1).max(255).optional(),
 });
 export type AgentForkSessionInput = z.infer<typeof AgentForkSessionInputSchema>;
+/**
+ * Deletion is turn-scoped. A transcript replays `tool-call` and `tool-result`
+ * as a pair, so removing one message of a turn would leave history no provider
+ * accepts; the UI therefore resolves the pressed message to its turn.
+ */
+export const AgentDeleteTurnInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  turnId: z.string().min(1),
+});
+export type AgentDeleteTurnInput = z.infer<typeof AgentDeleteTurnInputSchema>;
+export const AgentRetryMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+});
+export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),

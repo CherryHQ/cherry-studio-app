@@ -8,7 +8,12 @@ import {
 } from '../AssistantMessageActionsProvider';
 
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
+const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+let mockIsSessionBusy = false;
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
+const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefined);
+/** Captures the confirm request so a test can accept it the way a user would. */
+const mockAlertConfirm = jest.fn<void, [{ onConfirm: () => void }]>();
 const mockToastShow = jest.fn();
 const mockPush = jest.fn();
 let mockFocusEffect: (() => void) | undefined;
@@ -27,7 +32,10 @@ jest.mock('expo-clipboard', () => ({
 }));
 
 jest.mock('../../../../runtime', () => ({
+  useAgentChatDeleteTurn: () => mockDeleteTurn,
   useAgentChatFork: () => mockForkSession,
+  useAgentChatRetry: () => mockRetryMessage,
+  useAgentChatBusy: () => mockIsSessionBusy,
 }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
@@ -44,6 +52,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
   useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
@@ -89,6 +98,7 @@ describe('AssistantMessageActionsProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsSessionBusy = false;
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
     probeRef = createRef<ContextProbeHandle>();
@@ -193,6 +203,48 @@ describe('AssistantMessageActionsProvider', () => {
     expect(mockLoggerError).toHaveBeenCalledWith('Fork assistant message failed', error);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'chat.messageActions.forkFailed',
+      variant: 'danger',
+    });
+  });
+
+  test('deletes a turn only after the destructive confirmation is accepted', async () => {
+    renderProvider();
+
+    act(() => probeRef.current?.actions.deleteMessageTurn({ turnId: 'turn-1' }));
+
+    // Nothing has happened yet: the alert is the gate, not a notification.
+    expect(mockDeleteTurn).not.toHaveBeenCalled();
+    expect(mockAlertConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        confirmLabel: 'common.delete',
+        description: 'chat.messageActions.deleteMessage',
+        role: 'destructive',
+        title: 'chat.messageActions.deleteTitle',
+      }),
+    );
+
+    await act(async () => {
+      mockAlertConfirm.mock.lastCall![0].onConfirm();
+      await Promise.resolve();
+    });
+
+    expect(mockDeleteTurn).toHaveBeenCalledWith({ sessionId: 'session-1', turnId: 'turn-1' });
+  });
+
+  test('routes turn deletion failures to logging and user feedback', async () => {
+    const error = new Error('delete failed');
+    mockDeleteTurn.mockRejectedValueOnce(error);
+    renderProvider();
+
+    act(() => probeRef.current?.actions.deleteMessageTurn({ turnId: 'turn-1' }));
+    await act(async () => {
+      mockAlertConfirm.mock.lastCall![0].onConfirm();
+      await Promise.resolve();
+    });
+
+    expect(mockLoggerError).toHaveBeenCalledWith('Delete message turn failed', error);
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.messageActions.deleteFailed',
       variant: 'danger',
     });
   });

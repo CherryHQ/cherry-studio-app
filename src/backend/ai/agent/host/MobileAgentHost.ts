@@ -54,7 +54,9 @@ import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAli
 import {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
+  AgentDeleteTurnInputSchema,
   AgentForkSessionInputSchema,
+  AgentRetryMessageInputSchema,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
   AgentStartSessionInputSchema,
@@ -65,10 +67,12 @@ import {
   AgentToolInputPreviewSchema,
   type AgentApprovalView,
   type AgentCapabilities,
+  type AgentDeleteTurnInput,
   type AgentErrorView,
   type AgentEvent,
   type AgentExecutionTarget,
   type AgentForkSessionInput,
+  type AgentRetryMessageInput,
   type AgentInputPart,
   type AgentMessagePart,
   type AgentMessageView,
@@ -98,6 +102,7 @@ import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
+  omitTransientCompactionParts,
   settleStreamingTextParts,
 } from '../sessionStore/messageSettlement';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
@@ -115,6 +120,7 @@ import {
   toAgentErrorView,
   toAgentMessagePart,
   toAgentUsageView,
+  toCompactionAnchorPart,
 } from './runtimeProjection';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
@@ -123,6 +129,7 @@ import {
   type TurnPlan,
   type TurnPreparationDependencies,
 } from './turnPreparation';
+import { prepareRetryTurn } from './turnRetry';
 import { toRuntimeHistory, toRuntimeInputParts } from './turnRuntimeInput';
 
 const logger = loggerService.withContext('MobileAgentHost');
@@ -510,6 +517,50 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
+  async deleteTurn(input: AgentDeleteTurnInput): Promise<void> {
+    const parsed = AgentDeleteTurnInputSchema.parse(input);
+    // Same clean-cut rule as a fork: rows a live turn is still writing must
+    // not disappear underneath it, and the Session is the unit that is busy.
+    this.assertIdle(parsed.sessionId);
+    // Block new history reads before awaiting the write. The admission barrier
+    // also makes shutdown and whole-Session deletion drain this operation.
+    const completion = createCompletionSignal();
+    this.admittingSessions.set(parsed.sessionId, {
+      abortController: new AbortController(),
+      completion: completion.promise,
+    });
+    try {
+      const result = await this.store.deleteTurn(parsed);
+      switch (result.status) {
+        case 'session-not-found':
+          fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
+          break;
+        case 'turn-not-found':
+          fail('MESSAGE_NOT_FOUND', `Turn does not exist in this session: ${parsed.turnId}`);
+          break;
+        case 'turn-unsettled':
+          fail('SESSION_BUSY', 'The turn has not settled yet.');
+          break;
+        case 'deleted':
+          break;
+      }
+
+      // The status snapshot describes the latest turn this generation ran. Once
+      // that turn's rows are gone it would report a turn nothing can observe.
+      if (this.getSessionStatus(parsed.sessionId)?.turnId === parsed.turnId) {
+        this.updateSessionStatus(parsed.sessionId, null);
+      }
+      this.publish(parsed.sessionId, {
+        type: 'turn.deleted',
+        turnId: parsed.turnId,
+        messageIds: result.deletedMessageIds,
+      });
+    } finally {
+      this.admittingSessions.delete(parsed.sessionId);
+      completion.resolve();
+    }
+  }
+
   async renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView> {
     const parsed = AgentRenameSessionInputSchema.parse(input);
     const session = await this.store.renameSession(parsed.sessionId, parsed.title);
@@ -519,6 +570,54 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.updateBackgroundReplyTitle(session.id, session.title);
     this.publish(parsed.sessionId, { type: 'session.updated', session });
     return session;
+  }
+
+  async retryMessage(input: AgentRetryMessageInput): Promise<void> {
+    const parsed = AgentRetryMessageInputSchema.parse(input);
+    const { sessionId } = parsed;
+    this.assertIdle(sessionId);
+    const completion = createCompletionSignal();
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    this.admittingSessions.set(sessionId, { abortController, completion: completion.promise });
+    const lease = this.backgroundReply.acquirePreparation((reason) =>
+      abortController.abort(reason),
+    );
+    try {
+      const { plan, source, assistantParts } = await prepareRetryTurn(
+        { ...this.turnPreparation, store: this.store },
+        parsed,
+        signal,
+      );
+      const runtimeSession = plan.imageGeneration
+        ? undefined
+        : await this.getRuntimeSession(sessionId, plan.runtime, signal);
+      signal.throwIfAborted();
+      const reserved = await this.store.reserveRetry({
+        sessionId,
+        assistantMessageId: source.assistant.id,
+        userMessageId: source.user.id,
+        userParts: plan.userParts,
+        assistantParts,
+        modelId: plan.inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot: plan.inferenceSnapshot,
+      });
+      this.startReservedTurn(
+        sessionId,
+        plan.sessionTitle,
+        { ...plan, retry: { resumeParts: assistantParts } },
+        reserved,
+        runtimeSession,
+        abortController,
+      );
+    } catch (error) {
+      if (error instanceof KeepAliveInterruptionError) fail('INTERRUPTED', error.message, true);
+      throw error;
+    } finally {
+      this.admittingSessions.delete(sessionId);
+      lease.release();
+      completion.resolve();
+    }
   }
 
   async deleteSession(input: { sessionId: string }): Promise<void> {
@@ -797,7 +896,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     };
     this.activeTurns.set(sessionId, state);
 
-    this.publish(sessionId, { type: 'message.created', message: reserved.userMessage });
+    // A retry re-reserves an existing pair: the user row is already on screen,
+    // so it republishes as a settled view instead of entering the transcript.
+    this.publish(sessionId, {
+      type: plan.retry ? 'message.finalized' : 'message.created',
+      message: reserved.userMessage,
+    });
     this.publish(sessionId, { type: 'message.created', message: reserved.assistantMessage });
     this.publish(sessionId, { type: 'turn.updated', turn });
     if (state.autoNameUserParts && !abortController.signal.aborted) {
@@ -871,6 +975,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         contentAttachments: plan.runtimeContentAttachments,
       });
       state.abortController.signal.throwIfAborted();
+      // Derived from the projected parts, not the persisted ones: an assistant
+      // artifact is never replayed to the model, so a retained prefix can be
+      // model-visible or empty regardless of how many parts it kept.
+      const resume = plan.retry
+        ? toRuntimeHistory([{ ...state.assistantMessage, parts: plan.retry.resumeParts }]).flatMap(
+            (turn) => turn.messages.flatMap((message) => message.parts),
+          )
+        : [];
       const events = state.runtimeSession.execute({
         turnId: state.turn.id,
         sessionId,
@@ -880,11 +992,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           tools: plan.tools,
           pluginGuides: plan.pluginGuides,
           toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
+          ...(plan.retry ? { retry: resume.length ? 'resumed' : 'restarted' } : {}),
         }),
         model: plan.agent.model,
         history: toRuntimeHistory(plan.history, runtimeAttachments),
         contextCheckpoint: plan.runtimeContextCheckpoint,
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
+        ...(resume.length ? { resume } : {}),
         tools: [...plan.tools],
         options: plan.agent.options,
         runtimeTimingSink: state.runtimeTiming.sink,
@@ -985,6 +1099,25 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     event: RuntimeEvent,
   ): Promise<boolean> {
     switch (event.type) {
+      case 'context.compaction': {
+        const part = toCompactionAnchorPart(event.compaction, state.turn.id);
+        const index = state.assistantMessage.parts.findIndex((item) => item.id === part.id);
+        if (index < 0) {
+          state.assistantMessage.parts.push(part);
+        } else {
+          state.assistantMessage.parts[index] = part;
+        }
+        this.publish(sessionId, {
+          type: 'message.delta',
+          messageId: state.assistantMessage.id,
+          delta:
+            index < 0
+              ? { op: 'part.add', index: state.assistantMessage.parts.length - 1, part }
+              : { op: 'part.replace', part },
+        });
+        if (part.data.status === 'done') this.requestSnapshot(sessionId, state);
+        return false;
+      }
       case 'part.add': {
         const part = toAgentMessagePart(event.part);
         if (part.type === 'file') {
@@ -1000,7 +1133,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.publish(sessionId, {
           type: 'message.delta',
           messageId: state.assistantMessage.id,
-          delta: { op: 'part.add', index: event.index, part },
+          // Host-owned compaction anchors and a retry's retained prefix both
+          // shift later parts past the Runtime's own count.
+          delta: { op: 'part.add', index: state.assistantMessage.parts.length - 1, part },
         });
         return false;
       }
@@ -1142,7 +1277,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       completedAt: timingSnapshot.completedAt ?? Math.max(timingSnapshot.startedAt, terminalAt),
     };
     const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
-      settleStreamingTextParts(state.assistantMessage.parts),
+      settleStreamingTextParts(omitTransientCompactionParts(state.assistantMessage.parts)),
       'The turn ended before this tool call completed.',
     );
     if (outcome === 'failed' && error) {
@@ -1252,7 +1387,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     try {
       await this.store.updateStreamingAssistantMessage({
         assistantMessageId: assistantMessage.id,
-        parts: assistantMessage.parts,
+        parts: omitTransientCompactionParts(assistantMessage.parts),
       });
     } catch (error) {
       logger.warn('Agent streaming message write failed; recovery fidelity reduced', {
@@ -1316,7 +1451,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     if (this.deletingSessions.has(sessionId)) {
       fail('SESSION_BUSY', 'The session is being deleted.');
     }
-    if (this.activeTurns.has(sessionId) || this.admittingSessions.has(sessionId)) {
+    if (
+      this.activeTurns.has(sessionId) ||
+      this.admittingSessions.has(sessionId) ||
+      this.runningTurnsBySession.has(sessionId)
+    ) {
       fail('SESSION_BUSY', 'The session already has an active turn.');
     }
   }

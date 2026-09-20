@@ -11,6 +11,8 @@ export type MessageProcessItem = {
 export type MessageBodyItem = { kind: 'part'; index: number; part: CherryMessagePart };
 
 export type PartitionedMessageParts = {
+  /** Turn-boundary compaction markers stay visible before the process disclosure. */
+  boundaries: readonly MessageBodyItem[];
   /** The final result text, carrying its original index for citation resolution. */
   body: readonly MessageBodyItem[];
   /** Every file in the message, shown as one row after the body. */
@@ -43,6 +45,7 @@ export type PartitionedMessageParts = {
 export function partitionMessageParts(
   parts: readonly CherryMessagePart[],
 ): PartitionedMessageParts {
+  const boundaries: MessageBodyItem[] = [];
   const body: MessageBodyItem[] = [];
   const files: MessageFilePart[] = [];
   const process: MessageProcessItem[] = [];
@@ -62,6 +65,11 @@ export function partitionMessageParts(
       return;
     }
 
+    if (part.type === 'data-compaction-anchor' && part.data.phase !== 'in-loop') {
+      boundaries.push({ index, kind: 'part', part });
+      return;
+    }
+
     // A transcript failure is the outcome, not hidden execution process. Keep
     // it inline even when reasoning or partial answer text came before it.
     if (part.type === 'data-error') {
@@ -77,7 +85,7 @@ export function partitionMessageParts(
     body.push({ index, kind: 'part', part });
   });
 
-  return { body, files, process };
+  return { boundaries, body, files, process };
 }
 
 function findResultTextIndex(parts: readonly CherryMessagePart[]): number | undefined {
@@ -88,6 +96,7 @@ function findResultTextIndex(parts: readonly CherryMessagePart[]): number | unde
       part.type === 'source-url' ||
       part.type === 'file' ||
       part.type === 'data-error' ||
+      part.type === 'data-compaction-anchor' ||
       isInvisiblePart(part)
     ) {
       continue;
@@ -111,6 +120,7 @@ function isInvisiblePart(part: CherryMessagePart) {
     part.type === 'step-start' ||
     part.type === 'source-document' ||
     part.type === 'data-video' ||
+    (part.type === 'data-compaction-anchor' && part.data.status === 'skipped') ||
     (isToolMessagePart(part) && isProviderWebSearchToolPart(part))
   );
 }

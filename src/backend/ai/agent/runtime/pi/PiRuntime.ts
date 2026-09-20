@@ -5,7 +5,6 @@ import type {
   AgentTool as PiAgentTool,
 } from '@earendil-works/pi-agent-core';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
-import { estimateTokens } from '@earendil-works/pi-agent-core/compaction';
 import type {
   Api as PiApi,
   AssistantMessage,
@@ -32,6 +31,7 @@ import type {
   AgentRuntime,
   AgentRuntimeSession,
   MessageRuntimeTimingSink,
+  RuntimeContextCompaction,
   RuntimeDescriptor,
   RuntimeDocumentAttachmentPart,
   RuntimeError,
@@ -50,12 +50,18 @@ import type {
   RuntimeUsageContext,
 } from '../types';
 import {
+  convertPiMessagesToLlm,
   estimatePiLoopContextHeadroomTokens,
   estimatePiMessagesTokens,
+  estimatePiMessageTokens,
+  measurePiContext,
   PI_ESTIMATED_CHARACTERS_PER_TOKEN,
   PI_MIN_OUTPUT_RESERVE_TOKENS,
+  PI_OUTPUT_CLAMP_SAFETY_TOKENS,
   planPiContext,
+  planPiLoopContext,
   type PiContextCompactionOptions,
+  type PiCompactionUpdate,
 } from './contextCompaction';
 import { toPiConversation } from './modelMessages';
 import {
@@ -97,6 +103,7 @@ export type PiRuntimeContextOptions = PiContextCompactionOptions & {
 
 export type PiRuntimeAgent = {
   abort(): void;
+  continue(): Promise<void>;
   prompt(message: PiMessage | PiMessage[]): Promise<void>;
   subscribe(
     listener: (event: PiAgentEvent, signal: AbortSignal) => Promise<void> | void,
@@ -254,6 +261,27 @@ async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent
 }
 
 function validateRequest(request: RuntimeExecutionRequest): RuntimeError | null {
+  if (request.resume?.length) {
+    const pendingCalls = new Set<string>();
+    let isValid = request.resume.at(-1)?.type === 'tool-result';
+    for (const part of request.resume) {
+      if (part.type === 'tool-call') {
+        if (pendingCalls.has(part.toolCallId)) isValid = false;
+        pendingCalls.add(part.toolCallId);
+      } else if (part.type === 'tool-result') {
+        if (!pendingCalls.delete(part.toolCallId)) isValid = false;
+      } else if (part.type !== 'text' && part.type !== 'reasoning') {
+        isValid = false;
+      }
+    }
+    if (!isValid || pendingCalls.size > 0) {
+      return {
+        code: 'unsupported_input',
+        message: 'Retry context requires paired tool calls and results ending at a tool result.',
+        retryable: false,
+      };
+    }
+  }
   const inputAndHistoryParts = [
     ...request.input,
     ...request.history.flatMap((turn) => turn.messages.flatMap((message) => message.parts)),
@@ -446,7 +474,7 @@ function redactCompactionSummary(summary: string, sensitiveValues: readonly stri
   return redacted;
 }
 
-function sensitiveToolResultValues(messages: readonly PiMessage[]): string[] {
+function sensitiveToolResultValues(messages: readonly PiAgentMessage[]): string[] {
   const values: string[] = [];
   for (const message of messages) {
     if (message.role !== 'toolResult') continue;
@@ -717,8 +745,32 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
       const providerStream: PiModelResolution['streamFn'] = async (model, context, options) => {
+        const contextUsage = measurePiContext({
+          contextWindow: model.contextWindow,
+          maxInputTokens: resolution.maxInputTokens,
+          messages: context.messages,
+          outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
+          systemPrompt: context.systemPrompt ?? '',
+          tools: context.tools ?? [],
+        });
+        if (contextUsage.inputTokens > contextUsage.inputTokenLimit) {
+          throw Object.assign(new Error('The request exceeds the model input budget.'), {
+            code: 'context_window_exceeded',
+            retryable: false,
+          });
+        }
         const stream = await resolution.streamFn(model, context, {
           ...options,
+          maxTokens: Math.min(
+            options?.maxTokens ?? request.options.maxOutputTokens ?? model.maxTokens,
+            model.maxTokens,
+            Math.max(
+              1,
+              Math.floor(
+                model.contextWindow - contextUsage.inputTokens - PI_OUTPUT_CLAMP_SAFETY_TOKENS,
+              ),
+            ),
+          ),
           onPayload:
             turn.toolBudgetError || (turn.unavailableTools.size > 0 && !hasAvailableTools())
               ? async (payload, model) =>
@@ -767,10 +819,36 @@ class PiRuntimeSession implements AgentRuntimeSession {
           return response;
         },
       };
-      const compactionRedactions = [...secrets, ...sensitiveToolResultValues(conversation.history)];
+      const currentMessages = [conversation.prompt, ...(conversation.resume ?? [])];
+      const compactionRedactions = [
+        ...secrets,
+        ...sensitiveToolResultValues([...conversation.history, ...currentMessages]),
+      ];
       const thinkingLevel = resolveThinkingLevel(request, resolution);
+      let compactionSequence = 0;
+      const contextCallbacks = (phase: RuntimeContextCompaction['phase']) => {
+        let activity: Pick<RuntimeContextCompaction, 'id' | 'startedAt'> | undefined;
+        return {
+          onCompaction: (update: PiCompactionUpdate) => {
+            if (update.status === 'running') {
+              activity = { id: `compaction-${++compactionSequence}`, startedAt: Date.now() };
+            }
+            if (!activity) return;
+            this.emit(turn, {
+              type: 'context.compaction',
+              compaction: {
+                ...activity,
+                phase,
+                ...update,
+                ...(update.status === 'running' ? {} : { completedAt: Date.now() }),
+              },
+            });
+          },
+        };
+      };
       const contextPlan = await raceAbort(
         planPiContext({
+          ...contextCallbacks('preflight'),
           checkpoint: request.contextCheckpoint,
           conversation,
           maxInputTokens: resolution.maxInputTokens,
@@ -805,7 +883,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       };
       let responsePhase: 'tools' | 'final-response' | 'done' = 'tools';
       const updateModelContextHeadroom = (messages: PiAgentMessage[]) => {
-        turn.modelContextHeadroomTokens = estimatePiLoopContextHeadroomTokens({
+        const usage = measurePiContext({
           contextWindow: resolution.model.contextWindow,
           maxInputTokens: resolution.maxInputTokens,
           messages,
@@ -813,19 +891,26 @@ class PiRuntimeSession implements AgentRuntimeSession {
           systemPrompt: modelContext.systemPrompt,
           tools: modelContext.tools ?? [],
         });
+        turn.modelContextHeadroomTokens = usage.inputTokenLimit - usage.inputTokens;
       };
-      updateModelContextHeadroom([...contextPlan.messages, conversation.prompt]);
+      updateModelContextHeadroom([...contextPlan.messages, ...currentMessages]);
       const agentOptions: AgentOptions = {
         afterToolCall: async ({ toolCall }) =>
           turn.failedToolCalls.has(toolCall.id) ? { isError: true } : undefined,
+        convertToLlm: convertPiMessagesToLlm,
         initialState: {
-          messages: contextPlan.messages,
+          messages: conversation.resume?.length
+            ? [...contextPlan.messages, ...currentMessages]
+            : contextPlan.messages,
           model: resolution.model,
           systemPrompt: conversation.systemPrompt,
           thinkingLevel,
           tools: piTools,
         },
-        prepareNextTurnWithContext: ({ context, toolResults }) => {
+        prepareNextTurnWithContext: async ({ context, toolResults }) => {
+          if (toolResults.length === 0) {
+            updateModelContextHeadroom(context.messages);
+          }
           if (responsePhase === 'final-response') {
             responsePhase = 'done';
             if (toolResults.length > 0) turn.limitError = turn.toolBudgetError;
@@ -852,7 +937,40 @@ class PiRuntimeSession implements AgentRuntimeSession {
                 : context.tools?.filter((tool) => !turn.unavailableTools.has(tool.name)),
           };
           modelContext = nextContext;
-          updateModelContextHeadroom(context.messages);
+          if (turn.limitError) return undefined;
+          const loopPlan = await raceAbort(
+            planPiLoopContext({
+              ...contextCallbacks('tool-loop'),
+              messages: context.messages,
+              systemPrompt: nextContext.systemPrompt,
+              tools: nextContext.tools ?? [],
+              maxInputTokens: resolution.maxInputTokens,
+              model: resolution.model,
+              models,
+              options: this.contextOptions,
+              redactSummary: (summary) =>
+                redactCompactionSummary(summary, [
+                  ...compactionRedactions,
+                  ...sensitiveToolResultValues(context.messages),
+                ]),
+              signal: turn.abortController.signal,
+              thinkingLevel,
+            }),
+            turn.abortController.signal,
+          );
+          if (turn.phase !== 'running' || turn.abortController.signal.aborted) return undefined;
+          if (!loopPlan.ok) {
+            turn.limitError = {
+              ...TOOL_LOOP_CONTEXT_ERROR,
+              code: loopPlan.code,
+              ...(loopPlan.code === 'context_compaction_failed'
+                ? { message: loopPlan.message, retryable: loopPlan.retryable }
+                : {}),
+            };
+            return undefined;
+          }
+          nextContext.messages = loopPlan.messages;
+          updateModelContextHeadroom(nextContext.messages);
           if (turn.modelContextHeadroomTokens < 0 && !turn.limitError) {
             turn.limitError = TOOL_LOOP_CONTEXT_ERROR;
           }
@@ -861,7 +979,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
           // Pi prepares the next context before asking whether to stop. Allow
           // this one response, then stop even if the model asks for more tools.
           if (turn.toolBudgetError) responsePhase = 'final-response';
-          if (turn.toolBudgetError || turn.unavailableTools.size > 0) {
+          if (
+            nextContext.messages !== context.messages ||
+            turn.toolBudgetError ||
+            turn.unavailableTools.size > 0
+          ) {
             return { context: nextContext };
           }
           return undefined;
@@ -891,7 +1013,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // Consumer-side cancellation: the abort releases this wait immediately
       // rather than trusting the third-party loop to return. A late settlement
       // is fenced by the terminated phase in `emit()` and `handlePiEvent()`.
-      await raceAbort(agent.prompt(conversation.prompt), turn.abortController.signal);
+      await raceAbort(
+        conversation.resume?.length ? agent.continue() : agent.prompt(conversation.prompt),
+        turn.abortController.signal,
+      );
       if (this.settleIfEnding(turn, { emitCancelled: true })) return;
 
       const terminal = turn.terminalMessage;
@@ -972,7 +1097,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           this.recordInvocation(turn, event.message);
           turn.currentMessageOrdinal = undefined;
           // Input was already budgeted before the request; only add this response's content.
-          turn.modelContextHeadroomTokens -= estimateTokens(event.message);
+          turn.modelContextHeadroomTokens -= estimatePiMessageTokens(event.message);
         }
         break;
       case 'turn_end':

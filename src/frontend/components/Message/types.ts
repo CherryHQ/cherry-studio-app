@@ -30,6 +30,11 @@ export type MessageListItem = Readonly<{
   /** Message-owned runtime timing and materialized provider statistics. */
   stats?: MessageStats;
   status: MessageStatus;
+  /**
+   * Correlation id shared by a submission's rows. Row actions that operate on
+   * the whole exchange need it; synthetic and not-yet-reserved rows have none.
+   */
+  turnId?: string;
 }>;
 
 export type MessageListProps = {

@@ -291,6 +291,232 @@ describe('MobileAgentHost', () => {
     store = new InMemoryAgentSessionStore();
   });
 
+  async function seedRetryAnswer(status: 'success' | 'error', parts: AgentMessagePart[]) {
+    const session = await createStoredSession();
+    const reservation = {
+      sessionId: session.id,
+      ...messageIds(),
+      modelId: createUniqueModelId('mock-provider', 'mock-model'),
+      inferenceSnapshot: {
+        version: 1 as const,
+        model: await inferenceModel({ providerId: 'mock-provider', modelId: 'mock-model' }),
+        parameters: { temperature: 0.1, maxOutputTokens: 256 },
+        tools: [],
+        reasoningEffort: 'low',
+      },
+      userParts: [
+        { id: 'input', type: 'text' as const, text: 'Original question', state: 'done' as const },
+      ],
+    };
+    const reserved = await store.reserveSubmission(reservation);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status,
+      parts,
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    return { session, reserved, reservation };
+  }
+
+  test('regenerates the latest successful answer in place, reusing its recorded inference facts', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'old-text', type: 'text', state: 'done', text: 'Old answer' },
+    ]);
+    const before = await store.listMessages(session.id);
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Replacement'], requests);
+    const fork = jest.spyOn(store, 'forkSession');
+    await host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'replacement');
+    const after = await store.listMessages(session.id);
+    expect(after.map((message) => message.id)).toEqual(before.map((message) => message.id));
+    expect(after[1].parts).toEqual([
+      { id: 'text-1', type: 'text', state: 'done', text: 'Replacement' },
+    ]);
+    expect(requests[0]).toMatchObject({
+      input: [{ type: 'text', text: 'Original question' }],
+      history: [],
+      options: { temperature: 0.1, maxOutputTokens: 256, reasoningEffort: 'low' },
+    });
+    expect(requests[0].resume).toBeUndefined();
+    // Nothing is replayed, so the model is told the discarded attempt may
+    // already have changed the outside world.
+    expect(requests[0].instructions).toContain('## Answer Retry');
+    expect(fork).not.toHaveBeenCalled();
+    await host._doStop();
+  });
+
+  test('refuses to retry an answer that later messages already build on', async () => {
+    const { session, reserved, reservation } = await seedRetryAnswer('success', [
+      { id: 'old-text', type: 'text', state: 'done', text: 'Old answer' },
+    ]);
+    const later = await store.reserveSubmission({
+      ...reservation,
+      ...messageIds(),
+      userParts: [{ id: 'later', type: 'text', text: 'Future question', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: later.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'later-answer', type: 'text', text: 'Future answer', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 3, completedAt: 4, spans: [] } },
+    });
+    const before = await store.listMessages(session.id);
+    const host = hostWithText(['Replacement'], []);
+    await expect(
+      host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id }),
+    ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+    expect(await store.listMessages(session.id)).toEqual(before);
+    // The latest answer stays retryable, so the Session is not left stuck.
+    await host.retryMessage({ sessionId: session.id, messageId: later.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'replacement');
+    await host._doStop();
+  });
+
+  test('retries through the surviving checkpoint instead of replaying the whole transcript', async () => {
+    const { session, reserved, reservation } = await seedRetryAnswer('success', [
+      { id: 'summarized', type: 'text', state: 'done', text: 'Summarized answer' },
+    ]);
+    const checkpoint = { version: 1 as const, anchorTurnId: reserved.turnId, payload: { keep: 1 } };
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'summarized', type: 'text', state: 'done', text: 'Summarized answer' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: checkpoint,
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    const latest = await store.reserveSubmission({
+      ...reservation,
+      ...messageIds(),
+      userParts: [{ id: 'latest', type: 'text', text: 'Latest question', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: latest.assistantMessage.id,
+      status: 'error',
+      parts: [{ id: 'latest-answer', type: 'text', text: 'Broken answer', state: 'done' }],
+      usage: null,
+      error: { code: 'EXECUTION_FAILED', message: 'boom', retryable: true },
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 3, completedAt: 4, spans: [] } },
+    });
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Replacement'], requests);
+    await host.retryMessage({ sessionId: session.id, messageId: latest.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'replacement');
+    expect(requests[0].contextCheckpoint).toEqual(checkpoint);
+    // History stops at the anchor, so the summarized pair is never resent.
+    expect(requests[0].history).toEqual([]);
+    expect(requests[0].input).toEqual([{ type: 'text', text: 'Latest question' }]);
+    await host._doStop();
+  });
+
+  test('ignores the replaced answer as a checkpoint anchor, because its summary is about to vanish', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'old-text', type: 'text', state: 'done', text: 'Old answer' },
+    ]);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'old-text', type: 'text', state: 'done', text: 'Old answer' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: { version: 1, anchorTurnId: reserved.turnId, payload: { stale: 1 } },
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Replacement'], requests);
+    await host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'replacement');
+    expect(requests[0].contextCheckpoint).toBeNull();
+    expect(requests[0].input).toEqual([{ type: 'text', text: 'Original question' }]);
+    await host._doStop();
+  });
+
+  test('keeps completed tool results and appends new output after the retained prefix on retry', async () => {
+    const { session, reserved } = await seedRetryAnswer('error', [
+      { id: 'text-1', type: 'text', state: 'done', text: 'Searching' },
+      {
+        id: 'tool-search',
+        type: 'tool',
+        toolCallId: 'search-call',
+        toolRef: { source: 'builtin', capabilityId: 'search' },
+        providerName: 'search',
+        displayName: 'Search',
+        state: 'output-available',
+        input: { q: 'question' },
+        output: { value: { result: 'Found' }, artifacts: [] },
+      },
+      { id: 'unfinished', type: 'text', state: 'done', text: 'Incomplete answer' },
+    ]);
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Recovered answer'], requests);
+    const events: AgentEvent[] = [];
+    const observation = await host.observeSession(session.id, (event) => events.push(event));
+    await host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'recovery');
+    const messages = await store.listMessages(session.id);
+    expect(messages).toHaveLength(2);
+    expect(messages[1].parts).toMatchObject([
+      { type: 'text', text: 'Searching' },
+      { type: 'tool', toolCallId: 'search-call' },
+      { type: 'text', text: 'Recovered answer' },
+    ]);
+    expect(new Set(messages[1].parts.map((part) => part.id)).size).toBe(3);
+    expect(requests[0].resume).toMatchObject([
+      { type: 'text', text: 'Searching' },
+      { type: 'tool-call', toolCallId: 'search-call' },
+      { type: 'tool-result', toolCallId: 'search-call', output: { value: { result: 'Found' } } },
+    ]);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'message.delta',
+        delta: expect.objectContaining({ op: 'part.add', index: 2 }),
+      }),
+    );
+    observation.unsubscribe();
+    await host._doStop();
+  });
+
+  test('locks retry admission before preflight and leaves the old answer untouched when it fails', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'text', type: 'text', state: 'done', text: 'Keep me' },
+    ]);
+    const before = await store.listMessages(session.id);
+    const gate = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, async () => {
+      await gate.promise;
+      throw new Error('Model unavailable');
+    });
+    const retry = host.retryMessage({
+      sessionId: session.id,
+      messageId: reserved.assistantMessage.id,
+    });
+    const rejection = expect(retry).rejects.toBeDefined();
+    await expect(
+      host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+    await expect(
+      host.submitMessage({
+        sessionId: session.id,
+        ...messageIds(),
+        parts: [{ type: 'text', text: 'next' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+    gate.resolve();
+    await rejection;
+    expect(await store.listMessages(session.id)).toEqual(before);
+    await host._doStop();
+  });
+
   test('keeps image and text exchanges in one durable Session without opening Pi for images', async () => {
     const settings = { mode: 'generate' as const, paramValues: { aspectRatio: '16:9' } };
     const entry = FileEntrySchema.parse({
@@ -990,6 +1216,113 @@ describe('MobileAgentHost', () => {
       message: { status: 'error', usage: { inputTokens: 13, outputTokens: 3, totalTokens: 16 } },
     });
   });
+
+  test.each(['completed', 'cancelled', 'failed'] as const)(
+    'projects %s compaction in place and persists only completed anchors',
+    async (outcome) => {
+      const compaction = {
+        id: 'compaction-1',
+        phase: 'tool-loop' as const,
+        status: 'running' as const,
+        startedAt: 1,
+        inputTokensBefore: 112_000,
+      };
+      const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+        controller.emit({
+          type: 'part.add',
+          index: 0,
+          part: { id: 'before', type: 'text', text: 'Before', state: 'done' },
+        });
+        controller.emit({ type: 'context.compaction', compaction });
+        if (outcome !== 'cancelled') {
+          controller.emit({
+            type: 'context.compaction',
+            compaction: {
+              ...compaction,
+              status: outcome,
+              completedAt: 2,
+              ...(outcome === 'completed'
+                ? { inputTokensAfter: 20_000 }
+                : { reason: 'summary-failed' as const }),
+            },
+          });
+          controller.emit({
+            type: 'part.add',
+            index: 1,
+            part: { id: 'after', type: 'text', text: 'After', state: 'done' },
+          });
+        }
+        controller.emit({ type: outcome === 'cancelled' ? 'cancelled' : 'completed' });
+      });
+      const host = createHost(runtime);
+      const session = await createStoredSession();
+      const events: AgentEvent[] = [];
+      await host.observeSession(session.id, (event) => events.push(event));
+      await host.submitMessage({
+        ...messageIds(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Continue.' }],
+      });
+      await waitFor(
+        () => events.some((event) => event.type === 'message.finalized'),
+        'context terminal',
+      );
+      const updates = events.flatMap((event) =>
+        event.type === 'message.delta' &&
+        (event.delta.op === 'part.add' || event.delta.op === 'part.replace') &&
+        event.delta.part.type === 'data-compaction-anchor'
+          ? [event.delta]
+          : [],
+      );
+      expect(updates[0]).toMatchObject({
+        op: 'part.add',
+        index: 1,
+        part: { data: { status: 'compacting', phase: 'in-loop' } },
+      });
+      if (outcome !== 'cancelled') {
+        // The anchor occupies a transcript slot the Runtime's own part count does not know about.
+        expect(
+          events.flatMap((event) =>
+            event.type === 'message.delta' &&
+            event.delta.op === 'part.add' &&
+            event.delta.part.id === 'after'
+              ? [event.delta.index]
+              : [],
+          ),
+        ).toEqual([2]);
+        expect(updates[1]).toMatchObject({
+          op: 'part.replace',
+          part: {
+            id: updates[0].part.id,
+            data: { status: outcome === 'completed' ? 'done' : 'skipped' },
+          },
+        });
+      }
+      const message = (await store.listMessages(session.id))[1];
+      if (outcome === 'completed') {
+        expect(message.parts).toMatchObject([
+          { id: 'before' },
+          {
+            id: updates[0].part.id,
+            type: 'data-compaction-anchor',
+            data: {
+              status: 'done',
+              phase: 'in-loop',
+              trigger: 'auto',
+              startedAt: '1970-01-01T00:00:00.001Z',
+              completedAt: '1970-01-01T00:00:00.002Z',
+              preTokens: 112_000,
+              postTokens: 20_000,
+              durationMs: 1,
+            },
+          },
+          { id: 'after' },
+        ]);
+      } else {
+        expect(message.parts.some((part) => part.type === 'data-compaction-anchor')).toBe(false);
+      }
+    },
+  );
 
   test('persists a completed checkpoint and replays it after Host recreation', async () => {
     const checkpoint = {
@@ -3446,6 +3779,174 @@ describe('MobileAgentHost', () => {
       host.forkSession({ sessionId: session.id, fromMessageId: 'missing' }),
     ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
   });
+
+  test('deletes a settled turn, publishes it, and refuses to delete across a live turn', async () => {
+    const released = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        controller.emit({
+          type: 'part.add',
+          index: 0,
+          part: { id: 'text-1', type: 'text', text: 'First answer', state: 'done' },
+        });
+      })
+      .script(async (controller) => {
+        controller.emit({
+          type: 'part.add',
+          index: 0,
+          part: { id: 'text-2', type: 'text', text: 'Second answer', state: 'done' },
+        });
+        await released.promise;
+      });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    const first = await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the first turn to settle');
+    const second = await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Again.' }],
+    });
+
+    // A live turn owns the whole Session, so even deleting an older settled
+    // turn waits: its rows are what that turn will be replayed against.
+    await expect(
+      host.deleteTurn({ sessionId: session.id, turnId: first.turnId }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+
+    released.resolve();
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[3]?.status === 'success',
+      'the second turn to settle',
+    );
+
+    events.length = 0;
+    await host.deleteTurn({ sessionId: session.id, turnId: first.turnId });
+
+    expect(events).toEqual([
+      {
+        type: 'turn.deleted',
+        turnId: first.turnId,
+        messageIds: [first.userMessageId, first.assistantMessageId],
+      },
+    ]);
+    const remaining = await store.listMessages(session.id);
+    expect(remaining.map((message) => message.id)).toEqual([
+      second.userMessageId,
+      second.assistantMessageId,
+    ]);
+    // The latest turn ran in this generation, so its status snapshot survives
+    // a deletion that did not touch it.
+    expect(host.getSessionStatus(session.id)).toMatchObject({ turnId: second.turnId });
+
+    await host.deleteTurn({ sessionId: session.id, turnId: second.turnId });
+    // Deleting the turn the status describes leaves nothing to report.
+    expect(host.getSessionStatus(session.id)).toBeNull();
+    expect(await store.listMessages(session.id)).toEqual([]);
+
+    await expect(
+      host.deleteTurn({ sessionId: session.id, turnId: first.turnId }),
+    ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+    await expect(
+      host.deleteTurn({ sessionId: 'missing', turnId: first.turnId }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
+  });
+
+  test.each(['success', 'failure'] as const)(
+    'holds the Session during turn deletion and releases it after %s',
+    async (outcome) => {
+      const { session, reserved } = await seedRetryAnswer('success', [
+        { id: 'old-answer', type: 'text', text: 'Remove this answer', state: 'done' },
+      ]);
+      const gate = createDeferred();
+      const deleteFromStore = store.deleteTurn.bind(store);
+      const deletionError = new Error('Deletion failed');
+      jest.spyOn(store, 'deleteTurn').mockImplementationOnce(async (input) => {
+        await gate.promise;
+        if (outcome === 'failure') throw deletionError;
+        return deleteFromStore(input);
+      });
+      const requests: RuntimeExecutionRequest[] = [];
+      const host = hostWithText(['Next answer'], requests);
+      const input = { sessionId: session.id, turnId: reserved.turnId };
+      const deletion = host.deleteTurn(input).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      try {
+        await expect(
+          host.submitMessage({
+            sessionId: session.id,
+            ...messageIds(),
+            parts: [{ type: 'text', text: 'Do not read stale history' }],
+          }),
+        ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+        await expect(
+          host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id }),
+        ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+        await expect(host.deleteTurn(input)).rejects.toMatchObject({
+          view: { code: 'SESSION_BUSY' },
+        });
+
+        gate.resolve();
+        expect(await deletion).toBe(outcome === 'failure' ? deletionError : null);
+        await host.submitMessage({
+          sessionId: session.id,
+          ...messageIds(),
+          parts: [{ type: 'text', text: 'Continue after deletion settled' }],
+        });
+        await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'next turn');
+        expect(requests).toHaveLength(1);
+        expect(requests[0].history.map((turn) => turn.turnId)).toEqual(
+          outcome === 'success' ? [] : [reserved.turnId],
+        );
+      } finally {
+        gate.resolve();
+        await deletion;
+        await host._doStop();
+      }
+    },
+  );
+
+  test.each(['shutdown', 'session deletion'] as const)(
+    'drains a pending turn deletion before %s finishes',
+    async (operation) => {
+      const { session, reserved } = await seedRetryAnswer('success', []);
+      const gate = createDeferred();
+      const deleteFromStore = store.deleteTurn.bind(store);
+      jest.spyOn(store, 'deleteTurn').mockImplementationOnce(async (input) => {
+        await gate.promise;
+        return deleteFromStore(input);
+      });
+      const host = hostWithText([]);
+      const deletion = host.deleteTurn({ sessionId: session.id, turnId: reserved.turnId });
+      let finished = false;
+      const drain = (
+        operation === 'shutdown' ? host._doStop() : host.deleteSession({ sessionId: session.id })
+      ).then(() => {
+        finished = true;
+      });
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(finished).toBe(false);
+        gate.resolve();
+        await deletion;
+        await drain;
+        expect(finished).toBe(true);
+      } finally {
+        gate.resolve();
+        await Promise.allSettled([deletion, drain]);
+        await host._doStop();
+      }
+    },
+  );
 
   test('fails closed on unknown sessions, agents, and unsupported input', async () => {
     const host = hostWithText(['unused']);

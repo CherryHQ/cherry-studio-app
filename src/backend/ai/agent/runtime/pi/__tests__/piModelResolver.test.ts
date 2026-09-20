@@ -20,6 +20,7 @@ type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
 
 const mockGetModelById = jest.fn();
 const mockGetProviderById = jest.fn();
+const mockGetAuthConfig = jest.fn();
 const mockResolveApiKey = jest.fn();
 const mockBoundStreamFn = jest.fn();
 const mockBindPiStream = jest.fn<ReturnType<BindPiStream>, Parameters<BindPiStream>>();
@@ -29,6 +30,7 @@ jest.mock('@/backend/data/services/ModelService', () => ({
 }));
 jest.mock('@/backend/data/services/ProviderService', () => ({
   providerService: {
+    getAuthConfig: (...args: unknown[]) => mockGetAuthConfig(...args),
     getByProviderId: (...args: unknown[]) => mockGetProviderById(...args),
     resolveApiKey: (...args: unknown[]) => mockResolveApiKey(...args),
   },
@@ -89,6 +91,7 @@ describe('Pi model resolver', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAuthConfig.mockResolvedValue(null);
     mockResolveApiKey.mockResolvedValue({
       apiKeySelection: CREDENTIAL_RECEIPT,
       value: 'secret-key',
@@ -177,6 +180,31 @@ describe('Pi model resolver', () => {
         temperature: 0.25,
         timeoutMs: 600_000,
       }),
+    );
+  });
+
+  test('resolves Azure Responses and forwards the Azure API version', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_RESPONSES,
+      'https://resource.openai.azure.com/openai',
+      'azure-responses',
+    );
+    provider.authMethods = undefined;
+    provider.authType = 'iam-azure';
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
+    mockGetAuthConfig.mockResolvedValue({ type: 'iam-azure', apiVersion: '2025-04-01-preview' });
+
+    const resolution = await resolve(resolver, { maxOutputTokens: 1024 });
+
+    expect(resolution.model).toMatchObject({
+      api: 'azure-openai-responses',
+      baseUrl: 'https://resource.openai.azure.com/openai',
+    });
+    expect(mockGetAuthConfig).toHaveBeenCalledWith('test-provider');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.objectContaining({ api: 'azure-openai-responses' }),
+      expect.objectContaining({ azureApiVersion: '2025-04-01-preview' }),
     );
   });
 

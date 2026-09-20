@@ -1,4 +1,5 @@
-export { configureObserve } from './configureObserve';
-export { configureSentry, recordSentryBreadcrumb, setSentryConsent } from './configureSentry';
+export { configureReporting } from './reportingRegistry';
+export { wrapReportingRoot } from './wrapReportingRoot';
+export { recordSentryBreadcrumb, setSentryConsent } from './configureSentry';
 export { useSentryConsent } from './useSentryConsent';
 export { StartupInteractiveMarker } from './StartupInteractiveMarker';

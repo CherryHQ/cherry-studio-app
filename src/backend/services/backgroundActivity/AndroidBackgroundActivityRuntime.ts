@@ -401,7 +401,9 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     const leases = [...this.leases];
     this.leases.clear();
     if (leases.length > 0) {
-      logger.error('Background execution interrupted', reason, {
+      // Platform budget and service revocations are expected cancellation paths; keep them
+      // visible in development diagnostics without sending them to Sentry as errors.
+      logger.warn('Background execution interrupted', reason, {
         operation: 'background.execution.interrupt',
         reason: reason.reason,
         appState: AppState.currentState,

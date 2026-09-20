@@ -7,16 +7,22 @@ import {
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 
+import {
+  getModelPickerBadges,
+  type ModelPickerBadge as ModelPickerBadgeValue,
+} from '../utils/modelPickerBadges';
 import type { ModelPickerModelItem } from '../utils/modelPickerData';
 import {
   buildModelPickerFastScrollNavigation,
   MIN_MODEL_PICKER_FAST_SCROLL_MODEL_COUNT,
 } from '../utils/modelPickerFastScroll';
 import type { ModelPickerListItem } from '../utils/modelPickerListItems';
+import { ModelPickerBadge } from './ModelPickerBadge';
 import { ModelPickerFastScroller } from './ModelPickerFastScroller';
 
 const modelPickerEstimatedItemSize = 48;
@@ -31,6 +37,7 @@ type ModelPickerListProps = {
   loadingText?: string;
   onSelect: (item: ModelPickerModelItem) => void;
   selectedModelId: string | null;
+  showBadges?: boolean;
 };
 
 type ModelPickerListExtraData = {
@@ -47,6 +54,7 @@ export function ModelPickerList({
   loadingText,
   onSelect,
   selectedModelId,
+  showBadges = false,
 }: ModelPickerListProps) {
   const listRef = useRef<LegendListRef>(null);
   const navigationFrameRef = useRef<number | null>(null);
@@ -120,10 +128,11 @@ export function ModelPickerList({
           isSelected={item.item.modelId === extraData.selectedModelId}
           item={item.item}
           onSelect={onSelect}
+          showBadges={showBadges}
         />
       );
     },
-    [onSelect],
+    [onSelect, showBadges],
   );
   const keyExtractor = useCallback((item: ModelPickerListItem) => item.key, []);
   const getItemType = useCallback((item: ModelPickerListItem) => item.type, []);
@@ -231,17 +240,25 @@ const ModelPickerRow = memo(function ModelPickerRow({
   isSelected,
   item,
   onSelect,
+  showBadges,
 }: {
   isSelected: boolean;
   item: ModelPickerModelItem;
   onSelect: (item: ModelPickerModelItem) => void;
+  showBadges: boolean;
 }) {
+  const { t } = useTranslation();
   const handleSelect = useCallback(() => {
     onSelect(item);
   }, [item, onSelect]);
+  const badges = showBadges ? getModelPickerBadges(item.model) : [];
+  const accessibilityLabel = [
+    item.model.name,
+    ...badges.map((badge) => t(modelPickerBadgeLabelKeys[badge])),
+  ].join(', ');
   return (
     <Pressable
-      accessibilityLabel={item.model.name}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       className="min-h-12 flex-row items-center gap-3 px-6 active:opacity-60"
@@ -253,10 +270,22 @@ const ModelPickerRow = memo(function ModelPickerRow({
           {item.model.name}
         </Text>
       </View>
+      {badges.length > 0 ? (
+        <View className="flex-row items-center gap-1">
+          {badges.map((badge) => (
+            <ModelPickerBadge badge={badge} key={`${item.model.id}:${badge}`} />
+          ))}
+        </View>
+      ) : null}
       {isSelected ? <CheckIcon className="size-5 shrink-0 text-foreground" /> : null}
     </Pressable>
   );
 });
+
+const modelPickerBadgeLabelKeys = {
+  free: 'models.capability.free',
+  vision: 'models.capability.imageRecognition',
+} as const satisfies Record<ModelPickerBadgeValue, string>;
 
 const styles = StyleSheet.create({
   list: {

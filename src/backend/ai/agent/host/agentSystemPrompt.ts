@@ -33,6 +33,12 @@ export type BuildAgentSystemPromptInput = {
   tools: readonly RuntimeTool[];
   pluginGuides?: readonly PluginGuideSnapshot[];
   toolDiscoveryWarnings?: readonly string[];
+  /**
+   * Set when this turn replaces an earlier answer to the same question:
+   * `resumed` keeps that attempt's tool calls and results, `restarted` drops
+   * them (agent-protocol.md "Manual answer retry").
+   */
+  retry?: 'resumed' | 'restarted';
 };
 
 /** Build one Host-owned application prompt from fixed policy and the frozen tool snapshot. */
@@ -43,12 +49,22 @@ export function buildAgentSystemPrompt({
   tools,
   pluginGuides = [],
   toolDiscoveryWarnings = [],
+  retry,
 }: BuildAgentSystemPromptInput): string {
   const sections = [
     MOBILE_RUNTIME_RULES,
     `## Current Date\n\nThe current local date is \`${currentDate}\`.`,
     buildResponseLanguageSection(appLanguage),
   ];
+  if (retry === 'resumed') {
+    sections.push(`## Answer Recovery
+
+The user explicitly requested a retry of this unfinished answer. The retained assistant tool calls and results belong to the same original question. Reuse successful results and finish answering that question. Previous tool failures belong to the earlier attempt; recover using the currently available tools and current approval rules. An interrupted tool call has an unknown external outcome: inspect the current state before repeating a write, and explain any outcome you cannot safely establish. Do not repeat completed external actions.`);
+  } else if (retry === 'restarted') {
+    sections.push(`## Answer Retry
+
+The user explicitly requested a fresh answer to this question and discarded the previous one. That earlier attempt is not shown to you, but it may already have called tools and changed the outside world. Before any write, delete, send, or other externally visible action, inspect the current state and treat it as possibly already done rather than repeating it blindly. Read-only work may be redone freely.`);
+  }
   if (toolDiscoveryWarnings.length > 0) {
     sections.push(`## Tool Availability
 

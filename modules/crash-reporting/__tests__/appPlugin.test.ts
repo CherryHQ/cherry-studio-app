@@ -1,8 +1,9 @@
+import services from '../../../src/frontend/appShell/observability/reportingServices.json';
 import policy from '../reportingPolicy.json';
 
 type MetadataEntry = { $: { 'android:name': string; 'android:value': string } };
 type NativeConfig = {
-  extra: { sentryEnvironment: string };
+  extra: { reporting?: { environment: string; services: Record<string, boolean> } };
   info: Record<string, unknown>;
   application: { 'meta-data': MetadataEntry[] };
 };
@@ -66,7 +67,12 @@ describe('native startup reporting configuration', () => {
     'embeds the same consent policy with a production-only DSN for %s',
     (profile) => {
       const config = plugin({
-        extra: { sentryEnvironment: profile },
+        extra: {
+          reporting: {
+            environment: profile,
+            services: { sentry: true, observe: true, insights: true },
+          },
+        },
         info: {},
         application: { 'meta-data': [] },
       });
@@ -76,7 +82,7 @@ describe('native startup reporting configuration', () => {
           entry['android:value'],
         ]),
       );
-      expect(config.info.CherryCrashReportingEnabled).toBe(profile === 'production');
+      expect(config.info[services.sentry.nativeFlag]).toBe(profile === 'production');
       expect(config.info.CherryCrashReportingDsn).toBe(
         profile === 'production' ? process.env.EXPO_PUBLIC_SENTRY_DSN : '',
       );
@@ -91,11 +97,39 @@ describe('native startup reporting configuration', () => {
   test('disables native startup reporting in Storybook even with production config', () => {
     process.env.EXPO_PUBLIC_STORYBOOK_ENABLED = 'true';
     const config = plugin({
-      extra: { sentryEnvironment: 'production' },
+      extra: {
+        reporting: {
+          environment: 'production',
+          services: { sentry: true, observe: true, insights: true },
+        },
+      },
       info: {},
       application: { 'meta-data': [] },
     });
-    expect(config.info.CherryCrashReportingEnabled).toBe(false);
+    expect(config.info[services.sentry.nativeFlag]).toBe(false);
+    expect(config.info.CherryCrashReportingDsn).toBe('');
+  });
+
+  test.each(Object.keys(services) as (keyof typeof services)[])(
+    'the Sentry native flag follows its own service setting: %s',
+    (disabled) => {
+      const config = plugin({
+        extra: {
+          reporting: {
+            environment: 'production',
+            services: { sentry: true, observe: true, insights: true, [disabled]: false },
+          },
+        },
+        info: {},
+        application: { 'meta-data': [] },
+      });
+      expect(config.info[services.sentry.nativeFlag]).toBe(disabled !== 'sentry');
+    },
+  );
+
+  test('missing configuration never enables any native sender', () => {
+    const config = plugin({ extra: {}, info: {}, application: { 'meta-data': [] } });
+    expect(config.info[services.sentry.nativeFlag]).toBe(false);
     expect(config.info.CherryCrashReportingDsn).toBe('');
   });
 });

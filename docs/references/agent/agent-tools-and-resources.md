@@ -373,6 +373,14 @@ retry; cancellation still propagates without becoming a cached failure.
   metrics when another query fails. Absent data is `null` in range summaries, with per-metric
   `no-data` or `error` states; it must not be interpreted as zero activity. Daily results omit
   missing values. Queries remain subject to the system's history limits.
+- Quantity reads take the native aggregate first and fetch raw samples only to settle a zero,
+  which is where a measured zero and a missing record still differ and where the raw fetch is
+  cheap. Fetching raw samples for the whole range first exceeds the native timeout on dense
+  metrics such as step count, active energy, and heart rate. Daily results aggregate one query
+  per calendar day in the device's timezone rather than bucketing raw samples by UTC date.
+- A metric marked `error` carries the native failure reason alongside its state. A timeout, an
+  unmapped type, and a revoked grant are different faults with the same state, and the device log
+  is not available where the result is read.
 
 ### Image Generation
 

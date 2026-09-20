@@ -5,7 +5,9 @@
 
 import type { AgentEvent, AgentSessionObservation } from './events';
 import type {
+  AgentDeleteTurnInput,
   AgentForkSessionInput,
+  AgentRetryMessageInput,
   AgentStartSessionInput,
   AgentSubmitMessageInput,
 } from './inputs';
@@ -43,6 +45,16 @@ export interface AgentProtocol {
    * without claiming to undo the side effects recorded in its history.
    */
   forkSession(input: AgentForkSessionInput): Promise<AgentSessionView>;
+
+  /**
+   * Removes one settled turn from the transcript and clears any context
+   * checkpoint that may have summarized it. The turn's side effects are not
+   * undone: this erases the record, not what the record describes.
+   */
+  deleteTurn(input: AgentDeleteTurnInput): Promise<void>;
+
+  /** Replaces a settled answer in place using context up to its original user input. */
+  retryMessage(input: AgentRetryMessageInput): Promise<void>;
 
   submitMessage(
     input: AgentSubmitMessageInput,

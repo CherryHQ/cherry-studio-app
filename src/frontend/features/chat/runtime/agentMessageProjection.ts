@@ -141,6 +141,8 @@ function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'tool' }>['o
 
 function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   switch (part.type) {
+    case 'data-compaction-anchor':
+      return part;
     case 'text':
       return part.pluginReferences?.length
         ? withCherryMeta(
@@ -306,6 +308,7 @@ export function toAgentMessageListItem(
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),
+    ...(message.turnId ? { turnId: message.turnId } : {}),
   } satisfies MessageListItem;
   cache?.itemsByMessageId.set(message.id, { item, source: message });
   return item;
@@ -363,6 +366,29 @@ export function mergeAgentMessageViews(
   }
 
   return merged;
+}
+
+/**
+ * Show an answer awaiting its replacement turn the way a just-sent message
+ * looks: empty and pending. Admission is too slow to leave the replaced answer
+ * standing, and an empty pending row is the one state the list already renders
+ * as "working on it". The Host's reserved view takes over as soon as it lands,
+ * restoring any prefix the retry keeps.
+ */
+export function projectRetryingMessage(
+  messages: readonly AgentMessageView[],
+  retryingMessageId: string | undefined,
+): readonly AgentMessageView[] {
+  if (!retryingMessageId) {
+    return messages;
+  }
+  const index = messages.findIndex((message) => message.id === retryingMessageId);
+  if (index < 0) {
+    return messages;
+  }
+  const projected = [...messages];
+  projected[index] = { ...messages[index], status: 'pending', parts: [] };
+  return projected;
 }
 
 export function toAgentMessageListItems(

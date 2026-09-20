@@ -1,4 +1,17 @@
-import { and, desc, eq, gt, inArray, isNotNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  lt,
+  lte,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import {
   AppStatePolicy,
@@ -24,11 +37,14 @@ import {
 
 import type {
   AgentSessionStore,
+  DeleteTurnInput,
+  DeleteTurnResult,
   FinalizeAssistantMessageInput,
   ForkSessionInput,
   ForkSessionResult,
   ReserveInitialSubmissionInput,
   ReserveInitialSubmissionResult,
+  ReserveRetryInput,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
@@ -310,6 +326,187 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
+  async deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult> {
+    const result = await this.dbService.withWriteTx(async (tx): Promise<DeleteTurnResult> => {
+      const [session] = await tx
+        .select({ id: agentSessionTable.id })
+        .from(agentSessionTable)
+        .where(eq(agentSessionTable.id, input.sessionId))
+        .limit(1);
+      if (!session) {
+        return { status: 'session-not-found' };
+      }
+
+      const turnRows = await tx
+        .select({
+          createdAt: agentSessionMessageTable.createdAt,
+          id: agentSessionMessageTable.id,
+          status: agentSessionMessageTable.status,
+        })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.turnId, input.turnId),
+          ),
+        )
+        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+      if (turnRows.length === 0) {
+        return { status: 'turn-not-found' };
+      }
+      if (
+        turnRows.some((row) =>
+          (UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(row.status),
+        )
+      ) {
+        return { status: 'turn-unsettled' };
+      }
+
+      // Checkpoint summaries cover everything up to their anchor turn, and the
+      // store cannot read inside the opaque payload. Any checkpoint whose
+      // anchor does not sit strictly before this turn may therefore have
+      // absorbed it, so it is dropped rather than replayed. An anchor that no
+      // longer resolves fails the same test and is cleared with them.
+      const [firstRow] = turnRows;
+      await tx
+        .update(agentSessionMessageTable)
+        .set({ contextCheckpoint: null })
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            isNotNull(agentSessionMessageTable.contextCheckpoint),
+            sql`NOT EXISTS (
+              SELECT 1 FROM agent_session_message AS anchor
+              WHERE anchor.session_id = ${input.sessionId}
+                AND anchor.turn_id = json_extract(${agentSessionMessageTable.contextCheckpoint}, '$.anchorTurnId')
+                AND (anchor.created_at < ${firstRow.createdAt}
+                  OR (anchor.created_at = ${firstRow.createdAt} AND anchor.id < ${firstRow.id})))`,
+          ),
+        );
+
+      const deletedMessageIds = turnRows.map((row) => row.id);
+      // The boundary column is application-owned, so the delete below would
+      // otherwise leave this Session pointing at a row that no longer exists.
+      await tx
+        .update(agentSessionTable)
+        .set({ forkBoundaryMessageId: null })
+        .where(
+          and(
+            eq(agentSessionTable.id, input.sessionId),
+            inArray(agentSessionTable.forkBoundaryMessageId, deletedMessageIds),
+          ),
+        );
+
+      await tx
+        .delete(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.turnId, input.turnId),
+          ),
+        );
+
+      // Deleting the newest turn must give the Session back its previous
+      // activity time; list ordering is recency, and a deleted turn is no
+      // longer activity. Deleting an older turn recomputes the same value.
+      const [newest] = await tx
+        .select({
+          createdAt: agentSessionMessageTable.createdAt,
+          role: agentSessionMessageTable.role,
+          stats: agentSessionMessageTable.stats,
+        })
+        .from(agentSessionMessageTable)
+        .where(eq(agentSessionMessageTable.sessionId, input.sessionId))
+        .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
+        .limit(1);
+      if (newest) {
+        await tx
+          .update(agentSessionTable)
+          .set({
+            lastActivityAt:
+              newest.role === 'assistant'
+                ? (newest.stats?.runtimeTiming?.completedAt ?? newest.createdAt)
+                : newest.createdAt,
+          })
+          .where(eq(agentSessionTable.id, input.sessionId));
+      }
+
+      return { deletedMessageIds, status: 'deleted' };
+    });
+    if (result.status === 'deleted') {
+      publishDataApiChanges(['/agent-sessions', `/agent-sessions/${input.sessionId}`]);
+    }
+    return result;
+  }
+
+  async reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult> {
+    return this.dbService.withWriteTx(async (tx) => {
+      // The two trailing rows, newest first: only the latest answer is replaceable.
+      const [source, user] = await tx
+        .select()
+        .from(agentSessionMessageTable)
+        .where(eq(agentSessionMessageTable.sessionId, input.sessionId))
+        .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
+        .limit(2);
+      if (
+        !source ||
+        source.id !== input.assistantMessageId ||
+        source.role !== 'assistant' ||
+        (UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(source.status) ||
+        !user ||
+        user.id !== input.userMessageId ||
+        user.role !== 'user' ||
+        !source.turnId ||
+        user.turnId !== source.turnId
+      ) {
+        throw new Error('The retry source is not the settled latest answer of this session.');
+      }
+      const turnId = createOrderedUuid();
+      const [userRow] = await tx
+        .update(agentSessionMessageTable)
+        .set({ turnId, data: { version: 1, parts: input.userParts } })
+        .where(eq(agentSessionMessageTable.id, user.id))
+        .returning();
+      const values = {
+        turnId,
+        status: 'pending',
+        data: {
+          version: 1 as const,
+          // Reissued so the replacement execution's own part ids cannot collide
+          // with a retained one carried over from the previous attempt.
+          parts: input.assistantParts.map((part, index) => ({
+            ...part,
+            id: `retained-${turnId}-${index}`,
+          })),
+        },
+        error: null,
+        // The only summary that could cover the replaced answer is its own:
+        // it is the last message, so earlier checkpoints stay valid.
+        contextCheckpoint: null,
+        modelId: input.modelId,
+        messageSnapshot: input.inferenceSnapshot,
+        // Provider totals belong to the immutable invocation ledger. Only runtime timing resets.
+        stats: source.stats
+          ? { ...source.stats, runtimeTiming: undefined, contextTokens: undefined }
+          : null,
+      };
+      const [assistantRow] = await tx
+        .update(agentSessionMessageTable)
+        .set(values)
+        .where(eq(agentSessionMessageTable.id, source.id))
+        .returning();
+      await tx
+        .update(agentSessionTable)
+        .set({ lastActivityAt: Date.now() })
+        .where(eq(agentSessionTable.id, input.sessionId));
+      return {
+        turnId,
+        userMessage: toAgentMessageView(userRow),
+        assistantMessage: toAgentMessageView(assistantRow),
+      };
+    });
+  }
+
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
     const rows = await this.dbService
       .getDb()
@@ -395,7 +592,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     };
   }
 
-  async getLatestContextCheckpoint(sessionId: string) {
+  async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
     const [row] = await this.dbService
       .getDb()
       .select({
@@ -409,6 +606,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           eq(agentSessionMessageTable.role, 'assistant'),
           eq(agentSessionMessageTable.status, 'success'),
           isNotNull(agentSessionMessageTable.contextCheckpoint),
+          ...(excludeAssistantMessageId
+            ? [ne(agentSessionMessageTable.id, excludeAssistantMessageId)]
+            : []),
         ),
       )
       .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))

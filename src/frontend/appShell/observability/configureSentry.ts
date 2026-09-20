@@ -1,9 +1,9 @@
 import { loggerService } from '@logger';
 import * as Sentry from '@sentry/react-native';
-import Constants from 'expo-constants';
 
 import { getCrashReporting, type CrashReportingStatus } from '../../../../modules/crash-reporting';
 import policy from '../../../../modules/crash-reporting/reportingPolicy.json';
+import { getReportingPolicy } from './reportingPolicy';
 import {
   isExpectedSentryError,
   sanitizeSentryBreadcrumb,
@@ -92,11 +92,11 @@ export async function setSentryConsent(enabled: boolean): Promise<void> {
  */
 export function configureSentry(): Promise<void> {
   const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
-  const environment = Constants.expoConfig?.extra?.sentryEnvironment;
+  const reporting = getReportingPolicy('sentry');
   runtime = {
     dsn,
-    environment,
-    isProduction: environment === 'production' && Boolean(dsn) && !__DEV__,
+    environment: reporting.environment,
+    isProduction: reporting.enabled && Boolean(dsn),
   };
   const generation = ++configureGeneration;
 

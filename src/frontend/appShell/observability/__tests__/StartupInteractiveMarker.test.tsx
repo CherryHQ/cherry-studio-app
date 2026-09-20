@@ -4,8 +4,8 @@ import { StartupInteractiveMarker } from '../StartupInteractiveMarker';
 
 const mockMarkInteractive = jest.fn();
 
-jest.mock('expo-observe', () => ({
-  useObserve: () => ({ markInteractive: mockMarkInteractive }),
+jest.mock('../configureObserve', () => ({
+  observe: { useObserve: () => ({ markInteractive: mockMarkInteractive }) },
 }));
 
 describe('StartupInteractiveMarker', () => {

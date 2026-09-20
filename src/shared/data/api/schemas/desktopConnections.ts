@@ -195,62 +195,91 @@ export const DesktopProviderModelSchema = z
   }));
 export type DesktopProviderModel = z.infer<typeof DesktopProviderModelSchema>;
 
-export const DesktopProviderSnapshotSchema = z
-  .looseObject({
-    apiFeatures: z
-      .looseObject({
-        arrayContent: z.boolean().optional(),
-        reportsActualCost: z.boolean().optional(),
-        serviceTier: z.boolean().optional(),
-        streamOptions: z.boolean().optional(),
-        verbosity: z.boolean().optional(),
-      })
-      .optional(),
-    apiHost: z.string().optional(),
-    apiKeys: z.array(ApiKeySchema).default([]),
-    authConfig: z.unknown().optional(),
-    authMethods: z.array(z.enum(['api-key', 'oauth', 'external-cli'])).optional(),
-    authOptional: z.boolean().optional(),
-    authType: DesktopAuthTypeSchema.optional(),
-    defaultChatEndpoint: z.enum(objectValues(ENDPOINT_TYPE)).optional(),
-    endpointConfigs: z
-      .partialRecord(z.enum(objectValues(ENDPOINT_TYPE)), EndpointConfigSchema)
-      .optional(),
-    id: ProviderIdSchema,
-    isEnabled: z.boolean().optional(),
-    models: z.array(DesktopProviderModelSchema),
-    name: z.string().min(1),
-    presetProviderId: ProviderIdSchema.optional(),
-    providerSettings: ProviderSettingsSchema.optional(),
-    reportsActualCost: z.boolean().optional(),
-    settings: ProviderSettingsSchema.optional(),
-    type: z.string().optional(),
-  })
-  .superRefine((provider, context) => {
-    const modelIds = new Set<string>();
-    for (const model of provider.models) {
-      if (modelIds.has(model.modelId)) {
-        context.addIssue({ code: 'custom', message: 'Duplicate model ID', path: ['models'] });
-      }
-      modelIds.add(model.modelId);
-    }
-  });
-export type DesktopProviderSnapshot = z.infer<typeof DesktopProviderSnapshotSchema>;
+const DesktopProviderPayloadSchema = z.looseObject({
+  apiFeatures: z
+    .looseObject({
+      arrayContent: z.boolean().optional(),
+      reportsActualCost: z.boolean().optional(),
+      serviceTier: z.boolean().optional(),
+      streamOptions: z.boolean().optional(),
+      verbosity: z.boolean().optional(),
+    })
+    .optional(),
+  apiHost: z.string().optional(),
+  apiKeys: z.array(ApiKeySchema).default([]),
+  authConfig: z.unknown().optional(),
+  authMethods: z.array(z.enum(['api-key', 'oauth', 'external-cli'])).optional(),
+  authOptional: z.boolean().optional(),
+  authType: DesktopAuthTypeSchema.optional(),
+  defaultChatEndpoint: z.enum(objectValues(ENDPOINT_TYPE)).optional(),
+  endpointConfigs: z
+    .partialRecord(z.enum(objectValues(ENDPOINT_TYPE)), EndpointConfigSchema)
+    .optional(),
+  id: ProviderIdSchema,
+  isEnabled: z.boolean().optional(),
+  models: z.array(z.unknown()),
+  name: z.string().min(1),
+  presetProviderId: ProviderIdSchema.optional(),
+  providerSettings: ProviderSettingsSchema.optional(),
+  reportsActualCost: z.boolean().optional(),
+  settings: ProviderSettingsSchema.optional(),
+  type: z.string().optional(),
+});
+
+/** Identity is all a rejected provider needs: the picker still lists it, disabled. */
+const DesktopProviderIdentitySchema = z.looseObject({
+  id: ProviderIdSchema,
+  isEnabled: z.boolean().optional(),
+  name: z.string().min(1),
+});
+
+export const DesktopProviderSnapshotSchema = DesktopProviderPayloadSchema.transform((provider) => ({
+  ...provider,
+  models: collectModels(provider.models),
+}));
+export type DesktopProviderSnapshot = z.infer<typeof DesktopProviderSnapshotSchema> & {
+  /** The desktop sent fields this build cannot read; only the provider's identity survived. */
+  unreadable?: boolean;
+};
+
+/** A model the desktop describes in terms this build lacks is dropped, not fatal. */
+function collectModels(items: unknown[]): DesktopProviderModel[] {
+  const seen = new Set<string>();
+  const models: DesktopProviderModel[] = [];
+  for (const item of items) {
+    const parsed = DesktopProviderModelSchema.safeParse(item);
+    if (!parsed.success || seen.has(parsed.data.modelId)) continue;
+    seen.add(parsed.data.modelId);
+    models.push(parsed.data);
+  }
+  return models;
+}
+
+function readProvider(item: unknown): DesktopProviderSnapshot | undefined {
+  const parsed = DesktopProviderSnapshotSchema.safeParse(item);
+  if (parsed.success) return parsed.data;
+  const identity = DesktopProviderIdentitySchema.safeParse(item);
+  return identity.success
+    ? { ...identity.data, apiKeys: [], models: [], unreadable: true }
+    : undefined;
+}
+
+/** One unreadable provider must not cost the user every other provider on the desktop. */
+function collectProviders(items: unknown[]): DesktopProviderSnapshot[] {
+  const seen = new Set<string>();
+  const providers: DesktopProviderSnapshot[] = [];
+  for (const item of items) {
+    const provider = readProvider(item);
+    if (!provider || seen.has(provider.id)) continue;
+    seen.add(provider.id);
+    providers.push(provider);
+  }
+  return providers;
+}
 
 export const DesktopProvidersSnapshotSchema = z
-  .looseObject({
-    providers: z.array(DesktopProviderSnapshotSchema),
-    version: z.number().int(),
-  })
-  .superRefine((snapshot, context) => {
-    const providerIds = new Set<string>();
-    for (const provider of snapshot.providers) {
-      if (providerIds.has(provider.id)) {
-        context.addIssue({ code: 'custom', message: 'Duplicate provider ID', path: ['providers'] });
-      }
-      providerIds.add(provider.id);
-    }
-  });
+  .looseObject({ providers: z.array(z.unknown()), version: z.number().int() })
+  .transform((snapshot) => ({ ...snapshot, providers: collectProviders(snapshot.providers) }));
 export type DesktopProvidersSnapshot = z.infer<typeof DesktopProvidersSnapshotSchema>;
 
 export function parseSupportedAuthConfig(value: unknown) {
@@ -259,7 +288,7 @@ export function parseSupportedAuthConfig(value: unknown) {
 }
 
 export type DesktopImportMode = 'provider' | 'provider-models';
-export type DesktopImportUnavailableReason = 'unsupported-auth';
+export type DesktopImportUnavailableReason = 'unsupported-auth' | 'missing-api-key' | 'unreadable';
 
 export const DesktopImportSelectionsSchema = z.strictObject({
   selections: z

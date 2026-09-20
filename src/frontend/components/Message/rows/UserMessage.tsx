@@ -23,11 +23,7 @@ export const UserMessage = memo(function UserMessage({ message }: UserMessagePro
         {attachments.length > 0 ? <UserMessageAttachments attachments={attachments} /> : null}
         {bodyMessage ? (
           <View className="self-end rounded-[18px] bg-chat-user" style={styles.bubble}>
-            <MessageParts
-              isTextSelectionEnabled={false}
-              message={bodyMessage}
-              renderMode="plainText"
-            />
+            <MessageParts message={bodyMessage} renderMode="plainText" />
           </View>
         ) : null}
       </View>
