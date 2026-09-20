@@ -70,6 +70,11 @@ export const AgentDeleteTurnInputSchema = z.strictObject({
   turnId: z.string().min(1),
 });
 export type AgentDeleteTurnInput = z.infer<typeof AgentDeleteTurnInputSchema>;
+export const AgentRetryMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+});
+export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),

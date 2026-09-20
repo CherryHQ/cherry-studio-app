@@ -28,14 +28,16 @@ is present in the paginated window, `ChatWorkspace` inserts a presentation-only 
 until that boundary loads, the divider remains absent rather than attaching to a page edge.
 
 With message actions enabled, long-pressing a settled user or assistant message opens copy, share,
-and delete using the platform's default timing. iOS presents its native context menu; Android positions
-CherryUI's menu at the long-press pointer, adjusted to stay inside the screen's safe area.
-Copy uses the toolbar's existing text projection and clipboard action; content
+and delete using the platform's default timing. iOS presents its native context menu; Android
+positions CherryUI's menu at the long-press pointer, adjusted to stay inside the screen's safe
+area. Copy uses the toolbar's existing text projection and clipboard action; content
 without copyable text disables copy. Share opens the existing selector with the pressed message
 selected. Delete is destructive, confirms first, and removes the pressed message's whole turn
 rather than the single row: a transcript replays tool calls paired with their results, so half a
 turn is not replayable. Rows carrying no turn id — synthetic dividers, a send that has not been
-reserved yet — offer no delete. Pending messages have no menu actions; their wrapper stays mounted so settling does not
+reserved yet — offer no delete. A delete pressed while the Session is busy is refused by the Host
+and surfaces as a failure toast, the same way a fork is. Pending messages have no menu actions;
+their wrapper stays mounted so settling does not
 recreate the streamed body. Android's scroll boundary cancels
 menu recognition during drag and momentum; iOS relies on UIKit arbitration. Main-answer text
 selection stays disabled while message actions are enabled. Process details keep their own

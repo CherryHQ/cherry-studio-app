@@ -123,6 +123,7 @@ function finalTextIndex(parts: readonly AgentMessagePart[]): number | undefined 
     if (
       part.type === 'file' ||
       part.type === 'error' ||
+      part.type === 'data-compaction-anchor' ||
       ((part.type === 'text' || part.type === 'reasoning') && !part.text.trim())
     )
       continue;

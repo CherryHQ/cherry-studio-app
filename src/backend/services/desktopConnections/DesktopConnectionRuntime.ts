@@ -31,7 +31,14 @@ type ConnectionStore = Pick<
   DesktopConnectionService,
   'getRow' | 'savePair' | 'remove' | 'updateStatus' | 'preview' | 'import'
 >;
-const EXCLUDED_PROVIDER_IDS = new Set(['cherryai', 'gpustack', 'lmstudio', 'ollama', 'ovms']);
+const EXCLUDED_PROVIDER_IDS = new Set([
+  'cherryai',
+  'gpustack',
+  'lmstudio',
+  'local-embedding',
+  'ollama',
+  'ovms',
+]);
 const tokenKey = (id: string) => `desktop-connection-token.${id}`;
 const TOKEN_STORE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 

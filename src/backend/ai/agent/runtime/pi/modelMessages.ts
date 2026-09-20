@@ -38,6 +38,8 @@ export type PiConversation = {
   history: PiMessage[];
   historyTurns: PiHistoryTurn[];
   prompt: Extract<PiMessage, { role: 'user' }>;
+  /** Current-turn replay, excluded from completed-history compaction. */
+  resume?: PiMessage[];
   systemPrompt: string;
 };
 
@@ -81,9 +83,14 @@ export function toPiConversation(
     historyTurns.push(historyTurn);
   }
 
+  const resume: PiMessage[] = [];
+  if (request.resume?.length) {
+    appendAssistantHistory(resume, request.resume, providerNamesByCallId, model);
+  }
   return {
     history: historyTurns.flatMap((turn) => turn.messages),
     historyTurns,
+    ...(resume.length ? { resume } : {}),
     prompt: {
       role: 'user',
       content: collectUserContent(request.input, mediaCapabilities),
@@ -187,6 +194,9 @@ function toPiImage(part: { mediaType: string; uri: string }): ImageContent {
 
 function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
   const result = new Map<string, string>();
+  for (const part of request.resume ?? []) {
+    if (part.type === 'tool-call') result.set(part.toolCallId, piToolName(part));
+  }
   for (const turn of request.history) {
     for (const message of turn.messages) {
       for (const part of message.parts) {

@@ -103,6 +103,10 @@ class TestPiAgent implements PiRuntimeAgent {
     await this.activeRun;
   }
 
+  async continue(): Promise<void> {
+    await this.prompt(this.options.initialState?.messages as PiMessage[]);
+  }
+
   subscribe(listener: Parameters<PiRuntimeAgent['subscribe']>[0]): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -520,6 +524,38 @@ const harness: RuntimeConformanceHarness = {
 };
 
 describe('Pi invocation capture', () => {
+  test('clamps the provider output cap using multilingual input estimates', async () => {
+    const runtime = createTestRuntime();
+    let outputCap: number | undefined;
+    const holder = arrange(runtime, async (context) => {
+      const stream = await context.options.streamFn(holder.resolution.model, {
+        systemPrompt: context.options.initialState?.systemPrompt,
+        messages: [context.prompt],
+      });
+      await stream.result();
+      await emitText(context, 'Done.');
+    });
+    holder.resolution.model = { ...holder.resolution.model, maxTokens: 128_000 };
+    holder.resolution.streamFn = (_model, _context, options) => {
+      outputCap = options?.maxTokens;
+      const stream = new AssistantMessageEventStream();
+      stream.end(assistantMessage());
+      return stream;
+    };
+    const session = await runtime.open();
+    const events = await collect(
+      session.execute(
+        baseRequest('multilingual-output-cap', {
+          input: [{ type: 'text', text: '中'.repeat(50_000) }],
+          options: { maxOutputTokens: 64_000 },
+        }),
+      ),
+    );
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(outputCap).toBeLessThanOrEqual(128_000 - 100_000 - 4_096);
+    expect(outputCap).toBeGreaterThanOrEqual(1_024);
+    await session.close();
+  });
   test('keeps session identity and credential overrides scoped to each request', async () => {
     const sessionIds: string[] = [];
     const apiKeyOverrides: (string | undefined)[] = [];
@@ -703,6 +739,81 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
+  test('continues from retained tool results without repeating the user prompt or replaying tool execution', async () => {
+    const runtime = createTestRuntime();
+    const tool = askTool(() => {
+      throw new Error('A retained tool must not execute again.');
+    });
+    const holder = arrange(runtime, async (context) => {
+      expect(context.prompt.role).toBe('toolResult');
+      await emitText(context, 'Recovered answer');
+    });
+    const session = await runtime.open();
+    const request = baseRequest('retry', {
+      tools: [tool],
+      resume: [
+        {
+          type: 'tool-call',
+          toolCallId: 'retained-call',
+          toolRef: tool.ref,
+          providerName: tool.providerName,
+          input: {},
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'retained-call',
+          isError: false,
+          output: { value: 'already done', artifacts: [] },
+        },
+      ],
+    });
+    const events = await collect(session.execute(request));
+    const messages = holder.lastOptions?.initialState?.messages ?? [];
+    expect(messages.map((message) => message.role)).toEqual(['user', 'assistant', 'toolResult']);
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.some((event) => event.type === 'part.add' && event.part.type === 'tool')).toBe(
+      false,
+    );
+    expect(events.some((event) => event.type === 'approval.requested')).toBe(false);
+    const withResume = estimatePiContextFixedCosts({
+      conversation: toPiConversation(request, holder.resolution.model),
+      outputReserveTokens: 1024,
+      tools: [],
+    });
+    const withoutResume = estimatePiContextFixedCosts({
+      conversation: toPiConversation(baseRequest('fresh'), holder.resolution.model),
+      outputReserveTokens: 1024,
+      tools: [],
+    });
+    expect(withResume.currentInputTokens).toBeGreaterThan(withoutResume.currentInputTokens);
+    await session.close();
+  });
+
+  test('rejects a retry prefix with an unpaired tool call before contacting the provider', async () => {
+    const runtime = createTestRuntime();
+    const program = jest.fn((context: TestAgentContext) => emitText(context, 'Must not run'));
+    arrange(runtime, program);
+    const session = await runtime.open();
+    const events = await collect(
+      session.execute(
+        baseRequest('invalid-retry', {
+          resume: [
+            {
+              type: 'tool-call',
+              toolCallId: 'dangling',
+              toolRef: TOOL_REF,
+              providerName: TOOL_PROVIDER_NAME,
+              input: {},
+            },
+          ],
+        }),
+      ),
+    );
+    expect(events.at(-1)).toMatchObject({ type: 'failed', error: { code: 'unsupported_input' } });
+    expect(program).not.toHaveBeenCalled();
+    await session.close();
+  });
+
   test('previews opted-in file content without exposing executable partial input', async () => {
     const runtime = createTestRuntime();
     const fullInput = {
@@ -1417,7 +1528,7 @@ describe('PiRuntime mapping', () => {
 
     expect(summaryCalls).toBe(0);
     expect(holder.lastOptions).toBeUndefined();
-    expect(events).toEqual([
+    expect(events.filter((event) => event.type === 'failed')).toEqual([
       expect.objectContaining({
         type: 'failed',
         error: expect.objectContaining({ code: 'context_window_exceeded' }),
@@ -1481,6 +1592,75 @@ describe('PiRuntime mapping', () => {
           retryable: false,
         },
       },
+    ]);
+    await session.close();
+  });
+
+  test('continues the real tool loop after compaction without re-executing completed tools', async () => {
+    const resolution = createResolution();
+    resolution.model = { ...resolution.model, contextWindow: 16_384 };
+    const requests: PiMessage[][] = [];
+    resolution.streamFn = (_model, context) => {
+      requests.push([...context.messages]);
+      const toolCall = requests.length <= 2;
+      const message = assistantMessage({
+        content: toolCall
+          ? [{ type: 'toolCall', id: `lookup-${requests.length}`, name: 'lookup', arguments: {} }]
+          : [{ type: 'text', text: 'The answer is ready.' }],
+        stopReason: toolCall ? 'toolUse' : 'stop',
+        usage: usage(0, 0),
+      });
+      const stream = new AssistantMessageEventStream();
+      stream.push({ type: 'start', partial: message });
+      stream.push({ type: 'done', reason: toolCall ? 'toolUse' : 'stop', message });
+      return stream;
+    };
+    const execute = jest.fn(async ({ toolCallId }: { toolCallId: string }) => ({
+      value: 'x'.repeat(toolCallId === 'lookup-1' ? 36_000 : 12_000),
+      artifacts: [],
+    }));
+    const runtime = new PiRuntime(
+      { preflightModel: jest.fn(), resolveModel: () => resolution },
+      (options) => new Agent(options),
+      DEFAULT_PI_RUNTIME_LIMITS,
+      {
+        completeSimple: summaryCompletion('Condensed prior result.'),
+        settings: { enabled: true, reserveTokens: 4_096, keepRecentTokens: 2_000 },
+      },
+    );
+    const session = await runtime.open();
+    const events = await collect(
+      session.execute(
+        baseRequest('loop-compaction', {
+          tools: [
+            {
+              ref: { source: 'builtin', capabilityId: 'lookup' },
+              providerName: 'lookup',
+              displayName: 'Lookup',
+              description: 'Lookup records.',
+              inputSchema: { type: 'object', properties: {} },
+              approval: 'auto',
+              execute,
+            },
+          ],
+        }),
+      ),
+    );
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(requests).toHaveLength(3);
+    // Providers reject a request that opens with an assistant message.
+    expect(requests[2][0].role).toBe('user');
+    expect(JSON.stringify(requests[2][0])).toContain('Condensed prior result.');
+    expect(
+      requests[2]
+        .filter((message) => message.role === 'toolResult')
+        .map((message) => message.toolCallId),
+    ).toEqual(['lookup-2']);
+    expect(events.some((event) => event.type === 'context.checkpoint')).toBe(false);
+    expect(events.filter((event) => event.type === 'context.compaction')).toMatchObject([
+      { compaction: { phase: 'tool-loop', status: 'running' } },
+      { compaction: { phase: 'tool-loop', status: 'completed' } },
     ]);
     await session.close();
   });
@@ -2210,7 +2390,7 @@ describe('PiRuntime mapping', () => {
       const streamFn = holder.lastOptions?.streamFn;
       if (!streamFn) throw new Error('Pi stream function was not installed.');
 
-      streamFn(holder.resolution.model, undefined as never, { signal: upstream.signal } as never);
+      streamFn(holder.resolution.model, { messages: [] }, { signal: upstream.signal } as never);
       expect(providerSignal?.aborted).toBe(false);
 
       const cancelling = session.cancel('turn-stuck-cancel');

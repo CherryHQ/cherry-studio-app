@@ -1,5 +1,6 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
+import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
 import { Button } from '@cherrystudio/ui/components';
@@ -23,9 +24,14 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
-  const { copiedMessageId, isAssistantToolbarEnabled } = useAssistantMessageActionsState();
-  const { copyAssistantMessage, forkFromAssistantMessage, shareAssistantMessage } =
-    useAssistantMessageActions();
+  const { copiedMessageId, isAssistantToolbarEnabled, isRetryDisabled, retryableMessageId } =
+    useAssistantMessageActionsState();
+  const {
+    copyAssistantMessage,
+    forkFromAssistantMessage,
+    retryAssistantMessage,
+    shareAssistantMessage,
+  } = useAssistantMessageActions();
   const isSettled = isAssistantToolbarEnabled && message.status !== 'pending';
   const copyText = useMemo(
     () => (isSettled ? copyAssistantMessageText(message.data.parts ?? []) : ''),
@@ -39,6 +45,19 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
 
   return (
     <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
+      {retryableMessageId === message.id ? (
+        <Button
+          accessibilityLabel={t(
+            message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
+          )}
+          disabled={isRetryDisabled}
+          icon={<RotateCcwIcon className="text-muted-foreground" size={15} />}
+          onPress={() => retryAssistantMessage({ messageId: message.id })}
+          size="xs"
+          testID="assistant-message-retry"
+          variant="ghost"
+        />
+      ) : null}
       {copyText ? (
         <Button
           accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}

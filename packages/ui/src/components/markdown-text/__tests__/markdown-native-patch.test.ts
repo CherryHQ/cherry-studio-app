@@ -20,13 +20,13 @@ describe('native Markdown code-block menu patch', () => {
 });
 
 describe('native Markdown table interaction patch', () => {
-  test('removes the iOS table copy menu recognizer', () => {
-    expect(patch).toContain('-  [_gridContainer addInteraction:contextMenu];');
+  test('preserves the upstream iOS table copy menu and restricts link gestures to links', () => {
+    expect(patch).not.toContain('-  [_gridContainer addInteraction:contextMenu];');
     expect(patch).toContain('+  return [self linkURLAtPoint:[touch locationInView:self]] != nil;');
   });
 
-  test('removes Android copy-menu long presses from both cell targets', () => {
-    expect(patch.match(/^-\s+showContextMenu\(view\)$/gm)).toHaveLength(2);
+  test('preserves the upstream Android table copy-menu long presses', () => {
+    expect(patch).not.toMatch(/^-\s+showContextMenu\(view\)$/m);
   });
 
   test('keeps overflowing iOS tables out of the branch that resets their scroll offset', () => {

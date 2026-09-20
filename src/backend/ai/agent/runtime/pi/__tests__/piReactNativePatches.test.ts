@@ -80,6 +80,10 @@ describe('Pi React Native patches', () => {
       `${process.cwd()}/node_modules/@earendil-works/pi-ai/dist/api/openai-responses-shared.js`,
       'utf8',
     );
+    const azureResponses = readFileSync(
+      `${process.cwd()}/node_modules/@earendil-works/pi-ai/dist/api/azure-openai-responses.js`,
+      'utf8',
+    );
     const additionalAdapters = [
       'anthropic-messages',
       'google-generative-ai',
@@ -117,13 +121,13 @@ describe('Pi React Native patches', () => {
     expect(responsesShared).not.toContain('from "../models.js"');
     expect(responses).toContain('from "../utils/model-runtime.js"');
     expect(responsesShared).toContain('from "../utils/model-runtime.js"');
-    for (const adapter of [responses, ...additionalAdapters]) {
+    for (const adapter of [responses, azureResponses, ...additionalAdapters]) {
       expect(adapter).toContain('createAssistantMessageDiagnostic("provider_response_failure"');
       expect(adapter).toContain('status: normalizedError.status');
       expect(adapter).toContain('body: normalizedError.body');
       expect(adapter).toContain('retryable: normalizedError.retryable');
     }
-    for (const adapter of additionalAdapters) {
+    for (const adapter of [azureResponses, ...additionalAdapters]) {
       expect(adapter).not.toContain('from "../models.js"');
       expect(adapter).toContain('from "../utils/model-runtime.js"');
     }

@@ -173,6 +173,59 @@ describe.each([
     harness.cleanup();
   });
 
+  test('preserves multiple Desktop compaction anchors and their order through persisted reads', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Continue', state: 'done' }],
+    });
+    const parts = [
+      {
+        id: 'compaction-anchor:1',
+        type: 'data-compaction-anchor' as const,
+        data: {
+          status: 'done' as const,
+          phase: 'turn-start' as const,
+          preTokens: 112_000,
+          postTokens: 20_000,
+        },
+      },
+      { id: 'text-1', type: 'text' as const, state: 'done' as const, text: 'Working' },
+      {
+        id: 'compaction-anchor:2',
+        type: 'data-compaction-anchor' as const,
+        data: {
+          status: 'done' as const,
+          phase: 'in-loop' as const,
+          trigger: 'auto' as const,
+          startedAt: '2026-09-18T00:00:00.000Z',
+          completedAt: '2026-09-18T00:00:01.000Z',
+          preTokens: 110_000,
+          postTokens: 30_000,
+          durationMs: 1_000,
+        },
+      },
+      { id: 'text-2', type: 'text' as const, state: 'done' as const, text: 'Answer' },
+    ];
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      parts,
+    });
+    expect((await store.listMessages(session.id))[1].parts).toEqual(parts);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts,
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    expect((await store.listMessages(session.id))[1].parts).toEqual(parts);
+  });
+
   test('legacy empty Session lifecycle: seed, get, rename, delete', async () => {
     const created = await harness.createEmptySession({ agentId });
     expect(created.agentId).toBe(agentId);
@@ -205,6 +258,91 @@ describe.each([
     expect(await store.deleteSession(created.id)).toBe(true);
     expect(await store.deleteSession(created.id)).toBe(false);
     expect(await store.getSession(created.id)).toBeNull();
+  });
+
+  test.each(['success', 'error', 'cancelled', 'interrupted'] as const)(
+    'retries the latest %s answer in place, dropping only its own summary',
+    async (status) => {
+      const session = await harness.createEmptySession({ agentId });
+      const input = {
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userParts: [
+          { id: 'input', type: 'text' as const, text: 'Original question', state: 'done' as const },
+        ],
+      };
+      const first = await store.reserveSubmission(input);
+      await store.finalizeAssistantMessage({
+        assistantMessageId: first.assistantMessage.id,
+        status: 'success',
+        parts: [{ id: 'answer', type: 'text', text: 'Earlier answer', state: 'done' }],
+        usage: null,
+        error: null,
+        contextCheckpoint: { version: 1, anchorTurnId: first.turnId, payload: { keep: true } },
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      });
+      const latestInput = { ...input, ...messageIds() };
+      const latest = await store.reserveSubmission(latestInput);
+      await store.finalizeAssistantMessage({
+        assistantMessageId: latest.assistantMessage.id,
+        status,
+        parts: [{ id: 'latest-answer', type: 'text', text: 'Latest answer', state: 'done' }],
+        usage: null,
+        error: status === 'error' ? INTERRUPTED : null,
+        contextCheckpoint:
+          status === 'success'
+            ? { version: 1, anchorTurnId: latest.turnId, payload: { stale: true } }
+            : null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      });
+      const before = await store.listMessages(session.id);
+      const retried = await store.reserveRetry({ ...latestInput, assistantParts: [] });
+      const after = await store.listMessages(session.id);
+      expect(after.map((message) => message.id)).toEqual(before.map((message) => message.id));
+      expect(retried.turnId).not.toBe(latest.turnId);
+      expect(retried.userMessage.turnId).toBe(retried.turnId);
+      expect(retried.assistantMessage).toMatchObject({
+        id: latest.assistantMessage.id,
+        status: 'pending',
+        parts: [],
+        createdAt: latest.assistantMessage.createdAt,
+      });
+      expect(retried.assistantMessage.stats?.runtimeTiming).toBeUndefined();
+      expect(after.slice(0, 2)).toEqual(before.slice(0, 2));
+      // Only the replaced answer's own summary could describe it.
+      expect(await store.getLatestContextCheckpoint(session.id)).toMatchObject({
+        assistantMessageId: first.assistantMessage.id,
+      });
+      await expect(store.reserveRetry({ ...latestInput, assistantParts: [] })).rejects.toThrow();
+    },
+  );
+
+  test('refuses to retry an answer that is no longer the last message', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const input = {
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [
+        { id: 'input', type: 'text' as const, text: 'Original question', state: 'done' as const },
+      ],
+    };
+    const first = await store.reserveSubmission(input);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'answer', type: 'text', text: 'Earlier answer', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    await store.reserveSubmission({ ...input, ...messageIds() });
+    const before = await store.listMessages(session.id);
+
+    await expect(store.reserveRetry({ ...input, assistantParts: [] })).rejects.toThrow();
+    expect(await store.listMessages(session.id)).toEqual(before);
   });
 
   test('reserveSubmission writes the correlated user/assistant pair', async () => {
@@ -766,6 +904,60 @@ describe.each([
     });
     expect(await store.getLatestContextCheckpoint(session.id)).toBeNull();
     expect(await store.listMessages(session.id)).toHaveLength(2);
+  });
+
+  test('deleteTurn follows a retried answer to its reissued turn id', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const kept = await settleTurn(store, session.id, 'one');
+    const latest = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: latest.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'text-1', type: 'text', text: 're: two', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const retried = await store.reserveRetry({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userMessageId: latest.userMessage.id,
+      assistantMessageId: latest.assistantMessage.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
+      assistantParts: [],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: retried.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'text-2', type: 'text', text: 're: two again', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+
+    // A retry reissues the pair's turn id in place, so the id the transcript
+    // now carries is the only one that addresses those rows.
+    expect(await store.deleteTurn({ sessionId: session.id, turnId: latest.turnId })).toEqual({
+      status: 'turn-not-found',
+    });
+    expect(await store.deleteTurn({ sessionId: session.id, turnId: retried.turnId })).toEqual({
+      deletedMessageIds: expect.arrayContaining([
+        latest.userMessage.id,
+        latest.assistantMessage.id,
+      ]),
+      status: 'deleted',
+    });
+    expect((await store.listMessages(session.id)).map((message) => message.id)).toEqual([
+      kept.userMessage.id,
+      kept.assistantMessage.id,
+    ]);
   });
 
   test('deleteTurn refuses an unknown session, a foreign turn, and an unsettled turn', async () => {

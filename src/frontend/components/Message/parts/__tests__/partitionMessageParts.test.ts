@@ -17,6 +17,32 @@ function text(value: string): CherryMessagePart {
 }
 
 describe('partitionMessageParts', () => {
+  test('keeps turn-start markers visible and in-loop markers between their tools', () => {
+    const boundary = {
+      type: 'data-compaction-anchor',
+      data: { phase: 'turn-start', status: 'done' },
+    } as const;
+    const inLoop = {
+      type: 'data-compaction-anchor',
+      data: { phase: 'in-loop', status: 'done' },
+    } as const;
+    const result = partitionMessageParts([boundary, tool('a'), inLoop, tool('b'), text('answer')]);
+    expect(result.boundaries.map(({ index }) => index)).toEqual([0]);
+    expect(result.process.map(({ index }) => index)).toEqual([1, 2, 3]);
+    expect(result.body.map(({ index }) => index)).toEqual([4]);
+  });
+
+  test('skipped compaction leaves no process group or blank boundary and cannot hide the answer', () => {
+    const skipped = {
+      type: 'data-compaction-anchor',
+      data: { phase: 'turn-start', status: 'skipped' },
+    } as const;
+    const result = partitionMessageParts([text('answer'), skipped]);
+    expect(result.boundaries).toEqual([]);
+    expect(result.process).toEqual([]);
+    expect(result.body.map(({ index }) => index)).toEqual([0]);
+  });
+
   test('lifts every file out of the body, in the order it was produced', () => {
     const { body, files, process } = partitionMessageParts([
       text('before'),

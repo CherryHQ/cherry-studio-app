@@ -5,6 +5,7 @@ import {
   createAgentMessageListProjectionCache,
   createPendingChatMessages,
   mergeAgentMessageViews,
+  projectRetryingMessage,
   toAgentMessageListItem,
   toAgentMessageListItems,
 } from '../agentMessageProjection';
@@ -28,6 +29,46 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('renders a retrying answer as an empty pending row and leaves the rest untouched', () => {
+    const question = message('user-1', { role: 'user', status: 'success' });
+    const answer = message('assistant-1', {
+      status: 'error',
+      parts: [{ id: 'text-1', type: 'text', state: 'done', text: 'Broken answer' }],
+    });
+
+    const projected = projectRetryingMessage([question, answer], 'assistant-1');
+
+    expect(projected[0]).toBe(question);
+    expect(projected[1]).toMatchObject({ id: 'assistant-1', status: 'pending', parts: [] });
+    // Nothing to project once admission settles or when the row is off-window.
+    expect(projectRetryingMessage([question, answer], undefined)).toEqual([question, answer]);
+    expect(projectRetryingMessage([question], 'assistant-1')).toEqual([question]);
+  });
+
+  test('preserves compaction identity, data and position in live and reopened history', () => {
+    const anchor = {
+      id: 'compaction-anchor:turn-1:1',
+      type: 'data-compaction-anchor' as const,
+      data: { phase: 'in-loop' as const, status: 'compacting' as const },
+    };
+    const original = message('assistant-1', {
+      parts: [anchor, { id: 'answer', type: 'text', text: 'Answer', state: 'done' }],
+    });
+    const cache = createAgentMessageListProjectionCache();
+    const live = toAgentMessageListItem(original, cache);
+    const completed = {
+      ...anchor,
+      data: { ...anchor.data, status: 'done' as const, preTokens: 100_000, postTokens: 20_000 },
+    };
+    const reopened = toAgentMessageListItem(
+      { ...original, status: 'success', parts: [completed, original.parts[1]] },
+      cache,
+    );
+    expect(reopened?.data.partKeys).toEqual(live?.data.partKeys);
+    expect(reopened?.data.parts?.[0]).toEqual(completed);
+    expect(reopened?.data.parts?.[1]).toBe(live?.data.parts?.[1]);
+  });
+
   test('keeps image request settings on pending and reopened assistant messages', () => {
     const imageGeneration = { mode: 'generate' as const, paramValues: { aspectRatio: '16:9' } };
     const [, pending] = createPendingChatMessages({

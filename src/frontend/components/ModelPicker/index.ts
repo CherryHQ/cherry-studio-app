@@ -1,10 +1,16 @@
-export { ModelPickerDrawer } from './components/ModelPickerDrawer';
+export { ModelPickerDrawer, type ModelPickerDrawerVariant } from './components/ModelPickerDrawer';
 export { ModelPickerIcon } from './components/ModelPickerIcon';
 export { ModelPickerList } from './components/ModelPickerList';
 export { ModelSearchControls } from './components/ModelSearchControls/ModelSearchControls';
 export { useModelPickerData } from './hooks/useModelPickerData';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
 export { type ModelPickerGroup, type ModelPickerModelItem } from './utils/modelPickerData';
+export {
+  getModelPickerBadges,
+  matchesModelPickerBadges,
+  MODEL_PICKER_BADGES,
+  type ModelPickerBadge,
+} from './utils/modelPickerBadges';
 export { buildModelPickerListItems } from './utils/modelPickerListItems';
 export {
   getNextModelSelection,
