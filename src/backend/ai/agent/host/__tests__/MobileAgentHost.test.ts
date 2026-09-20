@@ -3859,6 +3859,95 @@ describe('MobileAgentHost', () => {
     ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
   });
 
+  test.each(['success', 'failure'] as const)(
+    'holds the Session during turn deletion and releases it after %s',
+    async (outcome) => {
+      const { session, reserved } = await seedRetryAnswer('success', [
+        { id: 'old-answer', type: 'text', text: 'Remove this answer', state: 'done' },
+      ]);
+      const gate = createDeferred();
+      const deleteFromStore = store.deleteTurn.bind(store);
+      const deletionError = new Error('Deletion failed');
+      jest.spyOn(store, 'deleteTurn').mockImplementationOnce(async (input) => {
+        await gate.promise;
+        if (outcome === 'failure') throw deletionError;
+        return deleteFromStore(input);
+      });
+      const requests: RuntimeExecutionRequest[] = [];
+      const host = hostWithText(['Next answer'], requests);
+      const input = { sessionId: session.id, turnId: reserved.turnId };
+      const deletion = host.deleteTurn(input).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      try {
+        await expect(
+          host.submitMessage({
+            sessionId: session.id,
+            ...messageIds(),
+            parts: [{ type: 'text', text: 'Do not read stale history' }],
+          }),
+        ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+        await expect(
+          host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id }),
+        ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+        await expect(host.deleteTurn(input)).rejects.toMatchObject({
+          view: { code: 'SESSION_BUSY' },
+        });
+
+        gate.resolve();
+        expect(await deletion).toBe(outcome === 'failure' ? deletionError : null);
+        await host.submitMessage({
+          sessionId: session.id,
+          ...messageIds(),
+          parts: [{ type: 'text', text: 'Continue after deletion settled' }],
+        });
+        await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'next turn');
+        expect(requests).toHaveLength(1);
+        expect(requests[0].history.map((turn) => turn.turnId)).toEqual(
+          outcome === 'success' ? [] : [reserved.turnId],
+        );
+      } finally {
+        gate.resolve();
+        await deletion;
+        await host._doStop();
+      }
+    },
+  );
+
+  test.each(['shutdown', 'session deletion'] as const)(
+    'drains a pending turn deletion before %s finishes',
+    async (operation) => {
+      const { session, reserved } = await seedRetryAnswer('success', []);
+      const gate = createDeferred();
+      const deleteFromStore = store.deleteTurn.bind(store);
+      jest.spyOn(store, 'deleteTurn').mockImplementationOnce(async (input) => {
+        await gate.promise;
+        return deleteFromStore(input);
+      });
+      const host = hostWithText([]);
+      const deletion = host.deleteTurn({ sessionId: session.id, turnId: reserved.turnId });
+      let finished = false;
+      const drain = (
+        operation === 'shutdown' ? host._doStop() : host.deleteSession({ sessionId: session.id })
+      ).then(() => {
+        finished = true;
+      });
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(finished).toBe(false);
+        gate.resolve();
+        await deletion;
+        await drain;
+        expect(finished).toBe(true);
+      } finally {
+        gate.resolve();
+        await Promise.allSettled([deletion, drain]);
+        await host._doStop();
+      }
+    },
+  );
+
   test('fails closed on unknown sessions, agents, and unsupported input', async () => {
     const host = hostWithText(['unused']);
 
