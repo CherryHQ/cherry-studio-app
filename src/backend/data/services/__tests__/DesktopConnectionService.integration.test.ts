@@ -341,4 +341,70 @@ describe('DesktopConnectionService provider synchronization', () => {
     expect(await testDb.database.select().from(userProviderTable)).toEqual([]);
     expect(await testDb.database.select().from(desktopConnectionTable)).toEqual([]);
   });
+
+  describe('providers this build cannot import', () => {
+    const loose = (...providers: unknown[]) =>
+      DesktopProvidersSnapshotSchema.parse({ version: 1, providers });
+
+    it('keeps an unreadable provider listed and disabled without losing the readable ones', async () => {
+      const data = loose({ ...provider('broken'), models: 'not-an-array' }, provider('relay'));
+      expect(data.providers.map(({ id }) => id)).toEqual(['broken', 'relay']);
+
+      const { providers } = await service.preview(data);
+      expect(providers[0]).toMatchObject({
+        id: 'broken',
+        models: [],
+        name: 'Desktop provider',
+        unavailableReason: 'unreadable',
+      });
+      expect(providers[1]).toMatchObject({ id: 'relay' });
+      expect(providers[1]!.unavailableReason).toBeUndefined();
+    });
+
+    it('drops only the models it cannot read and still offers the provider', async () => {
+      const data = loose({
+        ...provider('relay'),
+        models: [
+          { id: 'good', apiModelId: 'good', providerId: 'relay', name: 'Good' },
+          { id: 'bad', apiModelId: 'bad', providerId: 'relay', capabilities: ['telepathy'] },
+        ],
+      });
+      expect(data.providers[0]!.models.map(({ modelId }) => modelId)).toEqual(['good']);
+
+      const { providers } = await service.preview(data);
+      expect(providers[0]!.unavailableReason).toBeUndefined();
+      expect(providers[0]!.models).toHaveLength(1);
+    });
+
+    it('disables a provider that signs in on the desktop instead of holding a key', async () => {
+      const data = loose({ ...provider('openai-codex', []), apiKeys: [], authMethods: ['oauth'] });
+      const { providers } = await service.preview(data);
+      expect(providers[0]).toMatchObject({ unavailableReason: 'unsupported-auth' });
+    });
+
+    it('disables a provider the desktop exports without a usable key', async () => {
+      const data = loose({ ...provider('relay'), apiKeys: [] });
+      const { providers } = await service.preview(data);
+      expect(providers[0]).toMatchObject({ unavailableReason: 'missing-api-key' });
+      await expect(importSnapshot(data)).rejects.toMatchObject({
+        details: { reason: 'missing-api-key' },
+      });
+    });
+
+    it('keeps the first of duplicate desktop keys rather than failing the import', async () => {
+      const data = loose({
+        ...provider('relay'),
+        apiKeys: [
+          { id: 'a', isEnabled: true, key: 'secret' },
+          { id: 'a', isEnabled: true, key: 'other' },
+        ],
+      });
+      await importSnapshot(data);
+      const [row] = await testDb.database
+        .select()
+        .from(userProviderTable)
+        .where(eq(userProviderTable.providerId, 'relay'));
+      expect(row!.apiKeys).toEqual([{ id: 'a', isEnabled: true, key: 'secret' }]);
+    });
+  });
 });

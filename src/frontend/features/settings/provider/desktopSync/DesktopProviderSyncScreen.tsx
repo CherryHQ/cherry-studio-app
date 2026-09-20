@@ -17,12 +17,22 @@ import {
   useDesktopConnections,
 } from '@/frontend/hooks/useDesktopConnections';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import type { DesktopImportPreview } from '@/shared/data/api/schemas/desktopConnections';
+import type {
+  DesktopImportPreview,
+  DesktopImportUnavailableReason,
+} from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
 import { desktopConnectionErrorMessage } from '../../desktopConnectionError';
 import { ProviderAvatar } from '../components/ProviderAvatar';
+
+// `keySeparator: false` makes the whole dotted key literal, so spell each state out.
+const UNAVAILABLE_KEYS = {
+  'missing-api-key': 'settings.provider.desktopSync.unavailable.missing-api-key',
+  unreadable: 'settings.provider.desktopSync.unavailable.unreadable',
+  'unsupported-auth': 'settings.provider.desktopSync.unavailable.unsupported-auth',
+} as const satisfies Record<DesktopImportUnavailableReason, string>;
 
 type LoadedPreview = {
   connection: DesktopConnection;
@@ -320,7 +330,7 @@ function ProviderSelection({
               accessibilityState={{ checked: isSelected, disabled: isUnavailable }}
               description={
                 provider.unavailableReason
-                  ? t('settings.provider.desktopSync.unsupportedAuth')
+                  ? t(UNAVAILABLE_KEYS[provider.unavailableReason])
                   : t('settings.provider.desktopSync.providerDescription', {
                       count: provider.models.length,
                     })
