@@ -1,3 +1,4 @@
+import { loggerService } from '@logger';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { fetchSnapshot, requestWithTimeout } from '../desktopConnectionClient';
@@ -80,6 +81,27 @@ describe('desktop connection request lifetime', () => {
     expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
     expect(jest.getTimerCount()).toBe(0);
     removeListener.mockRestore();
+  });
+
+  it('names every address failure before collapsing them into one unreachable error', async () => {
+    const reported = jest.spyOn(loggerService, 'error').mockImplementation(() => undefined);
+    mockFetch.mockRejectedValueOnce(new TypeError('Network request failed'));
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 } as Response as Awaited<
+      ReturnType<typeof expoFetch>
+    >);
+    await expect(
+      fetchSnapshot(
+        ['http://192.168.1.2', 'http://192.168.1.3'],
+        'token',
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ details: { reason: 'unreachable' } });
+    // An `operation` is what routes the report to Sentry in production builds.
+    expect(reported).toHaveBeenCalledWith(expect.any(String), expect.any(Error), {
+      attempts: ['TypeError', 'http-500'],
+      operation: 'desktop.snapshot.fetch',
+    });
+    reported.mockRestore();
   });
 
   it('does not start a request for an already cancelled caller', async () => {
