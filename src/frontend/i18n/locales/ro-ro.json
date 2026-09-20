@@ -283,6 +283,8 @@
   "chat.messageActions.copyFailed": "Nu s-a putut copia mesajul. Vă rugăm să încercați din nou.",
   "chat.messageActions.fork": "Filială într-un nou chat",
   "chat.messageActions.forkFailed": "Nu s-a putut crea chatul ramificat. Vă rugăm să încercați din nou.",
+  "chat.messageActions.regenerate": "Generează un răspuns nou",
+  "chat.messageActions.retryFailed": "Nu s-a putut reîncerca acest răspuns. Verifică setările și încearcă din nou.",
   "chat.messageUsage.approvalDuration": "Așteptați aprobarea",
   "chat.messageUsage.cacheRead": "Citire din cache",
   "chat.messageUsage.cacheWrite": "Scriere în cache",

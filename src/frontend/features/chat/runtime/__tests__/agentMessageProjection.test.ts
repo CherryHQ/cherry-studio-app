@@ -5,6 +5,7 @@ import {
   createAgentMessageListProjectionCache,
   createPendingChatMessages,
   mergeAgentMessageViews,
+  projectRetryingMessage,
   toAgentMessageListItem,
   toAgentMessageListItems,
 } from '../agentMessageProjection';
@@ -28,6 +29,22 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('renders a retrying answer as an empty pending row and leaves the rest untouched', () => {
+    const question = message('user-1', { role: 'user', status: 'success' });
+    const answer = message('assistant-1', {
+      status: 'error',
+      parts: [{ id: 'text-1', type: 'text', state: 'done', text: 'Broken answer' }],
+    });
+
+    const projected = projectRetryingMessage([question, answer], 'assistant-1');
+
+    expect(projected[0]).toBe(question);
+    expect(projected[1]).toMatchObject({ id: 'assistant-1', status: 'pending', parts: [] });
+    // Nothing to project once admission settles or when the row is off-window.
+    expect(projectRetryingMessage([question, answer], undefined)).toEqual([question, answer]);
+    expect(projectRetryingMessage([question], 'assistant-1')).toEqual([question]);
+  });
+
   test('keeps image request settings on pending and reopened assistant messages', () => {
     const imageGeneration = { mode: 'generate' as const, paramValues: { aspectRatio: '16:9' } };
     const [, pending] = createPendingChatMessages({

@@ -281,6 +281,8 @@
   "chat.messageActions.copyFailed": "Δεν ήταν δυνατή η αντιγραφή του μηνύματος. Δοκιμάστε ξανά.",
   "chat.messageActions.fork": "Υποκατάστημα σε νέα συνομιλία",
   "chat.messageActions.forkFailed": "Δεν ήταν δυνατή η δημιουργία της διακλαδισμένης συνομιλίας. Δοκιμάστε ξανά.",
+  "chat.messageActions.regenerate": "Νέα απάντηση",
+  "chat.messageActions.retryFailed": "Δεν ήταν δυνατή η επανάληψη αυτής της απάντησης. Ελέγξτε τις ρυθμίσεις σας και δοκιμάστε ξανά.",
   "chat.messageUsage.approvalDuration": "Αναμονή έγκρισης",
   "chat.messageUsage.cacheRead": "Ανάγνωση προσωρινής μνήμης",
   "chat.messageUsage.cacheWrite": "Εγγραφή κρυφής μνήμης",

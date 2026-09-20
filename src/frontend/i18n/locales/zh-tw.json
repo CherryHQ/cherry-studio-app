@@ -279,6 +279,8 @@
   "chat.messageActions.copyFailed": "複製消息失敗，請重試。",
   "chat.messageActions.fork": "在新聊天中創建分支對話",
   "chat.messageActions.forkFailed": "創建分支對話失敗，請重試。",
+  "chat.messageActions.regenerate": "重新回答",
+  "chat.messageActions.retryFailed": "無法重試此回答，請檢查設定後重試。",
   "chat.messageUsage.approvalDuration": "等待確認",
   "chat.messageUsage.cacheRead": "快取讀取",
   "chat.messageUsage.cacheWrite": "快取寫入",

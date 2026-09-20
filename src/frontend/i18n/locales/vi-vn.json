@@ -279,6 +279,8 @@
   "chat.messageActions.copyFailed": "Không thể sao chép tin nhắn. Vui lòng thử lại.",
   "chat.messageActions.fork": "Chi nhánh trong cuộc trò chuyện mới",
   "chat.messageActions.forkFailed": "Không thể tạo cuộc trò chuyện phân nhánh. Vui lòng thử lại.",
+  "chat.messageActions.regenerate": "Trả lời lại",
+  "chat.messageActions.retryFailed": "Không thể thử lại câu trả lời này. Hãy kiểm tra cài đặt và thử lại.",
   "chat.messageUsage.approvalDuration": "Chờ phê duyệt",
   "chat.messageUsage.cacheRead": "Đọc bộ nhớ đệm",
   "chat.messageUsage.cacheWrite": "Ghi vào bộ nhớ đệm",

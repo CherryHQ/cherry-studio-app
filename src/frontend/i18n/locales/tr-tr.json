@@ -281,6 +281,8 @@
   "chat.messageActions.copyFailed": "Mesaj kopyalanamadı. Lütfen tekrar deneyin.",
   "chat.messageActions.fork": "Yeni sohbette şube",
   "chat.messageActions.forkFailed": "Dallandırılmış sohbet oluşturulamadı. Lütfen tekrar deneyin.",
+  "chat.messageActions.regenerate": "Yeniden yanıtla",
+  "chat.messageActions.retryFailed": "Bu yanıt yeniden denenemedi. Ayarlarınızı kontrol edip tekrar deneyin.",
   "chat.messageUsage.approvalDuration": "Onay bekleme",
   "chat.messageUsage.cacheRead": "Önbellek okuma",
   "chat.messageUsage.cacheWrite": "Önbellek yazma",

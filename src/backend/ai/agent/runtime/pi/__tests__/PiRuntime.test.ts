@@ -103,6 +103,10 @@ class TestPiAgent implements PiRuntimeAgent {
     await this.activeRun;
   }
 
+  async continue(): Promise<void> {
+    await this.prompt(this.options.initialState?.messages as PiMessage[]);
+  }
+
   subscribe(listener: Parameters<PiRuntimeAgent['subscribe']>[0]): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -703,6 +707,81 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
+  test('continues from retained tool results without repeating the user prompt or replaying tool execution', async () => {
+    const runtime = createTestRuntime();
+    const tool = askTool(() => {
+      throw new Error('A retained tool must not execute again.');
+    });
+    const holder = arrange(runtime, async (context) => {
+      expect(context.prompt.role).toBe('toolResult');
+      await emitText(context, 'Recovered answer');
+    });
+    const session = await runtime.open();
+    const request = baseRequest('retry', {
+      tools: [tool],
+      resume: [
+        {
+          type: 'tool-call',
+          toolCallId: 'retained-call',
+          toolRef: tool.ref,
+          providerName: tool.providerName,
+          input: {},
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'retained-call',
+          isError: false,
+          output: { value: 'already done', artifacts: [] },
+        },
+      ],
+    });
+    const events = await collect(session.execute(request));
+    const messages = holder.lastOptions?.initialState?.messages ?? [];
+    expect(messages.map((message) => message.role)).toEqual(['user', 'assistant', 'toolResult']);
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.some((event) => event.type === 'part.add' && event.part.type === 'tool')).toBe(
+      false,
+    );
+    expect(events.some((event) => event.type === 'approval.requested')).toBe(false);
+    const withResume = estimatePiContextFixedCosts({
+      conversation: toPiConversation(request, holder.resolution.model),
+      outputReserveTokens: 1024,
+      tools: [],
+    });
+    const withoutResume = estimatePiContextFixedCosts({
+      conversation: toPiConversation(baseRequest('fresh'), holder.resolution.model),
+      outputReserveTokens: 1024,
+      tools: [],
+    });
+    expect(withResume.currentInputTokens).toBeGreaterThan(withoutResume.currentInputTokens);
+    await session.close();
+  });
+
+  test('rejects a retry prefix with an unpaired tool call before contacting the provider', async () => {
+    const runtime = createTestRuntime();
+    const program = jest.fn((context: TestAgentContext) => emitText(context, 'Must not run'));
+    arrange(runtime, program);
+    const session = await runtime.open();
+    const events = await collect(
+      session.execute(
+        baseRequest('invalid-retry', {
+          resume: [
+            {
+              type: 'tool-call',
+              toolCallId: 'dangling',
+              toolRef: TOOL_REF,
+              providerName: TOOL_PROVIDER_NAME,
+              input: {},
+            },
+          ],
+        }),
+      ),
+    );
+    expect(events.at(-1)).toMatchObject({ type: 'failed', error: { code: 'unsupported_input' } });
+    expect(program).not.toHaveBeenCalled();
+    await session.close();
+  });
+
   test('previews opted-in file content without exposing executable partial input', async () => {
     const runtime = createTestRuntime();
     const fullInput = {

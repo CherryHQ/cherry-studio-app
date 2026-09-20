@@ -420,6 +420,8 @@ interface AgentProtocol {
     reasoningEffort?: ReasoningEffortOption
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
+  retryMessage(input: { sessionId: string; messageId: string }): Promise<void>
+
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
 
   respondApproval(input: {
@@ -645,9 +647,54 @@ detail the user explicitly asked for, kept so a provider failure can be investig
     historical reference, and artifact parts are not implicit model attachments.
 14. A Draft Session becomes durable in the same transaction that reserves its first message pair.
 
+## Manual answer retry
+
+`retryMessage({ sessionId, messageId })` replaces a settled assistant answer in place.
+
+**Only the Session's last message is retryable.** An in-place replacement rewrites history that
+later messages already answered, so retrying an earlier answer would leave every message after it
+responding to a reply that no longer exists. The Host rejects any other message with
+`MESSAGE_NOT_FOUND`, the store repeats the check inside the reservation transaction, and the
+toolbar offers the action on the latest answer alone. Going back further is a fork, not a retry.
+The Host holds the Session's admission guard throughout preparation and reservation; running,
+awaiting-approval, cancelling, and admitting Sessions reject retry with `SESSION_BUSY`. The
+frontend disables the action while the Session is busy and hides it in an older transcript window.
+
+The replacement keeps the answer's message id and transcript position and takes a fresh turn id.
+The original user message is reused; retry never creates a Session, inserts a message, or
+navigates away. Model context stops at that original question.
+
+A **resumed** retry applies to a failed, interrupted, or cancelled answer that completed at least
+one tool call. Its recorded prefix through the last completed tool result survives; the unfinished
+model response after it is discarded. Pi continues from the original input and those
+tool-call/result pairs without a synthetic user message. Tool errors stay visible so the model can
+recover; interrupted calls have unknown outcomes and must not be blindly repeated.
+
+A **restarted** retry applies to a successful answer, and to an unfinished one with no completed
+tool call. The old answer is discarded outright and the message restarts empty. Because that
+discarded attempt may already have changed the outside world without leaving any trace the model
+can read, the system prompt tells it to inspect current state before repeating an externally
+visible action. Retry does not undo tool effects and promises nothing about exactly-once execution.
+
+Approvals and tool availability are resolved afresh. The original model and inference parameters
+are reused when the snapshot is supported; current credentials, instructions, permissions, and
+attachment availability are revalidated. Preparation failure leaves the original transcript
+unchanged. Each retry has fresh runtime timing; the replaced answer retains cumulative provider
+usage and costs, because the invocation ledger is immutable and both attempts really were billed.
+Recovery uses persisted facts, not provider stream offsets: process death can lose unflushed
+output, and retry does not promise byte-level continuation.
+
+Retry reads history through the same checkpoint path as a submission, skipping the checkpoint on
+the answer it replaces: a retry in a compacted Session neither rereads the summarized transcript
+nor resumes from a summary of content it is discarding. Admission is therefore as slow as a
+submission's, and it has no new rows to show for it. The frontend renders the answer as empty and
+pending from the press until the reserved one arrives — the same state a just-sent message shows —
+so a rejected admission simply restores the untouched answer.
+
 ## Branching
 
-Agent Sessions do not branch in place. Chat-style sibling trees assume switching between
+Manual retry replaces the last answer; it does not create selectable answer versions, and it is
+never the way back to an earlier point in the transcript. Agent Sessions do not branch in place. Chat-style sibling trees assume switching between
 alternatives is harmless, but Agent turns have side effects — a tool call in one branch changes
 the one real world that every branch would claim to share. In-place switching therefore
 misrepresents history, and an active-path concept would touch nearly every invariant above.
@@ -656,8 +703,8 @@ Branching is instead a **fork**: `forkSession({ sessionId, fromMessageId })` cre
 and copies the transcript up to the fork point inside one transaction. Turns and approvals are not
 copied; the new Session starts idle. Because the Host already supplies complete normalized history
 for every turn, a forked Session executes through the unchanged flow — the Runtime never knows a
-fork happened. Regenerate and "try a different question" are forks from the relevant message
-boundary.
+fork happened. The explicit branch action and editing a question use a fork; retrying an answer
+uses the in-place replacement operation above.
 
 Rules:
 

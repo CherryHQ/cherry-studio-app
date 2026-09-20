@@ -281,6 +281,8 @@
   "chat.messageActions.copyFailed": "Couldn't copy the message. Please try again.",
   "chat.messageActions.fork": "Branch in new chat",
   "chat.messageActions.forkFailed": "Couldn't create the branched chat. Please try again.",
+  "chat.messageActions.regenerate": "Generate again",
+  "chat.messageActions.retryFailed": "Could not retry this answer. Check your settings and try again.",
   "chat.messageUsage.approvalDuration": "Approval wait",
   "chat.messageUsage.cacheRead": "Cache read",
   "chat.messageUsage.cacheWrite": "Cache write",

@@ -285,6 +285,8 @@
   "chat.messageActions.copyFailed": "Не удалось скопировать сообщение. Пожалуйста, попробуйте еще раз.",
   "chat.messageActions.fork": "Ветка в новом чате",
   "chat.messageActions.forkFailed": "Не удалось создать разветвленный чат. Пожалуйста, попробуйте еще раз.",
+  "chat.messageActions.regenerate": "Ответить заново",
+  "chat.messageActions.retryFailed": "Не удалось повторить ответ. Проверьте настройки и попробуйте ещё раз.",
   "chat.messageUsage.approvalDuration": "Ожидание одобрения",
   "chat.messageUsage.cacheRead": "Чтение из кэша",
   "chat.messageUsage.cacheWrite": "Запись в кэш",

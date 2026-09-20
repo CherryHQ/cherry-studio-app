@@ -11,6 +11,7 @@ import {
   AgentSessionStatusSchema,
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
+  AgentRetryMessageInputSchema,
   AgentToolRefSchema,
   readAgentInferenceSnapshot,
 } from '../agent';
@@ -20,6 +21,15 @@ const MCP_TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'search
 function roundTrip<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value));
 }
+
+describe('answer retry input', () => {
+  test('round-trips only the source identifiers and rejects client-supplied execution state', () => {
+    const input = { sessionId: 'session', messageId: 'answer' };
+    expect(AgentRetryMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+    expect(AgentRetryMessageInputSchema.safeParse({ ...input, messageId: '' }).success).toBe(false);
+    expect(AgentRetryMessageInputSchema.safeParse({ ...input, resume: [] }).success).toBe(false);
+  });
+});
 
 describe('Agent Session status contract', () => {
   test('round-trips immutable status snapshots without admitting transcript or error payloads', () => {

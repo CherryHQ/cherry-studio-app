@@ -6,6 +6,7 @@
 import type { AgentEvent, AgentSessionObservation } from './events';
 import type {
   AgentForkSessionInput,
+  AgentRetryMessageInput,
   AgentStartSessionInput,
   AgentSubmitMessageInput,
 } from './inputs';
@@ -40,6 +41,9 @@ export interface AgentProtocol {
    * without claiming to undo the side effects recorded in its history.
    */
   forkSession(input: AgentForkSessionInput): Promise<AgentSessionView>;
+
+  /** Replaces a settled answer in place using context up to its original user input. */
+  retryMessage(input: AgentRetryMessageInput): Promise<void>;
 
   submitMessage(
     input: AgentSubmitMessageInput,

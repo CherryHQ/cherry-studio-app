@@ -15,6 +15,7 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import {
   createAgentMessageListProjectionCache,
   mergeAgentMessageViews,
+  projectRetryingMessage,
   toAgentMessageListItems,
   useAgentChatActions,
   useAgentChatSession,
@@ -97,9 +98,20 @@ export function ChatWorkspace({
     }
   }, [client, messages, sessionId]);
   const mergedMessages = useMemo(
-    () => (hasNewerMessages ? messages : mergeAgentMessageViews(messages, live.liveMessages)),
-    [hasNewerMessages, live.liveMessages, messages],
+    () =>
+      projectRetryingMessage(
+        hasNewerMessages ? messages : mergeAgentMessageViews(messages, live.liveMessages),
+        live.retryingMessageId,
+      ),
+    [hasNewerMessages, live.liveMessages, live.retryingMessageId, messages],
   );
+  // Only the Session's latest answer is replaceable, and an older window does
+  // not hold it (agent-protocol.md "Manual answer retry").
+  const retryableMessageId = useMemo(() => {
+    if (hasNewerMessages) return undefined;
+    const last = mergedMessages.at(-1);
+    return last?.role === 'assistant' ? last.id : undefined;
+  }, [hasNewerMessages, mergedMessages]);
   useEffect(() => {
     if (
       pendingSend &&
@@ -294,6 +306,7 @@ export function ChatWorkspace({
       <AssistantMessageActionsProvider
         key={`assistant-actions-${listKey}`}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
+        retryableMessageId={retryableMessageId}
         sessionId={sessionId}
       >
         <MessageList

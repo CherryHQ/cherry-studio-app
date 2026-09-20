@@ -97,6 +97,7 @@ export type PiRuntimeContextOptions = PiContextCompactionOptions & {
 
 export type PiRuntimeAgent = {
   abort(): void;
+  continue(): Promise<void>;
   prompt(message: PiMessage | PiMessage[]): Promise<void>;
   subscribe(
     listener: (event: PiAgentEvent, signal: AbortSignal) => Promise<void> | void,
@@ -254,6 +255,27 @@ async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent
 }
 
 function validateRequest(request: RuntimeExecutionRequest): RuntimeError | null {
+  if (request.resume?.length) {
+    const pendingCalls = new Set<string>();
+    let isValid = request.resume.at(-1)?.type === 'tool-result';
+    for (const part of request.resume) {
+      if (part.type === 'tool-call') {
+        if (pendingCalls.has(part.toolCallId)) isValid = false;
+        pendingCalls.add(part.toolCallId);
+      } else if (part.type === 'tool-result') {
+        if (!pendingCalls.delete(part.toolCallId)) isValid = false;
+      } else if (part.type !== 'text' && part.type !== 'reasoning') {
+        isValid = false;
+      }
+    }
+    if (!isValid || pendingCalls.size > 0) {
+      return {
+        code: 'unsupported_input',
+        message: 'Retry context requires paired tool calls and results ending at a tool result.',
+        retryable: false,
+      };
+    }
+  }
   const inputAndHistoryParts = [
     ...request.input,
     ...request.history.flatMap((turn) => turn.messages.flatMap((message) => message.parts)),
@@ -767,7 +789,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
           return response;
         },
       };
-      const compactionRedactions = [...secrets, ...sensitiveToolResultValues(conversation.history)];
+      const currentMessages = [conversation.prompt, ...(conversation.resume ?? [])];
+      const compactionRedactions = [
+        ...secrets,
+        ...sensitiveToolResultValues([...conversation.history, ...currentMessages]),
+      ];
       const thinkingLevel = resolveThinkingLevel(request, resolution);
       const contextPlan = await raceAbort(
         planPiContext({
@@ -814,12 +840,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
           tools: modelContext.tools ?? [],
         });
       };
-      updateModelContextHeadroom([...contextPlan.messages, conversation.prompt]);
+      updateModelContextHeadroom([...contextPlan.messages, ...currentMessages]);
       const agentOptions: AgentOptions = {
         afterToolCall: async ({ toolCall }) =>
           turn.failedToolCalls.has(toolCall.id) ? { isError: true } : undefined,
         initialState: {
-          messages: contextPlan.messages,
+          messages: conversation.resume?.length
+            ? [...contextPlan.messages, ...currentMessages]
+            : contextPlan.messages,
           model: resolution.model,
           systemPrompt: conversation.systemPrompt,
           thinkingLevel,
@@ -891,7 +919,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // Consumer-side cancellation: the abort releases this wait immediately
       // rather than trusting the third-party loop to return. A late settlement
       // is fenced by the terminated phase in `emit()` and `handlePiEvent()`.
-      await raceAbort(agent.prompt(conversation.prompt), turn.abortController.signal);
+      await raceAbort(
+        conversation.resume?.length ? agent.continue() : agent.prompt(conversation.prompt),
+        turn.abortController.signal,
+      );
       if (this.settleIfEnding(turn, { emitCancelled: true })) return;
 
       const terminal = turn.terminalMessage;

@@ -1,4 +1,17 @@
-import { and, desc, eq, gt, inArray, isNotNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  lt,
+  lte,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import {
   AppStatePolicy,
@@ -29,6 +42,7 @@ import type {
   ForkSessionResult,
   ReserveInitialSubmissionInput,
   ReserveInitialSubmissionResult,
+  ReserveRetryInput,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
@@ -310,6 +324,74 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
+  async reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult> {
+    return this.dbService.withWriteTx(async (tx) => {
+      // The two trailing rows, newest first: only the latest answer is replaceable.
+      const [source, user] = await tx
+        .select()
+        .from(agentSessionMessageTable)
+        .where(eq(agentSessionMessageTable.sessionId, input.sessionId))
+        .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
+        .limit(2);
+      if (
+        !source ||
+        source.id !== input.assistantMessageId ||
+        source.role !== 'assistant' ||
+        (UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(source.status) ||
+        !user ||
+        user.id !== input.userMessageId ||
+        user.role !== 'user' ||
+        !source.turnId ||
+        user.turnId !== source.turnId
+      ) {
+        throw new Error('The retry source is not the settled latest answer of this session.');
+      }
+      const turnId = createOrderedUuid();
+      const [userRow] = await tx
+        .update(agentSessionMessageTable)
+        .set({ turnId, data: { version: 1, parts: input.userParts } })
+        .where(eq(agentSessionMessageTable.id, user.id))
+        .returning();
+      const values = {
+        turnId,
+        status: 'pending',
+        data: {
+          version: 1 as const,
+          // Reissued so the replacement execution's own part ids cannot collide
+          // with a retained one carried over from the previous attempt.
+          parts: input.assistantParts.map((part, index) => ({
+            ...part,
+            id: `retained-${turnId}-${index}`,
+          })),
+        },
+        error: null,
+        // The only summary that could cover the replaced answer is its own:
+        // it is the last message, so earlier checkpoints stay valid.
+        contextCheckpoint: null,
+        modelId: input.modelId,
+        messageSnapshot: input.inferenceSnapshot,
+        // Provider totals belong to the immutable invocation ledger. Only runtime timing resets.
+        stats: source.stats
+          ? { ...source.stats, runtimeTiming: undefined, contextTokens: undefined }
+          : null,
+      };
+      const [assistantRow] = await tx
+        .update(agentSessionMessageTable)
+        .set(values)
+        .where(eq(agentSessionMessageTable.id, source.id))
+        .returning();
+      await tx
+        .update(agentSessionTable)
+        .set({ lastActivityAt: Date.now() })
+        .where(eq(agentSessionTable.id, input.sessionId));
+      return {
+        turnId,
+        userMessage: toAgentMessageView(userRow),
+        assistantMessage: toAgentMessageView(assistantRow),
+      };
+    });
+  }
+
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
     const rows = await this.dbService
       .getDb()
@@ -395,7 +477,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     };
   }
 
-  async getLatestContextCheckpoint(sessionId: string) {
+  async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
     const [row] = await this.dbService
       .getDb()
       .select({
@@ -409,6 +491,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           eq(agentSessionMessageTable.role, 'assistant'),
           eq(agentSessionMessageTable.status, 'success'),
           isNotNull(agentSessionMessageTable.contextCheckpoint),
+          ...(excludeAssistantMessageId
+            ? [ne(agentSessionMessageTable.id, excludeAssistantMessageId)]
+            : []),
         ),
       )
       .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))

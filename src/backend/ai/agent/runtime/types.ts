@@ -239,6 +239,8 @@ export interface MessageRuntimeTimingSink {
 }
 
 export type RuntimeExecutionRequest = {
+  /** Retained assistant tool-call/result prefix for a fresh manual retry execution. */
+  resume?: RuntimeMessagePart[];
   /** Probe-only credential override. Never persist it or include it in traces or output events. */
   apiKeyOverride?: string;
   turnId: string;

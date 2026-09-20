@@ -4,6 +4,7 @@ import type {
   AgentMessageDelta,
   AgentMessageView,
   AgentProtocol,
+  AgentRetryMessageInput,
   AgentSessionObservation,
   AgentSessionSnapshot,
   AgentSessionView,
@@ -11,12 +12,16 @@ import type {
   AgentSubmitMessageInput,
   AgentTurnView,
 } from '@/shared/contracts/agent';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 
 import { ToolInputPreviewStore } from './ToolInputPreviewStore';
 
 export type AgentSessionChatStatus = 'idle' | 'observing' | 'ready' | 'error';
 
 export type AgentSessionChatState = {
+  isSubmitting?: boolean;
+  /** Answer awaiting its replacement turn; rendered as pending until it arrives. */
+  retryingMessageId?: string;
   activeTurn: AgentTurnView | null;
   enteringUserMessageId?: string;
   error?: Error;
@@ -52,6 +57,18 @@ const TERMINAL_TURN_STATUSES = new Set<AgentTurnView['status']>([
   'cancelled',
   'interrupted',
 ]);
+
+/**
+ * A Session is busy from the moment a submission or retry is admitted until its
+ * turn settles. Derived by exclusion so a future non-terminal turn status is
+ * treated as busy rather than silently unlocking the composer and retry action.
+ */
+export function isAgentSessionBusy(state: AgentSessionChatState): boolean {
+  return Boolean(
+    state.isSubmitting ||
+    (state.activeTurn && !TERMINAL_TURN_STATUSES.has(state.activeTurn.status)),
+  );
+}
 
 function createSessionState(sessionId: string): AgentSessionChatState {
   return {
@@ -239,10 +256,12 @@ export class AgentSessionChatClient {
   async submitMessage(input: AgentSubmitMessageInput) {
     const { sessionId } = input;
     const entry = this.getEntry(sessionId);
-    await this.observe(sessionId);
+    this.beginSubmission(entry);
     try {
+      await this.observe(sessionId);
       return await this.protocol.submitMessage(input);
     } finally {
+      this.updateState(entry, { ...entry.state, isSubmitting: false });
       // Non-React callers may submit without ever installing a subscriber. The
       // Host snapshot makes a later observation lossless, so do not retain an
       // ownerless listener or SessionEntry after admission completes.
@@ -251,6 +270,47 @@ export class AgentSessionChatClient {
         this.sessions.delete(sessionId);
       }
     }
+  }
+
+  async retryMessage(input: AgentRetryMessageInput): Promise<void> {
+    const entry = this.getEntry(input.sessionId);
+    // Admission is as slow as a submission's, and unlike a submission it has no
+    // new rows to show for it. The answer reads as pending from the press until
+    // the Host publishes the reserved one, so the wait looks like a wait.
+    this.beginSubmission(entry, input.messageId);
+    try {
+      await this.observe(input.sessionId);
+      await this.protocol.retryMessage(input);
+      this.options.onSessionChanged?.(input.sessionId);
+      this.options.onTranscriptChanged?.(input.sessionId);
+    } finally {
+      // The Host published the reserved answer before resolving, so dropping
+      // the projection here reveals that view rather than the replaced one.
+      // A rejected admission has published nothing and restores the old answer.
+      this.updateState(entry, {
+        ...entry.state,
+        isSubmitting: false,
+        retryingMessageId: undefined,
+      });
+      if (entry.listeners.size === 0 && this.sessions.get(input.sessionId) === entry) {
+        this.stopObservation(entry);
+        this.sessions.delete(input.sessionId);
+      }
+    }
+  }
+
+  private beginSubmission(entry: SessionEntry, retryingMessageId?: string): void {
+    if (
+      entry.state.isSubmitting ||
+      (entry.state.activeTurn && !TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status))
+    ) {
+      throw new AgentProtocolError({
+        code: 'SESSION_BUSY',
+        message: 'The session is busy.',
+        retryable: false,
+      });
+    }
+    this.updateState(entry, { ...entry.state, isSubmitting: true, retryingMessageId });
   }
 
   reconcilePersistedMessages(
@@ -270,6 +330,7 @@ export class AgentSessionChatClient {
         persistedMessage &&
         isTerminalMessage(liveMessage) &&
         isTerminalMessage(persistedMessage) &&
+        persistedMessage.turnId === liveMessage.turnId &&
         persistedMessage.status === liveMessage.status &&
         Date.parse(persistedMessage.updatedAt) >= Date.parse(liveMessage.updatedAt)
       ) {
@@ -360,6 +421,8 @@ export class AgentSessionChatClient {
       this.installToolInputPreviews(snapshot.streamingMessage);
     }
     this.updateState(entry, {
+      isSubmitting: entry.state.isSubmitting,
+      retryingMessageId: entry.state.retryingMessageId,
       activeTurn: snapshot.activeTurn,
       ...(snapshot.activeUserMessage
         ? { enteringUserMessageId: snapshot.activeUserMessage.id }

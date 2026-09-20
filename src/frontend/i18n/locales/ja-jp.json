@@ -279,6 +279,8 @@
   "chat.messageActions.copyFailed": "メッセージをコピーできませんでした。もう一度試してください。",
   "chat.messageActions.fork": "新しいチャットの分岐",
   "chat.messageActions.forkFailed": "分岐チャットを作成できませんでした。もう一度試してください。",
+  "chat.messageActions.regenerate": "回答を再生成",
+  "chat.messageActions.retryFailed": "この回答を再試行できませんでした。設定を確認して、もう一度お試しください。",
   "chat.messageUsage.approvalDuration": "承認待ち",
   "chat.messageUsage.cacheRead": "キャッシュ読み取り",
   "chat.messageUsage.cacheWrite": "キャッシュ書き込み",

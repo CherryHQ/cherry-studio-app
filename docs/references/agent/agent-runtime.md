@@ -193,6 +193,8 @@ type RuntimeExecutionRequest = {
   history: RuntimeHistoryTurn[]
   contextCheckpoint: RuntimeContextCheckpoint | null
   input: RuntimeInputPart[]
+  // Retained assistant tool-call/result prefix for an explicit manual retry.
+  resume?: RuntimeMessagePart[]
   tools: RuntimeTool[]
   options: RuntimeOptions
   trace?: TraceSpan
@@ -695,7 +697,13 @@ boundary; shutdown joins admissions before closing Runtime Sessions.
 Local execution depends on the Mobile JavaScript process. If the process is suspended or killed and
 the turn cannot reach a terminal event, startup reconciliation marks the persisted placeholder and
 turn as interrupted and terminalizes every non-terminal persisted tool part as `interrupted`.
-Version 1 has no resume API or background-execution guarantee.
+There is no automatic process resumption or background-execution guarantee. Manual answer retry
+starts a fresh execution with an optional `resume` prefix. Pi adds the original user input and
+retained assistant tool-call/result pairs to its initial context and calls `continue()`; replayed
+parts do not emit output events or execute tools. This current-turn prefix participates in context
+admission and is never summarized away as completed history. `resume` carries only model-visible
+parts, so a retained prefix that projects to nothing — an assistant artifact is never replayed —
+is sent as a plain restart rather than an empty continuation.
 
 History projection never sends an unanswered approval or another dangling tool call to Pi. A
 persisted `denied`, `error`, or `interrupted` tool part contributes its paired normalized tool result;

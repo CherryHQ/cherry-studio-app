@@ -7,6 +7,8 @@ import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from '../AssistantMessageToolbar';
 
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
+const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+let mockIsSessionBusy = false;
 const mockForkSession = jest.fn(async (_input: unknown) => undefined);
 const mockCopyAssistantMessageText = jest.mocked(copyAssistantMessageText);
 
@@ -34,6 +36,8 @@ jest.mock('@cherrystudio/ui/components', () => {
 
 jest.mock('../../../../runtime', () => ({
   useAgentChatFork: () => mockForkSession,
+  useAgentChatRetry: () => mockRetryMessage,
+  useAgentChatBusy: () => mockIsSessionBusy,
 }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
@@ -60,11 +64,45 @@ describe('AssistantMessageToolbar', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsSessionBusy = false;
   });
 
   afterEach(() => {
     act(() => renderer?.unmount());
   });
+
+  test('disables retry while the session is busy', () => {
+    mockIsSessionBusy = true;
+    renderToolbar(createMessage('success', 'Old answer'));
+    const retry = renderer!.root.findByProps({ testID: 'assistant-message-retry' });
+    expect(retry.props.disabled).toBe(true);
+    act(() => retry.props.onPress());
+    expect(mockRetryMessage).not.toHaveBeenCalled();
+  });
+
+  test('offers no retry on an answer that is not the latest, leaving branching as the way back', () => {
+    renderToolbar(createMessage('success', 'Older answer'), 'assistant-2');
+
+    expect(renderer?.root.findAllByProps({ testID: 'assistant-message-retry' })).toHaveLength(0);
+    expect(
+      renderer?.root.findAllByProps({ testID: 'assistant-message-fork' }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test.each(['success', 'error', 'paused'] as const)(
+    'retries a %s latest answer without creating a branch',
+    async (status) => {
+      renderToolbar(createMessage(status, 'Answer'));
+      await act(async () => {
+        renderer!.root.findByProps({ testID: 'assistant-message-retry' }).props.onPress();
+      });
+      expect(mockRetryMessage).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        messageId: 'assistant-1',
+      });
+      expect(mockForkSession).not.toHaveBeenCalled();
+    },
+  );
 
   test('stays hidden while the assistant message is pending', () => {
     renderToolbar(createMessage('pending', 'Answer'));
@@ -139,10 +177,14 @@ describe('AssistantMessageToolbar', () => {
     });
   });
 
-  function renderToolbar(message: MessageListItem) {
+  function renderToolbar(message: MessageListItem, retryableMessageId = 'assistant-1') {
     act(() => {
       renderer = create(
-        <AssistantMessageActionsProvider isAssistantToolbarEnabled sessionId="session-1">
+        <AssistantMessageActionsProvider
+          isAssistantToolbarEnabled
+          retryableMessageId={retryableMessageId}
+          sessionId="session-1"
+        >
           <AssistantMessageToolbar message={message} />
         </AssistantMessageActionsProvider>,
       );

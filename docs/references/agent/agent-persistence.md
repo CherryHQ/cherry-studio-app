@@ -268,6 +268,18 @@ Model deletion may null the foreign key but never rewrites the historical snapsh
 
 ## Store port and adapter
 
+Manual retry adds `reserveRetry`: the Session's last answer and its user row receive a fresh
+shared turn id in one transaction, with the same message ids and transcript position. The
+transaction re-reads the two trailing rows and rejects anything else, so a message that stopped
+being the last one between preparation and reservation cannot be replaced. The assistant is reset
+to `pending`, its error and context checkpoint cleared, runtime timing reset, and any retained
+tool results saved immediately. Retained part ids are reissued so new Runtime output cannot
+collide with them. Only the replaced answer's own checkpoint is dropped — it is the last message,
+so no earlier summary can describe it, and earlier compaction work stays reusable. Invocation
+ledger totals remain intact. Preparation must finish before this operation; a rejected preflight
+does not clear the old answer. A restarted answer begins with empty parts; a resumed one keeps its
+recorded prefix. Retry never creates a Session or inserts another user message.
+
 The `AgentSessionStore` port reshapes to message-centric operations; the Host owns the Turn
 projection:
 

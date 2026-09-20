@@ -187,9 +187,10 @@ export function estimatePiContextFixedCosts(input: {
   outputReserveTokens: number;
   tools: readonly PiToolSchema[];
 }): PiContextFixedCosts {
-  const currentInputTokens = estimateContextTokens([input.conversation.prompt]).tokens;
+  const currentMessages = [input.conversation.prompt, ...(input.conversation.resume ?? [])];
+  const currentInputTokens = estimateContextTokens(currentMessages).tokens;
   const fixedCosts = estimatePiNonMessageContextCosts({
-    imageMessages: [input.conversation.prompt],
+    imageMessages: currentMessages,
     outputReserveTokens: input.outputReserveTokens,
     systemPrompt: input.conversation.systemPrompt,
     tools: input.tools,
@@ -353,7 +354,7 @@ export async function planPiContext(input: {
     estimatePiLoopContextHeadroomTokens({
       contextWindow: input.model.contextWindow,
       maxInputTokens: input.maxInputTokens,
-      messages: [...messages, input.conversation.prompt],
+      messages: [...messages, input.conversation.prompt, ...(input.conversation.resume ?? [])],
       outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
       systemPrompt: input.conversation.systemPrompt,
       tools: input.tools,

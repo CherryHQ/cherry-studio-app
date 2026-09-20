@@ -16,6 +16,7 @@ import type {
   ForkSessionResult,
   ReserveInitialSubmissionInput,
   ReserveInitialSubmissionResult,
+  ReserveRetryInput,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
@@ -315,6 +316,54 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return cloneJson(reserved);
   }
 
+  async reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult> {
+    const source = this.messages.get(input.sessionId) ?? [];
+    const assistant = source.at(-1);
+    const user = source.at(-2);
+    if (
+      !assistant ||
+      assistant.view.id !== input.assistantMessageId ||
+      assistant.view.role !== 'assistant' ||
+      UNSETTLED_MESSAGE_STATUSES.has(assistant.view.status) ||
+      !user ||
+      user.view.id !== input.userMessageId ||
+      user.view.role !== 'user' ||
+      !assistant.view.turnId ||
+      user.view.turnId !== assistant.view.turnId
+    ) {
+      throw new Error('The retry source is not the settled latest answer of this session.');
+    }
+    const session = this.sessions.get(input.sessionId)!;
+    const turnId = uuidv7();
+    const updatedAt = nowIso();
+    user.view = { ...user.view, turnId, parts: cloneJson(input.userParts), updatedAt };
+    assistant.view = {
+      ...assistant.view,
+      turnId,
+      status: 'pending',
+      updatedAt,
+      // Reissued so the replacement execution's own part ids cannot collide
+      // with a retained one carried over from the previous attempt.
+      parts: cloneJson(input.assistantParts).map((part, index) => ({
+        ...part,
+        id: `retained-${turnId}-${index}`,
+      })),
+      modelId: input.modelId,
+      inferenceSnapshot: { status: 'supported', snapshot: cloneJson(input.inferenceSnapshot) },
+      stats: assistant.view.stats
+        ? { ...assistant.view.stats, runtimeTiming: undefined, contextTokens: undefined }
+        : null,
+    };
+    assistant.error = null;
+    assistant.contextCheckpoint = null;
+    this.sessions.set(session.id, { ...session, updatedAt });
+    return cloneJson({
+      turnId,
+      userMessage: user.view,
+      assistantMessage: assistant.view,
+    });
+  }
+
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
     return cloneJson((this.messages.get(sessionId) ?? []).map((stored) => stored.view));
   }
@@ -364,10 +413,11 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     });
   }
 
-  async getLatestContextCheckpoint(sessionId: string) {
+  async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
     const transcript = this.messages.get(sessionId) ?? [];
     for (let index = transcript.length - 1; index >= 0; index -= 1) {
       const stored = transcript[index];
+      if (stored?.view.id === excludeAssistantMessageId) continue;
       if (stored?.view.role === 'assistant' && stored.contextCheckpoint !== null) {
         return cloneJson({
           assistantMessageId: stored.view.id,

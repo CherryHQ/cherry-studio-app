@@ -207,6 +207,91 @@ describe.each([
     expect(await store.getSession(created.id)).toBeNull();
   });
 
+  test.each(['success', 'error', 'cancelled', 'interrupted'] as const)(
+    'retries the latest %s answer in place, dropping only its own summary',
+    async (status) => {
+      const session = await harness.createEmptySession({ agentId });
+      const input = {
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userParts: [
+          { id: 'input', type: 'text' as const, text: 'Original question', state: 'done' as const },
+        ],
+      };
+      const first = await store.reserveSubmission(input);
+      await store.finalizeAssistantMessage({
+        assistantMessageId: first.assistantMessage.id,
+        status: 'success',
+        parts: [{ id: 'answer', type: 'text', text: 'Earlier answer', state: 'done' }],
+        usage: null,
+        error: null,
+        contextCheckpoint: { version: 1, anchorTurnId: first.turnId, payload: { keep: true } },
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      });
+      const latestInput = { ...input, ...messageIds() };
+      const latest = await store.reserveSubmission(latestInput);
+      await store.finalizeAssistantMessage({
+        assistantMessageId: latest.assistantMessage.id,
+        status,
+        parts: [{ id: 'latest-answer', type: 'text', text: 'Latest answer', state: 'done' }],
+        usage: null,
+        error: status === 'error' ? INTERRUPTED : null,
+        contextCheckpoint:
+          status === 'success'
+            ? { version: 1, anchorTurnId: latest.turnId, payload: { stale: true } }
+            : null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      });
+      const before = await store.listMessages(session.id);
+      const retried = await store.reserveRetry({ ...latestInput, assistantParts: [] });
+      const after = await store.listMessages(session.id);
+      expect(after.map((message) => message.id)).toEqual(before.map((message) => message.id));
+      expect(retried.turnId).not.toBe(latest.turnId);
+      expect(retried.userMessage.turnId).toBe(retried.turnId);
+      expect(retried.assistantMessage).toMatchObject({
+        id: latest.assistantMessage.id,
+        status: 'pending',
+        parts: [],
+        createdAt: latest.assistantMessage.createdAt,
+      });
+      expect(retried.assistantMessage.stats?.runtimeTiming).toBeUndefined();
+      expect(after.slice(0, 2)).toEqual(before.slice(0, 2));
+      // Only the replaced answer's own summary could describe it.
+      expect(await store.getLatestContextCheckpoint(session.id)).toMatchObject({
+        assistantMessageId: first.assistantMessage.id,
+      });
+      await expect(store.reserveRetry({ ...latestInput, assistantParts: [] })).rejects.toThrow();
+    },
+  );
+
+  test('refuses to retry an answer that is no longer the last message', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const input = {
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [
+        { id: 'input', type: 'text' as const, text: 'Original question', state: 'done' as const },
+      ],
+    };
+    const first = await store.reserveSubmission(input);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'answer', type: 'text', text: 'Earlier answer', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    await store.reserveSubmission({ ...input, ...messageIds() });
+    const before = await store.listMessages(session.id);
+
+    await expect(store.reserveRetry({ ...input, assistantParts: [] })).rejects.toThrow();
+    expect(await store.listMessages(session.id)).toEqual(before);
+  });
+
   test('reserveSubmission writes the correlated user/assistant pair', async () => {
     const session = await harness.createEmptySession({ agentId });
     const ids = messageIds();

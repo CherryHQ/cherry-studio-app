@@ -32,11 +32,13 @@ export {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentForkSessionInputSchema,
+  AgentRetryMessageInputSchema,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   type AgentForkSessionInput,
+  type AgentRetryMessageInput,
   type AgentStartSessionInput,
   type AgentSubmitMessageInput,
 } from './inputs';

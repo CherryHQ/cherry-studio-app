@@ -8,6 +8,8 @@ import {
 } from '../AssistantMessageActionsProvider';
 
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
+const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+let mockIsSessionBusy = false;
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockToastShow = jest.fn();
 const mockPush = jest.fn();
@@ -28,6 +30,8 @@ jest.mock('expo-clipboard', () => ({
 
 jest.mock('../../../../runtime', () => ({
   useAgentChatFork: () => mockForkSession,
+  useAgentChatRetry: () => mockRetryMessage,
+  useAgentChatBusy: () => mockIsSessionBusy,
 }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
@@ -89,6 +93,7 @@ describe('AssistantMessageActionsProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsSessionBusy = false;
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
     probeRef = createRef<ContextProbeHandle>();

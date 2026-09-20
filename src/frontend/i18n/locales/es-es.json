@@ -283,6 +283,8 @@
   "chat.messageActions.copyFailed": "No se pudo copiar el mensaje. Por favor inténtalo de nuevo.",
   "chat.messageActions.fork": "Rama en nuevo chat",
   "chat.messageActions.forkFailed": "No se pudo crear el chat ramificado. Por favor inténtalo de nuevo.",
+  "chat.messageActions.regenerate": "Responder de nuevo",
+  "chat.messageActions.retryFailed": "No se pudo volver a intentar esta respuesta. Revisa la configuración e inténtalo de nuevo.",
   "chat.messageUsage.approvalDuration": "Espera de aprobación",
   "chat.messageUsage.cacheRead": "Lectura de caché",
   "chat.messageUsage.cacheWrite": "Escritura en caché",
