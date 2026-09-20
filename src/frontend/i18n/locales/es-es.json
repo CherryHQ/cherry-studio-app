@@ -1195,7 +1195,7 @@
   "settings.model.saved": "Modelos predeterminados guardados",
   "settings.model.title": "Modelo",
   "settings.model.translate.title": "Modelo de traducción",
-  "settings.notifications.liveActivity.description": "Muestra las tareas en curso en la pantalla de bloqueo y en la isla dinámica.",
+  "settings.notifications.liveActivity.description": "Muestra el progreso de las tareas en la pantalla de bloqueo y en la isla dinámica mientras estás fuera de la aplicación.",
   "settings.notifications.liveActivity.saveFailed": "La configuración de actividad en vivo no se guardó. Intentar otra vez.",
   "settings.notifications.liveActivity.title": "Actividades en vivo",
   "settings.notifications.title": "Notificaciones",

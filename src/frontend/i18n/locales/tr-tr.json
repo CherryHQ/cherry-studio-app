@@ -1190,7 +1190,7 @@
   "settings.model.saved": "Varsayılan modeller kaydedildi",
   "settings.model.title": "Model",
   "settings.model.translate.title": "Çeviri modeli",
-  "settings.notifications.liveActivity.description": "Kilit Ekranı ve Dinamik Ada'da devam eden görevleri gösterin.",
+  "settings.notifications.liveActivity.description": "Uygulamadan ayrıldığınızda görev ilerlemesini Kilit Ekranı ve Dinamik Ada üzerinde gösterin.",
   "settings.notifications.liveActivity.saveFailed": "Canlı Etkinlik ayarı kaydedilmedi. Tekrar deneyin.",
   "settings.notifications.liveActivity.title": "Canlı Etkinlikler",
   "settings.notifications.title": "Bildirimler",

@@ -1,7 +1,14 @@
 import type { BackgroundTaskLink } from '@/shared/backgroundActivity/taskLink';
 
-/** iOS Live Activities retain their own presentation lifecycle. */
+import { useVisibleBackgroundTask } from './useVisibleBackgroundTask';
+
+/**
+ * iOS has no local task notifications: a Live Activity owns its own
+ * presentation and is retired by the backend once its task becomes visible.
+ */
 export function useBackgroundTaskNotifications(
-  _task: BackgroundTaskLink | undefined,
-  _enabled = true,
-): void {}
+  task: BackgroundTaskLink | undefined,
+  enabled = true,
+): void {
+  useVisibleBackgroundTask(task, enabled);
+}

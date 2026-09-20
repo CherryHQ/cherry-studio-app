@@ -40,6 +40,7 @@ describe('BackgroundReplyRuntime', () => {
     return session;
   };
   const mockStartSession = jest.fn(createMockSession);
+  const mockDismissTask = jest.fn();
   const preparationRelease = jest.fn();
   const acquire = jest.fn(() => ({ release: preparationRelease }));
 
@@ -412,6 +413,10 @@ describe('BackgroundReplyRuntime', () => {
     turn.awaitApproval();
     runtime.clearSession('session-1');
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
+    // A settled surface from an earlier turn outlives its session record.
+    expect(mockDismissTask).toHaveBeenCalledWith(
+      `${Constants.expoConfig!.scheme as string}:///?sessionId=session-1`,
+    );
 
     turn.update({ parts: [textPart('late')] });
     expect(mockStartSession).toHaveBeenCalledTimes(1);
@@ -574,7 +579,7 @@ describe('BackgroundReplyRuntime', () => {
                 : key,
   ) {
     const runtime = new BackgroundReplyRuntime(
-      { startSession: mockStartSession },
+      { dismissTask: mockDismissTask, startSession: mockStartSession },
       {
         readCached: jest.fn(() => enabled),
         subscribeChange: jest.fn(() => (listener: () => void) => {

@@ -64,6 +64,7 @@ type TurnRecord = {
 };
 
 type BackgroundActivityPort = {
+  dismissTask(deepLinkUrl: string): void;
   startSession<Props extends BackgroundReplyActivityProps>(
     input: BackgroundActivitySessionInput<Props>,
   ): BackgroundActivitySession<Props>;
@@ -240,6 +241,8 @@ export class BackgroundReplyRuntime
   };
 
   private clearTurn(key: string): void {
+    // A settled surface outlives its turn: a deleted Session must not leave one.
+    this.activities.dismissTask(sessionTaskUrl(key));
     const record = this.turns.get(key);
     if (!record) return;
 
@@ -460,12 +463,13 @@ function normalizeTurnInput(input: BackgroundReplyTurnInput): {
   return {
     actorName: input.agentName,
     conversationTitle: input.sessionTitle,
-    deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), {
-      kind: 'chat',
-      sessionId: input.sessionId,
-    }),
+    deepLinkUrl: sessionTaskUrl(input.sessionId),
     key: input.sessionId,
   };
+}
+
+function sessionTaskUrl(sessionId: string): string {
+  return createBackgroundTaskUrl(resolveScheme({}), { kind: 'chat', sessionId });
 }
 
 const noOpTurn: BackgroundReplyTurn = {

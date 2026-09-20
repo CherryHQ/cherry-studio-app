@@ -150,9 +150,11 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
 
   createPresenter<Props extends ActivityProps>(): BackgroundActivityPresenter<Props> {
     return {
-      // A queued task can join an already-running service in the background.
-      // Hold protection only through notification submission, never through presentation.
-      canStartInBackground: true,
+      // A notification represents a task the execution runtime already admitted,
+      // whether or not the user can see the app, and a queued task can join an
+      // already-running service in the background. Hold protection only through
+      // notification submission, never through presentation.
+      presentWhile: 'always',
       shouldHoldLeaseUntilDelivery: true,
       clearOrphans: async () => 0,
       start: (props, deepLinkUrl) => {
@@ -165,6 +167,11 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         if (!this.disposed) this.activities.add(record);
         this.scheduleReconcile();
         return {
+          // The posted notification outlives its task record; a focused surface
+          // clears it here as well as through App Shell's own acknowledgement.
+          dismiss: async () => {
+            await this.notifications?.dismissNotificationAsync(record.id);
+          },
           update: (nextProps, context) => {
             record.latestProps = nextProps;
             const occurredInBackground =

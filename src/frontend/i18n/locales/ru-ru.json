@@ -1200,7 +1200,7 @@
   "settings.model.saved": "Модели по умолчанию сохранены",
   "settings.model.title": "Модель",
   "settings.model.translate.title": "Модель перевода",
-  "settings.notifications.liveActivity.description": "Показывать текущие задачи на экране блокировки и в динамическом острове.",
+  "settings.notifications.liveActivity.description": "Показывать ход выполнения задач на экране блокировки и в динамическом острове, пока вы не в приложении.",
   "settings.notifications.liveActivity.saveFailed": "Настройка интерактивной активности не была сохранена. Попробуйте еще раз.",
   "settings.notifications.liveActivity.title": "Живые активности",
   "settings.notifications.title": "Уведомления",

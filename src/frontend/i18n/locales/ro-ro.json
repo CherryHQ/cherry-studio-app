@@ -1195,7 +1195,7 @@
   "settings.model.saved": "Modele implicite salvate",
   "settings.model.title": "Model",
   "settings.model.translate.title": "Model de traducere",
-  "settings.notifications.liveActivity.description": "Afișați sarcinile în curs pe ecranul de blocare și pe Insula dinamică.",
+  "settings.notifications.liveActivity.description": "Afișați progresul sarcinilor pe ecranul de blocare și pe Insula dinamică cât timp sunteți în afara aplicației.",
   "settings.notifications.liveActivity.saveFailed": "Setarea Activitate live nu a fost salvată. Încearcă din nou.",
   "settings.notifications.liveActivity.title": "Activități live",
   "settings.notifications.title": "Notificări",

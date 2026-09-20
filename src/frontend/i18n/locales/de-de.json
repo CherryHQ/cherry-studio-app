@@ -1190,7 +1190,7 @@
   "settings.model.saved": "Standardmodelle gespeichert",
   "settings.model.title": "Modell",
   "settings.model.translate.title": "Übersetzungsmodell",
-  "settings.notifications.liveActivity.description": "Laufende Aufgaben auf dem Sperrbildschirm und Dynamic Island anzeigen.",
+  "settings.notifications.liveActivity.description": "Aufgabenfortschritt auf dem Sperrbildschirm und Dynamic Island anzeigen, während du die App verlassen hast.",
   "settings.notifications.liveActivity.saveFailed": "Die Live-Aktivitätseinstellung wurde nicht gespeichert. Versuchen Sie es erneut.",
   "settings.notifications.liveActivity.title": "Live-Aktivitäten",
   "settings.notifications.title": "Benachrichtigungen",

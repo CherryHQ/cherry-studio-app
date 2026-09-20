@@ -1190,7 +1190,7 @@
   "settings.model.saved": "Τα προεπιλεγμένα μοντέλα αποθηκεύτηκαν",
   "settings.model.title": "Μοντέλο",
   "settings.model.translate.title": "Μεταφραστικό μοντέλο",
-  "settings.notifications.liveActivity.description": "Εμφάνιση εργασιών σε εξέλιξη στην οθόνη κλειδώματος και στο Dynamic Island.",
+  "settings.notifications.liveActivity.description": "Εμφάνιση της προόδου των εργασιών στην οθόνη κλειδώματος και στο Dynamic Island όσο βρίσκεστε εκτός της εφαρμογής.",
   "settings.notifications.liveActivity.saveFailed": "Η ρύθμιση Live Activity δεν αποθηκεύτηκε. Προσπαθήστε ξανά.",
   "settings.notifications.liveActivity.title": "Ζωντανές Δραστηριότητες",
   "settings.notifications.title": "Ειδοποιήσεις",

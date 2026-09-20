@@ -1185,7 +1185,7 @@
   "settings.model.saved": "預設模型已儲存",
   "settings.model.title": "模型",
   "settings.model.translate.title": "翻譯模型",
-  "settings.notifications.liveActivity.description": "在鎖定屏幕和靈動島上顯示正在進行的任務",
+  "settings.notifications.liveActivity.description": "離開應用程式時，在鎖定螢幕和動態島上顯示任務進度",
   "settings.notifications.liveActivity.saveFailed": "實時活動設定儲存失敗，請重試。",
   "settings.notifications.liveActivity.title": "實時活動",
   "settings.notifications.title": "通知",

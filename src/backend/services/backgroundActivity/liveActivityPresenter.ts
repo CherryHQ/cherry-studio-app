@@ -1,6 +1,9 @@
-import type { LiveActivityFactory } from 'expo-widgets';
+import type { LiveActivityDismissalPolicy, LiveActivityFactory } from 'expo-widgets';
 
-import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivity/types';
+import {
+  BACKGROUND_ACTIVITY_LINGER_MS,
+  type BackgroundActivityBaseProps,
+} from '@/shared/backgroundActivity/types';
 
 import { type BackgroundActivityPresenter, noopBackgroundActivityPresenter } from './presenter';
 
@@ -15,9 +18,10 @@ export function createLiveActivityPresenter<Props extends BackgroundActivityBase
   if (!factory) return noopBackgroundActivityPresenter();
 
   return {
-    // Live Activities start in the foreground. Preserve the existing iOS
-    // behavior: ending generation can release audio before widget delivery.
-    canStartInBackground: false,
+    // A Live Activity speaks for the time the user cannot see the app; ActivityKit
+    // also refuses to create one from the background, so the manager's hidden
+    // window (the app resigning active) is the only moment it can be requested.
+    presentWhile: 'app-hidden',
     shouldHoldLeaseUntilDelivery: false,
     clearOrphans: async () => {
       const activities = factory.getInstances();
@@ -30,8 +34,21 @@ export function createLiveActivityPresenter<Props extends BackgroundActivityBase
       factory.getInstances();
       const activity = factory.start(props, deepLinkUrl);
       return {
-        end: (policy, endProps) =>
-          activity.end(policy, endProps, new Date(endProps.finishedAtEpochMs ?? Date.now())),
+        // An ended activity stays on the Lock Screen until its dismissal date.
+        // Ending it again retires it as soon as the user has seen the result.
+        dismiss: () => activity.end('immediate'),
+        end: (policy, endProps) => {
+          const finishedAt = endProps.finishedAtEpochMs ?? Date.now();
+          // `default` would leave a settled reply on the Lock Screen for up to
+          // four hours, and a dead process could no longer retire it. The
+          // library's `after()` helper builds this value, but importing it
+          // would resolve the native module on every platform.
+          const dismissal: LiveActivityDismissalPolicy =
+            policy === 'immediate'
+              ? 'immediate'
+              : { after: new Date(finishedAt + BACKGROUND_ACTIVITY_LINGER_MS) };
+          return activity.end(dismissal, endProps, new Date(finishedAt));
+        },
         update: (updateProps) => activity.update(updateProps),
       };
     },

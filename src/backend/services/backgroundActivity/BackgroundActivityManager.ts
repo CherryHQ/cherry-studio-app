@@ -13,7 +13,10 @@ import type {
   KeepAliveLease,
   KeepAliveSource,
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivity/types';
+import {
+  BACKGROUND_ACTIVITY_LINGER_MS,
+  type BackgroundActivityBaseProps,
+} from '@/shared/backgroundActivity/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { BackgroundActivityHandle, BackgroundActivityPresenter } from './presenter';
@@ -47,6 +50,8 @@ export type BackgroundActivitySession<Props extends BackgroundActivityBaseProps>
 
 type SessionRecord = {
   deepLinkUrl?: string;
+  /** The session, not its surface: a surface comes and goes while this stays false. */
+  ended: boolean;
   keepAlive: boolean;
   lastNativeUpdateAt: number;
   lease?: KeepAliveLease;
@@ -62,23 +67,38 @@ type SessionRecord = {
 type SurfaceState =
   | { status: 'pending' }
   | { handle: BackgroundActivityHandle<BackgroundActivityBaseProps>; status: 'active' }
-  | { status: 'unavailable' }
-  | { status: 'ended' };
+  | { status: 'unavailable' };
+
+/** An ended surface the platform may still be showing. */
+type SettledSurface = {
+  deepLinkUrl: string;
+  handle: BackgroundActivityHandle<BackgroundActivityBaseProps>;
+  retentionTimer: ReturnType<typeof setTimeout>;
+};
 
 type BackgroundActivityEnvironmentPort = {
   /** Every presenter whose orphaned surfaces must be swept at cold start. */
   presenters: readonly { clearOrphans(): Promise<number> }[];
   getColorScheme(): 'dark' | 'light';
   prepareLogo(): Promise<string | undefined>;
+  /** Emits the deep link of the task surface the user is currently looking at. */
+  subscribeVisibleTask(listener: (deepLinkUrl: string | undefined) => void): () => void;
 };
 
 /**
- * Feature-agnostic driver for background activity surfaces: admitted starts
- * are synchronous, update/end operations ride one serial queue, updates are
- * throttled (urgent ones jump the throttle), foreground-created surfaces
- * survive AppState transitions, orphans from a dead process are swept during
- * initialization, and each session's `keepAlive` bit is mirrored into a
- * KeepAliveCoordinator lease, with delivery protection declared by its presenter.
+ * Feature-agnostic driver for background activity surfaces: a surface exists
+ * only inside the window its presenter declares, update/end operations ride one
+ * serial queue, updates are throttled (urgent ones jump the throttle), orphans
+ * from a dead process are swept during initialization, and each session's
+ * `keepAlive` bit is mirrored into a KeepAliveCoordinator lease, with delivery
+ * protection declared by its presenter.
+ *
+ * A surface is disposable, its session is not: an `app-hidden` surface is
+ * retired when the user comes back and recreated when they leave again, while
+ * the session, its lease, and its content survive untouched. A settled surface
+ * that the platform may still be showing stays dismissable until the user opens
+ * its destination, so one destination never accumulates cards.
+ *
  * Domain meaning (what a session represents, when it is urgent, when to stay
  * alive) belongs to the feature services driving the sessions.
  */
@@ -92,6 +112,7 @@ export class BackgroundActivityManager extends BaseService {
   private logoUri?: string;
   private operationTail: Promise<void> = Promise.resolve();
   private sessions = new Set<SessionRecord>();
+  private settled = new Set<SettledSurface>();
 
   constructor(
     private readonly keepAlive: KeepAliveSource,
@@ -103,6 +124,9 @@ export class BackgroundActivityManager extends BaseService {
   protected async onInit(): Promise<void> {
     this.appState = AppState.currentState;
     this.registerAppStateListener(this.handleAppStateChange);
+    this.registerDisposable(
+      this.environment.subscribeVisibleTask((deepLinkUrl) => this.dismissTask(deepLinkUrl)),
+    );
     await this.clearOrphanedSurfaces();
     // Environments without a logo surface resolve `undefined`; no platform check here.
     this.logoUri = await this.environment.prepareLogo();
@@ -114,6 +138,7 @@ export class BackgroundActivityManager extends BaseService {
     if (this.disposed) return noOpSession();
 
     const record: SessionRecord = {
+      ended: false,
       keepAlive: input.keepAlive ?? false,
       lastNativeUpdateAt: 0,
       onInterrupt: input.onInterrupt,
@@ -125,6 +150,9 @@ export class BackgroundActivityManager extends BaseService {
       ...(input.deepLinkUrl ? { deepLinkUrl: input.deepLinkUrl } : {}),
     };
     this.sessions.add(record);
+    // The new session speaks for this destination now; its predecessor's
+    // settled card must not stack underneath.
+    this.dismissTask(record.deepLinkUrl);
     this.reconcileLease(record);
     this.startNative(record);
 
@@ -133,7 +161,7 @@ export class BackgroundActivityManager extends BaseService {
         void this.settle(record, 'immediate');
       },
       finish: (props) => {
-        if (record.surface.status === 'ended' || this.disposed) return Promise.resolve();
+        if (record.ended || this.disposed) return Promise.resolve();
         this.capturePhaseVisibility(record, props);
         record.props = {
           ...props,
@@ -145,10 +173,27 @@ export class BackgroundActivityManager extends BaseService {
     };
   }
 
+  /** Retires whatever settled surface is still showing for this destination. */
+  dismissTask(deepLinkUrl: string | undefined): void {
+    if (!deepLinkUrl) return;
+    for (const entry of [...this.settled]) {
+      if (entry.deepLinkUrl !== deepLinkUrl) continue;
+      this.forgetSettled(entry);
+      void this.enqueue(async () => {
+        try {
+          await entry.handle.dismiss();
+        } catch (error) {
+          logger.warn('Background activity dismissal failed', error as Error, { deepLinkUrl });
+        }
+      });
+    }
+  }
+
   protected async onStop(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
 
+    for (const entry of [...this.settled]) this.forgetSettled(entry);
     const records = [...this.sessions];
     this.sessions.clear();
     const activeSurfaces: {
@@ -162,7 +207,8 @@ export class BackgroundActivityManager extends BaseService {
       if (record.surface.status === 'active') {
         activeSurfaces.push({ handle: record.surface.handle, record });
       }
-      record.surface = { status: 'ended' };
+      record.ended = true;
+      record.surface = { status: 'pending' };
     }
     await this.enqueue(async () => {
       await Promise.all(
@@ -174,8 +220,12 @@ export class BackgroundActivityManager extends BaseService {
   private readonly handleAppStateChange = (nextState: AppStateStatus) => {
     if (this.disposed) return;
     this.appState = nextState;
-    if (nextState === 'active') {
-      for (const record of this.sessions) this.startNative(record);
+    for (const record of this.sessions) {
+      if (nextState === 'active' && record.presenter.presentWhile === 'app-hidden') {
+        this.retireSurface(record);
+        continue;
+      }
+      this.startNative(record);
     }
   };
 
@@ -184,7 +234,7 @@ export class BackgroundActivityManager extends BaseService {
     props: BackgroundActivityBaseProps,
     options?: { keepAlive?: boolean; urgent?: boolean },
   ): void {
-    if (record.surface.status === 'ended' || this.disposed) return;
+    if (record.ended || this.disposed) return;
 
     const changed = !shallowEqualProps(record.props, props);
     this.capturePhaseVisibility(record, props);
@@ -219,16 +269,21 @@ export class BackgroundActivityManager extends BaseService {
   }
 
   private settle(record: SessionRecord, policy: 'default' | 'immediate'): Promise<void> {
-    if (record.surface.status === 'ended' || this.disposed) return Promise.resolve();
+    if (record.ended || this.disposed) return Promise.resolve();
     this.stampFinishedAt(record);
-    const handle = record.surface.status === 'active' ? record.surface.handle : undefined;
-    record.surface = { status: 'ended' };
+    const surface = record.surface;
+    const handle = surface.status === 'active' ? surface.handle : undefined;
+    record.ended = true;
+    record.surface = { status: 'pending' };
     this.sessions.delete(record);
     this.clearUpdateTimer(record);
     if (!record.presenter.shouldHoldLeaseUntilDelivery) this.reconcileLease(record);
     if (handle) {
       return this.enqueue(async () => {
         await this.endNative(record, handle, policy);
+        // Cancellation leaves nothing behind; a settled result can outlive the
+        // session on the platform's own surface until the user has seen it.
+        if (policy === 'default') this.retainSettled(record, handle);
         this.reconcileLease(record);
       });
     }
@@ -236,15 +291,28 @@ export class BackgroundActivityManager extends BaseService {
     return Promise.resolve();
   }
 
+  /** Ends a surface whose presentation window closed, leaving its session live. */
+  private retireSurface(record: SessionRecord): void {
+    const surface = record.surface;
+    record.surface = { status: 'pending' };
+    if (surface.status !== 'active') return;
+    this.clearUpdateTimer(record);
+    void this.enqueue(async () => {
+      await this.endNative(record, surface.handle, 'immediate');
+      this.reconcileLease(record);
+    });
+  }
+
   private startNative(record: SessionRecord): void {
-    if (this.disposed || record.surface.status !== 'pending') return;
-    if (!record.presenter.canStartInBackground && this.appState !== 'active') return;
+    if (this.disposed || record.ended || record.surface.status !== 'pending') return;
+    if (record.presenter.presentWhile === 'app-hidden' && this.appState === 'active') return;
     try {
       const handle = record.presenter.start(this.toNativeProps(record), record.deepLinkUrl);
       record.surface = { handle, status: 'active' };
       record.lastNativeUpdateAt = Date.now();
       logger.info('Background activity started', { tag: record.tag });
     } catch (error) {
+      // Retried at the next presentation window, never inside the failed one.
       record.surface = { status: 'unavailable' };
       logger.warn('Background activity failed to start', error as Error, { tag: record.tag });
     }
@@ -287,6 +355,29 @@ export class BackgroundActivityManager extends BaseService {
     }
   }
 
+  private retainSettled(
+    record: SessionRecord,
+    handle: BackgroundActivityHandle<BackgroundActivityBaseProps>,
+  ): void {
+    const deepLinkUrl = record.deepLinkUrl;
+    // Without a destination nothing can report that the user has seen it, and
+    // the platform retires the surface on its own.
+    if (this.disposed || !deepLinkUrl) return;
+    const entry: SettledSurface = {
+      deepLinkUrl,
+      handle,
+      retentionTimer: setTimeout(() => {
+        this.settled.delete(entry);
+      }, BACKGROUND_ACTIVITY_LINGER_MS),
+    };
+    this.settled.add(entry);
+  }
+
+  private forgetSettled(entry: SettledSurface): void {
+    clearTimeout(entry.retentionTimer);
+    this.settled.delete(entry);
+  }
+
   private toNativeProps(
     record: SessionRecord,
   ): BackgroundActivityNativePresentation<BackgroundActivityBaseProps> {
@@ -312,7 +403,7 @@ export class BackgroundActivityManager extends BaseService {
 
   /** Mirrors the session's keep-alive bit into a coordinator lease. */
   private reconcileLease(record: SessionRecord): void {
-    const shouldHold = !this.disposed && record.surface.status !== 'ended' && record.keepAlive;
+    const shouldHold = !this.disposed && !record.ended && record.keepAlive;
     if (shouldHold && !record.lease) {
       record.lease = this.keepAlive.acquire(record.tag, record.onInterrupt);
     } else if (!shouldHold && record.lease) {

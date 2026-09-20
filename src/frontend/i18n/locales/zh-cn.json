@@ -1185,7 +1185,7 @@
   "settings.model.saved": "默认模型已保存",
   "settings.model.title": "模型",
   "settings.model.translate.title": "翻译模型",
-  "settings.notifications.liveActivity.description": "在锁定屏幕和灵动岛上显示正在进行的任务",
+  "settings.notifications.liveActivity.description": "离开应用时，在锁定屏幕和灵动岛上显示任务进度",
   "settings.notifications.liveActivity.saveFailed": "实时活动设置保存失败，请重试。",
   "settings.notifications.liveActivity.title": "实时活动",
   "settings.notifications.title": "通知",

@@ -1195,7 +1195,7 @@
   "settings.model.saved": "Modèles par défaut enregistrés",
   "settings.model.title": "Modèle",
   "settings.model.translate.title": "Modèle de traduction",
-  "settings.notifications.liveActivity.description": "Afficher les tâches en cours sur l'écran de verrouillage et Dynamic Island.",
+  "settings.notifications.liveActivity.description": "Afficher la progression des tâches sur l'écran de verrouillage et Dynamic Island lorsque vous quittez l'application.",
   "settings.notifications.liveActivity.saveFailed": "Le paramètre d'activité en direct n'a pas été enregistré. Essayer à nouveau.",
   "settings.notifications.liveActivity.title": "Activités en direct",
   "settings.notifications.title": "Notifications",

@@ -1190,7 +1190,7 @@
   "settings.model.saved": "Default models saved",
   "settings.model.title": "Model",
   "settings.model.translate.title": "Translation model",
-  "settings.notifications.liveActivity.description": "Show ongoing tasks on the Lock Screen and Dynamic Island.",
+  "settings.notifications.liveActivity.description": "Show task progress on the Lock Screen and Dynamic Island while you are away from the app.",
   "settings.notifications.liveActivity.saveFailed": "Live Activity setting was not saved. Try again.",
   "settings.notifications.liveActivity.title": "Live Activities",
   "settings.notifications.title": "Notifications",

@@ -1185,7 +1185,7 @@
   "settings.model.saved": "デフォルトのモデルが保存されました",
   "settings.model.title": "モデル",
   "settings.model.translate.title": "翻訳モデル",
-  "settings.notifications.liveActivity.description": "ロック画面とダイナミックアイランドに進行中のタスクを表示します。",
+  "settings.notifications.liveActivity.description": "アプリを離れている間、ロック画面とダイナミックアイランドにタスクの進行状況を表示します。",
   "settings.notifications.liveActivity.saveFailed": "ライブ アクティビティ設定が保存されませんでした。もう一度やり直してください。",
   "settings.notifications.liveActivity.title": "ライブ活動",
   "settings.notifications.title": "通知",

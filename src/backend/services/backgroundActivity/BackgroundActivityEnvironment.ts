@@ -18,6 +18,8 @@ export type BackgroundActivityEnvironmentConfig = {
   getColorScheme: () => 'dark' | 'light';
   onForegroundAttention?: (attention: ForegroundActivityAttention) => void;
   paintingPresenter: BackgroundActivityPresenter<PaintingActivityProps>;
+  /** Deep link of the focused, foreground task surface. Absent sources never report one. */
+  subscribeVisibleTask?: (listener: (deepLinkUrl: string | undefined) => void) => () => void;
   translate: BackgroundActivityTranslate;
 };
 
@@ -27,6 +29,8 @@ const defaultConfig = (): BackgroundActivityEnvironmentConfig => ({
   paintingPresenter: noopBackgroundActivityPresenter(),
   translate: (key) => key,
 });
+
+const noSubscription = () => () => {};
 
 /**
  * Host-scoped platform inputs for background surfaces.
@@ -56,6 +60,14 @@ export class BackgroundActivityEnvironment extends BaseService {
   }
 
   translate = (key: string): string => this.config.translate(key);
+
+  /**
+   * Subscribes to the task surface the user is currently looking at. The
+   * configured source is read per call, so a Fast Refresh replacement takes
+   * effect on the next subscription rather than leaking the previous graph.
+   */
+  subscribeVisibleTask = (listener: (deepLinkUrl: string | undefined) => void): (() => void) =>
+    (this.config.subscribeVisibleTask ?? noSubscription)(listener);
 
   onForegroundAttention = (attention: ForegroundActivityAttention): void => {
     this.config.onForegroundAttention?.(attention);

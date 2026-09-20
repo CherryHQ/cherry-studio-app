@@ -1185,7 +1185,7 @@
   "settings.model.saved": "Đã lưu các mẫu mặc định",
   "settings.model.title": "Mô hình",
   "settings.model.translate.title": "Mô hình dịch thuật",
-  "settings.notifications.liveActivity.description": "Hiển thị các tác vụ đang diễn ra trên Màn hình khóa và Đảo động.",
+  "settings.notifications.liveActivity.description": "Hiển thị tiến trình tác vụ trên Màn hình khóa và Đảo động khi bạn rời khỏi ứng dụng.",
   "settings.notifications.liveActivity.saveFailed": "Cài đặt Hoạt động trực tiếp chưa được lưu. Hãy thử lại.",
   "settings.notifications.liveActivity.title": "Hoạt động trực tiếp",
   "settings.notifications.title": "Thông báo",
