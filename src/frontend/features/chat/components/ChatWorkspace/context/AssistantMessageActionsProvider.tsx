@@ -33,6 +33,8 @@ const logger = loggerService.withContext('AssistantMessageActions');
 type AssistantMessageActionsState = {
   copiedMessageId?: string;
   isAssistantToolbarEnabled: boolean;
+  /** A running turn owns the transcript; its rows must not disappear underneath it. */
+  isDeleteDisabled: boolean;
   isRetryDisabled: boolean;
   /** The Session's latest answer, the only one retry may replace. */
   retryableMessageId?: string;
@@ -216,6 +218,7 @@ export function AssistantMessageActionsProvider({
     () => ({
       copiedMessageId,
       isAssistantToolbarEnabled,
+      isDeleteDisabled: isSessionBusy || !sessionId,
       isRetryDisabled: isSessionBusy || !sessionId,
       ...(retryableMessageId ? { retryableMessageId } : {}),
     }),

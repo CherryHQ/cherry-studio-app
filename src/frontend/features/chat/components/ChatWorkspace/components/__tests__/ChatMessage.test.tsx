@@ -170,28 +170,18 @@ describe('ChatMessage', () => {
     expect(renderer!.root.findAllByType('Button')).toHaveLength(0);
   });
 
-  test('offers a destructive delete only for rows that belong to a turn', () => {
+  test('keeps the long-press menu free of destructive actions', () => {
     act(() => {
-      renderer = create(renderMessage(createMessage('success')));
+      renderer = create(renderMessage({ ...createMessage('success'), turnId: 'turn-1' }));
     });
 
-    // A row with no turn — synthetic, or not yet reserved — has nothing whose
-    // deletion would keep the transcript replayable.
-    expect(mockContextMenu.mock.lastCall![0].items.map((item) => item.id)).toEqual([
-      'copy',
-      'share',
-    ]);
-
-    act(() => {
-      renderer?.update(renderMessage({ ...createMessage('success'), turnId: 'turn-1' }));
-    });
-
-    const menu = mockContextMenu.mock.lastCall![0];
-    expect(menu.items.map((item) => item.id)).toEqual(['copy', 'share', 'delete']);
-    expect(menu.items[2].destructive).toBe(true);
-    act(() => menu.items[2].onPress());
-    // The pressed message is an assistant row, but the whole exchange goes.
-    expect(mockDeleteMessageTurn).toHaveBeenCalledWith({ turnId: 'turn-1' });
+    // Deleting a turn lives on the assistant toolbar. A long press competes
+    // with native text selection and lands wherever the finger reaches, so it
+    // must not be able to remove anything.
+    const items = mockContextMenu.mock.lastCall![0].items;
+    expect(items.map((item) => item.id)).toEqual(['copy', 'share']);
+    expect(items.some((item) => item.destructive)).toBe(false);
+    expect(mockDeleteMessageTurn).not.toHaveBeenCalled();
   });
 
   test('keeps native text selection available when message actions are disabled', () => {

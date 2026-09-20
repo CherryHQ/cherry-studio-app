@@ -10,6 +10,9 @@ const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
 let mockIsSessionBusy = false;
 const mockForkSession = jest.fn(async (_input: unknown) => undefined);
+const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefined);
+/** Captures the confirm request so a test can accept it the way a user would. */
+const mockAlertConfirm = jest.fn<void, [{ onConfirm: () => void }]>();
 const mockCopyAssistantMessageText = jest.mocked(copyAssistantMessageText);
 
 jest.mock('expo-clipboard', () => ({
@@ -25,18 +28,19 @@ jest.mock('expo-router', () => ({
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/git-fork', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/trash-2', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     Button: (props: object) => createElement('Button', props),
-    useAlert: () => ({ alert: { confirm: jest.fn() } }),
+    useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
     useToast: () => ({ toast: { show: jest.fn() } }),
   };
 });
 
 jest.mock('../../../../runtime', () => ({
-  useAgentChatDeleteTurn: () => jest.fn(),
+  useAgentChatDeleteTurn: () => mockDeleteTurn,
   useAgentChatFork: () => mockForkSession,
   useAgentChatRetry: () => mockRetryMessage,
   useAgentChatBusy: () => mockIsSessionBusy,
@@ -177,6 +181,42 @@ describe('AssistantMessageToolbar', () => {
       sessionId: 'session-1',
       title: 'chat.fork.sessionTitle',
     });
+  });
+
+  test("deletes the pressed answer's whole turn after a destructive confirmation", async () => {
+    renderToolbar({ ...createMessage('success', 'Answer'), turnId: 'turn-1' });
+
+    const deleteButton = renderer!.root.findByProps({ testID: 'assistant-message-delete' });
+    expect(deleteButton.props).toMatchObject({
+      accessibilityLabel: 'chat.messageActions.delete',
+      disabled: false,
+      size: 'xs',
+      variant: 'ghost',
+    });
+
+    act(() => deleteButton.props.onPress());
+    expect(mockDeleteTurn).not.toHaveBeenCalled();
+
+    await act(async () => {
+      mockAlertConfirm.mock.lastCall![0].onConfirm();
+      await Promise.resolve();
+    });
+    expect(mockDeleteTurn).toHaveBeenCalledWith({ sessionId: 'session-1', turnId: 'turn-1' });
+  });
+
+  test('disables delete while the session is busy', () => {
+    mockIsSessionBusy = true;
+    renderToolbar({ ...createMessage('success', 'Answer'), turnId: 'turn-1' });
+
+    expect(renderer!.root.findByProps({ testID: 'assistant-message-delete' }).props.disabled).toBe(
+      true,
+    );
+  });
+
+  test('offers no delete on a row that carries no turn', () => {
+    renderToolbar(createMessage('success', 'Answer'));
+
+    expect(renderer?.root.findAllByProps({ testID: 'assistant-message-delete' })).toHaveLength(0);
   });
 
   function renderToolbar(message: MessageListItem, retryableMessageId = 'assistant-1') {

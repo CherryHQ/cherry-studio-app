@@ -136,12 +136,13 @@ function ChatMessageContextMenu({
   message: MessageListItem;
 }) {
   const { t } = useTranslation();
-  const { copyAssistantMessage, deleteMessageTurn, shareAssistantMessage } =
-    useAssistantMessageActions();
+  const { copyAssistantMessage, shareAssistantMessage } = useAssistantMessageActions();
   // These existing actions and the text projection accept either message role.
   const text =
     message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? []);
-  const turnId = message.turnId;
+  // Non-destructive actions only. A long press competes with native text
+  // selection and lands on whatever the finger happens to reach, which is not
+  // a gesture that should be able to remove a turn.
   const items: readonly MenuItem[] =
     message.status === 'pending'
       ? []
@@ -157,18 +158,6 @@ function ChatMessageContextMenu({
             label: t('chat.share.title'),
             onPress: () => shareAssistantMessage({ messageId: message.id }),
           },
-          // Deletion is turn-scoped, so a row without a turn — a synthetic or
-          // not-yet-reserved one — has nothing to delete.
-          ...(turnId
-            ? [
-                {
-                  destructive: true,
-                  id: 'delete',
-                  label: t('chat.messageActions.delete'),
-                  onPress: () => deleteMessageTurn({ turnId }),
-                } satisfies MenuItem,
-              ]
-            : []),
         ];
 
   return (

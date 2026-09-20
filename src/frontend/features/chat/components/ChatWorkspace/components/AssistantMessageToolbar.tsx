@@ -3,6 +3,7 @@ import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
+import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
 import { Button } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,10 +25,16 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
-  const { copiedMessageId, isAssistantToolbarEnabled, isRetryDisabled, retryableMessageId } =
-    useAssistantMessageActionsState();
+  const {
+    copiedMessageId,
+    isAssistantToolbarEnabled,
+    isDeleteDisabled,
+    isRetryDisabled,
+    retryableMessageId,
+  } = useAssistantMessageActionsState();
   const {
     copyAssistantMessage,
+    deleteMessageTurn,
     forkFromAssistantMessage,
     retryAssistantMessage,
     shareAssistantMessage,
@@ -38,6 +45,9 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     [isSettled, message],
   );
   const isCopied = copiedMessageId === message.id;
+  // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
+  // nothing to delete.
+  const turnId = message.turnId;
 
   if (!isSettled) {
     return null;
@@ -90,6 +100,17 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
         testID="assistant-message-share"
         variant="ghost"
       />
+      {turnId ? (
+        <Button
+          accessibilityLabel={t('chat.messageActions.delete')}
+          disabled={isDeleteDisabled}
+          icon={<Trash2Icon className="text-muted-foreground" size={15} />}
+          onPress={() => deleteMessageTurn({ turnId })}
+          size="xs"
+          testID="assistant-message-delete"
+          variant="ghost"
+        />
+      ) : null}
     </View>
   );
 });

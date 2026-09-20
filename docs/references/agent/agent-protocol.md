@@ -503,7 +503,8 @@ to write in, and never composes user-visible text itself.
 
 `deleteTurn` removes one settled turn from a Session. The unit is the turn because replayed
 history pairs every `tool-call` with its `tool-result`; the client resolves the pressed message to
-its turn rather than deleting a row. The Host refuses the operation while the Session has an
+its turn rather than deleting a row, and offers the action from the assistant toolbar rather than
+the long-press menu, which stays non-destructive. The Host refuses the operation while the Session has an
 active turn — the same clean-cut rule a fork applies — and refuses a turn whose own rows have not
 settled. It clears any context checkpoint that may have summarized the removed turn, then
 publishes `turn.deleted` so observers drop the rows from live state.
