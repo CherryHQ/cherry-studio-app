@@ -1,3 +1,6 @@
+import type { GatedSampling } from '@cherrystudio/ai-runtime/utils';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
+
 import type {
   TranslationAvailability,
   TranslationErrorCode,
@@ -7,6 +10,7 @@ import type {
   TranslationSnapshot,
   TranslationSurface,
 } from '@/shared/contracts/translation';
+import type { PreferenceClient } from '@/shared/data/preference';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import {
@@ -14,16 +18,19 @@ import {
   TRANSLATION_MAX_INPUT_LENGTH,
   TRANSLATION_MAX_OUTPUT_LENGTH,
   TRANSLATION_TIMEOUT_MS,
-  translationInstruction,
+  readTranslationSettings,
+  translationPrompt,
 } from './translationRequest';
 
 type TranslationDependencies = {
+  preferences: Pick<PreferenceClient, 'getCachedValue'>;
   subscribeAvailability(listener: () => void): () => void;
   getAvailability(surface: TranslationSurface): Promise<TranslationAvailability>;
   generate(input: {
     uniqueModelId: UniqueModelId;
     prompt: string;
-    system: string;
+    reasoningEffort: ReasoningEffortOption;
+    sampling: GatedSampling;
     signal: AbortSignal;
   }): Promise<{ text: string; finishReason?: string }>;
   subscribeConfigurationChange(listener: () => void): () => void;
@@ -93,10 +100,12 @@ function createTranslationSession(
       if (!isTranslationLanguage(targetLanguage)) return fail('invalidInput');
       const context = { text: initial.text, targetLanguage, model: availability.model };
       emit({ ...context, status: 'running' });
+      const settings = readTranslationSettings(dependencies.preferences);
       const result = await dependencies.generate({
         uniqueModelId: availability.model.id,
-        prompt: initial.text,
-        system: translationInstruction(targetLanguage),
+        prompt: translationPrompt(settings.promptTemplate, initial.text, targetLanguage),
+        reasoningEffort: settings.reasoningEffort,
+        sampling: settings.sampling,
         signal: controller.signal,
       });
       if (controller.signal.aborted || snapshot.status !== 'running') return;

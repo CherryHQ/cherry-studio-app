@@ -3,8 +3,21 @@ import {
   isWithTrailingSharp,
   routeToEndpoint,
 } from '@cherrystudio/ai-runtime/provider';
+import {
+  encodeChatCompletionsReasoning,
+  type GatedSampling,
+  getTemperature,
+  getTopP,
+  normalizeRequestedSelection,
+  resolveReasoningInvocation,
+} from '@cherrystudio/ai-runtime/utils';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
+import {
+  projectRuntimeReasoning,
+  providerRegistryService,
+} from '@/backend/data/services/ProviderRegistryService';
 import type { Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
@@ -18,7 +31,8 @@ export function resolveNativeTranslationConnection(
   provider: Provider,
   model: Model,
   auth: AuthConfig | null,
-): { endpoint: string; wireModelId: string } | null {
+  settings: { reasoningEffort: ReasoningEffortOption; sampling: GatedSampling },
+): { endpoint: string; wireModelId: string; requestParameters: Record<string, unknown> } | null {
   const connection = resolveProviderConnection(provider, model);
   if (
     connection.endpointType !== ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS ||
@@ -45,7 +59,31 @@ export function resolveNativeTranslationConnection(
     const url = new URL(`${baseURL}/chat/completions`);
     if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash)
       return null;
-    return { endpoint: url.toString(), wireModelId: connection.wireModelId };
+    const profile = providerRegistryService.resolveReasoningProfile(
+      provider,
+      model,
+      connection.endpointType,
+    );
+    const invocationModel = profile.support
+      ? { ...model, reasoning: projectRuntimeReasoning(profile.support, profile.wire) }
+      : model;
+    const reasoning = resolveReasoningInvocation({
+      selection: normalizeRequestedSelection(settings.reasoningEffort, invocationModel),
+      model: invocationModel,
+      profile: profile.wire,
+      maxTokens: model.maxOutputTokens,
+      assistantSummary:
+        typeof provider.settings.summaryText === 'string'
+          ? provider.settings.summaryText
+          : undefined,
+    });
+    const requestParameters = encodeChatCompletionsReasoning(reasoning);
+    if (!requestParameters) return null;
+    const temperature = getTemperature(settings.sampling, invocationModel, reasoning);
+    const topP = getTopP(settings.sampling, invocationModel, reasoning);
+    if (temperature !== undefined) requestParameters.temperature = temperature;
+    if (topP !== undefined) requestParameters.top_p = topP;
+    return { endpoint: url.toString(), wireModelId: connection.wireModelId, requestParameters };
   } catch {
     return null;
   }

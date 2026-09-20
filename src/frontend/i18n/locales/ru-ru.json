@@ -1669,5 +1669,13 @@
   "settings.websearch.provider.saveFailed": "Не удалось сохранить",
   "settings.websearch.provider.selection": "Поставщик поиска",
   "settings.websearch.provider.showApiKeys": "Показать ключ API",
-  "settings.websearch.provider.title": "Поставщик поиска"
+  "settings.websearch.provider.title": "Поставщик поиска",
+  "translation.settings.prompt": "Промпт для перевода",
+  "translation.settings.promptHint": "Используйте {{languagePlaceholder}} для языка перевода и {{textPlaceholder}} для исходного текста.",
+  "translation.settings.resetPrompt": "Восстановить промпт по умолчанию",
+  "translation.settings.saveFailed": "Не удалось сохранить настройки перевода",
+  "translation.settings.saved": "Настройки перевода сохранены",
+  "translation.settings.temperature": "Температура",
+  "translation.settings.title": "Настройки перевода",
+  "translation.settings.topP": "Top-P"
 }

@@ -2,19 +2,9 @@ import { OptionPickerBottomSheet, Section } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const LANGUAGES = [
-  'zh-CN',
-  'zh-TW',
-  'en-US',
-  'ja-JP',
-  'ko-KR',
-  'fr-FR',
-  'de-DE',
-  'es-ES',
-  'pt-PT',
-  'ru-RU',
-  'vi-VN',
-];
+import { APP_LANGUAGES } from '@/shared/utils/languages';
+
+const LANGUAGES = [...APP_LANGUAGES, { value: 'ko-KR', label: '한국어' }];
 
 export function TranslationLanguagePicker({
   value,
@@ -27,15 +17,14 @@ export function TranslationLanguagePicker({
   allowDefault?: boolean;
   disabled?: boolean;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const names = new Intl.DisplayNames([i18n.language], { type: 'language' });
   const options = [
     ...(allowDefault ? [{ value: '', label: t('translation.language.followApp') }] : []),
-    ...[...new Set([...(value ? [value] : []), ...LANGUAGES])].map((language) => ({
-      value: language,
-      label: names.of(language) ?? language,
-    })),
+    ...(value && !LANGUAGES.some((language) => language.value === value)
+      ? [{ value, label: value }]
+      : []),
+    ...LANGUAGES,
   ];
   return (
     <>

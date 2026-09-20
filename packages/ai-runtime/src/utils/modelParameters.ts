@@ -1,5 +1,5 @@
 /**
- * Assistant + Model/Provider capabilities -> final `temperature` / `topP`
+ * Sampling settings + Model/Provider capabilities -> final `temperature` / `topP`
  * / `maxOutputTokens`.
  *
  * Capability gating ported from desktop's `src/main/ai/utils/modelParameters.ts`.
@@ -26,9 +26,14 @@ import {
 import { isAwsBedrockProvider } from './provider';
 import type { ResolvedReasoningInvocation } from './reasoningSerializers';
 
+export type GatedSampling = Pick<
+  Assistant['settings'],
+  'enableTemperature' | 'temperature' | 'enableTopP' | 'topP'
+>;
+
 /** `undefined` falls back to the provider default. */
 export function getTemperature(
-  assistant: Assistant,
+  settings: GatedSampling,
   model: Model,
   reasoning: Pick<ResolvedReasoningInvocation, 'kind'>,
 ): number | undefined {
@@ -37,7 +42,7 @@ export function getTemperature(
   }
 
   const enableTemperature =
-    assistant.settings?.enableTemperature ?? DEFAULT_ASSISTANT_SETTINGS.enableTemperature;
+    settings.enableTemperature ?? DEFAULT_ASSISTANT_SETTINGS.enableTemperature;
   if (!enableTemperature) return undefined;
 
   if (isClaude47SeriesModel(model)) {
@@ -48,11 +53,14 @@ export function getTemperature(
     return undefined;
   }
 
-  if (!isSupportTemperatureModel(model)) {
+  if (
+    model.parameterSupport?.temperature?.supported === false ||
+    !isSupportTemperatureModel(model)
+  ) {
     return undefined;
   }
 
-  let temperature = assistant.settings?.temperature ?? DEFAULT_ASSISTANT_SETTINGS.temperature;
+  let temperature = settings.temperature ?? DEFAULT_ASSISTANT_SETTINGS.temperature;
 
   if (isMaxTemperatureOneModel(model) && temperature > 1) {
     temperature = 1;
@@ -66,7 +74,7 @@ export function getTemperature(
 
 /** Temperature wins when both are enabled on mutually-exclusive models. */
 export function getTopP(
-  assistant: Assistant,
+  settings: GatedSampling,
   model: Model,
   reasoning: Pick<ResolvedReasoningInvocation, 'kind'>,
 ): number | undefined {
@@ -74,22 +82,22 @@ export function getTopP(
     return undefined;
   }
 
-  const enableTopP = assistant.settings?.enableTopP ?? DEFAULT_ASSISTANT_SETTINGS.enableTopP;
+  const enableTopP = settings.enableTopP ?? DEFAULT_ASSISTANT_SETTINGS.enableTopP;
   if (!enableTopP) return undefined;
 
   if (isClaude47SeriesModel(model)) {
     return undefined;
   }
 
-  if (!isSupportTopPModel(model)) {
+  if (model.parameterSupport?.topP?.supported === false || !isSupportTopPModel(model)) {
     return undefined;
   }
 
-  if (isTemperatureTopPMutuallyExclusiveModel(model) && assistant.settings?.enableTemperature) {
+  if (isTemperatureTopPMutuallyExclusiveModel(model) && settings.enableTemperature) {
     return undefined;
   }
 
-  let topP = assistant.settings?.topP ?? DEFAULT_ASSISTANT_SETTINGS.topP;
+  let topP = settings.topP ?? DEFAULT_ASSISTANT_SETTINGS.topP;
 
   if (isClaudeReasoningModel(model) && reasoning.kind !== 'omit' && reasoning.kind !== 'off') {
     const clampedTopP = Math.max(0.95, Math.min(topP, 1));

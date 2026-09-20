@@ -1664,5 +1664,13 @@
   "settings.websearch.provider.saveFailed": "Salvare eșuată",
   "settings.websearch.provider.selection": "Furnizor de căutare",
   "settings.websearch.provider.showApiKeys": "Afișează cheia API",
-  "settings.websearch.provider.title": "Furnizor de căutare"
+  "settings.websearch.provider.title": "Furnizor de căutare",
+  "translation.settings.prompt": "Instrucțiuni de traducere",
+  "translation.settings.promptHint": "Folosește {{languagePlaceholder}} pentru limba țintă și {{textPlaceholder}} pentru textul sursă.",
+  "translation.settings.resetPrompt": "Restabilește instrucțiunile implicite",
+  "translation.settings.saveFailed": "Nu s-au putut salva setările de traducere",
+  "translation.settings.saved": "Setările de traducere au fost salvate",
+  "translation.settings.temperature": "Temperatură",
+  "translation.settings.title": "Setări de traducere",
+  "translation.settings.topP": "Top-P"
 }

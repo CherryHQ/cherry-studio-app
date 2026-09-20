@@ -24,7 +24,8 @@ internal data class TranslationConfiguration(
   val endpoint: String,
   val apiKey: String,
   val targetLanguage: String,
-  val instructionTemplate: String
+  val promptTemplate: String,
+  val requestParameters: JSONObject
 )
 
 /** Only configuration is persisted. This store never accepts source text or results. */
@@ -110,8 +111,10 @@ internal object TranslationConfigurationStore {
     val endpoint = value.getString("endpoint")
     val uri = URI(endpoint)
     val apiKey = value.getString("apiKey")
-    if (value.optInt("version") != 1 || uri.scheme != "https" || uri.host.isNullOrBlank() ||
+    val parameters = value.getJSONObject("requestParameters")
+    if (value.optInt("version") != 2 || uri.scheme != "https" || uri.host.isNullOrBlank() ||
       uri.userInfo != null || uri.fragment != null || uri.query != null ||
+      listOf("model", "messages", "stream", "tools", "tool_choice").any { parameters.has(it) } ||
       apiKey.isBlank() || apiKey.contains('\r') || apiKey.contains('\n')) {
       throw TranslationFailure("configurationStale")
     }
@@ -123,7 +126,8 @@ internal object TranslationConfigurationStore {
       endpoint = endpoint,
       apiKey = apiKey,
       targetLanguage = value.getString("targetLanguage"),
-      instructionTemplate = value.getString("instructionTemplate")
+      promptTemplate = value.getString("promptTemplate"),
+      requestParameters = parameters
     )
   }
 }

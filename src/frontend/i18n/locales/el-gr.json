@@ -1659,5 +1659,13 @@
   "settings.websearch.provider.saveFailed": "Αποτυχία αποθήκευσης",
   "settings.websearch.provider.selection": "Πάροχος αναζήτησης",
   "settings.websearch.provider.showApiKeys": "Εμφάνιση κλειδιού API",
-  "settings.websearch.provider.title": "Πάροχος αναζήτησης"
+  "settings.websearch.provider.title": "Πάροχος αναζήτησης",
+  "translation.settings.prompt": "Προτροπή μετάφρασης",
+  "translation.settings.promptHint": "Χρησιμοποιήστε το {{languagePlaceholder}} για τη γλώσσα προορισμού και το {{textPlaceholder}} για το αρχικό κείμενο.",
+  "translation.settings.resetPrompt": "Επαναφορά προεπιλεγμένης προτροπής",
+  "translation.settings.saveFailed": "Δεν ήταν δυνατή η αποθήκευση των ρυθμίσεων μετάφρασης",
+  "translation.settings.saved": "Οι ρυθμίσεις μετάφρασης αποθηκεύτηκαν",
+  "translation.settings.temperature": "Θερμοκρασία",
+  "translation.settings.title": "Ρυθμίσεις μετάφρασης",
+  "translation.settings.topP": "Top-P"
 }

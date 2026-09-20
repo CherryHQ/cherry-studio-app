@@ -1,4 +1,5 @@
 import type { TranslationAvailability } from '@/shared/contracts/translation';
+import type { PreferenceSchema } from '@/shared/data/preference';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import { createTranslationModule } from '../createTranslationModule';
@@ -20,8 +21,10 @@ function setup(
   })),
 ) {
   const invalidation = new Set<() => void>();
+  const preferences: Partial<PreferenceSchema> = {};
   const getAvailability = jest.fn(async (): Promise<TranslationAvailability> => ready);
   const module = createTranslationModule({
+    preferences: { getCachedValue: (key) => preferences[key] },
     generate,
     getAvailability,
     subscribeAvailability: () => () => {},
@@ -36,6 +39,7 @@ function setup(
     module,
     generate,
     getAvailability,
+    preferences,
     invalidate: () => invalidation.forEach((listener) => listener()),
   };
 }
@@ -47,8 +51,14 @@ test('uses only the selected translation model and keeps the language override w
   expect(generate).toHaveBeenCalledWith(
     expect.objectContaining({
       uniqueModelId: ready.model.id,
-      prompt: 'Hello',
-      system: expect.stringContaining('ja-JP'),
+      prompt: expect.stringContaining('<translate_input>\nHello\n</translate_input>'),
+      reasoningEffort: 'none',
+      sampling: { enableTemperature: false, temperature: 1, enableTopP: false, topP: 1 },
+    }),
+  );
+  expect(generate.mock.calls[0][0]).toEqual(
+    expect.objectContaining({
+      prompt: expect.stringContaining('ja-JP'),
     }),
   );
   expect(session.getSnapshot()).toMatchObject({
@@ -59,6 +69,28 @@ test('uses only the selected translation model and keeps the language override w
   expect(await module.getAvailability('app')).toEqual(ready);
   session.dispose();
   expect(session.getSnapshot()).toEqual({ status: 'disposed' });
+});
+
+test('uses the saved translation settings without interpolating placeholders inside source text', async () => {
+  const { module, generate, preferences } = setup();
+  Object.assign(preferences, {
+    'feature.translate.model_prompt': 'Translate to {{target_language}}: {{text}}',
+    'feature.translate.reasoning_effort': 'low',
+    'feature.translate.enable_temperature': true,
+    'feature.translate.temperature': 0.3,
+    'feature.translate.enable_top_p': true,
+    'feature.translate.top_p': 0.8,
+  });
+  const session = module.createSession({ text: '{{target_language}} $&', targetLanguage: 'ja-JP' });
+  await session.run();
+  expect(generate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      prompt: 'Translate to ja-JP: {{target_language}} $&',
+      reasoningEffort: 'low',
+      sampling: { enableTemperature: true, temperature: 0.3, enableTopP: true, topP: 0.8 },
+    }),
+  );
+  session.dispose();
 });
 
 test('does not fall back to another model when translation is unconfigured', async () => {

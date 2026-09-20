@@ -1659,5 +1659,13 @@
   "settings.websearch.provider.saveFailed": "Kaydedilemedi",
   "settings.websearch.provider.selection": "Arama sağlayıcısı",
   "settings.websearch.provider.showApiKeys": "API Anahtarını Göster",
-  "settings.websearch.provider.title": "Arama sağlayıcısı"
+  "settings.websearch.provider.title": "Arama sağlayıcısı",
+  "translation.settings.prompt": "Çeviri istemi",
+  "translation.settings.promptHint": "Hedef dil için {{languagePlaceholder}}, kaynak metin için {{textPlaceholder}} kullanın.",
+  "translation.settings.resetPrompt": "Varsayılan istemi geri yükle",
+  "translation.settings.saveFailed": "Çeviri ayarları kaydedilemedi",
+  "translation.settings.saved": "Çeviri ayarları kaydedildi",
+  "translation.settings.temperature": "Sıcaklık",
+  "translation.settings.title": "Çeviri ayarları",
+  "translation.settings.topP": "Top-P"
 }

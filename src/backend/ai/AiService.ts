@@ -11,8 +11,9 @@ import {
 } from '@cherrystudio/ai-runtime/image';
 import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
-import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
+import { createAiUsageCaptureContext, type GatedSampling } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import type { LanguageModelUsage, ModelMessage } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -51,6 +52,7 @@ export type AiUsageAttributionResolver = () => AiUsageAttribution;
 
 /** Non-streaming text generation request — pure transport data. */
 export interface AiGenerateRequest extends AiBaseRequest {
+  sampling?: GatedSampling;
   usageAttribution?: AiUsageAttribution;
   system?: string;
   prompt?: string;
@@ -225,8 +227,10 @@ export class AiService extends BaseService {
   /** Temporary text has no tools, usage capture, or caller-supplied execution hooks. */
   async generateTemporaryText(request: {
     uniqueModelId: UniqueModelId;
-    system: string;
+    system?: string;
     prompt: string;
+    reasoningEffort?: ReasoningEffortOption;
+    sampling?: GatedSampling;
     signal: AbortSignal;
   }): Promise<Pick<AiGenerateResult, 'text' | 'finishReason'>> {
     const { text, finishReason } = await this.generateTextWithUsagePolicy(
@@ -234,6 +238,8 @@ export class AiService extends BaseService {
         uniqueModelId: request.uniqueModelId,
         system: request.system,
         prompt: request.prompt,
+        reasoningEffort: request.reasoningEffort,
+        sampling: request.sampling,
         requestOptions: {
           signal: request.signal,
           maxRetries: 0,
@@ -489,7 +495,7 @@ export class AiService extends BaseService {
   }
 
   private async buildAgentParamsFor(
-    request: AiBaseRequest,
+    request: AiBaseRequest & { sampling?: GatedSampling },
     getRepairUsagePlugins?: () => AiPlugin[],
   ) {
     const { provider, model } = await this.getProviderAndModel(request);

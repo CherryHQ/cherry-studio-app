@@ -80,9 +80,10 @@ test('an in-flight publication cannot restore old credentials after the authorit
     getAuth: async () => null,
     getInterfaceLanguage: () => 'en-US',
     ensureModelCatalog: async () => {},
-    resolveNativeConnection: () => ({
+    resolveNativeConnection: (_provider, _model, _auth, settings) => ({
       endpoint: 'https://example.com/v1/chat/completions',
       wireModelId: model.modelId,
+      requestParameters: { reasoning_effort: settings.reasoningEffort },
     }),
   });
   try {
@@ -92,6 +93,8 @@ test('an in-flight publication cannot restore old credentials after the authorit
     const editing = modelConfigurationChanges.write(async () => {
       stateAtWrite = { revision: nativeRevision, key: nativeKey };
       key = 'new-key';
+      preferences['feature.translate.reasoning_effort'] = 'low';
+      preferences['feature.translate.model_prompt'] = 'Translate {{text}} into {{target_language}}';
     });
     await Promise.resolve();
     expect(stateAtWrite).toBeUndefined();
@@ -100,6 +103,11 @@ test('an in-flight publication cannot restore old credentials after the authorit
     expect(stateAtWrite).toEqual({ revision: null, key: null });
     expect((await runtime.getAvailability('externalWindow')).status).toBe('ready');
     expect(nativeKey).toBe('new-key');
+    expect(mockNative.publishTranslationConfiguration.mock.calls.at(-1)?.[0]).toMatchObject({
+      version: 2,
+      promptTemplate: 'Translate {{text}} into {{target_language}}',
+      requestParameters: { reasoning_effort: 'low' },
+    });
   } finally {
     allowPublication.resolve();
     await runtime.dispose();

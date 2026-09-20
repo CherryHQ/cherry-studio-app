@@ -118,6 +118,10 @@ export function TemporaryTranslationScreen() {
             label={t('translation.modelSettings')}
             onPress={() => router.push('/settings/model')}
           />
+          <Section.Item
+            label={t('translation.settings.title')}
+            onPress={() => router.push('/settings/model/translation')}
+          />
           <TranslationLanguagePicker
             value={targetLanguage}
             onChange={(next) => {

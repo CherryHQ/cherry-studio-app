@@ -13,7 +13,8 @@ struct TranslationConfiguration {
   let endpoint: URL
   let wireModelId: String
   let targetLanguage: String
-  let instructionTemplate: String
+  let promptTemplate: String
+  let requestParameters: [String: Any]
   let apiKey: String
 }
 
@@ -123,7 +124,7 @@ enum TranslationConfigurationStore {
   }
 
   private static func parse(_ values: [String: Any], apiKey: String) throws -> TranslationConfiguration {
-    guard values["version"] as? Int == 1,
+    guard values["version"] as? Int == 2,
           let revision = values["revision"] as? String,
           let modelName = values["modelName"] as? String,
           let providerName = values["providerName"] as? String,
@@ -132,12 +133,14 @@ enum TranslationConfigurationStore {
           endpoint.query == nil, endpoint.fragment == nil,
           let wireModelId = values["wireModelId"] as? String,
           let targetLanguage = values["targetLanguage"] as? String,
-          let template = values["instructionTemplate"] as? String,
+          let template = values["promptTemplate"] as? String,
+          let parameters = values["requestParameters"] as? [String: Any],
+          !["model", "messages", "stream", "tools", "tool_choice"].contains(where: { parameters[$0] != nil }),
           !apiKey.isEmpty, !apiKey.contains("\r"), !apiKey.contains("\n") else {
       throw TranslationFailure(code: "configurationStale")
     }
     return TranslationConfiguration(revision: revision, modelName: modelName, providerName: providerName,
       endpoint: endpoint, wireModelId: wireModelId, targetLanguage: targetLanguage,
-      instructionTemplate: template, apiKey: apiKey)
+      promptTemplate: template, requestParameters: parameters, apiKey: apiKey)
   }
 }

@@ -1,4 +1,5 @@
 import { Section, useToast } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,6 +22,7 @@ import { SettingsScrollPage } from '../components/SettingsScrollPage';
 const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter((kind) => kind !== 'fast');
 
 export default function ModelSettingsScreen() {
+  const router = useRouter();
   const { t } = useTranslation();
   const { toast } = useToast();
   const { saveSelections, selections } = useModelSettingSelections();
@@ -85,6 +87,10 @@ export default function ModelSettingsScreen() {
           {items.map(({ key, ...item }) => (
             <Section.SelectItem key={key} {...item} />
           ))}
+          <Section.Item
+            label={t('translation.settings.title')}
+            onPress={() => router.push('/settings/model/translation')}
+          />
         </Section>
       </SettingsScrollPage>
       {activeKind ? (

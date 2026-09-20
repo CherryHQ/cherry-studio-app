@@ -12,13 +12,17 @@ enum TemporaryTranslation {
     let language = targetLanguage ?? configuration.targetLanguage
     guard isLanguage(language) else { throw TranslationFailure(code: "invalidInput") }
     try Task.checkCancellation()
-    let body: [String: Any] = [
-      "model": configuration.wireModelId, "stream": false,
-      "messages": [
-        ["role": "system", "content": configuration.instructionTemplate.replacingOccurrences(of: "{language}", with: language)],
-        ["role": "user", "content": text]
-      ]
-    ]
+    let template = configuration.promptTemplate
+    let prompt = NSMutableString(string: template)
+    let placeholders = try NSRegularExpression(pattern: #"\{\{(?:target_language|text)\}\}"#)
+    for match in placeholders.matches(in: template, range: NSRange(template.startIndex..., in: template)).reversed() {
+      let replacement = (template as NSString).substring(with: match.range) == "{{target_language}}" ? language : text
+      prompt.replaceCharacters(in: match.range, with: replacement)
+    }
+    var body = configuration.requestParameters
+    body["model"] = configuration.wireModelId
+    body["stream"] = false
+    body["messages"] = [["role": "user", "content": prompt as String]]
     var request = URLRequest(url: configuration.endpoint, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 45)
     request.httpMethod = "POST"
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -27,6 +31,7 @@ enum TemporaryTranslation {
     request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
     request.setValue("CherryStudioMobile/1.0", forHTTPHeaderField: "User-Agent")
     let call = TemporaryTranslationRequest()
+    let revision = configuration.revision
     return try await withThrowingTaskGroup(of: String.self) { group in
       group.addTask { try await call.perform(request) }
       group.addTask {
@@ -36,7 +41,7 @@ enum TemporaryTranslation {
       group.addTask {
         while !Task.isCancelled {
           try await Task.sleep(nanoseconds: 400_000_000)
-          if TranslationConfigurationStore.revision() != configuration.revision {
+          if TranslationConfigurationStore.revision() != revision {
             throw TranslationFailure(code: "configurationStale")
           }
         }
@@ -44,7 +49,7 @@ enum TemporaryTranslation {
       }
       defer { group.cancelAll(); call.cancel() }
       guard let result = try await group.next() else { throw TranslationFailure(code: "failed") }
-      guard TranslationConfigurationStore.revision() == configuration.revision else { throw TranslationFailure(code: "configurationStale") }
+      guard TranslationConfigurationStore.revision() == revision else { throw TranslationFailure(code: "configurationStale") }
       return result
     }
   }

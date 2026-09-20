@@ -1654,5 +1654,13 @@
   "settings.websearch.provider.saveFailed": "Không lưu được",
   "settings.websearch.provider.selection": "Nhà cung cấp dịch vụ tìm kiếm",
   "settings.websearch.provider.showApiKeys": "Hiển thị khóa API",
-  "settings.websearch.provider.title": "Nhà cung cấp dịch vụ tìm kiếm"
+  "settings.websearch.provider.title": "Nhà cung cấp dịch vụ tìm kiếm",
+  "translation.settings.prompt": "Câu lệnh dịch",
+  "translation.settings.promptHint": "Dùng {{languagePlaceholder}} cho ngôn ngữ đích và {{textPlaceholder}} cho văn bản gốc.",
+  "translation.settings.resetPrompt": "Khôi phục câu lệnh mặc định",
+  "translation.settings.saveFailed": "Không thể lưu cài đặt dịch",
+  "translation.settings.saved": "Đã lưu cài đặt dịch",
+  "translation.settings.temperature": "Nhiệt độ",
+  "translation.settings.title": "Cài đặt dịch",
+  "translation.settings.topP": "Top-P"
 }

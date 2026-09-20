@@ -212,6 +212,7 @@ export function createBackend(
     resolveNativeConnection: resolveNativeTranslationConnection,
   });
   const translation = createTranslationModule({
+    preferences: services.preference,
     getAvailability: translationConfiguration.getAvailability,
     subscribeAvailability: translationConfiguration.subscribeAvailability,
     subscribeConfigurationChange: translationConfiguration.subscribeInvalidation,

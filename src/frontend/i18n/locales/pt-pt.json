@@ -1664,5 +1664,13 @@
   "settings.websearch.provider.saveFailed": "Falha ao guardar",
   "settings.websearch.provider.selection": "Fornecedor de pesquisa",
   "settings.websearch.provider.showApiKeys": "Mostrar chave API",
-  "settings.websearch.provider.title": "Fornecedor de pesquisa"
+  "settings.websearch.provider.title": "Fornecedor de pesquisa",
+  "translation.settings.prompt": "Instruções de tradução",
+  "translation.settings.promptHint": "Use {{languagePlaceholder}} para o idioma de destino e {{textPlaceholder}} para o texto original.",
+  "translation.settings.resetPrompt": "Restaurar as instruções predefinidas",
+  "translation.settings.saveFailed": "Não foi possível guardar as definições de tradução",
+  "translation.settings.saved": "Definições de tradução guardadas",
+  "translation.settings.temperature": "Temperatura",
+  "translation.settings.title": "Definições de tradução",
+  "translation.settings.topP": "Top-P"
 }

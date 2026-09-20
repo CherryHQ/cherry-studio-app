@@ -43,6 +43,8 @@ test('temporary translation excludes recording and tool execution without changi
     uniqueModelId: model.id,
     prompt: 'private source',
     system: 'Translate.',
+    reasoningEffort: 'none',
+    sampling: { enableTemperature: true, temperature: 0.3, enableTopP: false, topP: 1 },
     signal,
   });
   const parameters = mockGeneratorConstructor.mock.calls.at(-1)?.[0];
@@ -54,7 +56,9 @@ test('temporary translation excludes recording and tool execution without changi
   expect(parameters.options).toMatchObject({
     maxRetries: 0,
     headers: { 'Cache-Control': 'no-store' },
+    temperature: 0.3,
   });
+  expect(parameters.options.topP).toBeUndefined();
   expect(mockGenerate).toHaveBeenLastCalledWith({ prompt: 'private source' }, signal);
 });
 

@@ -48,6 +48,15 @@ const OMIT: ResolvedReasoningInvocation = {
   emissions: [],
 };
 
+/** Preserve a stored selection; unsupported automatic mode uses the provider default. */
+export function normalizeRequestedSelection(
+  selection: CanonicalReasoningSelection,
+  model: Model,
+): CanonicalReasoningSelection {
+  if (selection !== 'auto') return selection;
+  return model.reasoning?.selectableEfforts.includes('auto') ? selection : 'default';
+}
+
 function resolveSelection(
   selection: ResolveReasoningInvocationInput['selection'],
   model: Model,
@@ -207,4 +216,35 @@ export function encodeReasoningInvocation(
   invocation: ResolvedReasoningInvocation,
 ): Record<string, unknown> {
   return encodeEmissions(invocation);
+}
+
+/** Encode the subset usable without an SDK adapter; null means unsupported transport options. */
+export function encodeChatCompletionsReasoning(
+  invocation: ResolvedReasoningInvocation,
+): Record<string, unknown> | null {
+  if (
+    invocation.emissions.some(
+      ({ target }) =>
+        target === 'sendReasoning' ||
+        target === 'reasoningSummary' ||
+        target.startsWith('thinkingConfig.') ||
+        target.startsWith('reasoningConfig.') ||
+        target.startsWith('extra_body.') ||
+        target === 'think',
+    )
+  )
+    return null;
+
+  return encodeEmissions({
+    ...invocation,
+    emissions: invocation.emissions.map((emission) => ({
+      ...emission,
+      target:
+        emission.target === 'reasoningEffort'
+          ? 'reasoning_effort'
+          : emission.target === 'thinking.budgetTokens'
+            ? 'thinking.budget_tokens'
+            : emission.target,
+    })),
+  });
 }

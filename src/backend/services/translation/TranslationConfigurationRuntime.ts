@@ -16,7 +16,7 @@ import {
   type SystemIntegrationNativeModule,
 } from '../../../../modules/system-integration';
 import { getProviderConfigurationIssue } from '../providers/providerConfiguration';
-import { isTranslationLanguage, translationInstruction } from './translationRequest';
+import { isTranslationLanguage, readTranslationSettings } from './translationRequest';
 
 type ConfigurationDependencies = {
   preferences: Pick<PreferenceClient, 'getCachedValue'>;
@@ -30,7 +30,8 @@ type ConfigurationDependencies = {
     provider: Provider,
     model: Model,
     auth: AuthConfig | null,
-  ): { endpoint: string; wireModelId: string } | null;
+    settings: ReturnType<typeof readTranslationSettings>,
+  ): { endpoint: string; wireModelId: string; requestParameters: Record<string, unknown> } | null;
 };
 
 type SelectedConfiguration =
@@ -198,10 +199,12 @@ export class TranslationConfigurationRuntime {
       this.notify();
       return;
     }
+    const settings = readTranslationSettings(this.dependencies.preferences);
     const connection = this.dependencies.resolveNativeConnection(
       selected.provider,
       selected.model,
       selected.auth,
+      settings,
     );
     const key = selected.keys.find((entry) => entry.isEnabled && entry.key.trim())?.key;
     if (!connection || !key) {
@@ -219,7 +222,7 @@ export class TranslationConfigurationRuntime {
     const revision = Crypto.randomUUID();
     await native.publishTranslationConfiguration(
       {
-        version: 1,
+        version: 2,
         revision,
         modelId: selected.model.id,
         modelName: selected.model.name,
@@ -227,7 +230,7 @@ export class TranslationConfigurationRuntime {
         ...connection,
         targetLanguage: selected.availability.targetLanguage,
         interfaceLanguage: this.dependencies.getInterfaceLanguage(),
-        instructionTemplate: translationInstruction('{language}'),
+        promptTemplate: settings.promptTemplate,
       },
       key,
     );

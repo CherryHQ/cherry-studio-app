@@ -1654,5 +1654,13 @@
   "settings.websearch.provider.saveFailed": "保存に失敗しました",
   "settings.websearch.provider.selection": "検索プロバイダー",
   "settings.websearch.provider.showApiKeys": "API キーを表示",
-  "settings.websearch.provider.title": "検索プロバイダー"
+  "settings.websearch.provider.title": "検索プロバイダー",
+  "translation.settings.prompt": "翻訳プロンプト",
+  "translation.settings.promptHint": "対象言語には {{languagePlaceholder}}、原文には {{textPlaceholder}} を使用します。",
+  "translation.settings.resetPrompt": "既定のプロンプトに戻す",
+  "translation.settings.saveFailed": "翻訳設定を保存できませんでした",
+  "translation.settings.saved": "翻訳設定を保存しました",
+  "translation.settings.temperature": "温度",
+  "translation.settings.title": "翻訳設定",
+  "translation.settings.topP": "Top-P"
 }

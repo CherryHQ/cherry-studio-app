@@ -25,20 +25,32 @@ These source changes require a new custom development client. An OTA update or E
 the module or extensions. Local EAS Android development and iOS simulator builds succeeded on
 2026-09-17. Simulator checks passed share preview/cancellation and Android launcher navigation,
 but found blocking failures in the app translation screen on both platforms, iOS selected-text
-delivery, and iOS App Shortcut execution. Real model requests, physical-device provisioning, and
+delivery, and iOS App Shortcut execution. The app language picker no longer uses the unavailable
+`Intl.DisplayNames`; that source fix awaits device verification. Real model requests, physical-device provisioning, and
 automated suites remain unverified; this implementation is not ready for release.
 
 ## Configuration and privacy
 
-The app is the only configuration writer. It projects `feature.translate.model_id` and the target
-language preference into one versioned configuration. Swift/Kotlin executors read that projection,
+The app is the only configuration writer. It projects the selected translation model, target
+language, prompt template, and model-compatible request parameters into one versioned configuration.
+Swift/Kotlin executors read that projection,
 not the main SQLite database. They do not initialize React Native, chat, tools, or a job runtime.
 
-Native version 1 supports only HTTPS OpenAI Chat Completions with standard Bearer API-key auth.
+Native configuration version 2 supports only HTTPS OpenAI Chat Completions with standard Bearer API-key auth.
 Custom headers, other endpoint protocols, cloud signing, OAuth, local HTTP, and provider-specific
 service-tier/verbosity options are rejected. One enabled key is selected for the snapshot; there is
 no native key rotation, fallback model, automatic retry, or tool execution. App translation uses
 the existing AI SDK provider implementations through the dedicated non-recording entry point.
+
+Translation preferences follow desktop: a configurable prompt with `{{target_language}}` and
+`{{text}}`, reasoning effort `none` by default, and opt-in temperature/Top-P (both stored as `1`).
+The shared registry resolver emits off only when supported and gates sampling by model capabilities.
+The native projection converts supported reasoning options to HTTP fields, rejecting SDK-only
+options it cannot represent. The executors interpolate the saved prompt once into a user message;
+placeholders inside source text are left untouched. Changing these settings revokes the previous
+snapshot and cancels pending calls before publishing a replacement. Version 1 snapshots are
+rejected; open Cherry once after updating to publish version 2. Subsequent system translations do
+not open the main app or run its JavaScript.
 
 - Translation: 16,000 UTF-16 input units, 64,000 output units, 512 KiB native response limit,
   45-second deadline, non-streaming result, and cancellation on close/configuration change.
@@ -65,6 +77,7 @@ an already staged ordinary share to translation first removes that staging entry
 ## Activation and acceptance
 
 After an authorized development build, select a translation model under **Settings → Models**.
+**Translation settings** on that screen controls the default language, prompt, reasoning, and sampling.
 System entry points have no separate settings page or capability-status dashboard. Translation
 surfaces own language selection and actionable setup errors. On iOS 18.4+, select Cherry in the system default
 translation-app settings. iOS does not expose a reliable read API for that selection, so Cherry

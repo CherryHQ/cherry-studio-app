@@ -72,12 +72,14 @@ internal object TemporaryTranslation {
             setRequestProperty("Cache-Control", "no-store")
             setRequestProperty("User-Agent", "CherryStudioMobile/1.0")
           }
-          val body = JSONObject()
+          val prompt = Regex("""\{\{(?:target_language|text)\}\}""").replace(configuration.promptTemplate) {
+            if (it.value == "{{target_language}}") language else text
+          }
+          val body = configuration.requestParameters
             .put("model", configuration.wireModelId)
             .put("stream", false)
             .put("messages", JSONArray()
-              .put(JSONObject().put("role", "system").put("content", configuration.instructionTemplate.replace("{language}", language)))
-              .put(JSONObject().put("role", "user").put("content", text)))
+              .put(JSONObject().put("role", "user").put("content", prompt)))
           connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
           val status = connection.responseCode
           if (status != 200) throw TranslationFailure(when (status) {

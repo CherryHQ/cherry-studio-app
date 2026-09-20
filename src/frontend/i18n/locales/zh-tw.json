@@ -1654,5 +1654,13 @@
   "settings.websearch.provider.saveFailed": "儲存失敗",
   "settings.websearch.provider.selection": "搜索供應商",
   "settings.websearch.provider.showApiKeys": "顯示 API Key",
-  "settings.websearch.provider.title": "搜索供應商"
+  "settings.websearch.provider.title": "搜索供應商",
+  "translation.settings.prompt": "翻譯提示詞",
+  "translation.settings.promptHint": "使用 {{languagePlaceholder}} 表示目標語言，{{textPlaceholder}} 表示原文。",
+  "translation.settings.resetPrompt": "還原預設提示詞",
+  "translation.settings.saveFailed": "無法儲存翻譯設定",
+  "translation.settings.saved": "翻譯設定已儲存",
+  "translation.settings.temperature": "溫度",
+  "translation.settings.title": "翻譯設定",
+  "translation.settings.topP": "Top-P"
 }

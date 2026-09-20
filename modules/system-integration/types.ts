@@ -2,7 +2,7 @@ import type { NativeModule } from 'expo';
 
 /** This is a real native transport boundary. Do not move envelopes into Backend contracts. */
 export type NativeTranslationConfiguration = {
-  version: 1;
+  version: 2;
   revision: string;
   modelId: string;
   modelName: string;
@@ -11,7 +11,8 @@ export type NativeTranslationConfiguration = {
   wireModelId: string;
   targetLanguage: string;
   interfaceLanguage: string;
-  instructionTemplate: string;
+  promptTemplate: string;
+  requestParameters: Record<string, unknown>;
 };
 
 export type NativeSystemEntry = {
