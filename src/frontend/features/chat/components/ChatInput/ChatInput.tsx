@@ -455,6 +455,7 @@ function TextChatInput({
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}
+          variant="chat"
         />
       ) : null}
     </>
