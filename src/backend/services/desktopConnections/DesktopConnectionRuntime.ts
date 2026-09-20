@@ -1,3 +1,4 @@
+import { loggerService } from '@logger';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
@@ -11,6 +12,7 @@ import {
 } from '@/backend/core/lifecycle';
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import type { DesktopConnectionsModule } from '@/shared/contracts';
+import { DataApiError } from '@/shared/data/api/errors';
 import {
   DesktopProvidersSnapshotSchema,
   PairDesktopConnectionSchema,
@@ -39,6 +41,7 @@ const EXCLUDED_PROVIDER_IDS = new Set([
   'ollama',
   'ovms',
 ]);
+const logger = loggerService.withContext('DesktopConnection');
 const tokenKey = (id: string) => `desktop-connection-token.${id}`;
 const TOKEN_STORE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
@@ -60,7 +63,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   }
 
   pair(input: PairDesktopConnectionDto, signal: AbortSignal) {
-    return this.run(signal, async (store, signal) => {
+    return this.run('pair', signal, async (store, signal) => {
       const qr = PairDesktopConnectionSchema.parse(input);
       const id = qr.connectionId ?? Crypto.randomUUID();
       if (qr.connectionId) await store.getRow(id);
@@ -103,7 +106,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   }
 
   remove(id: string, signal: AbortSignal) {
-    return this.run(signal, async (store, signal) => {
+    return this.run('remove', signal, async (store, signal) => {
       signal.throwIfAborted();
       // Delete the credential first. Failure leaves a visible, retryable row.
       // Both deletes are idempotent, including a retry after the SQL delete failed.
@@ -113,7 +116,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   }
 
   preview(id: string, signal: AbortSignal) {
-    return this.run(signal, async (store, signal) => {
+    return this.run('preview', signal, async (store, signal) => {
       const snapshot = await this.loadSnapshot(store, id, signal);
       signal.throwIfAborted();
       return store.preview(snapshot);
@@ -121,7 +124,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   }
 
   import(id: string, input: DesktopImportSelectionsDto, signal: AbortSignal) {
-    return this.run(signal, async (store, signal) => {
+    return this.run('import', signal, async (store, signal) => {
       const snapshot = await this.loadSnapshot(store, id, signal);
       signal.throwIfAborted();
       if (input.selections.some((selection) => selection.mode === 'provider-models')) {
@@ -139,8 +142,9 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   }
 
   private run<T>(
+    operation: string,
     caller: AbortSignal,
-    operation: (store: ConnectionStore, signal: AbortSignal) => Promise<T>,
+    work: (store: ConnectionStore, signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
     if (this.stopped) return Promise.reject(new DOMException('Runtime stopped', 'AbortError'));
     const controller = new AbortController();
@@ -152,14 +156,37 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       .then(async () => {
         controller.signal.throwIfAborted();
         if (!this.store) throw new Error('Desktop connection store has not been configured');
-        return operation(this.store, controller.signal);
+        return work(this.store, controller.signal);
       })
       .finally(() => {
         caller.removeEventListener('abort', cancel);
         this.controllers.delete(controller);
       });
-    this.tail = pending.catch(() => undefined);
+    this.tail = pending.catch((error: unknown) => this.reportUnexpected(operation, error));
     return pending;
+  }
+
+  /** A reason speaks for itself; anything else surfaces as "try again" and leaves no other trace. */
+  private reportUnexpected(operation: string, error: unknown): void {
+    if (!(error instanceof Error) || error.name === 'AbortError') return;
+    if (error instanceof DataApiError && typeof error.details?.reason === 'string') return;
+    logger.error(`Desktop connection ${operation} failed`, error, {
+      operation: `desktop.${operation}`,
+    });
+  }
+
+  /** The payload itself never reaches a report, so carry what identifies the desktop that sent it. */
+  private reportDrift(
+    error: DataApiError,
+    desktopVersion: string,
+    context: Record<string, unknown>,
+  ): DataApiError {
+    logger.error(error.message, error, {
+      ...context,
+      desktopVersion,
+      operation: 'desktop.snapshot.parse',
+    });
+    return error;
   }
 
   private async loadSnapshot(store: ConnectionStore, id: string, signal: AbortSignal) {
@@ -192,14 +219,23 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
         ? (response.payload as Record<string, unknown>).version
         : undefined;
     if (version !== 1) {
-      throw desktopError(
+      const error = desktopError(
         typeof version === 'number' ? 'unsupported-version' : 'invalid-snapshot',
         'Desktop returned an unsupported or invalid configuration version',
       );
+      throw this.reportDrift(error, connection.desktopVersion, {
+        snapshotVersion: typeof version === 'number' ? version : typeof version,
+      });
     }
     const parsed = DesktopProvidersSnapshotSchema.safeParse(response.payload);
     if (!parsed.success) {
-      throw desktopError('invalid-snapshot', 'Desktop returned invalid configuration data');
+      const error = desktopError('invalid-snapshot', 'Desktop returned invalid configuration data');
+      // Field paths locate the drift; the rejected values stay out of the report.
+      throw this.reportDrift(error, connection.desktopVersion, {
+        issues: parsed.error.issues
+          .slice(0, 10)
+          .map((issue) => `${issue.path.join('.') || '<root>'}:${issue.code}`),
+      });
     }
     await store.updateStatus(
       id,
