@@ -1098,7 +1098,6 @@
   "settings.deviceConnections.scan.manualDescription": "Também pode colar o QR JSON mostrado no PC.",
   "settings.deviceConnections.scan.manualEntry": "Emparelhamento QR JSON",
   "settings.deviceConnections.scan.manualPlaceholder": "Colar QR JSON",
-  "settings.deviceConnections.scan.networkUpdateRequired": "Atualize a aplicação para ativar o acesso à rede local.",
   "settings.deviceConnections.scan.pair": "Par",
   "settings.deviceConnections.scan.permissionDescription": "O acesso à câmara é necessário para digitalizar. Pode ainda colar o conteúdo QR abaixo.",
   "settings.deviceConnections.scan.permissionTitle": "Câmara indisponível",

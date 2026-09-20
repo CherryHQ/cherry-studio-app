@@ -8,7 +8,7 @@ import { canRequestDevicePermission, type DevicePermissionStatus } from '@/share
 const CAMERA_PERMISSION_SCOPES = ['camera.read'] as const;
 type ScannerPermissions = {
   camera?: DevicePermissionStatus;
-  error?: 'native-unavailable' | 'request-failed';
+  error?: 'request-failed';
   isPreparing: boolean;
 };
 
@@ -27,14 +27,11 @@ export function useScannerPermissions() {
       preparation.current = controller;
       ready.current = false;
       setStatuses({ isPreparing: true });
-      let hasRequestedNetwork = false;
+      let hasPreparedNetwork = false;
       try {
-        hasRequestedNetwork = await permissions.requestLocalNetworkAccess(controller.signal);
+        await permissions.requestLocalNetworkAccess(controller.signal);
         controller.signal.throwIfAborted();
-        if (!hasRequestedNetwork) {
-          setStatuses({ error: 'native-unavailable', isPreparing: false });
-          return;
-        }
+        hasPreparedNetwork = true;
         let camera = (await permissions.getStatuses(CAMERA_PERMISSION_SCOPES))['camera.read'];
         controller.signal.throwIfAborted();
         if (
@@ -46,15 +43,15 @@ export function useScannerPermissions() {
           ];
         }
         controller.signal.throwIfAborted();
-        // The network prompt has been attempted; actual pairing owns connectivity failures.
+        // Best-effort prompt preparation is complete; pairing owns connectivity failures.
         ready.current = true;
         setStatuses({ camera, isPreparing: false });
       } catch {
         if (!controller.signal.aborted) {
-          ready.current = hasRequestedNetwork;
+          ready.current = hasPreparedNetwork;
           setStatuses({
             camera: { state: 'error', canAskAgain: false },
-            error: hasRequestedNetwork ? undefined : 'request-failed',
+            error: hasPreparedNetwork ? undefined : 'request-failed',
             isPreparing: false,
           });
         }

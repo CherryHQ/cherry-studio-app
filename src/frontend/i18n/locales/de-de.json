@@ -1093,7 +1093,6 @@
   "settings.deviceConnections.scan.manualDescription": "Sie können auch den auf dem PC angezeigten QR JSON einfügen.",
   "settings.deviceConnections.scan.manualEntry": "Kopplung QR JSON",
   "settings.deviceConnections.scan.manualPlaceholder": "QR einfügen JSON",
-  "settings.deviceConnections.scan.networkUpdateRequired": "Aktualisiere die App, um den Zugriff auf das lokale Netzwerk zu aktivieren.",
   "settings.deviceConnections.scan.pair": "Paar",
   "settings.deviceConnections.scan.permissionDescription": "Zum Scannen ist Kamerazugriff erforderlich. Sie können den QR-Inhalt weiterhin unten einfügen.",
   "settings.deviceConnections.scan.permissionTitle": "Kamera nicht verfügbar",

@@ -109,11 +109,11 @@ async function readPairResponse(response: Pick<Response, 'status' | 'ok' | 'json
 async function requestPairing(url: string, body: string, signal: AbortSignal) {
   signal.throwIfAborted();
   const headers = { ...defaultAppHeaders(), 'Content-Type': 'application/json' };
-  if (Platform.OS !== 'ios') {
+  const access = Platform.OS === 'ios' ? getLocalNetworkAccess() : null;
+  // Clients without the optional helper retain their existing pairing transport.
+  if (!access) {
     return requestWithTimeout(url, { body, headers, method: 'POST' }, readPairResponse, signal);
   }
-  const access = getLocalNetworkAccess();
-  if (!access) throw desktopError('unreachable', 'Local network native module is unavailable');
   // expo/fetch has no per-request waitsForConnectivity option. Only iOS pairing uses this
   // native POST, so the OS can wait for a pending permission without replaying the code.
   const request = new access.PairingRequest();

@@ -82,16 +82,18 @@ export class DevicePermissions implements PermissionsModule {
     return result;
   }
 
-  requestLocalNetworkAccess(signal?: AbortSignal): Promise<boolean> {
+  requestLocalNetworkAccess(signal?: AbortSignal): Promise<void> {
     const result = this.requestQueue.then(async () => {
       signal?.throwIfAborted();
       // The app targets Android SDK 36, where INTERNET already grants local access.
-      if (Platform.OS !== 'ios') return true;
+      if (Platform.OS !== 'ios') return;
       const access = this.loadLocalNetworkAccess();
-      if (!access) return false;
+      if (!access) {
+        logger.debug('Local network prompt preparation is unavailable in this native client');
+        return;
+      }
       await access.request();
       signal?.throwIfAborted();
-      return true;
     });
     // Allow the network sheet to finish before requesting camera/Agent permissions.
     this.requestQueue = result.then(

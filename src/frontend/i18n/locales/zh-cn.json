@@ -1088,7 +1088,6 @@
   "settings.deviceConnections.scan.manualDescription": "也可以粘贴桌面端显示的二维码 JSON 内容。",
   "settings.deviceConnections.scan.manualEntry": "配对二维码 JSON",
   "settings.deviceConnections.scan.manualPlaceholder": "粘贴二维码 JSON",
-  "settings.deviceConnections.scan.networkUpdateRequired": "请更新应用以启用局域网访问。",
   "settings.deviceConnections.scan.pair": "开始配对",
   "settings.deviceConnections.scan.permissionDescription": "扫码配对需要相机权限，也可以在下方手动粘贴二维码内容。",
   "settings.deviceConnections.scan.permissionTitle": "无法使用相机",

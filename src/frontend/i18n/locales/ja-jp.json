@@ -1088,7 +1088,6 @@
   "settings.deviceConnections.scan.manualDescription": "PC に表示されている QR JSON を貼り付けることもできます。",
   "settings.deviceConnections.scan.manualEntry": "ペアリング QR JSON",
   "settings.deviceConnections.scan.manualPlaceholder": "QR JSON を貼り付けてください",
-  "settings.deviceConnections.scan.networkUpdateRequired": "ローカルネットワークへのアクセスを有効にするには、アプリを更新してください。",
   "settings.deviceConnections.scan.pair": "ペア",
   "settings.deviceConnections.scan.permissionDescription": "スキャンするにはカメラへのアクセスが必要です。以下の QR コンテンツを貼り付けることもできます。",
   "settings.deviceConnections.scan.permissionTitle": "カメラが使用できません",

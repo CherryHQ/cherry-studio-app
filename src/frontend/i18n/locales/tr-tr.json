@@ -1093,7 +1093,6 @@
   "settings.deviceConnections.scan.manualDescription": "Ayrıca bilgisayarda gösterilen JSON QR kodunu da yapıştırabilirsiniz.",
   "settings.deviceConnections.scan.manualEntry": "QR JSON eşleştiriliyor",
   "settings.deviceConnections.scan.manualPlaceholder": "QR JSON yapıştır",
-  "settings.deviceConnections.scan.networkUpdateRequired": "Yerel ağ erişimini etkinleştirmek için uygulamayı güncelleyin.",
   "settings.deviceConnections.scan.pair": "Çift",
   "settings.deviceConnections.scan.permissionDescription": "Tarama için kamera erişimi gerekiyor. Yine de QR içeriğini aşağıya yapıştırabilirsiniz.",
   "settings.deviceConnections.scan.permissionTitle": "Kamera kullanılamıyor",

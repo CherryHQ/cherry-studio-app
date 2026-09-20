@@ -1093,7 +1093,6 @@
   "settings.deviceConnections.scan.manualDescription": "You can also paste the QR JSON shown on the PC.",
   "settings.deviceConnections.scan.manualEntry": "Pairing QR JSON",
   "settings.deviceConnections.scan.manualPlaceholder": "Paste QR JSON",
-  "settings.deviceConnections.scan.networkUpdateRequired": "Update the app to enable local network access.",
   "settings.deviceConnections.scan.pair": "Pair",
   "settings.deviceConnections.scan.permissionDescription": "Camera access is needed to scan. You can still paste the QR content below.",
   "settings.deviceConnections.scan.permissionTitle": "Camera unavailable",

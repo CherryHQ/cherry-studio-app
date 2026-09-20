@@ -123,16 +123,8 @@ export function DeviceConnectionScannerScreen({
         ) : permissionError ? (
           <View className="flex-1 justify-center px-6">
             <ContentState.Error
-              title={
-                permissionError === 'native-unavailable'
-                  ? t('settings.deviceConnections.scan.networkUpdateRequired')
-                  : t('settings.permissions.actionFailed')
-              }
-              primaryAction={
-                permissionError === 'native-unavailable'
-                  ? undefined
-                  : { children: t('common.retry'), onPress: () => void prepare() }
-              }
+              title={t('settings.permissions.actionFailed')}
+              primaryAction={{ children: t('common.retry'), onPress: () => void prepare() }}
             />
           </View>
         ) : scanError ? (

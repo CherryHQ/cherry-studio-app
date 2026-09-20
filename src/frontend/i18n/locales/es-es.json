@@ -1098,7 +1098,6 @@
   "settings.deviceConnections.scan.manualDescription": "También puedes pegar el QR JSON que se muestra en la PC.",
   "settings.deviceConnections.scan.manualEntry": "Emparejamiento QR JSON",
   "settings.deviceConnections.scan.manualPlaceholder": "Pegar QR JSON",
-  "settings.deviceConnections.scan.networkUpdateRequired": "Actualiza la aplicación para habilitar el acceso a la red local.",
   "settings.deviceConnections.scan.pair": "Pareja",
   "settings.deviceConnections.scan.permissionDescription": "Se necesita acceso a la cámara para escanear. Aún puedes pegar el contenido QR a continuación.",
   "settings.deviceConnections.scan.permissionTitle": "Cámara no disponible",

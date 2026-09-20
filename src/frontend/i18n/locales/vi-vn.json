@@ -1088,7 +1088,6 @@
   "settings.deviceConnections.scan.manualDescription": "Bạn cũng có thể dán QR JSON hiển thị trên PC.",
   "settings.deviceConnections.scan.manualEntry": "Ghép nối QR JSON",
   "settings.deviceConnections.scan.manualPlaceholder": "Dán QR JSON",
-  "settings.deviceConnections.scan.networkUpdateRequired": "Cập nhật ứng dụng để bật quyền truy cập mạng cục bộ.",
   "settings.deviceConnections.scan.pair": "Cặp",
   "settings.deviceConnections.scan.permissionDescription": "Cần có quyền truy cập vào máy ảnh để quét. Bạn vẫn có thể dán nội dung QR bên dưới.",
   "settings.deviceConnections.scan.permissionTitle": "Máy ảnh không có sẵn",

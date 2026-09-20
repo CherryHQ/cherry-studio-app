@@ -2,6 +2,9 @@
 
 iOS support for desktop pairing, discovered by Expo under `modules/`. Requires a new native
 development build; an OTA update cannot add this module to an existing client.
+Clients without the module skip early prompt preparation and retain the existing pairing
+transport. Missing this helper does not indicate denied local-network permission and must not
+block the scanner or ask the user to update the app.
 
 On scanner entry, `request()` attempts to trigger the system permission sheet by connecting UDP
 sockets to link-local IPv6 addresses, following
