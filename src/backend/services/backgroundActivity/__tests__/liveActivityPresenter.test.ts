@@ -8,6 +8,66 @@ import { createLiveActivityPresenter } from '../liveActivityPresenter';
 type TestProps = BackgroundActivityBaseProps & { detail: string };
 
 describe('createLiveActivityPresenter', () => {
+  it('recognizes a removed activity by native identity without confusing another task', () => {
+    const activity = { getId: () => 'first', end: jest.fn(), update: jest.fn() };
+    const other = { getId: () => 'second' };
+    const factory = {
+      getInstances: jest.fn(() => [activity, other]),
+      start: jest.fn(() => activity),
+    };
+    const presenter = createLiveActivityPresenter<TestProps>(factory as never);
+    const handle = presenter.start({ detail: 'running', startedAtEpochMs: 100 });
+
+    expect(handle.isActive?.()).toBe(true);
+    factory.getInstances.mockReturnValue([other]);
+    expect(handle.isActive?.()).toBe(false);
+    expect(activity.end).not.toHaveBeenCalled();
+  });
+
+  it('bounds every native content delivery, including the final update', async () => {
+    const activity = {
+      end: jest.fn(async (_policy: unknown, _props?: TestProps) => {}),
+      update: jest.fn(async (_props: TestProps) => {}),
+    };
+    const factory = { getInstances: () => [], start: jest.fn((_props: TestProps) => activity) };
+    const presenter = createLiveActivityPresenter<TestProps>(factory as never);
+    const props = { detail: '🌸"\\/'.repeat(4_000), startedAtEpochMs: 100 };
+    const handle = presenter.start(props);
+    await handle.update(props);
+    await handle.end('default', props);
+
+    for (const delivered of [
+      factory.start.mock.calls[0]![0],
+      activity.update.mock.calls[0]![0],
+      activity.end.mock.calls[0]![1],
+    ]) {
+      expect(
+        Buffer.byteLength(
+          JSON.stringify({
+            name: 'AssistantActivity',
+            props: JSON.stringify(delivered),
+          }).replaceAll('/', '\\/'),
+          'utf8',
+        ),
+      ).toBeLessThanOrEqual(4 * 1024);
+      expect(delivered).toMatchObject({ startedAtEpochMs: 100 });
+    }
+    expect(props.detail).toBe('🌸"\\/'.repeat(4_000));
+  });
+
+  it('still ends a card if its final fixed metadata cannot fit', async () => {
+    const { end, handle } = startHandle();
+
+    await expect(
+      handle.end('default', {
+        detail: 'done',
+        phase: 'invalid'.repeat(1_000),
+        startedAtEpochMs: 100,
+      }),
+    ).rejects.toThrow(RangeError);
+    expect(end).toHaveBeenCalledWith('immediate');
+  });
+
   it('prunes ended handles before new activities while retaining active ones', async () => {
     const retained = new Set<{ active: boolean }>();
     const factory = {

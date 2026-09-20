@@ -16,6 +16,9 @@ export type BackgroundActivityTranslate = (key: string) => string;
 export type BackgroundActivityEnvironmentConfig = {
   assistantPresenter: BackgroundActivityPresenter<BackgroundReplyActivityProps>;
   getColorScheme: () => 'dark' | 'light';
+  /** Platform presentation preference; independent of a task's execution lease. */
+  isPresentationEnabled?: () => boolean;
+  subscribePresentationEnabled?: (listener: () => void) => () => void;
   onForegroundAttention?: (attention: ForegroundActivityAttention) => void;
   paintingPresenter: BackgroundActivityPresenter<PaintingActivityProps>;
   /** Deep link of the focused, foreground task surface. Absent sources never report one. */
@@ -54,6 +57,11 @@ export class BackgroundActivityEnvironment extends BaseService {
   }
 
   getColorScheme = (): 'dark' | 'light' => this.config.getColorScheme();
+
+  isPresentationEnabled = (): boolean => this.config.isPresentationEnabled?.() ?? true;
+
+  subscribePresentationEnabled = (listener: () => void): (() => void) =>
+    this.config.subscribePresentationEnabled?.(listener) ?? noSubscription();
 
   get paintingPresenter(): BackgroundActivityPresenter<PaintingActivityProps> {
     return this.config.paintingPresenter;

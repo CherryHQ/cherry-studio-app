@@ -67,6 +67,7 @@ type SessionRecord = {
 type SurfaceState =
   | { status: 'pending' }
   | { handle: BackgroundActivityHandle<BackgroundActivityBaseProps>; status: 'active' }
+  | { status: 'dismissed' }
   | { status: 'unavailable' };
 
 /** An ended surface the platform may still be showing. */
@@ -80,6 +81,8 @@ type BackgroundActivityEnvironmentPort = {
   /** Every presenter whose orphaned surfaces must be swept at cold start. */
   presenters: readonly { clearOrphans(): Promise<number> }[];
   getColorScheme(): 'dark' | 'light';
+  isPresentationEnabled(): boolean;
+  subscribePresentationEnabled(listener: () => void): () => void;
   prepareLogo(): Promise<string | undefined>;
   /** Emits the deep link of the task surface the user is currently looking at. */
   subscribeVisibleTask(listener: (deepLinkUrl: string | undefined) => void): () => void;
@@ -124,6 +127,9 @@ export class BackgroundActivityManager extends BaseService {
   protected async onInit(): Promise<void> {
     this.appState = AppState.currentState;
     this.registerAppStateListener(this.handleAppStateChange);
+    this.registerDisposable(
+      this.environment.subscribePresentationEnabled(this.handlePresentationEnabledChange),
+    );
     this.registerDisposable(
       this.environment.subscribeVisibleTask((deepLinkUrl) => this.dismissTask(deepLinkUrl)),
     );
@@ -178,14 +184,7 @@ export class BackgroundActivityManager extends BaseService {
     if (!deepLinkUrl) return;
     for (const entry of [...this.settled]) {
       if (entry.deepLinkUrl !== deepLinkUrl) continue;
-      this.forgetSettled(entry);
-      void this.enqueue(async () => {
-        try {
-          await entry.handle.dismiss();
-        } catch (error) {
-          logger.warn('Background activity dismissal failed', error as Error, { deepLinkUrl });
-        }
-      });
+      this.dismissSettled(entry);
     }
   }
 
@@ -227,6 +226,16 @@ export class BackgroundActivityManager extends BaseService {
       }
       this.startNative(record);
     }
+  };
+
+  private readonly handlePresentationEnabledChange = () => {
+    if (this.disposed) return;
+    if (this.environment.isPresentationEnabled()) {
+      for (const record of this.sessions) this.startNative(record);
+      return;
+    }
+    for (const record of this.sessions) this.retireSurface(record);
+    for (const entry of [...this.settled]) this.dismissSettled(entry);
   };
 
   private updateSession(
@@ -271,8 +280,7 @@ export class BackgroundActivityManager extends BaseService {
   private settle(record: SessionRecord, policy: 'default' | 'immediate'): Promise<void> {
     if (record.ended || this.disposed) return Promise.resolve();
     this.stampFinishedAt(record);
-    const surface = record.surface;
-    const handle = surface.status === 'active' ? surface.handle : undefined;
+    const handle = this.getActiveSurface(record);
     record.ended = true;
     record.surface = { status: 'pending' };
     this.sessions.delete(record);
@@ -296,18 +304,21 @@ export class BackgroundActivityManager extends BaseService {
 
   /** Ends a surface whose presentation window closed, leaving its session live. */
   private retireSurface(record: SessionRecord): void {
-    const surface = record.surface;
+    const handle = this.getActiveSurface(record);
+    // A user's dismissal belongs to this task, not just this visibility window.
+    if (record.surface.status === 'dismissed') return;
     record.surface = { status: 'pending' };
-    if (surface.status !== 'active') return;
+    if (!handle) return;
     this.clearUpdateTimer(record);
     void this.enqueue(async () => {
-      await this.endNative(record, surface.handle, 'immediate');
+      await this.endNative(record, handle, 'immediate');
       this.reconcileLease(record);
     });
   }
 
   private startNative(record: SessionRecord): void {
     if (this.disposed || record.ended || record.surface.status !== 'pending') return;
+    if (!this.environment.isPresentationEnabled()) return;
     if (record.presenter.presentWhile === 'app-hidden' && this.appState === 'active') return;
     try {
       const handle = record.presenter.start(this.toNativeProps(record), record.deepLinkUrl);
@@ -323,9 +334,11 @@ export class BackgroundActivityManager extends BaseService {
 
   private async updateNative(record: SessionRecord): Promise<void> {
     if (this.disposed || record.surface.status !== 'active') return;
+    const handle = this.getActiveSurface(record);
+    if (!handle) return;
     const submittedProps = record.props;
     try {
-      await record.surface.handle.update(this.toNativeProps(record), {
+      await handle.update(this.toNativeProps(record), {
         phaseStartedInBackground: record.phaseStartedInBackground,
       });
       record.lastNativeUpdateAt = Date.now();
@@ -341,6 +354,23 @@ export class BackgroundActivityManager extends BaseService {
         this.reconcileLease(record);
       }
     }
+  }
+
+  private getActiveSurface(
+    record: SessionRecord,
+  ): BackgroundActivityHandle<BackgroundActivityBaseProps> | undefined {
+    if (record.surface.status !== 'active') return undefined;
+    const { handle } = record.surface;
+    try {
+      if (handle.isActive?.() === false) {
+        record.surface = { status: 'dismissed' };
+        this.clearUpdateTimer(record);
+        return undefined;
+      }
+    } catch (error) {
+      logger.warn('Background activity state lookup failed', error as Error, { tag: record.tag });
+    }
+    return handle;
   }
 
   private async endNative(
@@ -379,6 +409,19 @@ export class BackgroundActivityManager extends BaseService {
   private forgetSettled(entry: SettledSurface): void {
     clearTimeout(entry.retentionTimer);
     this.settled.delete(entry);
+  }
+
+  private dismissSettled(entry: SettledSurface): void {
+    this.forgetSettled(entry);
+    void this.enqueue(async () => {
+      try {
+        await entry.handle.dismiss();
+      } catch (error) {
+        logger.warn('Background activity dismissal failed', error as Error, {
+          deepLinkUrl: entry.deepLinkUrl,
+        });
+      }
+    });
   }
 
   private toNativeProps(

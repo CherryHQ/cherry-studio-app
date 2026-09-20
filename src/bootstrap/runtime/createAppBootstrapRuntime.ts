@@ -55,6 +55,7 @@ export function createAppBootstrapRuntime(
   // resolutions only construct — the connection opens in `DbService.onInit`,
   // inside `start()`.
   const host = new ApplicationHost({ overrides, services: serviceList });
+  const preference = host.container.get<PreferenceService>('PreferenceService');
   const backgroundActivityEnvironment = host.container.get<BackgroundActivityEnvironment>(
     'BackgroundActivityEnvironment',
   );
@@ -66,6 +67,11 @@ export function createAppBootstrapRuntime(
     assistantPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
+    // Android's switch controls chat execution; its service notifications remain mandatory.
+    isPresentationEnabled: () =>
+      Platform.OS !== 'ios' || preference.readCached('chat.background_reply.enabled'),
+    subscribePresentationEnabled: (listener) =>
+      preference.subscribeChange('chat.background_reply.enabled')(listener),
     onForegroundAttention: publishForegroundActivityAttention,
     paintingPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(PaintingActivity),
@@ -83,7 +89,6 @@ export function createAppBootstrapRuntime(
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
-  const preference = host.container.get<PreferenceService>('PreferenceService');
   const providerRegistryUpdater = host.container.get<ProviderRegistryUpdaterService>(
     'ProviderRegistryUpdaterService',
   );

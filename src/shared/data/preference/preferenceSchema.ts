@@ -34,6 +34,7 @@ export interface PreferenceSchema {
   'app.user.avatar': string;
   'app.user.name': string;
 
+  /** Also gates all iOS Live Activity surfaces, including painting; keep the persisted key. */
   'chat.background_reply.enabled': boolean;
   'agent.default_model_id': string | null;
   'chat.web_search.compression.cutoff_limit': number;

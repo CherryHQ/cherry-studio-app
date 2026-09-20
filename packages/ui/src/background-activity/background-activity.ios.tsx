@@ -11,6 +11,7 @@ import {
   multilineTextAlignment,
   offset,
   padding,
+  privacySensitive,
   resizable,
   truncationMode,
   widgetAccentedRenderingMode,
@@ -90,6 +91,7 @@ export const renderBackgroundActivity: LiveActivityComponent<
               <Text
                 modifiers={[
                   font({ size: 12, weight: 'medium' }),
+                  privacySensitive(),
                   foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
                   lineLimit(1),
                   truncationMode('tail'),
@@ -114,6 +116,7 @@ export const renderBackgroundActivity: LiveActivityComponent<
           <Text
             modifiers={[
               font({ size: 12 }),
+              privacySensitive(),
               foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
               lineLimit(1),
               multilineTextAlignment('leading'),
@@ -280,6 +283,7 @@ export const renderBackgroundActivity: LiveActivityComponent<
           <Text
             modifiers={[
               font({ size: 14, weight: 'semibold' }),
+              privacySensitive(),
               foregroundStyle('#FFFFFF'),
               lineLimit(1),
               truncationMode('tail'),
@@ -316,6 +320,7 @@ export const renderBackgroundActivity: LiveActivityComponent<
         <Text
           modifiers={[
             font({ size: 13 }),
+            privacySensitive(!!props.preview && !isSimplified),
             foregroundStyle('#C7C7CC'),
             lineHeight(17),
             lineLimit(isSimplified ? 1 : 2),

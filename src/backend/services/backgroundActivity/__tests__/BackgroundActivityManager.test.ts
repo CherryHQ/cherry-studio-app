@@ -15,7 +15,8 @@ function createMockPresenter(
     Pick<BackgroundActivityPresenter<TestProps>, 'presentWhile' | 'shouldHoldLeaseUntilDelivery'>
   > = {},
 ) {
-  const handles: { dismiss: jest.Mock; end: jest.Mock; update: jest.Mock }[] = [];
+  const handles: { dismiss: jest.Mock; end: jest.Mock; isActive: jest.Mock; update: jest.Mock }[] =
+    [];
   const presenter = {
     presentWhile: 'always',
     shouldHoldLeaseUntilDelivery: false,
@@ -25,6 +26,7 @@ function createMockPresenter(
       const handle = {
         dismiss: jest.fn(async () => {}),
         end: jest.fn(async () => {}),
+        isActive: jest.fn(() => true),
         update: jest.fn(async () => {}),
       };
       handles.push(handle);
@@ -40,6 +42,8 @@ function createMockPresenter(
 describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) => {
   let appStateListener: ((state: AppStateStatus) => void) | undefined;
   let visibleTaskListener: ((deepLinkUrl: string | undefined) => void) | undefined;
+  let presentationEnabledListener: (() => void) | undefined;
+  let isPresentationEnabled: boolean;
   const mockLeases: { release: jest.Mock }[] = [];
   const mockPrepareLogo = jest.fn(async () => 'file:///widgets/cherry-studio-logo.png');
   const mockAcquire = jest.fn((_tag: string) => {
@@ -51,6 +55,8 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
   beforeEach(() => {
     appStateListener = undefined;
     visibleTaskListener = undefined;
+    presentationEnabledListener = undefined;
+    isPresentationEnabled = true;
     mockLeases.length = 0;
     jest.clearAllMocks();
     Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
@@ -178,6 +184,122 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     await flushOperations();
     expect(presenter.start).not.toHaveBeenCalled();
     await manager._doStop();
+  });
+
+  test.each(['return', 'update', 'finish'] as const)(
+    'respects native dismissal detected on %s without interrupting the task',
+    async (detection) => {
+      const { handles, presenter } = createMockPresenter({ presentWhile: 'app-hidden' });
+      const manager = await createManager([presenter]);
+      const input = {
+        deepLinkUrl: 'cherrystudio:///?sessionId=session-1',
+        keepAlive: true,
+        presenter,
+        props: makeProps('running'),
+        tag: 'chat.topic-1',
+      };
+      const session = manager.startSession(input);
+      appStateListener?.('inactive');
+      appStateListener?.('background');
+      handles[0]!.isActive.mockReturnValue(false);
+
+      if (detection === 'update') {
+        session.update(makeProps('more text'), { urgent: true });
+        await flushOperations();
+      } else if (detection === 'finish') {
+        await session.finish(makeProps('completed'));
+      }
+      appStateListener?.('active');
+      appStateListener?.('inactive');
+      appStateListener?.('active');
+      appStateListener?.('inactive');
+      await flushOperations();
+
+      expect(presenter.start).toHaveBeenCalledTimes(1);
+      expect(handles[0]!.update).not.toHaveBeenCalled();
+      expect(handles[0]!.end).not.toHaveBeenCalled();
+      if (detection !== 'finish') expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+      await session.finish(makeProps('completed'));
+      expect(mockLeases[0]!.release).toHaveBeenCalledTimes(1);
+      visibleTaskListener?.(input.deepLinkUrl);
+      await flushOperations();
+      expect(handles[0]!.dismiss).not.toHaveBeenCalled();
+
+      // A new task at the same destination gets a new presentation opportunity.
+      appStateListener?.('active');
+      manager.startSession(input);
+      appStateListener?.('inactive');
+      expect(presenter.start).toHaveBeenCalledTimes(2);
+      await manager._doStop();
+    },
+  );
+
+  test('gates both chat and painting surfaces without taking away their execution leases', async () => {
+    isPresentationEnabled = false;
+    const chat = createMockPresenter({ presentWhile: 'app-hidden' });
+    const painting = createMockPresenter({ presentWhile: 'app-hidden' });
+    const manager = await createManager([chat.presenter, painting.presenter]);
+    const sessions = [chat, painting].map(({ presenter }) =>
+      manager.startSession({ keepAlive: true, presenter, props: makeProps('one'), tag: 'task' }),
+    );
+    appStateListener?.('inactive');
+    expect(chat.presenter.start).not.toHaveBeenCalled();
+    expect(painting.presenter.start).not.toHaveBeenCalled();
+    expect(mockLeases).toHaveLength(2);
+    for (const lease of mockLeases) expect(lease.release).not.toHaveBeenCalled();
+    for (const session of sessions) session.update(makeProps('two'));
+
+    appStateListener?.('active');
+    isPresentationEnabled = true;
+    presentationEnabledListener?.();
+    expect(chat.presenter.start).not.toHaveBeenCalled();
+    expect(painting.presenter.start).not.toHaveBeenCalled();
+    appStateListener?.('inactive');
+    for (const { presenter } of [chat, painting]) {
+      expect(presenter.start).toHaveBeenCalledWith(
+        expect.objectContaining({ detail: 'two' }),
+        undefined,
+      );
+    }
+    await manager._doStop();
+  });
+
+  test('turning presentation off removes running and settled cards across presenters', async () => {
+    const chat = createMockPresenter({ presentWhile: 'app-hidden' });
+    const painting = createMockPresenter({ presentWhile: 'app-hidden' });
+    const manager = await createManager([chat.presenter, painting.presenter]);
+    const chatSession = manager.startSession({
+      deepLinkUrl: 'cherrystudio:///?sessionId=session-1',
+      presenter: chat.presenter,
+      props: makeProps('chat'),
+      tag: 'chat',
+    });
+    const paintingSession = manager.startSession({
+      keepAlive: true,
+      presenter: painting.presenter,
+      props: makeProps('painting'),
+      tag: 'painting',
+    });
+    appStateListener?.('inactive');
+    await chatSession.finish(makeProps('completed'));
+
+    isPresentationEnabled = false;
+    presentationEnabledListener?.();
+    await flushOperations();
+    expect(chat.handles[0]!.dismiss).toHaveBeenCalledTimes(1);
+    expect(painting.handles[0]!.end).toHaveBeenCalledWith(
+      'immediate',
+      expect.any(Object),
+      expect.any(Object),
+    );
+    expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+    appStateListener?.('active');
+    appStateListener?.('inactive');
+    await paintingSession.finish(makeProps('completed'));
+    expect(painting.presenter.start).toHaveBeenCalledTimes(1);
+    expect(mockLeases[0]!.release).toHaveBeenCalledTimes(1);
+    await manager._doStop();
+    expect(presentationEnabledListener).toBeUndefined();
   });
 
   test('dismisses a settled surface when the user opens its destination', async () => {
@@ -318,6 +440,8 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
       { acquire: mockAcquire },
       {
         getColorScheme: () => 'dark',
+        isPresentationEnabled: () => isPresentationEnabled,
+        subscribePresentationEnabled,
         prepareLogo: mockPrepareLogo,
         presenters: [presenter],
         subscribeVisibleTask,
@@ -660,6 +784,8 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
       { acquire: mockAcquire },
       {
         getColorScheme: () => 'dark',
+        isPresentationEnabled: () => isPresentationEnabled,
+        subscribePresentationEnabled,
         prepareLogo: mockPrepareLogo,
         presenters,
         subscribeVisibleTask,
@@ -673,6 +799,13 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     visibleTaskListener = listener;
     return () => {
       visibleTaskListener = undefined;
+    };
+  }
+
+  function subscribePresentationEnabled(listener: () => void) {
+    presentationEnabledListener = listener;
+    return () => {
+      presentationEnabledListener = undefined;
     };
   }
 });

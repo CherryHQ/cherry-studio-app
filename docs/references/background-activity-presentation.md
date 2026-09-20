@@ -34,8 +34,34 @@ branches on the platform.
   request into the background, where it is refused.
 - Returning to the foreground ends the surface immediately. The session, its content, and its
   keep-alive lease are untouched — a surface is disposable, a session is not — and leaving again
-  recreates it from the latest content.
+  recreates it from the latest content, unless the user or system already removed it.
 - A refused creation is not retried inside the same window; the next window tries again.
+
+Before updating, ending, or retiring a running Live Activity, the presenter checks whether its
+native identifier is still active or stale. A removed surface becomes dismissed for the rest of
+that task: returning and leaving cannot recreate it. This does not cancel the task or release its
+execution lease. A new task at the same destination can create its own activity.
+
+The iOS **Live Activities** setting gates both chat and painting presentation. Disabling it retires
+running cards and dismisses retained results tracked by this process; tasks cannot create cards
+while the setting is disabled.
+Bootstrap supplies this presentation policy separately from the execution policy. The stored
+`chat.background_reply.enabled` key is retained for existing preferences; Android still uses it for
+background replies and keeps its mandatory foreground-service notification.
+
+## Privacy And Payloads
+
+Reply previews, conversation titles, assistant attribution, and painting prompts are marked with
+SwiftUI's `privacySensitive` modifier. Their content remains available for previews, while the
+system redacts those views according to the person's Lock Screen privacy settings. Task status and
+elapsed time stay unmarked. This does not force redaction when the person allows sensitive content.
+
+The Live Activity presenter bounds content before every start, update, and end. It measures UTF-8
+bytes including the deep link, expo-widgets' nested JSON encoding, and possible slash escaping.
+The measured payload is capped at 3 KB, reserving 1 KB of ActivityKit's 4 KB allowance for the native
+name and encoding overhead. Long previews, attribution, titles, and labels are shortened at Unicode
+code-point boundaries without changing the stored task content. Identifiers and state are never
+truncated; invalid fixed metadata is rejected, and an invalid final payload still ends the card.
 
 ## Opening A Surface Early Enough
 
@@ -91,7 +117,10 @@ on leaving and disappearing on return; sending a message and locking the phone i
 visible a card created for Control Center or the app switcher is; completion while locked; opening
 the app without entering the conversation (card stays) versus opening the conversation (card goes);
 a multi-turn conversation never stacking cards; expiry after the linger window; cards retired after
-the process is killed; concurrent chat and painting each showing one.
+the process is killed; concurrent chat and painting each showing one; a dismissed running card
+staying dismissed after returning and leaving; disabling Live Activities clearing chat and painting
+cards; system privacy redaction covering titles and previews while leaving status readable; and
+long multilingual prompts staying within the native payload limit.
 
 Two behaviors cannot be established by source review and must be confirmed on a device or
 simulator:

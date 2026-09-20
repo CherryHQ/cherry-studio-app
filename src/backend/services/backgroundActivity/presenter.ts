@@ -7,6 +7,8 @@ import type {
 // strictFunctionTypes, so a Presenter<FeatureProps> stays assignable to the
 // type-erased Presenter the manager stores (same trick as JobHandler).
 export type BackgroundActivityHandle<Props extends BackgroundActivityBaseProps> = {
+  /** Optional native-state check; false means the user or system removed the surface. */
+  isActive?(): boolean;
   /**
    * Retires a surface the user has already seen. Called at most once, after
    * `end`, while the ended surface may still be visible.

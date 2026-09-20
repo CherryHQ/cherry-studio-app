@@ -21,6 +21,10 @@ describe('background activity iOS layout', () => {
     expect(layout).toContain('compactLabel!==undefined');
     expect(layout).toContain('props.detail');
     expect(layout).toContain('props.preview');
+    // These modifiers must survive widget serialization; the system supplies
+    // the privacy redaction reason according to the person's Lock Screen settings.
+    expect(layout.match(/privacySensitive\(/g)).toHaveLength(4);
+    expect(layout).toContain('privacySensitive(!!props.preview&&!isSimplified)');
     expect(layout).toContain('bannerSmall');
     expect(layout.match(/activityBackgroundTint\(null\)/g)).toHaveLength(2);
     expect(layout.match(/style:['"]primary['"]/g)).toHaveLength(2);
