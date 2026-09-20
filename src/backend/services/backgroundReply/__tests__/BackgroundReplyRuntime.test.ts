@@ -62,25 +62,89 @@ describe('BackgroundReplyRuntime', () => {
       enabled = value;
       const runtime = await createRuntime();
       const interrupt = jest.fn();
-      const lease = runtime.acquirePreparation(interrupt);
+      const lease = runtime.acquirePreparation('session-1', interrupt);
       expect(acquire).toHaveBeenCalledTimes(value ? 1 : 0);
       if (value) expect(acquire).toHaveBeenCalledWith('chat.preparation', interrupt);
-      expect(mockStartSession).not.toHaveBeenCalled();
+      expect(mockStartSession).toHaveBeenCalledTimes(value ? 1 : 0);
       lease.release();
       expect(preparationRelease).toHaveBeenCalledTimes(value ? 1 : 0);
       await runtime._doStop();
     },
   );
 
+  test('preparation opens the surface the turn then inherits', async () => {
+    const runtime = await createRuntime();
+    const lease = runtime.acquirePreparation('session-1', jest.fn());
+
+    // The window to create a surface can close before the turn exists.
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+    const [session] = mockSessions;
+    expect(session!.input.deepLinkUrl).toBe('cherrystudio:///?sessionId=session-1');
+    expect(session!.input.props).toMatchObject({ phase: 'preparing' });
+
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+    lease.release();
+
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+    expect(session!.cancel).not.toHaveBeenCalled();
+    expect(session!.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ attribution: 'Alpha', title: 'First session' }),
+      expect.objectContaining({ keepAlive: true }),
+    );
+
+    turn.finish('completed');
+    await flushOperations();
+    expect(session!.finish).toHaveBeenCalledTimes(1);
+    await runtime._doStop();
+  });
+
+  test('a preparation that never reaches a turn leaves no surface behind', async () => {
+    const runtime = await createRuntime();
+    const lease = runtime.acquirePreparation('session-1', jest.fn());
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+
+    lease.release();
+    expect(mockSessions[0]!.cancel).toHaveBeenCalledTimes(1);
+    expect(mockDismissTask).toHaveBeenCalledWith('cherrystudio:///?sessionId=session-1');
+
+    // The next submission starts from scratch rather than inheriting it.
+    runtime.acquirePreparation('session-1', jest.fn());
+    expect(mockStartSession).toHaveBeenCalledTimes(2);
+    await runtime._doStop();
+  });
+
+  test('preparation never displaces a live turn on the same Session', async () => {
+    const runtime = await createRuntime();
+    runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+
+    const lease = runtime.acquirePreparation('session-1', jest.fn());
+    lease.release();
+
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+    expect(mockSessions[0]!.cancel).not.toHaveBeenCalled();
+    await runtime._doStop();
+  });
+
   test.each(['disabled', 'stopped'] as const)(
     'releases pending preparation leases once when background reply is %s',
     async (transition) => {
       const runtime = await createRuntime();
       const interrupt = jest.fn();
-      const completed = runtime.acquirePreparation(interrupt);
+      const completed = runtime.acquirePreparation('session-1', interrupt);
       const pending = [
-        runtime.acquirePreparation(interrupt),
-        runtime.acquirePreparation(interrupt),
+        runtime.acquirePreparation('session-2', interrupt),
+        runtime.acquirePreparation('session-3', interrupt),
       ];
       completed.release();
       completed.release();

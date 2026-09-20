@@ -279,11 +279,14 @@ export class BackgroundActivityManager extends BaseService {
     this.clearUpdateTimer(record);
     if (!record.presenter.shouldHoldLeaseUntilDelivery) this.reconcileLease(record);
     if (handle) {
+      // Cancellation leaves nothing behind; a settled result can outlive the
+      // session on the platform's own surface until the user has seen it.
+      // Retained before the end is delivered, so a dismissal arriving while
+      // that delivery is in flight still finds it — the queue keeps the
+      // dismissal behind the end regardless.
+      if (policy === 'default') this.retainSettled(record, handle);
       return this.enqueue(async () => {
         await this.endNative(record, handle, policy);
-        // Cancellation leaves nothing behind; a settled result can outlive the
-        // session on the platform's own surface until the user has seen it.
-        if (policy === 'default') this.retainSettled(record, handle);
         this.reconcileLease(record);
       });
     }

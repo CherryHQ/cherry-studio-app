@@ -28,10 +28,24 @@ branches on the platform.
 - The surface is created as the app resigns active. ActivityKit refuses to create a Live Activity
   from the background, so this transition is the only moment the request can succeed; a session
   that starts while the app is already hidden waits for the next one.
+- Resigning active is also what the system reports for Control Center, the notification shade, a
+  call banner, a system alert, and the app switcher. A surface created for one of those appears
+  briefly and is retired on return. Creation cannot be deferred past it: a delay only moves the
+  request into the background, where it is refused.
 - Returning to the foreground ends the surface immediately. The session, its content, and its
   keep-alive lease are untouched — a surface is disposable, a session is not — and leaving again
   recreates it from the latest content.
 - A refused creation is not retried inside the same window; the next window tries again.
+
+## Opening A Surface Early Enough
+
+A session that does not exist yet cannot be given a surface, and the only moment a Live Activity can
+be requested is the one the user creates by leaving. Chat therefore opens its Session's surface when
+submission preparation starts — the same point that already takes a keep-alive lease — rather than
+when the turn is reserved. Sending a message and immediately locking the phone would otherwise fall
+between the two: the durable writes of preparation are enough to miss the window, and the next one
+only comes when the user opens the app and leaves again. The turn inherits the prepared surface and
+replaces its placeholder labels; preparation that never reaches a turn takes its surface with it.
 
 `always` represents a task the execution runtime already admitted, whether or not the user can see
 the app. Creating a surface still does not authorize starting Android's foreground service from the
@@ -55,6 +69,10 @@ The manager keeps a settled surface dismissable for the same window and retires 
   predecessor's card instead of stacking a second one.
 - **The Session is deleted.** Chat dismisses the destination even when no turn record remains.
 
+Both platforms follow these rules. On Android they mostly restate what App Shell's read receipt
+already did, with one added effect: a new turn now clears its predecessor's terminal notification
+instead of leaving it for the read receipt.
+
 Cancellation leaves nothing behind, and an orphan sweep at cold start ends surfaces a dead process
 left active. `expo-widgets` only enumerates active and stale activities, so a settled Live Activity
 can no longer be found after a restart — its dismissal date is what retires it.
@@ -69,7 +87,8 @@ visible, which is exactly when the previous card has already been retired.
 ## Verification
 
 Device acceptance covers: no Dynamic Island card while chatting in the foreground; a card appearing
-on leaving and disappearing on return; rapid switch-away-and-back; completion while locked; opening
+on leaving and disappearing on return; sending a message and locking the phone immediately; how
+visible a card created for Control Center or the app switcher is; completion while locked; opening
 the app without entering the conversation (card stays) versus opening the conversation (card goes);
 a multi-turn conversation never stacking cards; expiry after the linger window; cards retired after
 the process is killed; concurrent chat and painting each showing one.

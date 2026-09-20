@@ -241,6 +241,34 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     await manager._doStop();
   });
 
+  test('dismisses a settled surface seen while its final delivery is in flight', async () => {
+    const { handles, presenter } = createMockPresenter({ presentWhile: 'app-hidden' });
+    const manager = await createManager([presenter]);
+    const deepLinkUrl = 'cherrystudio:///?sessionId=session-1';
+    const session = manager.startSession({
+      deepLinkUrl,
+      presenter,
+      props: makeProps('running'),
+      tag: 'chat.topic-1',
+    });
+    appStateListener?.('inactive');
+
+    let deliverEnd: (() => void) | undefined;
+    handles[0]!.end.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (deliverEnd = resolve)),
+    );
+    const finished = session.finish(makeProps('completed'));
+    await flushMicrotasks();
+
+    // The user reaches the conversation before the platform confirms the end.
+    visibleTaskListener?.(deepLinkUrl);
+    deliverEnd?.();
+    await finished;
+    await flushOperations();
+    expect(handles[0]!.dismiss).toHaveBeenCalledTimes(1);
+    await manager._doStop();
+  });
+
   test('forgets settled surfaces that outlive the linger window', async () => {
     jest.useFakeTimers();
     const { handles, presenter } = createMockPresenter({ presentWhile: 'app-hidden' });

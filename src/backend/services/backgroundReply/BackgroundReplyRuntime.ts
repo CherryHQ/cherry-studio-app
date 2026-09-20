@@ -152,16 +152,45 @@ export class BackgroundReplyRuntime
     }
   }
 
-  acquirePreparation = (onInterrupt: (reason: Error) => void): KeepAliveLease => {
+  acquirePreparation = (
+    sessionId: string,
+    onInterrupt: (reason: Error) => void,
+  ): KeepAliveLease => {
     if (!this.isActivated || this.disposed) return { release() {} };
     const lease = this.keepAlive.acquire('chat.preparation', onInterrupt);
     this.preparationLeases.add(lease);
+    const prepared = this.prepareTurn(sessionId);
     return {
       release: () => {
         if (this.preparationLeases.delete(lease)) lease.release();
+        // A turn that started owns the record now. Nothing took it over means
+        // preparation ended without one, so its surface has nothing to say.
+        if (prepared && this.turns.get(sessionId) === prepared) this.clearTurn(sessionId);
       },
     };
   };
+
+  /**
+   * Opens the Session's surface for the preparation stage. A surface can only
+   * be created while the user can still see the app, and preparation is the
+   * part of a submission they are most likely to walk away from.
+   */
+  private prepareTurn(sessionId: string): TurnRecord | undefined {
+    if (this.turns.has(sessionId)) return undefined;
+    const record: TurnRecord = {
+      // The turn replaces both labels as soon as it knows them.
+      actorName: this.environment.translate('chat.backgroundReply.assistant'),
+      content: deriveBackgroundReplyContent(undefined, this.environment.translate),
+      conversationTitle: '',
+      deepLinkUrl: sessionTaskUrl(sessionId),
+      generation: ++this.generation,
+      key: sessionId,
+      startedAtEpochMs: Date.now(),
+    };
+    this.turns.set(sessionId, record);
+    this.ensureSession(record);
+    return record;
+  }
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
     if (!this.isActivated || this.disposed) return noOpTurn;
