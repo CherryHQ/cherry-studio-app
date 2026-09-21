@@ -65,9 +65,13 @@ export async function stitchCapturedPngPages(
     return stitched;
   } catch (error) {
     release();
+    // AbortSignal can throw a DOMException from another realm, outside this Error constructor.
     if (
       error instanceof DocumentExportError ||
-      (error instanceof Error && error.name === 'AbortError')
+      (typeof error === 'object' &&
+        error !== null &&
+        'name' in error &&
+        error.name === 'AbortError')
     )
       throw error;
     throw new DocumentExportError('capture-failed');
