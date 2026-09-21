@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "Tamamlandı",
   "chat.actions.createImage": "Resim oluştur",
   "chat.actions.webSearch": "Web araması",
+  "chat.attachments.dropLimit": "Yalnızca ilk {{limit}} görsel eklendi; geri kalanlar atlandı.",
   "chat.attachments.image": "Resim eki",
   "chat.attachments.importFailed_one": "{{count}} ek eklenemedi.",
   "chat.attachments.importFailed_other": "{{count}} ek eklenemedi.",

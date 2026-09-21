@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "Завершено",
   "chat.actions.createImage": "Создать изображение",
   "chat.actions.webSearch": "Веб-поиск",
+  "chat.attachments.dropLimit": "Добавлены только первые {{limit}} изображений; остальные были пропущены.",
   "chat.attachments.image": "Вложение изображения",
   "chat.attachments.importFailed_few": "Не удалось добавить {{count}} вложения.",
   "chat.attachments.importFailed_many": "Не удалось добавить {{count}} вложений.",

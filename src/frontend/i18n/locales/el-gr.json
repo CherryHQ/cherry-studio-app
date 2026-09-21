@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "Ολοκληρώθηκε",
   "chat.actions.createImage": "Δημιουργία εικόνας",
   "chat.actions.webSearch": "Αναζήτηση στον Ιστό",
+  "chat.attachments.dropLimit": "Μόνο οι πρώτες {{limit}} εικόνες προστέθηκαν· οι υπόλοιπες παραλείφθηκαν.",
   "chat.attachments.image": "Συνημμένο εικόνας",
   "chat.attachments.importFailed_one": "Δεν ήταν δυνατή η προσθήκη {{count}} συνημμένου.",
   "chat.attachments.importFailed_other": "Δεν ήταν δυνατή η προσθήκη {{count}} συνημμένων.",

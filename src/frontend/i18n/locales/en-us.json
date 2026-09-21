@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "Completed",
   "chat.actions.createImage": "Create image",
   "chat.actions.webSearch": "Web search",
+  "chat.attachments.dropLimit": "Only the first {{limit}} images were added; the rest were left out.",
   "chat.attachments.image": "Image attachment",
   "chat.attachments.importFailed_one": "Could not add {{count}} attachment.",
   "chat.attachments.importFailed_other": "Could not add {{count}} attachments.",

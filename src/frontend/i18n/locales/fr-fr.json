@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "Terminé",
   "chat.actions.createImage": "Créer une image",
   "chat.actions.webSearch": "Recherche sur le Web",
+  "chat.attachments.dropLimit": "Seules les premières {{limit}} images ont été ajoutées ; les autres ont été ignorées.",
   "chat.attachments.image": "Image jointe",
   "chat.attachments.importFailed_many": "Impossible d’ajouter {{count}} pièces jointes.",
   "chat.attachments.importFailed_one": "Impossible d’ajouter {{count}} pièce jointe.",

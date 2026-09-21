@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "完了",
   "chat.actions.createImage": "画像の作成",
   "chat.actions.webSearch": "ウェブ検索",
+  "chat.attachments.dropLimit": "最初の{{limit}}枚の画像のみ追加され、残りは省略されました。",
   "chat.attachments.image": "画像添付ファイル",
   "chat.attachments.importFailed_other": "{{count}} 件の添付ファイルを追加できませんでした。",
   "chat.attachments.unsupportedImageFormat": "JPEG、PNG、GIF、および WebP 画像のみがサポートされます。",

@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "已完成",
   "chat.actions.createImage": "创建图片",
   "chat.actions.webSearch": "网络搜索",
+  "chat.attachments.dropLimit": "仅添加了前 {{limit}} 张图片，其余图片未添加。",
   "chat.attachments.image": "图片附件",
   "chat.attachments.importFailed_other": "有 {{count}} 个附件导入失败。",
   "chat.attachments.unsupportedImageFormat": "仅支持 JPEG、PNG、GIF 和 WebP 格式的图片。",

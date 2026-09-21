@@ -120,6 +120,41 @@ export function createPastedImageAttachmentDraft(uri: string): ComposerAttachmen
   return createPhotoAttachmentDraft({ fileName, id: uri, uri });
 }
 
+/** What the drop target reports for one image dropped from another app. */
+export type DroppedImagePayload = {
+  height?: number;
+  mediaType?: string;
+  name?: string;
+  size?: number;
+  uri: string;
+  width?: number;
+};
+
+export function isDroppedImagePayload(payload: DroppedImagePayload): boolean {
+  return isComposerImageMediaType(payload.mediaType) || isComposerImageFileName(payload.name);
+}
+
+/** Mirrors the photo-library draft: the cache file is imported as-is. */
+export function createDroppedImageAttachmentDraft(
+  image: DroppedImagePayload,
+): ComposerAttachmentSource {
+  const attachment = createPhotoAttachmentDraft({
+    fileName: image.name,
+    id: image.uri,
+    uri: image.uri,
+  });
+  const resolvedMediaType =
+    image.mediaType !== undefined && isComposerImageMediaType(image.mediaType)
+      ? image.mediaType
+      : attachment.mediaType;
+
+  return {
+    ...attachment,
+    mediaType: resolvedMediaType,
+    size: image.size,
+  };
+}
+
 type CameraPhotoInput = {
   uri: string;
 };
