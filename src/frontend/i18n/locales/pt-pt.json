@@ -441,7 +441,6 @@
   "common.done": "Concluído",
   "common.edit": "Editar",
   "common.filter": "Filtro",
-  "common.loading": "A carregar…",
   "common.more": "Mais",
   "common.officialWebsite": "Site oficial",
   "common.ok": "OK",
@@ -1676,14 +1675,5 @@
   "settings.websearch.provider.selection": "Fornecedor de pesquisa",
   "settings.websearch.provider.showApiKeys": "Mostrar chave API",
   "settings.websearch.provider.title": "Fornecedor de pesquisa",
-  "systemEntry.agent": "Agente",
-  "systemEntry.failed": "Não foi possível abrir esta partilha. Partilhe o conteúdo novamente.",
-  "systemEntry.manageAgents": "Gerir agentes",
-  "systemEntry.noAgent": "Nenhum agente disponível",
-  "systemEntry.sendFailed": "Não foi possível enviar esta partilha. Verifique o agente e o modelo selecionados e tente novamente.",
-  "systemEntry.share.attachments": "Anexos",
-  "systemEntry.share.expired": "Esta partilha já não está disponível. Partilhe o conteúdo novamente.",
-  "systemEntry.share.review": "Verifique o conteúdo partilhado e escolha um agente. O envio cria uma nova conversa guardada.",
-  "systemEntry.share.send": "Enviar numa nova conversa",
-  "systemEntry.share.title": "Partilhar no Cherry"
+  "systemEntry.failed": "Não foi possível abrir esta partilha. Partilhe o conteúdo novamente."
 }

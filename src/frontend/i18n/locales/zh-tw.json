@@ -433,7 +433,6 @@
   "common.done": "完成",
   "common.edit": "編輯",
   "common.filter": "篩選",
-  "common.loading": "載入中…",
   "common.more": "更多",
   "common.officialWebsite": "官網",
   "common.ok": "好",
@@ -1666,14 +1665,5 @@
   "settings.websearch.provider.selection": "搜索供應商",
   "settings.websearch.provider.showApiKeys": "顯示 API Key",
   "settings.websearch.provider.title": "搜索供應商",
-  "systemEntry.agent": "智能體",
-  "systemEntry.failed": "無法開啟此分享，請重新分享內容。",
-  "systemEntry.manageAgents": "管理智能體",
-  "systemEntry.noAgent": "目前沒有可用的智能體",
-  "systemEntry.sendFailed": "分享內容傳送失敗，請檢查所選智能體與模型後再試一次。",
-  "systemEntry.share.attachments": "附件",
-  "systemEntry.share.expired": "此分享內容已失效，請重新分享。",
-  "systemEntry.share.review": "確認分享內容並選擇智能體，傳送後將建立並儲存新的聊天。",
-  "systemEntry.share.send": "傳送到新聊天",
-  "systemEntry.share.title": "分享到 Cherry"
+  "systemEntry.failed": "無法開啟此分享，請重新分享內容。"
 }

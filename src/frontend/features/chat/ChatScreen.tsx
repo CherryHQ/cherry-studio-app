@@ -17,6 +17,7 @@ import {
   type ChatTarget,
   parseChatRoute,
 } from '@/frontend/appShell/navigation/chat';
+import { getShareComposerHandoff } from '@/frontend/appShell/systemEntry';
 import {
   ComposerDismissArea,
   ComposerDock,
@@ -93,6 +94,9 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     !sessionId && Boolean(agentId) && !agent.error && (agent.isLoading || Boolean(agent.agent));
   const hasComposer =
     !isPreview && Boolean(agent.agent) && (isSessionAvailable || isNewAgentAvailable);
+  // A system share arrives as composer content, not as a message: its text and attachments wait
+  // in the input for the user to edit, retarget, and send.
+  const shareHandoff = getShareComposerHandoff(composerSession.seedHandoff);
   const { bottom: bottomInset } = useSafeAreaInsets();
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
@@ -102,7 +106,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   }
 
   return (
-    <ComposerSessionProvider key={composerSession.key}>
+    <ComposerSessionProvider
+      key={composerSession.key}
+      initialAttachments={shareHandoff?.attachments}
+      initialDraft={shareHandoff?.draft}
+    >
       {!isPreview &&
       sessionId &&
       session.data &&

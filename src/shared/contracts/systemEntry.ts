@@ -1,22 +1,25 @@
+import type { FileEntryId } from '@/shared/data/types/file';
+
+/** A shared attachment after it has been imported into the managed file library. */
+export type SystemSharedFile = {
+  fileEntryId: FileEntryId;
+  mediaType: string;
+  name: string;
+  size: number;
+  uri: string;
+};
+
 export type SystemAction = {
   kind: 'share.receive';
   text: string;
-  files: readonly { id: string; name: string; mediaType: string; size: number }[];
+  files: readonly SystemSharedFile[];
 };
-
-/** The app shell owns a claimed action until completion, dismissal, or disposal. */
-export interface SystemEntrySession {
-  readonly action: SystemAction;
-  /** Settles after submission, dismissal, or disposal. */
-  readonly settled: Promise<void>;
-  /** Requires explicit user confirmation from the share review. */
-  submit(agentId: string): Promise<{ sessionId: string }>;
-  dismiss(): Promise<void>;
-  /** Releases an unconsumed share for the next foreground pass. */
-  dispose(): Promise<void>;
-}
 
 export interface SystemEntryModule {
   subscribePending(listener: () => void): () => void;
-  claimNext(): Promise<SystemEntrySession | null>;
+  /**
+   * Claims one staged share. Attachments are imported into the library and the native staging
+   * copy is released before it resolves, so the caller owns nothing that needs releasing.
+   */
+  claimNext(): Promise<SystemAction | null>;
 }

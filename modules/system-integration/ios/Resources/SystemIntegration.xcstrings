@@ -58,13 +58,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save for Cherry"
+            "value": "Add to Cherry"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "保存到 Cherry 待确认"
+            "value": "添加到 Cherry"
           }
         }
       }
@@ -75,13 +75,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saved. Open Cherry to choose an Agent and review the content before sending."
+            "value": "Added. Open Cherry to finish it and send."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已保存。请打开 Cherry，选择 Agent 并确认内容后发送。"
+            "value": "已添加。打开 Cherry 即可继续编辑并发送。"
           }
         }
       }

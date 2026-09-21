@@ -433,7 +433,6 @@
   "common.done": "完成",
   "common.edit": "编辑",
   "common.filter": "筛选",
-  "common.loading": "加载中…",
   "common.more": "更多",
   "common.officialWebsite": "官网",
   "common.ok": "好",
@@ -1666,14 +1665,5 @@
   "settings.websearch.provider.selection": "搜索服务商",
   "settings.websearch.provider.showApiKeys": "显示 API Key",
   "settings.websearch.provider.title": "搜索服务商",
-  "systemEntry.agent": "Agent",
-  "systemEntry.failed": "无法打开此分享，请重新分享内容。",
-  "systemEntry.manageAgents": "管理 Agent",
-  "systemEntry.noAgent": "暂无可用 Agent",
-  "systemEntry.sendFailed": "分享内容发送失败，请检查所选 Agent 和模型后重试。",
-  "systemEntry.share.attachments": "附件",
-  "systemEntry.share.expired": "此分享内容已失效，请重新分享。",
-  "systemEntry.share.review": "确认分享内容并选择 Agent，发送后将创建并保存新的聊天。",
-  "systemEntry.share.send": "发送到新聊天",
-  "systemEntry.share.title": "分享到 Cherry"
+  "systemEntry.failed": "无法打开此分享，请重新分享内容。"
 }

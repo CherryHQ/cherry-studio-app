@@ -433,7 +433,6 @@
   "common.done": "完了",
   "common.edit": "編集",
   "common.filter": "フィルター",
-  "common.loading": "読み込み中…",
   "common.more": "その他",
   "common.officialWebsite": "公式サイト",
   "common.ok": "OK",
@@ -1666,14 +1665,5 @@
   "settings.websearch.provider.selection": "検索プロバイダー",
   "settings.websearch.provider.showApiKeys": "API キーを表示",
   "settings.websearch.provider.title": "検索プロバイダー",
-  "systemEntry.agent": "エージェント",
-  "systemEntry.failed": "この共有を開けませんでした。もう一度共有してください。",
-  "systemEntry.manageAgents": "エージェントを管理",
-  "systemEntry.noAgent": "利用できるエージェントがありません",
-  "systemEntry.sendFailed": "この共有を送信できませんでした。選択したエージェントとモデルを確認してから再試行してください。",
-  "systemEntry.share.attachments": "添付ファイル",
-  "systemEntry.share.expired": "この共有は利用できなくなりました。もう一度共有してください。",
-  "systemEntry.share.review": "共有された内容を確認してエージェントを選択してください。送信すると新しいチャットが作成され、保存されます。",
-  "systemEntry.share.send": "新しいチャットで送信",
-  "systemEntry.share.title": "Cherry に共有"
+  "systemEntry.failed": "この共有を開けませんでした。もう一度共有してください。"
 }

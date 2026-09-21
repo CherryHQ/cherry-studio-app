@@ -441,7 +441,6 @@
   "common.done": "Gata",
   "common.edit": "Editează",
   "common.filter": "Filtru",
-  "common.loading": "Se încarcă…",
   "common.more": "Mai mult",
   "common.officialWebsite": "Site-ul oficial",
   "common.ok": "OK",
@@ -1676,14 +1675,5 @@
   "settings.websearch.provider.selection": "Furnizor de căutare",
   "settings.websearch.provider.showApiKeys": "Afișează cheia API",
   "settings.websearch.provider.title": "Furnizor de căutare",
-  "systemEntry.agent": "Agent",
-  "systemEntry.failed": "Această partajare nu a putut fi deschisă. Partajați din nou conținutul.",
-  "systemEntry.manageAgents": "Gestionați agenții",
-  "systemEntry.noAgent": "Niciun agent disponibil",
-  "systemEntry.sendFailed": "Această partajare nu a putut fi trimisă. Verificați agentul și modelul selectate, apoi încercați din nou.",
-  "systemEntry.share.attachments": "Atașamente",
-  "systemEntry.share.expired": "Această partajare nu mai este disponibilă. Partajați din nou conținutul.",
-  "systemEntry.share.review": "Verificați conținutul partajat și alegeți un agent. La trimitere se creează o conversație nouă, salvată.",
-  "systemEntry.share.send": "Trimiteți într-o conversație nouă",
-  "systemEntry.share.title": "Partajați în Cherry"
+  "systemEntry.failed": "Această partajare nu a putut fi deschisă. Partajați din nou conținutul."
 }

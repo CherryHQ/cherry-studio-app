@@ -34,10 +34,7 @@ export interface AgentProtocol {
   deleteSession(input: { sessionId: string }): Promise<void>;
 
   /** Creates the durable Session only when its first submission is admitted. */
-  startSession(
-    input: AgentStartSessionInput,
-    options?: { signal?: AbortSignal },
-  ): Promise<AgentSessionView>;
+  startSession(input: AgentStartSessionInput): Promise<AgentSessionView>;
 
   /**
    * Copies the transcript up to and including `fromMessageId` into a new idle

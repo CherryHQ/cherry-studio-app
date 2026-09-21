@@ -1,1 +1,0 @@
-export { SystemShareScreen } from './SystemShareScreen';

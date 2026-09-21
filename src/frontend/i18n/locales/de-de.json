@@ -437,7 +437,6 @@
   "common.done": "Fertig",
   "common.edit": "Bearbeiten",
   "common.filter": "Filter",
-  "common.loading": "Wird geladen…",
   "common.more": "Mehr",
   "common.officialWebsite": "Offizielle Website",
   "common.ok": "OK",
@@ -1671,14 +1670,5 @@
   "settings.websearch.provider.selection": "Suchanbieter",
   "settings.websearch.provider.showApiKeys": "API-Schlüssel anzeigen",
   "settings.websearch.provider.title": "Suchanbieter",
-  "systemEntry.agent": "Agent",
-  "systemEntry.failed": "Diese Freigabe konnte nicht geöffnet werden. Teilen Sie den Inhalt erneut.",
-  "systemEntry.manageAgents": "Agenten verwalten",
-  "systemEntry.noAgent": "Kein Agent verfügbar",
-  "systemEntry.sendFailed": "Diese Freigabe konnte nicht gesendet werden. Prüfen Sie den ausgewählten Agenten und das Modell und versuchen Sie es erneut.",
-  "systemEntry.share.attachments": "Anhänge",
-  "systemEntry.share.expired": "Diese Freigabe ist nicht mehr verfügbar. Teilen Sie den Inhalt erneut.",
-  "systemEntry.share.review": "Prüfen Sie den geteilten Inhalt und wählen Sie einen Agenten. Beim Senden wird eine neue gespeicherte Unterhaltung erstellt.",
-  "systemEntry.share.send": "In neuem Chat senden",
-  "systemEntry.share.title": "Mit Cherry teilen"
+  "systemEntry.failed": "Diese Freigabe konnte nicht geöffnet werden. Teilen Sie den Inhalt erneut."
 }

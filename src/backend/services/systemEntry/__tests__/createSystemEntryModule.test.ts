@@ -1,4 +1,4 @@
-import type { AgentSessionView, AgentStartSessionInput } from '@/shared/contracts/agent';
+import type { SystemSharedFile } from '@/shared/contracts';
 
 import type {
   NativeSystemEntry,
@@ -7,27 +7,24 @@ import type {
 import { createSystemEntryModule } from '../createSystemEntryModule';
 
 const id = '42f7f701-37d6-4731-b7a8-8e7f3040be55';
-const view: AgentSessionView = {
-  id,
-  agentId: 'agent',
-  executionTarget: { kind: 'local' },
-  title: 'Share',
-  titleIsManual: false,
-  forkBoundaryMessageId: null,
-  forkedFromSessionId: null,
-  createdAt: '2026-09-16T00:00:00.000Z',
-  updatedAt: '2026-09-16T00:00:00.000Z',
+const file: SystemSharedFile = {
+  fileEntryId: 'ac3a0b0e-1f30-4e5c-8a51-6d0f51a5b2c7',
+  mediaType: 'image/jpeg',
+  name: 'photo.jpg',
+  size: 1024,
+  uri: 'file:///library/photo.jpg',
 };
 
 function setup() {
-  let committed: AgentSessionView | null = null;
   const entry: NativeSystemEntry = {
     version: 1,
     id,
     createdAt: Date.now(),
     kind: 'share.receive',
     text: 'hello',
-    files: [],
+    files: [
+      { uri: 'file:///staged/photo.jpg', name: 'photo.jpg', mediaType: 'image/jpeg', size: 1024 },
+    ],
   };
   const native = {
     claimNextEntry: jest.fn(async () => entry),
@@ -35,64 +32,37 @@ function setup() {
     releaseEntry: jest.fn(async () => {}),
     addListener: jest.fn(() => ({ remove: jest.fn() })),
   };
-  const dependencies = {
+  const importFiles = jest.fn(async (_entry: NativeSystemEntry, _signal: AbortSignal) => [file]);
+  const runtime = createSystemEntryModule({
+    importFiles,
     native: native as unknown as SystemIntegrationNativeModule,
-    ensureReady: jest.fn(async (_signal: AbortSignal) => {}),
-    getAgent: jest.fn(async () => ({ id: 'agent', name: 'Agent' })),
-    findSession: jest.fn(async () => committed),
-    imports: {
-      import: jest.fn(async () => []),
-      discard: jest.fn(async () => {}),
-      forget: jest.fn(),
-      cleanExpired: jest.fn(async () => {}),
-    },
-    agent: {
-      startSession: jest.fn(
-        async (_input: AgentStartSessionInput, _options?: { signal?: AbortSignal }) => {
-          committed = view;
-          return view;
-        },
-      ),
-    },
-  };
-  const runtime = createSystemEntryModule(dependencies);
-  return {
-    runtime,
-    dependencies,
-    native,
-    commit: () => {
-      committed = view;
-    },
-  };
+  });
+  return { runtime, native, importFiles };
 }
 
-test('a share never imports or sends before explicit confirmation, and repeated confirmation creates one chat', async () => {
-  const { runtime, dependencies, native } = setup();
-  const session = (await runtime.module.claimNext())!;
-  expect(dependencies.agent.startSession).not.toHaveBeenCalled();
-  expect(dependencies.imports.import).not.toHaveBeenCalled();
-  const first = session.submit('agent');
-  const second = session.submit('agent');
-  expect(second).toBe(first);
-  await first;
-  expect(dependencies.agent.startSession).toHaveBeenCalledTimes(1);
+test('a claimed share arrives as library files and leaves no native staging behind', async () => {
+  const { runtime, native, importFiles } = setup();
+
+  const action = await runtime.module.claimNext();
+
+  expect(action).toEqual({ kind: 'share.receive', text: 'hello', files: [file] });
+  expect(importFiles).toHaveBeenCalledTimes(1);
   expect(native.completeEntry).toHaveBeenCalledWith(id);
-  await session.settled;
+  expect(native.releaseEntry).not.toHaveBeenCalled();
   await runtime.dispose();
 });
 
-test('a lost native acknowledgement recovers the committed chat without importing or sending again', async () => {
-  const { runtime, dependencies, native, commit } = setup();
-  commit();
-  const session = (await runtime.module.claimNext())!;
-  expect(await session.submit('agent')).toEqual({ sessionId: id });
-  expect(dependencies.agent.startSession).not.toHaveBeenCalled();
-  expect(dependencies.imports.import).not.toHaveBeenCalled();
-  expect(native.completeEntry).toHaveBeenCalledWith(id);
+test('an import failure leaves the share staged for a later claim', async () => {
+  const { runtime, native, importFiles } = setup();
+  importFiles.mockRejectedValueOnce(new Error('disk full'));
+
+  await expect(runtime.module.claimNext()).rejects.toThrow('System share import failed');
+  expect(native.releaseEntry).toHaveBeenCalledWith(id);
+  expect(native.completeEntry).not.toHaveBeenCalled();
   await runtime.dispose();
 });
 
-test('an invalid entry does not block the next valid share in the same foreground pass', async () => {
+test('an invalid entry does not block the next valid share in the same pass', async () => {
   const { runtime, native } = setup();
   const rejectedId = '6720369c-029e-42f1-9d41-89f2873dbe5a';
   native.claimNextEntry.mockResolvedValueOnce({
@@ -103,17 +73,30 @@ test('an invalid entry does not block the next valid share in the same foregroun
     text: '',
     files: [],
   });
-  const session = await runtime.module.claimNext();
-  expect(session?.action).toMatchObject({ kind: 'share.receive', text: 'hello' });
+
+  const action = await runtime.module.claimNext();
+
+  expect(action).toMatchObject({ kind: 'share.receive', text: 'hello' });
   expect(native.completeEntry).toHaveBeenCalledWith(rejectedId);
   await runtime.dispose();
 });
 
-test('disposing an unsubmitted share releases it for a later foreground claim', async () => {
-  const { runtime, dependencies, native } = setup();
-  const session = (await runtime.module.claimNext())!;
-  await session.dispose();
-  expect(native.releaseEntry).toHaveBeenCalledWith(id);
-  expect(dependencies.imports.discard).not.toHaveBeenCalled();
+test('disposal aborts an in-flight import and releases the share', async () => {
+  const { runtime, native, importFiles } = setup();
+  let observed: AbortSignal | undefined;
+  importFiles.mockImplementationOnce(
+    (_entry, signal) =>
+      new Promise((_resolve, reject) => {
+        observed = signal;
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      }),
+  );
+
+  const claim = runtime.module.claimNext();
+  await Promise.resolve();
   await runtime.dispose();
+
+  await expect(claim).rejects.toThrow('System share import failed');
+  expect(observed?.aborted).toBe(true);
+  expect(native.releaseEntry).toHaveBeenCalledWith(id);
 });

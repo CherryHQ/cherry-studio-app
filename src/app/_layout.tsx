@@ -142,10 +142,6 @@ function RootStack() {
       <Stack.Screen name="files/[fileEntryId]" options={{ headerTransparent: false }} />
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
       <Stack.Screen
-        name="system-share"
-        options={{ headerTransparent: false, gestureEnabled: false }}
-      />
-      <Stack.Screen
         name="document-export"
         options={{
           contentStyle: { backgroundColor },

@@ -1,5 +1,5 @@
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
-import { type AgentRuntime, raceAbort } from '@/backend/ai/agent/runtime';
+import type { AgentRuntime } from '@/backend/ai/agent/runtime';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
@@ -43,11 +43,10 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
-import { createSystemEntryModule, createSystemShareImports } from '@/backend/services/systemEntry';
+import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
@@ -194,21 +193,8 @@ export function createBackend(
     },
   });
 
-  const findEntrySession = async (id: string) => {
-    try {
-      return await services.agentSession.getById(id);
-    } catch (error) {
-      if (isDataApiError(error) && error.code === ErrorCode.NOT_FOUND) return null;
-      throw error;
-    }
-  };
   const systemEntry = createSystemEntryModule({
-    agent: services.agent,
-    ensureReady: (signal) =>
-      raceAbort(infrastructure.providerRegistryUpdater.ensureReady(), signal),
-    findSession: findEntrySession,
-    getAgent: (id) => services.agentData.getById(id),
-    imports: createSystemShareImports({ entries: exportFiles, findSession: findEntrySession }),
+    importFiles: createSystemShareImporter(exportFiles),
   });
 
   return {

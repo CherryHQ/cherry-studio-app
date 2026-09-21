@@ -437,7 +437,6 @@
   "common.done": "Bitti",
   "common.edit": "Düzenle",
   "common.filter": "Filtre",
-  "common.loading": "Yükleniyor…",
   "common.more": "Daha Fazla",
   "common.officialWebsite": "Resmi web sitesi",
   "common.ok": "Tamam",
@@ -1671,14 +1670,5 @@
   "settings.websearch.provider.selection": "Arama sağlayıcısı",
   "settings.websearch.provider.showApiKeys": "API Anahtarını Göster",
   "settings.websearch.provider.title": "Arama sağlayıcısı",
-  "systemEntry.agent": "Ajan",
-  "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın.",
-  "systemEntry.manageAgents": "Ajanları yönet",
-  "systemEntry.noAgent": "Kullanılabilir ajan yok",
-  "systemEntry.sendFailed": "Bu paylaşım gönderilemedi. Seçili ajanı ve modeli kontrol edip yeniden deneyin.",
-  "systemEntry.share.attachments": "Ekler",
-  "systemEntry.share.expired": "Bu paylaşım artık kullanılamıyor. İçeriği yeniden paylaşın.",
-  "systemEntry.share.review": "Paylaşılan içeriği gözden geçirin ve bir ajan seçin. Gönderdiğinizde kaydedilen yeni bir sohbet oluşturulur.",
-  "systemEntry.share.send": "Yeni sohbette gönder",
-  "systemEntry.share.title": "Cherry ile paylaş"
+  "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın."
 }

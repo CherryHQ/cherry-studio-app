@@ -433,7 +433,6 @@
   "common.done": "Xong",
   "common.edit": "Chỉnh sửa",
   "common.filter": "Lọc",
-  "common.loading": "Đang tải…",
   "common.more": "Thêm",
   "common.officialWebsite": "Trang web chính thức",
   "common.ok": "Được rồi",
@@ -1666,14 +1665,5 @@
   "settings.websearch.provider.selection": "Nhà cung cấp dịch vụ tìm kiếm",
   "settings.websearch.provider.showApiKeys": "Hiển thị khóa API",
   "settings.websearch.provider.title": "Nhà cung cấp dịch vụ tìm kiếm",
-  "systemEntry.agent": "Tác nhân",
-  "systemEntry.failed": "Không thể mở nội dung chia sẻ này. Hãy chia sẻ lại.",
-  "systemEntry.manageAgents": "Quản lý tác nhân",
-  "systemEntry.noAgent": "Không có tác nhân khả dụng",
-  "systemEntry.sendFailed": "Không thể gửi nội dung chia sẻ này. Hãy kiểm tra tác nhân và mô hình đã chọn rồi thử lại.",
-  "systemEntry.share.attachments": "Tệp đính kèm",
-  "systemEntry.share.expired": "Nội dung chia sẻ này không còn khả dụng. Hãy chia sẻ lại.",
-  "systemEntry.share.review": "Hãy xem lại nội dung được chia sẻ và chọn một tác nhân. Khi gửi, một cuộc trò chuyện mới sẽ được tạo và lưu lại.",
-  "systemEntry.share.send": "Gửi trong cuộc trò chuyện mới",
-  "systemEntry.share.title": "Chia sẻ tới Cherry"
+  "systemEntry.failed": "Không thể mở nội dung chia sẻ này. Hãy chia sẻ lại."
 }

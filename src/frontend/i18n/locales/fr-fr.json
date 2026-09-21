@@ -441,7 +441,6 @@
   "common.done": "Terminé",
   "common.edit": "Éditer",
   "common.filter": "Filtre",
-  "common.loading": "Chargement…",
   "common.more": "Plus",
   "common.officialWebsite": "Site officiel",
   "common.ok": "D'accord",
@@ -1676,14 +1675,5 @@
   "settings.websearch.provider.selection": "Fournisseur de recherche",
   "settings.websearch.provider.showApiKeys": "Afficher la clé API",
   "settings.websearch.provider.title": "Fournisseur de recherche",
-  "systemEntry.agent": "Agent",
-  "systemEntry.failed": "Impossible d’ouvrir ce partage. Partagez à nouveau le contenu.",
-  "systemEntry.manageAgents": "Gérer les agents",
-  "systemEntry.noAgent": "Aucun agent disponible",
-  "systemEntry.sendFailed": "Impossible d’envoyer ce partage. Vérifiez l’agent et le modèle sélectionnés, puis réessayez.",
-  "systemEntry.share.attachments": "Pièces jointes",
-  "systemEntry.share.expired": "Ce partage n’est plus disponible. Partagez à nouveau le contenu.",
-  "systemEntry.share.review": "Vérifiez le contenu partagé et choisissez un agent. L’envoi crée une nouvelle conversation enregistrée.",
-  "systemEntry.share.send": "Envoyer dans une nouvelle conversation",
-  "systemEntry.share.title": "Partager avec Cherry"
+  "systemEntry.failed": "Impossible d’ouvrir ce partage. Partagez à nouveau le contenu."
 }

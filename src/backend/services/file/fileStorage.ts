@@ -122,11 +122,8 @@ function resolveMediaType(...candidates: (string | null | undefined)[]): string 
   return FALLBACK_MEDIA_TYPE;
 }
 
-async function writeInternalFile(
-  input: CreateInternalEntryInput,
-  reservedId?: FileEntryId,
-): Promise<WrittenInternalFile> {
-  const id = reservedId ? FileEntryIdSchema.parse(reservedId) : createOrderedUuid();
+async function writeInternalFile(input: CreateInternalEntryInput): Promise<WrittenInternalFile> {
+  const id = createOrderedUuid();
   let filename: string;
   let mediaType: string;
   let write: (destination: File) => Promise<void> | void;
@@ -155,9 +152,6 @@ async function writeInternalFile(
   const destination = new File(ensureFileDirectory(), `${id}${extSuffix(filename)}`);
 
   try {
-    // A durable import receipt may retry a copy interrupted before its database row committed.
-    // Its owner has checked that this reserved identity has no existing row.
-    if (reservedId && destination.exists) destination.delete();
     await write(destination);
 
     if (!destination.exists) {
@@ -193,10 +187,9 @@ export async function createInternalEntry(
   entries: Pick<FileEntryService, 'create'>,
   input: CreateInternalEntryInput,
   signal?: AbortSignal,
-  reservedId?: FileEntryId,
 ): Promise<FileEntry> {
   signal?.throwIfAborted();
-  const written = await writeInternalFile(input, reservedId);
+  const written = await writeInternalFile(input);
   try {
     signal?.throwIfAborted();
     const entry = await entries.create(written, signal);
@@ -363,17 +356,6 @@ export function deleteInternalFile(entry: Pick<FileEntry, 'filename' | 'id'>): b
   }
   file.delete();
   return true;
-}
-
-/** Reclaims a receipt-owned copy that crashed before its FileEntry row was committed. */
-export function discardReservedInternalFile(id: FileEntryId): void {
-  const safeId = FileEntryIdSchema.parse(id);
-  const directory = fileDirectory();
-  if (!directory.exists) return;
-  for (const file of directory.list()) {
-    if (file instanceof File && (file.name === safeId || file.name.startsWith(`${safeId}.`)))
-      file.delete();
-  }
 }
 
 export function getInternalFileUri(entry: Pick<FileEntry, 'filename' | 'id'>): string | undefined {

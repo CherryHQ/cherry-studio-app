@@ -437,7 +437,6 @@
   "common.done": "Έγινε",
   "common.edit": "Επεξεργασία",
   "common.filter": "Φίλτρο",
-  "common.loading": "Φόρτωση…",
   "common.more": "Περισσότερα",
   "common.officialWebsite": "Επίσημος ιστότοπος",
   "common.ok": "Εντάξει",
@@ -1671,14 +1670,5 @@
   "settings.websearch.provider.selection": "Πάροχος αναζήτησης",
   "settings.websearch.provider.showApiKeys": "Εμφάνιση κλειδιού API",
   "settings.websearch.provider.title": "Πάροχος αναζήτησης",
-  "systemEntry.agent": "Πράκτορας",
-  "systemEntry.failed": "Δεν ήταν δυνατό το άνοιγμα αυτής της κοινοποίησης. Κοινοποιήστε ξανά το περιεχόμενο.",
-  "systemEntry.manageAgents": "Διαχείριση πρακτόρων",
-  "systemEntry.noAgent": "Δεν υπάρχει διαθέσιμος πράκτορας",
-  "systemEntry.sendFailed": "Δεν ήταν δυνατή η αποστολή αυτής της κοινοποίησης. Ελέγξτε τον επιλεγμένο πράκτορα και το μοντέλο και δοκιμάστε ξανά.",
-  "systemEntry.share.attachments": "Συνημμένα",
-  "systemEntry.share.expired": "Αυτή η κοινοποίηση δεν είναι πλέον διαθέσιμη. Κοινοποιήστε ξανά το περιεχόμενο.",
-  "systemEntry.share.review": "Ελέγξτε το κοινοποιημένο περιεχόμενο και επιλέξτε πράκτορα. Η αποστολή δημιουργεί μια νέα αποθηκευμένη συνομιλία.",
-  "systemEntry.share.send": "Αποστολή σε νέα συνομιλία",
-  "systemEntry.share.title": "Κοινοποίηση στο Cherry"
+  "systemEntry.failed": "Δεν ήταν δυνατό το άνοιγμα αυτής της κοινοποίησης. Κοινοποιήστε ξανά το περιεχόμενο."
 }
