@@ -1,5 +1,6 @@
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import { resolveScheme } from 'expo-linking';
+import { AppState } from 'react-native';
 
 import {
   type Activatable,
@@ -40,6 +41,7 @@ import {
   deriveBackgroundReplyContent,
   getTerminalBackgroundReplyContent,
 } from './deriveBackgroundReplyContent';
+import type { ReplyCompletionNotifier } from './replyCompletionNotifications';
 
 const PREFERENCE_KEY = 'chat.background_reply.enabled';
 const SESSION_TAG = 'chat.backgroundReply';
@@ -77,6 +79,8 @@ type PreferencePort = {
 
 type EnvironmentPort = {
   assistantPresenter: BackgroundActivityEnvironment['assistantPresenter'];
+  /** Optional iOS completion-notice channel; absent means no delivery. */
+  replyNotifications?: ReplyCompletionNotifier;
   translate: BackgroundReplyTranslate;
 };
 
@@ -188,6 +192,7 @@ export class BackgroundReplyRuntime
       startedAtEpochMs: Date.now(),
     };
     this.turns.set(sessionId, record);
+    this.beginReplyDestination(record);
     this.ensureSession(record);
     return record;
   }
@@ -214,6 +219,7 @@ export class BackgroundReplyRuntime
       ...(existing?.session ? { session: existing.session } : {}),
     };
     this.turns.set(record.key, record);
+    this.beginReplyDestination(record);
     this.ensureSession(record);
 
     return {
@@ -369,6 +375,8 @@ export class BackgroundReplyRuntime
     const record = this.turns.get(key);
     if (!record) return;
 
+    // Captured at the logical terminal moment, before any finish grace waits.
+    const occurredInBackground = AppState.currentState === 'background';
     const hasDeferredPreview = record.updateTimer !== undefined;
     this.clearUpdateTimer(record);
     const preview =
@@ -390,9 +398,46 @@ export class BackgroundReplyRuntime
       if (!this.isRecordCurrent(record)) return;
       const session = record.session;
       record.session = undefined;
+      // The notice submits before the session's final delivery settles, so the
+      // session lease still covers the native notification call.
+      const notified = await this.notifyReplyFinished(record, outcome, occurredInBackground);
       await session?.finish(this.toActivityProps(record));
+      // A delivered notice replaces the Live Activity card as the completion
+      // artifact; retire the settled surface so the lock screen shows one item.
+      if (notified) this.activities.dismissTask(record.deepLinkUrl);
       if (this.turns.get(key) === record) this.turns.delete(key);
     });
+  }
+
+  /** A new reply on a destination retires its previous completion notice; the
+   *  iOS permission prompt follows the user action that started the reply. */
+  private beginReplyDestination(record: TurnRecord): void {
+    const notifications = this.environment.replyNotifications;
+    notifications?.dismissDestination(record.deepLinkUrl);
+    notifications?.requestPermissionOnce();
+  }
+
+  private async notifyReplyFinished(
+    record: TurnRecord,
+    outcome: BackgroundReplyOutcome,
+    occurredInBackground: boolean,
+  ): Promise<boolean> {
+    const notify = this.environment.replyNotifications?.notifyTurnFinished;
+    if (!notify) return false;
+    try {
+      return await notify({
+        deepLinkUrl: record.deepLinkUrl,
+        detail: record.content.detail,
+        occurredInBackground,
+        outcome,
+        ...(record.content.preview ? { preview: record.content.preview } : {}),
+        title: record.conversationTitle || record.actorName,
+      });
+    } catch (error) {
+      // A delivery failure must never break the turn's own settlement.
+      logger.warn('Reply completion notification failed', error as Error, { key: record.key });
+      return false;
+    }
   }
 
   private async waitForFinishDependency(key: string, dependency: Promise<unknown>): Promise<void> {

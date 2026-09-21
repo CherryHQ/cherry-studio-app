@@ -7,6 +7,7 @@ import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/c
 import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import type { ReplyCompletionNotifier } from '../backgroundReply/replyCompletionNotifications';
 import { noopBackgroundActivityPresenter, type BackgroundActivityPresenter } from './presenter';
 
 const logger = loggerService.withContext('BackgroundActivityEnvironment');
@@ -23,6 +24,8 @@ export type BackgroundActivityEnvironmentConfig = {
   paintingPresenter: BackgroundActivityPresenter<PaintingActivityProps>;
   /** Whether finishing chat replies may raise a system notification. */
   isReplyCompletionNotificationEnabled: () => boolean;
+  /** iOS reply completion notices; absent means the platform owns another channel. */
+  replyNotifications?: ReplyCompletionNotifier;
   /** Deep link of the focused, foreground task surface. Absent sources never report one. */
   subscribeVisibleTask?: (listener: (deepLinkUrl: string | undefined) => void) => () => void;
   translate: BackgroundActivityTranslate;
@@ -82,6 +85,10 @@ export class BackgroundActivityEnvironment extends BaseService {
 
   isReplyCompletionNotificationEnabled = (): boolean =>
     this.config.isReplyCompletionNotificationEnabled();
+
+  get replyNotifications(): ReplyCompletionNotifier | undefined {
+    return this.config.replyNotifications;
+  }
 
   onForegroundAttention = (attention: ForegroundActivityAttention): void => {
     this.config.onForegroundAttention?.(attention);

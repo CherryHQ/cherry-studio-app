@@ -1,10 +1,12 @@
 import Constants from 'expo-constants';
+import { AppState } from 'react-native';
 
 import type { BackgroundActivitySessionInput } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { AgentMessagePart } from '@/shared/contracts/agent';
 
 import { BackgroundReplyRuntime } from '../BackgroundReplyRuntime';
+import type { ReplyCompletionNotifier } from '../replyCompletionNotifications';
 
 jest.mock('expo-constants', () => ({
   ...jest.requireActual('expo-constants'),
@@ -241,6 +243,94 @@ describe('BackgroundReplyRuntime', () => {
       expect.objectContaining({ attribution: 'Alpha', title: 'Renamed session' }),
       { keepAlive: true, urgent: true },
     );
+    await runtime._doStop();
+  });
+
+  test('delivers an iOS completion notice from a background terminal event and retires the Live Activity', async () => {
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
+    const notifyTurnFinished = jest.fn(async () => true);
+    const dismissDestination = jest.fn();
+    const runtime = await createRuntime(undefined, {
+      dismissDestination,
+      notifyTurnFinished,
+      requestPermissionOnce: jest.fn(),
+    });
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+
+    // A new reply on a destination retires the previous completion notice.
+    expect(dismissDestination).toHaveBeenCalledWith('cherrystudio:///?sessionId=session-1');
+
+    turn.finish('completed');
+    await flushOperations();
+
+    expect(notifyTurnFinished).toHaveBeenCalledTimes(1);
+    expect(notifyTurnFinished).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deepLinkUrl: 'cherrystudio:///?sessionId=session-1',
+        occurredInBackground: true,
+        outcome: 'completed',
+        title: 'First session',
+      }),
+    );
+    // The delivered notice replaces the Live Activity card: the settled
+    // surface for that destination retires through the manager's dismissal.
+    expect(mockDismissTask).toHaveBeenCalledWith('cherrystudio:///?sessionId=session-1');
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
+    await runtime._doStop();
+  });
+
+  test('a foreground terminal event notifies with occurredInBackground false and never retires the surface', async () => {
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
+    const notifyTurnFinished = jest.fn(async () => false);
+    const runtime = await createRuntime(undefined, {
+      dismissDestination: jest.fn(),
+      notifyTurnFinished,
+      requestPermissionOnce: jest.fn(),
+    });
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: '',
+    });
+    turn.finish('failed');
+    await flushOperations();
+
+    expect(notifyTurnFinished).toHaveBeenCalledWith(
+      expect.objectContaining({ occurredInBackground: false, outcome: 'failed' }),
+    );
+    expect(mockDismissTask).not.toHaveBeenCalled();
+    await runtime._doStop();
+  });
+
+  test('a notification delivery failure never breaks the turn settlement', async () => {
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
+    const notifyTurnFinished = jest.fn(async () => {
+      throw new Error('notification channel unavailable');
+    });
+    const runtime = await createRuntime(undefined, {
+      dismissDestination: jest.fn(),
+      notifyTurnFinished,
+      requestPermissionOnce: jest.fn(),
+    });
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: '',
+    });
+    const session = mockSessions[0];
+    turn.finish('completed');
+    await flushOperations();
+
+    expect(session?.finish).toHaveBeenCalledWith(expect.objectContaining({ phase: 'completed' }));
+    expect(mockDismissTask).not.toHaveBeenCalled();
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
     await runtime._doStop();
   });
 
@@ -641,6 +731,7 @@ describe('BackgroundReplyRuntime', () => {
               : key === 'chat.backgroundReply.failed'
                 ? '回复失败'
                 : key,
+    notifications?: ReplyCompletionNotifier,
   ) {
     const runtime = new BackgroundReplyRuntime(
       { dismissTask: mockDismissTask, startSession: mockStartSession },
@@ -653,6 +744,7 @@ describe('BackgroundReplyRuntime', () => {
       },
       {
         assistantPresenter: undefined as never,
+        ...(notifications ? { replyNotifications: notifications } : {}),
         translate,
       },
       { acquire },

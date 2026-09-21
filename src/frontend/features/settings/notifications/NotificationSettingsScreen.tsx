@@ -3,33 +3,15 @@ import { Section, useToast } from '@cherrystudio/ui/components';
 import Constants from 'expo-constants';
 import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import { openSettings } from 'expo-linking';
-import {
-  getPermissionsAsync,
-  IosAuthorizationStatus,
-  requestPermissionsAsync,
-  type NotificationPermissionsStatus,
-} from 'expo-notifications';
+import { getPermissionsAsync, requestPermissionsAsync } from 'expo-notifications';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, Platform } from 'react-native';
 
 import { usePreference } from '@/frontend/data/hooks';
+import { isNotificationBlocked } from '@/shared/notifications/notificationPermission';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
-
-/** iOS can also deliver under provisional or ephemeral authorization. */
-function isNotificationAllowed(status: NotificationPermissionsStatus): boolean {
-  return (
-    status.granted ||
-    status.ios?.status === IosAuthorizationStatus.PROVISIONAL ||
-    status.ios?.status === IosAuthorizationStatus.EPHEMERAL
-  );
-}
-
-/** Only a hard denial (undeliverable and unpromptable) offers the recovery row. */
-function isNotificationBlocked(status: NotificationPermissionsStatus): boolean {
-  return !isNotificationAllowed(status) && !status.canAskAgain;
-}
 
 export default function NotificationSettingsScreen() {
   const { t } = useTranslation();
