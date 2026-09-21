@@ -367,60 +367,63 @@ function ProviderDetailSettings({
           )}
         </KeyboardAwareScrollView>
       ) : (
-        <ModelRegistryGate>
-          {managedModels.length > 0 ? (
-            <View className="px-4 py-2">
-              <Text className="text-muted-foreground text-sm">
-                {t(
-                  management.isSelecting
-                    ? 'settings.provider.models.management.scope'
-                    : 'settings.provider.models.management.listTitle',
-                  { count: managedModels.length },
-                )}
-              </Text>
-            </View>
-          ) : null}
-          {management.isSelecting || managedModels.length === 0 ? null : (
-            <>
-              <InlineSearch
-                onChangeText={setModelSearchText}
-                placeholder={t('modelPicker.searchPlaceholder')}
-                value={modelSearchText}
-              />
-              {showsModelPurposeTabs ? (
-                <View className="px-4 pb-3">
-                  <ProviderModelPurposeTabs
-                    onChange={setModelPurpose}
-                    value={effectiveModelPurpose}
-                  />
-                </View>
-              ) : null}
-            </>
-          )}
-          {allProviderModelsQuery.isError ? (
-            <View className="px-6 py-10">
-              <ContentState.Error
-                title={t('settings.provider.models.management.loadFailed')}
-                primaryAction={{
-                  children: t('common.retry'),
-                  onPress: () => void allProviderModelsQuery.refetch(),
-                }}
-              />
-            </View>
-          ) : (
-            <ProviderModelList
-              management={management}
-              supportedModelIds={supportedModelIds}
-              groupByPurpose={effectiveModelPurpose === 'all'}
-              isEndpointSelectionDisabled={formMeta.isDirty || management.isDeleting}
-              isFiltered={isModelListFiltered}
-              isLoading={allProviderModelsQuery.isPending}
-              models={listedModels}
-              onAddModelManually={openModelAddSettings}
-              onPullModels={openModelSyncSettings}
-              provider={provider}
+        <>
+          {/* Search mounts with the header, not with the models: letting a finished load add the
+              native search bar leaves it detached from the navigation bar. Multi-select is a
+              deliberate mode change, so it still unmounts the field. */}
+          {management.isSelecting ? null : (
+            <InlineSearch
+              onChangeText={setModelSearchText}
+              placeholder={t('modelPicker.searchPlaceholder')}
+              value={modelSearchText}
             />
           )}
+          <ModelRegistryGate>
+            {managedModels.length > 0 ? (
+              <View className="px-4 py-2">
+                <Text className="text-muted-foreground text-sm">
+                  {t(
+                    management.isSelecting
+                      ? 'settings.provider.models.management.scope'
+                      : 'settings.provider.models.management.listTitle',
+                    { count: managedModels.length },
+                  )}
+                </Text>
+              </View>
+            ) : null}
+            {management.isSelecting || managedModels.length === 0 ? null : showsModelPurposeTabs ? (
+              <View className="px-4 pb-3">
+                <ProviderModelPurposeTabs
+                  onChange={setModelPurpose}
+                  value={effectiveModelPurpose}
+                />
+              </View>
+            ) : null}
+            {allProviderModelsQuery.isError ? (
+              <View className="px-6 py-10">
+                <ContentState.Error
+                  title={t('settings.provider.models.management.loadFailed')}
+                  primaryAction={{
+                    children: t('common.retry'),
+                    onPress: () => void allProviderModelsQuery.refetch(),
+                  }}
+                />
+              </View>
+            ) : (
+              <ProviderModelList
+                management={management}
+                supportedModelIds={supportedModelIds}
+                groupByPurpose={effectiveModelPurpose === 'all'}
+                isEndpointSelectionDisabled={formMeta.isDirty || management.isDeleting}
+                isFiltered={isModelListFiltered}
+                isLoading={allProviderModelsQuery.isPending}
+                models={listedModels}
+                onAddModelManually={openModelAddSettings}
+                onPullModels={openModelSyncSettings}
+                provider={provider}
+              />
+            )}
+          </ModelRegistryGate>
           {management.isSelecting ? (
             <SelectionToolbar
               isDeleting={management.isDeleting}
@@ -429,7 +432,7 @@ function ProviderDetailSettings({
               selectedCount={management.selectedIds.size}
             />
           ) : null}
-        </ModelRegistryGate>
+        </>
       )}
     </>
   );
