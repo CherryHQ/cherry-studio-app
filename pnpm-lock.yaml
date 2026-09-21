@@ -150,7 +150,7 @@ patchedDependencies:
   react-native-keyboard-controller@1.21.13: 6f5bed7a836aae55a44a2b0a97532e6d73d9dfb87032457499dfe3ff2c239186
   react-native-nitro-healthkit@1.0.0: 7cf6de1a057d10ee9606b9dc88a45d7c8e1e13b97806b1baf1a2fc19dfb28f31
   react-native-reanimated@4.5.1: 33f006c0e10fff05d47d9879ade97c8c443eb6fd99f4379d5ffef53cc9af4fd8
-  react-native-screens@4.26.2: e306efd5e122450c5d08ec35adf58e9bf030133a121e309390624ea5b85a8372
+  react-native-screens@4.26.2: 544b1e7aa371b58cd449b5dedca0893c8e04dc7bc6f3f66dab74b3dcedc63804
   react-native-streamdown@0.2.0: fb782d56f984e24b869d207954edf90d94c3e13b518b2ab95bbfb4421b0736b3
   react-native@0.86.3: 5cff80f1c85ad62edb2c5da0f36ee87f0c095775bc36bd2bc3dec211184a6de6
   uniwind@1.6.5: 791bd6e5e63c234764db0263b41a5f7aa5c6259270634d6fc7405845de987eeb
