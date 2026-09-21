@@ -111,7 +111,10 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       !messageWindow.error ? (
         <SessionReadReceipt sessionId={sessionId} />
       ) : null}
-      <ComposerDismissArea disabled testID="chat-background">
+      {/* A completed background press ends composer editing, so the message
+          list area dismisses the keyboard like other chat apps. The press
+          target is claimed only while a composer exists to dismiss. */}
+      <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
         {sessionId && session.error ? (
           <View className="flex-1 justify-center px-8 py-16">
             <ContentState.Error

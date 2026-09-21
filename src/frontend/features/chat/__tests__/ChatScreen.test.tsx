@@ -187,6 +187,9 @@ describe('ChatScreen composer dock wiring', () => {
       const background = renderer!.root.find(
         (node) => typeof node.type === 'string' && node.props.testID === 'chat-background',
       );
+      // The press candidate must actually be eligible: a disabled area never
+      // reaches grant/release, so the dismissal contract would be inert.
+      expect(background.props.onStartShouldSetResponder()).toBe(true);
       const nativeTarget = {
         measure: (callback: (...bounds: number[]) => void) => callback(0, 0, 400, 800, 0, 0),
       };
@@ -245,6 +248,13 @@ describe('ChatScreen composer dock wiring', () => {
 
     expect(chatInputProps).toBeUndefined();
     expect(chatWorkspaceProps).toMatchObject({ sessionId: 'session-1' });
+
+    // Without a composer there is nothing to dismiss, so the background does
+    // not claim presses.
+    const background = renderer!.root.find(
+      (node) => typeof node.type === 'string' && node.props.testID === 'chat-background',
+    );
+    expect(background.props.onStartShouldSetResponder()).toBe(false);
   });
 
   it('resolves a draft when the requested Session is missing', () => {
