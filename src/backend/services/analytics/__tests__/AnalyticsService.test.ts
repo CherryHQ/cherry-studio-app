@@ -1,4 +1,5 @@
 import { AnalyticsClient } from '@cherrystudio/analytics-client';
+import { AppState } from 'react-native';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { PreferenceKeyType, PreferenceSchema } from '@/shared/data/preference';
@@ -76,6 +77,8 @@ function createCache(lastActivityDate = '') {
 
 type Harness = {
   cache: ReturnType<typeof createCache>;
+  /** Drives the service's own app-state listener. */
+  changeAppState: (status: string) => void;
   client: ReturnType<typeof createClient>;
   preference: ReturnType<typeof createPreference>;
   service: AnalyticsService;
@@ -84,24 +87,38 @@ type Harness = {
 async function startService(
   options: {
     cache?: ReturnType<typeof createCache>;
+    client?: ReturnType<typeof createClient>;
     preference?: ReturnType<typeof createPreference>;
   } = {},
 ): Promise<Harness> {
   const cache = options.cache ?? createCache();
   const preference = options.preference ?? createPreference();
-  const client = createClient();
+  const client = options.client ?? createClient();
   analyticsClientMock.mockImplementation(() => client);
+  let changeAppState: (status: string) => void = () => undefined;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+    changeAppState = listener as typeof changeAppState;
+    return { remove: jest.fn() };
+  });
   await installTestHost({ CacheService: cache, PreferenceService: preference });
   const service = new AnalyticsService();
   await service._doInit();
   await settle();
-  return { cache, client, preference, service };
+  return { cache, changeAppState: (status) => changeAppState(status), client, preference, service };
 }
 
 afterEach(async () => {
   analyticsClientMock.mockReset();
+  jest.restoreAllMocks();
   await uninstallTestHost();
 });
+
+/** A client whose activity ping never answers, as on a device with no route out. */
+function createStalledClient() {
+  const client = createClient();
+  client.trackAppUpdate.mockImplementation(() => new Promise(() => {}) as never);
+  return client;
+}
 
 it('reports through the platform channel once consent is in place', async () => {
   const { client } = await startService();
@@ -178,4 +195,25 @@ it('ignores an unusable or unchanged desktop identity', async () => {
   await service.adoptClientId(LOCAL_CLIENT_ID);
 
   expect(client.setClientId).not.toHaveBeenCalled();
+});
+
+it('activates and tears down while the activity ping is still unanswered', async () => {
+  const { client, preference } = await startService({ client: createStalledClient() });
+
+  expect(client.trackAppUpdate).toHaveBeenCalledTimes(1);
+
+  await preference.set('app.privacy.data_collection.enabled', false as never);
+  await settle();
+
+  expect(client.destroy).toHaveBeenCalledWith(expect.objectContaining({ flush: false }));
+});
+
+it('reports the day once when foreground events overlap an unanswered ping', async () => {
+  const { changeAppState, client } = await startService({ client: createStalledClient() });
+
+  changeAppState('active');
+  changeAppState('active');
+  await settle();
+
+  expect(client.trackAppUpdate).toHaveBeenCalledTimes(1);
 });

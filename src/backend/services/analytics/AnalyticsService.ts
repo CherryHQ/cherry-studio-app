@@ -61,11 +61,15 @@ export class AnalyticsService extends BaseService implements Activatable {
    * out from under a client that is still being built.
    */
   private tail: Promise<unknown> = Promise.resolve();
+  /** In-flight activity ping, so a second `active` cannot ship the day twice. */
+  private activityReport: Promise<void> | null = null;
 
   protected onInit(): void {
     const preference = application.get('PreferenceService');
     const refresh = () => {
-      void this.refreshDesiredEnabled();
+      void this.refreshDesiredEnabled().catch((error) =>
+        logger.warn('Could not apply the new data-collection consent', error as Error),
+      );
     };
     for (const key of Object.values(CONSENT_PREFERENCE_KEYS)) {
       this.registerDisposable(preference.subscribeChange(key)(refresh));
@@ -97,7 +101,10 @@ export class AnalyticsService extends BaseService implements Activatable {
       this.client.trackAppLaunch({ os: Platform.OS, version });
       this.hasTrackedAppLaunch = true;
     }
-    await this.reportDailyActivity();
+    // Deliberately not awaited: the lifecycle queues teardown and identity
+    // changes behind this hook against a 5s ceiling, while the request behind it
+    // can retry for the better part of a minute.
+    void this.reportDailyActivity();
   }
 
   async onDeactivate(): Promise<void> {
@@ -159,7 +166,14 @@ export class AnalyticsService extends BaseService implements Activatable {
     if (status === 'active') void this.reportDailyActivity();
   };
 
-  private async reportDailyActivity(): Promise<void> {
+  /** Serialized: the date is only recorded once the request lands. */
+  private reportDailyActivity(): Promise<void> {
+    return (this.activityReport ??= this.sendDailyActivity().finally(() => {
+      this.activityReport = null;
+    }));
+  }
+
+  private async sendDailyActivity(): Promise<void> {
     const client = this.client;
     if (!client) return;
     const cache = application.get('CacheService');
