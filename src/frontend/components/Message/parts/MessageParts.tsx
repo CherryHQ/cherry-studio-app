@@ -6,6 +6,7 @@ import type { MessageListItem } from '../types';
 import { resolveMessageCitations } from './citations';
 import { GeneratedFileStrip } from './GeneratedFileStrip';
 import { MessagePartRenderer } from './MessagePartRenderer';
+import { omitGeneratedImageReferences } from './omitGeneratedImageReferences';
 import { partitionMessageParts } from './partitionMessageParts';
 import { ProcessGroupPart } from './ProcessGroupPart';
 import { SourceGroup } from './SourceGroup';
@@ -26,12 +27,15 @@ function getMessagePartKey(
 }
 
 export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsProps) {
-  const parts = message.data.parts;
+  const parts = useMemo(
+    () => omitGeneratedImageReferences(message.data.parts ?? []),
+    [message.data.parts],
+  );
   // Parts keep their identity across renders (see the projection cache), so the
   // resolved text and source-number map stay stable for their consumers too.
-  const citations = useMemo(() => resolveMessageCitations(parts ?? []), [parts]);
+  const citations = useMemo(() => resolveMessageCitations(parts), [parts]);
 
-  if (!parts?.length) {
+  if (!parts.length) {
     return null;
   }
 

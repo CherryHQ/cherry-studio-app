@@ -53,6 +53,12 @@ attachments above its bubble. Two rules hold the assistant-result shape:
   identically, so the split keys on part and media type. Only assistant messages reach `MessageParts`
   with files, because `UserMessage` lifts its own attachments out first.
 
+The model receives generated file ids, not public image URLs. Before rendering Markdown,
+`omitGeneratedImageReferences` removes standalone image paragraphs whose destination ends in an
+image file id already present in the same message. This prevents an invented preview URL from
+leaving an empty native image placeholder beside the real generated image. Code examples, inline
+prose, nested blocks, unrelated URLs, and stored transcript text remain unchanged.
+
 Neither file group carries a heading: whether a file was attached or produced follows from the role
 of the message it sits in.
 
