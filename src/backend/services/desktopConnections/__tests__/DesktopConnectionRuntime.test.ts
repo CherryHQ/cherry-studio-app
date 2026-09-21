@@ -214,6 +214,26 @@ describe('DesktopConnectionRuntime', () => {
     }
   });
 
+  it('does not hold the pairing open while the analytics identity is adopted', async () => {
+    const desktopClientId = '99999999-8888-4777-8666-555555555555';
+    const adoptClientId = jest.fn(() => new Promise<void>(() => {}));
+    await installTestHost({ AnalyticsService: { adoptClientId } });
+    try {
+      jest.mocked(pairDesktop).mockResolvedValue({
+        baseUrl,
+        clientId: desktopClientId,
+        name: 'Desktop',
+        token: 'new-token',
+        version: '2.0.8',
+      });
+
+      await expect(runtime.pair(pairing, signal())).resolves.toEqual(connection);
+      expect(adoptClientId).toHaveBeenCalledWith(desktopClientId);
+    } finally {
+      await uninstallTestHost();
+    }
+  });
+
   it('compensates cancellation during a credential write before resolving', async () => {
     const entered = deferred<void>();
     const written = deferred<void>();

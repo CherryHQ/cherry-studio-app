@@ -46,6 +46,15 @@ const logger = loggerService.withContext('DesktopConnection');
 const tokenKey = (id: string) => `desktop-connection-token.${id}`;
 const TOKEN_STORE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
+/** Best effort, and never the caller's problem: a missing host means nobody to report to. */
+async function adoptAnalyticsIdentity(clientId: string): Promise<void> {
+  try {
+    await application.get('AnalyticsService').adoptClientId(clientId);
+  } catch (error) {
+    logger.warn('Could not adopt the desktop analytics identity', error as Error);
+  }
+}
+
 /** Owns paired credentials and in-flight work; drains before the originating database closes. */
 @Injectable('DesktopConnectionRuntime')
 @DependsOn(['DbService'])
@@ -96,15 +105,11 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           signal,
         );
         // A paired phone and computer are one user, so the desktop's analytics
-        // identity wins. Caught here rather than by the block below: a reporting
-        // concern must never roll back credentials for a pairing that succeeded.
-        if (paired.clientId) {
-          try {
-            await application.get('AnalyticsService').adoptClientId(paired.clientId);
-          } catch (error) {
-            logger.warn('Could not adopt the desktop analytics identity', error as Error);
-          }
-        }
+        // identity wins. Left to run on its own rather than awaited here: it
+        // drains the report queue first, which can retry against the network for
+        // the better part of a minute, and a reporting concern must neither hold
+        // the pairing open nor roll back credentials for one that succeeded.
+        if (paired.clientId) void adoptAnalyticsIdentity(paired.clientId);
         return connection;
       } catch (error) {
         if (previousToken) {
