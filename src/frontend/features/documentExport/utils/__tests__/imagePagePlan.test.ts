@@ -5,6 +5,7 @@ import {
   IMAGE_LAYOUT_WIDTH,
   IMAGE_PAGE_HEIGHT,
   IMAGE_PAGE_TOP_INSET,
+  SINGLE_IMAGE_CAPTURE_HEIGHT,
   imagePagePlan,
   type ImagePageMeasurement,
 } from '../imagePagePlan';
@@ -90,9 +91,12 @@ test('an object taller than a page fails instead of silently dropping or cutting
   ).toThrow();
 });
 
-test('single-image mode preserves the complete height without a page-height restriction', () => {
-  expect(imagePagePlan(measurement({ height: 150_000 }), 'single')).toEqual([
-    { top: 0, height: 150_000 },
+test('single-image mode covers the complete height with bounded contiguous capture strips', () => {
+  const height = SINGLE_IMAGE_CAPTURE_HEIGHT * 2 + 37;
+  expect(imagePagePlan(measurement({ height }), 'single')).toEqual([
+    { top: 0, height: SINGLE_IMAGE_CAPTURE_HEIGHT },
+    { top: SINGLE_IMAGE_CAPTURE_HEIGHT, height: SINGLE_IMAGE_CAPTURE_HEIGHT },
+    { top: SINGLE_IMAGE_CAPTURE_HEIGHT * 2, height: 37 },
   ]);
 });
 

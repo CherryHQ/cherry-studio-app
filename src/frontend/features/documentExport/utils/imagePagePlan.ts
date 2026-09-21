@@ -8,6 +8,9 @@ import { IMAGE_CAPTURE_SCALE } from './imageCapturePlan';
 
 export const IMAGE_LAYOUT_WIDTH = 360;
 export const IMAGE_PAGE_TOP_INSET = 16;
+// A very tall WebView can report the expected dimensions while its native snapshot contains
+// unpainted white regions. Single-image output therefore captures bounded strips and stitches them.
+export const SINGLE_IMAGE_CAPTURE_HEIGHT = 1200;
 // Fill the same physical edge budget as HTML image conversion, including page spacing.
 export const IMAGE_PAGE_HEIGHT =
   Math.floor(HTML_CONVERSION_MAX_EDGE / IMAGE_CAPTURE_SCALE) - IMAGE_PAGE_TOP_INSET;
@@ -19,7 +22,7 @@ export type ImagePageMeasurement = {
   ink: [number, number][];
 };
 
-/** Fill each image to its capture limit, moving the cut only to avoid painted content. */
+/** Plan bounded captures; paged output moves visible cuts only to avoid painted content. */
 export function imagePagePlan(
   measurement: ImagePageMeasurement,
   layout: ExportImageLayout,
@@ -42,7 +45,13 @@ export function imagePagePlan(
     )
   )
     throw new DocumentExportError('capture-failed');
-  if (layout === 'single') return [{ top: 0, height }];
+  if (layout === 'single') {
+    const slices: ImagePageSlice[] = [];
+    for (let top = 0; top < height; top += SINGLE_IMAGE_CAPTURE_HEIGHT) {
+      slices.push({ top, height: Math.min(SINGLE_IMAGE_CAPTURE_HEIGHT, height - top) });
+    }
+    return slices;
+  }
 
   const ranges: [number, number][] = [];
   for (const [top, bottom] of [...ink].sort((a, b) => a[0] - b[0])) {

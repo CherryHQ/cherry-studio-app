@@ -53,9 +53,11 @@ is header-checked, handed to the backend, copied, and released before the next s
 both document export and HTML-file conversion. Closing unmounts the surface, but backend completion
 waits for an in-flight capture or copy so cleanup cannot race a late write.
 
-Single-long-image mode still takes one full-height screenshot at the same density. It has no
-application height/pixel cap and retains device-dependent capture and decoding limits. It is not a
-streaming encoder. Source images also retain device-dependent decode costs.
+Single-long-image mode captures contiguous 1200-logical-pixel strips at the same density, then joins
+them losslessly into one PNG. This avoids unpainted white regions from oversized WebView snapshots,
+while the final stitched bitmap still has no application height/pixel cap and retains
+device-dependent allocation and decoding limits. It is not a streaming encoder. Source images also
+retain device-dependent decode costs.
 
 ## Preview And Delivery
 

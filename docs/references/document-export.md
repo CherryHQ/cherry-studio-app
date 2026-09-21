@@ -158,10 +158,12 @@ The frontend checks the PNG's 24-byte header and dimensions, not image sharpness
 is copied unchanged and released before the next one; paged capture allocates no full-document
 output bitmap and runs no second image encoder.
 
-The layout menu retains **single long image**. This mode still uses a full-height screenshot at
-3x density, without an application output-height/pixel cap. It is not streamed and still scales
-native allocation with document length. It cannot guarantee arbitrary dimensions on the device or
-in receiving applications.
+The layout menu retains **single long image**. This mode captures contiguous 1200-logical-pixel
+strips at 3x density and joins them losslessly into one PNG. Bounding each WebView snapshot avoids
+publishing a correctly sized file whose unpainted lower region is white. The final stitched bitmap
+still has no application output-height/pixel cap, is not streamed and scales native allocation with
+document length. It cannot guarantee arbitrary dimensions on the device or in receiving
+applications.
 
 ## Validation And Resource Boundaries
 
@@ -176,7 +178,7 @@ in receiving applications.
 | Remote read | 15 seconds, no redirects, cancellable stream |
 | HTML width / type | 280–800 logical pixels / 12–40 font size and 12–56 line height |
 | Paged capture | 8192-pixel edge budget; 2714 logical content height plus 16 top spacing at 3x |
-| Single capture | No application height/pixel cap |
+| Single capture | 1200-logical-pixel capture strips; final PNG has no application height/pixel cap |
 | Capture wait | 60 seconds per page; physical lease includes native capture and file copy |
 | Sessions | Four live/closing sessions, one interactive request |
 
