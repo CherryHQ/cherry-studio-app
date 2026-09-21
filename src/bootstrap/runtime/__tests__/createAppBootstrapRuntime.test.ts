@@ -54,7 +54,7 @@ jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
 }));
 jest.mock('@/frontend/appShell/backgroundActivity', () => ({
   publishForegroundActivityAttention: jest.fn(),
-  subscribeVisibleBackgroundTask: jest.fn(),
+  subscribeVisibleBackgroundTask: jest.fn(() => jest.fn()),
 }));
 jest.mock('@/bootstrap/composition/createBackendServices', () => ({
   createBackendServices: (infrastructure: unknown) => mockCreateBackendServices(infrastructure),

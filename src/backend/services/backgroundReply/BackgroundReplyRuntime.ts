@@ -43,7 +43,8 @@ import {
 } from './deriveBackgroundReplyContent';
 import type { ReplyCompletionNotifier } from './replyCompletionNotifications';
 
-const PREFERENCE_KEY = 'chat.background_reply.enabled';
+const ACTIVITY_PREFERENCE_KEY = 'chat.background_reply.enabled';
+const NOTIFICATION_PREFERENCE_KEY = 'chat.completion_notifications.enabled';
 const SESSION_TAG = 'chat.backgroundReply';
 const FINISH_TITLE_GRACE_MS = 5_000;
 const PREVIEW_UPDATE_INTERVAL_MS = 1_000;
@@ -72,9 +73,11 @@ type BackgroundActivityPort = {
   ): BackgroundActivitySession<Props>;
 };
 
+type RuntimePreferenceKey = typeof ACTIVITY_PREFERENCE_KEY | typeof NOTIFICATION_PREFERENCE_KEY;
+
 type PreferencePort = {
-  readCached(key: typeof PREFERENCE_KEY): boolean;
-  subscribeChange(key: typeof PREFERENCE_KEY): (listener: () => void) => () => void;
+  readCached(key: RuntimePreferenceKey): boolean;
+  subscribeChange(key: RuntimePreferenceKey): (listener: () => void) => () => void;
 };
 
 type EnvironmentPort = {
@@ -121,16 +124,34 @@ export class BackgroundReplyRuntime
   }
 
   protected onInit(): void {
+    // Both switches drive this runtime: the Live Activities switch controls
+    // the surfaces, the completion-notifications switch keeps the logical
+    // turn tracking — and with it the notice channel — alive on its own.
     this.registerDisposable(
-      this.preference.subscribeChange(PREFERENCE_KEY)(() => this.handlePreferenceChange()),
+      this.preference.subscribeChange(ACTIVITY_PREFERENCE_KEY)(() => this.handlePreferenceChange()),
+    );
+    this.registerDisposable(
+      this.preference.subscribeChange(NOTIFICATION_PREFERENCE_KEY)(() =>
+        this.handlePreferenceChange(),
+      ),
     );
   }
 
   protected async onReady(): Promise<void> {
-    if (this.preference.readCached(PREFERENCE_KEY)) await this.activate();
+    if (this.shouldRun()) await this.activate();
   }
 
   onActivate(): void {
+    this.presentSurfaces();
+  }
+
+  onDeactivate(): void {
+    this.cancelSessions();
+  }
+
+  /** Surfaces exist only while the Live Activities switch is on. */
+  private presentSurfaces(): void {
+    if (!this.preference.readCached(ACTIVITY_PREFERENCE_KEY)) return;
     try {
       for (const record of this.turns.values()) {
         this.refreshContent(record);
@@ -142,8 +163,11 @@ export class BackgroundReplyRuntime
     }
   }
 
-  onDeactivate(): void {
-    this.cancelSessions();
+  private shouldRun(): boolean {
+    return (
+      this.preference.readCached(ACTIVITY_PREFERENCE_KEY) ||
+      this.preference.readCached(NOTIFICATION_PREFERENCE_KEY)
+    );
   }
 
   private cancelSessions(): void {
@@ -276,8 +300,11 @@ export class BackgroundReplyRuntime
   };
 
   private clearTurn(key: string): void {
+    const deepLinkUrl = sessionTaskUrl(key);
     // A settled surface outlives its turn: a deleted Session must not leave one.
-    this.activities.dismissTask(sessionTaskUrl(key));
+    this.activities.dismissTask(deepLinkUrl);
+    // A delivered completion notice is retired with its destination.
+    this.environment.replyNotifications?.dismissDestination(deepLinkUrl);
     const record = this.turns.get(key);
     if (!record) return;
 
@@ -297,12 +324,20 @@ export class BackgroundReplyRuntime
   }
 
   private handlePreferenceChange(): void {
-    const transition = this.preference.readCached(PREFERENCE_KEY)
-      ? this.activate()
-      : this.deactivate();
-    void transition.catch((error: unknown) => {
-      logger.error('Background reply preference transition failed', error as Error);
-    });
+    // Live Activities going off drops only the surfaces; the turn tracking and
+    // the notice channel keep running while their own switch is on.
+    if (!this.preference.readCached(ACTIVITY_PREFERENCE_KEY)) this.cancelSessions();
+    const wasActivated = this.isActivated;
+    const transition = this.shouldRun() ? this.activate() : this.deactivate();
+    void transition
+      .then((activated) => {
+        // activate() is idempotent, so a notify-only run whose Live Activities
+        // switch came back on re-presents its surfaces here.
+        if (activated && wasActivated) this.presentSurfaces();
+      })
+      .catch((error: unknown) => {
+        logger.error('Background reply preference transition failed', error as Error);
+      });
   }
 
   private updateTurn(
@@ -388,25 +423,32 @@ export class BackgroundReplyRuntime
       preview,
       this.environment.translate,
     );
-    record.session?.update(this.toActivityProps(record), { keepAlive: false, urgent: true });
-    if (waitFor) {
-      await this.waitForFinishDependency(key, waitFor);
+    // The notice and the final delivery must outlive the session's own lease
+    // (dropped by the keepAlive:false update below): hold a short delivery
+    // lease until both settle, or a backgrounded app can be suspended
+    // mid-submission.
+    const deliveryLease = this.keepAlive.acquire('chat.replyNotice');
+    try {
+      record.session?.update(this.toActivityProps(record), { keepAlive: false, urgent: true });
+      if (waitFor) {
+        await this.waitForFinishDependency(key, waitFor);
+      }
+      // Keep terminal content updateable until any final title projection settles.
+      // A continuation that supersedes this generation inherits the live session.
+      await this.enqueue(async () => {
+        if (!this.isRecordCurrent(record)) return;
+        const session = record.session;
+        record.session = undefined;
+        const notified = await this.notifyReplyFinished(record, outcome, occurredInBackground);
+        await session?.finish(this.toActivityProps(record));
+        // A delivered notice replaces the Live Activity card as the completion
+        // artifact; retire the settled surface so the lock screen shows one item.
+        if (notified) this.activities.dismissTask(record.deepLinkUrl);
+        if (this.turns.get(key) === record) this.turns.delete(key);
+      });
+    } finally {
+      deliveryLease.release();
     }
-    // Keep terminal content updateable until any final title projection settles.
-    // A continuation that supersedes this generation inherits the live session.
-    await this.enqueue(async () => {
-      if (!this.isRecordCurrent(record)) return;
-      const session = record.session;
-      record.session = undefined;
-      // The notice submits before the session's final delivery settles, so the
-      // session lease still covers the native notification call.
-      const notified = await this.notifyReplyFinished(record, outcome, occurredInBackground);
-      await session?.finish(this.toActivityProps(record));
-      // A delivered notice replaces the Live Activity card as the completion
-      // artifact; retire the settled surface so the lock screen shows one item.
-      if (notified) this.activities.dismissTask(record.deepLinkUrl);
-      if (this.turns.get(key) === record) this.turns.delete(key);
-    });
   }
 
   /** A new reply on a destination retires its previous completion notice; the
@@ -468,6 +510,8 @@ export class BackgroundReplyRuntime
     // `onActivate` runs before BaseService flips `isActivated`; callers during
     // normal operation use the public state as the preference gate.
     if ((!activating && !this.isActivated) || this.disposed) return;
+    // A notify-only run tracks the turn without any surface.
+    if (!this.preference.readCached(ACTIVITY_PREFERENCE_KEY)) return;
 
     const keepAlive = isGeneratingPhase(record.content.phase);
     if (record.session) {

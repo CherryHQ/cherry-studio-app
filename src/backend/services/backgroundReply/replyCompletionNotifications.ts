@@ -78,11 +78,12 @@ export function createReplyCompletionNotifier(
     `cherry-reply-${deepLinkUrl.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
   const dismissDestination = (deepLinkUrl: string): void => {
-    const identifier = delivered.get(deepLinkUrl);
-    if (!identifier) return;
     delivered.delete(deepLinkUrl);
+    // The identifier is deterministic per destination, so dismissal works
+    // without prior in-memory knowledge — including a notice delivered
+    // before a process restart.
     void loadNotifications()
-      .dismissNotificationAsync(identifier)
+      .dismissNotificationAsync(notificationId(deepLinkUrl))
       .catch((error: unknown) => {
         logger.warn('Failed to dismiss reply notification', error as Error, { deepLinkUrl });
       });

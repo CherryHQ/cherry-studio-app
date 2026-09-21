@@ -91,7 +91,7 @@ export function createAppBootstrapRuntime(
   });
   // Opening a destination retires its delivered completion notice, mirroring
   // the manager's settled-surface dismissal on the same visible-task source.
-  subscribeVisibleBackgroundTask((deepLinkUrl) => {
+  const unsubscribeVisibleTask = subscribeVisibleBackgroundTask((deepLinkUrl) => {
     if (deepLinkUrl) replyCompletionNotifications?.dismissDestination(deepLinkUrl);
   });
   const agent = host.container.get<MobileAgentHost>('MobileAgentHost');
@@ -161,6 +161,7 @@ export function createAppBootstrapRuntime(
       // Drain system-entry consumers before the host's resources.
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
+        unsubscribeVisibleTask();
         await disposeSystemEntry();
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host

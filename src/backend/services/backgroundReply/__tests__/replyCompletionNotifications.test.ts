@@ -133,7 +133,9 @@ describe('createReplyCompletionNotifier', () => {
     await notifier.notifyTurnFinished(event());
     await notifier.notifyTurnFinished(event({ title: 'Second round' }));
 
-    expect(dismissals).toHaveBeenCalledTimes(1);
+    // Every delivery first retires the destination's previous notice, by
+    // the same deterministic identifier.
+    expect(dismissals).toHaveBeenCalledTimes(2);
     expect(dismissals).toHaveBeenCalledWith('cherry-reply-cherrystudio_____sessionId_session_1');
     expect(notices).toHaveBeenCalledTimes(2);
   });
@@ -147,9 +149,10 @@ describe('createReplyCompletionNotifier', () => {
     notifier.dismissDestination('cherrystudio:///?sessionId=session-1');
     expect(dismissals).toHaveBeenCalledWith('cherry-reply-cherrystudio_____sessionId_session_1');
 
-    // A destination without a delivered notice is a no-op.
+    // Dismissal rides the deterministic identifier, so it also retires a
+    // notice delivered before a process restart, with no in-memory record.
     notifier.dismissDestination('cherrystudio:///?sessionId=session-2');
-    expect(dismissals).toHaveBeenCalledTimes(1);
+    expect(dismissals).toHaveBeenCalledWith('cherry-reply-cherrystudio_____sessionId_session_2');
   });
 
   it('requests permission once, only in the foreground and only while enabled', async () => {

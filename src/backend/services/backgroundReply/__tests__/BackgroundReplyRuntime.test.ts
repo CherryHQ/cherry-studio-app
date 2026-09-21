@@ -30,6 +30,7 @@ type MockSession = {
 describe('BackgroundReplyRuntime', () => {
   let preferenceListener: (() => void) | undefined;
   let enabled: boolean;
+  let notificationsEnabled: boolean;
   const mockSessions: MockSession[] = [];
   const createMockSession = (input: SessionInput): MockSession => {
     const session: MockSession = {
@@ -48,6 +49,7 @@ describe('BackgroundReplyRuntime', () => {
 
   beforeEach(() => {
     enabled = true;
+    notificationsEnabled = false;
     preferenceListener = undefined;
     mockSessions.length = 0;
     jest.clearAllMocks();
@@ -331,6 +333,85 @@ describe('BackgroundReplyRuntime', () => {
     expect(session?.finish).toHaveBeenCalledWith(expect.objectContaining({ phase: 'completed' }));
     expect(mockDismissTask).not.toHaveBeenCalled();
     Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
+    await runtime._doStop();
+  });
+
+  test('tracks turns without surfaces while only completion notifications are on', async () => {
+    enabled = false;
+    notificationsEnabled = true;
+    const notifyTurnFinished = jest.fn(async () => true);
+    const dismissDestination = jest.fn();
+    const runtime = await createRuntime(undefined, {
+      dismissDestination,
+      notifyTurnFinished,
+      requestPermissionOnce: jest.fn(),
+    });
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+
+    // The Live Activities switch is off: the turn is still tracked, but no
+    // surface is created, and the destination's notice channel is engaged.
+    expect(runtime.isActivated).toBe(true);
+    expect(mockStartSession).not.toHaveBeenCalled();
+    expect(dismissDestination).toHaveBeenCalledWith('cherrystudio:///?sessionId=session-1');
+
+    turn.update({ parts: [textPart('hi')] });
+    turn.finish('completed');
+    await flushOperations();
+
+    expect(notifyTurnFinished).toHaveBeenCalledTimes(1);
+    expect(notifyTurnFinished).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'completed', occurredInBackground: false }),
+    );
+    expect(mockSessions).toHaveLength(0);
+    await runtime._doStop();
+  });
+
+  test('re-presents surfaces when the Live Activities switch returns mid-tracking', async () => {
+    enabled = false;
+    notificationsEnabled = true;
+    const runtime = await createRuntime();
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+    expect(mockStartSession).not.toHaveBeenCalled();
+
+    enabled = true;
+    preferenceListener?.();
+    await flushOperations();
+    expect(runtime.isActivated).toBe(true);
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+    expect(mockSessions[0]?.input.props).toMatchObject({ phase: 'preparing' });
+
+    turn.finish('completed');
+    await flushOperations();
+    expect(mockSessions[0]?.finish).toHaveBeenCalledTimes(1);
+    await runtime._doStop();
+  });
+
+  test('holds a delivery lease across the finish window', async () => {
+    const release = jest.fn();
+    const runtime = await createRuntime();
+    acquire.mockImplementationOnce(() => ({ release }));
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+
+    turn.finish('completed');
+    await flushOperations();
+
+    expect(acquire).toHaveBeenCalledWith('chat.replyNotice');
+    expect(release).toHaveBeenCalledTimes(1);
     await runtime._doStop();
   });
 
@@ -736,7 +817,9 @@ describe('BackgroundReplyRuntime', () => {
     const runtime = new BackgroundReplyRuntime(
       { dismissTask: mockDismissTask, startSession: mockStartSession },
       {
-        readCached: jest.fn(() => enabled),
+        readCached: jest.fn((key: string) =>
+          key === 'chat.completion_notifications.enabled' ? notificationsEnabled : enabled,
+        ),
         subscribeChange: jest.fn(() => (listener: () => void) => {
           preferenceListener = listener;
           return jest.fn();
