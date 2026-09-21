@@ -217,7 +217,7 @@ function DocumentExportBody({
   const [deliveryPresentation, setDeliveryPresentation] = useState<ExportPresentation>();
   const previewPresentation =
     deliveryPresentation ?? (format === 'image' ? imagePresentation : presentation);
-  const { capture, surface } = useDocumentExportHtmlCapture();
+  const { capture, surface, onCaptureLayout } = useDocumentExportHtmlCapture();
   const { state, getArtifact, retry } = useDocumentExportPreview(
     session,
     format,
@@ -295,60 +295,62 @@ function DocumentExportBody({
 
   return (
     <View className="min-h-0 flex-1">
-      {state.status === 'markdown' ? (
-        <ScrollView className="flex-1" contentContainerClassName="px-6 py-4">
-          <DocumentExportTextPreview
-            key={revision}
-            document={session.document}
-            watermark={previewPresentation.watermark}
+      <View className="min-h-0 flex-1" onLayout={onCaptureLayout}>
+        {state.status === 'markdown' ? (
+          <ScrollView className="flex-1" contentContainerClassName="px-6 py-4">
+            <DocumentExportTextPreview
+              key={revision}
+              document={session.document}
+              watermark={previewPresentation.watermark}
+            />
+          </ScrollView>
+        ) : artifact ? (
+          <ArtifactPreview
+            key={artifact.id}
+            artifact={artifact}
+            onError={previewFallback}
+            width={Math.max(1, windowWidth - left - right - 48)}
           />
-        </ScrollView>
-      ) : artifact ? (
-        <ArtifactPreview
-          key={artifact.id}
-          artifact={artifact}
-          onError={previewFallback}
-          width={Math.max(1, windowWidth - left - right - 48)}
-        />
-      ) : (
-        <View className="flex-1 overflow-hidden">
-          {/* Keep capture laid out and mounted beneath the opaque loading surface. Its
+        ) : (
+          <View className="flex-1 overflow-hidden">
+            {/* Keep capture laid out and mounted beneath the opaque loading surface. Its
               wrapper is captured independently; controls never enter the exported bitmap. */}
-          <ScrollView
-            accessibilityElementsHidden
-            className="absolute inset-0"
-            importantForAccessibility="no-hide-descendants"
-            pointerEvents="none"
-            removeClippedSubviews={false}
-          >
-            {surface}
-          </ScrollView>
-          <ScrollView
-            className="flex-1 bg-background"
-            contentContainerClassName="flex-grow items-center justify-center p-6"
-          >
-            {state.status === 'paused' ? (
-              <ContentState.Empty
-                primaryAction={{ children: t('documentExport.resume'), onPress: retry }}
-                title={t('documentExport.paused')}
-              />
-            ) : (
-              <ContentState.Loading
-                title={
-                  state.status === 'loading' && typeof state.progress !== 'string'
-                    ? t('documentExport.progress.page', {
-                        page: state.progress.page,
-                        total: state.progress.total,
-                      })
-                    : t(
-                        `documentExport.progress.${state.status === 'loading' ? state.progress : 'rendering'}`,
-                      )
-                }
-              />
-            )}
-          </ScrollView>
-        </View>
-      )}
+            <ScrollView
+              accessibilityElementsHidden
+              className="absolute inset-0"
+              importantForAccessibility="no-hide-descendants"
+              pointerEvents="none"
+              removeClippedSubviews={false}
+            >
+              {surface}
+            </ScrollView>
+            <ScrollView
+              className="flex-1 bg-background"
+              contentContainerClassName="flex-grow items-center justify-center p-6"
+            >
+              {state.status === 'paused' ? (
+                <ContentState.Empty
+                  primaryAction={{ children: t('documentExport.resume'), onPress: retry }}
+                  title={t('documentExport.paused')}
+                />
+              ) : (
+                <ContentState.Loading
+                  title={
+                    state.status === 'loading' && typeof state.progress !== 'string'
+                      ? t('documentExport.progress.page', {
+                          page: state.progress.page,
+                          total: state.progress.total,
+                        })
+                      : t(
+                          `documentExport.progress.${state.status === 'loading' ? state.progress : 'rendering'}`,
+                        )
+                  }
+                />
+              )}
+            </ScrollView>
+          </View>
+        )}
+      </View>
       <View className="gap-3 px-6 pt-2" style={{ paddingBottom: Math.max(bottom, 12) }}>
         {(state.status === 'ready' || state.status === 'markdown') && state.fallback ? (
           <Text accessibilityLiveRegion="polite" className="text-muted-foreground text-sm">
