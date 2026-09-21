@@ -28,5 +28,6 @@ describe('preference schema', () => {
     expect(getDefaultValue('file.document_parser.mode')).toBe('anydoc');
     expect(getDefaultValue('ui.theme_mode')).toBe(ThemeMode.system);
     expect(getDefaultValue('ui.font_size_step')).toBe(0);
+    expect(getDefaultValue('ui.sidebar.recent_view_mode')).toBe('sessions');
   });
 });

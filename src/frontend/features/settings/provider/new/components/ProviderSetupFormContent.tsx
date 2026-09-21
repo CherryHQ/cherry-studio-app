@@ -11,9 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { Provider } from '@/shared/data/types/provider';
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import {
-  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   type CustomProviderTextEndpoint,
   getConfiguredCustomProviderTextEndpoints,
 } from '../../apiService/utils/providerApiServiceEndpointRules';
@@ -106,7 +106,7 @@ export function ProviderSetupPresetFields({
       </View>
       {showApiKey ? (
         <View className="gap-2">
-          <ProviderForm.ApiKey />
+          <ProviderForm.ApiKeys />
           {apiKeyUrl ? (
             <View className="items-start">
               <Button
@@ -173,7 +173,7 @@ export function ProviderSetupCustomFields() {
     return (
       <View className="gap-5">
         <ProviderForm.Name />
-        <ProviderForm.ApiKey />
+        <ProviderForm.ApiKeys />
         <ProviderForm.Endpoints />
       </View>
     );
@@ -182,7 +182,7 @@ export function ProviderSetupCustomFields() {
   return (
     <View className="gap-5">
       <ProviderForm.Name />
-      <ProviderForm.ApiKey />
+      <ProviderForm.ApiKeys />
       <SelectField
         accessibilityLabel={t('onboarding.connection.protocol')}
         disabled={meta.isSubmitting}
@@ -198,7 +198,7 @@ export function ProviderSetupCustomFields() {
         onClose={() => setIsProtocolPickerOpen(false)}
         onValueChange={(value) => actions.replaceTextEndpoint(value as CustomProviderTextEndpoint)}
         open={isProtocolPickerOpen}
-        options={CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.map((value) => ({
+        options={CHAT_ENDPOINT_TYPES.map((value) => ({
           label: t(ENDPOINT_LABEL_KEYS[value]),
           value,
         }))}

@@ -115,36 +115,70 @@ function resolvePresetProviderId(provider: DesktopProviderSnapshot): string | nu
   return null;
 }
 
-function getProviderImportUnavailableReason(
+/** Payload-only rejections; the import transaction re-validates whatever needs the database. */
+function getProviderImportRejection(
   provider: DesktopProviderSnapshot,
 ): DesktopImportUnavailableReason | undefined {
-  const hasSupportedAuthMethod = provider.authMethods?.includes('api-key') ?? false;
-  return provider.authType === 'oauth' || (provider.authMethods && !hasSupportedAuthMethod)
-    ? 'unsupported-auth'
-    : undefined;
+  if (provider.unreadable) return 'unreadable';
+  // An absent `authMethods` predates the field rather than denying API keys.
+  const acceptsApiKey = provider.authMethods?.includes('api-key') ?? true;
+  if (provider.authType === 'oauth' || !acceptsApiKey) return 'unsupported-auth';
+  // A desktop signed in through OAuth exports no key, and mobile has no flow to obtain one.
+  const hasUsableKey = provider.apiKeys.some((entry) => entry.isEnabled && entry.key.trim());
+  return provider.authOptional || hasUsableKey ? undefined : 'missing-api-key';
+}
+
+/** Run the real mapping up front so a provider that cannot be written is disabled, not attempted. */
+function getProviderImportUnavailableReason(
+  provider: DesktopProviderSnapshot,
+  existingEndpointConfigs: EndpointConfigs | null | undefined,
+): DesktopImportUnavailableReason | undefined {
+  const rejection = getProviderImportRejection(provider);
+  if (rejection) return rejection;
+  try {
+    const configuration = mapProvider(provider);
+    if (configuration.presetProviderId) return undefined;
+    const endpointConfigs = { ...existingEndpointConfigs, ...configuration.endpointConfigs };
+    assertCustomProviderEndpointConfiguration({
+      defaultChatEndpoint: configuration.defaultChatEndpoint,
+      endpointConfigs,
+    });
+    for (const model of provider.models) {
+      assertCustomProviderModelEndpointTypes({
+        defaultChatEndpoint: configuration.defaultChatEndpoint,
+        endpointConfigs,
+        endpointTypes: model.endpointTypes ?? [],
+      });
+    }
+    return undefined;
+  } catch {
+    return 'unreadable';
+  }
 }
 
 function getEnabledDesktopProviders(snapshot: DesktopProvidersSnapshot) {
   // Preserve support for version 1 snapshots that omit explicit enabled flags.
   return snapshot.providers
     .filter((provider) => provider.isEnabled !== false)
-    .map((provider) => ({
-      ...provider,
-      models: provider.models.filter((model) => model.isEnabled !== false),
-    }));
+    .map((provider) => {
+      // Preview and import must validate the same keys that will be written.
+      const seenKeyIds = new Set<string>();
+      const seenKeyValues = new Set<string>();
+      const apiKeys = provider.apiKeys.filter((apiKey) => {
+        if (seenKeyIds.has(apiKey.id) || seenKeyValues.has(apiKey.key)) return false;
+        seenKeyIds.add(apiKey.id);
+        seenKeyValues.add(apiKey.key);
+        return true;
+      });
+      return {
+        ...provider,
+        apiKeys,
+        models: provider.models.filter((model) => model.isEnabled !== false),
+      };
+    });
 }
 
 function mapProvider(provider: DesktopProviderSnapshot): Omit<InsertUserProviderRow, 'orderKey'> {
-  const seenKeyIds = new Set<string>();
-  const seenKeyValues = new Set<string>();
-  for (const apiKey of provider.apiKeys) {
-    if (seenKeyIds.has(apiKey.id) || seenKeyValues.has(apiKey.key)) {
-      throw desktopError('invalid-snapshot', 'Desktop returned duplicate API keys');
-    }
-    seenKeyIds.add(apiKey.id);
-    seenKeyValues.add(apiKey.key);
-  }
-
   const presetProviderId = resolvePresetProviderId(provider);
   const defaultChatEndpoint =
     provider.defaultChatEndpoint ??
@@ -295,14 +329,23 @@ export class DesktopConnectionService {
 
   async preview(snapshot: DesktopProvidersSnapshot): Promise<DesktopImportPreview> {
     const [providerRows, modelRows] = await Promise.all([
-      this.db.select({ id: userProviderTable.providerId }).from(userProviderTable),
+      this.db
+        .select({
+          endpointConfigs: userProviderTable.endpointConfigs,
+          id: userProviderTable.providerId,
+        })
+        .from(userProviderTable),
       this.db.select({ id: userModelTable.id }).from(userModelTable),
     ]);
-    const existingProviders = new Set(providerRows.map((row) => row.id));
+    // Retained mobile endpoints widen what an update accepts, so judge against them.
+    const existingProviders = new Map(providerRows.map((row) => [row.id, row.endpointConfigs]));
     const existingModels = new Set(modelRows.map((row) => row.id));
     return {
       providers: getEnabledDesktopProviders(snapshot).map((provider) => {
-        const unavailableReason = getProviderImportUnavailableReason(provider);
+        const unavailableReason = getProviderImportUnavailableReason(
+          provider,
+          existingProviders.get(provider.id),
+        );
         return {
           action: existingProviders.has(provider.id) ? 'update' : 'add',
           id: provider.id,
@@ -339,11 +382,9 @@ export class DesktopConnectionService {
       if (!provider) {
         throw desktopError('invalid-selection', 'A selected provider is no longer available');
       }
-      if (getProviderImportUnavailableReason(provider)) {
-        throw desktopError(
-          'unsupported-auth',
-          'A selected provider uses an authentication method unsupported on mobile',
-        );
+      const rejection = getProviderImportRejection(provider);
+      if (rejection) {
+        throw desktopError(rejection, `A selected provider was rejected as ${rejection}`);
       }
     }
 

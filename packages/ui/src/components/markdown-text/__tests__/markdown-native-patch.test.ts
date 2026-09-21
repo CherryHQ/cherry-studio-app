@@ -20,13 +20,13 @@ describe('native Markdown code-block menu patch', () => {
 });
 
 describe('native Markdown table interaction patch', () => {
-  test('removes the iOS table copy menu recognizer', () => {
-    expect(patch).toContain('-  [_gridContainer addInteraction:contextMenu];');
+  test('preserves the upstream iOS table copy menu and restricts link gestures to links', () => {
+    expect(patch).not.toContain('-  [_gridContainer addInteraction:contextMenu];');
     expect(patch).toContain('+  return [self linkURLAtPoint:[touch locationInView:self]] != nil;');
   });
 
-  test('removes Android copy-menu long presses from both cell targets', () => {
-    expect(patch.match(/^-\s+showContextMenu\(view\)$/gm)).toHaveLength(2);
+  test('preserves the upstream Android table copy-menu long presses', () => {
+    expect(patch).not.toMatch(/^-\s+showContextMenu\(view\)$/m);
   });
 
   test('keeps overflowing iOS tables out of the branch that resets their scroll offset', () => {
@@ -101,5 +101,52 @@ describe('native Markdown code-block divider patch', () => {
 
   test('keeps the full Android divider stroke above the code viewport', () => {
     expect(patch).toContain('+    val y = headerH - dividerPaint.strokeWidth / 2f');
+  });
+});
+
+describe('native Markdown streaming work patch', () => {
+  const streamingPatch = patch.split(
+    '+++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt',
+  )[1];
+
+  test('coalesces native work before submitting another full render', () => {
+    expect(streamingPatch).toContain('+      if (renderInFlight) {');
+    expect(streamingPatch).toContain('+        renderRequested = true');
+    expect(streamingPatch).toContain('+        return');
+    expect(streamingPatch).toContain('+            if (renderRequested) scheduleRender()');
+    expect(streamingPatch).toContain('+      disposed = true');
+  });
+
+  test('allows repaired suffix changes within the native view generation', () => {
+    expect(streamingPatch).toContain('+              isStreaming && streamingAnimation &&');
+    expect(streamingPatch).not.toContain('currentMarkdown.startsWith(markdown)');
+    expect(streamingPatch).toContain(
+      '+            if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {',
+    );
+    expect(streamingPatch).toContain('+      val flags = md4cFlags');
+  });
+
+  test('schedules and remeasures status-only finalization while invalidating old jobs', () => {
+    expect(streamingPatch).toContain('+        streamingGeneration++');
+    expect(streamingPatch).toContain('+        dirtyFlags += DirtyFlag.FORCE_HEIGHT');
+    expect(streamingPatch).toContain('+        renderPending = true');
+    expect(streamingPatch).toContain('+      val generation = streamingGeneration');
+    expect(streamingPatch).toContain('+      if (forceHeight) {');
+    expect(streamingPatch).toContain('+        MeasurementStore.invalidate(id)');
+    expect(streamingPatch).toContain(
+      '+          state.putInt("forceHeightRecalculationCounter", ++forceHeightRecalculationCounter)',
+    );
+    expect(streamingPatch).toContain('+          wrapper.updateState(state)');
+  });
+
+  test('limits animation without disabling native streaming parsing', () => {
+    expect(streamingPatch).toContain(
+      '+      private const val MAX_ANIMATED_CONTENT_LENGTH = 64 * 1024',
+    );
+    expect(streamingPatch).toContain(
+      '+      get() = streamingAnimation && currentMarkdown.length <= MAX_ANIMATED_CONTENT_LENGTH',
+    );
+    expect(streamingPatch).toContain('+      if (!shouldAnimateStreaming) return');
+    expect(streamingPatch).not.toContain('+      streamingAnimation = false');
   });
 });

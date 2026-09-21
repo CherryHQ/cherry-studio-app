@@ -31,7 +31,7 @@ import {
 
 import {
   assertCustomProviderEndpointConfiguration,
-  getRemovedPiTextEndpoints,
+  getRemovedConfiguredChatEndpoints,
 } from './providerModelEndpointIntegrity';
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
@@ -598,7 +598,7 @@ export class ProviderService {
         });
 
         if (input.endpointConfigs !== undefined) {
-          const removedEndpointTypes = getRemovedPiTextEndpoints(
+          const removedEndpointTypes = getRemovedConfiguredChatEndpoints(
             current.endpointConfigs,
             nextEndpointConfigs,
           );

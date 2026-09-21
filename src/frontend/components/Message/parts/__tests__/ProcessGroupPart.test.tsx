@@ -79,7 +79,6 @@ describe('ProcessGroupPart', () => {
       renderer = create(
         <ProcessGroupPart
           citationText={new Map()}
-          isTextSelectionEnabled
           items={[{ index: 0, key: 'reasoning-1', part }]}
           message={message}
           messageParts={[part]}

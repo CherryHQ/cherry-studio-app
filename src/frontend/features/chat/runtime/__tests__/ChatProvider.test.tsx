@@ -46,6 +46,10 @@ jest.mock('@/frontend/components/Message', () => ({
 }));
 
 jest.mock('../AgentSessionChatClient', () => ({
+  // The busy predicate is the client's own rule, not a test double.
+  isAgentSessionBusy: jest.requireActual<typeof import('../AgentSessionChatClient')>(
+    '../AgentSessionChatClient',
+  ).isAgentSessionBusy,
   AgentSessionChatClient: jest.fn().mockImplementation(() => ({
     dispose: mockDispose,
     refreshObservedSessions: mockRefreshObservedSessions,

@@ -32,12 +32,16 @@ import {
 } from '@cherrystudio/ai-runtime/provider';
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import * as Crypto from 'expo-crypto';
 
 import {
   resolveProviderConnection,
   type ResolvedProviderConnection,
 } from '@/backend/ai/provider/providerConnection';
-import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
+import type {
+  ProviderService,
+  ResolvedProviderApiKey,
+} from '@/backend/data/services/ProviderService';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
@@ -87,6 +91,22 @@ interface ProviderToAiSdkConfigOptions {
 export interface ResolvedProviderAiSdkConfig {
   config: ProviderConfig;
   credentialReceipt: ServingCredentialReceipt;
+}
+
+export interface ResolveAiSdkServingInput {
+  provider: Provider;
+  model: Model;
+  providerService: Pick<ProviderService, 'getAuthConfig' | 'resolveApiKey'>;
+  apiKeyOverride?: string;
+  /** Pass the connection when the caller already resolved it to validate the request. */
+  connection?: ResolvedProviderConnection;
+}
+
+export interface ResolvedAiSdkServing {
+  connection: ResolvedProviderConnection;
+  sdkConfig: ProviderConfig & { modelId: string };
+  credentialReceipt: ServingCredentialReceipt;
+  requestId: string;
 }
 
 /** Applies endpoint-/provider-specific formatting (API version, Ollama/Gemini paths). */
@@ -159,6 +179,35 @@ export async function providerToAiSdkConfig(
   options?: ProviderToAiSdkConfigOptions,
 ): Promise<ProviderConfig> {
   return (await resolveProviderAiSdkConfig(provider, model, runtime, options)).config;
+}
+
+/**
+ * Resolves the connection, credentials, and wire model for one AI SDK request. Text and image
+ * requests share nothing else: each capability builds its own parameters from this result.
+ */
+export async function resolveAiSdkServing({
+  provider,
+  model,
+  providerService,
+  apiKeyOverride,
+  connection = resolveProviderConnection(provider, model),
+}: ResolveAiSdkServingInput): Promise<ResolvedAiSdkServing> {
+  const requestId = Crypto.randomUUID();
+  const { config, credentialReceipt } = await resolveProviderAiSdkConfig(
+    provider,
+    model,
+    {
+      getAuthConfig: (providerId) => providerService.getAuthConfig(providerId),
+      resolveApiKey: (providerId, override) => providerService.resolveApiKey(providerId, override),
+    },
+    { apiKeyOverride, resolvedConnection: connection, sessionId: requestId },
+  );
+  return {
+    connection,
+    sdkConfig: { ...config, modelId: connection.wireModelId },
+    credentialReceipt,
+    requestId,
+  };
 }
 
 export async function resolveProviderAiSdkConfig(

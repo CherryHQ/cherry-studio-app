@@ -1,4 +1,7 @@
+import { Platform } from 'react-native';
+
 import { application } from '@/backend/core/application/Application';
+import type { BackgroundActivityEnvironmentConfig } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createAppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 
 const mockBackend = { kind: 'backend' };
@@ -15,7 +18,11 @@ const mockDocumentExport = { kind: 'document-export' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
-const mockPreference = { kind: 'preference' };
+const mockPreference = {
+  kind: 'preference',
+  readCached: jest.fn(() => false),
+  subscribeChange: jest.fn((_key: string) => (_listener: () => void) => () => {}),
+};
 const mockProviderRegistryUpdater = { kind: 'provider-registry-updater' };
 const mockWebSearch = { kind: 'web-search' };
 const mockBackgroundActivityEnvironment = { configure: jest.fn() };
@@ -45,6 +52,7 @@ jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
 }));
 jest.mock('@/frontend/appShell/backgroundActivity', () => ({
   publishForegroundActivityAttention: jest.fn(),
+  subscribeVisibleBackgroundTask: jest.fn(),
 }));
 jest.mock('@/bootstrap/composition/createBackendServices', () => ({
   createBackendServices: (infrastructure: unknown) => mockCreateBackendServices(infrastructure),
@@ -126,8 +134,11 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockBackgroundActivityEnvironment.configure).toHaveBeenCalledWith({
       assistantPresenter: expect.any(Object),
       getColorScheme: expect.any(Function),
+      isPresentationEnabled: expect.any(Function),
+      subscribePresentationEnabled: expect.any(Function),
       onForegroundAttention: expect.any(Function),
       paintingPresenter: expect.any(Object),
+      subscribeVisibleTask: expect.any(Function),
       translate: expect.any(Function),
     });
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
@@ -141,6 +152,25 @@ describe('createAppBootstrapRuntime', () => {
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);
     expect(runtime.preference).toBe(mockPreference);
+  });
+
+  test('applies the shared presentation switch only to iOS Live Activities', () => {
+    const originalPlatform = Platform.OS;
+    const runtime = createRuntime();
+    const config = mockBackgroundActivityEnvironment.configure.mock
+      .calls[0]![0] as BackgroundActivityEnvironmentConfig;
+    try {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+      expect(config.isPresentationEnabled?.()).toBe(false);
+      expect(mockPreference.readCached).toHaveBeenCalledWith('chat.background_reply.enabled');
+      mockPreference.readCached.mockReturnValueOnce(true);
+      expect(config.isPresentationEnabled?.()).toBe(true);
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+      expect(config.isPresentationEnabled?.()).toBe(true);
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
+    }
+    return runtime.dispose();
   });
 
   test('installs its host so services resolve through application', async () => {

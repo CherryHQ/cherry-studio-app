@@ -1,3 +1,4 @@
+import { loggerService } from '@logger';
 import * as Device from 'expo-device';
 import { fetch as expoFetch } from 'expo/fetch';
 import { Platform } from 'react-native';
@@ -7,7 +8,11 @@ import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import type { DesktopPairingQr } from '@/shared/data/api/schemas/desktopConnections';
 
+import { getLocalNetworkAccess } from '../../../../modules/local-network-access';
+
 const REQUEST_TIMEOUT_MS = 4_000;
+
+const logger = loggerService.withContext('DesktopConnection');
 
 const PairResponseSchema = z.looseObject({
   name: z.string().min(1),
@@ -16,6 +21,14 @@ const PairResponseSchema = z.looseObject({
 });
 
 export class PairingRejectedError extends Error {}
+class HttpStatusError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 export class AuthorizationError extends Error {
   constructor(readonly status: 401 | 403) {
     super(`Desktop authorization failed with status ${status}`);
@@ -24,6 +37,22 @@ export class AuthorizationError extends Error {
 
 export function desktopError(reason: string, message: string): DataApiError {
   return new DataApiError(ErrorCode.INVALID_OPERATION, message, { reason });
+}
+
+/** Keeps the shape free of addresses and tokens so a failed attempt is safe to report. */
+function attemptOutcome(error: unknown): string {
+  if (error instanceof HttpStatusError) return `http-${error.status}`;
+  if (!(error instanceof Error)) return 'unknown';
+  return error.name === 'AbortError' ? 'timeout' : error.name;
+}
+
+/** Every address failed and its cause was dropped; name the causes before collapsing them. */
+function unreachable(operation: string, message: string, attempts: string[]): DataApiError {
+  const error = desktopError('unreachable', message);
+  // A desktop that answers with an HTTP error is a defect worth reporting; a silent network is not.
+  const level = attempts.some((attempt) => attempt.startsWith('http-')) ? 'error' : 'warn';
+  logger[level](message, error, { attempts, operation });
+  return error;
 }
 
 export function baseUrlsFromQr(qr: DesktopPairingQr): string[] {
@@ -61,52 +90,78 @@ export async function requestWithTimeout<T>(
   }
 }
 
+async function readPairResponse(response: Pick<Response, 'status' | 'ok' | 'json'>) {
+  if (response.status === 403) throw new PairingRejectedError();
+  if (!response.ok) {
+    throw new HttpStatusError(
+      response.status,
+      `Pairing request failed with status ${response.status}`,
+    );
+  }
+
+  const parsed = PairResponseSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw desktopError('invalid-pair-response', 'Desktop returned an invalid pairing response');
+  }
+  return parsed.data;
+}
+
+async function requestPairing(url: string, body: string, signal: AbortSignal) {
+  signal.throwIfAborted();
+  const headers = { ...defaultAppHeaders(), 'Content-Type': 'application/json' };
+  const access = Platform.OS === 'ios' ? getLocalNetworkAccess() : null;
+  // Clients without the optional helper retain their existing pairing transport.
+  if (!access) {
+    return requestWithTimeout(url, { body, headers, method: 'POST' }, readPairResponse, signal);
+  }
+  // expo/fetch has no per-request waitsForConnectivity option. Only iOS pairing uses this
+  // native POST, so the OS can wait for a pending permission without replaying the code.
+  const request = new access.PairingRequest();
+  const cancel = () => void request.cancel().catch(() => undefined);
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    const response = await request.post(url, headers, body);
+    signal.throwIfAborted();
+    return await readPairResponse({
+      status: response.status,
+      ok: response.status >= 200 && response.status < 300,
+      json: async () => JSON.parse(response.body),
+    });
+  } catch (error) {
+    signal.throwIfAborted();
+    throw error;
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    request.release();
+  }
+}
+
 export async function pairDesktop(baseUrls: string[], qr: DesktopPairingQr, signal: AbortSignal) {
   const reportedDeviceName = (Device.deviceName ?? Device.modelName ?? '').trim();
   const deviceName = (reportedDeviceName || 'Cherry Studio Mobile').slice(0, 64);
+  const body = JSON.stringify({
+    code: qr.code,
+    device: { name: deviceName, platform: Platform.OS.slice(0, 32) },
+  });
+  const attempts: string[] = [];
   for (const baseUrl of baseUrls) {
     try {
-      return await requestWithTimeout(
-        `${baseUrl}/pair`,
-        {
-          body: JSON.stringify({
-            code: qr.code,
-            device: { name: deviceName, platform: Platform.OS.slice(0, 32) },
-          }),
-          headers: { ...defaultAppHeaders(), 'Content-Type': 'application/json' },
-          method: 'POST',
-        },
-        async (response) => {
-          if (response.status === 403) {
-            throw new PairingRejectedError();
-          }
-          if (!response.ok) {
-            throw new Error(`Pairing request failed with status ${response.status}`);
-          }
-
-          const parsed = PairResponseSchema.safeParse(await response.json());
-          if (!parsed.success) {
-            throw desktopError(
-              'invalid-pair-response',
-              'Desktop returned an invalid pairing response',
-            );
-          }
-          return { baseUrl, ...parsed.data };
-        },
-        signal,
-      );
+      const response = await requestPairing(`${baseUrl}/pair`, body, signal);
+      return { baseUrl, ...response };
     } catch (error) {
       signal.throwIfAborted();
       if (error instanceof PairingRejectedError || error instanceof DataApiError) {
         throw error;
       }
+      attempts.push(attemptOutcome(error));
     }
   }
 
-  throw desktopError('unreachable', 'Could not connect to the desktop');
+  throw unreachable('desktop.pair', 'Could not connect to the desktop', attempts);
 }
 
 export async function fetchSnapshot(baseUrls: string[], token: string, signal: AbortSignal) {
+  const attempts: string[] = [];
   for (const baseUrl of baseUrls) {
     try {
       return await requestWithTimeout(
@@ -120,7 +175,10 @@ export async function fetchSnapshot(baseUrls: string[], token: string, signal: A
             throw new AuthorizationError(response.status);
           }
           if (!response.ok) {
-            throw new Error(`Desktop configuration request failed with status ${response.status}`);
+            throw new HttpStatusError(
+              response.status,
+              `Desktop configuration request failed with status ${response.status}`,
+            );
           }
           let payload: unknown;
           try {
@@ -137,8 +195,13 @@ export async function fetchSnapshot(baseUrls: string[], token: string, signal: A
       if (error instanceof AuthorizationError || error instanceof DataApiError) {
         throw error;
       }
+      attempts.push(attemptOutcome(error));
     }
   }
 
-  throw desktopError('unreachable', 'Could not fetch configuration from the desktop');
+  throw unreachable(
+    'desktop.snapshot.fetch',
+    'Could not fetch configuration from the desktop',
+    attempts,
+  );
 }

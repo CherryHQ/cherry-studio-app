@@ -1,21 +1,19 @@
 import { useCallback } from 'react';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import {
-  DEFAULT_EXPORT_WATERMARK_STYLE,
-  type ExportWatermark,
-  type ExportWatermarkStyle,
-} from '@/shared/contracts/fileExport';
+import type { ExportWatermark, ExportWatermarkStyle } from '@/shared/contracts/fileExport';
 import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import { EXPORT_BRAND } from './exportBrand';
+import { useExportWatermarkStyle } from './useExportWatermarkStyle';
 
-export function useExportWatermark(style: ExportWatermarkStyle = DEFAULT_EXPORT_WATERMARK_STYLE) {
+export function useExportWatermark(style?: ExportWatermarkStyle) {
+  const resolvedStyle = useExportWatermarkStyle(style);
   const [background, foreground] = useThemeColor(['constant-white', 'constant-black']);
   // Document capture observes this value; unrelated screen renders must not restart it.
   return useCallback(
     (timestamp = formatExportTimestamp(new Date())): ExportWatermark => {
-      switch (style) {
+      switch (resolvedStyle) {
         case 'none':
           return { kind: 'none' };
         case 'cherry':
@@ -25,6 +23,6 @@ export function useExportWatermark(style: ExportWatermarkStyle = DEFAULT_EXPORT_
           };
       }
     },
-    [style, background, foreground],
+    [resolvedStyle, background, foreground],
   );
 }

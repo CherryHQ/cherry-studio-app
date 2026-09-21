@@ -21,6 +21,7 @@ import {
 
 import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '..';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
+import { withPiApiKeyFallback } from './piApiKeyFallback';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
@@ -44,16 +45,29 @@ export function createPiModelResolver(): PiRuntimeDependencies {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
     },
-    async resolveModel(runtimeModel, runtimeOptions, sessionId): Promise<PiModelResolution> {
+    async resolveModel(
+      runtimeModel,
+      runtimeOptions,
+      sessionId,
+      apiKeyOverride,
+    ): Promise<PiModelResolution> {
       const { adapter, connection, model, preflight, provider } =
         await resolveConfiguredPiModel(runtimeModel);
 
-      const selectedApiKey = await providerService.resolveApiKey(provider.id);
+      const selectedApiKey = await providerService.resolveApiKey(provider.id, apiKeyOverride);
       if (!selectedApiKey.value.trim()) {
         throw new PiModelResolutionError(
           'invalid_api_key',
           'Pi Runtime requires an API key from the selected provider.',
         );
+      }
+
+      let azureApiVersion: string | undefined;
+      if (adapter.api === 'azure-openai-responses') {
+        const authConfig = await providerService.getAuthConfig(provider.id);
+        const configuredVersion =
+          authConfig?.type === 'iam-azure' ? authConfig.apiVersion : provider.settings.apiVersion;
+        azureApiVersion = configuredVersion?.trim() || undefined;
       }
 
       const modelId = connection.wireModelId;
@@ -112,7 +126,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         provider: provider.id,
         reasoning: invocationModel.reasoning !== undefined,
       };
-      const streamFn = await bindPiStream(adapter, {
+      const streamBinding: Parameters<typeof bindPiStream>[1] = {
         apiKey: selectedApiKey.value,
         fetch: expoFetch as unknown as FetchFunction,
         headers,
@@ -129,9 +143,16 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         },
         temperature: runtimeOptions.temperature,
         timeoutMs: DEFAULT_PI_TIMEOUT_MS,
-      });
+        azureApiVersion,
+      };
+      const primaryStream = await bindPiStream(adapter, streamBinding);
+      const hasAuthHeader = Object.keys(headers).some((name) =>
+        adapter.authHeaderNames.includes(name.toLowerCase()),
+      );
       const capturedContext = createAiUsageCaptureContext({
-        credentialReceipt: selectedApiKey.apiKeySelection,
+        credentialReceipt: hasAuthHeader
+          ? { attribution: 'unknown' }
+          : selectedApiKey.apiKeySelection,
         messageRef: null,
         modelId,
         modelName: model.name,
@@ -153,11 +174,37 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         trustProviderReportedCost: capturedContext.trustProviderReportedCost,
       };
 
+      const selectedKeyId =
+        'id' in usageContext.credentialReceipt ? usageContext.credentialReceipt.id : undefined;
+      const enabledKeys =
+        apiKeyOverride === undefined &&
+        selectedKeyId !== undefined &&
+        provider.apiKeys.filter((key) => key.isEnabled).length > 1
+          ? (await providerService.listApiKeys(provider.id, { enabled: true })).keys
+          : [];
+      const selectedIndex = enabledKeys.findIndex((key) => key.id === selectedKeyId);
+      const fallbackKeys =
+        selectedIndex < 0
+          ? []
+          : [...enabledKeys.slice(selectedIndex + 1), ...enabledKeys.slice(0, selectedIndex)];
+      const streamFn = withPiApiKeyFallback(
+        primaryStream,
+        fallbackKeys.map((key) => async () => {
+          const selected = await providerService.resolveApiKey(provider.id, key.key);
+          const stream = await bindPiStream(adapter, { ...streamBinding, apiKey: selected.value });
+          usageContext.credentialReceipt = selected.apiKeySelection;
+          return stream;
+        }),
+      );
+
       return {
         defaultThinkingLevel: resolveDefaultThinkingLevel(invocationModel),
         maxInputTokens: model.maxInputTokens,
         model: piModel,
-        redactionValues: collectRedactionValues(selectedApiKey.value, headers),
+        redactionValues: [
+          ...collectRedactionValues(selectedApiKey.value, headers),
+          ...fallbackKeys.map((key) => key.key),
+        ],
         streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(streamFn) : streamFn,
         supportsTools: preflight.supportsTools,
         usageContext,
@@ -176,7 +223,7 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
 
   const connection = resolveProviderConnection(provider, model);
   const piBinding = requirePiLanguageBinding(resolvePiLanguageBinding(provider, connection));
-  const adapter = resolvePiApiAdapter(piBinding.endpointType);
+  const adapter = resolvePiApiAdapter(piBinding.endpointType, connection.adapterFamily);
 
   return {
     adapter,
@@ -190,10 +237,10 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
 export function toPiModelPreflight(model: Model): RuntimeModelPreflight {
   const contextWindow = model.contextWindow ?? DEFAULT_MODEL_CONTEXT_WINDOW;
   const maxOutputTokens = model.maxOutputTokens ?? DEFAULT_MODEL_MAX_OUTPUT_TOKENS;
-  const contextInputLimit = Math.max(0, contextWindow - maxOutputTokens);
+  // These are model limits; the Runtime budgets input and output together for each request.
   const maxInputTokens = Math.max(
     0,
-    Math.min(model.maxInputTokens ?? contextInputLimit, contextInputLimit),
+    Math.min(model.maxInputTokens ?? contextWindow, contextWindow),
   );
 
   return {

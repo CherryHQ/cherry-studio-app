@@ -84,9 +84,9 @@ export function createBackend(
   };
   const models = createModelsModule({
     ai: services.ai,
-    checkChatModel: (model, signal) =>
+    checkChatModel: (model, options) =>
       checkChatModel(infrastructure.languageServing, model, {
-        signal,
+        ...options,
         onUsage: async (report, requestId) => {
           try {
             await services.aiUsageRecord.recordInvocation({

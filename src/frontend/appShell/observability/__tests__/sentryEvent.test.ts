@@ -1,6 +1,10 @@
 import type { Event } from '@sentry/react-native';
 
-import { isExpectedSentryError, sanitizeSentryEvent } from '../sentryEvent';
+import {
+  isExpectedSentryError,
+  sanitizeSentryBreadcrumb,
+  sanitizeSentryEvent,
+} from '../sentryEvent';
 
 describe('Sentry event privacy', () => {
   test('retains symbolication fields while excluding content from every free-form field', () => {
@@ -85,5 +89,63 @@ describe('Sentry event privacy', () => {
       isExpectedSentryError(Object.assign(new Error('canceled'), { code: 'ERR_CANCELED' })),
     ).toBe(true);
     expect(isExpectedSentryError(new Error('database unavailable'))).toBe(false);
+  });
+
+  test('keeps only bounded, predefined breadcrumbs, rebuilding their contents', () => {
+    const event = sanitizeSentryEvent({
+      exception: { values: [{ type: 'Error' }] },
+      breadcrumbs: [
+        ...Array.from({ length: 25 }, (_, timestamp) => ({
+          category: 'app.diagnostic',
+          message: 'startup.router',
+          timestamp,
+          data: { token: 'private' },
+          unknown: 'private',
+        })),
+        { category: 'navigation', message: '/chat/private' },
+        { category: 'app.diagnostic', message: 'route.private' },
+      ],
+    });
+    expect(event?.breadcrumbs).toHaveLength(20);
+    expect(
+      sanitizeSentryBreadcrumb({ category: 'app.diagnostic', message: 'route.settings' }),
+    ).toBeNull();
+    expect(
+      sanitizeSentryBreadcrumb({ category: 'app.diagnostic', message: 'lifecycle.background' }),
+    ).toBeNull();
+    expect(event?.breadcrumbs?.[0]?.timestamp).toBe(5);
+    expect(JSON.stringify(event)).not.toContain('private');
+    expect(
+      sanitizeSentryBreadcrumb({
+        category: 'app.diagnostic',
+        message: 'startup.ready',
+        data: { url: 'private' },
+      }),
+    ).toEqual({
+      category: 'app.diagnostic',
+      message: 'startup.ready',
+      level: 'info',
+      timestamp: undefined,
+    });
+  });
+
+  test('classifies framework failures and closed error codes without uploading free-form messages', () => {
+    const event = {
+      exception: {
+        values: [{ type: 'Error', value: 'Element type is invalid: private component details' }],
+      },
+    };
+    const sanitized = sanitizeSentryEvent(
+      event,
+      Object.assign(new Error('private'), { code: 'NOT_FOUND' }),
+    );
+    expect(sanitized?.tags).toMatchObject({
+      'error.kind': 'invalid_element',
+      'error.code': 'NOT_FOUND',
+    });
+    expect(JSON.stringify(sanitized)).not.toContain('private');
+    expect(
+      sanitizeSentryEvent(event, Object.assign(new Error(), { code: 'PRIVATE_SECRET' }))?.tags,
+    ).not.toHaveProperty('error.code');
   });
 });

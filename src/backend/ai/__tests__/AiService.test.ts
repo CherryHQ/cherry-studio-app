@@ -1,4 +1,5 @@
 import { createOpenAI } from '@ai-sdk/openai';
+import { generateImage as aiCoreGenerateImage } from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
 import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
@@ -113,6 +114,73 @@ describe('AiService.listModels', () => {
       'listModels requires providerId',
     );
   });
+});
+
+describe('AiService.generateImage', () => {
+  afterEach(() => {
+    jest.mocked(aiCoreGenerateImage).mockReset();
+  });
+
+  it.each([
+    ['generate', ENDPOINT_TYPE.OPENAI_RESPONSES],
+    ['edit', ENDPOINT_TYPE.OPENAI_RESPONSES],
+    ['generate', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+    ['edit', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+    ['generate', ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+  ] as const)(
+    'keeps chat parameters out of image %s requests using %s connections',
+    async (mode, endpointType) => {
+      const provider = createProvider({
+        defaultChatEndpoint: endpointType,
+        endpointConfigs: {
+          [endpointType]: { adapterFamily: 'openai', baseUrl: 'https://api.example.com' },
+        },
+        settings: { serviceTier: 'priority' },
+      });
+      const model = createModel('local-image', {
+        apiModelId: 'gpt-image-2-2026-04-21',
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      });
+      const services = createServices({ model, provider });
+      const signal = new AbortController().signal;
+      const inputImages = mode === 'edit' ? ['data:image/png;base64,iVBORw0KGgo='] : undefined;
+      jest.mocked(aiCoreGenerateImage).mockRejectedValue(new Error('image request captured'));
+
+      await expect(
+        new AiService(services).generateImage({
+          apiKeyOverride: 'image-key',
+          inputImages,
+          mode,
+          paramValues: { background: 'opaque', quality: 'high', size: '1024x1024' },
+          prompt: 'Draw a cat.',
+          requestOptions: {
+            headers: { 'X-Image': 'test', unused: undefined },
+            maxRetries: 2,
+            signal,
+          },
+          uniqueModelId: model.id,
+        }),
+      ).rejects.toThrow('image request captured');
+
+      const [, providerSettings, params] = jest.mocked(aiCoreGenerateImage).mock
+        .calls[0] as unknown as [string, unknown, { providerOptions?: Record<string, unknown> }];
+      expect(providerSettings).toMatchObject({
+        apiKey: 'image-key',
+        baseURL: 'https://api.example.com/v1',
+      });
+      expect(services.provider.resolveApiKey).toHaveBeenCalledTimes(1);
+      expect(params).toMatchObject({
+        abortSignal: signal,
+        headers: { 'X-Image': 'test' },
+        maxRetries: 2,
+        model: 'gpt-image-2-2026-04-21',
+        n: 1,
+        prompt: inputImages ? { images: inputImages, text: 'Draw a cat.' } : 'Draw a cat.',
+        size: '1024x1024',
+      });
+      expect(params.providerOptions?.openai).toEqual({ background: 'opaque', quality: 'high' });
+    },
+  );
 });
 
 describe('AiService.checkModel', () => {

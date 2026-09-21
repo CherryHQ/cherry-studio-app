@@ -17,7 +17,7 @@ import {
 import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { registerVisibleBackgroundTask } from '../foregroundActivityAttention';
+import { useVisibleBackgroundTask } from './useVisibleBackgroundTask';
 
 const logger = loggerService.withContext('BackgroundTaskNotifications');
 
@@ -29,6 +29,8 @@ export function useBackgroundTaskNotifications(
   const taskKind = task?.kind;
   const taskId = task?.kind === 'chat' ? task.sessionId : task?.paintingId;
 
+  useVisibleBackgroundTask(task, enabled);
+
   useFocusEffect(
     useCallback(() => {
       if (!enabled || !taskKind || !taskId) return;
@@ -36,7 +38,6 @@ export function useBackgroundTaskNotifications(
         taskKind === 'chat'
           ? { kind: taskKind, sessionId: taskId }
           : { kind: taskKind, paintingId: taskId };
-      let releaseVisibility: (() => void) | undefined;
       let focused = true;
 
       const dismissViewed = async (notification: Notification) => {
@@ -52,11 +53,8 @@ export function useBackgroundTaskNotifications(
       };
       const reportError = (error: unknown) =>
         logger.warn('Could not clear viewed notification', { error });
-      const updateVisibility = () => {
-        releaseVisibility?.();
-        releaseVisibility = undefined;
+      const dismissPresented = () => {
         if (AppState.currentState !== 'active') return;
-        releaseVisibility = registerVisibleBackgroundTask(target);
         void getPresentedNotificationsAsync()
           .then((notifications) => Promise.all(notifications.map(dismissViewed)))
           .catch(reportError);
@@ -67,11 +65,10 @@ export function useBackgroundTaskNotifications(
       const presented = addNotificationPresentedListener((notification) => {
         void dismissViewed(notification).catch(reportError);
       });
-      const appState = AppState.addEventListener('change', updateVisibility);
-      updateVisibility();
+      const appState = AppState.addEventListener('change', dismissPresented);
+      dismissPresented();
       return () => {
         focused = false;
-        releaseVisibility?.();
         appState.remove();
         presented.remove();
       };

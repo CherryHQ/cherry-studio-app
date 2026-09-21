@@ -1,0 +1,14 @@
+diff --git a/ios/RNSScreenStackHeaderConfig.mm b/ios/RNSScreenStackHeaderConfig.mm
+index 1c844846a5c66e31cfa530ca462774d2fb6bbea1..c4ca0305c379d970ec1f1a8e3b433215596136cd 100644
+--- a/ios/RNSScreenStackHeaderConfig.mm
++++ b/ios/RNSScreenStackHeaderConfig.mm
+@@ -208,7 +208,8 @@ - (void)updateHeaderStateInShadowTreeInContextOfNavigationBar:(nullable UINaviga
+   [self updateShadowStateWithSize:navigationBar.frame.size
+                        edgeInsets:[self computeEdgeInsetsOfNavigationBar:navigationBar]
+                       frameOrigin:navBarFrameInScreenView.origin];
+-  for (RNSScreenStackHeaderSubview *subview in self.reactSubviews) {
++  // Synchronous state updates can mount/unmount header subviews while this loop runs.
++  for (RNSScreenStackHeaderSubview *subview in [self.reactSubviews copy]) {
+     [subview updateShadowStateInContextOfAncestorView:navigationBar];
+   }
+ }

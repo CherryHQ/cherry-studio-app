@@ -1,11 +1,12 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import type { EndpointType } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
+import { areApiKeyEntriesEqual } from '../../../apiService/utils/providerApiServiceApiKeys';
 import {
   canEditProviderEndpoint,
-  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   getPrimaryEndpoint,
   getProviderPrimaryBaseUrl,
   isCustomProviderTextEndpointType,
@@ -19,7 +20,7 @@ import {
  * slots a screen composes.
  */
 export type ProviderFormValues = {
-  apiKey: string;
+  apiKeys: ApiKeyEntry[];
   avatarUri: string | null;
   defaultChatEndpoint: EndpointType;
   endpointUrls: Partial<Record<EndpointType, string>>;
@@ -27,12 +28,11 @@ export type ProviderFormValues = {
 };
 
 /** Text protocols offered when creating a fully custom mobile provider. */
-export const NEW_PROVIDER_ENDPOINT_TYPES: readonly EndpointType[] =
-  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES;
+export const NEW_PROVIDER_ENDPOINT_TYPES: readonly EndpointType[] = CHAT_ENDPOINT_TYPES;
 
 export function createEmptyProviderFormValues(): ProviderFormValues {
   return {
-    apiKey: '',
+    apiKeys: [],
     avatarUri: null,
     defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
     endpointUrls: {},
@@ -41,7 +41,7 @@ export function createEmptyProviderFormValues(): ProviderFormValues {
 }
 
 /**
- * Fully custom providers expose every Pi text endpoint. Presets keep their
+ * Fully custom providers expose every configurable chat endpoint. Presets keep their
  * single primary URL. Empty means the auth type has no editable URL at all.
  */
 export function resolveProviderFormEndpointTypes(provider: Provider): readonly EndpointType[] {
@@ -49,30 +49,28 @@ export function resolveProviderFormEndpointTypes(provider: Provider): readonly E
     return [];
   }
 
-  return isFullyCustomProvider(provider)
-    ? CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES
-    : [getPrimaryEndpoint(provider)];
+  return isFullyCustomProvider(provider) ? CHAT_ENDPOINT_TYPES : [getPrimaryEndpoint(provider)];
 }
 
 export function createProviderFormValues({
-  apiKey = '',
+  apiKeys = [],
   avatarUri,
   provider,
 }: {
-  apiKey?: string;
+  apiKeys?: ApiKeyEntry[];
   avatarUri: string | null;
   provider: Provider;
 }): ProviderFormValues {
   if (isFullyCustomProvider(provider)) {
     const endpointUrls = Object.fromEntries(
-      CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.map((endpointType) => [
+      CHAT_ENDPOINT_TYPES.map((endpointType) => [
         endpointType,
         provider.endpointConfigs?.[endpointType]?.baseUrl ?? '',
       ]),
     ) as Partial<Record<EndpointType, string>>;
 
     return {
-      apiKey,
+      apiKeys,
       avatarUri,
       defaultChatEndpoint: normalizeCustomProviderDefaultEndpoint(
         endpointUrls,
@@ -86,7 +84,7 @@ export function createProviderFormValues({
   const primaryEndpoint = getPrimaryEndpoint(provider);
 
   return {
-    apiKey,
+    apiKeys,
     avatarUri,
     defaultChatEndpoint: primaryEndpoint,
     endpointUrls: { [primaryEndpoint]: getProviderPrimaryBaseUrl(provider) },
@@ -122,7 +120,7 @@ export function isProviderFormDirty({
   if (
     values.name !== initialValues.name ||
     values.avatarUri !== initialValues.avatarUri ||
-    values.apiKey !== initialValues.apiKey ||
+    !areApiKeyEntriesEqual(values.apiKeys, initialValues.apiKeys) ||
     values.defaultChatEndpoint !== initialValues.defaultChatEndpoint
   ) {
     return true;

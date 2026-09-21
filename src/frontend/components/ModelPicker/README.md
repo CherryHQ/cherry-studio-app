@@ -13,8 +13,9 @@ This module owns the model selection surface, model metadata UI, and model setti
   jump to their group headers without changing provider/order-key order.
 - `ModelPickerIcon` renders model identity used by picker consumers.
 - `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
-  embedded in the Android controls frame. Product workflows own their purpose controls rather than
-  exposing provider capability taxonomies through the shared picker.
+  embedded in the Android controls frame. The drawer's `chat` variant adds the two high-value
+  model traits (`Free` and `Vision`) as row badges and a compact filter menu; other workflows keep
+  the picker neutral rather than exposing the provider capability taxonomy.
 - `useModelSettingSelections` reads model selection preferences and saves partial updates. The
   settings screen persists each selection immediately.
 - Model setting and model type helpers are exported from `index.ts`.

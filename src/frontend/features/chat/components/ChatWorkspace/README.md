@@ -32,12 +32,22 @@ share using the platform's default timing. iOS presents its native context menu;
 CherryUI's menu at the long-press pointer, adjusted to stay inside the screen's safe area.
 Copy uses the toolbar's existing text projection and clipboard action; content
 without copyable text disables copy. Share opens the existing selector with the pressed message
-selected. Pending messages have no menu actions; their wrapper stays mounted so settling does not
+selected. The menu carries non-destructive actions only: message text is selectable, so a long
+press competes with the native selection gesture and resolves on whatever region the finger
+reaches. Pending messages have no menu actions; their wrapper stays mounted so settling does not
 recreate the streamed body. Android's scroll boundary cancels
-menu recognition during drag and momentum; iOS relies on UIKit arbitration. Main-answer text
-selection stays disabled while message actions are enabled. Process details keep their own
+menu recognition during drag and momentum; iOS relies on UIKit arbitration. The main answer's text
+region is a `ContextMenuExclusion`, so holding the answer selects text instead of opening the
+menu. Process details keep their own
 selection and scrolling inside a `ContextMenuExclusion`, as do source entry points, attachments,
 errors, and the assistant toolbar.
+
+Deleting a turn is a toolbar action, not a menu action. The assistant toolbar shows it on any row
+that carries a turn id — a synthetic divider or a send that has not been reserved yet has none —
+and it confirms destructively before removing the pressed answer together with the question that
+produced it: a transcript replays tool calls paired with their results, so half a turn is not
+replayable. The button is disabled while the Session is busy, like retry, because a running turn's
+rows must not disappear underneath it.
 Holding these regions belongs to the child interaction and does not open the message menu.
 
 `ChatWorkspace` observes the native screen-reader setting once for all rows. When enabled, settled

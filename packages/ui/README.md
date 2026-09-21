@@ -96,7 +96,10 @@ native renderer. A part that has streamed keeps the streaming renderer for its f
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
 the same theme tokens, syntax palette, LaTeX flags, and typography scale. Native streaming mode ends
 with each part, releasing pending tail blocks and requesting a final layout even when the text
-itself is unchanged. Product code supplies the active font size step and decides how links open:
+itself is unchanged. Product code supplies the active font size step, decides how links open, and
+passes the native copy-menu labels already translated. The renderer presents those menus itself, on
+text selections and on Markdown tables, so omitting the labels leaves the library's English
+defaults:
 
 ```tsx
 <MarkdownText
@@ -104,13 +107,36 @@ itself is unchanged. Product code supplies the active font size step and decides
   isStreaming={isStreaming}
   markdown={markdown}
   onLinkPress={openLink}
+  selectionMenuLabels={selectionMenuLabels}
 />;
 ```
 
-The enriched-renderer patch keeps overflowing tables horizontally scrollable across layout
-updates and exposes native scroll indicators. Table cells do not open a copy menu; whole-message
-copy stays with the message actions. Standalone code blocks have a 192-point maximum height,
-including their header, in both native layout and shadow measurement. Short blocks keep their
+Streaming updates use the Desktop cadence at the chat-state owner: 100 ms for small
+messages, increasing with accumulated text length to at most 3 seconds. Terminal events
+publish immediately. The Streamdown dependency patch allows one repair job and one latest
+pending input per mounted renderer and publishes completed results within the same raw-source
+generation. Replacement, clear, or repair-option changes start a new generation and remount
+the native renderer; ordinary appends and completion retain it. This lets Android accept
+repaired snapshots whose temporary closing delimiters change, while old-generation results
+cannot return after replacement. It preserves full Markdown parsing; there is no tail-only
+parser or persisted-content truncation.
+
+The Android enriched-renderer patch similarly coalesces pending render requests instead of
+queuing every full-text snapshot. It stops text/block fades past 64 * 1024 UTF-16 code units
+without disabling native streaming filters or completion layout. Inline message disclosures
+mount into natural layout immediately and unmount when closed; their visibility never waits
+for a Markdown measurement or a height-animation callback.
+
+Android streaming-status changes invalidate in-flight render jobs and schedule another render
+even when the text is unchanged. Applying that result also invalidates Fabric/Yoga measurement
+so completion or cancellation releases filtered tails and pending code-block presentation.
+The native coalescer relies on Streamdown's generation key for source replacement isolation;
+streaming callers that bypass Streamdown must key their native renderer by source generation.
+
+The enriched-renderer patch also keeps overflowing tables horizontally scrollable across layout
+updates and exposes native scroll indicators. Tables retain the upstream native copy menu;
+whole-message copy stays with the message actions. Standalone code blocks have a 192-point maximum
+height, including their header, in both native layout and shadow measurement. Short blocks keep their
 natural height; longer blocks keep their complete content in a native vertical scroll viewport
 with horizontal scrolling for long lines. The limit applies during streaming and after completion,
 including reasoning and final answers. Code-pane drags use native scroll recognition and cancel
@@ -642,6 +668,27 @@ prompt at all.
 Only platform-divergent material and text metrics use `.ios` / `.android` files. Layout, state, and
 collapse behavior stay shared. `Composer.Input` forwards every paste to `onPaste`; the caller decides
 which payloads to use.
+
+The Android enriched-input patch guards the observed framework null pointers during cursor dragging
+(`Editor.updateCursorPosition`) and long-press selection (`Editor.performLongClick` and
+`Editor.selectCurrentWordAndStartDrag`). Only those top stack frames are handled; other exceptions
+still propagate. The failed interaction is consumed without retrying a partially applied selection
+change. These native guards require a new installation package; a JavaScript update cannot apply
+them. The composer native-patch suite checks the installed sources, while recovery and subsequent
+editing still need device acceptance. See [the stability tracker](https://github.com/CherryHQ/cherry-studio-app/issues/1011).
+
+The field's height is measured natively, not in JavaScript: `maxHeight` caps it and the native input
+reports its own content height back to Fabric. On Android, `replaceTextInRange` suppresses the text
+watcher during edits, so it reports the updated height after formatting is applied. This covers
+markdown paste and programmatic inserts without extending measurement to formatting-only commands.
+
+The Android field also clamps scroll offsets outside the content range when its size changes.
+Native scroll-to-caret can run before Fabric applies the new height, but Android's pre-draw pass
+also adjusts scrolling. The size-change clamp is a defensive measure; its effect on the reported
+first-line clipping still needs device acceptance. Record the view height, text layout height, and
+`scrollY` before and after resizing, including the pre-draw pass, to establish whether a stale offset
+survives. The installed-source guards confirm patch presence, not runtime layout behavior. Both
+native changes require a new installation package.
 
 Rows above the field follow composition order rather than named slots. Use `Composer.Collapsible`
 only when a conditional row should animate the surface height:

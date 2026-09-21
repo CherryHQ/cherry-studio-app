@@ -34,7 +34,7 @@ describe('provider form values', () => {
     });
 
     expect(createProviderFormValues({ avatarUri: 'file:///logo.png', provider })).toEqual({
-      apiKey: '',
+      apiKeys: [],
       avatarUri: 'file:///logo.png',
       defaultChatEndpoint: 'anthropic-messages',
       endpointUrls: {
@@ -47,7 +47,7 @@ describe('provider form values', () => {
     });
   });
 
-  it('offers all Pi text endpoints for a fully custom provider', () => {
+  it('offers all configurable chat endpoints for a fully custom provider', () => {
     expect(resolveProviderFormEndpointTypes(createTestProvider())).toEqual([
       'openai-chat-completions',
       'anthropic-messages',
@@ -91,7 +91,7 @@ describe('provider form values', () => {
 
   it('starts a new provider on the OpenAI chat completions endpoint', () => {
     expect(createEmptyProviderFormValues()).toEqual({
-      apiKey: '',
+      apiKeys: [],
       avatarUri: null,
       defaultChatEndpoint: 'openai-chat-completions',
       endpointUrls: {},

@@ -1,3 +1,4 @@
+import { ContextMenuExclusion } from '@cherrystudio/ui/components';
 import { Image, Text, useWindowDimensions } from 'react-native';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
@@ -14,7 +15,6 @@ import { PartMarkdown } from './PartMarkdown';
 
 type TextPartProps = {
   isStreaming: boolean;
-  isTextSelectionEnabled: boolean;
   part: Extract<CherryMessagePart, { type: 'text' }>;
   renderMode?: MessagePartRenderMode;
   resolvedText?: ResolvedCitationText;
@@ -55,7 +55,7 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
   const iconSize = (textStyle.fontSize ?? 16) * fontScale;
 
   return (
-    <Text className="text-base text-foreground" accessibilityLabel={text}>
+    <Text className="text-base text-foreground" accessibilityLabel={text} selectable>
       {segments.map((segment) => {
         if (!segment.reference) return renderMentionSegments(splitToolMentions(segment.text));
         const icon = getPluginInlineIcon(segment.reference.pluginId, theme);
@@ -83,25 +83,22 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
 
 export function TextPart({
   isStreaming,
-  isTextSelectionEnabled,
   part,
   renderMode = 'markdown',
   resolvedText,
 }: TextPartProps) {
-  if (renderMode === 'plainText') {
-    return (
-      <PlainTextWithMentions
-        text={resolvedText?.plainText ?? part.text}
-        references={readCherryMeta(part)?.references}
-      />
-    );
-  }
-
+  // Native selection, links and block menus own touches inside the text region.
+  // Keep the boundary mounted while streaming so completion preserves the native text.
   return (
-    <PartMarkdown
-      isStreaming={isStreaming}
-      markdown={resolvedText?.markdown ?? part.text}
-      selectable={isTextSelectionEnabled}
-    />
+    <ContextMenuExclusion>
+      {renderMode === 'plainText' ? (
+        <PlainTextWithMentions
+          text={resolvedText?.plainText ?? part.text}
+          references={readCherryMeta(part)?.references}
+        />
+      ) : (
+        <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />
+      )}
+    </ContextMenuExclusion>
   );
 }

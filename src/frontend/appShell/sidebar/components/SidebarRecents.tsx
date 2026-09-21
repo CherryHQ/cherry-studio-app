@@ -1,6 +1,6 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { ActionMenu, ContentState, type MenuItem } from '@cherrystudio/ui/components';
+import { ActionMenu, ContentState, type MenuItem, useToast } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { useGlobalSearchParams, usePathname } from 'expo-router';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
@@ -23,6 +23,7 @@ import {
   useSessionActionAlerts,
   useSessionListSessions,
 } from '@/frontend/components/SessionList';
+import { usePreference } from '@/frontend/data/hooks';
 import { useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
 import { appSidebar } from '@/frontend/utils/constants';
 import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
@@ -72,25 +73,34 @@ function SidebarRowContent({
 
 export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<SessionViewMode>('sessions');
+  const { toast } = useToast();
+  const [mode, setMode] = usePreference('ui.sidebar.recent_view_mode');
   const isSessionMode = mode === 'sessions';
   const modeLabel = t(isSessionMode ? 'navigation.sessions' : 'navigation.agents');
+  const handleModeChange = useCallback(
+    (nextMode: SessionViewMode) => {
+      void setMode(nextMode).catch(() => {
+        toast.show({ label: t('settings.privacy.saveFailed'), variant: 'danger' });
+      });
+    },
+    [setMode, t, toast],
+  );
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
         checked: isSessionMode,
         id: 'show-sessions',
         label: t('navigation.sessions'),
-        onPress: () => setMode('sessions'),
+        onPress: () => handleModeChange('sessions'),
       },
       {
         checked: !isSessionMode,
         id: 'show-agents',
         label: t('navigation.agents'),
-        onPress: () => setMode('agents'),
+        onPress: () => handleModeChange('agents'),
       },
     ],
-    [isSessionMode, t],
+    [handleModeChange, isSessionMode, t],
   );
 
   return (

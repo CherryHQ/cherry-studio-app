@@ -212,7 +212,8 @@ function ImportedProviderCreationScreen({
           canSave={importedProviderForm.canCompleteSetup && !isPreparing}
           issue={
             issue ??
-            (importedProviderForm.requiresApiKey && !importedProviderForm.form.state.apiKey.trim()
+            (importedProviderForm.requiresApiKey &&
+            !importedProviderForm.form.state.apiKeys.some((entry) => entry.key.trim())
               ? 'missing-api-key'
               : undefined)
           }

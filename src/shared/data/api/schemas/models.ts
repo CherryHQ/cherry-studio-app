@@ -47,7 +47,6 @@ export type CreateModelDto = z.infer<typeof CreateModelSchema>;
 export const MODELS_BATCH_MAX_ITEMS = 500;
 export const MODELS_BULK_UPDATE_MAX_ITEMS = 1000;
 export const MODELS_DELETE_MAX_IDS = 1000;
-export const MODELS_RECONCILE_MAX_ITEMS = 5000;
 
 export const CreateModelsSchema = z.array(CreateModelSchema).min(1).max(MODELS_BATCH_MAX_ITEMS);
 export type CreateModelsDto = z.infer<typeof CreateModelsSchema>;
@@ -90,12 +89,6 @@ export const DeleteModelsQuerySchema = z.strictObject({
   ids: DeleteModelsIdsQueryValueSchema,
 });
 export type DeleteModelsQuery = z.input<typeof DeleteModelsQuerySchema>;
-
-export const ReconcileProviderModelsSchema = z.strictObject({
-  toAdd: z.array(CreateModelSchema).max(MODELS_RECONCILE_MAX_ITEMS),
-  toRemove: z.array(UniqueModelIdSchema).max(MODELS_RECONCILE_MAX_ITEMS),
-});
-export type ReconcileProviderModelsDto = z.infer<typeof ReconcileProviderModelsSchema>;
 
 export const ResolveProviderModelsQuerySchema = z.strictObject({
   ids: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
@@ -145,13 +138,6 @@ export type ModelSchemas = {
       body: UpdateModelDto;
       params: { uniqueModelId: UniqueModelId };
       response: Model;
-    };
-  };
-  '/providers/:providerId/models:reconcile': {
-    POST: {
-      body: ReconcileProviderModelsDto;
-      params: { providerId: string };
-      response: Model[];
     };
   };
   '/providers/:providerId/models:resolve': {

@@ -34,6 +34,7 @@ export interface PreferenceSchema {
   'app.user.avatar': string;
   'app.user.name': string;
 
+  /** Also gates all iOS Live Activity surfaces, including painting; keep the persisted key. */
   'chat.background_reply.enabled': boolean;
   'agent.default_model_id': string | null;
   'chat.web_search.compression.cutoff_limit': number;
@@ -48,6 +49,7 @@ export interface PreferenceSchema {
   'feature.translate.model_id': string | null;
 
   'file.document_parser.mode': DocumentParserMode;
+  'file.export.watermark_enabled': boolean;
 
   'agent.session_naming.enabled': boolean;
   'agent.session_naming.model_id': string | null;
@@ -55,6 +57,7 @@ export interface PreferenceSchema {
 
   'ui.font_size_step': FontSizeStep;
   'ui.library.view_mode': 'grid' | 'list';
+  'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
   'ui.theme_mode': ThemeMode;
 }
 
@@ -78,6 +81,7 @@ export const PreferenceDefaults = {
   'feature.translate.model_id': null,
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
+  'file.export.watermark_enabled': true,
 
   'agent.session_naming.enabled': true,
   'agent.session_naming.model_id': null,
@@ -85,6 +89,7 @@ export const PreferenceDefaults = {
 
   'ui.font_size_step': 0,
   'ui.library.view_mode': 'grid',
+  'ui.sidebar.recent_view_mode': 'sessions',
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
 

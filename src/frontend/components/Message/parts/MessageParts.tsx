@@ -6,12 +6,12 @@ import type { MessageListItem } from '../types';
 import { resolveMessageCitations } from './citations';
 import { GeneratedFileStrip } from './GeneratedFileStrip';
 import { MessagePartRenderer } from './MessagePartRenderer';
+import { omitGeneratedImageReferences } from './omitGeneratedImageReferences';
 import { partitionMessageParts } from './partitionMessageParts';
 import { ProcessGroupPart } from './ProcessGroupPart';
 import { SourceGroup } from './SourceGroup';
 
 type MessagePartsProps = {
-  isTextSelectionEnabled: boolean;
   message: MessageListItem;
   renderMode?: MessagePartRenderMode;
 };
@@ -26,34 +26,39 @@ function getMessagePartKey(
   return message.data.partKeys?.[index] ?? `${message.id}-${part.type}-${index}`;
 }
 
-export function MessageParts({
-  isTextSelectionEnabled,
-  message,
-  renderMode = 'markdown',
-}: MessagePartsProps) {
-  const parts = message.data.parts;
+export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsProps) {
+  const parts = useMemo(
+    () => omitGeneratedImageReferences(message.data.parts ?? []),
+    [message.data.parts],
+  );
   // Parts keep their identity across renders (see the projection cache), so the
   // resolved text and source-number map stay stable for their consumers too.
-  const citations = useMemo(() => resolveMessageCitations(parts ?? []), [parts]);
+  const citations = useMemo(() => resolveMessageCitations(parts), [parts]);
 
-  if (!parts?.length) {
+  if (!parts.length) {
     return null;
   }
 
-  const { body, files, process } = partitionMessageParts(parts);
+  const { boundaries, body, files, process } = partitionMessageParts(parts);
   const isSettled = message.status !== 'pending';
   const isStreaming = !isSettled;
   const showSources = isSettled && parts.some((part) => part.type === 'source-url');
 
   return (
     <View className="gap-4">
+      {boundaries.map(({ index, part }) => (
+        <MessagePartRenderer
+          isStreaming={isStreaming}
+          key={getMessagePartKey(message, part, index)}
+          part={part}
+        />
+      ))}
       {process.length > 0 ? (
         isStreaming ? (
           <View className="gap-1">
             {process.map(({ index, part }) => (
               <MessagePartRenderer
                 isStreaming
-                isTextSelectionEnabled={isTextSelectionEnabled}
                 key={getMessagePartKey(message, part, index)}
                 messageId={message.id}
                 messageParts={parts}
@@ -67,7 +72,6 @@ export function MessageParts({
           <ContextMenuExclusion>
             <ProcessGroupPart
               citationText={citations.textByPartIndex}
-              isTextSelectionEnabled={isTextSelectionEnabled}
               items={process.map(({ index, part }) => ({
                 index,
                 key: getMessagePartKey(message, part, index),
@@ -80,24 +84,29 @@ export function MessageParts({
           </ContextMenuExclusion>
         )
       ) : null}
-      {body.map((item) => (
-        <MessagePartRenderer
-          isStreaming={isStreaming}
-          isTextSelectionEnabled={isTextSelectionEnabled}
-          key={getMessagePartKey(message, item.part, item.index)}
-          messageId={message.id}
-          messageParts={parts}
-          part={item.part}
-          renderMode={renderMode}
-          resolvedText={citations.textByPartIndex.get(item.index)}
-        />
-      ))}
+      {body.map((item) =>
+        item.part.type === 'file' ? (
+          <GeneratedFileStrip
+            key={getMessagePartKey(message, item.part, item.index)}
+            parts={[item.part]}
+          />
+        ) : (
+          <MessagePartRenderer
+            isStreaming={isStreaming}
+            key={getMessagePartKey(message, item.part, item.index)}
+            messageId={message.id}
+            messageParts={parts}
+            part={item.part}
+            renderMode={renderMode}
+            resolvedText={citations.textByPartIndex.get(item.index)}
+          />
+        ),
+      )}
       {showSources ? (
         <SourceGroup citationNumberBySourceId={citations.sourceNumberById} parts={parts} />
       ) : null}
-      {/* Like sources and message actions, generated results belong to the
-          settled message footer. Hiding them while text streams prevents the
-          list tail from repeatedly moving around a large card. */}
+      {/* Downloadable files collect in the footer once the answer settles.
+          Images stay in the body as soon as their file part arrives. */}
       {isSettled && files.length > 0 ? <GeneratedFileStrip parts={files} /> : null}
     </View>
   );

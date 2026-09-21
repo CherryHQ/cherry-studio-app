@@ -213,6 +213,11 @@ type AgentMessageView = {
 type AgentMessagePart =
   | {
       id: string
+      type: 'data-compaction-anchor'
+      data: CompactionAnchorData
+    }
+  | {
+      id: string
       type: 'text' | 'reasoning'
       text: string
       state: 'streaming' | 'done'
@@ -394,6 +399,7 @@ interface AgentProtocol {
 
   renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
+  deleteTurn(input: { sessionId: string; turnId: string }): Promise<void>
   forkSession(input: {
     sessionId: string
     fromMessageId: string
@@ -419,6 +425,8 @@ interface AgentProtocol {
     modelId?: UniqueModelId
     reasoningEffort?: ReasoningEffortOption
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
+
+  retryMessage(input: { sessionId: string; messageId: string }): Promise<void>
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
 
@@ -493,6 +501,19 @@ navigates to it and observes it like any other Session.
 and the Host has no locale: it resolves the app language only to tell a naming model which language
 to write in, and never composes user-visible text itself.
 
+`deleteTurn` removes one settled turn from a Session. The unit is the turn because replayed
+history pairs every `tool-call` with its `tool-result`; the client resolves the pressed message to
+its turn rather than deleting a row, and offers the action from the assistant toolbar rather than
+the long-press menu, which stays non-destructive. The Host refuses the operation while the Session has an
+active turn — the same clean-cut rule a fork applies — and refuses a turn whose own rows have not
+settled. It clears any context checkpoint that may have summarized the removed turn, then
+publishes `turn.deleted` so observers drop the rows from live state.
+
+Deletion is not an undo. A turn's tool calls already changed the one real world, and erasing their
+record does not reverse them; the Agent simply no longer sees that it made them. Replacing an
+answer is [Manual answer retry](#manual-answer-retry), and reopening an earlier question is a fork
+(see [Branching](#branching)); neither undoes side effects either.
+
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;
 the protocol does not need event sequence, host epoch, replay buffers, or revision counters in
@@ -508,6 +529,7 @@ type AgentEvent =
   | { type: 'message.created'; message: AgentMessageView }
   | { type: 'message.delta'; messageId: string; delta: AgentMessageDelta }
   | { type: 'message.finalized'; message: AgentMessageView }
+  | { type: 'turn.deleted'; turnId: string; messageIds: string[] }
   | { type: 'approval.requested'; approval: AgentApprovalView }
   | { type: 'approval.resolved'; approval: AgentApprovalView }
 
@@ -522,6 +544,36 @@ there is no untyped patch object.
 
 Durable facts commit before their events publish. Streaming deltas are ephemeral; a fresh observer
 gets the accumulated streaming message from the snapshot.
+
+Compaction history uses Desktop-compatible `data-compaction-anchor` parts, in transcript order:
+
+```ts
+type CompactionAnchorData = {
+  status: 'compacting' | 'done' | 'skipped'
+  phase: 'turn-start' | 'in-loop' | 'agent-session'
+  trigger?: 'manual' | 'auto'
+  startedAt?: string // ISO timestamp
+  completedAt?: string // ISO timestamp
+  preTokens?: number
+  postTokens?: number
+  durationMs?: number
+  foldedCount?: number
+}
+```
+
+The Host inserts one `compacting` part per attempt using `part.add`, then replaces that same id with
+`done` or `skipped`. Every `part.add` index is the Host transcript position, so parts that follow an
+anchor keep their order for live observers. Each attempt has a distinct id. Only completed anchors enter streaming snapshots
+and terminal persistence; skipped, cancelled, or still-running attempts leave no historical marker.
+Completed anchors survive later turn failure or interruption. Recovery also removes transient anchors.
+The Mobile path emits `turn-start` for preflight folds and `in-loop` between tool batches, with
+`trigger: 'auto'`; `agent-session` and `manual` retain their Desktop vocabulary without adding commands.
+Optional measurements are omitted when unavailable; Mobile does not infer `foldedCount` from tool parts.
+
+Turn-start anchors render as a dashed separator outside the process disclosure. In-loop anchors remain
+inside the process at their original position. The marker has no detail disclosure and never contains
+summary text or tool payloads. The model-history adapter excludes these presentation parts. A marker
+records an event; it does not turn an execution-local summary into a durable checkpoint.
 
 ## Snapshot and recovery
 
@@ -645,9 +697,57 @@ detail the user explicitly asked for, kept so a provider failure can be investig
     historical reference, and artifact parts are not implicit model attachments.
 14. A Draft Session becomes durable in the same transaction that reserves its first message pair.
 
+## Manual answer retry
+
+`retryMessage({ sessionId, messageId })` replaces a settled assistant answer in place.
+
+**Only the Session's last message is retryable.** An in-place replacement rewrites history that
+later messages already answered, so retrying an earlier answer would leave every message after it
+responding to a reply that no longer exists. The Host rejects any other message with
+`MESSAGE_NOT_FOUND`, the store repeats the check inside the reservation transaction, and the
+toolbar offers the action on the latest answer alone. Going back further is a fork, not a retry.
+The Host holds the Session's admission guard throughout preparation and reservation; running,
+awaiting-approval, cancelling, and admitting Sessions reject retry with `SESSION_BUSY`. The
+frontend disables the action while the Session is busy and hides it in an older transcript window.
+
+The replacement keeps the answer's message id and transcript position and takes a fresh turn id.
+The original user message is reused; retry never creates a Session, inserts a message, or
+navigates away. Model context stops at that original question.
+
+A **resumed** retry applies to a failed, interrupted, or cancelled answer that completed at least
+one tool call. Its recorded prefix through the last completed tool result survives; the unfinished
+model response after it is discarded. Pi continues from the original input and those
+tool-call/result pairs without a synthetic user message. Tool errors stay visible so the model can
+recover; interrupted calls have unknown outcomes and must not be blindly repeated. The prefix keeps
+the tool record alone: the previous attempt's compaction anchors are dropped, because the
+replacement plans context afresh and emits its own. The prefix is budgeted as current-turn input,
+so compaction can summarize history around it but never the prefix itself.
+
+A **restarted** retry applies to a successful answer, and to an unfinished one with no completed
+tool call. The old answer is discarded outright and the message restarts empty. Because that
+discarded attempt may already have changed the outside world without leaving any trace the model
+can read, the system prompt tells it to inspect current state before repeating an externally
+visible action. Retry does not undo tool effects and promises nothing about exactly-once execution.
+
+Approvals and tool availability are resolved afresh. The original model and inference parameters
+are reused when the snapshot is supported; current credentials, instructions, permissions, and
+attachment availability are revalidated. Preparation failure leaves the original transcript
+unchanged. Each retry has fresh runtime timing; the replaced answer retains cumulative provider
+usage and costs, because the invocation ledger is immutable and both attempts really were billed.
+Recovery uses persisted facts, not provider stream offsets: process death can lose unflushed
+output, and retry does not promise byte-level continuation.
+
+Retry reads history through the same checkpoint path as a submission, skipping the checkpoint on
+the answer it replaces: a retry in a compacted Session neither rereads the summarized transcript
+nor resumes from a summary of content it is discarding. Admission is therefore as slow as a
+submission's, and it has no new rows to show for it. The frontend renders the answer as empty and
+pending from the press until the reserved one arrives — the same state a just-sent message shows —
+so a rejected admission simply restores the untouched answer.
+
 ## Branching
 
-Agent Sessions do not branch in place. Chat-style sibling trees assume switching between
+Manual retry replaces the last answer; it does not create selectable answer versions, and it is
+never the way back to an earlier point in the transcript. Agent Sessions do not branch in place. Chat-style sibling trees assume switching between
 alternatives is harmless, but Agent turns have side effects — a tool call in one branch changes
 the one real world that every branch would claim to share. In-place switching therefore
 misrepresents history, and an active-path concept would touch nearly every invariant above.
@@ -656,8 +756,8 @@ Branching is instead a **fork**: `forkSession({ sessionId, fromMessageId })` cre
 and copies the transcript up to the fork point inside one transaction. Turns and approvals are not
 copied; the new Session starts idle. Because the Host already supplies complete normalized history
 for every turn, a forked Session executes through the unchanged flow — the Runtime never knows a
-fork happened. Regenerate and "try a different question" are forks from the relevant message
-boundary.
+fork happened. The explicit branch action and editing a question use a fork; retrying an answer
+uses the in-place replacement operation above.
 
 Rules:
 

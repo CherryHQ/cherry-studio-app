@@ -222,6 +222,26 @@ describe('DesktopConnectionRuntime', () => {
     expect(store.preview).not.toHaveBeenCalled();
   });
 
+  it('filters the desktop local embedding provider before previewing imports', async () => {
+    jest.mocked(fetchSnapshot).mockResolvedValueOnce({
+      baseUrl,
+      payload: {
+        version: 1,
+        providers: [
+          { id: 'local-embedding', name: 'Local Models', models: [] },
+          { id: 'openai', name: 'OpenAI', models: [] },
+        ],
+      },
+    });
+
+    await runtime.preview(id, signal());
+
+    expect(store.preview).toHaveBeenCalledWith({
+      version: 1,
+      providers: [{ apiKeys: [], id: 'openai', name: 'OpenAI', models: [] }],
+    });
+  });
+
   it('aborts active requests and rejects queued work when its host stops', async () => {
     const entered = deferred<void>();
     jest.mocked(fetchSnapshot).mockImplementationOnce(async (_urls, _token, signal) => {

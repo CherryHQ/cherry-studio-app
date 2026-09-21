@@ -197,6 +197,17 @@ export type RuntimeContextCheckpoint = {
   payload: RuntimeJsonValue;
 };
 
+export type RuntimeContextCompaction = {
+  id: string;
+  phase: 'preflight' | 'tool-loop';
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  startedAt: number;
+  completedAt?: number;
+  inputTokensBefore: number;
+  inputTokensAfter?: number;
+  reason?: 'summary-failed' | 'insufficient-reduction' | 'cancelled';
+};
+
 /**
  * One tool invocation. A single object on purpose: a positional context
  * parameter can be silently dropped by an implementation, while an ignored
@@ -239,6 +250,10 @@ export interface MessageRuntimeTimingSink {
 }
 
 export type RuntimeExecutionRequest = {
+  /** Retained assistant tool-call/result prefix for a fresh manual retry execution. */
+  resume?: RuntimeMessagePart[];
+  /** Probe-only credential override. Never persist it or include it in traces or output events. */
+  apiKeyOverride?: string;
   turnId: string;
   /**
    * Host-owned conversation identity. Providers that key requests on the conversation
@@ -365,6 +380,7 @@ export type RuntimeEvent =
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }
   | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
+  | { type: 'context.compaction'; compaction: RuntimeContextCompaction }
   | ({ type: 'usage' } & RuntimeUsageReport)
   | { type: 'completed' }
   | { type: 'failed'; error: RuntimeError }

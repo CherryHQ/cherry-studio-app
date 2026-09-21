@@ -4,6 +4,7 @@ import { MAX_IMAGE_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy'
 import { fileContent } from '../fileContent';
 import { createInternalEntryWithPreview } from '../filePreviewStorage';
 import { readFileUriBytes, resolveFileEntry } from '../fileStorage';
+import { discardNormalizedImage, normalizeImportedImage } from '../importedImageNormalization';
 
 const FILE_ID = '00000000-0000-7000-8000-000000000001';
 const mockSize = { value: 8 };
@@ -22,6 +23,10 @@ jest.mock('../documentText', () => ({
 }));
 jest.mock('../fileStorage', () => ({ resolveFileEntry: jest.fn(), readFileUriBytes: jest.fn() }));
 jest.mock('../filePreviewStorage', () => ({ createInternalEntryWithPreview: jest.fn() }));
+jest.mock('../importedImageNormalization', () => ({
+  discardNormalizedImage: jest.fn(),
+  normalizeImportedImage: jest.fn(),
+}));
 
 function resolvedFile(mediaType = 'text/plain') {
   return {
@@ -46,6 +51,28 @@ beforeEach(() => {
 });
 
 describe('fileContent attachment boundary', () => {
+  test('stores the normalized image instead of the picked original, then discards it', async () => {
+    const normalized = {
+      mediaType: 'image/jpeg',
+      name: 'photo.jpg',
+      uri: 'file:///cache/encoded.jpg',
+    };
+    jest.mocked(normalizeImportedImage).mockResolvedValue(normalized);
+    jest.mocked(createInternalEntryWithPreview).mockRejectedValue(new Error('disk full'));
+    await expect(
+      fileContent.createInternalEntry({
+        uri: 'file:///picker/photo.png',
+        name: 'photo.png',
+        mediaType: 'image/png',
+      }),
+    ).rejects.toThrow('disk full');
+    expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
+      {},
+      { ...normalized, provenance: 'imported', source: 'uri' },
+    );
+    expect(discardNormalizedImage).toHaveBeenCalledWith(normalized);
+  });
+
   test('imports without parsing, then resolves library metadata and text on submission', async () => {
     jest.mocked(createInternalEntryWithPreview).mockResolvedValue(resolvedFile().entry);
     await fileContent.createInternalEntry({

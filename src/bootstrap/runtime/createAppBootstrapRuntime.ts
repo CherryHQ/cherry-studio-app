@@ -25,7 +25,10 @@ import type { WebSearchService } from '@/backend/services/webSearch/WebSearchSer
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
-import { publishForegroundActivityAttention } from '@/frontend/appShell/backgroundActivity';
+import {
+  publishForegroundActivityAttention,
+  subscribeVisibleBackgroundTask,
+} from '@/frontend/appShell/backgroundActivity';
 import AssistantActivity from '@/frontend/appShell/backgroundActivity/AssistantActivity/AssistantActivity';
 import PaintingActivity from '@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActivity';
 import i18n from '@/frontend/i18n';
@@ -52,6 +55,7 @@ export function createAppBootstrapRuntime(
   // resolutions only construct — the connection opens in `DbService.onInit`,
   // inside `start()`.
   const host = new ApplicationHost({ overrides, services: serviceList });
+  const preference = host.container.get<PreferenceService>('PreferenceService');
   const backgroundActivityEnvironment = host.container.get<BackgroundActivityEnvironment>(
     'BackgroundActivityEnvironment',
   );
@@ -63,9 +67,15 @@ export function createAppBootstrapRuntime(
     assistantPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
+    // Android's switch controls chat execution; its service notifications remain mandatory.
+    isPresentationEnabled: () =>
+      Platform.OS !== 'ios' || preference.readCached('chat.background_reply.enabled'),
+    subscribePresentationEnabled: (listener) =>
+      preference.subscribeChange('chat.background_reply.enabled')(listener),
     onForegroundAttention: publishForegroundActivityAttention,
     paintingPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(PaintingActivity),
+    subscribeVisibleTask: subscribeVisibleBackgroundTask,
     translate: (key) => i18n.t(key),
   });
   const agent = host.container.get<MobileAgentHost>('MobileAgentHost');
@@ -79,7 +89,6 @@ export function createAppBootstrapRuntime(
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
-  const preference = host.container.get<PreferenceService>('PreferenceService');
   const providerRegistryUpdater = host.container.get<ProviderRegistryUpdaterService>(
     'ProviderRegistryUpdaterService',
   );

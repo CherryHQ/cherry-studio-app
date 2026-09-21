@@ -39,20 +39,25 @@ A tool that returns managed artifacts already has them in the message: the Host 
 as its own file part, right after the tool result that produced it. A per-tool renderer therefore
 renders the *call*, never the artifact, or the same file appears twice.
 
-`MessageParts` lifts every file part out of the ordered stream and renders managed assistant
-outputs through `GeneratedFileStrip` after the answer. `UserMessage` separately uses
-`MessageFileStrip` for input attachments above its bubble. Two rules hold the assistant-result
-shape:
+`MessageParts` renders managed assistant outputs through `GeneratedFileStrip`. Images stay in the
+body in transcript order, so an image produced by a tool appears before its following explanation.
+Other files collect after the answer. `UserMessage` separately uses `MessageFileStrip` for input
+attachments above its bubble. Two rules hold the assistant-result shape:
 
-- **Files belong to the answer, not to the step.** A deliverable buried between two blocks of prose
-  is hard to find on a phone, and the position a file was emitted at tells a reader nothing. The
-  result group stays out of layout while the answer streams, then appears at the end when the
-  message reaches any terminal status. This matches source groups and message actions, and keeps a
-  large result card from repeatedly moving the live list tail.
+- **Images are visible results.** They appear as soon as their file parts arrive and retain their
+  position relative to the final text when the message settles. They never enter the collapsed
+  process or repeat in the footer. Non-image files appear together at the end once the message
+  reaches a terminal status.
 - **Layout never reads `purpose`.** A file's purpose is a Runtime fact used to decide model replay,
   not a presentation input. A transcript that arrives from a peer without one must lay out
-  identically, so the split keys on part type alone. Only assistant messages reach `MessageParts`
+  identically, so the split keys on part and media type. Only assistant messages reach `MessageParts`
   with files, because `UserMessage` lifts its own attachments out first.
+
+The model receives generated file ids, not public image URLs. Before rendering Markdown,
+`omitGeneratedImageReferences` removes standalone image paragraphs whose destination ends in an
+image file id already present in the same message. This prevents an invented preview URL from
+leaving an empty native image placeholder beside the real generated image. Code examples, inline
+prose, nested blocks, unrelated URLs, and stored transcript text remain unchanged.
 
 Neither file group carries a heading: whether a file was attached or produced follows from the role
 of the message it sits in.
@@ -106,8 +111,8 @@ precedence over that fallback.
 
 Reasoning expands inline: `MessagePart.Reasoning` owns the toggle and the left-rail container its
 markdown renders into, so a reader keeps their place in the transcript. While a response streams,
-its process parts remain visible without a total-duration wrapper. Once the response settles, every
-visible transcript part except the final result text moves into one collapsed `MessagePart.Process`
+its process parts remain visible without a total-duration wrapper. Once the response settles,
+intermediate prose, reasoning, and tools move into one collapsed `MessagePart.Process`
 row whose label is the message's total wall-clock duration. Expanding it reveals the original parts in order. Source
 groups use a borderless row of overlapping favicons and their source count, while their expanded
 views must use `MessagePart.Detail`. The source group stays out of layout while the assistant is
@@ -124,10 +129,16 @@ the part adapter notifies the list scroll controller, which leaves live-edge fol
 any scheduled end correction. LegendList's size anchoring then keeps the tapped summary in place so
 the detail expands below it, even when the viewport started at the bottom.
 
-`partitionMessageParts` finds the last visible text part and leaves only that part in the article
-body. Earlier prose, reasoning, and tool calls all enter the timed process disclosure. A text part
+`partitionMessageParts` finds the last visible text part and leaves it alongside images in the
+article body. Earlier prose, reasoning, and tool calls enter the timed process disclosure. A text part
 followed by a tool is therefore treated as intermediate narration, not as the result. Provider-
-executed web searches render nothing; source and file parts retain their dedicated result rows.
+executed web searches render nothing; sources and non-image files retain their footer rows.
+
+Automatic context compaction uses the Desktop-compatible `data-compaction-anchor` part. Turn-start
+markers stay visible as dashed separators before the process disclosure; in-loop markers remain
+between the corresponding tool steps inside it. Running markers show progress, completed markers
+show the estimated tokens saved when available, and skipped markers render nothing. The marker
+itself has no press target or detail disclosure. Summary text remains private to the Runtime.
 
 ### Detail Content Status
 
@@ -143,7 +154,7 @@ lives beside `MessagePartDetail` in `packages/ui/src/components/message-part/com
 ### Renderer Inventory And Visual Acceptance
 
 The visible non-tool part adapters are Text, Reasoning, Code, Compact, Error, Translation, File,
-Source URL/group, and Unknown. Pending is an assistant-row state rather than a persisted part
+Compaction Anchor, Source URL/group, and Unknown. Pending is an assistant-row state rather than a persisted part
 adapter. Video data, source-document, step-start, and provider-owned web-search parts intentionally
 render no separate message-list content.
 
@@ -265,22 +276,34 @@ and stable render identity.
 
 ## Message Interaction Ownership
 
-The chat's menu uses the platform's default long-press timing and covers ordinary message content
-and whitespace. Android places the menu near the long-press pointer with screen-edge adjustment;
-iOS delegates placement to UIKit. Child-owned regions use CherryUI's `ContextMenuExclusion`;
-this disables the Android ancestor recognizer or withholds iOS native menu items for that touch without changing
-the child's tap, native selection, or scrolling behavior.
+The chat's whole-message menu uses the platform's default long-press timing and covers the message
+header and whitespace outside text and other child-owned regions, including user-bubble padding.
+Android places the menu near the long-press pointer with screen-edge adjustment; iOS delegates
+placement to UIKit. Child-owned regions use CherryUI's `ContextMenuExclusion`; this disables the
+Android ancestor recognizer or withholds iOS native menu items for that touch without changing the
+child's tap, native selection, or scrolling behavior.
 
 | Region | Interaction owner |
 | --- | --- |
-| User bubble and main answer | Message copy/share menu; main-answer partial selection is disabled when actions are enabled |
+| User text and main answer | Excluded text region; native text selection and selection menus retain ownership, independently of message actions |
+| Message header and whitespace outside excluded regions | Whole-message copy/share menu |
 | Process, reasoning, tool summaries and inline file-output panes | Excluded process region; disclosures, detail sheets, selection and inner scrolling retain ownership |
 | User attachments and generated artifacts | Excluded attachment region; file/image preview controls retain ownership |
 | Sources and error feedback | Excluded region; source list, external links, error details and local selection retain ownership |
 | Assistant copy/fork/share toolbar and usage details | Excluded toolbar region |
 | Markdown links, checkboxes and spoilers | Native renderer handles the inline target; native cancellation must prevent a second action on release |
-| Fenced code and Markdown tables | Native renderer owns code copy/menu and nested scrolling; the existing table patch removes the table-wide copy menu |
+| Fenced code and Markdown tables | Native renderer owns block copy menus and nested scrolling inside the excluded text or process region |
 | Video/source-document/step-start parts | No rendered touch target |
+
+Text selection uses React Native `Text` for user messages and the existing Markdown renderer for
+assistant messages. Message text is always selectable; there is no per-message selection toggle,
+because a message whose text cannot be selected has no remaining way to copy part of an answer. The
+system owns the long-press threshold, selection handles, and selection-menu timing; the app adds no
+second hold timer or movement threshold. The text exclusion remains mounted
+during streaming and after completion, so settling does not remount the native text. Streamdown
+retains its upstream selection policy while processing streamed content. Selection is local to each
+native text segment and cannot span independent Markdown blocks or message parts; whole-message
+copy remains available through message actions.
 
 Android code menus explicitly cancel ancestor gesture recognizers before presenting. This also
 covers short, non-scrolling code blocks; moving focus to the native popup alone does not cancel

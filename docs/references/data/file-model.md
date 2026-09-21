@@ -18,7 +18,13 @@ here. Terms follow [Domain Language](../domain-language.md).
 3. **Cherry owns every blob.** Picker, camera, and provider URIs are transient import sources whose
    bytes are copied into `Data/Files`. No entry references a path outside the sandbox.
 4. **Import happens when the file enters the app.** Painting imports at generation time; the Agent
-   Composer imports when an attachment enters its managed draft.
+   Composer imports when an attachment enters its managed draft. Import is also the only place an
+   image is resized: a user-imported JPEG, PNG, or WebP above the per-image share of the request
+   image budget (total bytes divided by the image count limit, about 2.2 MB) is re-encoded once to a
+   2048-pixel long edge (an oversized PNG becomes a JPEG and is renamed to match), so the managed
+   blob is already what a model request can carry and no request path compresses, caches a
+   derivative, or retries on a provider size error. GIFs, generated images, and images that cannot
+   be re-encoded are stored untouched; send-time attachment limits remain their guard.
 5. **Business-object deletion never deletes files.** Deleting an Agent Session or painting leaves
    every file it pointed at in place.
 6. **Only the user deletes files.** Removing a composer attachment removes its reference, not the
@@ -77,9 +83,9 @@ An owner stores the entry ids it points at, inside its own row:
 
 `write_file` and `edit_file` tool results each carry the `fileEntryId` they created in result JSON.
 The Runtime projects the same id as a `purpose: 'artifact'` file part directly after its tool part;
-chat lifts file parts out of the ordered stream and shows them after the answer, where deliverables
-are easier to find than at the step that produced them. As with every owner here, the reference
-outlives the bytes and degrades to the unavailable placeholder.
+chat keeps images in the body in transcript order and collects non-image files after the answer.
+Images remain visible outside the collapsed process and appear before any following explanation.
+As with every owner here, the reference outlives the bytes and degrades to the unavailable placeholder.
 
 `purpose` and `provenance` answer different questions and neither substitutes for the other.
 `purpose` is a fact about a file's role *in one message*, travels in the transcript, and is read by
