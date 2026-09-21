@@ -1,0 +1,294 @@
+diff --git a/lib/module/StreamdownText.js b/lib/module/StreamdownText.js
+index e2fb54a4610a719d178146e887dd2beb6916a913..ac05c757b760cce68e77078cfb41797ec8da9df8 100644
+--- a/lib/module/StreamdownText.js
++++ b/lib/module/StreamdownText.js
+@@ -17,7 +17,8 @@ export function StreamdownText({
+ }) {
+   const {
+     processedMarkdown,
+-    isStreaming
++    isStreaming,
++    generation
+   } = useStreamdownMarkdown(markdown, {
+     remendConfig
+   });
+@@ -26,6 +27,6 @@ export function StreamdownText({
+     streamingAnimation: true,
+     selectable: !isStreaming && selectable,
+     ...enrichedMarkdownProps
+-  });
++  }, generation);
+ }
+ //# sourceMappingURL=StreamdownText.js.map
+diff --git a/lib/module/hooks/useStreamdownMarkdown.js b/lib/module/hooks/useStreamdownMarkdown.js
+index e54951f1ecc5f9da3eea1d048fbc48e095f15360..f4e0f803aa6980c898a8f531015be736a14057b8 100644
+--- a/lib/module/hooks/useStreamdownMarkdown.js
++++ b/lib/module/hooks/useStreamdownMarkdown.js
+@@ -2,28 +2,72 @@
+ 
+ import { useState, useEffect, useRef } from 'react';
+ import { processRemendInWorklet } from "../worklets/remendWorklet.js";
+-export function useStreamdownMarkdown(markdown, options) {
+-  const [processedMarkdown, setProcessedMarkdown] = useState('');
+-  const [isStreaming, setIsStreaming] = useState(false);
+-  const versionRef = useRef(0);
++
++export function useStreamdownMarkdown(
++  markdown,
++  options
++) {
++  const config = options?.remendConfig;
++  const [source, setSource] = useState({ markdown, config, generation: 0 });
++  // Track the raw source, before remend inserts temporary closing delimiters.
++  // Reset during render so a replacement never commits into the old native view.
++  if (source.markdown !== markdown || source.config !== config) {
++    const continuesStream = source.config === config && markdown.startsWith(source.markdown);
++    setSource({ markdown, config, generation: source.generation + (continuesStream ? 0 : 1) });
++  }
++  const [processed, setProcessed] = useState({
++    input: '',
++    generation: -1,
++    text: '',
++  });
++  const latest = useRef(null);
++  const pending = useRef(null);
++  const drain = useRef(null);
++
+   useEffect(() => {
+-    if (markdown === '') {
+-      setProcessedMarkdown('');
+-      setIsStreaming(false);
+-      return;
++    let active = true;
++    let inFlight = false;
++    const processNext = () => {
++      if (!active || inFlight || !pending.current) return;
++      const request = pending.current;
++      pending.current = null;
++      inFlight = true;
++      processRemendInWorklet(request.markdown, (text) => {
++        if (!active) return;
++        inFlight = false;
++        // Publish completed work within the same raw-source generation, even
++        // when remend changed the suffix. Never resurrect an earlier generation.
++        const current = latest.current;
++        if (current?.generation === request.generation) {
++          setProcessed({ input: request.markdown, generation: request.generation, text });
++        }
++        processNext();
++      }, request.config);
++    };
++    drain.current = processNext;
++    return () => {
++      active = false;
++      pending.current = null;
++      drain.current = null;
++    };
++  }, []);
++
++  useEffect(() => {
++    latest.current = source;
++    if (source.markdown === '') {
++      pending.current = null;
++      setProcessed({ input: '', generation: source.generation, text: '' });
++    } else {
++      // One running job and one latest pending input; no queue of old full texts.
++      pending.current = source;
++      drain.current?.();
+     }
+-    setIsStreaming(true);
+-    const currentVersion = ++versionRef.current;
+-    processRemendInWorklet(markdown, result => {
+-      if (currentVersion === versionRef.current) {
+-        setProcessedMarkdown(result);
+-        setIsStreaming(false);
+-      }
+-    }, options?.remendConfig);
+-  }, [markdown, options?.remendConfig]);
++  }, [source]);
++
++  const compatible = processed.generation === source.generation;
+   return {
+-    processedMarkdown,
+-    isStreaming
++    generation: source.generation,
++    processedMarkdown: compatible ? processed.text : '',
++    isStreaming: markdown !== '' && (!compatible || processed.input !== markdown),
+   };
+ }
+-//# sourceMappingURL=useStreamdownMarkdown.js.map
+\ No newline at end of file
+diff --git a/lib/module/worklets/remendWorklet.js b/lib/module/worklets/remendWorklet.js
+index 11691d90fbbe58ffa084a988bf95f936692e7e22..2b7c2f58a96736c811bd80f1b8f3046956b5f8ee 100644
+--- a/lib/module/worklets/remendWorklet.js
++++ b/lib/module/worklets/remendWorklet.js
+@@ -23,7 +23,13 @@ export function processRemendInWorklet(markdown, onComplete, config) {
+   scheduleOnRuntime(remendRuntime, () => {
+     'worklet';
+ 
+-    const result = remend(markdown, mergedConfig);
++    // Always acknowledge a job, including repair failures.
++    let result = markdown;
++    try {
++      result = remend(markdown, mergedConfig);
++    } catch {
++      // Keep the unmodified input on repair failure.
++    }
+     scheduleOnRN(onComplete, result);
+   });
+ }
+diff --git a/lib/typescript/src/hooks/useStreamdownMarkdown.d.ts b/lib/typescript/src/hooks/useStreamdownMarkdown.d.ts
+index 228e73e84cfee4ce356164b17d248753e3379f31..99d7560ae568733599f64ffe061b0d91e313786f 100644
+--- a/lib/typescript/src/hooks/useStreamdownMarkdown.d.ts
++++ b/lib/typescript/src/hooks/useStreamdownMarkdown.d.ts
+@@ -5,6 +5,7 @@ interface UseStreamdownMarkdownOptions {
+ interface UseStreamdownMarkdownResult {
+     processedMarkdown: string;
+     isStreaming: boolean;
++    generation: number;
+ }
+ export declare function useStreamdownMarkdown(markdown: string, options?: UseStreamdownMarkdownOptions): UseStreamdownMarkdownResult;
+ export {};
+diff --git a/src/StreamdownText.tsx b/src/StreamdownText.tsx
+index 7d5ad61d0a50098fb09b46ebb698bcb9edb46b57..2afd5922618f40ebe2b490cb1f4d976ea892c3b2 100644
+--- a/src/StreamdownText.tsx
++++ b/src/StreamdownText.tsx
+@@ -14,12 +14,13 @@ export function StreamdownText({
+   selectable = true,
+   ...enrichedMarkdownProps
+ }: StreamdownTextProps) {
+-  const { processedMarkdown, isStreaming } = useStreamdownMarkdown(markdown, {
++  const { processedMarkdown, isStreaming, generation } = useStreamdownMarkdown(markdown, {
+     remendConfig,
+   });
+ 
+   return (
+     <EnrichedMarkdownText
++      key={generation}
+       markdown={processedMarkdown}
+       streamingAnimation
+       selectable={!isStreaming && selectable}
+diff --git a/src/hooks/useStreamdownMarkdown.ts b/src/hooks/useStreamdownMarkdown.ts
+index 23a36aa52daa1e7baecf07e29cb49961401b8224..29c7c656b4e2da970125b57e60f7a1f06c89764f 100644
+--- a/src/hooks/useStreamdownMarkdown.ts
++++ b/src/hooks/useStreamdownMarkdown.ts
+@@ -9,37 +9,76 @@ interface UseStreamdownMarkdownOptions {
+ interface UseStreamdownMarkdownResult {
+   processedMarkdown: string;
+   isStreaming: boolean;
++  generation: number;
+ }
+ 
++type Request = { markdown: string; config?: RemendOptions; generation: number };
++
+ export function useStreamdownMarkdown(
+   markdown: string,
+   options?: UseStreamdownMarkdownOptions
+ ): UseStreamdownMarkdownResult {
+-  const [processedMarkdown, setProcessedMarkdown] = useState('');
+-  const [isStreaming, setIsStreaming] = useState(false);
+-  const versionRef = useRef(0);
++  const config = options?.remendConfig;
++  const [source, setSource] = useState<Request>({ markdown, config, generation: 0 });
++  // Track the raw source, before remend inserts temporary closing delimiters.
++  // Reset during render so a replacement never commits into the old native view.
++  if (source.markdown !== markdown || source.config !== config) {
++    const continuesStream = source.config === config && markdown.startsWith(source.markdown);
++    setSource({ markdown, config, generation: source.generation + (continuesStream ? 0 : 1) });
++  }
++  const [processed, setProcessed] = useState({
++    input: '',
++    generation: -1,
++    text: '',
++  });
++  const latest = useRef<Request | null>(null);
++  const pending = useRef<Request | null>(null);
++  const drain = useRef<(() => void) | null>(null);
+ 
+   useEffect(() => {
+-    if (markdown === '') {
+-      setProcessedMarkdown('');
+-      setIsStreaming(false);
+-      return;
+-    }
+-
+-    setIsStreaming(true);
+-    const currentVersion = ++versionRef.current;
+-
+-    processRemendInWorklet(
+-      markdown,
+-      (result) => {
+-        if (currentVersion === versionRef.current) {
+-          setProcessedMarkdown(result);
+-          setIsStreaming(false);
++    let active = true;
++    let inFlight = false;
++    const processNext = () => {
++      if (!active || inFlight || !pending.current) return;
++      const request = pending.current;
++      pending.current = null;
++      inFlight = true;
++      processRemendInWorklet(request.markdown, (text) => {
++        if (!active) return;
++        inFlight = false;
++        // Publish completed work within the same raw-source generation, even
++        // when remend changed the suffix. Never resurrect an earlier generation.
++        const current = latest.current;
++        if (current?.generation === request.generation) {
++          setProcessed({ input: request.markdown, generation: request.generation, text });
+         }
+-      },
+-      options?.remendConfig
+-    );
+-  }, [markdown, options?.remendConfig]);
++        processNext();
++      }, request.config);
++    };
++    drain.current = processNext;
++    return () => {
++      active = false;
++      pending.current = null;
++      drain.current = null;
++    };
++  }, []);
++
++  useEffect(() => {
++    latest.current = source;
++    if (source.markdown === '') {
++      pending.current = null;
++      setProcessed({ input: '', generation: source.generation, text: '' });
++    } else {
++      // One running job and one latest pending input; no queue of old full texts.
++      pending.current = source;
++      drain.current?.();
++    }
++  }, [source]);
+ 
+-  return { processedMarkdown, isStreaming };
++  const compatible = processed.generation === source.generation;
++  return {
++    generation: source.generation,
++    processedMarkdown: compatible ? processed.text : '',
++    isStreaming: markdown !== '' && (!compatible || processed.input !== markdown),
++  };
+ }
+diff --git a/src/worklets/remendWorklet.ts b/src/worklets/remendWorklet.ts
+index 0f879457581621c3e5fb69aca801aac11773d16e..cd0508e95ade2bb5df9e022d974e2d590828f04a 100644
+--- a/src/worklets/remendWorklet.ts
++++ b/src/worklets/remendWorklet.ts
+@@ -32,7 +32,14 @@ export function processRemendInWorklet(
+ 
+   scheduleOnRuntime(remendRuntime, () => {
+     'worklet';
+-    const result = remend(markdown, mergedConfig);
++    // Always acknowledge a job so an unexpected repair failure cannot wedge the
++    // bounded scheduler. The native parser can still render the original input.
++    let result = markdown;
++    try {
++      result = remend(markdown, mergedConfig);
++    } catch {
++      // Keep the unmodified input on repair failure.
++    }
+     scheduleOnRN(onComplete, result);
+   });
+ }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 import {
   EnrichedMarkdownText,
   type LinkPressEvent,
@@ -267,6 +268,9 @@ export function MarkdownText({
       md4cFlags={{ latexMath: true, superscript: true, underline: false }}
       onLinkPress={handleLinkPress}
       selectable={selectable}
+      // iOS derives the translucent highlight and handles from one opaque tint.
+      selectionColor={Platform.OS === 'ios' ? mutedForeground : secondary}
+      selectionHandleColor={mutedForeground}
       selectionMenuConfig={selectionMenuConfig}
       streamingAnimation={isStreaming}
     />

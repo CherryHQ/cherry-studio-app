@@ -8,6 +8,8 @@ import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import type { DesktopPairingQr } from '@/shared/data/api/schemas/desktopConnections';
 
+import { getLocalNetworkAccess } from '../../../../modules/local-network-access';
+
 const REQUEST_TIMEOUT_MS = 4_000;
 
 const logger = loggerService.withContext('DesktopConnection');
@@ -88,44 +90,64 @@ export async function requestWithTimeout<T>(
   }
 }
 
+async function readPairResponse(response: Pick<Response, 'status' | 'ok' | 'json'>) {
+  if (response.status === 403) throw new PairingRejectedError();
+  if (!response.ok) {
+    throw new HttpStatusError(
+      response.status,
+      `Pairing request failed with status ${response.status}`,
+    );
+  }
+
+  const parsed = PairResponseSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw desktopError('invalid-pair-response', 'Desktop returned an invalid pairing response');
+  }
+  return parsed.data;
+}
+
+async function requestPairing(url: string, body: string, signal: AbortSignal) {
+  signal.throwIfAborted();
+  const headers = { ...defaultAppHeaders(), 'Content-Type': 'application/json' };
+  const access = Platform.OS === 'ios' ? getLocalNetworkAccess() : null;
+  // Clients without the optional helper retain their existing pairing transport.
+  if (!access) {
+    return requestWithTimeout(url, { body, headers, method: 'POST' }, readPairResponse, signal);
+  }
+  // expo/fetch has no per-request waitsForConnectivity option. Only iOS pairing uses this
+  // native POST, so the OS can wait for a pending permission without replaying the code.
+  const request = new access.PairingRequest();
+  const cancel = () => void request.cancel().catch(() => undefined);
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    const response = await request.post(url, headers, body);
+    signal.throwIfAborted();
+    return await readPairResponse({
+      status: response.status,
+      ok: response.status >= 200 && response.status < 300,
+      json: async () => JSON.parse(response.body),
+    });
+  } catch (error) {
+    signal.throwIfAborted();
+    throw error;
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    request.release();
+  }
+}
+
 export async function pairDesktop(baseUrls: string[], qr: DesktopPairingQr, signal: AbortSignal) {
   const reportedDeviceName = (Device.deviceName ?? Device.modelName ?? '').trim();
   const deviceName = (reportedDeviceName || 'Cherry Studio Mobile').slice(0, 64);
+  const body = JSON.stringify({
+    code: qr.code,
+    device: { name: deviceName, platform: Platform.OS.slice(0, 32) },
+  });
   const attempts: string[] = [];
   for (const baseUrl of baseUrls) {
     try {
-      return await requestWithTimeout(
-        `${baseUrl}/pair`,
-        {
-          body: JSON.stringify({
-            code: qr.code,
-            device: { name: deviceName, platform: Platform.OS.slice(0, 32) },
-          }),
-          headers: { ...defaultAppHeaders(), 'Content-Type': 'application/json' },
-          method: 'POST',
-        },
-        async (response) => {
-          if (response.status === 403) {
-            throw new PairingRejectedError();
-          }
-          if (!response.ok) {
-            throw new HttpStatusError(
-              response.status,
-              `Pairing request failed with status ${response.status}`,
-            );
-          }
-
-          const parsed = PairResponseSchema.safeParse(await response.json());
-          if (!parsed.success) {
-            throw desktopError(
-              'invalid-pair-response',
-              'Desktop returned an invalid pairing response',
-            );
-          }
-          return { baseUrl, ...parsed.data };
-        },
-        signal,
-      );
+      const response = await requestPairing(`${baseUrl}/pair`, body, signal);
+      return { baseUrl, ...response };
     } catch (error) {
       signal.throwIfAborted();
       if (error instanceof PairingRejectedError || error instanceof DataApiError) {

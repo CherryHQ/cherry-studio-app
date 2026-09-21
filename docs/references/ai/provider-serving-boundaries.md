@@ -95,6 +95,25 @@ selection still belongs to the binding, and neither traces nor persisted message
 `AiService.checkModel()` remains an internal AI SDK text-generation probe and does not establish
 chat readiness.
 
+Pi selects the first API key through `ProviderService`'s per-provider round-robin cursor. Before
+any content event is emitted, an HTTP 401 or 429 advances through the remaining enabled keys in
+that same cyclic order. The working key stays active across subsequent tool steps in the turn;
+failed keys are not revisited in that turn or persistently disabled. Explicit probe-key overrides
+disable failover. Cancellation, other errors, and errors after content starts do not advance keys.
+The binding updates usage attribution to the serving key and redacts every candidate credential.
+This policy belongs to Pi; non-conversation AI SDK and image calls retain their existing behavior.
+
+Provider-configured authentication headers disable Pi key failover and leave credential attribution
+unknown, because the selected API key may not be the credential serving the request. Each Pi adapter
+declares the relevant header names: `Authorization` for all supported protocols, plus `x-api-key`
+for Anthropic, `x-goog-api-key` for Google, and `api-key` for Azure. Matching is case-insensitive and
+includes empty values, which can suppress SDK-generated authentication. These headers remain
+unchanged and redacted; unrelated custom headers do not disable failover.
+
+Device interconnection already exports the full enabled API-key list, including IDs and labels.
+Mobile provider imports preserve that list and its order, so imported keys participate in the same
+rotation and failover policy without a separate synchronization protocol.
+
 The Pi binding owns only Pi mechanics:
 
 - endpoint/protocol family to Pi API-family mapping;

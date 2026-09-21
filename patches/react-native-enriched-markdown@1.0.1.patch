@@ -1,148 +1,335 @@
-diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdownTextInput.mm
-index 9a9987e0d61c907787cff3d6a6f6cea81155f536..299e21b9750c78a30ec56e8fae651b40840cdfe3 100644
---- a/ios/input/EnrichedMarkdownTextInput.mm
-+++ b/ios/input/EnrichedMarkdownTextInput.mm
-@@ -1575,5 +1575,6 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
- - (void)handleTextChanged
- {
-   if (_editSession.isComposing) {
-+    [self updatePlaceholderVisibility];
-     return;
+diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
+index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
+--- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
++++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
+@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+ 
+ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   std::string pattern{};
++  std::string icon{};
++  bool iconTint{false};
+   SharedColor color{};
+   bool underline{false};
+   SharedColor backgroundColor{};
+@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
+     result["pattern"] = pattern;
++    result["icon"] = icon;
++    result["iconTint"] = iconTint;
+     result["color"] = ::facebook::react::toDynamic(color);
+     result["underline"] = underline;
+     result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
+@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_pattern != map.end()) {
+     fromRawValue(context, tmp_pattern->second, result.pattern);
    }
-diff --git a/ios/renderer/ListItemRenderer.m b/ios/renderer/ListItemRenderer.m
-index 204fc185..c8800496 100644
---- a/ios/renderer/ListItemRenderer.m
-+++ b/ios/renderer/ListItemRenderer.m
-@@ -176,4 +176,10 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
-+  // Cover the whole grapheme cluster: anchoring on a single UTF-16 code unit
-+  // splits multi-unit graphemes (emoji surrogate pairs, ZWJ sequences) across
-+  // two attribute runs, which drops the glyph and hides the marker for every
-+  // item but the last.
-+  const NSRange anchorRange = [string rangeOfComposedCharacterSequenceAtIndex:anchorLocation];
-+
-   NSArray *existingMarkers = [output attribute:ListItemMarkerStartAttribute atIndex:anchorLocation effectiveRange:NULL];
-   NSArray *markers =
-       [existingMarkers isKindOfClass:[NSArray class]] ? [existingMarkers arrayByAddingObject:marker] : @[ marker ];
--  [output addAttribute:ListItemMarkerStartAttribute value:markers range:NSMakeRange(anchorLocation, 1)];
-+  [output addAttribute:ListItemMarkerStartAttribute value:markers range:anchorRange];
-diff --git a/ios/utils/ListMarkerDrawer.m b/ios/utils/ListMarkerDrawer.m
-index 315ec083..93548a1d 100644
---- a/ios/utils/ListMarkerDrawer.m
-+++ b/ios/utils/ListMarkerDrawer.m
-@@ -9 +9,3 @@
- extern NSString *const ListItemMarkerStartAttribute;
-+
-+static NSString *const kAppleColorEmojiFontName = @"AppleColorEmoji";
-@@ -58,3 +60,25 @@ - (void)drawMarkersForGlyphRange:(NSRange)glyphsToShow
-                                  CGPoint glyphLoc = [layoutManager locationForGlyphAtIndex:glyphRange.location];
-                                  CGFloat baselineY = origin.y + rect.origin.y + glyphLoc.y;
--                                 UIFont *font = attrs[NSFontAttributeName] ?: [self defaultFont];
-+
-+                                 // When the anchor character is an emoji, NSFontAttributeName
-+                                 // returns AppleColorEmoji whose metrics (xHeight, capHeight)
-+                                 // differ widely from the text font and would misplace the
-+                                 // marker. Look past the first composed character sequence
-+                                 // to find the actual text font used on the line.
-+                                 UIFont *font = attrs[NSFontAttributeName];
-+                                 if (charRange.length > 1) {
-+                                   NSRange firstGrapheme =
-+                                       [storage.string rangeOfComposedCharacterSequenceAtIndex:charRange.location];
-+                                   NSUInteger afterFirst = NSMaxRange(firstGrapheme);
-+                                   if (afterFirst < NSMaxRange(charRange)) {
-+                                     UIFont *textFont = [storage attribute:NSFontAttributeName
-+                                                                   atIndex:afterFirst
-+                                                            effectiveRange:NULL];
-+                                     if (textFont) {
-+                                       font = textFont;
-+                                     }
-+                                   }
-+                                 }
-+                                 if (!font || [font.fontName isEqualToString:kAppleColorEmojiFontName]) {
-+                                   font = [self defaultFont];
-+                                 }
-diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
---- a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
-+++ b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
-@@ -67,6 +67,7 @@
-   private val scrollView =
-     HorizontalScrollView(context).apply {
-       isHorizontalScrollBarEnabled = true
-+      isScrollbarFadingEnabled = false
-       overScrollMode = View.OVER_SCROLL_NEVER
-       importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-       addView(
-diff --git a/ios/views/ENRMTableIOSGridView.m b/ios/views/ENRMTableIOSGridView.m
---- a/ios/views/ENRMTableIOSGridView.m
-+++ b/ios/views/ENRMTableIOSGridView.m
-@@ -3,6 +3,9 @@
- #if !TARGET_OS_OSX
- 
- @implementation ENRMTableIOSRowData
-+@end
-+
-+@interface ENRMTableIOSGridView () <UIGestureRecognizerDelegate>
- @end
- 
- @implementation ENRMTableIOSGridView {
-@@ -25,10 +28,12 @@
-     self.accessibilityElementsHidden = YES;
- 
-     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
-+    tap.delegate = self;
-     [self addGestureRecognizer:tap];
- 
-     UILongPressGestureRecognizer *longPress =
-         [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
-+    longPress.delegate = self;
-     [self addGestureRecognizer:longPress];
-   }
-   return self;
-@@ -188,6 +193,12 @@
- 
- #pragma mark - Gesture handlers
- 
-+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
-+{
-+  // Plain cells have no link action and must leave scrolling eligible.
-+  return [self linkURLAtPoint:[touch locationInView:self]] != nil;
-+}
-+
- - (void)handleLinkGesture:(UIGestureRecognizer *)recognizer block:(ENRMTableIOSLinkBlock)block
- {
-   CGPoint point = [recognizer locationInView:self];
-diff --git a/ios/views/TableContainerView.m b/ios/views/TableContainerView.m
---- a/ios/views/TableContainerView.m
-+++ b/ios/views/TableContainerView.m
-@@ -623,11 +623,17 @@
- - (void)layoutSubviews
- {
-   [super layoutSubviews];
-+#if !TARGET_OS_OSX
-+  BOOL scrollGeometryChanged = !CGSizeEqualToSize(_scrollView.bounds.size, self.bounds.size) ||
-+                               _scrollView.contentSize.width != _totalTableWidth;
-+#endif
-   _scrollView.frame = self.bounds;
- #if !TARGET_OS_OSX
-   CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
-   CGFloat containerWidth = self.bounds.size.width;
--  BOOL tableOverflows = (overhang > 0 && _totalTableWidth > containerWidth);
-+  // Overflow must scroll even when no horizontal overhang is configured. Keeping
-+  // it in this branch also preserves the reader's offset across layout updates.
-+  BOOL tableOverflows = (_totalTableWidth > containerWidth);
- 
-   if (tableOverflows) {
-     UIEdgeInsets inset = UIEdgeInsetsMake(0, overhang, 0, overhang);
-@@ -645,6 +651,10 @@
-     _scrollView.contentSize = CGSizeMake(MAX(_totalTableWidth, containerWidth), _totalTableHeight);
-     _scrollView.scrollEnabled = (_totalTableWidth > containerWidth);
-     _gridContainer.frame = CGRectMake(overhang + alignOffset, 0, _totalTableWidth, _totalTableHeight);
++  auto tmp_icon = map.find("icon");
++  if (tmp_icon != map.end()) {
++    fromRawValue(context, tmp_icon->second, result.icon);
 +  }
-+  _scrollView.showsHorizontalScrollIndicator = tableOverflows;
-+  if (tableOverflows && scrollGeometryChanged) {
-+    [_scrollView flashScrollIndicators];
++  auto tmp_iconTint = map.find("iconTint");
++  if (tmp_iconTint != map.end()) {
++    fromRawValue(context, tmp_iconTint->second, result.iconTint);
++  }
+   auto tmp_color = map.find("color");
+   if (tmp_color != map.end()) {
+     fromRawValue(context, tmp_color->second, result.color);
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
+index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..b3ce501c70d2c2b03f8f53eae26266e622f04ba2 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
+@@ -8,6 +8,7 @@ import android.graphics.Color
+ import android.os.Build
+ import android.text.Editable
+ import android.text.InputType
++import android.util.Log
+ import android.util.TypedValue
+ import android.view.Gravity
+ import android.view.KeyEvent
+@@ -285,11 +286,40 @@ class EnrichedMarkdownTextInputView(
+         }
+       }
+     }
+-    return super.onTouchEvent(ev)
++    // CHERRY-STUDIO-APP-A: selection callbacks can clear TextView's layout while
++    // Editor is positioning the dragged cursor. Only absorb that framework NPE.
++    return try {
++      super.onTouchEvent(ev)
++    } catch (e: NullPointerException) {
++      val top = e.stackTrace.firstOrNull()
++      if (top == null || top.className != "android.widget.Editor" || top.methodName != "updateCursorPosition") {
++        throw e
++      }
++      Log.w("EnrichedMarkdownTextInputView", "Framework cursor layout unavailable during touch", e)
++      // Keep this touch consumed; do not retry a partially processed selection change.
++      true
++    }
    }
- #else
-   CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
+ 
+   override fun performClick(): Boolean = super.performClick()
+ 
++  // Selection callbacks can invalidate Editor's cursor controller during a long press.
++  // Extend https://github.com/software-mansion/enriched-markdown/pull/738 for CHERRY-STUDIO-APP-R.
++  override fun performLongClick(): Boolean =
++    try {
++      super.performLongClick()
++    } catch (e: NullPointerException) {
++      val top = e.stackTrace.firstOrNull()
++      if (top == null || top.className != "android.widget.Editor" ||
++        (top.methodName != "performLongClick" && top.methodName != "selectCurrentWordAndStartDrag")
++      ) {
++        throw e
++      }
++      Log.w("EnrichedMarkdownTextInputView", "Framework cursor controller unavailable during long press", e)
++      // Mark the long press handled so ACTION_UP does not dispatch an extra click.
++      true
++    }
++
+   // In auto-grow mode (scrollEnabled=false) TextView's internal bringPointIntoView
+   // scrolls content before Fabric has resized the view, causing a visible flicker.
+   override fun scrollTo(
+@@ -304,6 +334,32 @@ class EnrichedMarkdownTextInputView(
+ 
+   override fun canScrollHorizontally(direction: Int): Boolean = scrollEnabled && super.canScrollHorizontally(direction)
+ 
++  // Clamp offsets outside the content range after the view changes size.
++  // `forceScrollToSelection` can run before Fabric applies the new height.
++  // Android also adjusts scrolling in its pre-draw pass; this is a defensive
++  // clamp, not evidence that an offset survives that pass on affected devices.
++  // When the layout fits the viewport, its maximum vertical offset is zero.
++  // Whether this resolves the reported first-line clipping still needs device
++  // acceptance with the view height, layout height, and scrollY recorded.
++  override fun onSizeChanged(
++    w: Int,
++    h: Int,
++    oldw: Int,
++    oldh: Int,
++  ) {
++    super.onSizeChanged(w, h, oldw, oldh)
++
++    val textLayout = layout ?: return
++    val visibleTextHeight = h - paddingTop - paddingBottom
++    if (visibleTextHeight <= 0) return
++
++    val maxScrollY = (textLayout.height - visibleTextHeight).coerceAtLeast(0)
++    if (scrollY <= maxScrollY) return
++    // Apply the correction even when the scrollTo override disables scrolling.
++    // In-range offsets return above without changing the current scroll position.
++    super.scrollTo(scrollX, maxScrollY)
++  }
++
+   fun attachTextWatcher(editable: Editable) {
+     if (textWatcher != null) {
+       editable.removeSpan(textWatcher)
+@@ -444,6 +500,12 @@ class EnrichedMarkdownTextInputView(
+       postAdjust(editable)
+       lastProcessedText = editable.toString()
+       applyFormattingAndEmit()
++      // The text watcher is suppressed for the whole edit phase entered above, so
++      // the layout invalidation it normally issues on a text change never runs.
++      // Without this, paste and every programmatic insert — mentions, links, the
++      // mention indicator — change the text while Fabric keeps measuring the old
++      // one, and the field stays at the height it had before the insert.
++      layoutManager.invalidateLayout()
+       eventEmitter.emitChangeText()
+     } finally {
+       editSession.exit()
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
+index 8e3fc760ea1b6ff2c5ccc0911b0801b87da84aec..c2ce8ce4ea42211d67b0bd0088b91ba1ae433476 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
+@@ -11,6 +11,7 @@ import com.swmansion.enriched.markdown.input.spans.InputListItemSpacingSpan
+ import com.swmansion.enriched.markdown.input.styles.BlockHandler
+ import com.swmansion.enriched.markdown.input.styles.BoldStyleHandler
+ import com.swmansion.enriched.markdown.input.styles.HeadingBlockHandler
++import com.swmansion.enriched.markdown.input.styles.InputLinkIconSpan
+ import com.swmansion.enriched.markdown.input.styles.ItalicStyleHandler
+ import com.swmansion.enriched.markdown.input.styles.LinkStyleHandler
+ import com.swmansion.enriched.markdown.input.styles.OrderedListBlockHandler
+@@ -95,7 +96,10 @@ class InputFormatter(
+       val handler = handlers[range.type] ?: continue
+       val spans = handler.createSpans(range, currentStyle)
+       for (span in spans) {
+-        desired.add(SpanDescriptor(range.start, range.end, span::class.java, range.url))
++        // An icon replaces only the object character; never replace the shaped link label.
++        if (span is InputLinkIconSpan && spannable[range.start] != '\uFFFC') continue
++        val end = if (span is InputLinkIconSpan) range.start + 1 else range.end
++        desired.add(SpanDescriptor(range.start, end, span::class.java, range.url))
+       }
+     }
+ 
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
+index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..9d6f22f128ed6d3498445e9d633aefb16459b6fe 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
+@@ -2,6 +2,7 @@ package com.swmansion.enriched.markdown.input.layout
+ 
+ import android.content.Context
+ import android.os.Build
++import android.text.SpannedString
+ import android.text.StaticLayout
+ import android.text.TextPaint
+ import androidx.appcompat.widget.AppCompatEditText
+@@ -21,7 +22,7 @@ object InputMeasurementStore {
+   private data class MeasurementParams(
+     val cachedWidth: Float,
+     val cachedSize: Long,
+-    val text: CharSequence?,
++    val text: SpannedString?,
+     val paintParams: PaintParams,
+   )
+ 
+@@ -35,10 +36,12 @@ object InputMeasurementStore {
+     val cachedWidth = data[id]?.cachedWidth ?: 0f
+     val cachedSize = data[id]?.cachedSize ?: 0L
+ 
+-    val size = measure(cachedWidth, text, paint)
++    // Snapshot on the UI thread: Fabric must not measure an Editable while input mutates it.
++    val textSnapshot = text?.let { SpannedString(it) }
++    val size = measure(cachedWidth, textSnapshot, paint)
+     val paintParams = PaintParams(paint.typeface, paint.textSize)
+ 
+-    data[id] = MeasurementParams(cachedWidth, size, text, paintParams)
++    data[id] = MeasurementParams(cachedWidth, size, textSnapshot, paintParams)
+     return size != cachedSize
+   }
+ 
+@@ -85,7 +88,8 @@ object InputMeasurementStore {
+       }
+ 
+     val size = measure(width, value.text, paint)
+-    data[id] = MeasurementParams(width, size, value.text, value.paintParams)
++    // A newer UI snapshot or release must not be overwritten by this measurement.
++    data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))
+     return size
+   }
+ 
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
+index a961e675a0b0e4358675f9de6d8c75e83dd34bae..e785ba8fa23fe2ba663a74a614845b426fc5d410 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
+@@ -45,7 +45,17 @@ data class InputLinkVariantStyle(
+   val color: Int,
+   val underline: Boolean,
+   val backgroundColor: Int,
++  val icon: String = "",
++  val iconTint: Boolean = false,
+ ) {
++  val iconBitmap: android.graphics.Bitmap? =
++    try {
++      val data = android.util.Base64.decode(icon, android.util.Base64.DEFAULT)
++      android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size)
++    } catch (_: IllegalArgumentException) {
++      null
++    }
++
+   val compiledRegex: Regex? =
+     try {
+       Regex(pattern)
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt
+index 8b90a875c766338d7ab036812ae7295c1c752368..7842c2e74feed029a144e4583e58a02ce5d4e6c5 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt
+@@ -1,13 +1,21 @@
+ package com.swmansion.enriched.markdown.input.styles
+ 
++import android.graphics.Bitmap
++import android.graphics.Canvas
++import android.graphics.Paint
++import android.graphics.PorterDuff
++import android.graphics.PorterDuffColorFilter
++import android.graphics.RectF
+ import android.text.style.BackgroundColorSpan
+ import android.text.style.CharacterStyle
+ import android.text.style.ForegroundColorSpan
++import android.text.style.ReplacementSpan
+ import android.text.style.UnderlineSpan
+ import com.swmansion.enriched.markdown.input.formatting.MarkdownSpan
+ import com.swmansion.enriched.markdown.input.model.FormattingRange
+ import com.swmansion.enriched.markdown.input.model.InputFormatterStyle
+ import com.swmansion.enriched.markdown.input.model.StyleType
++import kotlin.math.ceil
+ 
+ private class MarkdownLinkColorSpan(
+   color: Int,
+@@ -34,6 +42,7 @@ class LinkStyleHandler : StyleHandler {
+     if (linkStyle.backgroundColor != 0) {
+       spans.add(MarkdownLinkBackgroundColorSpan(linkStyle.backgroundColor))
+     }
++    linkStyle.icon?.let { spans.add(InputLinkIconSpan(it, if (linkStyle.iconTint) linkStyle.color else null)) }
+     return spans
+   }
+ 
+@@ -42,6 +51,7 @@ class LinkStyleHandler : StyleHandler {
+       MarkdownLinkColorSpan::class.java,
+       MarkdownLinkUnderlineSpan::class.java,
+       MarkdownLinkBackgroundColorSpan::class.java,
++      InputLinkIconSpan::class.java,
+     )
+ 
+   private fun resolveLinkStyle(
+@@ -59,6 +69,8 @@ class LinkStyleHandler : StyleHandler {
+       color = variant?.color ?: style.linkColor,
+       underline = variant?.underline ?: style.linkUnderline,
+       backgroundColor = variant?.backgroundColor ?: style.linkBackgroundColor,
++      icon = variant?.iconBitmap,
++      iconTint = variant?.iconTint ?: false,
+     )
+   }
+ 
+@@ -66,6 +78,8 @@ class LinkStyleHandler : StyleHandler {
+     val color: Int,
+     val underline: Boolean,
+     val backgroundColor: Int,
++    val icon: Bitmap?,
++    val iconTint: Boolean,
+   )
+ }
+ 
+@@ -73,3 +87,29 @@ private class MarkdownLinkBackgroundColorSpan(
+   color: Int,
+ ) : BackgroundColorSpan(color),
+   MarkdownSpan
++
++/** Occupies only the leading object character; the label keeps native text shaping and wrapping. */
++class InputLinkIconSpan(
++  private val bitmap: Bitmap,
++  color: Int?,
++) : ReplacementSpan(), MarkdownSpan {
++  private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
++    alpha = 204
++    colorFilter = color?.let { PorterDuffColorFilter(it, PorterDuff.Mode.SRC_IN) }
++  }
++
++  override fun getSize(paint: Paint, text: CharSequence, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int {
++    if (fm != null) {
++      paint.getFontMetricsInt(fm)
++      fm.ascent = minOf(fm.ascent, -ceil(paint.textSize - paint.fontMetrics.descent).toInt())
++      fm.top = minOf(fm.top, fm.ascent)
++    }
++    return ceil(paint.textSize).toInt()
++  }
++
++  override fun draw(canvas: Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
++    val size = paint.textSize
++    val iconBottom = y + paint.fontMetrics.descent
++    canvas.drawBitmap(bitmap, null, RectF(x, iconBottom - size, x + size, iconBottom), imagePaint)
++  }
++}
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt b/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt
+index 9ff71ede7eb3ec58eb6e0547d553839e1acbb977..f77b0e60dd5d22cf81f4bd176cb7e663a2888f61 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt
+@@ -64,6 +64,8 @@ object MarkdownStyleParser {
+         color = variant.getInt("color"),
+         underline = variant.getBoolean("underline"),
+         backgroundColor = variant.getInt("backgroundColor"),
++        icon = if (variant.hasKey("icon")) variant.getString("icon") ?: "" else "",
++        iconTint = variant.hasKey("iconTint") && variant.getBoolean("iconTint"),
+       )
+     }
+   }
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
 index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29db25fa97f 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
@@ -299,6 +486,217 @@ index 380c6be097ff3e6b67e6f66ec32b205af196844f..d52361bfc5bae9e02d9752f19a40a29d
      }
    }
  }
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
+index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..f2cc80414fdc6b581ff90031460a51beedfa654a 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
+@@ -67,6 +67,7 @@ class TableContainerView(
+   private val scrollView =
+     HorizontalScrollView(context).apply {
+       isHorizontalScrollBarEnabled = true
++      isScrollbarFadingEnabled = false
+       overScrollMode = View.OVER_SCROLL_NEVER
+       importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+       addView(
+diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
+index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
+--- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
++++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
+@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+ 
+ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   std::string pattern{};
++  std::string icon{};
++  bool iconTint{false};
+   SharedColor color{};
+   bool underline{false};
+   SharedColor backgroundColor{};
+@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
+   folly::dynamic toDynamic() const {
+     folly::dynamic result = folly::dynamic::object();
+     result["pattern"] = pattern;
++    result["icon"] = icon;
++    result["iconTint"] = iconTint;
+     result["color"] = ::facebook::react::toDynamic(color);
+     result["underline"] = underline;
+     result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
+@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
+   if (tmp_pattern != map.end()) {
+     fromRawValue(context, tmp_pattern->second, result.pattern);
+   }
++  auto tmp_icon = map.find("icon");
++  if (tmp_icon != map.end()) {
++    fromRawValue(context, tmp_icon->second, result.icon);
++  }
++  auto tmp_iconTint = map.find("iconTint");
++  if (tmp_iconTint != map.end()) {
++    fromRawValue(context, tmp_iconTint->second, result.iconTint);
++  }
+   auto tmp_color = map.find("color");
+   if (tmp_color != map.end()) {
+     fromRawValue(context, tmp_color->second, result.color);
+diff --git a/ios/input/ENRMInputFormatter.mm b/ios/input/ENRMInputFormatter.mm
+index 851d9902478af68906739d03a93fff94afc07000..79d858eaa2d27d72a15bf020703b20dc8ea12f3d 100644
+--- a/ios/input/ENRMInputFormatter.mm
++++ b/ios/input/ENRMInputFormatter.mm
+@@ -92,6 +92,8 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
+   [textStorage removeAttribute:NSUnderlineStyleAttributeName range:scopeRange];
+   [textStorage removeAttribute:NSStrikethroughStyleAttributeName range:scopeRange];
+   [textStorage removeAttribute:NSBackgroundColorAttributeName range:scopeRange];
++  // Attachments are derived from link ranges, so deletion and undo cannot leave stale icons.
++  [textStorage removeAttribute:NSAttachmentAttributeName range:scopeRange];
+ 
+   UIFontDescriptorSymbolicTraits *traitMap =
+       (UIFontDescriptorSymbolicTraits *)calloc(scopeLength, sizeof(UIFontDescriptorSymbolicTraits));
+diff --git a/ios/input/ENRMInputFormatterStyle.h b/ios/input/ENRMInputFormatterStyle.h
+index c09a3cbcc24ce3900b9e62848f9759b2f234fa53..ab98c62a7ee5151365678e6282e40bcdb6516526 100644
+--- a/ios/input/ENRMInputFormatterStyle.h
++++ b/ios/input/ENRMInputFormatterStyle.h
+@@ -8,6 +8,7 @@ NS_ASSUME_NONNULL_BEGIN
+ @interface ENRMInputLinkVariantStyle : NSObject
+ 
+ @property (nonatomic, copy) NSString *pattern;
++@property (nonatomic, strong, nullable) RCTUIImage *icon;
+ @property (nonatomic, strong) RCTUIColor *color;
+ @property (nonatomic, assign) BOOL underline;
+ @property (nonatomic, strong, nullable) RCTUIColor *backgroundColor;
+diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdownTextInput.mm
+index 9a9987e0d61c907787cff3d6a6f6cea81155f536..299e21b9750c78a30ec56e8fae651b40840cdfe3 100644
+--- a/ios/input/EnrichedMarkdownTextInput.mm
++++ b/ios/input/EnrichedMarkdownTextInput.mm
+@@ -1575,6 +1575,7 @@ - (ENRMInputTypingAttributesController *)typingController
+ - (void)handleTextChanged
+ {
+   if (_editSession.isComposing) {
++    [self updatePlaceholderVisibility];
+     return;
+   }
+ 
+diff --git a/ios/input/InputStylePropsUtils.h b/ios/input/InputStylePropsUtils.h
+index 1d28946d1ec4e46fc0d502d35adec208645674ed..14d1c258ed9f16ca9f81af754b4429aa00e998c6 100644
+--- a/ios/input/InputStylePropsUtils.h
++++ b/ios/input/InputStylePropsUtils.h
+@@ -133,7 +133,8 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
+         const auto &newVariant = newProps.markdownStyle.linkVariants[i];
+         const auto &oldVariant = oldProps.markdownStyle.linkVariants[i];
+         if (newVariant.pattern != oldVariant.pattern || newVariant.color != oldVariant.color ||
+-            newVariant.underline != oldVariant.underline || newVariant.backgroundColor != oldVariant.backgroundColor) {
++            newVariant.underline != oldVariant.underline || newVariant.backgroundColor != oldVariant.backgroundColor ||
++            newVariant.icon != oldVariant.icon || newVariant.iconTint != oldVariant.iconTint) {
+           linkVariantsChanged = YES;
+           break;
+         }
+@@ -147,6 +148,21 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
+         variant.pattern = [[NSString alloc] initWithUTF8String:entry.pattern.c_str()];
+         variant.color = RCTUIColorFromSharedColor(entry.color);
+         variant.underline = entry.underline;
++        NSString *iconBase64 = [[NSString alloc] initWithUTF8String:entry.icon.c_str()];
++        NSData *iconData = [[NSData alloc] initWithBase64EncodedString:iconBase64 options:0];
++        RCTUIImage *icon = iconData ? [[RCTUIImage alloc] initWithData:iconData] : nil;
++#if !TARGET_OS_OSX
++        if (icon && entry.iconTint) {
++          icon = [icon imageWithTintColor:variant.color renderingMode:UIImageRenderingModeAlwaysOriginal];
++        }
++        if (icon) {
++          RCTUIGraphicsImageRenderer *renderer = ImageRendererForSize(icon.size);
++          icon = [renderer imageWithActions:^(RCTUIGraphicsImageRendererContext *context) {
++            [icon drawAtPoint:CGPointZero blendMode:kCGBlendModeNormal alpha:0.8];
++          }];
++        }
++#endif
++        variant.icon = icon;
+         RCTUIColor *backgroundColor = RCTUIColorFromSharedColor(entry.backgroundColor);
+         variant.backgroundColor = CGColorGetAlpha(backgroundColor.CGColor) > 0 ? backgroundColor : nil;
+         variant.regex = [NSRegularExpression regularExpressionWithPattern:variant.pattern options:0 error:nil];
+diff --git a/ios/input/styles/ENRMLinkStyleHandler.mm b/ios/input/styles/ENRMLinkStyleHandler.mm
+index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83364e40d7 100644
+--- a/ios/input/styles/ENRMLinkStyleHandler.mm
++++ b/ios/input/styles/ENRMLinkStyleHandler.mm
+@@ -38,6 +38,18 @@ - (void)applyNonFontAttributesToTextStorage:(NSTextStorage *)storage
+   BOOL linkUnderline = variant ? variant.underline : style.linkUnderline;
+   RCTUIColor *backgroundColor = variant ? variant.backgroundColor : style.linkBackgroundColor;
+ 
++#if !TARGET_OS_OSX
++  NSUInteger iconIndex = formattingRange.range.location;
++  if (variant.icon && NSLocationInRange(iconIndex, range) &&
++      [storage.string characterAtIndex:iconIndex] == 0xFFFC) {
++    NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
++    attachment.image = variant.icon;
++    CGFloat size = style.baseFont.pointSize;
++    attachment.bounds = CGRectMake(0, style.baseFont.descender, size, size);
++    [storage addAttribute:NSAttachmentAttributeName value:attachment range:NSMakeRange(iconIndex, 1)];
++  }
++#endif
++
+   if (linkColor != nil) {
+     [storage addAttribute:NSForegroundColorAttributeName value:linkColor range:range];
+   }
+diff --git a/ios/renderer/ListItemRenderer.m b/ios/renderer/ListItemRenderer.m
+index 204fc18510d3de0b79c3d3741b1599659a53d4d9..c880049600007ec76f8e533408246f9280aa5599 100644
+--- a/ios/renderer/ListItemRenderer.m
++++ b/ios/renderer/ListItemRenderer.m
+@@ -173,10 +173,16 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
+     }
+   }
+ 
++  // Cover the whole grapheme cluster: anchoring on a single UTF-16 code unit
++  // splits multi-unit graphemes (emoji surrogate pairs, ZWJ sequences) across
++  // two attribute runs, which drops the glyph and hides the marker for every
++  // item but the last.
++  const NSRange anchorRange = [string rangeOfComposedCharacterSequenceAtIndex:anchorLocation];
++
+   NSArray *existingMarkers = [output attribute:ListItemMarkerStartAttribute atIndex:anchorLocation effectiveRange:NULL];
+   NSArray *markers =
+       [existingMarkers isKindOfClass:[NSArray class]] ? [existingMarkers arrayByAddingObject:marker] : @[ marker ];
+-  [output addAttribute:ListItemMarkerStartAttribute value:markers range:NSMakeRange(anchorLocation, 1)];
++  [output addAttribute:ListItemMarkerStartAttribute value:markers range:anchorRange];
+ 
+   if (isTask && isChecked) {
+     [self applyCheckedDecorationsTo:output range:itemRange nestingLevel:nestingLevel];
+diff --git a/ios/utils/ListMarkerDrawer.m b/ios/utils/ListMarkerDrawer.m
+index 315ec083f1daf23c29bc2d708086578c14fec1e5..93548a1d3f9534811246beb7ebe31e9294d243b0 100644
+--- a/ios/utils/ListMarkerDrawer.m
++++ b/ios/utils/ListMarkerDrawer.m
+@@ -7,6 +7,8 @@
+ 
+ extern NSString *const ListItemMarkerStartAttribute;
+ 
++static NSString *const kAppleColorEmojiFontName = @"AppleColorEmoji";
++
+ @implementation ListMarkerDrawer {
+   StyleConfig *_config;
+ }
+@@ -57,7 +59,29 @@ - (void)drawMarkersForGlyphRange:(NSRange)glyphsToShow
+ 
+                                  CGPoint glyphLoc = [layoutManager locationForGlyphAtIndex:glyphRange.location];
+                                  CGFloat baselineY = origin.y + rect.origin.y + glyphLoc.y;
+-                                 UIFont *font = attrs[NSFontAttributeName] ?: [self defaultFont];
++
++                                 // When the anchor character is an emoji, NSFontAttributeName
++                                 // returns AppleColorEmoji whose metrics (xHeight, capHeight)
++                                 // differ widely from the text font and would misplace the
++                                 // marker. Look past the first composed character sequence
++                                 // to find the actual text font used on the line.
++                                 UIFont *font = attrs[NSFontAttributeName];
++                                 if (charRange.length > 1) {
++                                   NSRange firstGrapheme =
++                                       [storage.string rangeOfComposedCharacterSequenceAtIndex:charRange.location];
++                                   NSUInteger afterFirst = NSMaxRange(firstGrapheme);
++                                   if (afterFirst < NSMaxRange(charRange)) {
++                                     UIFont *textFont = [storage attribute:NSFontAttributeName
++                                                                   atIndex:afterFirst
++                                                            effectiveRange:NULL];
++                                     if (textFont) {
++                                       font = textFont;
++                                     }
++                                   }
++                                 }
++                                 if (!font || [font.fontName isEqualToString:kAppleColorEmojiFontName]) {
++                                   font = [self defaultFont];
++                                 }
+ 
+                                  for (ENRMListMarkerDescriptor *marker in markers) {
+                                    CGFloat markerX = isRTL ? origin.x + container.size.width - marker.indent + gap
 diff --git a/ios/views/ENRMCodeBlockContainerView.m b/ios/views/ENRMCodeBlockContainerView.m
 index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1ef4eb6ed 100644
 --- a/ios/views/ENRMCodeBlockContainerView.m
@@ -389,239 +787,80 @@ index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..5f98a0f2f932e2cc2ad133bb9ee8efd1
      [dividerColor setFill];
  #if !TARGET_OS_OSX
      [[UIBezierPath bezierPathWithRect:dividerRect] fill];
-diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
-index 8e3fc760ea1b6ff2c5ccc0911b0801b87da84aec..c2ce8ce4ea42211d67b0bd0088b91ba1ae433476 100644
---- a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
-+++ b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/InputFormatter.kt
-@@ -11,6 +11,7 @@ import com.swmansion.enriched.markdown.input.spans.InputListItemSpacingSpan
- import com.swmansion.enriched.markdown.input.styles.BlockHandler
- import com.swmansion.enriched.markdown.input.styles.BoldStyleHandler
- import com.swmansion.enriched.markdown.input.styles.HeadingBlockHandler
-+import com.swmansion.enriched.markdown.input.styles.InputLinkIconSpan
- import com.swmansion.enriched.markdown.input.styles.ItalicStyleHandler
- import com.swmansion.enriched.markdown.input.styles.LinkStyleHandler
- import com.swmansion.enriched.markdown.input.styles.OrderedListBlockHandler
-@@ -95,7 +96,10 @@ class InputFormatter(
-       val handler = handlers[range.type] ?: continue
-       val spans = handler.createSpans(range, currentStyle)
-       for (span in spans) {
--        desired.add(SpanDescriptor(range.start, range.end, span::class.java, range.url))
-+        // An icon replaces only the object character; never replace the shaped link label.
-+        if (span is InputLinkIconSpan && spannable[range.start] != '\uFFFC') continue
-+        val end = if (span is InputLinkIconSpan) range.start + 1 else range.end
-+        desired.add(SpanDescriptor(range.start, end, span::class.java, range.url))
-       }
-     }
+diff --git a/ios/views/ENRMTableIOSGridView.m b/ios/views/ENRMTableIOSGridView.m
+index 138435033005771ce0bb194f273316a5328e3057..1f4dc09df07134d34ce259ca59d3b158494f8886 100644
+--- a/ios/views/ENRMTableIOSGridView.m
++++ b/ios/views/ENRMTableIOSGridView.m
+@@ -5,6 +5,9 @@
+ @implementation ENRMTableIOSRowData
+ @end
  
-diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
-index a961e675a0b0e4358675f9de6d8c75e83dd34bae..e785ba8fa23fe2ba663a74a614845b426fc5d410 100644
---- a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
-+++ b/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
-@@ -45,7 +45,17 @@ data class InputLinkVariantStyle(
-   val color: Int,
-   val underline: Boolean,
-   val backgroundColor: Int,
-+  val icon: String = "",
-+  val iconTint: Boolean = false,
- ) {
-+  val iconBitmap: android.graphics.Bitmap? =
-+    try {
-+      val data = android.util.Base64.decode(icon, android.util.Base64.DEFAULT)
-+      android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size)
-+    } catch (_: IllegalArgumentException) {
-+      null
-+    }
++@interface ENRMTableIOSGridView () <UIGestureRecognizerDelegate>
++@end
 +
-   val compiledRegex: Regex? =
-     try {
-       Regex(pattern)
-diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt
-index 8b90a875c766338d7ab036812ae7295c1c752368..7842c2e74feed029a144e4583e58a02ce5d4e6c5 100644
---- a/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt
-+++ b/android/src/main/java/com/swmansion/enriched/markdown/input/styles/LinkStyleHandler.kt
-@@ -1,13 +1,21 @@
- package com.swmansion.enriched.markdown.input.styles
+ @implementation ENRMTableIOSGridView {
+   NSArray<ENRMTableIOSRowData *> *_tableRows;
+   NSArray<NSNumber *> *_columnWidths;
+@@ -25,10 +28,12 @@ - (instancetype)initWithFrame:(CGRect)frame
+     self.accessibilityElementsHidden = YES;
  
-+import android.graphics.Bitmap
-+import android.graphics.Canvas
-+import android.graphics.Paint
-+import android.graphics.PorterDuff
-+import android.graphics.PorterDuffColorFilter
-+import android.graphics.RectF
- import android.text.style.BackgroundColorSpan
- import android.text.style.CharacterStyle
- import android.text.style.ForegroundColorSpan
-+import android.text.style.ReplacementSpan
- import android.text.style.UnderlineSpan
- import com.swmansion.enriched.markdown.input.formatting.MarkdownSpan
- import com.swmansion.enriched.markdown.input.model.FormattingRange
- import com.swmansion.enriched.markdown.input.model.InputFormatterStyle
- import com.swmansion.enriched.markdown.input.model.StyleType
-+import kotlin.math.ceil
+     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
++    tap.delegate = self;
+     [self addGestureRecognizer:tap];
  
- private class MarkdownLinkColorSpan(
-   color: Int,
-@@ -34,6 +42,7 @@ class LinkStyleHandler : StyleHandler {
-     if (linkStyle.backgroundColor != 0) {
-       spans.add(MarkdownLinkBackgroundColorSpan(linkStyle.backgroundColor))
-     }
-+    linkStyle.icon?.let { spans.add(InputLinkIconSpan(it, if (linkStyle.iconTint) linkStyle.color else null)) }
-     return spans
+     UILongPressGestureRecognizer *longPress =
+         [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
++    longPress.delegate = self;
+     [self addGestureRecognizer:longPress];
    }
+   return self;
+@@ -188,6 +193,12 @@ - (NSString *)linkURLAtPoint:(CGPoint)point
  
-@@ -42,6 +51,7 @@ class LinkStyleHandler : StyleHandler {
-       MarkdownLinkColorSpan::class.java,
-       MarkdownLinkUnderlineSpan::class.java,
-       MarkdownLinkBackgroundColorSpan::class.java,
-+      InputLinkIconSpan::class.java,
-     )
+ #pragma mark - Gesture handlers
  
-   private fun resolveLinkStyle(
-@@ -59,6 +69,8 @@ class LinkStyleHandler : StyleHandler {
-       color = variant?.color ?: style.linkColor,
-       underline = variant?.underline ?: style.linkUnderline,
-       backgroundColor = variant?.backgroundColor ?: style.linkBackgroundColor,
-+      icon = variant?.iconBitmap,
-+      iconTint = variant?.iconTint ?: false,
-     )
-   }
- 
-@@ -66,6 +78,8 @@ class LinkStyleHandler : StyleHandler {
-     val color: Int,
-     val underline: Boolean,
-     val backgroundColor: Int,
-+    val icon: Bitmap?,
-+    val iconTint: Boolean,
-   )
- }
- 
-@@ -73,3 +87,29 @@ private class MarkdownLinkBackgroundColorSpan(
-   color: Int,
- ) : BackgroundColorSpan(color),
-   MarkdownSpan
-+
-+/** Occupies only the leading object character; the label keeps native text shaping and wrapping. */
-+class InputLinkIconSpan(
-+  private val bitmap: Bitmap,
-+  color: Int?,
-+) : ReplacementSpan(), MarkdownSpan {
-+  private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-+    alpha = 204
-+    colorFilter = color?.let { PorterDuffColorFilter(it, PorterDuff.Mode.SRC_IN) }
-+  }
-+
-+  override fun getSize(paint: Paint, text: CharSequence, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int {
-+    if (fm != null) {
-+      paint.getFontMetricsInt(fm)
-+      fm.ascent = minOf(fm.ascent, -ceil(paint.textSize - paint.fontMetrics.descent).toInt())
-+      fm.top = minOf(fm.top, fm.ascent)
-+    }
-+    return ceil(paint.textSize).toInt()
-+  }
-+
-+  override fun draw(canvas: Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
-+    val size = paint.textSize
-+    val iconBottom = y + paint.fontMetrics.descent
-+    canvas.drawBitmap(bitmap, null, RectF(x, iconBottom - size, x + size, iconBottom), imagePaint)
-+  }
++- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
++{
++  // Plain cells have no link action and must leave scrolling eligible.
++  return [self linkURLAtPoint:[touch locationInView:self]] != nil;
 +}
-diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt b/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt
-index 9ff71ede7eb3ec58eb6e0547d553839e1acbb977..f77b0e60dd5d22cf81f4bd176cb7e663a2888f61 100644
---- a/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt
-+++ b/android/src/main/java/com/swmansion/enriched/markdown/utils/input/MarkdownStyleParser.kt
-@@ -64,6 +64,8 @@ object MarkdownStyleParser {
-         color = variant.getInt("color"),
-         underline = variant.getBoolean("underline"),
-         backgroundColor = variant.getInt("backgroundColor"),
-+        icon = if (variant.hasKey("icon")) variant.getString("icon") ?: "" else "",
-+        iconTint = variant.hasKey("iconTint") && variant.getBoolean("iconTint"),
-       )
-     }
-   }
-diff --git a/ios/input/ENRMInputFormatter.mm b/ios/input/ENRMInputFormatter.mm
-index 851d9902478af68906739d03a93fff94afc07000..79d858eaa2d27d72a15bf020703b20dc8ea12f3d 100644
---- a/ios/input/ENRMInputFormatter.mm
-+++ b/ios/input/ENRMInputFormatter.mm
-@@ -92,6 +92,8 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
-   [textStorage removeAttribute:NSUnderlineStyleAttributeName range:scopeRange];
-   [textStorage removeAttribute:NSStrikethroughStyleAttributeName range:scopeRange];
-   [textStorage removeAttribute:NSBackgroundColorAttributeName range:scopeRange];
-+  // Attachments are derived from link ranges, so deletion and undo cannot leave stale icons.
-+  [textStorage removeAttribute:NSAttachmentAttributeName range:scopeRange];
- 
-   UIFontDescriptorSymbolicTraits *traitMap =
-       (UIFontDescriptorSymbolicTraits *)calloc(scopeLength, sizeof(UIFontDescriptorSymbolicTraits));
-diff --git a/ios/input/ENRMInputFormatterStyle.h b/ios/input/ENRMInputFormatterStyle.h
-index c09a3cbcc24ce3900b9e62848f9759b2f234fa53..ab98c62a7ee5151365678e6282e40bcdb6516526 100644
---- a/ios/input/ENRMInputFormatterStyle.h
-+++ b/ios/input/ENRMInputFormatterStyle.h
-@@ -8,6 +8,7 @@ NS_ASSUME_NONNULL_BEGIN
- @interface ENRMInputLinkVariantStyle : NSObject
- 
- @property (nonatomic, copy) NSString *pattern;
-+@property (nonatomic, strong, nullable) RCTUIImage *icon;
- @property (nonatomic, strong) RCTUIColor *color;
- @property (nonatomic, assign) BOOL underline;
- @property (nonatomic, strong, nullable) RCTUIColor *backgroundColor;
-diff --git a/ios/input/InputStylePropsUtils.h b/ios/input/InputStylePropsUtils.h
-index 1d28946d1ec4e46fc0d502d35adec208645674ed..14d1c258ed9f16ca9f81af754b4429aa00e998c6 100644
---- a/ios/input/InputStylePropsUtils.h
-+++ b/ios/input/InputStylePropsUtils.h
-@@ -133,7 +133,8 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
-         const auto &newVariant = newProps.markdownStyle.linkVariants[i];
-         const auto &oldVariant = oldProps.markdownStyle.linkVariants[i];
-         if (newVariant.pattern != oldVariant.pattern || newVariant.color != oldVariant.color ||
--            newVariant.underline != oldVariant.underline || newVariant.backgroundColor != oldVariant.backgroundColor) {
-+            newVariant.underline != oldVariant.underline || newVariant.backgroundColor != oldVariant.backgroundColor ||
-+            newVariant.icon != oldVariant.icon || newVariant.iconTint != oldVariant.iconTint) {
-           linkVariantsChanged = YES;
-           break;
-         }
-@@ -147,6 +148,21 @@ BOOL applyInputStyleProps(ENRMInputFormatterStyle *style, const InputProps &newP
-         variant.pattern = [[NSString alloc] initWithUTF8String:entry.pattern.c_str()];
-         variant.color = RCTUIColorFromSharedColor(entry.color);
-         variant.underline = entry.underline;
-+        NSString *iconBase64 = [[NSString alloc] initWithUTF8String:entry.icon.c_str()];
-+        NSData *iconData = [[NSData alloc] initWithBase64EncodedString:iconBase64 options:0];
-+        RCTUIImage *icon = iconData ? [[RCTUIImage alloc] initWithData:iconData] : nil;
-+#if !TARGET_OS_OSX
-+        if (icon && entry.iconTint) {
-+          icon = [icon imageWithTintColor:variant.color renderingMode:UIImageRenderingModeAlwaysOriginal];
-+        }
-+        if (icon) {
-+          RCTUIGraphicsImageRenderer *renderer = ImageRendererForSize(icon.size);
-+          icon = [renderer imageWithActions:^(RCTUIGraphicsImageRendererContext *context) {
-+            [icon drawAtPoint:CGPointZero blendMode:kCGBlendModeNormal alpha:0.8];
-+          }];
-+        }
-+#endif
-+        variant.icon = icon;
-         RCTUIColor *backgroundColor = RCTUIColorFromSharedColor(entry.backgroundColor);
-         variant.backgroundColor = CGColorGetAlpha(backgroundColor.CGColor) > 0 ? backgroundColor : nil;
-         variant.regex = [NSRegularExpression regularExpressionWithPattern:variant.pattern options:0 error:nil];
-diff --git a/ios/input/styles/ENRMLinkStyleHandler.mm b/ios/input/styles/ENRMLinkStyleHandler.mm
-index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83364e40d7 100644
---- a/ios/input/styles/ENRMLinkStyleHandler.mm
-+++ b/ios/input/styles/ENRMLinkStyleHandler.mm
-@@ -38,6 +38,18 @@ - (void)applyNonFontAttributesToTextStorage:(NSTextStorage *)storage
-   BOOL linkUnderline = variant ? variant.underline : style.linkUnderline;
-   RCTUIColor *backgroundColor = variant ? variant.backgroundColor : style.linkBackgroundColor;
- 
-+#if !TARGET_OS_OSX
-+  NSUInteger iconIndex = formattingRange.range.location;
-+  if (variant.icon && NSLocationInRange(iconIndex, range) &&
-+      [storage.string characterAtIndex:iconIndex] == 0xFFFC) {
-+    NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
-+    attachment.image = variant.icon;
-+    CGFloat size = style.baseFont.pointSize;
-+    attachment.bounds = CGRectMake(0, style.baseFont.descender, size, size);
-+    [storage addAttribute:NSAttachmentAttributeName value:attachment range:NSMakeRange(iconIndex, 1)];
-+  }
-+#endif
 +
-   if (linkColor != nil) {
-     [storage addAttribute:NSForegroundColorAttributeName value:linkColor range:range];
+ - (void)handleLinkGesture:(UIGestureRecognizer *)recognizer block:(ENRMTableIOSLinkBlock)block
+ {
+   CGPoint point = [recognizer locationInView:self];
+diff --git a/ios/views/TableContainerView.m b/ios/views/TableContainerView.m
+index b76936d8620a3748be375ec8f3e35f47c03c0edd..840224fc70bb88f286ae8c70cc6e652105d11b33 100644
+--- a/ios/views/TableContainerView.m
++++ b/ios/views/TableContainerView.m
+@@ -623,11 +623,17 @@ - (CGFloat)alignOffsetForFreeSpace:(CGFloat)freeSpace
+ - (void)layoutSubviews
+ {
+   [super layoutSubviews];
++#if !TARGET_OS_OSX
++  BOOL scrollGeometryChanged = !CGSizeEqualToSize(_scrollView.bounds.size, self.bounds.size) ||
++                               _scrollView.contentSize.width != _totalTableWidth;
++#endif
+   _scrollView.frame = self.bounds;
+ #if !TARGET_OS_OSX
+   CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
+   CGFloat containerWidth = self.bounds.size.width;
+-  BOOL tableOverflows = (overhang > 0 && _totalTableWidth > containerWidth);
++  // Overflow must scroll even when no horizontal overhang is configured. Keeping
++  // it in this branch also preserves the reader's offset across layout updates.
++  BOOL tableOverflows = (_totalTableWidth > containerWidth);
+ 
+   if (tableOverflows) {
+     UIEdgeInsets inset = UIEdgeInsetsMake(0, overhang, 0, overhang);
+@@ -646,6 +652,10 @@ - (void)layoutSubviews
+     _scrollView.scrollEnabled = (_totalTableWidth > containerWidth);
+     _gridContainer.frame = CGRectMake(overhang + alignOffset, 0, _totalTableWidth, _totalTableHeight);
    }
++  _scrollView.showsHorizontalScrollIndicator = tableOverflows;
++  if (tableOverflows && scrollGeometryChanged) {
++    [_scrollView flashScrollIndicators];
++  }
+ #else
+   CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
+   CGFloat containerWidth = self.bounds.size.width;
 diff --git a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts b/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
 index dc228d579a8e7c55a1c07156e3f0e3357c019d67..3981e6222db948f0413cddbe917674adf49e11c6 100644
 --- a/lib/module/EnrichedMarkdownTextInputNativeComponent.ts
@@ -776,177 +1015,225 @@ index 240cd3e5d736d370160dc1907c0760f18d5ed478..b5b6edcceb083c4345e3a717f1173541
          color: normalizeColor(override.color) ?? linkBase.color,
          underline: override.underline ?? linkBase.underline,
          backgroundColor:
-diff --git a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
---- a/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-+++ b/android/generated/jni/react/renderer/components/EnrichedMarkdownTextSpec/Props.h
-@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
+index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c42352385c97e96 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
+@@ -63,10 +63,25 @@ class EnrichedMarkdown
+     }
  
- struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
-   std::string pattern{};
-+  std::string icon{};
-+  bool iconTint{false};
-   SharedColor color{};
-   bool underline{false};
-   SharedColor backgroundColor{};
-@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
-   folly::dynamic toDynamic() const {
-     folly::dynamic result = folly::dynamic::object();
-     result["pattern"] = pattern;
-+    result["icon"] = icon;
-+    result["iconTint"] = iconTint;
-     result["color"] = ::facebook::react::toDynamic(color);
-     result["underline"] = underline;
-     result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
-@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
-   if (tmp_pattern != map.end()) {
-     fromRawValue(context, tmp_pattern->second, result.pattern);
-   }
-+  auto tmp_icon = map.find("icon");
-+  if (tmp_icon != map.end()) {
-+    fromRawValue(context, tmp_icon->second, result.icon);
-+  }
-+  auto tmp_iconTint = map.find("iconTint");
-+  if (tmp_iconTint != map.end()) {
-+    fromRawValue(context, tmp_iconTint->second, result.iconTint);
-+  }
-   auto tmp_color = map.find("color");
-   if (tmp_color != map.end()) {
-     fromRawValue(context, tmp_color->second, result.color);
-diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-index 1416540317cfe30b8f54c04643afd7296e6e707f..26ef02bc62c39869f9e2d4fedff1cb0633dde65d 100644
---- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-+++ b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
-@@ -2923,6 +2923,8 @@ static inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputMarkdownSt
+     private var currentRenderId = 0L
++    // Main-thread-owned: at most one worker job, with props holding the latest
++    // pending input instead of retaining a queue of growing Markdown snapshots.
++    private var renderInFlight = false
++    private var renderRequested = false
++    private var disposed = false
+     private val segmentViews = mutableListOf<View>()
+     private val segmentSignatures = mutableListOf<Long>()
+     private val dirtyFlags = EnumSet.noneOf(DirtyFlag::class.java)
++    private var streamingGeneration = 0L
+     var streamingAnimation: Boolean = false
++      set(value) {
++        if (field == value) return
++        field = value
++        // A status-only completion must release filtered tails and invalidate
++        // in-flight streaming work, including a quick stop/start transition.
++        streamingGeneration++
++        dirtyFlags += DirtyFlag.FORCE_HEIGHT
++        renderPending = true
++      }
  
- struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
-   std::string pattern{};
-+  std::string icon{};
-+  bool iconTint{false};
-   SharedColor color{};
-   bool underline{false};
-   SharedColor backgroundColor{};
-@@ -2934,6 +2936,8 @@ struct EnrichedMarkdownTextInputMarkdownStyleLinkVariantsStruct {
-   folly::dynamic toDynamic() const {
-     folly::dynamic result = folly::dynamic::object();
-     result["pattern"] = pattern;
-+    result["icon"] = icon;
-+    result["iconTint"] = iconTint;
-     result["color"] = ::facebook::react::toDynamic(color);
-     result["underline"] = underline;
-     result["backgroundColor"] = ::facebook::react::toDynamic(backgroundColor);
-@@ -2949,6 +2953,14 @@ static inline void fromRawValue(const PropsParserContext& context, const RawValu
-   if (tmp_pattern != map.end()) {
-     fromRawValue(context, tmp_pattern->second, result.pattern);
-   }
-+  auto tmp_icon = map.find("icon");
-+  if (tmp_icon != map.end()) {
-+    fromRawValue(context, tmp_icon->second, result.icon);
-+  }
-+  auto tmp_iconTint = map.find("iconTint");
-+  if (tmp_iconTint != map.end()) {
-+    fromRawValue(context, tmp_iconTint->second, result.iconTint);
-+  }
-   auto tmp_color = map.find("color");
-   if (tmp_color != map.end()) {
-     fromRawValue(context, tmp_color->second, result.color);
-diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..65e12dc8d75546a29504dda877cbc3996b73df11 100644
---- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-+++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
-@@ -8,6 +8,7 @@
- import android.os.Build
- import android.text.Editable
- import android.text.InputType
-+import android.util.Log
- import android.util.TypedValue
- import android.view.Gravity
- import android.view.KeyEvent
-@@ -285,10 +286,39 @@
+     // used to force a Yoga re-measure when a block image resolves its box height
+     var stateWrapper: StateWrapper? = null
+@@ -343,19 +358,31 @@ class EnrichedMarkdown
+     }
+ 
+     private fun scheduleRenderIfNeeded() {
+-      if (currentMarkdown.isNotEmpty()) scheduleRender()
++      scheduleRender()
+     }
+ 
+     private fun scheduleRender() {
++      if (disposed) return
++      val renderId = ++currentRenderId
++      if (renderInFlight) {
++        renderRequested = true
++        return
++      }
+       val style = markdownStyle ?: return
+-      val markdown = currentMarkdown.takeIf { it.isNotEmpty() } ?: return
++      val markdown = currentMarkdown
++      val flags = md4cFlags
+       val isStreaming = streamingAnimation
++      val generation = streamingGeneration
+       val tableMode = tableStreamingMode
+       val codeBlockMode = codeBlockStreamingMode
+-
+-      val renderId = ++currentRenderId
++      val linkPress = onLinkPressCallback
++      val linkLongPress = onLinkLongPressCallback
++      renderInFlight = true
++      renderRequested = false
+ 
+       executor.execute {
++        var renderedSegments: List<RenderedSegment> = emptyList()
++        var hasPendingCodeBlock = false
+         try {
+           val filtered =
+             if (isStreaming) {
+@@ -364,33 +391,39 @@ class EnrichedMarkdown
+               null
+             }
+           val renderableMarkdown = filtered?.markdown ?: markdown
+-          val hasPendingCodeBlock = filtered?.endsInsideOpenCodeFence ?: false
+-
+-          if (renderableMarkdown.isEmpty()) {
+-            postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
+-            return@execute
++          hasPendingCodeBlock = filtered?.endsInsideOpenCodeFence ?: false
++          val ast = if (renderableMarkdown.isEmpty()) null else parser.parseMarkdown(renderableMarkdown, flags)
++          if (ast != null) {
++            renderedSegments =
++              MarkdownSegmentRenderer.render(
++                splitASTIntoSegments(ast),
++                style,
++                context,
++                linkPress,
++                linkLongPress,
++              )
+           }
+-
+-          val ast =
+-            parser.parseMarkdown(renderableMarkdown, md4cFlags) ?: run {
+-              postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
+-              return@execute
+-            }
+-
+-          val segments = splitASTIntoSegments(ast)
+-          val renderedSegments =
+-            MarkdownSegmentRenderer.render(
+-              segments,
+-              style,
+-              context,
+-              onLinkPressCallback,
+-              onLinkLongPressCallback,
+-            )
+-
+-          postToMain(renderId) { applyRenderedSegments(renderedSegments, style, hasPendingCodeBlock) }
+         } catch (e: Exception) {
+           Log.e(TAG, "Render failed", e)
+-          postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
++        }
++
++        mainHandler.post {
++          renderInFlight = false
++          if (!disposed) {
++            // Streamdown keys this view by the raw-source generation, remounting
++            // on replacement/clear. Within that lifetime remend may rewrite the
++            // suffix, so repaired-text prefix matching would starve progress.
++            // This serial worker preserves result order; status changes also
++            // invalidate jobs even when the Markdown itself did not change.
++            val compatibleStream =
++              isStreaming && streamingAnimation &&
++                markdownStyle === style && md4cFlags == flags &&
++                tableStreamingMode == tableMode && codeBlockStreamingMode == codeBlockMode
++            if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {
++              applyRenderedSegments(renderedSegments, style, hasPendingCodeBlock)
++            }
++            if (renderRequested) scheduleRender()
++          }
          }
        }
      }
--    return super.onTouchEvent(ev)
-+    // CHERRY-STUDIO-APP-A: selection callbacks can clear TextView's layout while
-+    // Editor is positioning the dragged cursor. Only absorb that framework NPE.
-+    return try {
-+      super.onTouchEvent(ev)
-+    } catch (e: NullPointerException) {
-+      val top = e.stackTrace.firstOrNull()
-+      if (top == null || top.className != "android.widget.Editor" || top.methodName != "updateCursorPosition") {
-+        throw e
-+      }
-+      Log.w("EnrichedMarkdownTextInputView", "Framework cursor layout unavailable during touch", e)
-+      // Keep this touch consumed; do not retry a partially processed selection change.
-+      true
-+    }
-   }
- 
-   override fun performClick(): Boolean = super.performClick()
-+
-+  // Selection callbacks can invalidate Editor's cursor controller during a long press.
-+  // Extend https://github.com/software-mansion/enriched-markdown/pull/738 for CHERRY-STUDIO-APP-R.
-+  override fun performLongClick(): Boolean =
-+    try {
-+      super.performLongClick()
-+    } catch (e: NullPointerException) {
-+      val top = e.stackTrace.firstOrNull()
-+      if (top == null || top.className != "android.widget.Editor" ||
-+        (top.methodName != "performLongClick" && top.methodName != "selectCurrentWordAndStartDrag")
-+      ) {
-+        throw e
-+      }
-+      Log.w("EnrichedMarkdownTextInputView", "Framework cursor controller unavailable during long press", e)
-+      // Mark the long press handled so ACTION_UP does not dispatch an extra click.
-+      true
-+    }
- 
-   // In auto-grow mode (scrollEnabled=false) TextView's internal bringPointIntoView
-   // scrolls content before Fabric has resized the view, causing a visible flicker.
-diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
-index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..9d6f22f128ed6d3498445e9d633aefb16459b6fe 100644
---- a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
-+++ b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
-@@ -2,6 +2,7 @@ package com.swmansion.enriched.markdown.input.layout
- 
- import android.content.Context
- import android.os.Build
-+import android.text.SpannedString
- import android.text.StaticLayout
- import android.text.TextPaint
- import androidx.appcompat.widget.AppCompatEditText
-@@ -21,7 +22,7 @@ object InputMeasurementStore {
-   private data class MeasurementParams(
-     val cachedWidth: Float,
-     val cachedSize: Long,
--    val text: CharSequence?,
-+    val text: SpannedString?,
-     val paintParams: PaintParams,
-   )
- 
-@@ -35,10 +36,12 @@ object InputMeasurementStore {
-     val cachedWidth = data[id]?.cachedWidth ?: 0f
-     val cachedSize = data[id]?.cachedSize ?: 0L
- 
--    val size = measure(cachedWidth, text, paint)
-+    // Snapshot on the UI thread: Fabric must not measure an Editable while input mutates it.
-+    val textSnapshot = text?.let { SpannedString(it) }
-+    val size = measure(cachedWidth, textSnapshot, paint)
-     val paintParams = PaintParams(paint.typeface, paint.textSize)
- 
--    data[id] = MeasurementParams(cachedWidth, size, text, paintParams)
-+    data[id] = MeasurementParams(cachedWidth, size, textSnapshot, paintParams)
-     return size != cachedSize
-   }
- 
-@@ -85,8 +88,9 @@ object InputMeasurementStore {
+@@ -453,6 +486,16 @@ class EnrichedMarkdown
+           requestLayout()
+         }
        }
++      if (forceHeight) {
++        // requestLayout only updates Android's view tree. Explicitly invalidate
++        // Fabric/Yoga as well when a status-only change releases a hidden tail.
++        MeasurementStore.invalidate(id)
++        stateWrapper?.let { wrapper ->
++          val state = Arguments.createMap()
++          state.putInt("forceHeightRecalculationCounter", ++forceHeightRecalculationCounter)
++          wrapper.updateState(state)
++        }
++      }
+     }
  
-     val size = measure(width, value.text, paint)
--    data[id] = MeasurementParams(width, size, value.text, value.paintParams)
-+    // A newer UI snapshot or release must not be overwritten by this measurement.
-+    data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))
-     return size
+     private fun viewMatchesSegmentKind(
+@@ -497,7 +540,7 @@ class EnrichedMarkdown
+           val tableView = view as TableContainerView
+           val previousRowCount = tableView.rowCount
+           tableView.applyTableNode(segment.node)
+-          if (streamingAnimation && !isReducedMotionEnabled(context)) {
++          if (shouldAnimateStreaming && !isReducedMotionEnabled(context)) {
+             tableView.animateNewRows(previousRowCount, BLOCK_FADE_DURATION_MS)
+           }
+         }
+@@ -517,11 +560,16 @@ class EnrichedMarkdown
+       }
+     }
+ 
++    // Keep streaming parsing/finalization semantics when large content stops
++    // animating, just as Desktop separates isStreaming from per-word animation.
++    private val shouldAnimateStreaming: Boolean
++      get() = streamingAnimation && currentMarkdown.length <= MAX_ANIMATED_CONTENT_LENGTH
++
+     private fun animateNewView(
+       view: View,
+       segment: RenderedSegment,
+     ) {
+-      if (!streamingAnimation) return
++      if (!shouldAnimateStreaming) return
+       when (segment) {
+         is RenderedSegment.Text -> animateTextViewTail(view as EnrichedMarkdownInternalText, 0)
+         is RenderedSegment.Table, is RenderedSegment.Math, is RenderedSegment.CodeBlock -> animateBlockViewFadeIn(view)
+@@ -532,14 +580,14 @@ class EnrichedMarkdown
+       view: EnrichedMarkdownInternalText,
+       tailStart: Int,
+     ) {
+-      if (!streamingAnimation) return
++      if (!shouldAnimateStreaming) return
+       val textLength = view.text?.length ?: 0
+       if (textLength <= tailStart) return
+       TailFadeInAnimator(view).animate(tailStart, textLength)
+     }
+ 
+     private fun animateBlockViewFadeIn(view: View) {
+-      if (!streamingAnimation) return
++      if (!shouldAnimateStreaming) return
+       if (isReducedMotionEnabled(context)) return
+       view.alpha = 0f
+       view
+@@ -635,15 +683,6 @@ class EnrichedMarkdown
+       }
+     }
+ 
+-    private fun postToMain(
+-      renderId: Long,
+-      action: () -> Unit,
+-    ) {
+-      mainHandler.post {
+-        if (renderId == currentRenderId) action()
+-      }
+-    }
+-
+     override fun onLayout(
+       changed: Boolean,
+       l: Int,
+@@ -729,11 +768,14 @@ class EnrichedMarkdown
+     }
+ 
+     fun cleanup() {
++      disposed = true
++      renderRequested = false
+       executor.shutdownNow()
+     }
+ 
+     companion object {
+       private const val TAG = "EnrichedMarkdown"
+       private const val BLOCK_FADE_DURATION_MS = 200L
++      private const val MAX_ANIMATED_CONTENT_LENGTH = 64 * 1024
+     }
    }
- 
-   private fun initialMeasure(

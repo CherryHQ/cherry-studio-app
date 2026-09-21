@@ -122,7 +122,7 @@ const backgroundReplyTurn = {
   update: jest.fn(),
 };
 const backgroundReply = {
-  acquirePreparation: jest.fn((_onInterrupt: (reason: Error) => void) => ({
+  acquirePreparation: jest.fn((_sessionId: string, _onInterrupt: (reason: Error) => void) => ({
     release: jest.fn(),
   })),
   clearSession: jest.fn(),
@@ -726,7 +726,11 @@ describe('MobileAgentHost', () => {
           ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
           : host.submitMessage(input);
       const lease = backgroundReply.acquirePreparation.mock.results[0]!.value;
-      expect(backgroundReply.acquirePreparation).toHaveBeenCalledTimes(1);
+      // The Session's surface can only be opened before the turn exists.
+      expect(backgroundReply.acquirePreparation).toHaveBeenCalledWith(
+        sessionId,
+        expect.any(Function),
+      );
       expect(lease.release).not.toHaveBeenCalled();
       expect(backgroundReply.startTurn).not.toHaveBeenCalled();
 
@@ -767,7 +771,7 @@ describe('MobileAgentHost', () => {
       const rejected = expect(submitting).rejects.toMatchObject({
         view: { code: 'INTERRUPTED', retryable: true },
       });
-      backgroundReply.acquirePreparation.mock.calls[0]![0](
+      backgroundReply.acquirePreparation.mock.calls[0]![1](
         new KeepAliveInterruptionError('service-stopped'),
       );
       prepared.resolve();

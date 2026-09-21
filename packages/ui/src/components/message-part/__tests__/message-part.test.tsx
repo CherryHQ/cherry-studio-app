@@ -187,6 +187,31 @@ describe('MessagePart', () => {
     expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
   });
 
+  it('reopens streaming reasoning before Markdown has reported any layout', () => {
+    const content = (text: string) => (
+      <MessagePart.Reasoning state="running" statusText="Thinking" testID="thinking">
+        {text ? <Text>{text}</Text> : null}
+      </MessagePart.Reasoning>
+    );
+    act(() => {
+      renderer = create(content(''));
+    });
+    const toggle = () =>
+      act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
+    toggle();
+    toggle();
+    toggle();
+    act(() => renderer!.update(content('Late reasoning result')));
+
+    const detail = findRenderedByTestId(renderer!, 'thinking-detail')[0];
+    expect(detail).toBeDefined();
+    // No height-zero wrapper or absolute child can keep a delayed native result hidden.
+    expect(detail.props.style).toBeUndefined();
+    expect(renderer!.root.findByProps({ children: 'Late reasoning result' })).toBeDefined();
+    toggle();
+    expect(renderer!.root.findAllByProps({ children: 'Late reasoning result' })).toHaveLength(0);
+  });
+
   it('keeps the total process duration folded until the reader expands it', () => {
     const onDisclosureToggle = jest.fn();
     act(() => {

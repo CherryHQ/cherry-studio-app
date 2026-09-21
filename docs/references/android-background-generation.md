@@ -42,7 +42,8 @@ post-presentation event so a focused task screen can dismiss asynchronously deli
   and failure use the state at delivery: if the user has since left, they still receive a system
   notification rather than losing both forms of attention.
 - A focused foreground chat or painting surface dismisses that task's presented notifications,
-  including deliveries racing foreground entry. Chat behind the drawer, unloaded surfaces, other
+  including deliveries racing foreground entry. The same focus also reaches the shared manager,
+  which retires the task's settled surface on either platform. Chat behind the drawer, unloaded surfaces, other
   tasks, and unrelated notifications remain unacknowledged. In-flight reads are invalidated on blur.
   The screen subscribes before reading presented notifications. Its second path listens to
   `addNotificationPresentedListener`, emitted after Android's `notify()` call, including background
@@ -78,22 +79,21 @@ post-presentation event so a focused task screen can dismiss asynchronously deli
   Task and draft route identities follow [Navigation And Insets](./navigation-and-insets.md).
   An unsubmitted edit does not acknowledge the source painting's notifications.
   No backend navigation callback or custom pending-link registry is needed.
-- iOS keeps its existing audio/Live Activity implementation. Shared session completion and job
-  handoff changes apply to both platforms. The background-actions native module is
+- iOS keeps its audio keep-alive and Live Activity implementation; its surface lifecycle lives in
+  [Background Activity Presentation](./background-activity-presentation.md). Shared session
+  completion and job handoff changes apply to both platforms. The background-actions native module is
   excluded from iOS autolinking. Expo Notifications is installed through its standard Expo plugin;
   this integration only sends Android local notifications and does not register for push tokens.
 
 ## Shared iOS And Android Lifecycle
 
 Business services use the same session and execution-lease contracts on both platforms. Each
-[presenter](../../src/backend/services/backgroundActivity/presenter.ts) declares two requirements;
-the shared manager orders updates, completion, and lease release without platform-specific
-decisions in those paths.
-
-| Presenter requirement | iOS Live Activity | Android notification |
-| --- | --- | --- |
-| `canStartInBackground` | `false`: defer creation until foreground | `true`: represent a task already admitted by the execution runtime |
-| `shouldHoldLeaseUntilDelivery` | `false`: preserve immediate audio-lease release | `true`: retain an existing session lease until notification submission settles |
+[presenter](../../src/backend/services/backgroundActivity/presenter.ts) declares its presentation
+window and its delivery protection; the shared manager orders creation, updates, completion, and
+lease release without platform-specific decisions in those paths. Android declares
+`presentWhile: 'always'` because a notification represents a task the execution runtime already
+admitted. See [Background Activity Presentation](./background-activity-presentation.md) for the
+window rules, settled-surface retirement, and the iOS Live Activity behavior they produce.
 
 Creating an Android surface does not authorize starting a foreground service from the background;
 the Android execution runtime still owns that restriction. A session never acquires an extra lease

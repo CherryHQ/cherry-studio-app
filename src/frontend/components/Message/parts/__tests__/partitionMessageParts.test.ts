@@ -43,7 +43,7 @@ describe('partitionMessageParts', () => {
     expect(result.body.map(({ index }) => index)).toEqual([0]);
   });
 
-  test('lifts every file out of the body, in the order it was produced', () => {
+  test('collects non-image files after the body, in the order they were produced', () => {
     const { body, files, process } = partitionMessageParts([
       text('before'),
       file('a'),
@@ -56,6 +56,30 @@ describe('partitionMessageParts', () => {
     ).toEqual(['after']);
     expect(process.map((item) => (item.part as { text: string }).text)).toEqual(['before']);
     expect(files.map((part) => part.filename)).toEqual(['a.md', 'b.md']);
+  });
+
+  test('keeps tool images before their explanation and later images after it', () => {
+    const image = { ...file('image'), mediaType: 'image/png' };
+    const laterImage = { ...file('later'), mediaType: 'image/webp' };
+    const parts = [tool('generate_image'), image, text('explanation'), laterImage, file('notes')];
+    const { body, files, process } = partitionMessageParts(parts);
+
+    expect(body.map(({ index }) => index)).toEqual([1, 2, 3]);
+    expect(body.map(({ part }) => part)).toEqual([image, parts[2], laterImage]);
+    expect(process.map(({ index }) => index)).toEqual([0]);
+    expect(files).toEqual([parts[4]]);
+  });
+
+  test('keeps an image visible even when no final text follows the tool result', () => {
+    const image: CherryMessagePart = {
+      mediaType: 'image/png',
+      type: 'file',
+      url: 'https://peer.example/image.png',
+    };
+    const { body, files } = partitionMessageParts([tool('generate_image'), image]);
+
+    expect(body).toEqual([{ index: 1, kind: 'part', part: image }]);
+    expect(files).toEqual([]);
   });
 
   test('splits on part type alone, so a peer transcript with no Cherry metadata splits the same', () => {

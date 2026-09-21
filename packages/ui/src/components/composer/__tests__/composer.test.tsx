@@ -14,6 +14,14 @@ jest.mock('heroui-native/utils', () => {
 });
 
 jest.mock('uniwind', () => ({
+  useCSSVariable: (names: string[]) => {
+    const variables: Record<string, string> = {
+      '--color-muted-foreground': '#666666',
+      '--color-secondary': 'rgba(0, 0, 0, 0.05)',
+    };
+
+    return names.map((name) => variables[name]);
+  },
   withUniwind: (component: unknown) => component,
   useResolveClassNames: jest.fn((className: string) =>
     className.includes('text-foreground')
