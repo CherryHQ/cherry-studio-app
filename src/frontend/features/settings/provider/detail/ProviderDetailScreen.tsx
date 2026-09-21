@@ -335,13 +335,13 @@ function ProviderDetailSettings({
                 <ProviderForm.Name />
                 {isCustomProvider ? (
                   <>
-                    {showApiKeys ? <ProviderForm.ApiKey /> : null}
+                    {showApiKeys ? <ProviderForm.ApiKeys /> : null}
                     <ProviderForm.Endpoints />
                   </>
                 ) : (
                   <>
                     <ProviderForm.BaseUrl />
-                    {showApiKeys ? <ProviderForm.ApiKey /> : null}
+                    {showApiKeys ? <ProviderForm.ApiKeys /> : null}
                   </>
                 )}
               </ProviderForm>

@@ -75,10 +75,22 @@ OpenVINO Model Server), including copies identified by their preset provider ID 
 ## Provider Form
 
 `ProviderForm` is a compound component over one draft: `ProviderForm.Avatar`, `.Name`, `.BaseUrl`,
-`.Endpoint`, `.Endpoints`, and `.ApiKey`. `useProviderFormDraft` owns field state; `useProviderConfigurationForm` adds loading,
+`.Endpoint`, `.Endpoints`, and `.ApiKeys`. `useProviderFormDraft` owns field state; `useProviderConfigurationForm` adds loading,
 validation, endpoint impact confirmation, and saving for existing providers. Creation keeps its
 own initial persistence step. Each screen drives its actions from the same draft that its fields
 consume and composes the slots it needs.
+
+`ProviderForm.ApiKeys` edits a dynamic list of credential entries. Each row keeps its ID, key,
+optional label, and enabled state together; removing another row never reassigns that identity.
+The list supports adding, editing, copying, and deleting individual keys and shows the enabled
+count. Blank, duplicate, or multi-key input blocks saving with row-level feedback. Keys and labels
+are trimmed on save without dropping entries or changing their order. All edits, including enabling
+keys during setup, remain in the page draft until the explicit save succeeds. Editing unrelated
+fields does not replace keys updated by a background synchronization.
+
+The interaction follows desktop's `ProviderApiKeyListDrawer` entry model, adapted to inline mobile
+fields and the page's existing save/discard contract. It uses existing CherryUI controls and needs
+no database or device synchronization protocol change.
 
 Endpoint fields share protocol labels, full request URL previews with explicit copying, and
 correction hints for pasted request paths. Base URLs accept the desktop-compatible trailing `#` to

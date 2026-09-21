@@ -2,7 +2,7 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
 import { useProviderConfigurationForm } from '../useProviderConfigurationForm';
 
@@ -29,6 +29,7 @@ const followingModel: Model = {
   supportsStreaming: true,
 };
 let mockModels: Model[] = [];
+let mockApiKeys: ApiKeyEntry[] = [];
 const mockSave = jest.fn();
 const mockReplaceApiKeys = jest.fn();
 const mockConfirm = jest.fn();
@@ -51,7 +52,7 @@ jest.mock('@/frontend/data', () => ({
 jest.mock('../useProviderApiServiceQueries', () => ({
   useProviderApiServiceQueries: () => ({
     provider: mockProvider,
-    apiKeys: [{ id: 'key', key: 'sk-test', isEnabled: true }],
+    apiKeys: mockApiKeys,
     authConfig: null,
     providerQuery: { isPending: false, isError: false },
     apiKeysQuery: { isPending: false, isError: false },
@@ -80,6 +81,7 @@ describe('shared provider configuration saves', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockModels = [followingModel];
+    mockApiKeys = [{ id: 'key', key: 'sk-test', isEnabled: true }];
     mockSave.mockResolvedValue(mockProvider);
     act(() => {
       renderer = create(<Probe />);
@@ -138,13 +140,13 @@ describe('shared provider configuration saves', () => {
     mockSave.mockRejectedValue(new Error('write failed'));
     act(() => {
       configuration.form.actions.setName('Unsaved');
-      configuration.form.actions.setApiKey('sk-new');
+      configuration.form.actions.updateApiKey('key', { key: 'sk-new' });
     });
     await act(async () => {
       configuration.requestSave(onSaved);
     });
     expect(configuration.form.state.name).toBe('Unsaved');
-    expect(configuration.form.state.apiKey).toBe('sk-new');
+    expect(configuration.form.state.apiKeys[0].key).toBe('sk-new');
     expect(mockReplaceApiKeys).not.toHaveBeenCalled();
     expect(configuration.form.meta.isDirty).toBe(true);
     expect(configuration.isSaving).toBe(false);
@@ -158,7 +160,7 @@ describe('shared provider configuration saves', () => {
         ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
         'https://new.example.com/v1',
       );
-      configuration.form.actions.setApiKey('sk-new');
+      configuration.form.actions.updateApiKey('key', { key: 'sk-new' });
     });
 
     await act(async () => configuration.requestSave());
@@ -175,6 +177,59 @@ describe('shared provider configuration saves', () => {
       }),
     );
     expect(mockReplaceApiKeys).not.toHaveBeenCalled();
+    expect(configuration.form.meta.isDirty).toBe(false);
+  });
+
+  it('saves edited key metadata together and preserves the retained desktop identity', async () => {
+    mockApiKeys = [
+      { id: 'a', key: 'sk-a', label: 'Primary', isEnabled: true },
+      { id: 'b', key: 'sk-b', label: 'Backup', isEnabled: false },
+    ];
+    act(() => renderer.update(<Probe />));
+    act(() => configuration.form.actions.reset(configuration.createInitialValues()));
+    act(() => {
+      configuration.form.actions.removeApiKey('a');
+      configuration.form.actions.updateApiKey('b', { label: ' Work ', isEnabled: true });
+    });
+    await act(async () => configuration.requestSave());
+    expect(mockSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeys: [{ id: 'b', key: 'sk-b', label: 'Work', isEnabled: true }],
+      }),
+    );
+    expect(configuration.form.state.apiKeys).toEqual([
+      { id: 'b', key: 'sk-b', label: 'Work', isEnabled: true },
+    ]);
+    expect(configuration.form.meta.isDirty).toBe(false);
+  });
+
+  it('keeps enabling disabled keys in the draft until the page is saved', async () => {
+    mockApiKeys = [{ id: 'a', key: 'sk-a', label: 'Work', isEnabled: false }];
+    act(() => renderer.update(<Probe />));
+    act(() => configuration.form.actions.reset(configuration.createInitialValues()));
+    expect(configuration.canCompleteSetup).toBe(false);
+
+    act(() => configuration.enableKeys());
+    expect(mockSave).not.toHaveBeenCalled();
+    expect(mockReplaceApiKeys).not.toHaveBeenCalled();
+    expect(configuration.canCompleteSetup).toBe(true);
+    expect(configuration.form.meta.isDirty).toBe(true);
+    await act(async () => configuration.requestSave());
+    expect(mockSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeys: [{ id: 'a', key: 'sk-a', label: 'Work', isEnabled: true }],
+      }),
+    );
+  });
+
+  it('does not overwrite synchronized keys when only the provider name was edited', async () => {
+    act(() => configuration.form.actions.setName('Renamed'));
+    mockApiKeys = [{ id: 'synced', key: 'sk-synced', isEnabled: true, label: 'PC' }];
+    act(() => renderer.update(<Probe />));
+    await act(async () => configuration.requestSave());
+
+    expect(mockSave.mock.calls[0][0]).not.toHaveProperty('apiKeys');
+    expect(configuration.form.state.apiKeys).toEqual(mockApiKeys);
     expect(configuration.form.meta.isDirty).toBe(false);
   });
 });

@@ -9,7 +9,7 @@ import { useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
-import { buildApiKeyEntriesFromInput } from '../../apiService';
+import { normalizeApiKeyEntries } from '../../apiService';
 import {
   buildCustomProviderCreationPayload,
   findInvalidCustomProviderEndpointUrl,
@@ -51,7 +51,7 @@ export function useNewProviderForm() {
         endpointUrls: values.endpointUrls,
         preferredChatEndpoint: values.defaultChatEndpoint,
       });
-      const apiKeys = buildApiKeyEntriesFromInput(values.apiKey, []);
+      const apiKeys = normalizeApiKeyEntries(values.apiKeys);
 
       await createProvider({
         body: {
@@ -76,7 +76,7 @@ export function useNewProviderForm() {
     meta.canSubmit &&
     hasConfiguredCustomProviderTextEndpoint(state.endpointUrls) &&
     !findInvalidCustomProviderEndpointUrl(state.endpointUrls) &&
-    state.apiKey.trim().length > 0;
+    state.apiKeys.some((entry) => entry.isEnabled && entry.key.trim());
   const handleSave = useCallback(async () => {
     if (!canSubmit) {
       return undefined;
@@ -159,13 +159,13 @@ export function ProviderNewFormContent({
         <ProviderForm.Name />
         {endpointMode === 'custom-text' ? (
           <>
-            {showApiKey ? <ProviderForm.ApiKey autoFocus={issue === 'missing-api-key'} /> : null}
+            {showApiKey ? <ProviderForm.ApiKeys /> : null}
             <ProviderForm.Endpoints />
           </>
         ) : (
           <>
             <ProviderForm.BaseUrl />
-            {showApiKey ? <ProviderForm.ApiKey autoFocus={issue === 'missing-api-key'} /> : null}
+            {showApiKey ? <ProviderForm.ApiKeys /> : null}
           </>
         )}
       </ProviderForm>
