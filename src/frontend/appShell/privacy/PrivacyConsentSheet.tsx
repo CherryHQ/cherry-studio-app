@@ -29,8 +29,8 @@ export function PrivacyConsentSheet({
   onDecline,
   open,
 }: PrivacyConsentSheetProps) {
-  const { t } = useTranslation();
-  const policyUrl = getPrivacyPolicyUrl();
+  const { i18n, t } = useTranslation();
+  const policyUrl = getPrivacyPolicyUrl(i18n.language);
 
   return (
     <BottomSheet
@@ -79,18 +79,16 @@ export function PrivacyConsentSheet({
         />
         <View className="gap-3">
           <Text className="text-foreground-tertiary text-xs">{t('privacyConsent.optOut')}</Text>
-          {policyUrl ? (
-            <View className="items-start">
-              <Button
-                accessibilityRole="link"
-                onPress={() => void openExternalUrl(policyUrl)}
-                size="inline"
-                variant="link"
-              >
-                {t('privacyConsent.readPolicy')}
-              </Button>
-            </View>
-          ) : null}
+          <View className="items-start">
+            <Button
+              accessibilityRole="link"
+              onPress={() => void openExternalUrl(policyUrl)}
+              size="inline"
+              variant="link"
+            >
+              {t('privacyConsent.readPolicy')}
+            </Button>
+          </View>
         </View>
       </ScrollView>
     </BottomSheet>

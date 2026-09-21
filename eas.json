@@ -11,8 +11,7 @@
       "node": "24.19.0",
       "pnpm": "12.2.1",
       "env": {
-        "PROFILE": "development",
-        "PRIVACY_POLICY_URL": "https://cherryai.com.cn/docs/zh-cn/about/privacypolicy/"
+        "PROFILE": "development"
       },
       "android": {
         "buildType": "apk",
@@ -36,8 +35,7 @@
       "node": "24.19.0",
       "pnpm": "12.2.1",
       "env": {
-        "PROFILE": "preview",
-        "PRIVACY_POLICY_URL": "https://cherryai.com.cn/docs/zh-cn/about/privacypolicy/"
+        "PROFILE": "preview"
       },
       "android": {
         "buildType": "apk",
@@ -52,8 +50,7 @@
       "node": "24.19.0",
       "pnpm": "12.2.1",
       "env": {
-        "PROFILE": "production",
-        "PRIVACY_POLICY_URL": "https://cherryai.com.cn/docs/zh-cn/about/privacypolicy/"
+        "PROFILE": "production"
       },
       "android": {
         "buildType": "apk",

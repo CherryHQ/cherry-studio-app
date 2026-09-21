@@ -15,12 +15,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const groupIdentifier = `group.${bundleIdentifier}`;
   const widgetBundleIdentifier = `${bundleIdentifier}.ExpoWidgetsTarget`;
   const eas = config.extra?.eas;
-  const privacyPolicyUrl = process.env.PRIVACY_POLICY_URL?.trim();
-  // A release must not ship a consent sheet whose policy link is missing or a
-  // leftover placeholder, and that is invisible at runtime — fail the build instead.
-  if (profile === 'production' && !privacyPolicyUrl) {
-    throw new Error('PRIVACY_POLICY_URL is required for production builds.');
-  }
   const reporting = {
     environment: profile,
     services: Object.fromEntries(
@@ -84,7 +78,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.extra,
       sentryEnvironment: profile,
       reporting,
-      privacyPolicyUrl,
       eas: {
         ...eas,
         build: {
