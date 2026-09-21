@@ -42,10 +42,6 @@ interface ApplyMovesOptions {
   scope?: SQL;
 }
 
-interface ResetOrderOptions {
-  pkColumn: AnyColumn;
-}
-
 interface ComputeOptions {
   excludePkValue?: string;
   pkColumn: AnyColumn;
@@ -53,14 +49,6 @@ interface ComputeOptions {
 }
 
 const logger = loggerService.withContext('orderKey');
-
-export function generateOrderKeySequence(count: number): string[] {
-  if (count <= 0) {
-    return [];
-  }
-
-  return generateNKeysBetween(null, null, count);
-}
 
 export function generateOrderKeyBetween(before: string | null, after: string | null): string {
   return generateKeyBetween(before, after);
@@ -177,27 +165,6 @@ export async function applyMoves(
   }
 }
 
-export async function resetOrder<T extends Record<string, unknown>>(
-  tx: TxLike,
-  table: TableWithOrderKey,
-  orderedRows: T[],
-  options: ResetOrderOptions,
-): Promise<void> {
-  if (orderedRows.length === 0) {
-    return;
-  }
-
-  const orderKeys = generateOrderKeySequence(orderedRows.length);
-  const pkColumn = options.pkColumn;
-
-  for (let i = 0; i < orderedRows.length; i++) {
-    const row = orderedRows[i] as Record<string, unknown>;
-    const pkValue = resolvePkValue(row, pkColumn);
-    // react-doctor-disable-next-line async-await-in-loop -- 写事务内本质串行，按序重置 orderKey，并行化无收益
-    await tx.update(table).set({ orderKey: orderKeys[i] }).where(eq(pkColumn, pkValue));
-  }
-}
-
 export async function computeNewOrderKey(
   tx: TxLike,
   table: TableWithOrderKey,
@@ -264,15 +231,6 @@ function dedupMoves(moves: { anchor: OrderRequest; id: string }[]): {
     deduped: [...byId.values()],
     droppedCount: moves.length - byId.size,
   };
-}
-
-function resolvePkValue(row: Record<string, unknown>, pkColumn: AnyColumn): string {
-  const name = pkColumn.name;
-  const value = row[name];
-  if (value === undefined || value === null || value === '') {
-    throw new Error(`resolvePkValue: row is missing primary-key field "${name}"`);
-  }
-  return String(value);
 }
 
 async function selectBoundaryKey(

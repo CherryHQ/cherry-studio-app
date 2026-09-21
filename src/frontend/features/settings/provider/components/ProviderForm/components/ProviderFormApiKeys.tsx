@@ -72,7 +72,6 @@ export function ProviderFormApiKeys() {
           accessibilityLabel={t('settings.provider.apiService.keys.add')}
           disabled={meta.isSubmitting}
           onPress={editor.startAdd}
-          showChevron={false}
           testID="provider-api-key-add"
         >
           <View className="flex-row items-center gap-3">

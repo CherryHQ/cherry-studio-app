@@ -168,14 +168,6 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('write_file', 'auto'),
 ];
 
-const DESCRIPTORS_BY_ID = new Map<string, BuiltInToolDescriptor>(
-  BUILT_IN_TOOL_DESCRIPTORS.map((descriptor) => [descriptor.capabilityId, descriptor]),
-);
-
-export function getBuiltInToolDescriptor(capabilityId: string): BuiltInToolDescriptor | undefined {
-  return DESCRIPTORS_BY_ID.get(capabilityId);
-}
-
 export type AgentCapabilityAvailability = {
   /** Union of the member tools' OS permission scopes; empty when none apply. */
   permissionScopes: readonly DevicePermissionScope[];
