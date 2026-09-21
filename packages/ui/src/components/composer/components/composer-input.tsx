@@ -59,14 +59,15 @@ export function ComposerInput({
   // Submit-on-return has to work with, not against, the uncontrolled buffer:
   // the return keystroke's native newline cannot be vetoed from JS — the key
   // press event only announces it. Send on the announcement, then treat the
-  // one change that follows as that keystroke's debris and refuse to adopt it;
-  // the sync effect below puts the caller's value (cleared by the send) back
-  // into the field, so the newline never reaches the draft. The capture is
-  // always answered by exactly one change: every path that emits `Enter` —
-  // the iOS text-change delegate and the Android input-connection wrapper —
-  // applies its newline right after, and the list-key interceptors only
-  // consume Tab and Backspace.
-  const submitCaptureRef = useRef(false);
+  // change that matches the captured draft plus one newline as that
+  // keystroke's debris and refuse to adopt it; the sync effect below puts the
+  // caller's value (cleared by the send) back into the field, so the newline
+  // never reaches the draft. The capture is keyed to the submit edit's text
+  // because the newline change does not always follow the announcement: on
+  // Android an IME batch edit applies the text (emitting the Markdown change)
+  // before `endBatchEdit` announces the pending key, so the first shape would
+  // orphan a blind capture and swallow the next real edit.
+  const submitCaptureRef = useRef<{ draft: string } | null>(null);
   // Mirrored so the capture branch can push the freshest caller value without
   // the change handler's identity churning on every keystroke.
   const valueRef = useRef(value);
@@ -74,13 +75,18 @@ export function ComposerInput({
 
   const handleChangeMarkdown = useCallback(
     (markdown: string) => {
-      if (submitCaptureRef.current) {
-        submitCaptureRef.current = false;
-        // Adopt nothing from the captured edit; put the caller's value back so
-        // the field cannot end up showing a newline the draft does not have.
-        emitted.current = valueRef.current;
-        inputRef.current?.setValue(valueRef.current);
-        return;
+      const capture = submitCaptureRef.current;
+      if (capture) {
+        submitCaptureRef.current = null;
+        if (markdown === `${capture.draft}\n`) {
+          // The captured keystroke's own newline reached JS: adopt nothing
+          // from it and put the caller's value back so the field cannot end
+          // up showing a newline the draft does not have.
+          emitted.current = valueRef.current;
+          inputRef.current?.setValue(valueRef.current);
+          return;
+        }
+        // Anything else is a real edit that raced the announcement — keep it.
       }
       emitted.current = markdown;
       changeText(markdown);
@@ -99,10 +105,18 @@ export function ComposerInput({
       if (streaming || !canSend) {
         return;
       }
-      submitCaptureRef.current = true;
+      // A change-first delivery has already put the keystroke's newline into
+      // the draft: record the capture and the outgoing text without it.
+      const draft = valueRef.current.replace(/\n$/, '');
+      if (draft !== valueRef.current) {
+        emitted.current = draft;
+        changeText(draft);
+        console.error('DBG-CHANGED', draft);
+      }
+      submitCaptureRef.current = { draft };
       send();
     },
-    [canSend, send, streaming, submitBehavior],
+    [canSend, changeText, send, streaming, submitBehavior],
   );
 
   // Pushes a caller-side change — send clearing the draft, a failed send

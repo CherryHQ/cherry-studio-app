@@ -327,6 +327,54 @@ describe('Composer', () => {
     expect(inputRef.current?.setValue).toHaveBeenCalledWith('Hello');
   });
 
+  it('keeps a change-before-Enter delivery from orphaning the capture', () => {
+    const inputRef = createRef<ComposerInputHandle>();
+    const onChangeText = jest.fn();
+    const onSend = jest.fn();
+    const children = <Composer.Input ref={inputRef} testID="composer-input" />;
+    const tree = render({
+      children,
+      onChangeText,
+      onSend,
+      submitBehavior: 'submit',
+      value: 'Hello',
+    });
+    const input = tree.root.find((node) => typeof node.props.onKeyPress === 'function');
+
+    // Android batch-edit ordering: the IME applies the newline (emitting the
+    // Markdown change) before endBatchEdit announces the pending Enter key.
+    act(() => {
+      input.props.onChangeMarkdown('Hello\n');
+    });
+    act(() => {
+      tree.update(
+        <Composer
+          onChangeText={onChangeText}
+          onSend={onSend}
+          submitBehavior="submit"
+          value={'Hello\n'}
+        >
+          {children}
+        </Composer>,
+      );
+    });
+    act(() => {
+      input.props.onKeyPress({ nativeEvent: { key: 'Enter' } });
+    });
+
+    // The announcement finds the newline already in the draft: the outgoing
+    // text drops it, and the capture expects a debris change that never comes.
+    expect(onChangeText).toHaveBeenLastCalledWith('Hello');
+    expect(onSend).toHaveBeenCalledTimes(1);
+
+    // The first real edit after the send is kept, not refused as debris.
+    act(() => {
+      input.props.onChangeMarkdown('Hello there');
+    });
+    expect(onChangeText).toHaveBeenLastCalledWith('Hello there');
+    expect(inputRef.current?.setValue).not.toHaveBeenCalled();
+  });
+
   it('lets return insert a newline by default', () => {
     const onChangeText = jest.fn();
     const onSend = jest.fn();

@@ -34,6 +34,8 @@ type ComposerActionsContextValue = {
   clearAttachments: () => void;
   removeAttachment: (attachmentId: string) => void;
   setAttachments: (attachments: ComposerAttachmentDraft[]) => void;
+  /** The freshest adopted draft, without waiting for a React commit. */
+  getDraft: () => string;
   /**
    * Replaces the whole draft. Only for the cases that own it wholesale — send
    * clearing it, a failed send restoring it with a functional update to preserve newer text. Anything that *adds* to what the
@@ -91,7 +93,17 @@ export function ComposerProvider({
   initialDraft = '',
 }: ComposerProviderProps) {
   const inputRef = useRef<ComposerInputHandle | null>(null);
-  const [draft, setDraft] = useState(initialDraft);
+  const [draft, setDraftState] = useState(initialDraft);
+  // Synchronous mirror of the draft. A keystroke and the Enter that follows it
+  // can arrive in one native event batch, so the send path must read the
+  // freshest adopted text rather than the last committed render.
+  const draftRef = useRef(initialDraft);
+  const setDraft = useCallback<ComposerActionsContextValue['setDraft']>((update) => {
+    const next = typeof update === 'function' ? update(draftRef.current) : update;
+    draftRef.current = next;
+    setDraftState(next);
+  }, []);
+  const getDraft = useCallback(() => draftRef.current, []);
   const presentation = useComposerPresentation(inputRef);
   const [localAttachments, setLocalAttachments] = useState<ComposerAttachmentDraft[]>(() => [
     ...initialAttachments,
@@ -121,11 +133,12 @@ export function ComposerProvider({
     () => ({
       addAttachments,
       clearAttachments,
+      getDraft,
       removeAttachment,
       setAttachments,
       setDraft,
     }),
-    [addAttachments, clearAttachments, removeAttachment, setAttachments],
+    [addAttachments, clearAttachments, getDraft, removeAttachment, setAttachments],
   );
 
   const metaValue = useMemo(() => ({ inputRef }), []);

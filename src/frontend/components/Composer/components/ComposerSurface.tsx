@@ -69,7 +69,7 @@ export function ComposerSurface({
   });
   const [enterSends] = usePreference('chat.input.enter_sends');
   const { attachments, draft } = useComposerState();
-  const { addAttachments, clearAttachments, setDraft } = useComposerActions();
+  const { addAttachments, clearAttachments, getDraft, setDraft } = useComposerActions();
   const { dismissInput } = useComposerPresentationActions();
   const activeSendAttemptIdRef = useRef<number | null>(null);
   const nextSendAttemptIdRef = useRef(0);
@@ -92,7 +92,9 @@ export function ComposerSurface({
     const attemptId = ++nextSendAttemptIdRef.current;
     activeSendAttemptIdRef.current = attemptId;
 
-    const draftSnapshot = draft;
+    // Read through the mirror: the keystroke that preceded Enter can arrive in
+    // the same native batch, before this callback's closure could re-render.
+    const draftSnapshot = getDraft();
 
     setDraft('');
     clearAttachments();
@@ -118,6 +120,7 @@ export function ComposerSurface({
     dismissInput,
     dismissKeyboardOnSend,
     draft,
+    getDraft,
     reportSendError,
     labels?.sendFailed,
     onSend,

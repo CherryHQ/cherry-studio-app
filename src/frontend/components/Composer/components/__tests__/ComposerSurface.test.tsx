@@ -115,6 +115,28 @@ describe('ComposerSurface', () => {
     });
   });
 
+  it('sends the freshest draft when a keystroke and the send land in one batch', async () => {
+    const onSend = jest.fn(async () => undefined);
+    render(
+      <ComposerSurface onSend={onSend} onStop={jest.fn()} streaming={false}>
+        <StateProbe />
+      </ComposerSurface>,
+      'hello',
+    );
+
+    // One native event batch: the final keystroke and the send fire before any
+    // React commit could refresh a render-scoped snapshot, so the send must
+    // read the synchronously mirrored draft.
+    let send: Promise<void> | undefined;
+    act(() => {
+      mockComposerActions?.setDraft('hello world');
+      send = Promise.resolve(mockComposerProps?.onSend());
+    });
+
+    await act(async () => send);
+    expect(onSend).toHaveBeenCalledWith({ attachments: [], text: 'hello world' });
+  });
+
   it('allows another send after the current attempt settles', async () => {
     const onSend = jest.fn(async () => undefined);
     render(
