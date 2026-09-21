@@ -104,7 +104,9 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
 
   return (
     <ComposerSessionProvider key={composerSession.key}>
-      <ComposerDropArea>
+      {/* A drop without a composer could import files with nothing to attach
+          them to, so the area refuses sessions in preview and error states. */}
+      <ComposerDropArea enabled={hasComposer}>
         {!isPreview &&
         sessionId &&
         session.data &&

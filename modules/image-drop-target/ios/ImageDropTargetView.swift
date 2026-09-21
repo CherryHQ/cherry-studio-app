@@ -14,11 +14,31 @@ import UIKit
  * representation. In-place loading keeps the original bytes — HEIC stays HEIC,
  * filenames and EXIF survive — so the file JS receives matches what the photo
  * library picker would hand over, without decoding the bitmap in between.
+ * Formats the send pipeline cannot consume (HEIC/HEIF/AVIF stills) are
+ * re-encoded to JPEG during staging, so an imported drop never fails at send
+ * time.
  *
  * No photo-library permission is involved: the data is delivered by the system
  * as part of the user's explicit drag, never through `PHAsset` APIs.
  */
 public final class ImageDropTargetView: ExpoView {
+  /// Mirrors the shared per-message image ceiling (`AI_IMAGE_INPUT_MAX_COUNT`),
+  /// enforced before any provider I/O so an oversized drop does not start work
+  /// whose results would only be discarded.
+  private static let selectionLimit = 9
+  /// Provider loads run concurrently but bounded, so a large Files drop cannot
+  /// start one unbounded copy operation per item.
+  private static let maxConcurrentLoads = 3
+  /// What the send pipeline consumes; anything else is transcoded to JPEG.
+  private static let supportedImageMIMETypes: Set<String> = [
+    "image/gif", "image/jpeg", "image/png", "image/webp",
+  ]
+
+  /// When false the view ignores every drop session (the composer may be
+  /// absent in preview or error states); the container stays mounted so the
+  /// tree shape does not change.
+  var isEnabled = true
+
   private let onDragEnter = EventDispatcher()
   private let onDragLeave = EventDispatcher()
   private let onDropImages = EventDispatcher()
@@ -58,11 +78,19 @@ public final class ImageDropTargetView: ExpoView {
         completion(nil)
         return
       }
-      completion(self.copyDroppedImage(from: url, provider: provider))
+      completion(self.stageDroppedImage(from: url, provider: provider))
     }
   }
 
-  private func copyDroppedImage(from source: URL, provider: NSItemProvider) -> [String: Any]? {
+  /// Copies the provider-backed source into staging and returns its payload.
+  /// Apple requires in-place provider URLs to be accessed through
+  /// `NSFileCoordinator` regardless of `isInPlace`; the `.forUploading` option
+  /// coordinates a readable snapshot (including Files/iCloud providers), and
+  /// the copy happens synchronously inside the coordinated block.
+  private func stageDroppedImage(
+    from source: URL,
+    provider: NSItemProvider
+  ) -> [String: Any]? {
     let didStartAccessing = source.startAccessingSecurityScopedResource()
     defer {
       if didStartAccessing {
@@ -73,9 +101,40 @@ public final class ImageDropTargetView: ExpoView {
     guard let directory = dropDirectory else {
       return nil
     }
-    // Items of the same batch load concurrently and can race the existence
-    // check in `uniqueDestinationURL`; a failed copy retries with a fresh
-    // unique name instead of silently dropping one of the images.
+    let coordinator = NSFileCoordinator(filePresenter: nil)
+    var coordinationError: NSError?
+    var stagedURL: URL?
+    coordinator.coordinate(
+      readingItemAt: source,
+      options: [.forUploading],
+      error: &coordinationError
+    ) { snapshot in
+      stagedURL = self.copyToStaging(from: snapshot, in: directory, provider: provider)
+    }
+    if let coordinationError {
+      NSLog(
+        "ImageDropTarget: failed to coordinate a dropped image: \(coordinationError.localizedDescription)"
+      )
+      return nil
+    }
+    guard let stagedURL else {
+      return nil
+    }
+    // A still format the send pipeline rejects becomes JPEG now, while the
+    // bytes are local — never at send time.
+    guard let finalURL = transcodeToSupportedFormat(stagedURL, in: directory) else {
+      try? fileManager.removeItem(at: stagedURL)
+      return nil
+    }
+    return payload(for: finalURL)
+  }
+
+  /// Copies the coordinated snapshot into staging. Items of the same batch
+  /// load concurrently and can race the existence check in
+  /// `uniqueDestinationURL`; a failed copy retries with a fresh unique name
+  /// instead of silently dropping one of the images.
+  private func copyToStaging(from source: URL, in directory: URL, provider: NSItemProvider)
+    -> URL? {
     var copyError: Error?
     for _ in 0..<3 {
       let destination = uniqueDestinationURL(
@@ -85,7 +144,7 @@ public final class ImageDropTargetView: ExpoView {
       )
       do {
         try fileManager.copyItem(at: source, to: destination)
-        return payload(for: destination)
+        return destination
       } catch {
         copyError = error
       }
@@ -94,6 +153,43 @@ public final class ImageDropTargetView: ExpoView {
       NSLog("ImageDropTarget: failed to copy a dropped image: \(copyError.localizedDescription)")
     }
     return nil
+  }
+
+  /// Re-encodes still images the send pipeline cannot consume into JPEG and
+  /// returns the new URL, removing the staged original. Supported formats come
+  /// back unchanged.
+  private func transcodeToSupportedFormat(_ url: URL, in directory: URL) -> URL? {
+    if let mediaType = mediaType(for: url),
+       Self.supportedImageMIMETypes.contains(mediaType) {
+      return url
+    }
+    guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+          CGImageSourceGetCount(imageSource) > 0 else {
+      return nil
+    }
+    let baseName = url.deletingPathExtension().lastPathComponent
+    let destination = uniqueDestinationURL(
+      in: directory,
+      preferredName: "\(baseName).jpg",
+      fallbackName: "\(UUID().uuidString).jpg"
+    )
+    guard let destinationSink = CGImageDestinationCreateWithURL(
+      destination as CFURL,
+      UTType.jpeg.identifier as CFString,
+      1,
+      nil
+    ) else {
+      return nil
+    }
+    let options = [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary
+    CGImageDestinationAddImageFromSource(destinationSink, imageSource, 0, options)
+    guard CGImageDestinationFinalize(destinationSink) else {
+      return nil
+    }
+    if url != destination {
+      try? fileManager.removeItem(at: url)
+    }
+    return destination
   }
 
   /// A collision-free cache URL that keeps the source extension and the
@@ -167,10 +263,11 @@ public final class ImageDropTargetView: ExpoView {
 
 extension ImageDropTargetView: UIDropInteractionDelegate {
   /// Only sessions that contain at least one image item enter the drop
-  /// conversation; everything else gets the system's forbidden cue.
+  /// conversation; everything else gets the system's forbidden cue. A disabled
+  /// view (no composer to attach to) refuses every session.
   public func dropInteraction(_ interaction: UIDropInteraction, canHandle session: UIDropSession)
     -> Bool {
-    session.hasItemsConforming(toTypeIdentifiers: [UTType.image.identifier])
+    isEnabled && session.hasItemsConforming(toTypeIdentifiers: [UTType.image.identifier])
   }
 
   public func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnter session: UIDropSession) {
@@ -181,11 +278,18 @@ extension ImageDropTargetView: UIDropInteractionDelegate {
     onDragLeave()
   }
 
+  /// The final callback of every session, including cancellation and other
+  /// termination paths that never exit "normally": the authoritative hover
+  /// cleanup, so the JS highlight cannot stay stuck.
+  public func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: UIDropSession) {
+    onDragLeave()
+  }
+
   public func dropInteraction(
     _ interaction: UIDropInteraction,
     sessionDidUpdate session: UIDropSession
   ) -> UIDropProposal {
-    let hasImages = session.hasItemsConforming(toTypeIdentifiers: [UTType.image.identifier])
+    let hasImages = isEnabled && session.hasItemsConforming(toTypeIdentifiers: [UTType.image.identifier])
     // Cross-app drops are copies by definition (HIG: dragging between apps
     // always results in a copy).
     return UIDropProposal(operation: hasImages ? .copy : .cancel)
@@ -199,24 +303,33 @@ extension ImageDropTargetView: UIDropInteractionDelegate {
     let imageItems = session.items.filter {
       $0.itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier)
     }
-    guard !imageItems.isEmpty else {
-      onDropImages(["images": []])
+    // The per-message quota is applied before any provider I/O: an oversized
+    // drop neither starts loads nor writes staging files for discarded items.
+    let acceptedItems = Array(imageItems.prefix(Self.selectionLimit))
+    guard !acceptedItems.isEmpty else {
+      onDropImages(["failedCount": 0, "images": [], "totalDropped": imageItems.count])
       return
     }
 
     let group = DispatchGroup()
+    let inFlight = DispatchSemaphore(value: Self.maxConcurrentLoads)
+    let loadQueue = DispatchQueue(label: "cherry.imageDropTarget.load", attributes: .concurrent)
     let lock = NSLock()
-    var payloads: [[String: Any]] = []
+    var indexedPayloads: [Int: [String: Any]] = [:]
 
-    for item in imageItems {
+    for (index, item) in acceptedItems.enumerated() {
       group.enter()
-      loadImagePayload(from: item.itemProvider) { payload in
-        if let payload {
-          lock.lock()
-          payloads.append(payload)
-          lock.unlock()
+      loadQueue.async { [weak self] in
+        inFlight.wait()
+        self?.loadImagePayload(from: item.itemProvider) { payload in
+          if let payload {
+            lock.lock()
+            indexedPayloads[index] = payload
+            lock.unlock()
+          }
+          inFlight.signal()
+          group.leave()
         }
-        group.leave()
       }
     }
 
@@ -224,7 +337,14 @@ extension ImageDropTargetView: UIDropInteractionDelegate {
       guard let self else {
         return
       }
-      self.onDropImages(["images": payloads])
+      // Results are compacted by original item index: attachment order follows
+      // the drop order, not provider I/O timing.
+      let payloads = acceptedItems.indices.compactMap { indexedPayloads[$0] }
+      self.onDropImages([
+        "failedCount": acceptedItems.count - payloads.count,
+        "images": payloads,
+        "totalDropped": imageItems.count,
+      ])
     }
   }
 }

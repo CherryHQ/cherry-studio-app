@@ -8,11 +8,13 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { ComposerAttachmentStore } from '../context/ComposerProvider';
 import {
   appendComposerAttachments,
+  cleanupDropStagedFile,
   type ComposerAttachmentDraft,
   type ComposerAttachmentSource,
   type ComposerInitialAttachment,
   isComposerAttachmentReady,
   isComposerImageMediaType,
+  isDropStagedFile,
   removeComposerAttachment,
 } from '../utils/composerAttachments';
 
@@ -56,6 +58,9 @@ export function useManagedComposerAttachments(
           name: source.name,
           uri: source.uri,
         });
+        // The managed entry owns the bytes now; a drop's staged cache copy
+        // would otherwise linger until the OS evicts Caches.
+        if (isDropStagedFile(source.uri)) void cleanupDropStagedFile(source.uri);
         // A removed tile or departed screen cannot restore a stale reference.
         // The completed import remains in My Files in either case.
         if (importTokensRef.current.get(source.id) !== token || !isMountedRef.current)

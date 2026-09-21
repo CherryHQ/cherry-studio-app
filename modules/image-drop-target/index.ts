@@ -13,10 +13,16 @@ export type DroppedImage = {
 };
 
 export type ImageDropEvent = {
+  /** Items the native side could not stage; their bytes never reached JS. */
+  failedCount: number;
   images: DroppedImage[];
+  /** Every image item in the drop, including ones over the per-drop cap. */
+  totalDropped: number;
 };
 
 export type ImageDropTargetProps = PropsWithChildren<{
+  /** When false the view refuses every drop session (no composer to attach to). */
+  enabled?: boolean;
   onDragEnter?: () => void;
   onDragLeave?: () => void;
   onDropImages?: (event: ImageDropEvent) => void;

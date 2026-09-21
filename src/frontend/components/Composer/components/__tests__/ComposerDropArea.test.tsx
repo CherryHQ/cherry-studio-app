@@ -3,12 +3,17 @@ import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ImageDropEvent } from '../../../../../../modules/image-drop-target';
-import { ComposerProvider, useComposerState } from '../../context/ComposerProvider';
+import {
+  ComposerProvider,
+  useComposerActions,
+  useComposerState,
+} from '../../context/ComposerProvider';
 import type { ComposerAttachmentDraft } from '../../utils/composerAttachments';
 import { ComposerDropArea } from '../ComposerDropArea';
 
 const mockToastShow = jest.fn();
 let mockDropTargetProps: {
+  enabled?: boolean;
   onDragEnter?: () => void;
   onDragLeave?: () => void;
   onDropImages?: (event: ImageDropEvent) => void;
@@ -16,6 +21,7 @@ let mockDropTargetProps: {
 const mockViewRef: {
   current: ComponentType<{
     children?: ReactNode;
+    enabled?: boolean;
     onDragEnter?: () => void;
     onDragLeave?: () => void;
     onDropImages?: (event: ImageDropEvent) => void;
@@ -47,6 +53,7 @@ function createMockViewComponent() {
 
   return function MockImageDropTargetView(props: {
     children?: ReactNode;
+    enabled?: boolean;
     onDragEnter?: () => void;
     onDragLeave?: () => void;
     onDropImages?: (event: ImageDropEvent) => void;
@@ -57,6 +64,7 @@ function createMockViewComponent() {
 }
 
 let attachments: readonly ComposerAttachmentDraft[] = [];
+let composerActions: ReturnType<typeof useComposerActions> | undefined;
 
 function AttachmentsProbe() {
   const state = useComposerState();
@@ -66,6 +74,22 @@ function AttachmentsProbe() {
   }, [state.attachments]);
 
   return null;
+}
+
+function ActionsProbe() {
+  composerActions = useComposerActions();
+  return null;
+}
+
+/** An image attachment the composer already holds. */
+function heldImage(name: string) {
+  return {
+    id: `photo:held-${name}`,
+    kind: 'image' as const,
+    mediaType: 'image/jpeg',
+    name,
+    uri: `file:///tmp/${name}`,
+  };
 }
 
 function dropImage(name: string) {
@@ -81,12 +105,13 @@ function dropImage(name: string) {
 
 let renderer: ReactTestRenderer | undefined;
 
-async function renderDropArea() {
+async function renderDropArea(props: { enabled?: boolean } = {}) {
   await act(async () => {
     renderer = create(
       <ComposerProvider>
-        <ComposerDropArea>
+        <ComposerDropArea {...props}>
           <AttachmentsProbe />
+          <ActionsProbe />
         </ComposerDropArea>
       </ComposerProvider>,
     );
@@ -111,7 +136,9 @@ describe('ComposerDropArea', () => {
 
     await act(async () =>
       mockDropTargetProps?.onDropImages?.({
+        failedCount: 0,
         images: [dropImage('first.jpg'), dropImage('second.jpg')],
+        totalDropped: 2,
       }),
     );
 
@@ -134,6 +161,7 @@ describe('ComposerDropArea', () => {
 
     await act(async () =>
       mockDropTargetProps?.onDropImages?.({
+        failedCount: 0,
         images: [
           {
             mediaType: 'application/pdf',
@@ -143,6 +171,7 @@ describe('ComposerDropArea', () => {
           },
           { mediaType: 'text/plain', name: 'note.txt', uri: 'x' },
         ],
+        totalDropped: 2,
       }),
     );
 
@@ -155,7 +184,9 @@ describe('ComposerDropArea', () => {
 
     await act(async () =>
       mockDropTargetProps?.onDropImages?.({
+        failedCount: 0,
         images: Array.from({ length: 11 }, (_, index) => dropImage(`photo-${index}.jpg`)),
+        totalDropped: 11,
       }),
     );
 
@@ -180,11 +211,65 @@ describe('ComposerDropArea', () => {
 
     await act(async () => mockDropTargetProps?.onDragEnter?.());
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({ images: [dropImage('first.jpg')] }),
+      mockDropTargetProps?.onDropImages?.({
+        failedCount: 0,
+        images: [dropImage('first.jpg')],
+        totalDropped: 1,
+      }),
     );
     expect(renderer?.root.findAllByProps({ testID: 'composer-drop-area-highlight' })).toHaveLength(
       0,
     );
+  });
+
+  it('accepts only the remaining per-message quota and says what was skipped', async () => {
+    await renderDropArea();
+    // The composer already holds eight images: one slot is left.
+    const held = Array.from({ length: 8 }, (_, index) => heldImage(`held-${index}.jpg`));
+    act(() => composerActions?.addAttachments(held));
+    expect(attachments).toHaveLength(8);
+
+    await act(async () =>
+      mockDropTargetProps?.onDropImages?.({
+        failedCount: 0,
+        images: [dropImage('a.jpg'), dropImage('b.jpg')],
+        totalDropped: 2,
+      }),
+    );
+
+    expect(attachments).toHaveLength(9);
+    expect(attachments.map(({ name }) => name)).toContain('a.jpg');
+    expect(attachments.map(({ name }) => name)).not.toContain('b.jpg');
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: expect.stringContaining('chat.attachments.dropLimit'),
+      variant: 'warning',
+    });
+  });
+
+  it('reports native staging failures to the user', async () => {
+    await renderDropArea();
+
+    await act(async () =>
+      mockDropTargetProps?.onDropImages?.({
+        failedCount: 2,
+        images: [dropImage('survivor.jpg')],
+        totalDropped: 5,
+      }),
+    );
+
+    expect(attachments).toHaveLength(1);
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: expect.stringContaining('chat.attachments.dropFailed'),
+      variant: 'warning',
+    });
+  });
+
+  it('passes the enabled gate through to the native view', async () => {
+    await renderDropArea({ enabled: false });
+    expect(mockDropTargetProps?.enabled).toBe(false);
+
+    await renderDropArea({ enabled: true });
+    expect(mockDropTargetProps?.enabled).toBe(true);
   });
 
   it('renders a plain container when the native view is unavailable', async () => {

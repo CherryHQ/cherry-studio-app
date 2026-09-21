@@ -134,6 +134,27 @@ export function isDroppedImagePayload(payload: DroppedImagePayload): boolean {
   return isComposerImageMediaType(payload.mediaType) || isComposerImageFileName(payload.name);
 }
 
+/** Only files the drop target staged; anything else is someone else's to own. */
+export function isDropStagedFile(uri: string): boolean {
+  return uri.includes('/ImageDropTarget/');
+}
+
+/**
+ * Deletes a staged drop file nobody owns anymore: the managed import copied
+ * the bytes into My Files, or the composer rejected the payload outright.
+ * Best-effort — the OS evicts Caches regardless.
+ */
+export async function cleanupDropStagedFile(uri: string): Promise<void> {
+  try {
+    const FileSystem = await import('expo-file-system');
+    if ((await FileSystem.getInfoAsync(uri)).exists) {
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+    }
+  } catch {
+    // Cache cleanup is best-effort; the OS evicts Caches anyway.
+  }
+}
+
 /** Mirrors the photo-library draft: the cache file is imported as-is. */
 export function createDroppedImageAttachmentDraft(
   image: DroppedImagePayload,
