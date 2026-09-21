@@ -1,5 +1,3 @@
-import type { NativeModule } from 'expo';
-
 /** This is a real native transport boundary. Do not move envelopes into Backend contracts. */
 export type NativeTranslationConfiguration = {
   version: 2;
@@ -32,7 +30,16 @@ type NativeSystemEvents = {
   onIntentCancelled: (event: { id: string }) => void;
 };
 
-export interface SystemIntegrationNativeModule extends NativeModule<NativeSystemEvents> {
+/**
+ * Expo exports `NativeModule` as the constructor type, so extending it inherits statics rather
+ * than the emitter instance members, and drops the events map. Declare the one member consumed
+ * here so each event payload stays typed.
+ */
+export interface SystemIntegrationNativeModule {
+  addListener<EventName extends keyof NativeSystemEvents>(
+    eventName: EventName,
+    listener: NativeSystemEvents[EventName],
+  ): { remove(): void };
   getCapabilities(): {
     translationWindow: boolean;
     translationProvider: boolean;

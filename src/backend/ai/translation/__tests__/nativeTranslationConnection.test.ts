@@ -46,9 +46,10 @@ function connection(apiModelId: string, reasoningEffort: ReasoningEffortOption =
 beforeEach(installProviderRegistryTestSnapshot);
 
 test('turns off supported reasoning using the native HTTP field and omits disabled sampling', () => {
+  // The catalog id is the wire id for OpenAI itself; only providers with an override rename it.
   expect(connection('gpt-5.4').resolve()).toEqual({
     endpoint: 'https://api.openai.com/v1/chat/completions',
-    wireModelId: 'gpt-5.4',
+    wireModelId: 'gpt-5-4',
     requestParameters: { reasoning_effort: 'none' },
   });
 });

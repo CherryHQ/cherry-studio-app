@@ -109,8 +109,7 @@ export function createSystemEntryModule(dependencies: Dependencies): {
       const readMessage = (message: AgentMessageView | null) => {
         if (message?.role === 'assistant')
           answer = message.parts
-            .filter((part) => part.type === 'text')
-            .map((part) => part.text)
+            .flatMap((part) => (part.type === 'text' ? [part.text] : []))
             .join('\n');
       };
       const onStatus = (status: string) => {

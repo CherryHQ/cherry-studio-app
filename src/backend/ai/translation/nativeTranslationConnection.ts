@@ -2,6 +2,7 @@ import {
   formatApiHost,
   isWithTrailingSharp,
   routeToEndpoint,
+  shouldAppendProviderApiVersion,
 } from '@cherrystudio/ai-runtime/provider';
 import {
   encodeChatCompletionsReasoning,
@@ -21,10 +22,7 @@ import {
 import type { Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
-import {
-  resolveProviderConnection,
-  shouldAppendProviderApiVersion,
-} from '../provider/providerConnection';
+import { resolveProviderConnection } from '../provider/providerConnection';
 
 /** A deliberately small protocol surface; never infer support from a provider's display name. */
 export function resolveNativeTranslationConnection(

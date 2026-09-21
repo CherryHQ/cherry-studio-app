@@ -20,14 +20,13 @@ export function SystemEntryBridge() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { refreshShortcuts } = module;
-  const {
-    agents,
-    query: { isSuccess },
-  } = useAgentsApi({ enabled: !!refreshShortcuts });
+  const { agents, query } = useAgentsApi({ enabled: !!refreshShortcuts });
+  // Publish only once the list has actually resolved; the hook reports an empty list while loading.
+  const agentsLoaded = query.data !== undefined;
 
   useEffect(() => {
-    if (isSuccess) void refreshShortcuts?.().catch(() => {});
-  }, [refreshShortcuts, agents, isSuccess]);
+    if (agentsLoaded) void refreshShortcuts?.().catch(() => {});
+  }, [agents, agentsLoaded, refreshShortcuts]);
 
   useEffect(() => {
     if (!navigation?.key) return;

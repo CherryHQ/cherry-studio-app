@@ -142,6 +142,7 @@ export function SystemShareScreen() {
         options={agents.map(({ id, name }) => ({ value: id, label: name }))}
         selectedValue={selected?.id ?? ''}
         onValueChange={setSelectedId}
+        size="large"
       />
     </View>
   );
