@@ -49,7 +49,11 @@ type SessionEntry = {
   state: AgentSessionChatState;
 };
 
-const LIVE_MESSAGE_FLUSH_INTERVAL_MS = 16;
+// Like Desktop's streaming overlay, space out full-message render commits as
+// content grows. Deltas remain lossless; terminal events still flush immediately.
+const MIN_LIVE_MESSAGE_FLUSH_INTERVAL_MS = 100;
+const MAX_LIVE_MESSAGE_FLUSH_INTERVAL_MS = 3000;
+const LIVE_MESSAGE_CHARS_PER_MS = 2000;
 
 const TERMINAL_TURN_STATUSES = new Set<AgentTurnView['status']>([
   'completed',
@@ -600,10 +604,26 @@ export class AgentSessionChatClient {
     if (entry.liveMessagesFlush !== undefined) {
       return;
     }
+    let chars = 0;
+    for (const message of entry.liveMessages.values()) {
+      if (isTerminalMessage(message)) continue;
+      for (const part of message.parts) {
+        if (part.type === 'text' || part.type === 'reasoning') chars += part.text.length;
+      }
+    }
+    for (const pending of entry.pendingTextDeltas.values()) {
+      for (const chunk of pending.chunks) chars += chunk.length;
+    }
+    const interval = Math.min(
+      MAX_LIVE_MESSAGE_FLUSH_INTERVAL_MS,
+      Math.max(MIN_LIVE_MESSAGE_FLUSH_INTERVAL_MS, chars / LIVE_MESSAGE_CHARS_PER_MS),
+    );
+    // Do not move an already scheduled deadline when more deltas arrive: a busy
+    // stream must keep becoming visible instead of indefinitely debouncing.
     entry.liveMessagesFlush = setTimeout(() => {
       entry.liveMessagesFlush = undefined;
       this.commitLiveMessages(entry);
-    }, LIVE_MESSAGE_FLUSH_INTERVAL_MS);
+    }, interval);
   }
 
   private queueTextDelta(

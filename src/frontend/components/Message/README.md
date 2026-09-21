@@ -39,20 +39,25 @@ A tool that returns managed artifacts already has them in the message: the Host 
 as its own file part, right after the tool result that produced it. A per-tool renderer therefore
 renders the *call*, never the artifact, or the same file appears twice.
 
-`MessageParts` lifts every file part out of the ordered stream and renders managed assistant
-outputs through `GeneratedFileStrip` after the answer. `UserMessage` separately uses
-`MessageFileStrip` for input attachments above its bubble. Two rules hold the assistant-result
-shape:
+`MessageParts` renders managed assistant outputs through `GeneratedFileStrip`. Images stay in the
+body in transcript order, so an image produced by a tool appears before its following explanation.
+Other files collect after the answer. `UserMessage` separately uses `MessageFileStrip` for input
+attachments above its bubble. Two rules hold the assistant-result shape:
 
-- **Files belong to the answer, not to the step.** A deliverable buried between two blocks of prose
-  is hard to find on a phone, and the position a file was emitted at tells a reader nothing. The
-  result group stays out of layout while the answer streams, then appears at the end when the
-  message reaches any terminal status. This matches source groups and message actions, and keeps a
-  large result card from repeatedly moving the live list tail.
+- **Images are visible results.** They appear as soon as their file parts arrive and retain their
+  position relative to the final text when the message settles. They never enter the collapsed
+  process or repeat in the footer. Non-image files appear together at the end once the message
+  reaches a terminal status.
 - **Layout never reads `purpose`.** A file's purpose is a Runtime fact used to decide model replay,
   not a presentation input. A transcript that arrives from a peer without one must lay out
-  identically, so the split keys on part type alone. Only assistant messages reach `MessageParts`
+  identically, so the split keys on part and media type. Only assistant messages reach `MessageParts`
   with files, because `UserMessage` lifts its own attachments out first.
+
+The model receives generated file ids, not public image URLs. Before rendering Markdown,
+`omitGeneratedImageReferences` removes standalone image paragraphs whose destination ends in an
+image file id already present in the same message. This prevents an invented preview URL from
+leaving an empty native image placeholder beside the real generated image. Code examples, inline
+prose, nested blocks, unrelated URLs, and stored transcript text remain unchanged.
 
 Neither file group carries a heading: whether a file was attached or produced follows from the role
 of the message it sits in.
@@ -106,8 +111,8 @@ precedence over that fallback.
 
 Reasoning expands inline: `MessagePart.Reasoning` owns the toggle and the left-rail container its
 markdown renders into, so a reader keeps their place in the transcript. While a response streams,
-its process parts remain visible without a total-duration wrapper. Once the response settles, every
-visible transcript part except the final result text moves into one collapsed `MessagePart.Process`
+its process parts remain visible without a total-duration wrapper. Once the response settles,
+intermediate prose, reasoning, and tools move into one collapsed `MessagePart.Process`
 row whose label is the message's total wall-clock duration. Expanding it reveals the original parts in order. Source
 groups use a borderless row of overlapping favicons and their source count, while their expanded
 views must use `MessagePart.Detail`. The source group stays out of layout while the assistant is
@@ -124,10 +129,10 @@ the part adapter notifies the list scroll controller, which leaves live-edge fol
 any scheduled end correction. LegendList's size anchoring then keeps the tapped summary in place so
 the detail expands below it, even when the viewport started at the bottom.
 
-`partitionMessageParts` finds the last visible text part and leaves only that part in the article
-body. Earlier prose, reasoning, and tool calls all enter the timed process disclosure. A text part
+`partitionMessageParts` finds the last visible text part and leaves it alongside images in the
+article body. Earlier prose, reasoning, and tool calls enter the timed process disclosure. A text part
 followed by a tool is therefore treated as intermediate narration, not as the result. Provider-
-executed web searches render nothing; source and file parts retain their dedicated result rows.
+executed web searches render nothing; sources and non-image files retain their footer rows.
 
 Automatic context compaction uses the Desktop-compatible `data-compaction-anchor` part. Turn-start
 markers stay visible as dashed separators before the process disclosure; in-loop markers remain

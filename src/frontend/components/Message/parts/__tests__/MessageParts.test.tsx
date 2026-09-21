@@ -79,6 +79,29 @@ describe('MessageParts', () => {
     expect(renderer.root.findByType('SourceGroup').props.parts).toEqual(message.data.parts);
   });
 
+  test('renders the generated image once without a duplicate Markdown image placeholder', () => {
+    const id = '01a0c213-4cfb-741d-807e-624fedfa1ab8';
+    const message: MessageListItem = {
+      ...makeMessage('success'),
+      data: {
+        parts: [
+          makeFilePart(id, '三国.png', 'image/png'),
+          {
+            type: 'text',
+            text: `![三国名将阵营图](https://preview.cherry.ai/${id})\n\n这张图将三国名将分组。`,
+          },
+        ],
+      },
+    };
+    const renderer = render(<MessageParts message={message} />);
+
+    expect(renderer.root.findAllByType('GeneratedFileStrip')).toHaveLength(1);
+    expect(renderer.root.findByType('MessagePartRenderer').props.part.text).toBe(
+      '这张图将三国名将分组。',
+    );
+    expect(renderer.root.findAllByType('ProcessGroupPart')).toHaveLength(0);
+  });
+
   test.each([
     ['pending', false],
     ['success', true],
@@ -206,37 +229,44 @@ describe('MessageParts', () => {
     expect(renderer.root.findAllByType('MessagePartRenderer')).toHaveLength(1);
   });
 
-  test('shows a file produced mid-answer after the answer, not where it interrupted it', () => {
-    const message: MessageListItem = {
-      ...makeMessage('success'),
-      data: {
-        parts: [
-          { text: 'Here it is', type: 'text' },
-          makeFilePart('file-1', 'chart.png'),
-          { text: 'and a revision', type: 'text' },
-        ],
-      },
-    };
-    const renderer = render(<MessageParts message={message} />);
-    const rendered = renderer.root.findAll(
-      (node) =>
-        node.type === 'ProcessGroupPart' ||
-        node.type === 'MessagePartRenderer' ||
-        node.type === 'GeneratedFileStrip',
-    );
+  test.each(['pending', 'success'] as const)(
+    'shows a generated image before its explanation exactly once while %s',
+    (status) => {
+      const message: MessageListItem = {
+        ...makeMessage(status),
+        data: {
+          parts: [
+            { text: 'Here it is', type: 'text' },
+            makeFilePart('file-1', 'chart.png', 'image/png'),
+            { text: 'and a revision', type: 'text' },
+          ],
+        },
+      };
+      const renderer = render(<MessageParts message={message} />);
+      const rendered = renderer.root.findAll(
+        (node) =>
+          node.type === 'ProcessGroupPart' ||
+          node.type === 'MessagePartRenderer' ||
+          node.type === 'GeneratedFileStrip',
+      );
 
-    expect(rendered.map((node) => node.type)).toEqual([
-      'ProcessGroupPart',
-      'MessagePartRenderer',
-      'GeneratedFileStrip',
-    ]);
-  });
+      expect(rendered.map((node) => node.type)).toEqual([
+        status === 'pending' ? 'MessagePartRenderer' : 'ProcessGroupPart',
+        'GeneratedFileStrip',
+        'MessagePartRenderer',
+      ]);
+      expect(renderer.root.findAllByType('GeneratedFileStrip')).toHaveLength(1);
+      expect(renderer.root.findByType('GeneratedFileStrip').props.parts).toEqual([
+        message.data.parts![1],
+      ]);
+    },
+  );
 });
 
-function makeFilePart(fileEntryId: string, filename: string) {
+function makeFilePart(fileEntryId: string, filename: string, mediaType = 'text/markdown') {
   return {
     filename,
-    mediaType: 'text/markdown',
+    mediaType,
     providerMetadata: { cherry: { fileEntryId } },
     type: 'file' as const,
     url: `cherry://file/${fileEntryId}`,

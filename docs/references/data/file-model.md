@@ -83,9 +83,9 @@ An owner stores the entry ids it points at, inside its own row:
 
 `write_file` and `edit_file` tool results each carry the `fileEntryId` they created in result JSON.
 The Runtime projects the same id as a `purpose: 'artifact'` file part directly after its tool part;
-chat lifts file parts out of the ordered stream and shows them after the answer, where deliverables
-are easier to find than at the step that produced them. As with every owner here, the reference
-outlives the bytes and degrades to the unavailable placeholder.
+chat keeps images in the body in transcript order and collects non-image files after the answer.
+Images remain visible outside the collapsed process and appear before any following explanation.
+As with every owner here, the reference outlives the bytes and degrades to the unavailable placeholder.
 
 `purpose` and `provenance` answer different questions and neither substitutes for the other.
 `purpose` is a fact about a file's role *in one message*, travels in the transcript, and is read by
