@@ -28,6 +28,47 @@ jest.mock('../../../../../modules/system-integration', () => ({
   getSystemIntegration: () => mockNative,
 }));
 
+test.each([
+  [null, 'modelNotConfigured'],
+  [createUniqueModelId('provider', 'removed-model'), 'modelUnavailable'],
+] as const)(
+  'omits missing model metadata from the native snapshot: %s',
+  async (modelId, reason) => {
+    mockNative.invalidateTranslationConfiguration.mockResolvedValue(undefined);
+    mockNative.publishTranslationUnavailable.mockReset().mockResolvedValue(undefined);
+    const preferences: Partial<PreferenceSchema> = { 'feature.translate.model_id': modelId };
+    const runtime = new TranslationConfigurationRuntime({
+      preferences: { getCachedValue: (name) => preferences[name] },
+      getModel: async () => null,
+      getProvider: async () => {
+        throw new Error('No provider for a missing model');
+      },
+      getKeys: async () => ({ keys: [] }),
+      getAuth: async () => null,
+      getInterfaceLanguage: () => 'en-US',
+      ensureModelCatalog: async () => {},
+      resolveNativeConnection: () => null,
+    });
+    try {
+      await runtime.start();
+      expect(await runtime.getAvailability('externalWindow')).toMatchObject({
+        status: 'unavailable',
+        reason,
+      });
+      // Expo can bridge present-but-undefined properties as JSON null. Strict equality also
+      // rejects those properties before Android's JSONObject can turn them into label text.
+      expect(mockNative.publishTranslationUnavailable.mock.calls.at(-1)?.[0]).toStrictEqual({
+        version: 1,
+        reason,
+        targetLanguage: 'en-US',
+        interfaceLanguage: 'en-US',
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  },
+);
+
 test('an in-flight publication cannot restore old credentials after the authoritative edit', async () => {
   const publicationStarted = deferred();
   const allowPublication = deferred();

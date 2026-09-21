@@ -24,10 +24,21 @@ version stays at 17. Existing Widget configuration is preserved.
 These source changes require a new custom development client. An OTA update or Expo Go cannot add
 the module or extensions. Local EAS Android development and iOS simulator builds succeeded on
 2026-09-17. Simulator checks passed share preview/cancellation and Android launcher navigation,
-but found blocking failures in the app translation screen on both platforms, iOS selected-text
-delivery, and iOS App Shortcut execution. The app language picker no longer uses the unavailable
-`Intl.DisplayNames`; that source fix awaits device verification. Real model requests, physical-device provisioning, and
-automated suites remain unverified; this implementation is not ready for release.
+but found failures in the app translation screen on both platforms, iOS selected-text delivery,
+iOS App Shortcut execution, and Android's missing-model label. The app language picker no longer
+uses the unavailable `Intl.DisplayNames`. The selected-text extension now observes the system
+context inside a SwiftUI view, waits for input, and replaces the translation session when the
+selection changes. Android ignores null model metadata and hides an empty model label; unavailable
+configuration publications omit missing names. These source fixes await device verification.
+Real model requests, physical-device provisioning, and automated suites remain unverified;
+this implementation is not ready for release.
+
+The earlier iOS development artifact contains all three Cherry actions and its shortcut provider
+in `Metadata.appintents`, with matching provider symbols in the debug binary. The shortcut failure
+remains unresolved: [developers report the same failure with Apple's sample on iOS 26.5 simulators](https://developer.apple.com/forums/thread/836585),
+but the earlier Cherry evidence contains only the error UI, not the system execution logs needed
+to establish the same cause. Validate on a physical device or a different runtime and capture
+Shortcuts/App Intents system errors before changing action registration.
 
 ## Configuration and privacy
 

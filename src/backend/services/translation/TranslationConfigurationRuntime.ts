@@ -250,8 +250,9 @@ export class TranslationConfigurationRuntime {
     await this.native?.publishTranslationUnavailable({
       version: 1,
       reason: availability.reason,
-      modelName: availability.model?.name,
-      providerName: availability.model?.providerName,
+      ...(availability.model
+        ? { modelName: availability.model.name, providerName: availability.model.providerName }
+        : {}),
       targetLanguage: availability.targetLanguage,
       interfaceLanguage: this.dependencies.getInterfaceLanguage(),
     });

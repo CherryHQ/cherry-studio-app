@@ -100,9 +100,11 @@ class TranslationActivity : Activity() {
     text(getString(R.string.cherry_translation_title)).textSize = 20f
     modelLabel = text("")
     TranslationConfigurationStore.display(this)?.let { configuration ->
-      modelLabel.text = listOf(configuration.optString("modelName"), configuration.optString("providerName"))
+      // JSONObject.optString coerces JSON null into the visible text "null".
+      modelLabel.text = listOfNotNull(configuration.opt("modelName") as? String, configuration.opt("providerName") as? String)
         .filter { it.isNotBlank() }.joinToString(" · ")
     }
+    modelLabel.visibility = if (modelLabel.text.isBlank()) View.GONE else View.VISIBLE
     text(getString(R.string.cherry_translation_target))
     val languages = listOf(target, "zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "fr-FR", "de-DE", "es-ES", "pt-PT", "ru-RU", "vi-VN").distinct()
     content.addView(Spinner(this).apply {
@@ -155,6 +157,7 @@ class TranslationActivity : Activity() {
       try {
         val configuration = TranslationConfigurationStore.read(this@TranslationActivity)
         modelLabel.text = "${configuration.modelName} · ${configuration.providerName}"
+        modelLabel.visibility = View.VISIBLE
         val translated = TemporaryTranslation.translate(applicationContext, source, target)
         if (current == generation && !isFinishing) {
           result = translated
