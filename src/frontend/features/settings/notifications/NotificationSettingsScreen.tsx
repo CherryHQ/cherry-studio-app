@@ -3,14 +3,33 @@ import { Section, useToast } from '@cherrystudio/ui/components';
 import Constants from 'expo-constants';
 import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import { openSettings } from 'expo-linking';
-import { getPermissionsAsync, requestPermissionsAsync } from 'expo-notifications';
+import {
+  getPermissionsAsync,
+  IosAuthorizationStatus,
+  requestPermissionsAsync,
+  type NotificationPermissionsStatus,
+} from 'expo-notifications';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { usePreference } from '@/frontend/data/hooks';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
+
+/** iOS can also deliver under provisional or ephemeral authorization. */
+function isNotificationAllowed(status: NotificationPermissionsStatus): boolean {
+  return (
+    status.granted ||
+    status.ios?.status === IosAuthorizationStatus.PROVISIONAL ||
+    status.ios?.status === IosAuthorizationStatus.EPHEMERAL
+  );
+}
+
+/** Only a hard denial (undeliverable and unpromptable) offers the recovery row. */
+function isNotificationBlocked(status: NotificationPermissionsStatus): boolean {
+  return !isNotificationAllowed(status) && !status.canAskAgain;
+}
 
 export default function NotificationSettingsScreen() {
   const { t } = useTranslation();
@@ -21,20 +40,29 @@ export default function NotificationSettingsScreen() {
   const [isCompletionNotificationEnabled, setIsCompletionNotificationEnabled] = usePreference(
     'chat.completion_notifications.enabled',
   );
-  const [isNotificationPermissionDenied, setIsNotificationPermissionDenied] = useState(false);
+  const [isNotificationPermissionBlocked, setIsNotificationPermissionBlocked] = useState(false);
 
   useEffect(() => {
     // Only meaningful while the switch is on; rendering gates the recovery row
     // on the same condition, so a stale denial needs no synchronous reset.
     if (!isCompletionNotificationEnabled) return;
     let cancelled = false;
-    void getPermissionsAsync()
-      .then(({ granted }) => {
-        if (!cancelled) setIsNotificationPermissionDenied(!granted);
-      })
-      .catch(() => {});
+    const refreshPermissionState = (): void => {
+      void getPermissionsAsync()
+        .then((status) => {
+          if (!cancelled) setIsNotificationPermissionBlocked(isNotificationBlocked(status));
+        })
+        .catch(() => {});
+    };
+    refreshPermissionState();
+    // Returning from system Settings keeps this screen mounted: re-query so a
+    // grant made there replaces the blocked row without a remount.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshPermissionState();
+    });
     return () => {
       cancelled = true;
+      subscription.remove();
     };
   }, [isCompletionNotificationEnabled]);
 
@@ -50,9 +78,9 @@ export default function NotificationSettingsScreen() {
         if (!isEnabled) return;
         // The system sheet follows the user's explicit opt-in; Android only
         // reports the current state once it has already been decided.
-        const { granted } = await requestPermissionsAsync();
-        setIsNotificationPermissionDenied(!granted);
-        if (!granted) {
+        const status = await requestPermissionsAsync();
+        setIsNotificationPermissionBlocked(isNotificationBlocked(status));
+        if (isNotificationBlocked(status)) {
           toast.show({
             label: t('settings.notifications.completion.permissionDenied'),
             variant: 'warning',
@@ -125,7 +153,7 @@ export default function NotificationSettingsScreen() {
       ) : null}
       {Platform.OS === 'ios' &&
       isCompletionNotificationEnabled &&
-      isNotificationPermissionDenied ? (
+      isNotificationPermissionBlocked ? (
         <Section footer={t('settings.notifications.completion.permissionDenied')}>
           <Section.Item
             label={t('settings.notifications.completion.systemSettings')}

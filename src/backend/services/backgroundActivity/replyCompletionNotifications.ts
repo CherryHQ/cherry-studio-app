@@ -80,13 +80,18 @@ export function createReplyCompletionNotifier<Props extends BackgroundReplyActiv
         context: BackgroundActivityDeliveryContext | undefined,
         policy: 'default' | 'immediate',
       ): Promise<void> => {
+        // A surface transitions back to a non-terminal phase only when a new
+        // turn inherits it: re-arm the one-shot notice and the delivery record
+        // for the new turn's own ending.
+        if (finalProps.phase !== 'completed' && finalProps.phase !== 'failed') {
+          noticeUsed = false;
+          delivered = false;
+          return Promise.resolve();
+        }
         // Only a terminal phase consumes the one-shot notice: streaming
         // updates ride the same channel and must leave it armed for the real
         // ending, while later title updates never replay a delivered one.
         if (noticeUsed) return Promise.resolve();
-        if (finalProps.phase !== 'completed' && finalProps.phase !== 'failed') {
-          return Promise.resolve();
-        }
         noticeUsed = true;
         return deliver(deepLinkUrl, finalProps, context, policy)
           .then((sent) => {

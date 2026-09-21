@@ -155,6 +155,18 @@ test('a streaming update leaves the terminal notice armed', async () => {
   expect(notices).toHaveBeenCalledTimes(1);
 });
 
+test('re-arms the notice when a new turn inherits a surface whose slot was consumed silently', async () => {
+  const activity = surface();
+  // Turn 1 completes in the foreground: the one-shot slot is consumed without delivery.
+  setAppState('active');
+  await activity.update(props('completed'), { phaseStartedInBackground: false });
+  // Turn 2 inherits the same handle; its background completion must still notify.
+  setAppState('background');
+  await activity.update(props('preparing'), inBackground);
+  await activity.update(props('completed'), inBackground);
+  expect(notices).toHaveBeenCalledTimes(1);
+});
+
 test('declares the delivery lease so ending cannot suspend before submission', () => {
   const notifier = createReplyCompletionNotifier(innerPresenter(), {
     isReplyCompletionNotificationEnabled: enabled,
