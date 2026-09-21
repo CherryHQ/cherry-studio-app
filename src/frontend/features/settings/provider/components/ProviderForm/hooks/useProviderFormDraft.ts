@@ -6,7 +6,6 @@ import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import {
   areApiKeyEntriesEqual,
-  createApiKeyEntry,
   getApiKeyValidationError,
 } from '../../../apiService/utils/providerApiServiceApiKeys';
 import {
@@ -82,9 +81,12 @@ export function useProviderFormDraft({
     },
     [createInitialValues, defaultEndpointNeedsRepair, initiallyDirty, sourceKey],
   );
-  const addApiKey = useCallback(() => {
-    const entry = createApiKeyEntry();
-    setValues((current) => ({ ...current, apiKeys: [...current.apiKeys, entry] }));
+  const addApiKey = useCallback<ProviderFormActions['addApiKey']>((entry) => {
+    setValues((current) =>
+      current.apiKeys.some((key) => key.id === entry.id)
+        ? current
+        : { ...current, apiKeys: [...current.apiKeys, entry] },
+    );
   }, []);
   const updateApiKey = useCallback<ProviderFormActions['updateApiKey']>(
     (id, updates) =>

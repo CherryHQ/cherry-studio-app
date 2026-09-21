@@ -7,7 +7,7 @@ import type { ProviderFormValues } from './utils/providerFormValues';
 
 export type ProviderFormActions = {
   reset: (values?: ProviderFormValues) => void;
-  addApiKey: () => void;
+  addApiKey: (entry: ApiKeyEntry) => void;
   updateApiKey: (id: string, updates: Partial<Omit<ApiKeyEntry, 'id'>>) => void;
   removeApiKey: (id: string) => void;
   setAvatarUri: (uri: string | null) => void;

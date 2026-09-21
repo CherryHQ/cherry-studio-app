@@ -1,5 +1,6 @@
 import {
   getApiKeyValidationError,
+  maskProviderApiKey,
   normalizeApiKeyEntries,
 } from '../apiService/utils/providerApiServiceApiKeys';
 import { shouldShowApiKeys } from '../apiService/utils/providerApiServiceAuth';
@@ -17,6 +18,13 @@ import {
 } from '../apiService/utils/providerApiServiceSave';
 
 describe('provider API service form helpers', () => {
+  it('never displays a complete credential in the key list', () => {
+    expect(maskProviderApiKey('short')).toBe('••••••••');
+    expect(maskProviderApiKey('        abcd')).toBe('••••••••');
+    expect(maskProviderApiKey('12345678')).toBe('••••••••');
+    expect(maskProviderApiKey('sk-secret-value-abcd')).toBe('•••• abcd');
+    expect(maskProviderApiKey(' sk-secret-value-abcd ')).toBe('•••• abcd');
+  });
   it('hides manual keys only for login-only providers', () => {
     expect(shouldShowApiKeys('api-key', { authMethods: ['oauth'] })).toBe(false);
     expect(shouldShowApiKeys('api-key', { authMethods: ['api-key', 'oauth'] })).toBe(true);

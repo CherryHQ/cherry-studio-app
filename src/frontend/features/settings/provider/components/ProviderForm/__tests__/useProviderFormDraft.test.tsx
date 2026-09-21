@@ -1,5 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { createApiKeyEntry } from '../../../apiService/utils/providerApiServiceApiKeys';
 import { buildCustomProviderCreationPayload } from '../../../apiService/utils/providerApiServiceEndpointRules';
 import { useProviderFormDraft } from '../hooks/useProviderFormDraft';
 import {
@@ -80,9 +81,9 @@ describe('single-protocol provider setup', () => {
   });
 
   it('adds enabled keys with independent identities and restores a clean draft when an addition is removed', () => {
-    act(() => form.actions.addApiKey());
+    act(() => form.actions.addApiKey(createApiKeyEntry()));
     const first = form.state.apiKeys[0];
-    act(() => form.actions.addApiKey());
+    act(() => form.actions.addApiKey(createApiKeyEntry()));
     const second = form.state.apiKeys[1];
     expect(first.id).not.toBe(second.id);
     expect(first.isEnabled).toBe(true);
@@ -100,14 +101,14 @@ describe('single-protocol provider setup', () => {
   it('blocks blank or duplicate rows until they are corrected or removed', () => {
     act(() => {
       form.actions.setName('Provider');
-      form.actions.addApiKey();
+      form.actions.addApiKey(createApiKeyEntry());
     });
     const firstId = form.state.apiKeys[0].id;
     expect(form.meta.canSubmit).toBe(false);
     act(() => form.actions.updateApiKey(firstId, { key: 'sk-a' }));
     expect(form.meta.canSubmit).toBe(true);
 
-    act(() => form.actions.addApiKey());
+    act(() => form.actions.addApiKey(createApiKeyEntry()));
     const secondId = form.state.apiKeys[1].id;
     act(() => form.actions.updateApiKey(secondId, { key: ' sk-a ', isEnabled: false }));
     expect(form.meta.canSubmit).toBe(false);

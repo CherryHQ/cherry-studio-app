@@ -4,8 +4,20 @@ import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
 export type ApiKeyValidationError = 'empty' | 'duplicate' | 'invalidFormat';
 
+export const API_KEY_ERROR_LABELS = {
+  empty: 'settings.provider.apiService.apiKeyRequired',
+  duplicate: 'settings.provider.apiService.keys.duplicate',
+  invalidFormat: 'settings.provider.apiService.keys.invalidFormat',
+} as const satisfies Record<ApiKeyValidationError, string>;
+
 export function createApiKeyEntry(): ApiKeyEntry {
   return { id: Crypto.randomUUID(), isEnabled: true, key: '' };
+}
+
+/** Keep short credentials fully hidden and expose only a small suffix for recognition. */
+export function maskProviderApiKey(key: string): string {
+  const trimmedKey = key.trim();
+  return trimmedKey.length > 8 ? `•••• ${trimmedKey.slice(-4)}` : '••••••••';
 }
 
 export function getApiKeyValidationError(
