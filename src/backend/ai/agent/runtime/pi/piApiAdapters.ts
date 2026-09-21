@@ -16,6 +16,8 @@ type PiStreamFn = AgentOptions['streamFn'];
 
 type PiApiAdapter = {
   api: SupportedPiApi;
+  /** Configured headers that override or compete with the selected API key. */
+  authHeaderNames: readonly string[];
   formatBaseUrl(baseUrl: string, appendApiVersion?: boolean): string;
   loadStreamSimple(): Promise<PiStreamFn>;
   supportsCustomFetch: boolean;
@@ -23,6 +25,7 @@ type PiApiAdapter = {
 
 const AZURE_RESPONSES_ADAPTER: PiApiAdapter = {
   api: 'azure-openai-responses',
+  authHeaderNames: ['authorization', 'api-key'],
   formatBaseUrl: (baseUrl) => formatApiHost(baseUrl, false),
   loadStreamSimple: async () =>
     (await import('@earendil-works/pi-ai/api/azure-openai-responses'))
@@ -33,6 +36,7 @@ const AZURE_RESPONSES_ADAPTER: PiApiAdapter = {
 const PI_API_ADAPTERS = {
   [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
     api: 'anthropic-messages',
+    authHeaderNames: ['authorization', 'x-api-key'],
     formatBaseUrl: (baseUrl) => withoutTrailingApiVersion(formatApiHost(baseUrl, false)),
     loadStreamSimple: async () =>
       (await import('@earendil-works/pi-ai/api/anthropic-messages'))
@@ -41,6 +45,7 @@ const PI_API_ADAPTERS = {
   },
   [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: {
     api: 'google-generative-ai',
+    authHeaderNames: ['authorization', 'x-goog-api-key'],
     formatBaseUrl: (baseUrl) => formatApiHost(baseUrl, true, 'v1beta'),
     loadStreamSimple: async () =>
       (await import('@earendil-works/pi-ai/api/google-generative-ai'))
@@ -49,6 +54,7 @@ const PI_API_ADAPTERS = {
   },
   [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
     api: 'openai-completions',
+    authHeaderNames: ['authorization'],
     formatBaseUrl: (baseUrl, appendApiVersion = true) => formatApiHost(baseUrl, appendApiVersion),
     loadStreamSimple: async () =>
       (await import('@earendil-works/pi-ai/api/openai-completions'))
@@ -57,6 +63,7 @@ const PI_API_ADAPTERS = {
   },
   [ENDPOINT_TYPE.OPENAI_RESPONSES]: {
     api: 'openai-responses',
+    authHeaderNames: ['authorization'],
     formatBaseUrl: (baseUrl, appendApiVersion = true) => formatApiHost(baseUrl, appendApiVersion),
     loadStreamSimple: async () =>
       (await import('@earendil-works/pi-ai/api/openai-responses'))

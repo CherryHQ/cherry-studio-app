@@ -93,6 +93,7 @@ describe('Pi model resolver', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockBoundStreamFn.mockReset();
     mockGetAuthConfig.mockResolvedValue(null);
     mockListApiKeys.mockResolvedValue({ keys: [] });
     mockResolveApiKey.mockResolvedValue({
@@ -143,6 +144,10 @@ describe('Pi model resolver', () => {
     }));
     const provider = makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily);
     provider.apiKeys = [...keys, { id: 'disabled', isEnabled: false }];
+    provider.settings.extraHeaders = {
+      ...provider.settings.extraHeaders,
+      'CF-AIG-Authorization': 'Bearer gateway-key',
+    };
     mockGetProviderById.mockResolvedValue(provider);
     mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
     mockListApiKeys.mockResolvedValue({ keys });
@@ -207,6 +212,85 @@ describe('Pi model resolver', () => {
     expect(mockListApiKeys).toHaveBeenCalledWith(provider.id, { enabled: true });
   });
 
+  test.each([
+    ...CASES.map((testCase) => ({
+      ...testCase,
+      authHeader: 'aUtHoRiZaTiOn',
+      value: 'Bearer header-secret',
+    })),
+    { ...CASES[0], authHeader: 'Authorization', value: '' },
+    { ...CASES[2], authHeader: 'X-Api-Key', value: 'header-secret' },
+    { ...CASES[3], authHeader: 'X-Goog-Api-Key', value: 'header-secret' },
+    ...['API-Key', 'Authorization'].map((authHeader) => ({
+      ...CASES[0],
+      adapterFamily: 'azure-responses',
+      api: 'azure-openai-responses',
+      authHeader,
+      value: 'header-secret',
+    })),
+  ])(
+    'preserves $authHeader on $api without rotating or attributing the overridden key',
+    async (testCase) => {
+      const provider = makeProvider(
+        testCase.endpointType,
+        testCase.baseUrl,
+        testCase.adapterFamily,
+      );
+      provider.apiKeys = [
+        { id: 'key-1', isEnabled: true },
+        { id: 'key-2', isEnabled: true },
+      ];
+      provider.settings.extraHeaders = { [testCase.authHeader]: testCase.value };
+      if (testCase.adapterFamily === 'azure-responses') provider.authType = 'iam-azure';
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+      mockListApiKeys.mockResolvedValue({
+        keys: provider.apiKeys.map((key) => ({ ...key, key: `secret-${key.id}` })),
+      });
+
+      const resolution = await resolve(resolver);
+      expect(resolution.usageContext.credentialReceipt).toEqual({ attribution: 'unknown' });
+      expect(resolution.redactionValues).toEqual(['secret-key', testCase.value]);
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          headers: expect.objectContaining({ [testCase.authHeader]: testCase.value }),
+        }),
+      );
+
+      for (const status of [401, 429]) {
+        const failure: AssistantMessage = {
+          role: 'assistant',
+          api: resolution.model.api,
+          provider: provider.id,
+          model: resolution.model.id,
+          content: [],
+          stopReason: 'error',
+          timestamp: 1,
+          diagnostics: [{ type: 'provider_response_failure', timestamp: 1, details: { status } }],
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+        };
+        mockBoundStreamFn.mockImplementation(() => {
+          const stream = new AssistantMessageEventStream();
+          stream.push({ type: 'error', reason: 'error', error: failure });
+          return stream;
+        });
+        const stream = await resolution.streamFn(resolution.model, { messages: [] });
+        expect(await stream.result()).toBe(failure);
+      }
+      expect(mockBoundStreamFn).toHaveBeenCalledTimes(2);
+      expect(mockListApiKeys).not.toHaveBeenCalled();
+      expect(mockResolveApiKey).toHaveBeenCalledTimes(1);
+    },
+  );
+
   test.each(CASES)('resolves $endpointType through $api', async (testCase) => {
     const provider = makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily);
     const model = makeModel(testCase.endpointType);
@@ -242,7 +326,7 @@ describe('Pi model resolver', () => {
     expect(resolution.streamFn).toBe(mockBoundStreamFn);
     expect(resolution.supportsTools).toBe(true);
     expect(resolution.defaultThinkingLevel).toBe('high');
-    expect(resolution.redactionValues).toEqual(['secret-key', 'Bearer header-secret']);
+    expect(resolution.redactionValues).toEqual(['secret-key']);
     expect(resolution.usageContext).toMatchObject({
       credentialReceipt: CREDENTIAL_RECEIPT,
       modelId: testCase.expectedModelId,
@@ -253,7 +337,6 @@ describe('Pi model resolver', () => {
       expect.objectContaining({
         apiKey: 'secret-key',
         headers: expect.objectContaining({
-          Authorization: 'Bearer header-secret',
           'X-App-Name': 'CherryStudioMobile',
           'X-Custom': 'custom',
         }),
@@ -683,7 +766,6 @@ function makeProvider(
     name: 'Test Provider',
     settings: {
       extraHeaders: {
-        Authorization: 'Bearer header-secret',
         'X-Custom': 'custom',
       },
     },

@@ -103,6 +103,13 @@ disable failover. Cancellation, other errors, and errors after content starts do
 The binding updates usage attribution to the serving key and redacts every candidate credential.
 This policy belongs to Pi; non-conversation AI SDK and image calls retain their existing behavior.
 
+Provider-configured authentication headers disable Pi key failover and leave credential attribution
+unknown, because the selected API key may not be the credential serving the request. Each Pi adapter
+declares the relevant header names: `Authorization` for all supported protocols, plus `x-api-key`
+for Anthropic, `x-goog-api-key` for Google, and `api-key` for Azure. Matching is case-insensitive and
+includes empty values, which can suppress SDK-generated authentication. These headers remain
+unchanged and redacted; unrelated custom headers do not disable failover.
+
 Device interconnection already exports the full enabled API-key list, including IDs and labels.
 Mobile provider imports preserve that list and its order, so imported keys participate in the same
 rotation and failover policy without a separate synchronization protocol.

@@ -146,8 +146,13 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         azureApiVersion,
       };
       const primaryStream = await bindPiStream(adapter, streamBinding);
+      const hasAuthHeader = Object.keys(headers).some((name) =>
+        adapter.authHeaderNames.includes(name.toLowerCase()),
+      );
       const capturedContext = createAiUsageCaptureContext({
-        credentialReceipt: selectedApiKey.apiKeySelection,
+        credentialReceipt: hasAuthHeader
+          ? { attribution: 'unknown' }
+          : selectedApiKey.apiKeySelection,
         messageRef: null,
         modelId,
         modelName: model.name,
@@ -170,7 +175,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       };
 
       const selectedKeyId =
-        'id' in selectedApiKey.apiKeySelection ? selectedApiKey.apiKeySelection.id : undefined;
+        'id' in usageContext.credentialReceipt ? usageContext.credentialReceipt.id : undefined;
       const enabledKeys =
         apiKeyOverride === undefined &&
         selectedKeyId !== undefined &&
