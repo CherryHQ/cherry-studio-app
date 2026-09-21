@@ -24,6 +24,7 @@ import {
   paintingViewerHeaderShown,
 } from '@/frontend/appShell/navigation';
 import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/observability';
+import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { QueryProvider } from '@/frontend/data';
@@ -60,6 +61,7 @@ function RootLayout() {
                                 <BackgroundActivityBridge />
                                 <LanguagePreferenceObserver />
                                 <RootStack />
+                                <PrivacyConsentGate />
                               </RouteHeaderProvider>
                             </BottomSheetProvider>
                           </AppAlertProvider>

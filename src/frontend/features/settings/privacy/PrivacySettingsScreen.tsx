@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { setSentryConsent, useSentryConsent } from '@/frontend/appShell/observability';
+import { usePreference } from '@/frontend/data/hooks';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
@@ -11,6 +12,17 @@ export default function PrivacySettingsScreen() {
   const { toast } = useToast();
   const { enabled, available } = useSentryConsent();
   const [isSaving, setIsSaving] = useState(false);
+  const [dataCollectionEnabled, setDataCollectionEnabled] = usePreference(
+    'app.privacy.data_collection.enabled',
+  );
+
+  const changeDataCollection = async (value: boolean) => {
+    try {
+      await setDataCollectionEnabled(value);
+    } catch {
+      toast.show({ label: t('settings.privacy.saveFailed'), variant: 'danger' });
+    }
+  };
 
   const changeConsent = async (value: boolean) => {
     setIsSaving(true);
@@ -33,6 +45,14 @@ export default function PrivacySettingsScreen() {
             void changeConsent(value);
           }}
           value={enabled}
+        />
+        <Section.SwitchItem
+          description={t('settings.privacy.dataCollectionDescription')}
+          label={t('settings.privacy.dataCollection')}
+          onValueChange={(value) => {
+            void changeDataCollection(value);
+          }}
+          value={dataCollectionEnabled}
         />
       </Section>
     </SettingsScrollPage>
