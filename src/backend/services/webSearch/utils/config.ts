@@ -137,11 +137,3 @@ export async function getProviderForCapability(
 
   return provider;
 }
-
-/**
- * Permanent configuration failures are typed at their owning boundary so callers never infer
- * retryability from error-message text.
- */
-export function isPermanentWebSearchConfigError(error: unknown): error is WebSearchConfigError {
-  return error instanceof WebSearchConfigError;
-}

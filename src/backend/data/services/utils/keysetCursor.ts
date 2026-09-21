@@ -71,9 +71,6 @@ export const asNumericKey = (s: string): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** `parseKey` for string sort columns (e.g. `orderKey`). Rejects empty. */
-export const asStringKey = (s: string): string | null => (s === '' ? null : s);
-
 /**
  * List-browsing decode policy: `undefined` raw means "first page" (no warn);
  * a malformed cursor warns once and falls back to the first page (`null`).

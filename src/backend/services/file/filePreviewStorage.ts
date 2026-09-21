@@ -5,12 +5,10 @@ import type { FileEntryService } from '@/backend/data/services/FileEntryService'
 import type { ResolvedFileUris } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { FileEntry } from '@/shared/data/types/file';
-import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import {
   createInternalEntry,
   type CreateInternalEntryInput,
-  createMessageParts,
   getInternalFileUri,
 } from './fileStorage';
 
@@ -31,15 +29,6 @@ export async function createInternalEntryWithPreview(
   const entry = await createInternalEntry(entries, input);
   await resolveFilePreviewUris(entry);
   return entry;
-}
-
-export async function createMessagePartsWithPreviews(
-  entries: Pick<FileEntryService, 'create' | 'delete'>,
-  parts: readonly CherryMessagePart[],
-): Promise<{ entries: FileEntry[]; parts: CherryMessagePart[] }> {
-  const managed = await createMessageParts(entries, parts);
-  await Promise.all(managed.entries.map(resolveFilePreviewUris));
-  return managed;
 }
 
 export async function resolveFilePreviewUris(entry: FileEntry): Promise<ResolvedFileUris> {

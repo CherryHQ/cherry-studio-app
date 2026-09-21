@@ -14,10 +14,7 @@ import {
   reconcileImageParamDraft,
   resolveImageGenerationMode,
 } from '@/shared/utils/imageGenerationParams';
-import {
-  resolvePaintingGenerationMode,
-  supportsPaintingGenerationMode,
-} from '@/shared/utils/paintingModelSupport';
+import { resolvePaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
 
 const support = {
   modes: {
@@ -76,7 +73,6 @@ describe('image generation parameter resolution', () => {
       inputModalities: [MODALITY.TEXT, MODALITY.IMAGE],
       imageGeneration: { modes: { generate: support.modes.generate } },
     });
-    expect(supportsPaintingGenerationMode(selected, 'edit')).toBe(true);
     const mode = resolvePaintingGenerationMode(selected, true);
     expect(mode).toBe('generate');
     expect(resolveImageGenerationMode(selected.imageGeneration, mode)?.definition).toBe(
@@ -105,15 +101,17 @@ describe('image generation parameter resolution', () => {
   });
 
   it('filters models by the requested generate or edit interaction', () => {
-    expect(supportsPaintingGenerationMode(model({ imageGeneration: support }), 'generate')).toBe(
-      true,
-    );
-    expect(supportsPaintingGenerationMode(model({ imageGeneration: support }), 'edit')).toBe(true);
     expect(
-      supportsPaintingGenerationMode(
+      resolvePaintingGenerationMode(model({ imageGeneration: support }), false) !== undefined,
+    ).toBe(true);
+    expect(
+      resolvePaintingGenerationMode(model({ imageGeneration: support }), true) !== undefined,
+    ).toBe(true);
+    expect(
+      resolvePaintingGenerationMode(
         model({ imageGeneration: { modes: { generate: { supports: {} } } } }),
-        'edit',
-      ),
+        true,
+      ) !== undefined,
     ).toBe(false);
   });
 
@@ -125,10 +123,10 @@ describe('image generation parameter resolution', () => {
       endpointTypes: [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, ENDPOINT_TYPE.OPENAI_IMAGE_EDIT],
     });
 
-    expect(supportsPaintingGenerationMode(generateOnly, 'generate')).toBe(true);
-    expect(supportsPaintingGenerationMode(generateOnly, 'edit')).toBe(false);
-    expect(supportsPaintingGenerationMode(editOnly, 'generate')).toBe(false);
-    expect(supportsPaintingGenerationMode(editOnly, 'edit')).toBe(true);
+    expect(resolvePaintingGenerationMode(generateOnly, false) !== undefined).toBe(true);
+    expect(resolvePaintingGenerationMode(generateOnly, true) !== undefined).toBe(false);
+    expect(resolvePaintingGenerationMode(editOnly, false) !== undefined).toBe(false);
+    expect(resolvePaintingGenerationMode(editOnly, true) !== undefined).toBe(true);
   });
 
   it('retains capability and modality fallback for legacy image models', () => {
@@ -138,10 +136,10 @@ describe('image generation parameter resolution', () => {
       inputModalities: [MODALITY.IMAGE],
     });
 
-    expect(supportsPaintingGenerationMode(generateModel, 'generate')).toBe(true);
-    expect(supportsPaintingGenerationMode(generateModel, 'edit')).toBe(false);
-    expect(supportsPaintingGenerationMode(editModel, 'edit')).toBe(true);
-    expect(supportsPaintingGenerationMode(undefined, 'generate')).toBe(false);
+    expect(resolvePaintingGenerationMode(generateModel, false) !== undefined).toBe(true);
+    expect(resolvePaintingGenerationMode(generateModel, true) !== undefined).toBe(false);
+    expect(resolvePaintingGenerationMode(editModel, true) !== undefined).toBe(true);
+    expect(resolvePaintingGenerationMode(undefined, false) !== undefined).toBe(false);
   });
 });
 

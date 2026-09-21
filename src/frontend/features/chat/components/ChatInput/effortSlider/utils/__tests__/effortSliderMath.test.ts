@@ -1,6 +1,5 @@
 import {
   clamp01,
-  effortGaugeNeedleAngle,
   getEffortSliderTrackGeometry,
   magnetize,
   nearestStopIndex,
@@ -62,20 +61,6 @@ describe('getEffortSliderTrackGeometry', () => {
       getEffortSliderTrackGeometry(300, 0, effortSliderThumbSize, effortSliderThumbInset)
         .tickCenters,
     ).toEqual([]);
-  });
-});
-
-describe('effortGaugeNeedleAngle', () => {
-  it('maps the first, middle, and last stops across the gauge sweep', () => {
-    expect(effortGaugeNeedleAngle(0, 5)).toBeCloseTo(-Math.PI / 3);
-    expect(effortGaugeNeedleAngle(2, 5)).toBeCloseTo(0);
-    expect(effortGaugeNeedleAngle(4, 5)).toBeCloseTo(Math.PI / 3);
-  });
-
-  it('clamps invalid indices and collapses a single stop to the start angle', () => {
-    expect(effortGaugeNeedleAngle(-1, 5)).toBeCloseTo(-Math.PI / 3);
-    expect(effortGaugeNeedleAngle(9, 5)).toBeCloseTo(Math.PI / 3);
-    expect(effortGaugeNeedleAngle(0, 1)).toBeCloseTo(-Math.PI / 3);
   });
 });
 
