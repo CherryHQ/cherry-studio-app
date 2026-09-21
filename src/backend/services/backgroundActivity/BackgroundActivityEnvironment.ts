@@ -21,6 +21,8 @@ export type BackgroundActivityEnvironmentConfig = {
   subscribePresentationEnabled?: (listener: () => void) => () => void;
   onForegroundAttention?: (attention: ForegroundActivityAttention) => void;
   paintingPresenter: BackgroundActivityPresenter<PaintingActivityProps>;
+  /** Whether finishing chat replies may raise a system notification. */
+  isReplyCompletionNotificationEnabled: () => boolean;
   /** Deep link of the focused, foreground task surface. Absent sources never report one. */
   subscribeVisibleTask?: (listener: (deepLinkUrl: string | undefined) => void) => () => void;
   translate: BackgroundActivityTranslate;
@@ -29,6 +31,7 @@ export type BackgroundActivityEnvironmentConfig = {
 const defaultConfig = (): BackgroundActivityEnvironmentConfig => ({
   assistantPresenter: noopBackgroundActivityPresenter(),
   getColorScheme: () => 'light',
+  isReplyCompletionNotificationEnabled: () => false,
   paintingPresenter: noopBackgroundActivityPresenter(),
   translate: (key) => key,
 });
@@ -76,6 +79,9 @@ export class BackgroundActivityEnvironment extends BaseService {
    */
   subscribeVisibleTask = (listener: (deepLinkUrl: string | undefined) => void): (() => void) =>
     (this.config.subscribeVisibleTask ?? noSubscription)(listener);
+
+  isReplyCompletionNotificationEnabled = (): boolean =>
+    this.config.isReplyCompletionNotificationEnabled();
 
   onForegroundAttention = (attention: ForegroundActivityAttention): void => {
     this.config.onForegroundAttention?.(attention);

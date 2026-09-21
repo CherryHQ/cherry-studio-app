@@ -17,6 +17,7 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
+import { createReplyCompletionNotifier } from '@/backend/services/backgroundActivity/replyCompletionNotifications';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -63,13 +64,21 @@ export function createAppBootstrapRuntime(
     Platform.OS === 'android'
       ? host.container.get<AndroidBackgroundActivityRuntime>('AndroidBackgroundActivityRuntime')
       : undefined;
+  // Android raises completion notices inside its own attention runtime; the
+  // iOS Live Activity presenter needs the decorator for the same contract.
+  const isReplyCompletionNotificationEnabled = () =>
+    preference.readCached('chat.completion_notifications.enabled');
   backgroundActivityEnvironment.configure({
     assistantPresenter:
-      androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
+      androidActivities?.createPresenter() ??
+      createReplyCompletionNotifier(createLiveActivityPresenter(AssistantActivity), {
+        isReplyCompletionNotificationEnabled,
+      }),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
     // Android's switch controls chat execution; its service notifications remain mandatory.
     isPresentationEnabled: () =>
       Platform.OS !== 'ios' || preference.readCached('chat.background_reply.enabled'),
+    isReplyCompletionNotificationEnabled,
     subscribePresentationEnabled: (listener) =>
       preference.subscribeChange('chat.background_reply.enabled')(listener),
     onForegroundAttention: publishForegroundActivityAttention,

@@ -137,6 +137,7 @@ describe('createAppBootstrapRuntime', () => {
       assistantPresenter: expect.any(Object),
       getColorScheme: expect.any(Function),
       isPresentationEnabled: expect.any(Function),
+      isReplyCompletionNotificationEnabled: expect.any(Function),
       subscribePresentationEnabled: expect.any(Function),
       onForegroundAttention: expect.any(Function),
       paintingPresenter: expect.any(Object),

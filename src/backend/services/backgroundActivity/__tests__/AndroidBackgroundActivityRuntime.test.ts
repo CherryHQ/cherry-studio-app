@@ -34,7 +34,12 @@ jest.mock('expo-notifications', () => ({
 const native = jest.mocked(background);
 const notices = jest.mocked(notifications);
 const foregroundAttention = jest.fn();
-const environment = { translate: (key: string) => key, onForegroundAttention: foregroundAttention };
+const completionNotificationsEnabled = jest.fn(() => true);
+const environment = {
+  translate: (key: string) => key,
+  isReplyCompletionNotificationEnabled: completionNotificationsEnabled,
+  onForegroundAttention: foregroundAttention,
+};
 let running: boolean;
 let runtime: AndroidBackgroundActivityRuntime;
 const listeners = new Set<(state: AppStateStatus) => void>();
@@ -631,6 +636,31 @@ test('an aggregate restores the app and becomes task-specific again when one tas
     expect.objectContaining({ linkingURI: 'cherrystudio:///?sessionId=second' }),
   );
   expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('the completion preference suppresses plain completions but never failures', async () => {
+  completionNotificationsEnabled.mockReturnValue(false);
+  const completed = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  runtime.acquire('chat');
+  await flush();
+  setAppState('background');
+  await completed.update(props('completed'));
+  await completed.end('default', props('completed'));
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+
+  // Failures and approvals stay attention regardless of the preference.
+  const failed = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('responding'));
+  await failed.update(props('failed'));
+  expect(notices.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+
+  // Enabling the preference applies to later turns; the consumed completion
+  // above must not replay.
+  completionNotificationsEnabled.mockReturnValue(true);
+  const later = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('responding'));
+  await later.update(props('completed'));
+  expect(notices.scheduleNotificationAsync).toHaveBeenCalledTimes(2);
 });
 
 function props(phase: BackgroundReplyActivityProps['phase']): BackgroundReplyActivityProps {
