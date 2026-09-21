@@ -16,19 +16,6 @@ public class SystemIntegrationModule: Module {
       ]
     }
     OnDestroy { self.observers.forEach { NotificationCenter.default.removeObserver($0) }; self.observers = [] }
-    Function("getCapabilities") { () -> [String: Bool] in
-      var provider = false
-      if #available(iOS 18.4, *) { provider = true }
-      return ["translationWindow": true, "translationProvider": provider, "translationShortcut": true, "shortcuts": true]
-    }
-    AsyncFunction("invalidateTranslationConfiguration") { try TranslationConfigurationStore.invalidate() }
-    AsyncFunction("publishTranslationConfiguration") { (configuration: [String: Any], apiKey: String) in
-      try TranslationConfigurationStore.publish(configuration, apiKey: apiKey)
-    }
-    AsyncFunction("publishTranslationUnavailable") { (configuration: [String: Any]) in
-      try TranslationConfigurationStore.publishUnavailable(configuration)
-    }
-    AsyncFunction("getTranslationRevision") { TranslationConfigurationStore.revision() }
     AsyncFunction("claimNextEntry") { try SystemEntryStore.claimNext() }
     AsyncFunction("releaseEntry") { (id: String) in SystemEntryStore.release(id) }
     AsyncFunction("completeEntry") { (id: String) in try SystemEntryStore.complete(id) }

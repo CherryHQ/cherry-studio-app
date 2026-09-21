@@ -11,9 +11,8 @@ import {
 } from '@cherrystudio/ai-runtime/image';
 import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
-import { createAiUsageCaptureContext, type GatedSampling } from '@cherrystudio/ai-runtime/utils';
+import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import type { LanguageModelUsage, ModelMessage } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -52,7 +51,6 @@ export type AiUsageAttributionResolver = () => AiUsageAttribution;
 
 /** Non-streaming text generation request — pure transport data. */
 export interface AiGenerateRequest extends AiBaseRequest {
-  sampling?: GatedSampling;
   usageAttribution?: AiUsageAttribution;
   system?: string;
   prompt?: string;
@@ -66,7 +64,6 @@ export interface AiGenerateRequest extends AiBaseRequest {
 export interface AiGenerateResult {
   text: string;
   usage?: LanguageModelUsage;
-  finishReason?: string;
 }
 
 /** Image requests accept transport options only; text generation controls have no image meaning. */
@@ -220,41 +217,6 @@ export class AiService extends BaseService {
   // ── Non-streaming text generation (agent.generate) ──
 
   async generateText(request: AiGenerateRequest): Promise<AiGenerateResult> {
-    const { text, usage } = await this.generateTextWithUsagePolicy(request, true);
-    return { text, usage };
-  }
-
-  /** Temporary text has no tools, usage capture, or caller-supplied execution hooks. */
-  async generateTemporaryText(request: {
-    uniqueModelId: UniqueModelId;
-    system?: string;
-    prompt: string;
-    reasoningEffort?: ReasoningEffortOption;
-    sampling?: GatedSampling;
-    signal: AbortSignal;
-  }): Promise<Pick<AiGenerateResult, 'text' | 'finishReason'>> {
-    const { text, finishReason } = await this.generateTextWithUsagePolicy(
-      {
-        uniqueModelId: request.uniqueModelId,
-        system: request.system,
-        prompt: request.prompt,
-        reasoningEffort: request.reasoningEffort,
-        sampling: request.sampling,
-        requestOptions: {
-          signal: request.signal,
-          maxRetries: 0,
-          headers: { 'Cache-Control': 'no-store' },
-        },
-      },
-      false,
-    );
-    return { text, finishReason };
-  }
-
-  private async generateTextWithUsagePolicy(
-    request: AiGenerateRequest,
-    captureUsage: boolean,
-  ): Promise<AiGenerateResult> {
     const signal = request.requestOptions?.signal;
 
     const repairUsagePlugins: { current?: AiPlugin[] } = {};
@@ -269,29 +231,25 @@ export class AiService extends BaseService {
       sdkConfig,
       tools,
     } = await this.buildAgentParamsFor(request, () => repairUsagePlugins.current ?? []);
-    const usagePlugins = captureUsage
-      ? [
-          createAiUsagePlugin(
-            createCaptureContext({
-              provider,
-              model,
-              sdkModelId: sdkConfig.modelId,
-              credentialReceipt,
-              usageAttribution: request.usageAttribution,
-            }),
-            this.services.aiUsageRecord,
-          ),
-        ]
-      : [];
-    repairUsagePlugins.current = usagePlugins;
+    const usagePlugin = createAiUsagePlugin(
+      createCaptureContext({
+        provider,
+        model,
+        sdkModelId: sdkConfig.modelId,
+        credentialReceipt,
+        usageAttribution: request.usageAttribution,
+      }),
+      this.services.aiUsageRecord,
+    );
+    repairUsagePlugins.current = [usagePlugin];
 
     const generator = new AiSdkGenerator({
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
-      plugins: [...plugins, ...usagePlugins],
+      plugins: [...plugins, usagePlugin],
       context,
-      repairToolCall: captureUsage ? repairToolCall : undefined,
+      repairToolCall,
       system: request.system,
       tools,
       options,
@@ -495,7 +453,7 @@ export class AiService extends BaseService {
   }
 
   private async buildAgentParamsFor(
-    request: AiBaseRequest & { sampling?: GatedSampling },
+    request: AiBaseRequest,
     getRepairUsagePlugins?: () => AiPlugin[],
   ) {
     const { provider, model } = await this.getProviderAndModel(request);

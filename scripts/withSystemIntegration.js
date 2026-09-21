@@ -10,10 +10,7 @@ const {
   withXcodeProject,
 } = require('expo/config-plugins');
 
-const TARGETS = [
-  { name: 'CherryShareExtension', source: 'ShareExtension', minimum: '17.0' },
-  { name: 'CherryTranslationExtension', source: 'TranslationExtension', minimum: '18.4' },
-];
+const TARGETS = [{ name: 'CherryShareExtension', source: 'ShareExtension', minimum: '17.0' }];
 
 function xml(value) {
   const escape = (text) =>
@@ -41,29 +38,15 @@ function writePlist(file, value) {
 module.exports = (config) => {
   const bundle = config.ios.bundleIdentifier;
   const group = `group.${bundle}.system-integration`;
-  const keychain = `$(AppIdentifierPrefix)${bundle}.system-integration`;
-  const sharedInfo = {
-    CherrySystemIntegrationGroup: group,
-    CherrySystemIntegrationKeychainGroup: keychain,
-    'com.apple.developer.translation-ui-provider.network-access': true,
-  };
+  const sharedInfo = { CherrySystemIntegrationGroup: group };
   const sharedEntitlements = {
     'com.apple.security.application-groups': [group],
-    'keychain-access-groups': [keychain],
   };
   config = withEntitlementsPlist(config, (mod) => {
     const entitlements = mod.modResults;
     entitlements['com.apple.security.application-groups'] = [
       ...new Set([...(entitlements['com.apple.security.application-groups'] ?? []), group]),
     ];
-    // Preserve the app's default Keychain namespace before adding the extension's narrow group.
-    entitlements['keychain-access-groups'] = [
-      ...new Set([
-        ...(entitlements['keychain-access-groups'] ?? [`$(AppIdentifierPrefix)${bundle}`]),
-        keychain,
-      ]),
-    ];
-    entitlements['com.apple.developer.translation-app'] = true;
     return mod;
   });
   config = withInfoPlist(config, (mod) => {
@@ -101,10 +84,9 @@ module.exports = (config) => {
       for (const child of ['Core', target.source, 'Resources']) {
         fs.cpSync(path.join(source, child), path.join(directory, child), { recursive: true });
       }
-      const translation = target.source === 'TranslationExtension';
       writePlist(path.join(directory, 'Info.plist'), {
         CFBundleDevelopmentRegion: 'en',
-        CFBundleDisplayName: translation ? 'Cherry Translate' : 'Cherry Studio',
+        CFBundleDisplayName: 'Cherry Studio',
         CFBundleExecutable: '$(EXECUTABLE_NAME)',
         CFBundleIdentifier: '$(PRODUCT_BUNDLE_IDENTIFIER)',
         CFBundleInfoDictionaryVersion: '6.0',
@@ -113,26 +95,18 @@ module.exports = (config) => {
         CFBundleShortVersionString: '$(MARKETING_VERSION)',
         CFBundleVersion: '$(CURRENT_PROJECT_VERSION)',
         ...sharedInfo,
-        ...(translation
-          ? {
-              EXAppExtensionAttributes: {
-                EXExtensionPointIdentifier: 'com.apple.public.translation-ui-provider',
-              },
-            }
-          : {
-              NSExtension: {
-                NSExtensionPointIdentifier: 'com.apple.share-services',
-                NSExtensionPrincipalClass: '$(PRODUCT_MODULE_NAME).CherryShareViewController',
-                NSExtensionAttributes: {
-                  NSExtensionActivationRule: {
-                    NSExtensionActivationSupportsText: true,
-                    NSExtensionActivationSupportsWebURLWithMaxCount: 10,
-                    NSExtensionActivationSupportsImageWithMaxCount: 10,
-                    NSExtensionActivationSupportsFileWithMaxCount: 10,
-                  },
-                },
-              },
-            }),
+        NSExtension: {
+          NSExtensionPointIdentifier: 'com.apple.share-services',
+          NSExtensionPrincipalClass: '$(PRODUCT_MODULE_NAME).CherryShareViewController',
+          NSExtensionAttributes: {
+            NSExtensionActivationRule: {
+              NSExtensionActivationSupportsText: true,
+              NSExtensionActivationSupportsWebURLWithMaxCount: 10,
+              NSExtensionActivationSupportsImageWithMaxCount: 10,
+              NSExtensionActivationSupportsFileWithMaxCount: 10,
+            },
+          },
+        },
       });
       writePlist(path.join(directory, `${target.name}.entitlements`), sharedEntitlements);
       writePlist(path.join(directory, 'PrivacyInfo.xcprivacy'), {
@@ -174,29 +148,8 @@ module.exports = (config) => {
           'Resources',
           added.uuid,
         );
-        if (translation) {
-          // xcode's addTarget only knows legacy extensions. ExtensionKit uses a distinct product and embed directory.
-          const product = added.pbxNativeTarget.productReference;
-          const buildFiles = project.pbxBuildFileSection();
-          const embed = project.addBuildPhase(
-            [],
-            'PBXCopyFilesBuildPhase',
-            'Embed Cherry Translation',
-            main,
-            'app_extension',
-          );
-          embed.buildPhase.dstSubfolderSpec = 16;
-          embed.buildPhase.dstPath = '"$(CONTENTS_FOLDER_PATH)/Extensions"';
-          for (const phase of Object.values(project.hash.project.objects.PBXCopyFilesBuildPhase)) {
-            if (!phase?.files || phase === embed.buildPhase) continue;
-            const moved = phase.files.filter((file) => buildFiles[file.value]?.fileRef === product);
-            phase.files = phase.files.filter((file) => buildFiles[file.value]?.fileRef !== product);
-            embed.buildPhase.files.push(...moved);
-          }
-        }
       }
       const [uuid, nativeTarget] = entry;
-      if (translation) nativeTarget.productType = '"com.apple.product-type.extensionkit-extension"';
       const list = project.pbxXCConfigurationList()[nativeTarget.buildConfigurationList];
       for (const item of list.buildConfigurations) {
         const build = project.pbxXCBuildConfigurationSection()[item.value];

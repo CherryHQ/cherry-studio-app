@@ -1,1 +1,0 @@
-export { TranslationSettingsScreen } from './TranslationSettingsScreen';

@@ -10,7 +10,6 @@ import type { PluginsModule } from './plugins';
 import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
 import type { SystemEntryModule } from './systemEntry';
-import type { TranslationModule } from './translation';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
@@ -27,7 +26,6 @@ export interface Backend {
   readonly profile: ProfileModule;
   readonly providers: ProvidersModule;
   readonly webSearch: WebSearchModule;
-  readonly translation: TranslationModule;
 }
 
 export type BackendModuleKey = keyof Backend;

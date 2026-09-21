@@ -1,5 +1,5 @@
 <resources>
-  <style name="CherryTranslationDialog" parent="android:style/Theme.Material.Dialog.Alert">
+  <style name="CherryShareDialog" parent="android:style/Theme.Material.Dialog.Alert">
     <item name="android:windowNoTitle">true</item>
     <item name="android:windowCloseOnTouchOutside">true</item>
     <item name="android:windowActionModeOverlay">true</item>

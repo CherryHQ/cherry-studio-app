@@ -31,19 +31,12 @@ class ShareReceiverActivity : Activity() {
         item.text?.toString() ?: item.uri?.takeIf { it.scheme in listOf("http", "https") }?.toString()
       }.joinToString("\n\n") }.orEmpty()
     val uris = receiveUris(intent)
-    // No source text is staged until the user chooses the ordinary share workflow.
+    // No source content is staged until the user confirms the share.
     dialog = AlertDialog.Builder(this)
       .setTitle(R.string.cherry_share_title)
       .setMessage(R.string.cherry_share_confirm)
-      .setNegativeButton(R.string.cherry_translation_close) { _, _ -> finish() }
+      .setNegativeButton(R.string.cherry_share_close) { _, _ -> finish() }
       .setPositiveButton(R.string.cherry_share_continue) { _, _ -> stage(text, uris) }
-      .apply {
-        if (uris.isEmpty() && text.isNotBlank()) setNeutralButton(R.string.cherry_share_translate) { _, _ ->
-          startActivity(Intent(this@ShareReceiverActivity, TranslationActivity::class.java)
-            .setAction(TranslationActivity.ACTION_TRANSLATE).putExtra(Intent.EXTRA_TEXT, text))
-          finish()
-        }
-      }
       .setOnCancelListener { finish() }
       .show()
   }
@@ -60,7 +53,7 @@ class ShareReceiverActivity : Activity() {
 
   private fun stage(text: String, uris: List<Uri>) {
     dialog = AlertDialog.Builder(this).setMessage(R.string.cherry_share_preparing)
-      .setNegativeButton(R.string.cherry_translation_close) { _, _ -> finish() }
+      .setNegativeButton(R.string.cherry_share_close) { _, _ -> finish() }
       .setOnCancelListener { finish() }.show()
     scope.launch {
       try {
@@ -89,7 +82,7 @@ class ShareReceiverActivity : Activity() {
       } catch (_: Exception) {
         dialog?.dismiss()
         dialog = AlertDialog.Builder(this@ShareReceiverActivity).setMessage(R.string.cherry_share_failed)
-          .setPositiveButton(R.string.cherry_translation_close) { _, _ -> finish() }
+          .setPositiveButton(R.string.cherry_share_close) { _, _ -> finish() }
           .setOnCancelListener { finish() }.show()
       }
     }

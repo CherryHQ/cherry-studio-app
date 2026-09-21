@@ -7,7 +7,7 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { chatHref } from '@/frontend/appShell/navigation/chat';
-import { createTranslationHandoff, getSystemEntryHandoff } from '@/frontend/appShell/systemEntry';
+import { getSystemEntryHandoff } from '@/frontend/appShell/systemEntry';
 import { queryKeys } from '@/frontend/data';
 import { useAgentsApi } from '@/frontend/hooks/agent';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -57,26 +57,6 @@ export function SystemShareScreen() {
         if (mounted.current) setBusy(false);
       });
   };
-  const translate = () => {
-    if (!session || !action || busy) return;
-    setBusy(true);
-    void session
-      .complete()
-      .then(() => {
-        if (mounted.current)
-          router.replace({
-            pathname: '/translate',
-            params: { handoff: createTranslationHandoff({ text: action.text }) },
-          });
-      })
-      .catch(() => {
-        if (mounted.current) {
-          setBusy(false);
-          toast.show({ label: t('systemEntry.failed'), variant: 'danger' });
-        }
-      });
-  };
-
   return (
     <View className="flex-1">
       <RouteHeader
@@ -127,11 +107,6 @@ export function SystemShareScreen() {
             <Button loading={busy} disabled={!selected} onPress={submit}>
               {t('systemEntry.share.send')}
             </Button>
-            {!action.files.length && action.text.length <= 16_000 ? (
-              <Button variant="secondary" disabled={busy} onPress={translate}>
-                {t('translation.title')}
-              </Button>
-            ) : null}
           </>
         )}
       </ScrollView>

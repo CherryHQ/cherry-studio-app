@@ -107,7 +107,7 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
   async generate(
     input: { messages: ModelMessage[] } | { prompt: string },
     signal?: AbortSignal,
-  ): Promise<{ text: string; usage: LanguageModelUsage; finishReason: string }> {
+  ): Promise<{ text: string; usage: LanguageModelUsage }> {
     const hooks = this.composedHooks();
     try {
       await safeCall('onStart', hooks.onStart);
@@ -125,7 +125,7 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
       });
       if (terminalError) throw terminalError;
       await safeCall('onFinish', hooks.onFinish);
-      return { text: result.text, usage: result.usage, finishReason: result.finishReason };
+      return { text: result.text, usage: result.usage };
     } catch (error) {
       const isCancellation =
         signal?.aborted === true && (error === signal.reason || isAbortError(error));

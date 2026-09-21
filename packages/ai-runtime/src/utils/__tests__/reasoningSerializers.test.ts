@@ -1,11 +1,7 @@
 import type { ReasoningWireProfile } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 
-import {
-  encodeChatCompletionsReasoning,
-  encodeReasoningInvocation,
-  resolveReasoningInvocation,
-} from '../reasoningSerializers';
+import { encodeReasoningInvocation, resolveReasoningInvocation } from '../reasoningSerializers';
 
 const budgetProfile: ReasoningWireProfile = {
   effort: {
@@ -33,35 +29,6 @@ const budgetModel = createModel({
   controls: [{ kind: 'budget', min: 1024, max: 64_000 }],
   selectableEfforts: ['high'],
   thinkingTokenLimits: { min: 1024, max: 64_000 },
-});
-
-describe('standalone Chat Completions reasoning', () => {
-  it('converts SDK spelling to request body fields without flattening nested options', () => {
-    expect(
-      encodeChatCompletionsReasoning({
-        kind: 'effort',
-        selection: 'high',
-        emissions: [
-          { target: 'reasoningEffort', value: 'high' },
-          { target: 'thinking.type', value: 'enabled' },
-          { target: 'thinking.budgetTokens', value: 2048 },
-        ],
-      }),
-    ).toEqual({ reasoning_effort: 'high', thinking: { type: 'enabled', budget_tokens: 2048 } });
-  });
-
-  it('rejects the complete projection when an option needs an SDK adapter', () => {
-    expect(
-      encodeChatCompletionsReasoning({
-        kind: 'effort',
-        selection: 'high',
-        emissions: [
-          { target: 'reasoningEffort', value: 'high' },
-          { target: 'sendReasoning', value: true },
-        ],
-      }),
-    ).toBeNull();
-  });
 });
 
 describe('resolveReasoningInvocation', () => {

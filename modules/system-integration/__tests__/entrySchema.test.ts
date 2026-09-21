@@ -29,13 +29,6 @@ test('rejects unknown actions, versions, unbounded payloads, and arbitrary sourc
   expect(
     nativeSystemEntrySchema.safeParse({
       ...base,
-      kind: 'translation.translate',
-      text: 'hello',
-    }).success,
-  ).toBe(false);
-  expect(
-    nativeSystemEntrySchema.safeParse({
-      ...base,
       kind: 'share.receive',
       text: 'x'.repeat(131_073),
       files: [],

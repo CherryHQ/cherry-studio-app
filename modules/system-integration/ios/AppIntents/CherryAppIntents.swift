@@ -44,21 +44,9 @@ struct CherryAskIntent: AppIntent {
   }
 }
 
-struct CherryTranslateIntent: AppIntent {
-  static var title: LocalizedStringResource = "Translate with Cherry"
-  static var description = IntentDescription("Translate text with the translation model selected in Cherry. Cherry does not save a translation record.")
-  @Parameter(title: "Text") var text: String
-  @Parameter(title: "Target language", description: "A language code such as en-US or zh-CN. Leave empty to use Cherry’s default.") var targetLanguage: String?
-  func perform() async throws -> some IntentResult & ReturnsValue<String> {
-    let translated = try await CherrySystemIntents.translate(text, targetLanguage: targetLanguage)
-    return .result(value: translated)
-  }
-}
-
 struct CherryAppShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     AppShortcut(intent: CherryNewChatIntent(), phrases: ["New chat in \(.applicationName)"], shortTitle: "New chat", systemImageName: "bubble.left.and.bubble.right")
     AppShortcut(intent: CherryAskIntent(), phrases: ["Ask \(.applicationName)"], shortTitle: "Ask Cherry", systemImageName: "sparkles")
-    AppShortcut(intent: CherryTranslateIntent(), phrases: ["Translate with \(.applicationName)"], shortTitle: "Translate", systemImageName: "translate")
   }
 }

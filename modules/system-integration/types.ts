@@ -1,18 +1,4 @@
 /** This is a real native transport boundary. Do not move envelopes into Backend contracts. */
-export type NativeTranslationConfiguration = {
-  version: 2;
-  revision: string;
-  modelId: string;
-  modelName: string;
-  providerName: string;
-  endpoint: string;
-  wireModelId: string;
-  targetLanguage: string;
-  interfaceLanguage: string;
-  promptTemplate: string;
-  requestParameters: Record<string, unknown>;
-};
-
 export type NativeSystemEntry = {
   version: 1;
   id: string;
@@ -40,26 +26,6 @@ export interface SystemIntegrationNativeModule {
     eventName: EventName,
     listener: NativeSystemEvents[EventName],
   ): { remove(): void };
-  getCapabilities(): {
-    translationWindow: boolean;
-    translationProvider: boolean;
-    translationShortcut: boolean;
-    shortcuts: boolean;
-  };
-  invalidateTranslationConfiguration(): Promise<void>;
-  publishTranslationConfiguration(
-    configuration: NativeTranslationConfiguration,
-    apiKey: string,
-  ): Promise<void>;
-  publishTranslationUnavailable(configuration: {
-    version: 1;
-    reason: string;
-    modelName?: string;
-    providerName?: string;
-    targetLanguage: string;
-    interfaceLanguage: string;
-  }): Promise<void>;
-  getTranslationRevision(): Promise<string | null>;
   claimNextEntry(): Promise<NativeSystemEntry | null>;
   releaseEntry(id: string): Promise<void>;
   completeEntry(id: string): Promise<void>;

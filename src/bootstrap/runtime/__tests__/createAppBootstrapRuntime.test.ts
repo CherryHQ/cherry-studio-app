@@ -35,16 +35,11 @@ const mockServices = {
   webSearch: mockWebSearch,
 };
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
-const mockTranslationConfiguration = {
-  start: jest.fn(async () => {}),
-  dispose: jest.fn(async () => {}),
-};
 const mockDisposeSystemEntry = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
   dataApiDependencies: mockDataApiDependencies,
-  translationConfiguration: mockTranslationConfiguration,
   disposeSystemEntry: mockDisposeSystemEntry,
 }));
 
@@ -154,7 +149,6 @@ describe('createAppBootstrapRuntime', () => {
       documentExport: mockDocumentExport,
       languageServing: mockAgentRuntime,
       providerRegistryUpdater: mockProviderRegistryUpdater,
-      getInterfaceLanguage: expect.any(Function),
     });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);
@@ -203,7 +197,6 @@ describe('createAppBootstrapRuntime', () => {
     await firstDispose;
 
     expect(mockDisposeSystemEntry).toHaveBeenCalledTimes(1);
-    expect(mockTranslationConfiguration.dispose).toHaveBeenCalledTimes(1);
     // Native consumers stop before host-owned data and runtimes are disposed.
     expect(application.hasHost).toBe(false);
   });

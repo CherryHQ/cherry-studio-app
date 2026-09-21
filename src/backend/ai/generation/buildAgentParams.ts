@@ -14,11 +14,7 @@ import {
   applyServiceTierToProviderOptions,
   buildCapabilityProviderOptions,
   filterStandardParams,
-  type GatedSampling,
-  getTemperature,
   getTimeout,
-  getTopP,
-  normalizeRequestedSelection,
   normalizeServiceTierSelection,
   resolveReasoningInvocation,
   resolveServiceTierWireValue,
@@ -50,7 +46,7 @@ export interface BuildAgentParamsDependencies {
 }
 
 export interface BuildAgentParamsInput {
-  request: AiBaseRequest & { apiKeyOverride?: string; sampling?: GatedSampling };
+  request: AiBaseRequest & { apiKeyOverride?: string };
   services: BuildAgentParamsDependencies;
   provider: Provider;
   model: Model;
@@ -109,6 +105,11 @@ export async function buildAgentParams({
     model,
     reasoningEndpointType,
   );
+  const serviceTierControl = providerRegistryService.resolveServiceTierControl(
+    provider,
+    model,
+    endpointType,
+  );
   const invocationModel = reasoningProfile.support
     ? {
         ...model,
@@ -116,18 +117,13 @@ export async function buildAgentParams({
       }
     : model;
   const reasoning = resolveReasoningInvocation({
-    selection: normalizeRequestedSelection(request.reasoningEffort ?? 'default', invocationModel),
+    selection: request.reasoningEffort ?? 'default',
     model: invocationModel,
     profile: reasoningProfile.wire,
     maxTokens: request.callOverrides?.maxOutputTokens ?? model.maxOutputTokens,
     assistantSummary:
       typeof provider.settings.summaryText === 'string' ? provider.settings.summaryText : undefined,
   });
-  const serviceTierControl = providerRegistryService.resolveServiceTierControl(
-    provider,
-    model,
-    endpointType,
-  );
   let providerOptions = buildCapabilityProviderOptions(
     invocationModel,
     provider,
@@ -185,15 +181,7 @@ export async function buildAgentParams({
     getUsagePlugins: getRepairUsagePlugins,
   });
   const overridden = applyCallOverrides(
-    {
-      providerOptions,
-      standardParams: request.sampling
-        ? {
-            temperature: getTemperature(request.sampling, invocationModel, reasoning),
-            topP: getTopP(request.sampling, invocationModel, reasoning),
-          }
-        : {},
-    },
+    { providerOptions, standardParams: {} },
     request.callOverrides,
     model,
   );

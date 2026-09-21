@@ -124,7 +124,6 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 | `profile` | Encapsulates profile avatar storage and preference coordination |
 | `providers` | Combines provider removal policy with provider avatar storage |
 | `systemEntry` | Claims native actions, coordinates confirmed share imports and Agent admission, and owns bounded replies and cleanup |
-| `translation` | Exposes translation availability and caller-owned non-recording sessions with cancellation and disposal |
 | `webSearch` | Encapsulates provider-specific connectivity checks and third-party behavior |
 
 Ordinary persistence for these resource families still belongs to the Data API. For example, model

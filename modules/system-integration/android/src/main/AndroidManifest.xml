@@ -1,25 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <uses-permission android:name="android.permission.INTERNET" />
   <application>
-    <activity
-      android:name=".TranslationActivity"
-      android:label="@string/cherry_translation_title"
-      android:theme="@style/CherryTranslationDialog"
-      android:exported="true"
-      android:excludeFromRecents="true"
-      android:taskAffinity=""
-      android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
-      android:launchMode="singleTop">
-      <intent-filter>
-        <action android:name="android.intent.action.PROCESS_TEXT" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <data android:mimeType="text/plain" />
-      </intent-filter>
-    </activity>
     <activity
       android:name=".ShareReceiverActivity"
       android:label="@string/cherry_share_title"
-      android:theme="@style/CherryTranslationDialog"
+      android:theme="@style/CherryShareDialog"
       android:exported="true"
       android:excludeFromRecents="true"
       android:taskAffinity="">

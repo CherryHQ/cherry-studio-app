@@ -131,15 +131,10 @@ resource-deletion contract.
 
 ## Other Long-Lived Resources
 
-- Bootstrap owns `TranslationConfigurationRuntime`, which projects the selected translation model
-  into native configuration and revokes it before related data writes. Its shutdown cancels active
-  app translations but preserves the last native configuration for independent extension calls.
 - `SystemEntryBridge` owns the foreground claim loop. A claimed `SystemEntrySession` owns admission,
   native acknowledgement, and any Ask reply; bootstrap drains these owners before stopping the host.
-  Ordinary share staging survives process restart until consumed or expired. Translation content does not.
-- A temporary translation screen or native window owns one attempt, cancels it on close/background,
-  and drops its source/result. iOS translation and share extensions run outside the main app process;
-  they do not own another application Backend or Agent Host.
+  Ordinary share staging survives process restart until consumed or expired. The iOS share
+  extension runs outside the main app process and does not own another Backend or Agent Host.
 
 - `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
 - `WebSearchService` owns API-key rotation state; the host stops it.

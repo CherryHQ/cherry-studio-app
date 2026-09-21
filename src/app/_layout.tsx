@@ -145,7 +145,6 @@ function RootStack() {
         name="system-share"
         options={{ headerTransparent: false, gestureEnabled: false }}
       />
-      <Stack.Screen name="translate" options={{ headerTransparent: false }} />
       <Stack.Screen
         name="document-export"
         options={{

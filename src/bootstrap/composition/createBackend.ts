@@ -4,7 +4,6 @@ import {
   createSystemModelSupport,
   type LanguageServingSupport,
 } from '@/backend/ai/provider/systemModelSupport';
-import { resolveNativeTranslationConnection } from '@/backend/ai/translation/nativeTranslationConnection';
 import {
   createMcpServerMutations,
   type McpServerMutations,
@@ -45,10 +44,6 @@ import {
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import { createSystemEntryModule, createSystemShareImports } from '@/backend/services/systemEntry';
-import {
-  createTranslationModule,
-  TranslationConfigurationRuntime,
-} from '@/backend/services/translation';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -57,7 +52,6 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;
-  translationConfiguration: TranslationConfigurationRuntime;
   disposeSystemEntry(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
@@ -75,7 +69,6 @@ export function createBackend(
     desktopConnections: DesktopConnectionRuntime;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
-    getInterfaceLanguage?: () => string;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
@@ -201,24 +194,6 @@ export function createBackend(
     },
   });
 
-  const translationConfiguration = new TranslationConfigurationRuntime({
-    preferences: services.preference,
-    getModel: (id) => services.model.getById(id),
-    getProvider: (id) => services.provider.getByProviderId(id),
-    getKeys: (id) => services.provider.listApiKeys(id),
-    getAuth: (id) => services.provider.getAuthConfig(id),
-    getInterfaceLanguage: infrastructure.getInterfaceLanguage ?? (() => 'en-US'),
-    ensureModelCatalog: () => infrastructure.providerRegistryUpdater.ensureReady(),
-    resolveNativeConnection: resolveNativeTranslationConnection,
-  });
-  const translation = createTranslationModule({
-    preferences: services.preference,
-    getAvailability: translationConfiguration.getAvailability,
-    subscribeAvailability: translationConfiguration.subscribeAvailability,
-    subscribeConfigurationChange: translationConfiguration.subscribeInvalidation,
-    generate: (input) => services.ai.generateTemporaryText(input),
-  });
-
   const findEntrySession = async (id: string) => {
     try {
       return await services.agentSession.getById(id);
@@ -241,7 +216,6 @@ export function createBackend(
   });
 
   return {
-    translationConfiguration,
     disposeSystemEntry: systemEntry.dispose,
     backend: {
       systemEntry: systemEntry.module,
@@ -265,7 +239,6 @@ export function createBackend(
       profile,
       providers,
       webSearch: services.webSearch,
-      translation,
     },
     dataApiDependencies: {
       agentAvatars,

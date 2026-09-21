@@ -3,7 +3,6 @@ import { eq } from 'drizzle-orm';
 import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DEFAULT_PREFERENCE_SCOPE, preferenceTable } from '@/backend/data/db/schemas';
-import { modelConfigurationChanges } from '@/backend/data/modelConfigurationChanges';
 import {
   getDefaultValue,
   getPreferenceKeys,
@@ -175,19 +174,6 @@ export class PreferenceService extends BaseService implements PreferenceClient {
       return;
     }
 
-    const persist = () => this.applyAndPersistUpdates(updates, keys, options);
-    if (keys.some((key) => key.startsWith('feature.translate.') || key === 'app.language')) {
-      await modelConfigurationChanges.write(persist);
-    } else {
-      await persist();
-    }
-  }
-
-  private async applyAndPersistUpdates(
-    updates: PreferenceUpdateMap,
-    keys: PreferenceKeyType[],
-    options: PreferenceUpdateOptions,
-  ) {
     const previousValues = this.pickCachedValues(keys);
 
     if (options.optimistic) {

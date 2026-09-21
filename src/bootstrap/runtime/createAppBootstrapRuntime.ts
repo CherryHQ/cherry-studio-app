@@ -31,7 +31,7 @@ import {
 } from '@/frontend/appShell/backgroundActivity';
 import AssistantActivity from '@/frontend/appShell/backgroundActivity/AssistantActivity/AssistantActivity';
 import PaintingActivity from '@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActivity';
-import i18n, { resolveLanguage } from '@/frontend/i18n';
+import i18n from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
@@ -102,15 +102,13 @@ export function createAppBootstrapRuntime(
     preference,
     webSearch,
   });
-  const { backend, dataApiDependencies, translationConfiguration, disposeSystemEntry } =
-    createBackend(services, {
-      dbService,
-      documentExport,
-      desktopConnections,
-      languageServing,
-      providerRegistryUpdater,
-      getInterfaceLanguage: () => resolveLanguage(preference.readCached('app.language')),
-    });
+  const { backend, dataApiDependencies, disposeSystemEntry } = createBackend(services, {
+    dbService,
+    documentExport,
+    desktopConnections,
+    languageServing,
+    providerRegistryUpdater,
+  });
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
@@ -144,11 +142,10 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
-      // Drain system-entry consumers and translation configuration before the host's resources.
+      // Drain system-entry consumers before the host's resources.
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         await disposeSystemEntry();
-        await translationConfiguration.dispose();
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;
@@ -165,12 +162,8 @@ export function createAppBootstrapRuntime(
       await initializeAppRuntime(services);
     },
     runPostReadyTasks: async () => {
-      // Starts the PostReady phase alongside the hand-run tasks. Both are
-      // best-effort and off the first-paint path; the host logs its own
-      // failures rather than surfacing them here.
-      const translationReady = translationConfiguration.start();
+      // Starts the best-effort PostReady phase off the first-paint path.
       host.runPostReady();
-      await translationReady;
     },
   };
 }

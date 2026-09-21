@@ -9,7 +9,7 @@ import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Ordinary, explicitly accepted shares may survive a process restart. Translation never enters here. */
+/** Explicitly accepted shares may survive a process restart. */
 internal object SystemEntryStore {
   private val lock = Any()
   private val claimed = mutableSetOf<String>()
@@ -102,7 +102,11 @@ internal object SystemEntryStore {
     Unit
   }
 
-  private fun entries(context: Context): File = File(TranslationConfigurationStore.root(context), "shares").apply { mkdirs() }
+  private fun entries(context: Context): File =
+    File(root(context), "shares").apply { mkdirs() }
+
+  private fun root(context: Context): File =
+    File(context.noBackupFilesDir, "cherry-system-integration").apply { mkdirs() }
 
   private fun readEntry(directory: File): JSONObject? {
     val file = File(directory, "entry.json")

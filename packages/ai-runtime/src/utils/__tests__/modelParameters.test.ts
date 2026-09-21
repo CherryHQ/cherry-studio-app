@@ -90,17 +90,17 @@ describe('getTemperature', () => {
       capabilities: [MODEL_CAPABILITY.REASONING],
     });
 
-    expect(getTemperature(assistant.settings, model, activeReasoning)).toBeUndefined();
+    expect(getTemperature(assistant, model, activeReasoning)).toBeUndefined();
   });
 
   it('returns undefined when enableTemperature is false', () => {
     const a = createAssistant({ enableTemperature: false, temperature: 0.7 });
-    expect(getTemperature(a.settings, createModel('gpt-4o'), omittedReasoning)).toBeUndefined();
+    expect(getTemperature(a, createModel('gpt-4o'), omittedReasoning)).toBeUndefined();
   });
 
   it('returns the temperature when the model supports it', () => {
     const a = createAssistant({ temperature: 0.5 });
-    expect(getTemperature(a.settings, createModel('gpt-4o'), omittedReasoning)).toBe(0.5);
+    expect(getTemperature(a, createModel('gpt-4o'), omittedReasoning)).toBe(0.5);
   });
 
   it('disables temperature on Claude reasoning models with non-default reasoning effort', () => {
@@ -109,7 +109,7 @@ describe('getTemperature', () => {
       providerId: 'anthropic',
       capabilities: [MODEL_CAPABILITY.REASONING],
     });
-    expect(getTemperature(a.settings, model, activeReasoning)).toBeUndefined();
+    expect(getTemperature(a, model, activeReasoning)).toBeUndefined();
   });
 
   it('keeps temperature on Claude reasoning models when reasoning_effort is default', () => {
@@ -118,7 +118,7 @@ describe('getTemperature', () => {
       providerId: 'anthropic',
       capabilities: [MODEL_CAPABILITY.REASONING],
     });
-    expect(getTemperature(a.settings, model, omittedReasoning)).toBe(0.8);
+    expect(getTemperature(a, model, omittedReasoning)).toBe(0.8);
   });
 
   it('clamps temperature to 1 for isMaxTemperatureOneModel', () => {
@@ -126,19 +126,19 @@ describe('getTemperature', () => {
     const model = createModel('gpt-5', {
       parameters: { temperature: { supported: true, range: { min: 0, max: 1 } } },
     });
-    expect(getTemperature(a.settings, model, omittedReasoning)).toBe(1);
+    expect(getTemperature(a, model, omittedReasoning)).toBe(1);
   });
 
   it('disables temperature for Gemini 3.x models', () => {
     const a = createAssistant({ temperature: 0.8 });
     const model = createModel('gemini-3-pro', { providerId: 'gemini' });
-    expect(getTemperature(a.settings, model, omittedReasoning)).toBeUndefined();
+    expect(getTemperature(a, model, omittedReasoning)).toBeUndefined();
   });
 
   it('disables temperature for Claude Opus 4.7 models', () => {
     const a = createAssistant({ temperature: 0.8 });
     const model = createModel('claude-opus-4-7-20260101', { providerId: 'anthropic' });
-    expect(getTemperature(a.settings, model, omittedReasoning)).toBeUndefined();
+    expect(getTemperature(a, model, omittedReasoning)).toBeUndefined();
   });
 });
 
@@ -155,17 +155,17 @@ describe('getTopP', () => {
       capabilities: [MODEL_CAPABILITY.REASONING],
     });
 
-    expect(getTopP(assistant.settings, model, activeReasoning)).toBe(0.95);
+    expect(getTopP(assistant, model, activeReasoning)).toBe(0.95);
   });
 
   it('returns undefined when enableTopP is false', () => {
     const a = createAssistant({ enableTopP: false, topP: 0.9 });
-    expect(getTopP(a.settings, createModel('gpt-4o'), omittedReasoning)).toBeUndefined();
+    expect(getTopP(a, createModel('gpt-4o'), omittedReasoning)).toBeUndefined();
   });
 
   it('returns topP when enabled', () => {
     const a = createAssistant({ enableTopP: true, topP: 0.9 });
-    expect(getTopP(a.settings, createModel('gpt-4o'), omittedReasoning)).toBe(0.9);
+    expect(getTopP(a, createModel('gpt-4o'), omittedReasoning)).toBe(0.9);
   });
 
   it('clamps topP to [0.95, 1] on Claude reasoning models with reasoning effort', () => {
@@ -182,25 +182,25 @@ describe('getTopP', () => {
       providerId: 'anthropic',
       capabilities: [MODEL_CAPABILITY.REASONING],
     });
-    expect(getTopP(a.settings, model, activeReasoning)).toBe(0.95);
+    expect(getTopP(a, model, activeReasoning)).toBe(0.95);
   });
 
   it('disables topP for Gemini 3.x models', () => {
     const a = createAssistant({ enableTopP: true, topP: 0.8 });
     const model = createModel('gemini-3-pro', { providerId: 'gemini' });
-    expect(getTopP(a.settings, model, omittedReasoning)).toBeUndefined();
+    expect(getTopP(a, model, omittedReasoning)).toBeUndefined();
   });
 
   it('disables topP for Claude Opus 4.7 models', () => {
     const a = createAssistant({ enableTopP: true, topP: 0.8 });
     const model = createModel('claude-opus-4-7-20260101', { providerId: 'anthropic' });
-    expect(getTopP(a.settings, model, omittedReasoning)).toBeUndefined();
+    expect(getTopP(a, model, omittedReasoning)).toBeUndefined();
   });
 
   it('disables topP on mutually-exclusive models when temperature is also enabled', () => {
     const a = createAssistant({ enableTemperature: true, enableTopP: true, topP: 0.8 });
     const model = createModel('claude-sonnet-4-5-20250101', { providerId: 'anthropic' });
-    expect(getTopP(a.settings, model, omittedReasoning)).toBeUndefined();
+    expect(getTopP(a, model, omittedReasoning)).toBeUndefined();
   });
 });
 

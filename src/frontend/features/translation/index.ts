@@ -1,1 +1,0 @@
-export { TemporaryTranslationScreen } from './TemporaryTranslationScreen';

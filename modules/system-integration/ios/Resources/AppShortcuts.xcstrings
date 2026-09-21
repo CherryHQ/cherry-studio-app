@@ -34,23 +34,6 @@
           }
         }
       }
-    },
-    "Translate with ${applicationName}": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Translate with ${applicationName}"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "使用 ${applicationName} 翻译"
-          }
-        }
-      }
     }
   },
   "version": "1.0"

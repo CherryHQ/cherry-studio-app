@@ -6,9 +6,5 @@ export function getSystemIntegration(): SystemIntegrationNativeModule | null {
   return requireOptionalNativeModule<SystemIntegrationNativeModule>('SystemIntegration');
 }
 
-export type {
-  NativeSystemEntry,
-  NativeTranslationConfiguration,
-  SystemIntegrationNativeModule,
-} from './types';
+export type { NativeSystemEntry, SystemIntegrationNativeModule } from './types';
 export { nativeSystemEntrySchema } from './entrySchema';
