@@ -1,13 +1,15 @@
 import { createContext, use } from 'react';
 
 import type { EndpointType } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
 import type { ProviderFormValues } from './utils/providerFormValues';
 
 export type ProviderFormActions = {
   reset: (values?: ProviderFormValues) => void;
-  setApiKey: (value: string) => void;
+  addApiKey: (entry: ApiKeyEntry) => void;
+  updateApiKey: (id: string, updates: Partial<Omit<ApiKeyEntry, 'id'>>) => void;
+  removeApiKey: (id: string) => void;
   setAvatarUri: (uri: string | null) => void;
   setDefaultChatEndpoint: (endpoint: EndpointType) => void;
   replaceTextEndpoint: (endpoint: EndpointType) => void;
@@ -20,13 +22,14 @@ export type ProviderFormMeta = {
   /** Endpoint the "Base URL" field edits — the first of `endpointTypes`. */
   baseUrlEndpoint: EndpointType | null;
   /**
-   * The one rule both screens share: a provider needs a name. Screens add their
+   * Shared rules: a provider needs a name and valid key entries. Screens add their
    * own on top (creating also demands a Base URL) rather than the form growing a
    * flag per screen.
    */
   canSubmit: boolean;
   defaultEndpointNeedsRepair: boolean;
   hasEditedEndpointUrls: boolean;
+  hasApiKeyChanges: boolean;
   isDirty: boolean;
   isSubmitting: boolean;
 };

@@ -19,7 +19,7 @@ export type ImagePageMeasurement = {
   ink: [number, number][];
 };
 
-/** Fill each image to its capture limit, moving the cut only to avoid painted content. */
+/** Plan output pages. Single-image capture tiles are planned against the native viewport separately. */
 export function imagePagePlan(
   measurement: ImagePageMeasurement,
   layout: ExportImageLayout,

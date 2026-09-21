@@ -106,7 +106,7 @@ export function ProviderSetupPresetFields({
       </View>
       {showApiKey ? (
         <View className="gap-2">
-          <ProviderForm.ApiKey />
+          <ProviderForm.ApiKeys />
           {apiKeyUrl ? (
             <View className="items-start">
               <Button
@@ -173,7 +173,7 @@ export function ProviderSetupCustomFields() {
     return (
       <View className="gap-5">
         <ProviderForm.Name />
-        <ProviderForm.ApiKey />
+        <ProviderForm.ApiKeys />
         <ProviderForm.Endpoints />
       </View>
     );
@@ -182,7 +182,7 @@ export function ProviderSetupCustomFields() {
   return (
     <View className="gap-5">
       <ProviderForm.Name />
-      <ProviderForm.ApiKey />
+      <ProviderForm.ApiKeys />
       <SelectField
         accessibilityLabel={t('onboarding.connection.protocol')}
         disabled={meta.isSubmitting}

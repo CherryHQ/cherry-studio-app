@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "ios/SystemIntegration.podspec",
+    "modules": ["SystemIntegrationModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.systemintegration.SystemIntegrationModule"]
+  }
+}

@@ -16,8 +16,13 @@ export type BackgroundActivityTranslate = (key: string) => string;
 export type BackgroundActivityEnvironmentConfig = {
   assistantPresenter: BackgroundActivityPresenter<BackgroundReplyActivityProps>;
   getColorScheme: () => 'dark' | 'light';
+  /** Platform presentation preference; independent of a task's execution lease. */
+  isPresentationEnabled?: () => boolean;
+  subscribePresentationEnabled?: (listener: () => void) => () => void;
   onForegroundAttention?: (attention: ForegroundActivityAttention) => void;
   paintingPresenter: BackgroundActivityPresenter<PaintingActivityProps>;
+  /** Deep link of the focused, foreground task surface. Absent sources never report one. */
+  subscribeVisibleTask?: (listener: (deepLinkUrl: string | undefined) => void) => () => void;
   translate: BackgroundActivityTranslate;
 };
 
@@ -27,6 +32,8 @@ const defaultConfig = (): BackgroundActivityEnvironmentConfig => ({
   paintingPresenter: noopBackgroundActivityPresenter(),
   translate: (key) => key,
 });
+
+const noSubscription = () => () => {};
 
 /**
  * Host-scoped platform inputs for background surfaces.
@@ -51,11 +58,24 @@ export class BackgroundActivityEnvironment extends BaseService {
 
   getColorScheme = (): 'dark' | 'light' => this.config.getColorScheme();
 
+  isPresentationEnabled = (): boolean => this.config.isPresentationEnabled?.() ?? true;
+
+  subscribePresentationEnabled = (listener: () => void): (() => void) =>
+    this.config.subscribePresentationEnabled?.(listener) ?? noSubscription();
+
   get paintingPresenter(): BackgroundActivityPresenter<PaintingActivityProps> {
     return this.config.paintingPresenter;
   }
 
   translate = (key: string): string => this.config.translate(key);
+
+  /**
+   * Subscribes to the task surface the user is currently looking at. The
+   * configured source is read per call, so a Fast Refresh replacement takes
+   * effect on the next subscription rather than leaking the previous graph.
+   */
+  subscribeVisibleTask = (listener: (deepLinkUrl: string | undefined) => void): (() => void) =>
+    (this.config.subscribeVisibleTask ?? noSubscription)(listener);
 
   onForegroundAttention = (attention: ForegroundActivityAttention): void => {
     this.config.onForegroundAttention?.(attention);

@@ -86,25 +86,76 @@ describe('react-native-enriched-markdown iOS patch', () => {
 });
 
 describe('react-native-enriched-markdown Android input patch', () => {
-  const patch = readFileSync(
-    `${process.cwd()}/patches/react-native-enriched-markdown@1.0.1.patch`,
-    'utf8',
-  );
+  const inputRoot = `${process.cwd()}/node_modules/react-native-enriched-markdown/android/src/main/java/com/swmansion/enriched/markdown/input`;
+  const input = readFileSync(`${inputRoot}/EnrichedMarkdownTextInputView.kt`, 'utf8');
 
-  test('absorbs only the framework long-press cursor-controller null pointer', () => {
-    expect(patch).toContain('+  override fun performLongClick(): Boolean =');
-    expect(patch).toContain(
-      '!top.className.startsWith("android.widget.Editor") || top.methodName != "performLongClick"',
+  // Installed-source upgrade guards. Jest cannot execute Android Editor's reentrant
+  // selection callbacks; these do not establish recovery on a device.
+  test('APP-A consumes a cursor-update null pointer without catching unrelated touch failures', () => {
+    const touch = input
+      .split('override fun onTouchEvent(ev: MotionEvent): Boolean {')[1]
+      ?.split('override fun performClick()')[0];
+
+    expect(touch).toMatch(
+      /return try\s*\{\s*super\.onTouchEvent\(ev\)\s*\} catch \(e: NullPointerException\)/,
     );
-    expect(patch).toContain('+        throw e');
+    expect(touch).toMatch(
+      /val top = e\.stackTrace\.firstOrNull\(\)\s*if \(top == null \|\| top\.className != "android.widget.Editor" \|\| top\.methodName != "updateCursorPosition"\)\s*\{\s*throw e\s*\}/,
+    );
+    expect(touch).toMatch(/Log\.w\([^\n]+\)\s*\/\/[^\n]+\s*true\s*\}/);
+  });
+
+  test('APP-R and APP-G consume only the two known framework long-press null pointers', () => {
+    const longPress = input
+      .split('override fun performLongClick(): Boolean =')[1]
+      ?.split('override fun scrollTo(')[0];
+
+    expect(longPress).toMatch(
+      /try\s*\{\s*super\.performLongClick\(\)\s*\} catch \(e: NullPointerException\)/,
+    );
+    expect(longPress).toMatch(
+      /val top = e\.stackTrace\.firstOrNull\(\)\s*if \(top == null \|\| top\.className != "android.widget.Editor" \|\|\s*\(top\.methodName != "performLongClick" && top\.methodName != "selectCurrentWordAndStartDrag"\)\s*\)\s*\{\s*throw e\s*\}/,
+    );
+    // A handled long press must not dispatch an extra click on ACTION_UP.
+    expect(longPress).toMatch(/Log\.w\([^\n]+\)\s*\/\/[^\n]+\s*true\s*\}/);
+  });
+
+  test('re-measures the field after an insert that suppresses the text watcher', () => {
+    const replaceRange = input
+      .split('private inline fun replaceTextInRange(')[1]
+      ?.split('fun applyFormatting()')[0];
+
+    // Paste and every programmatic insert run inside an edit phase, where the
+    // watcher's own invalidation never fires. Without this call the field keeps
+    // the height it had before the insert.
+    expect(replaceRange).toMatch(
+      /applyFormattingAndEmit\(\)\s*(?:\/\/[^\n]*\n\s*)*layoutManager\.invalidateLayout\(\)/,
+    );
+  });
+
+  test('clamps the leftover scroll offset once the field grows', () => {
+    const sizeChanged = input
+      .split('override fun onSizeChanged(')[1]
+      ?.split('fun attachTextWatcher(')[0];
+
+    expect(sizeChanged).toContain('val visibleTextHeight = h - paddingTop - paddingBottom');
+    expect(sizeChanged).toContain(
+      'val maxScrollY = (textLayout.height - visibleTextHeight).coerceAtLeast(0)',
+    );
+    // `super.scrollTo`, not `scrollTo`: the override above drops every scroll in
+    // auto-grow mode, and this one restores that mode's own invariant.
+    expect(sizeChanged).toMatch(
+      /if \(scrollY <= maxScrollY\) return\s*(?:\/\/[^\n]*\n\s*)*super\.scrollTo\(scrollX, maxScrollY\)/,
+    );
   });
 
   test('measures an immutable snapshot instead of the live Editable', () => {
-    expect(patch).toContain('+    val text: SpannedString?,');
-    expect(patch).toContain('+    val textSnapshot = text?.let { SpannedString(it) }');
-    expect(patch).toContain('+    val size = measure(cachedWidth, textSnapshot, paint)');
-    expect(patch).toContain(
-      '+    data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))',
+    const measurement = readFileSync(`${inputRoot}/layout/InputMeasurementStore.kt`, 'utf8');
+    expect(measurement).toContain('val text: SpannedString?,');
+    expect(measurement).toContain('val textSnapshot = text?.let { SpannedString(it) }');
+    expect(measurement).toContain('val size = measure(cachedWidth, textSnapshot, paint)');
+    expect(measurement).toContain(
+      'data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))',
     );
   });
 });

@@ -47,6 +47,7 @@ export interface PreferenceSchema {
   'app.user.id': string;
   'app.user.name': string;
 
+  /** Also gates all iOS Live Activity surfaces, including painting; keep the persisted key. */
   'chat.background_reply.enabled': boolean;
   'agent.default_model_id': string | null;
   'chat.web_search.compression.cutoff_limit': number;
@@ -69,6 +70,7 @@ export interface PreferenceSchema {
 
   'ui.font_size_step': FontSizeStep;
   'ui.library.view_mode': 'grid' | 'list';
+  'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
   'ui.theme_mode': ThemeMode;
 }
 
@@ -106,6 +108,7 @@ export const PreferenceDefaults = {
 
   'ui.font_size_step': 0,
   'ui.library.view_mode': 'grid',
+  'ui.sidebar.recent_view_mode': 'sessions',
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
 

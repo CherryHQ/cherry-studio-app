@@ -4,6 +4,7 @@ import { useIsOnSurface } from 'heroui-native/hooks';
 import { Input as HeroInput } from 'heroui-native/input';
 import { useCallback, useRef, useState } from 'react';
 import {
+  Platform,
   StyleSheet,
   type TextInput,
   type TextInputProps,
@@ -70,6 +71,11 @@ function NativeInput({
   value,
   ...inputProps
 }: NativeInputProps) {
+  const [selectionTint, selectionBackground] = useCSSVariable([
+    '--color-muted-foreground',
+    '--color-secondary',
+  ]);
+  const selectionColor = Platform.OS === 'ios' ? selectionTint : selectionBackground;
   const baseLineHeight = resolveCSSNumber(
     useCSSVariable('--ui-text-base--line-height'),
     fallbackBaseLineHeight,
@@ -100,6 +106,9 @@ function NativeInput({
       autoCorrect={autoCorrect}
       autoFocus={autoFocus}
       className={inputClassName}
+      cursorColor={typeof selectionTint === 'string' ? selectionTint : undefined}
+      selectionColor={typeof selectionColor === 'string' ? selectionColor : undefined}
+      selectionHandleColor={typeof selectionTint === 'string' ? selectionTint : undefined}
       isDisabled={disabled}
       isInvalid={invalid}
       {...inputProps}

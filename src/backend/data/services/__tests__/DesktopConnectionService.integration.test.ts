@@ -83,6 +83,24 @@ describe('DesktopConnectionService provider synchronization', () => {
     );
   }
 
+  it('imports the complete API key list and keeps desktop order and labels when resynced', async () => {
+    const keys = ['a', 'b', 'c'].map((id) => ({
+      id,
+      key: `desktop-secret-${id}`,
+      label: `Account ${id}`,
+      isEnabled: true,
+    }));
+    const data = snapshot({ ...provider(), apiKeys: keys });
+    await importSnapshot(data);
+    const [created] = await testDb.database.select().from(userProviderTable);
+    expect(created!.apiKeys).toEqual(keys);
+
+    const updatedKeys = [keys[2]!, keys[0]!];
+    await importSnapshot(snapshot({ ...provider(), apiKeys: updatedKeys }));
+    const [updated] = await testDb.database.select().from(userProviderTable);
+    expect(updated!.apiKeys).toEqual(updatedKeys);
+  });
+
   it('syncs provider configuration while keeping every existing model column', async () => {
     await importSnapshot(snapshot(provider()));
     await testDb.database.update(userProviderTable).set({
@@ -399,6 +417,7 @@ describe('DesktopConnectionService provider synchronization', () => {
           { id: 'a', isEnabled: true, key: 'other' },
         ],
       });
+      expect((await service.preview(data)).providers[0]!.unavailableReason).toBeUndefined();
       await importSnapshot(data);
       const [row] = await testDb.database
         .select()
@@ -406,5 +425,34 @@ describe('DesktopConnectionService provider synchronization', () => {
         .where(eq(userProviderTable.providerId, 'relay'));
       expect(row!.apiKeys).toEqual([{ id: 'a', isEnabled: true, key: 'secret' }]);
     });
+
+    it.each([
+      { duplicate: 'id', id: 'disabled', key: 'other-secret' },
+      { duplicate: 'value', id: 'enabled', key: 'shared-secret' },
+    ])(
+      'rejects unusable keys after deduplicating by $duplicate without overwriting local keys',
+      async ({ id, key }) => {
+        await importSnapshot(snapshot(provider('relay')));
+        const data = loose({
+          ...provider('relay'),
+          apiKeys: [
+            { id: 'disabled', isEnabled: false, key: 'shared-secret' },
+            { id, isEnabled: true, key },
+          ],
+        });
+        expect((await service.preview(data)).providers[0]).toMatchObject({
+          action: 'update',
+          unavailableReason: 'missing-api-key',
+        });
+        await expect(importSnapshot(data)).rejects.toMatchObject({
+          details: { reason: 'missing-api-key' },
+        });
+        const [row] = await testDb.database
+          .select()
+          .from(userProviderTable)
+          .where(eq(userProviderTable.providerId, 'relay'));
+        expect(row!.apiKeys).toEqual(provider('relay').apiKeys);
+      },
+    );
   });
 });

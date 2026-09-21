@@ -131,6 +131,12 @@ resource-deletion contract.
 
 ## Other Long-Lived Resources
 
+- `SystemEntryBridge` owns the foreground claim pass. `systemEntry` owns the import and the native
+  acknowledgement that ends a claim; bootstrap drains in-flight claims before stopping the host.
+  A claimed share then lives only in the composer, so the process that is killed with an unsent
+  draft loses it. Unclaimed staging survives process restart until consumed or expired. The iOS
+  share extension runs outside the main app process and does not own another Backend or Agent Host.
+
 - `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
 - `WebSearchService` owns API-key rotation state; the host stops it.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,

@@ -15,11 +15,7 @@ import {
   useProviderFormDraft,
 } from '../../components/ProviderForm';
 import { useProviderAvatar, useProviderAvatarActions } from '../../hooks/useProviderAvatar';
-import {
-  buildApiKeyEntriesFromInput,
-  buildApiKeysInputFromEntries,
-  normalizeApiKeyEntries,
-} from '../utils/providerApiServiceApiKeys';
+import { normalizeApiKeyEntries } from '../utils/providerApiServiceApiKeys';
 import { getEffectiveAuthConfig, shouldShowApiKeys } from '../utils/providerApiServiceAuth';
 import {
   findInvalidCustomProviderEndpointUrl,
@@ -57,14 +53,13 @@ export function useProviderConfigurationForm(providerId: string) {
   const isError =
     providerQuery.isError || apiKeysQuery.isError || authConfigQuery.isError || modelsQuery.isError;
   const endpointTypes = provider ? resolveProviderFormEndpointTypes(provider) : [];
-  const apiKeysInput = buildApiKeysInputFromEntries(normalizeApiKeyEntries(apiKeys ?? []));
   const defaultEndpointNeedsRepair = provider
     ? providerDefaultEndpointNeedsRepair(provider)
     : false;
   const createInitialValues = () =>
     provider
       ? createProviderFormValues({
-          apiKey: apiKeysInput,
+          apiKeys: apiKeys ?? [],
           avatarUri: storedAvatarUri ?? null,
           provider,
         })
@@ -82,7 +77,7 @@ export function useProviderConfigurationForm(providerId: string) {
   const { state, meta } = form;
   const showApiKey = shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type, provider);
   const requiresApiKey = showApiKey && !provider?.authOptional;
-  const disabledKeys = Boolean(apiKeys?.length) && !apiKeys?.some((key) => key.isEnabled);
+  const disabledKeys = state.apiKeys.length > 0 && !state.apiKeys.some((key) => key.isEnabled);
   const baseUrlEndpoint = meta.baseUrlEndpoint;
   const baseUrl = baseUrlEndpoint ? (state.endpointUrls[baseUrlEndpoint] ?? '') : '';
   const canSubmit =
@@ -96,18 +91,13 @@ export function useProviderConfigurationForm(providerId: string) {
   const canCompleteSetup =
     canSubmit &&
     (!baseUrlEndpoint || baseUrl.trim().length > 0 || isCustomProvider) &&
-    (!requiresApiKey ||
-      buildApiKeyEntriesFromInput(state.apiKey, apiKeys ?? []).some(
-        (key) => key.isEnabled && key.key.trim(),
-      ));
+    (!requiresApiKey || state.apiKeys.some((key) => key.isEnabled && key.key.trim()));
 
   function enableKeys() {
     if (isSaving) return;
-    void queries.replaceApiKeysMutation
-      .mutateAsync((apiKeys ?? []).map((key) => ({ ...key, isEnabled: true })))
-      .catch(() =>
-        toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' }),
-      );
+    for (const key of state.apiKeys) {
+      if (!key.isEnabled) form.actions.updateApiKey(key.id, { isEnabled: true });
+    }
   }
 
   function requestSave(onSaved?: (result: SavedProviderConfiguration) => void) {
@@ -171,8 +161,8 @@ export function useProviderConfigurationForm(providerId: string) {
       return;
     }
 
-    const nextApiKeys = buildApiKeyEntriesFromInput(state.apiKey, apiKeys ?? []);
-    const shouldSaveApiKeys = showApiKey && state.apiKey !== apiKeysInput;
+    const nextApiKeys = normalizeApiKeyEntries(state.apiKeys);
+    const shouldSaveApiKeys = showApiKey && meta.hasApiKeyChanges;
     const persist = () => {
       if (savePending.current) return;
       savePending.current = true;
@@ -187,7 +177,7 @@ export function useProviderConfigurationForm(providerId: string) {
           }
           form.actions.reset({
             ...state,
-            apiKey: shouldSaveApiKeys ? buildApiKeysInputFromEntries(nextApiKeys) : state.apiKey,
+            apiKeys: shouldSaveApiKeys ? nextApiKeys : (apiKeys ?? state.apiKeys),
             defaultChatEndpoint: updates.defaultChatEndpoint ?? state.defaultChatEndpoint,
             endpointUrls: savedEndpointUrls,
             name: providerName,

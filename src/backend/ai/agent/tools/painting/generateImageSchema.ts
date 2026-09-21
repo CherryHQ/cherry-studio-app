@@ -172,9 +172,6 @@ export function buildGenerateImageToolSchema(
   return z.object(inputShape).strict();
 }
 
-/** Fallback contract used when no model capability block is available. */
-export const generateImageInputSchema = buildGenerateImageToolSchema(undefined);
-
 export function limitGenerateImageInputIds(imageIds: readonly string[]): string[] {
   return imageIds.slice(0, MAX_INPUT_IMAGES);
 }
