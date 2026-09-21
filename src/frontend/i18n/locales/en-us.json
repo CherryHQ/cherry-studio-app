@@ -140,7 +140,7 @@
   "chat.actions.webSearch": "Web search",
   "chat.attachments.dropFailed_one": "{{count}} dropped image could not be imported.",
   "chat.attachments.dropFailed_other": "{{count}} dropped images could not be imported.",
-  "chat.attachments.dropLimit": "Added {{added}} of {{skipped}} dropped images; one message holds at most {{limit}}.",
+  "chat.attachments.dropLimit": "Added {{added}} of {{total}} dropped images; one message holds at most {{limit}}.",
   "chat.attachments.image": "Image attachment",
   "chat.attachments.importFailed_one": "Could not add {{count}} attachment.",
   "chat.attachments.importFailed_other": "Could not add {{count}} attachments.",

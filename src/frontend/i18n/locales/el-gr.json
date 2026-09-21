@@ -140,7 +140,7 @@
   "chat.actions.webSearch": "Αναζήτηση στον Ιστό",
   "chat.attachments.dropFailed_one": "Δεν ήταν δυνατή η εισαγωγή {{count}} εικόνας.",
   "chat.attachments.dropFailed_other": "Δεν ήταν δυνατή η εισαγωγή {{count}} εικόνων.",
-  "chat.attachments.dropLimit": "Προστέθηκαν {{added}} από {{skipped}} εικόνες· ένα μήνυμα δέχεται το πολύ {{limit}}.",
+  "chat.attachments.dropLimit": "Προστέθηκαν {{added}} από {{total}} εικόνες· ένα μήνυμα δέχεται το πολύ {{limit}}.",
   "chat.attachments.image": "Συνημμένο εικόνας",
   "chat.attachments.importFailed_one": "Δεν ήταν δυνατή η προσθήκη {{count}} συνημμένου.",
   "chat.attachments.importFailed_other": "Δεν ήταν δυνατή η προσθήκη {{count}} συνημμένων.",

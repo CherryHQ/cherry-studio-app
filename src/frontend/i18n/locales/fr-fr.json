@@ -140,7 +140,7 @@
   "chat.actions.webSearch": "Recherche sur le Web",
   "chat.attachments.dropFailed_one": "Impossible d'importer {{count}} image déposée.",
   "chat.attachments.dropFailed_other": "Impossible d'importer {{count}} images déposées.",
-  "chat.attachments.dropLimit": "{{added}} images ajoutées sur {{skipped}} ; un message contient au maximum {{limit}} images.",
+  "chat.attachments.dropLimit": "{{added}} images ajoutées sur {{total}} ; un message contient au maximum {{limit}} images.",
   "chat.attachments.image": "Image jointe",
   "chat.attachments.importFailed_many": "Impossible d’ajouter {{count}} pièces jointes.",
   "chat.attachments.importFailed_one": "Impossible d’ajouter {{count}} pièce jointe.",

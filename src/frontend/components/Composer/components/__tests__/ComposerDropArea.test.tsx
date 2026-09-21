@@ -12,6 +12,8 @@ import type { ComposerAttachmentDraft } from '../../utils/composerAttachments';
 import { ComposerDropArea } from '../ComposerDropArea';
 
 const mockToastShow = jest.fn();
+const mockFileDelete = jest.fn();
+const mockConstructedUris: string[] = [];
 let mockDropTargetProps: {
   enabled?: boolean;
   onDragEnter?: () => void;
@@ -30,6 +32,13 @@ const mockViewRef: {
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToastShow } }),
+}));
+
+jest.mock('expo-file-system', () => ({
+  File: jest.fn((uri: string) => {
+    mockConstructedUris.push(uri);
+    return { exists: true, delete: mockFileDelete };
+  }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -64,7 +73,9 @@ function createMockViewComponent() {
 }
 
 let attachments: readonly ComposerAttachmentDraft[] = [];
-let composerActions: ReturnType<typeof useComposerActions> | undefined;
+const composerActionsRef: { current: ReturnType<typeof useComposerActions> | undefined } = {
+  current: undefined,
+};
 
 function AttachmentsProbe() {
   const state = useComposerState();
@@ -77,7 +88,7 @@ function AttachmentsProbe() {
 }
 
 function ActionsProbe() {
-  composerActions = useComposerActions();
+  composerActionsRef.current = useComposerActions();
   return null;
 }
 
@@ -92,9 +103,10 @@ function heldImage(name: string) {
   };
 }
 
-function dropImage(name: string) {
+function dropImage(name: string, id = name) {
   return {
     height: 800,
+    id: `drop-${id}`,
     mediaType: 'image/jpeg',
     name,
     size: 1024,
@@ -121,6 +133,7 @@ async function renderDropArea(props: { enabled?: boolean } = {}) {
 describe('ComposerDropArea', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockConstructedUris.length = 0;
     mockDropTargetProps = null;
     mockViewRef.current = createMockViewComponent();
     attachments = [];
@@ -146,7 +159,7 @@ describe('ComposerDropArea', () => {
     // A source draft without status: staging to 'importing' is the managed
     // attachment store's job, covered by its own suite.
     expect(attachments[0]).toEqual({
-      id: 'photo:file:///cache/ImageDropTarget/first.jpg',
+      id: 'photo:drop-first.jpg',
       kind: 'image',
       mediaType: 'image/jpeg',
       name: 'first.jpg',
@@ -154,6 +167,33 @@ describe('ComposerDropArea', () => {
       uri: 'file:///cache/ImageDropTarget/first.jpg',
     });
     expect(mockToastShow).not.toHaveBeenCalled();
+  });
+
+  it('keeps two drops of one path separate through the per-item payload id', async () => {
+    await renderDropArea();
+
+    // The same staged path comes back once an earlier copy was cleaned up;
+    // the attachment identity rides the unique payload id, not the URI.
+    const first = dropImage('photo.jpg', 'a');
+    const second = { ...dropImage('photo.jpg', 'b'), uri: first.uri };
+
+    await act(async () =>
+      mockDropTargetProps?.onDropImages?.({
+        failedCount: 0,
+        images: [first],
+        totalDropped: 1,
+      }),
+    );
+    await act(async () =>
+      mockDropTargetProps?.onDropImages?.({
+        failedCount: 0,
+        images: [second],
+        totalDropped: 1,
+      }),
+    );
+
+    expect(attachments).toHaveLength(2);
+    expect(attachments.map(({ id }) => id)).toEqual(['photo:drop-a', 'photo:drop-b']);
   });
 
   it('ignores payloads that are not images', async () => {
@@ -164,12 +204,13 @@ describe('ComposerDropArea', () => {
         failedCount: 0,
         images: [
           {
+            id: 'drop-pdf',
             mediaType: 'application/pdf',
             name: 'brief.pdf',
             size: 10,
             uri: 'file:///cache/brief.pdf',
           },
-          { mediaType: 'text/plain', name: 'note.txt', uri: 'x' },
+          { id: 'drop-txt', mediaType: 'text/plain', name: 'note.txt', uri: 'x' },
         ],
         totalDropped: 2,
       }),
@@ -194,6 +235,39 @@ describe('ComposerDropArea', () => {
     expect(attachments.map(({ name }) => name)).not.toContain('photo-9.jpg');
     expect(mockToastShow).toHaveBeenCalledWith({
       label: expect.stringContaining('chat.attachments.dropLimit'),
+      variant: 'warning',
+    });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: expect.stringContaining('"added":9'),
+      variant: 'warning',
+    });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: expect.stringContaining('"total":11'),
+      variant: 'warning',
+    });
+  });
+
+  it('counts natively truncated items in the overflow feedback', async () => {
+    await renderDropArea();
+
+    // The real native event: an 11-image drop delivers at most 9 payloads.
+    await act(async () =>
+      mockDropTargetProps?.onDropImages?.({
+        failedCount: 0,
+        images: Array.from({ length: 9 }, (_, index) => dropImage(`kept-${index}.jpg`)),
+        totalDropped: 11,
+      }),
+    );
+
+    // All nine delivered images fit the composer, yet two were discarded
+    // before delivery — the drop total must still reach the feedback.
+    expect(attachments).toHaveLength(9);
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: expect.stringContaining('"added":9'),
+      variant: 'warning',
+    });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: expect.stringContaining('"total":11'),
       variant: 'warning',
     });
   });
@@ -226,7 +300,7 @@ describe('ComposerDropArea', () => {
     await renderDropArea();
     // The composer already holds eight images: one slot is left.
     const held = Array.from({ length: 8 }, (_, index) => heldImage(`held-${index}.jpg`));
-    act(() => composerActions?.addAttachments(held));
+    act(() => composerActionsRef.current?.addAttachments(held));
     expect(attachments).toHaveLength(8);
 
     await act(async () =>
@@ -244,6 +318,17 @@ describe('ComposerDropArea', () => {
       label: expect.stringContaining('chat.attachments.dropLimit'),
       variant: 'warning',
     });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: expect.stringContaining('"added":1'),
+      variant: 'warning',
+    });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: expect.stringContaining('"total":2'),
+      variant: 'warning',
+    });
+    // The rejected overflow copy is a staged file nobody owns anymore.
+    expect(mockConstructedUris).toContain('file:///cache/ImageDropTarget/b.jpg');
+    expect(mockFileDelete).toHaveBeenCalled();
   });
 
   it('reports native staging failures to the user', async () => {

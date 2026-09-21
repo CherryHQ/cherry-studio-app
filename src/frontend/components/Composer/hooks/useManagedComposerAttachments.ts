@@ -84,6 +84,9 @@ export function useManagedComposerAttachments(
         );
         return 'ready';
       } catch {
+        // The failed import owns no bytes; a drop's staged cache copy would
+        // otherwise linger with no one left to clean it.
+        if (isDropStagedFile(source.uri)) void cleanupDropStagedFile(source.uri);
         if (importTokensRef.current.get(source.id) !== token || !isMountedRef.current)
           return 'ignored';
         importTokensRef.current.delete(source.id);
@@ -122,6 +125,14 @@ export function useManagedComposerAttachments(
     (next: ComposerAttachmentDraft[]) => {
       const current = attachmentsRef.current;
       const accepted = appendComposerAttachments(current, next).slice(current.length);
+      // A rejected draft (duplicate or over the limit) owns no reference; a
+      // drop-staged source behind it would linger with no one to clean it.
+      const acceptedIds = new Set(accepted.map((attachment) => attachment.id));
+      for (const draft of next) {
+        if (!acceptedIds.has(draft.id) && isDropStagedFile(draft.uri)) {
+          void cleanupDropStagedFile(draft.uri);
+        }
+      }
       if (accepted.length === 0) return;
       const sources = accepted.filter(
         (attachment): attachment is ComposerAttachmentSource => attachment.status === undefined,

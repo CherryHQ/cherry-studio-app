@@ -140,7 +140,7 @@
   "chat.actions.webSearch": "Căutare pe web",
   "chat.attachments.dropFailed_one": "Nu s-a putut importa {{count}} imagine.",
   "chat.attachments.dropFailed_other": "Nu s-au putut importa {{count}} imagini.",
-  "chat.attachments.dropLimit": "Au fost adăugate {{added}} din {{skipped}} imagini; un mesaj cuprinde cel mult {{limit}}.",
+  "chat.attachments.dropLimit": "Au fost adăugate {{added}} din {{total}} imagini; un mesaj cuprinde cel mult {{limit}}.",
   "chat.attachments.image": "Atașament imagine",
   "chat.attachments.importFailed_few": "Nu s-au putut adăuga {{count}} atașamente.",
   "chat.attachments.importFailed_one": "Nu s-a putut adăuga {{count}} atașament.",

@@ -140,7 +140,7 @@
   "chat.actions.webSearch": "Web araması",
   "chat.attachments.dropFailed_one": "{{count}} bırakılan görsel içe aktarılamadı.",
   "chat.attachments.dropFailed_other": "{{count}} bırakılan görsel içe aktarılamadı.",
-  "chat.attachments.dropLimit": "Bırakılan {{skipped}} görselden {{added}} tanesi eklendi; bir ileti en fazla {{limit}} görsel alır.",
+  "chat.attachments.dropLimit": "Bırakılan {{total}} görselden {{added}} tanesi eklendi; bir ileti en fazla {{limit}} görsel alır.",
   "chat.attachments.image": "Resim eki",
   "chat.attachments.importFailed_one": "{{count}} ek eklenemedi.",
   "chat.attachments.importFailed_other": "{{count}} ek eklenemedi.",

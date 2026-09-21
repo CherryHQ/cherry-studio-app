@@ -110,6 +110,7 @@ describe('composer attachments', () => {
     expect(
       createDroppedImageAttachmentDraft({
         height: 800,
+        id: 'drop-a',
         mediaType: 'image/heic',
         name: 'IMG_0001.HEIC',
         size: 2048,
@@ -117,7 +118,7 @@ describe('composer attachments', () => {
         width: 600,
       }),
     ).toEqual({
-      id: 'photo:file:///cache/ImageDropTarget/IMG_0001.HEIC',
+      id: 'photo:drop-a',
       kind: 'image',
       mediaType: 'image/heic',
       name: 'IMG_0001.HEIC',
@@ -129,6 +130,7 @@ describe('composer attachments', () => {
   test('falls back to the file-name media type when the drop payload has none', () => {
     expect(
       createDroppedImageAttachmentDraft({
+        id: 'drop-2',
         name: 'shot.png',
         uri: 'file:///cache/ImageDropTarget/shot.png',
       }),
@@ -138,24 +140,26 @@ describe('composer attachments', () => {
   test('accepts only image payloads for drop staging', () => {
     expect(
       isDroppedImagePayload({
+        id: 'drop-img',
         mediaType: 'image/jpeg',
         name: 'photo.jpg',
         uri: 'file:///cache/photo.jpg',
       }),
     ).toBe(true);
-    expect(isDroppedImagePayload({ mediaType: undefined, name: 'photo.HEIC', uri: 'x' })).toBe(
-      true,
-    );
+    expect(
+      isDroppedImagePayload({ id: 'drop-4', mediaType: undefined, name: 'photo.HEIC', uri: 'x' }),
+    ).toBe(true);
     expect(
       isDroppedImagePayload({
+        id: 'drop-5',
         mediaType: 'application/pdf',
         name: 'brief.pdf',
         uri: 'file:///cache/brief.pdf',
       }),
     ).toBe(false);
-    expect(isDroppedImagePayload({ mediaType: 'text/plain', name: undefined, uri: 'x' })).toBe(
-      false,
-    );
+    expect(
+      isDroppedImagePayload({ id: 'drop-6', mediaType: 'text/plain', name: undefined, uri: 'x' }),
+    ).toBe(false);
   });
 
   test('creates camera attachments from expo-camera URIs', () => {

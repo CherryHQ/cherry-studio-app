@@ -222,9 +222,12 @@ public final class ImageDropTargetView: ExpoView {
   }
 
   /// File facts read from the copied file. Dimensions come from image
-  /// metadata, which avoids decoding the full bitmap.
+  /// metadata, which avoids decoding the full bitmap. `id` is unique per
+  /// staged item: staging paths can repeat once an earlier copy was cleaned
+  /// up, so the URI cannot serve as the attachment identity.
   private func payload(for fileURL: URL) -> [String: Any] {
     var payload: [String: Any] = [
+      "id": UUID().uuidString,
       "name": fileURL.lastPathComponent,
       "uri": fileURL.absoluteString,
     ]
@@ -321,7 +324,14 @@ extension ImageDropTargetView: UIDropInteractionDelegate {
       group.enter()
       loadQueue.async { [weak self] in
         inFlight.wait()
-        self?.loadImagePayload(from: item.itemProvider) { payload in
+        // The view can be released while this worker queued on the semaphore;
+        // leaving without its load would block the remaining workers forever.
+        guard let self else {
+          inFlight.signal()
+          group.leave()
+          return
+        }
+        self.loadImagePayload(from: item.itemProvider) { payload in
           if let payload {
             lock.lock()
             indexedPayloads[index] = payload

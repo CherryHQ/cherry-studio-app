@@ -140,7 +140,7 @@
   "chat.actions.webSearch": "网络搜索",
   "chat.attachments.dropFailed_one": "有 {{count}} 张拖入的图片无法导入。",
   "chat.attachments.dropFailed_other": "有 {{count}} 张拖入的图片无法导入。",
-  "chat.attachments.dropLimit": "已添加拖入的 {{skipped}} 张图片中的 {{added}} 张；单条消息最多 {{limit}} 张。",
+  "chat.attachments.dropLimit": "已添加拖入的 {{total}} 张图片中的 {{added}} 张；单条消息最多 {{limit}} 张。",
   "chat.attachments.image": "图片附件",
   "chat.attachments.importFailed_other": "有 {{count}} 个附件导入失败。",
   "chat.attachments.unsupportedImageFormat": "仅支持 JPEG、PNG、GIF 和 WebP 格式的图片。",

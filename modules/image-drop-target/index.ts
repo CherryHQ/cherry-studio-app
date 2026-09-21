@@ -5,6 +5,8 @@ import type { StyleProp, ViewStyle } from 'react-native';
 /** One dropped image file, copied into the app's cache by the native side. */
 export type DroppedImage = {
   height?: number;
+  /** Unique per staged item; the staged path can repeat across drops. */
+  id: string;
   mediaType?: string;
   name: string;
   size?: number;

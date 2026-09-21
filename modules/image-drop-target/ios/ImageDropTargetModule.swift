@@ -8,7 +8,7 @@ public class ImageDropTargetModule: Module {
     // on the container accepts image drags started in other apps.
     View(ImageDropTargetView.self) {
       Events("onDragEnter", "onDragLeave", "onDropImages")
-      Property("isEnabled") { (view: ImageDropTargetView, value: Bool) in
+      Prop("enabled") { (view: ImageDropTargetView, value: Bool) in
         view.isEnabled = value
       }
     }

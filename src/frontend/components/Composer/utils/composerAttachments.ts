@@ -1,3 +1,5 @@
+import { File } from 'expo-file-system';
+
 import type { FileUploadSelection } from '@/frontend/hooks/file';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
@@ -123,6 +125,8 @@ export function createPastedImageAttachmentDraft(uri: string): ComposerAttachmen
 /** What the drop target reports for one image dropped from another app. */
 export type DroppedImagePayload = {
   height?: number;
+  /** Unique per staged item; the staged path can repeat across drops. */
+  id: string;
   mediaType?: string;
   name?: string;
   size?: number;
@@ -146,10 +150,8 @@ export function isDropStagedFile(uri: string): boolean {
  */
 export async function cleanupDropStagedFile(uri: string): Promise<void> {
   try {
-    const FileSystem = await import('expo-file-system');
-    if ((await FileSystem.getInfoAsync(uri)).exists) {
-      await FileSystem.deleteAsync(uri, { idempotent: true });
-    }
+    const file = new File(uri);
+    if (file.exists) file.delete();
   } catch {
     // Cache cleanup is best-effort; the OS evicts Caches anyway.
   }
@@ -161,7 +163,7 @@ export function createDroppedImageAttachmentDraft(
 ): ComposerAttachmentSource {
   const attachment = createPhotoAttachmentDraft({
     fileName: image.name,
-    id: image.uri,
+    id: image.id,
     uri: image.uri,
   });
   const resolvedMediaType =

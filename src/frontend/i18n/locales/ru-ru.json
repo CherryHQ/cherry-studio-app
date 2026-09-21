@@ -140,7 +140,7 @@
   "chat.actions.webSearch": "Веб-поиск",
   "chat.attachments.dropFailed_one": "Не удалось импортировать {{count}} изображение.",
   "chat.attachments.dropFailed_other": "Не удалось импортировать {{count}} изображений.",
-  "chat.attachments.dropLimit": "Добавлено {{added}} из {{skipped}} изображений; в одном сообщении не более {{limit}}.",
+  "chat.attachments.dropLimit": "Добавлено {{added}} из {{total}} изображений; в одном сообщении не более {{limit}}.",
   "chat.attachments.image": "Вложение изображения",
   "chat.attachments.importFailed_few": "Не удалось добавить {{count}} вложения.",
   "chat.attachments.importFailed_many": "Не удалось добавить {{count}} вложений.",

@@ -81,12 +81,15 @@ export function ComposerDropArea({ children, enabled = true }: ComposerDropAreaP
           variant: 'warning',
         });
       }
-      if (images.length > accepted.length) {
+      // The copy the composer did not accept includes items the native side
+      // truncated before delivery, so the feedback describes the whole drop.
+      const droppedTotal = event.totalDropped - unsupported.length;
+      if (droppedTotal > accepted.length) {
         toast.show({
           label: t('chat.attachments.dropLimit', {
             added: accepted.length,
             limit: COMPOSER_PHOTO_SELECTION_LIMIT,
-            skipped: images.length - accepted.length,
+            total: droppedTotal,
           }),
           variant: 'warning',
         });
