@@ -93,13 +93,13 @@ index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..b3ce501c70d2c2b03f8f53eae26266e6
  
    override fun canScrollHorizontally(direction: Int): Boolean = scrollEnabled && super.canScrollHorizontally(direction)
  
-+  // A field that has just grown must not stay scrolled. `forceScrollToSelection`
-+  // runs while the text has already reflowed but Fabric has not yet applied the
-+  // new height, so it measures against the pre-growth height and leaves a scroll
-+  // offset behind that nothing else clears — the first line then renders with its
-+  // top sliced off. Re-clamping once the new size lands is the corrective step:
-+  // when the view is tall enough for its layout, the leftover offset collapses
-+  // back to zero.
++  // Clamp offsets outside the content range after the view changes size.
++  // `forceScrollToSelection` can run before Fabric applies the new height.
++  // Android also adjusts scrolling in its pre-draw pass; this is a defensive
++  // clamp, not evidence that an offset survives that pass on affected devices.
++  // When the layout fits the viewport, its maximum vertical offset is zero.
++  // Whether this resolves the reported first-line clipping still needs device
++  // acceptance with the view height, layout height, and scrollY recorded.
 +  override fun onSizeChanged(
 +    w: Int,
 +    h: Int,
@@ -114,8 +114,8 @@ index ffeb7a1d15d533349784f23b3bfae8aba68eaa32..b3ce501c70d2c2b03f8f53eae26266e6
 +
 +    val maxScrollY = (textLayout.height - visibleTextHeight).coerceAtLeast(0)
 +    if (scrollY <= maxScrollY) return
-+    // Bypasses the `scrollTo` guard above deliberately: scrolling back toward the
-+    // top is what restores auto-grow mode's own invariant rather than fighting it.
++    // Apply the correction even when the scrollTo override disables scrolling.
++    // In-range offsets return above without changing the current scroll position.
 +    super.scrollTo(scrollX, maxScrollY)
 +  }
 +

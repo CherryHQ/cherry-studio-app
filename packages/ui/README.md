@@ -656,13 +656,17 @@ them. The composer native-patch suite checks the installed sources, while recove
 editing still need device acceptance. See [the stability tracker](https://github.com/CherryHQ/cherry-studio-app/issues/1011).
 
 The field's height is measured natively, not in JavaScript: `maxHeight` caps it and the native input
-reports its own content height back to Fabric. Two Android patches keep that reporting honest. A text
-mutation made inside an edit phase — every paste and every programmatic insert — suppresses the
-watcher that normally reports the new height, so `replaceTextInRange` reports it itself; without that
-the field keeps the height it had before the insert. And because the native scroll-to-caret runs
-against the height the field had *before* it grew, a stale offset can survive the growth and slice
-the top off the first line, so the field re-clamps its scroll whenever its size changes. Both need a
-new installation package.
+reports its own content height back to Fabric. On Android, `replaceTextInRange` suppresses the text
+watcher during edits, so it reports the updated height after formatting is applied. This covers
+markdown paste and programmatic inserts without extending measurement to formatting-only commands.
+
+The Android field also clamps scroll offsets outside the content range when its size changes.
+Native scroll-to-caret can run before Fabric applies the new height, but Android's pre-draw pass
+also adjusts scrolling. The size-change clamp is a defensive measure; its effect on the reported
+first-line clipping still needs device acceptance. Record the view height, text layout height, and
+`scrollY` before and after resizing, including the pre-draw pass, to establish whether a stale offset
+survives. The installed-source guards confirm patch presence, not runtime layout behavior. Both
+native changes require a new installation package.
 
 Rows above the field follow composition order rather than named slots. Use `Composer.Collapsible`
 only when a conditional row should animate the surface height:
