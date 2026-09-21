@@ -13,13 +13,12 @@ class SystemIntegrationModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("SystemIntegration")
-    Events("onPending", "onIntentCancelled")
+    Events("onPending")
     OnCreate { stopObserving = SystemEntryStore.observe { sendEvent("onPending") } }
     OnDestroy { stopObserving?.invoke(); stopObserving = null }
 
     AsyncFunction("claimNextEntry") Coroutine { -> withContext(Dispatchers.IO) { SystemEntryStore.claimNext(context) } }
     AsyncFunction("releaseEntry") { id: String -> SystemEntryStore.release(id) }
     AsyncFunction("completeEntry") Coroutine { id: String -> withContext(Dispatchers.IO) { SystemEntryStore.complete(context, id) } }
-    AsyncFunction("finishIntent") { _: String, _: Map<String, Any?> -> Unit }
   }
 }

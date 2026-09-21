@@ -19,7 +19,7 @@ export function SystemShareScreen() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ handoff?: string | string[] }>();
   const [session] = useState(() => getSystemEntryHandoff(getSingleRouteParam(params.handoff)));
-  const action = session?.action.kind === 'share.receive' ? session.action : null;
+  const action = session?.action ?? null;
   const { agents } = useAgentsApi();
   const [selectedId, setSelectedId] = useState<string>();
   const selected = agents.find((agent) => agent.id === selectedId) ?? agents[0];

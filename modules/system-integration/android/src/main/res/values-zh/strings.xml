@@ -5,8 +5,4 @@
   <string name="cherry_share_confirm">在 Cherry 中预览分享内容，确认后再发送给助手。</string>
   <string name="cherry_share_preparing">正在准备分享内容…</string>
   <string name="cherry_share_failed">无法读取分享内容。请分享最多 10 个文件（单个 25 MB，总计 50 MB）后重试。</string>
-  <string name="cherry_shortcut_chat">新建对话</string>
-  <string name="cherry_shortcut_painting">创建图片</string>
-  <string name="cherry_new_chat">新建聊天</string>
-  <string name="cherry_new_painting">新建绘画</string>
 </resources>

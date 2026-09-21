@@ -47,7 +47,7 @@ export function createSystemShareImports(dependencies: {
       signal.throwIfAborted();
       if (!directory.exists) directory.create({ intermediates: true });
       const file = receiptFile(entry.id);
-      const attachments = entry.files ?? [];
+      const attachments = entry.files;
       const receipt = file.exists
         ? await read(file)
         : {

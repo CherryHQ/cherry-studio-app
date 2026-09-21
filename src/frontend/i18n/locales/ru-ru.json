@@ -1682,7 +1682,7 @@
   "settings.websearch.provider.showApiKeys": "Показать ключ API",
   "settings.websearch.provider.title": "Поставщик поиска",
   "systemEntry.agent": "Агент",
-  "systemEntry.failed": "Не удалось открыть это системное действие. Проверьте настройки Cherry и попробуйте снова.",
+  "systemEntry.failed": "Не удалось открыть этот материал. Поделитесь содержимым ещё раз.",
   "systemEntry.manageAgents": "Управление агентами",
   "systemEntry.noAgent": "Нет доступных агентов",
   "systemEntry.sendFailed": "Не удалось отправить этот материал. Проверьте выбранного агента и модель, затем повторите попытку.",

@@ -14,11 +14,5 @@
         <data android:mimeType="*/*" />
       </intent-filter>
     </activity>
-    <activity
-      android:name=".ShortcutEntryActivity"
-      android:theme="@android:style/Theme.NoDisplay"
-      android:exported="true"
-      android:excludeFromRecents="true"
-      android:taskAffinity="" />
   </application>
 </manifest>

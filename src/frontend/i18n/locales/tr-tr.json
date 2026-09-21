@@ -1672,7 +1672,7 @@
   "settings.websearch.provider.showApiKeys": "API Anahtarını Göster",
   "settings.websearch.provider.title": "Arama sağlayıcısı",
   "systemEntry.agent": "Ajan",
-  "systemEntry.failed": "Bu sistem işlemi açılamadı. Cherry ayarlarını kontrol edip yeniden deneyin.",
+  "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın.",
   "systemEntry.manageAgents": "Ajanları yönet",
   "systemEntry.noAgent": "Kullanılabilir ajan yok",
   "systemEntry.sendFailed": "Bu paylaşım gönderilemedi. Seçili ajanı ve modeli kontrol edip yeniden deneyin.",

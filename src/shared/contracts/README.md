@@ -123,7 +123,7 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 | `plugins` | Validates credentials and coordinates authorization, connection persistence, and runtime invalidation; connection reads use the Data API |
 | `profile` | Encapsulates profile avatar storage and preference coordination |
 | `providers` | Combines provider removal policy with provider avatar storage |
-| `systemEntry` | Claims native actions, coordinates confirmed share imports and Agent admission, and owns bounded replies and cleanup |
+| `systemEntry` | Claims native shares, coordinates confirmed imports and Agent admission, and owns cleanup |
 | `webSearch` | Encapsulates provider-specific connectivity checks and third-party behavior |
 
 Ordinary persistence for these resource families still belongs to the Data API. For example, model

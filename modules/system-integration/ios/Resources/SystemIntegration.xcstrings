@@ -18,53 +18,19 @@
         }
       }
     },
-    "invalidInput": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enter a question before asking Cherry."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "请先输入问题。"
-          }
-        }
-      }
-    },
-    "timedOut": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cherry did not respond in time. Try again."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cherry 未及时响应，请重试。"
-          }
-        }
-      }
-    },
     "failed": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The action failed. Open Cherry and try again."
+            "value": "The share failed. Open Cherry and try again."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "操作失败，请打开 Cherry 后重试。"
+            "value": "分享失败，请打开 Cherry 后重试。"
           }
         }
       }

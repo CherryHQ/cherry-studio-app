@@ -1667,7 +1667,7 @@
   "settings.websearch.provider.showApiKeys": "顯示 API Key",
   "settings.websearch.provider.title": "搜索供應商",
   "systemEntry.agent": "智能體",
-  "systemEntry.failed": "無法開啟此系統操作，請檢查 Cherry 設定後再試一次。",
+  "systemEntry.failed": "無法開啟此分享，請重新分享內容。",
   "systemEntry.manageAgents": "管理智能體",
   "systemEntry.noAgent": "目前沒有可用的智能體",
   "systemEntry.sendFailed": "分享內容傳送失敗，請檢查所選智能體與模型後再試一次。",

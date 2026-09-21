@@ -6,15 +6,12 @@ const base = {
   createdAt: 1_789_566_000_000,
 };
 
-test('ordinary shares cannot claim the native ask reply capability or supply provider configuration', () => {
+test('shares reject fields outside the bounded native envelope', () => {
   const share = { ...base, kind: 'share.receive', text: 'hello', files: [] };
   expect(nativeSystemEntrySchema.safeParse(share).success).toBe(true);
   expect(nativeSystemEntrySchema.safeParse({ ...share, replyExpected: true }).success).toBe(false);
   expect(
     nativeSystemEntrySchema.safeParse({ ...share, endpoint: 'https://example.com' }).success,
-  ).toBe(false);
-  expect(
-    nativeSystemEntrySchema.safeParse({ ...base, kind: 'chat.ask', text: 'hello' }).success,
   ).toBe(false);
 });
 
@@ -24,7 +21,7 @@ test('rejects unknown actions, versions, unbounded payloads, and arbitrary sourc
       .success,
   ).toBe(false);
   expect(
-    nativeSystemEntrySchema.safeParse({ ...base, version: 2, kind: 'chat.open' }).success,
+    nativeSystemEntrySchema.safeParse({ ...base, version: 2, kind: 'system.open' }).success,
   ).toBe(false);
   expect(
     nativeSystemEntrySchema.safeParse({

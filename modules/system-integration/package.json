@@ -1,7 +1,7 @@
 {
   "name": "@cherrystudio/system-integration",
   "version": "1.0.0",
-  "description": "System entry points for Cherry Mobile",
+  "description": "System sharing for Cherry Mobile",
   "main": "index.ts",
   "private": true,
   "license": "UNLICENSED"

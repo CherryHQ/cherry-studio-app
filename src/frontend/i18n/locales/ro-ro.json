@@ -1677,7 +1677,7 @@
   "settings.websearch.provider.showApiKeys": "Afișează cheia API",
   "settings.websearch.provider.title": "Furnizor de căutare",
   "systemEntry.agent": "Agent",
-  "systemEntry.failed": "Această acțiune de sistem nu a putut fi deschisă. Verificați setările Cherry și încercați din nou.",
+  "systemEntry.failed": "Această partajare nu a putut fi deschisă. Partajați din nou conținutul.",
   "systemEntry.manageAgents": "Gestionați agenții",
   "systemEntry.noAgent": "Niciun agent disponibil",
   "systemEntry.sendFailed": "Această partajare nu a putut fi trimisă. Verificați agentul și modelul selectate, apoi încercați din nou.",

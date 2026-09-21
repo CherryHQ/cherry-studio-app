@@ -1,20 +1,18 @@
 # System Integration
 
-This local Expo module owns Cherry Mobile's native system-entry boundary. Frontend code uses
+This local Expo module owns Cherry Mobile's native share boundary. Frontend code uses
 `Backend.systemEntry`; it never imports this module directly. See the
 [architecture and behavior contract](../../docs/references/system-integration-design.md).
 
 ## Native targets
 
 - Android: `ShareReceiverActivity` receives text, links, images, and files after explicit user
-  confirmation. `ShortcutEntryActivity` accepts only new-chat and painting navigation.
+  confirmation.
 - iOS: `CherryShareExtension` supports iOS 17 and stages confirmed shares in the app group.
-  `CherryAppIntents.swift` compiles into the main app target and exposes New Chat and Ask Cherry.
-  Ask opens the app, uses the existing Agent workflow, and waits at most 55 seconds for a reply.
 
-`scripts/withSystemIntegration.js` copies the share extension and App Intent sources, configures
-their resources and App Group entitlement, and declares Android launcher shortcuts. These native
-changes require a new custom development client; an OTA update or Expo Go cannot add them.
+`scripts/withSystemIntegration.js` configures the iOS share extension, its resources, and its
+App Group entitlement. The Android activity is registered by the local Expo module. These
+native changes require a new custom development client; an OTA update or Expo Go cannot add them.
 
 ## Share storage and lifecycle
 
@@ -35,6 +33,6 @@ accepted content is deleted from staging after completion or expiry.
 ## Acceptance
 
 Before release, authorize and perform native builds and device checks for cold and warm share
-delivery, cancellation, restart and expiry cleanup, attachment limits, App Intent discovery, Ask
-cancellation, App Group provisioning, and Android launcher navigation. Run the focused system-entry
-and native-envelope suites when verification is authorized.
+delivery, cancellation, restart and expiry cleanup, attachment limits, App Group provisioning,
+and confirmed submission. Run the focused system-entry and native-envelope suites when
+verification is authorized.

@@ -1672,7 +1672,7 @@
   "settings.websearch.provider.showApiKeys": "Εμφάνιση κλειδιού API",
   "settings.websearch.provider.title": "Πάροχος αναζήτησης",
   "systemEntry.agent": "Πράκτορας",
-  "systemEntry.failed": "Δεν ήταν δυνατό το άνοιγμα αυτής της ενέργειας συστήματος. Ελέγξτε τις ρυθμίσεις του Cherry και δοκιμάστε ξανά.",
+  "systemEntry.failed": "Δεν ήταν δυνατό το άνοιγμα αυτής της κοινοποίησης. Κοινοποιήστε ξανά το περιεχόμενο.",
   "systemEntry.manageAgents": "Διαχείριση πρακτόρων",
   "systemEntry.noAgent": "Δεν υπάρχει διαθέσιμος πράκτορας",
   "systemEntry.sendFailed": "Δεν ήταν δυνατή η αποστολή αυτής της κοινοποίησης. Ελέγξτε τον επιλεγμένο πράκτορα και το μοντέλο και δοκιμάστε ξανά.",

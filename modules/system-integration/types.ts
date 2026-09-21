@@ -3,17 +3,13 @@ export type NativeSystemEntry = {
   version: 1;
   id: string;
   createdAt: number;
-  kind: 'chat.open' | 'chat.ask' | 'painting.open' | 'share.receive';
-  agentId?: string;
-  text?: string;
-  files?: { name: string; uri: string; mediaType: string; size: number }[];
-  /** Only the native App Intent implementation can grant this capability. */
-  replyExpected?: boolean;
+  kind: 'share.receive';
+  text: string;
+  files: { name: string; uri: string; mediaType: string; size: number }[];
 };
 
 type NativeSystemEvents = {
   onPending: () => void;
-  onIntentCancelled: (event: { id: string }) => void;
 };
 
 /**
@@ -29,10 +25,4 @@ export interface SystemIntegrationNativeModule {
   claimNextEntry(): Promise<NativeSystemEntry | null>;
   releaseEntry(id: string): Promise<void>;
   completeEntry(id: string): Promise<void>;
-  finishIntent(
-    id: string,
-    result: { status: 'succeeded' | 'failed'; text?: string },
-  ): Promise<void>;
-  /** iOS App Intents read this index; Android launcher shortcuts do not use it. */
-  publishAgents?(agents: { id: string; name: string }[]): Promise<void>;
 }

@@ -5,8 +5,4 @@
   <string name="cherry_share_confirm">Review the shared content in Cherry before sending it to an Agent.</string>
   <string name="cherry_share_preparing">Preparing shared content…</string>
   <string name="cherry_share_failed">Could not read this share. Share up to 10 files (25 MB each, 50 MB total) and try again.</string>
-  <string name="cherry_shortcut_chat">New chat</string>
-  <string name="cherry_shortcut_painting">Create image</string>
-  <string name="cherry_new_chat">New chat</string>
-  <string name="cherry_new_painting">New painting</string>
 </resources>

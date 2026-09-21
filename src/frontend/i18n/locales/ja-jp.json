@@ -1667,7 +1667,7 @@
   "settings.websearch.provider.showApiKeys": "API キーを表示",
   "settings.websearch.provider.title": "検索プロバイダー",
   "systemEntry.agent": "エージェント",
-  "systemEntry.failed": "このシステム操作を開けませんでした。Cherry の設定を確認してからもう一度お試しください。",
+  "systemEntry.failed": "この共有を開けませんでした。もう一度共有してください。",
   "systemEntry.manageAgents": "エージェントを管理",
   "systemEntry.noAgent": "利用できるエージェントがありません",
   "systemEntry.sendFailed": "この共有を送信できませんでした。選択したエージェントとモデルを確認してから再試行してください。",

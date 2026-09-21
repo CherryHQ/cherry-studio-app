@@ -1,14 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const {
-  AndroidConfig,
-  IOSConfig,
-  withAndroidManifest,
-  withDangerousMod,
-  withEntitlementsPlist,
-  withInfoPlist,
-  withXcodeProject,
-} = require('expo/config-plugins');
+const { withEntitlementsPlist, withInfoPlist, withXcodeProject } = require('expo/config-plugins');
 
 const TARGETS = [{ name: 'CherryShareExtension', source: 'ShareExtension', minimum: '17.0' }];
 
@@ -57,27 +49,6 @@ module.exports = (config) => {
     const project = mod.modResults;
     const root = mod.modRequest.platformProjectRoot;
     const source = path.join(mod.modRequest.projectRoot, 'modules/system-integration/ios');
-    const main = project.getFirstTarget().uuid;
-    const mainFolder = 'CherrySystemIntegration';
-    fs.mkdirSync(path.join(root, mainFolder), { recursive: true });
-    for (const [file, from, resource] of [
-      ['CherryAppIntents.swift', 'AppIntents', false],
-      ['SystemIntegration.xcstrings', 'Resources', true],
-      ['Localizable.xcstrings', 'Resources', true],
-      ['AppShortcuts.xcstrings', 'Resources', true],
-    ]) {
-      fs.copyFileSync(path.join(source, from, file), path.join(root, mainFolder, file));
-      IOSConfig.XcodeUtils.ensureGroupRecursively(project, mainFolder);
-      const options = {
-        filepath: `${mainFolder}/${file}`,
-        groupName: mainFolder,
-        project,
-        targetUuid: main,
-        isBuildFile: true,
-      };
-      if (resource) IOSConfig.XcodeUtils.addResourceFileToGroup(options);
-      else IOSConfig.XcodeUtils.addBuildSourceFileToGroup(options);
-    }
     for (const target of TARGETS) {
       const directory = path.join(root, target.name);
       fs.mkdirSync(directory, { recursive: true });
@@ -186,40 +157,5 @@ module.exports = (config) => {
     }
     return mod;
   });
-  config = withAndroidManifest(config, (mod) => {
-    const main = AndroidConfig.Manifest.getMainActivityOrThrow(mod.modResults);
-    const metadata = (main['meta-data'] ??= []);
-    const item = metadata.find((entry) => entry.$['android:name'] === 'android.app.shortcuts');
-    if (item) item.$['android:resource'] = '@xml/cherry_shortcuts';
-    else
-      metadata.push({
-        $: { 'android:name': 'android.app.shortcuts', 'android:resource': '@xml/cherry_shortcuts' },
-      });
-    return mod;
-  });
-  return withDangerousMod(config, [
-    'android',
-    (mod) => {
-      const directory = path.join(mod.modRequest.platformProjectRoot, 'app/src/main/res/xml');
-      fs.mkdirSync(directory, { recursive: true });
-      const entries = [
-        ['new_chat', 'chat.open'],
-        ['new_painting', 'painting.open'],
-      ]
-        .map(
-          ([id, kind]) => `
-  <shortcut android:shortcutId="cherry_${id}" android:enabled="true" android:shortcutShortLabel="@string/cherry_${id}" android:icon="@mipmap/ic_launcher">
-    <intent android:action="android.intent.action.VIEW" android:targetPackage="${config.android.package}" android:targetClass="expo.modules.systemintegration.ShortcutEntryActivity">
-      <extra android:name="kind" android:value="${kind}" />
-    </intent>
-  </shortcut>`,
-        )
-        .join('');
-      fs.writeFileSync(
-        path.join(directory, 'cherry_shortcuts.xml'),
-        `<?xml version="1.0" encoding="utf-8"?>\n<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">${entries}\n</shortcuts>\n`,
-      );
-      return mod;
-    },
-  ]);
+  return config;
 };

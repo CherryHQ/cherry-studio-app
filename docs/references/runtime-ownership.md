@@ -132,7 +132,7 @@ resource-deletion contract.
 ## Other Long-Lived Resources
 
 - `SystemEntryBridge` owns the foreground claim loop. A claimed `SystemEntrySession` owns admission,
-  native acknowledgement, and any Ask reply; bootstrap drains these owners before stopping the host.
+  native acknowledgement, and cleanup; bootstrap drains these owners before stopping the host.
   Ordinary share staging survives process restart until consumed or expired. The iOS share
   extension runs outside the main app process and does not own another Backend or Agent Host.
 

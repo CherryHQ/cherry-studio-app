@@ -13,7 +13,6 @@ import org.json.JSONObject
 internal object SystemEntryStore {
   private val lock = Any()
   private val claimed = mutableSetOf<String>()
-  private val volatileEntries = mutableListOf<JSONObject>()
   private val listeners = mutableSetOf<() -> Unit>()
   private const val TTL_MS = 24 * 60 * 60 * 1000L
   private const val MAX_FILE_BYTES = 25 * 1024 * 1024L
@@ -22,15 +21,6 @@ internal object SystemEntryStore {
   fun observe(listener: () -> Unit): () -> Unit = synchronized(lock) {
     listeners.add(listener)
     return@synchronized { synchronized(lock) { listeners.remove(listener) }; Unit }
-  }
-
-  fun enqueueNavigation(kind: String) {
-    require(kind == "chat.open" || kind == "painting.open")
-    synchronized(lock) {
-      volatileEntries.add(JSONObject().put("version", 1).put("id", UUID.randomUUID().toString())
-        .put("createdAt", System.currentTimeMillis()).put("kind", kind))
-    }
-    notifyPending()
   }
 
   fun stageShare(context: Context, text: String, uris: List<Uri>, isCancelled: () -> Boolean): String {
@@ -82,11 +72,10 @@ internal object SystemEntryStore {
 
   fun claimNext(context: Context): Map<String, Any?>? = synchronized(lock) {
     cleanExpired(context)
-    val queued = volatileEntries.firstOrNull { !claimed.contains(it.getString("id")) }
-      ?: entries(context).listFiles()?.filter { it.isDirectory }?.sortedBy { it.lastModified() }
-        ?.firstNotNullOfOrNull { directory ->
-          if (claimed.contains(directory.name)) null else readEntry(directory)
-        }
+    val queued = entries(context).listFiles()?.filter { it.isDirectory }?.sortedBy { it.lastModified() }
+      ?.firstNotNullOfOrNull { directory ->
+        if (claimed.contains(directory.name)) null else readEntry(directory)
+      }
     if (queued == null) return@synchronized null
     claimed.add(queued.getString("id"))
     queued.toMap()
@@ -97,7 +86,6 @@ internal object SystemEntryStore {
   fun complete(context: Context, id: String) = synchronized(lock) {
     requireIdentifier(id)
     claimed.remove(id)
-    volatileEntries.removeAll { it.optString("id") == id }
     File(entries(context), id).deleteRecursively()
     Unit
   }
@@ -138,7 +126,6 @@ internal object SystemEntryStore {
         if (createdAt <= 0 || now - createdAt > TTL_MS || createdAt > now + 60_000) directory.deleteRecursively()
       }
     }
-    volatileEntries.removeAll { now - it.optLong("createdAt") > 120_000 }
   }
 
   private fun requireIdentifier(id: String) { require(runCatching { UUID.fromString(id) }.isSuccess) }

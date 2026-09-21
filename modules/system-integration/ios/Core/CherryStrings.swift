@@ -8,9 +8,7 @@ struct CherryStrings {
 
   private static let fallback = [
     "close": "Close",
-    "invalidInput": "Enter a question before asking Cherry.",
-    "timedOut": "Cherry did not respond in time. Try again.",
-    "failed": "The action failed. Open Cherry and try again.",
+    "failed": "The share failed. Open Cherry and try again.",
     "shareTitle": "Share to Cherry", "shareSave": "Save for Cherry",
     "shareSaved": "Saved. Open Cherry to choose an Agent and review the content before sending.",
     "sharePreparing": "Preparing shared content…",

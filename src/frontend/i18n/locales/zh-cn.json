@@ -1667,7 +1667,7 @@
   "settings.websearch.provider.showApiKeys": "显示 API Key",
   "settings.websearch.provider.title": "搜索服务商",
   "systemEntry.agent": "Agent",
-  "systemEntry.failed": "无法完成此系统操作，请检查 Cherry 设置后重试。",
+  "systemEntry.failed": "无法打开此分享，请重新分享内容。",
   "systemEntry.manageAgents": "管理 Agent",
   "systemEntry.noAgent": "暂无可用 Agent",
   "systemEntry.sendFailed": "分享内容发送失败，请检查所选 Agent 和模型后重试。",

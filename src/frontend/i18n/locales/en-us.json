@@ -1672,7 +1672,7 @@
   "settings.websearch.provider.showApiKeys": "Show API Key",
   "settings.websearch.provider.title": "Search provider",
   "systemEntry.agent": "Agent",
-  "systemEntry.failed": "Could not open this system action. Check Cherry settings and try again.",
+  "systemEntry.failed": "Could not open this share. Share the content again.",
   "systemEntry.manageAgents": "Manage Agents",
   "systemEntry.noAgent": "No Agent available",
   "systemEntry.sendFailed": "Could not send this share. Check the selected Agent and model, then retry.",

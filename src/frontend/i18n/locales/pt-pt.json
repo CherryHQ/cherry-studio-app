@@ -1677,7 +1677,7 @@
   "settings.websearch.provider.showApiKeys": "Mostrar chave API",
   "settings.websearch.provider.title": "Fornecedor de pesquisa",
   "systemEntry.agent": "Agente",
-  "systemEntry.failed": "Não foi possível abrir esta ação do sistema. Verifique as definições do Cherry e tente novamente.",
+  "systemEntry.failed": "Não foi possível abrir esta partilha. Partilhe o conteúdo novamente.",
   "systemEntry.manageAgents": "Gerir agentes",
   "systemEntry.noAgent": "Nenhum agente disponível",
   "systemEntry.sendFailed": "Não foi possível enviar esta partilha. Verifique o agente e o modelo selecionados e tente novamente.",

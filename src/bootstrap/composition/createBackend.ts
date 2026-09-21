@@ -207,11 +207,7 @@ export function createBackend(
     ensureReady: (signal) =>
       raceAbort(infrastructure.providerRegistryUpdater.ensureReady(), signal),
     findSession: findEntrySession,
-    readMessage: async (sessionId, messageId) =>
-      (await services.agentSessionMessage.listByCursor(sessionId, { ids: [messageId] })).items[0] ??
-      null,
     getAgent: (id) => services.agentData.getById(id),
-    listAgents: async () => (await services.agentData.list({ limit: 500 })).items,
     imports: createSystemShareImports({ entries: exportFiles, findSession: findEntrySession }),
   });
 

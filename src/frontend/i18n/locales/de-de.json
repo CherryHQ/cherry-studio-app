@@ -1672,7 +1672,7 @@
   "settings.websearch.provider.showApiKeys": "API-Schlüssel anzeigen",
   "settings.websearch.provider.title": "Suchanbieter",
   "systemEntry.agent": "Agent",
-  "systemEntry.failed": "Diese Systemaktion konnte nicht geöffnet werden. Prüfen Sie die Cherry-Einstellungen und versuchen Sie es erneut.",
+  "systemEntry.failed": "Diese Freigabe konnte nicht geöffnet werden. Teilen Sie den Inhalt erneut.",
   "systemEntry.manageAgents": "Agenten verwalten",
   "systemEntry.noAgent": "Kein Agent verfügbar",
   "systemEntry.sendFailed": "Diese Freigabe konnte nicht gesendet werden. Prüfen Sie den ausgewählten Agenten und das Modell und versuchen Sie es erneut.",

@@ -1667,7 +1667,7 @@
   "settings.websearch.provider.showApiKeys": "Hiển thị khóa API",
   "settings.websearch.provider.title": "Nhà cung cấp dịch vụ tìm kiếm",
   "systemEntry.agent": "Tác nhân",
-  "systemEntry.failed": "Không thể mở thao tác hệ thống này. Hãy kiểm tra cài đặt Cherry rồi thử lại.",
+  "systemEntry.failed": "Không thể mở nội dung chia sẻ này. Hãy chia sẻ lại.",
   "systemEntry.manageAgents": "Quản lý tác nhân",
   "systemEntry.noAgent": "Không có tác nhân khả dụng",
   "systemEntry.sendFailed": "Không thể gửi nội dung chia sẻ này. Hãy kiểm tra tác nhân và mô hình đã chọn rồi thử lại.",
