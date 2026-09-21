@@ -5,6 +5,8 @@ import type { ComposerLabels } from '../composer.types';
 export type ComposerStateContextValue = {
   canSend: boolean;
   labels: ComposerLabels;
+  /** What the field's return key does; see `ComposerProps.submitBehavior`. */
+  submitBehavior: 'newline' | 'submit';
   streaming: boolean;
   value: string;
 };

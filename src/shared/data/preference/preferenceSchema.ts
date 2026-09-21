@@ -35,6 +35,11 @@ export interface PreferenceSchema {
   'app.user.name': string;
 
   'chat.background_reply.enabled': boolean;
+  /**
+   * Whether the composer's return key sends the message. When false, the key
+   * inserts a newline, matching the mobile convention.
+   */
+  'chat.input.enter_sends': boolean;
   'agent.default_model_id': string | null;
   'chat.web_search.compression.cutoff_limit': number;
   'chat.web_search.compression.method': WebSearchCompressionMethod;
@@ -67,6 +72,7 @@ export const PreferenceDefaults = {
   'app.user.name': '',
 
   'chat.background_reply.enabled': true,
+  'chat.input.enter_sends': false,
   'agent.default_model_id': null,
   'chat.web_search.compression.cutoff_limit': 2000,
   'chat.web_search.compression.method': 'cutoff',

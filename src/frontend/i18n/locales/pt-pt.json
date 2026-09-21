@@ -1122,6 +1122,8 @@
   "settings.documentParser.builtinDescription": "Apenas extrai texto, adequado para resumos e perguntas e respostas para documentos focados em texto. Menor utilização de token.",
   "settings.documentParser.saveFailed": "Não foi possível guardar o analisador do documento",
   "settings.documentParser.title": "Analisador de documentos",
+  "settings.enterToSend.saveFailed": "Não foi possível guardar a definição da tecla Enter",
+  "settings.enterToSend.title": "A tecla Enter envia a mensagem",
   "settings.exportWatermark.saveFailed": "Não foi possível guardar a definição da marca de água",
   "settings.exportWatermark.title": "Marca de água na partilha",
   "settings.fontSize.level.extraLarge": "Extra grande",

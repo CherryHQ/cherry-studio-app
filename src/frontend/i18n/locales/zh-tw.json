@@ -1112,6 +1112,8 @@
   "settings.documentParser.builtinDescription": "僅提取文本，適合文字為主的文檔摘要與問答；Token 消耗較少。",
   "settings.documentParser.saveFailed": "文檔解析器設定儲存失敗",
   "settings.documentParser.title": "文檔解析器",
+  "settings.enterToSend.saveFailed": "Enter 鍵設定儲存失敗",
+  "settings.enterToSend.title": "Enter 鍵發送消息",
   "settings.exportWatermark.saveFailed": "無法儲存浮水印設定",
   "settings.exportWatermark.title": "分享浮水印",
   "settings.fontSize.level.extraLarge": "特大",

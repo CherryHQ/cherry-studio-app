@@ -1112,6 +1112,8 @@
   "settings.documentParser.builtinDescription": "Chỉ trích xuất văn bản, phù hợp với phần tóm tắt và Hỏi đáp cho các tài liệu tập trung vào văn bản. Mức sử dụng mã thông báo thấp hơn.",
   "settings.documentParser.saveFailed": "Không thể lưu trình phân tích cú pháp tài liệu",
   "settings.documentParser.title": "Trình phân tích tài liệu",
+  "settings.enterToSend.saveFailed": "Không thể lưu cài đặt phím Enter",
+  "settings.enterToSend.title": "Phím Enter gửi tin nhắn",
   "settings.exportWatermark.saveFailed": "Không thể lưu cài đặt hình mờ",
   "settings.exportWatermark.title": "Hình mờ khi chia sẻ",
   "settings.fontSize.level.extraLarge": "Cực lớn",

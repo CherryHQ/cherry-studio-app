@@ -1,7 +1,7 @@
 import { TextInputWrapper } from 'expo-paste-input';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet } from 'react-native';
-import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
+import { StyleSheet, type NativeSyntheticEvent } from 'react-native';
+import { EnrichedMarkdownTextInput, type OnKeyPressEvent } from 'react-native-enriched-markdown';
 import { useResolveClassNames } from 'uniwind';
 
 import type { ComposerInputHandle, ComposerInputProps } from '../composer.types';
@@ -34,8 +34,8 @@ export function ComposerInput({
   style,
   testID,
 }: ComposerInputProps) {
-  const { value } = useComposerState('Composer.Input');
-  const { changeText } = useComposerActions('Composer.Input');
+  const { canSend, streaming, submitBehavior, value } = useComposerState('Composer.Input');
+  const { changeText, send } = useComposerActions('Composer.Input');
   // The rich editor is a Fabric host rather than RN's TextInput, so Uniwind
   // cannot resolve a className on it. Resolve the two base text properties here
   // instead. Use the font-size-only utility deliberately: the upstream Android
@@ -56,12 +56,53 @@ export function ComposerInput({
     [baseTextStyle, style],
   );
 
+  // Submit-on-return has to work with, not against, the uncontrolled buffer:
+  // the return keystroke's native newline cannot be vetoed from JS — the key
+  // press event only announces it. Send on the announcement, then treat the
+  // one change that follows as that keystroke's debris and refuse to adopt it;
+  // the sync effect below puts the caller's value (cleared by the send) back
+  // into the field, so the newline never reaches the draft. The capture is
+  // always answered by exactly one change: every path that emits `Enter` —
+  // the iOS text-change delegate and the Android input-connection wrapper —
+  // applies its newline right after, and the list-key interceptors only
+  // consume Tab and Backspace.
+  const submitCaptureRef = useRef(false);
+  // Mirrored so the capture branch can push the freshest caller value without
+  // the change handler's identity churning on every keystroke.
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
   const handleChangeMarkdown = useCallback(
     (markdown: string) => {
+      if (submitCaptureRef.current) {
+        submitCaptureRef.current = false;
+        // Adopt nothing from the captured edit; put the caller's value back so
+        // the field cannot end up showing a newline the draft does not have.
+        emitted.current = valueRef.current;
+        inputRef.current?.setValue(valueRef.current);
+        return;
+      }
       emitted.current = markdown;
       changeText(markdown);
     },
-    [changeText],
+    [changeText, inputRef],
+  );
+
+  const handleKeyPress = useCallback(
+    (event: NativeSyntheticEvent<OnKeyPressEvent>) => {
+      if (event.nativeEvent.key !== 'Enter' || submitBehavior !== 'submit') {
+        return;
+      }
+      // While a reply streams the send button means stop, and the send
+      // protocol forbids concurrent sends; the return key does neither, so it
+      // falls back to the native newline.
+      if (streaming || !canSend) {
+        return;
+      }
+      submitCaptureRef.current = true;
+      send();
+    },
+    [canSend, send, streaming, submitBehavior],
   );
 
   // Pushes a caller-side change — send clearing the draft, a failed send
@@ -95,6 +136,7 @@ export function ComposerInput({
         onBlur={onBlur}
         onChangeMarkdown={handleChangeMarkdown}
         onFocus={onFocus}
+        onKeyPress={handleKeyPress}
         placeholder={placeholder}
         placeholderTextColor={
           typeof placeholderStyle.color === 'string' ? placeholderStyle.color : undefined

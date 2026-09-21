@@ -21,6 +21,7 @@ type MockComposerProps = {
   children?: ReactNode;
   labels?: { send: string; stop: string };
   onSend: () => Promise<void> | void;
+  submitBehavior?: 'newline' | 'submit';
   value: string;
 };
 
@@ -29,9 +30,14 @@ const mockAlertShow = jest.fn();
 const mockLoggerDebug = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
+let mockEnterSends = false;
 let mockComposerProps: MockComposerProps | undefined;
 let mockComposerActions: ReturnType<typeof useComposerActions> | undefined;
 let mockComposerState: ReturnType<typeof useComposerState> | undefined;
+
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: () => [mockEnterSends, jest.fn()],
+}));
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
@@ -75,6 +81,7 @@ describe('ComposerSurface', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEnterSends = false;
     mockComposerProps = undefined;
     mockComposerActions = undefined;
     mockComposerState = undefined;
@@ -213,6 +220,31 @@ describe('ComposerSurface', () => {
       label: 'Image failed',
       variant: 'danger',
     });
+  });
+
+  it('maps the enter-sends preference onto the submit behavior it hands the field', () => {
+    render(
+      <ComposerSurface
+        onSend={jest.fn(async () => undefined)}
+        onStop={jest.fn()}
+        streaming={false}
+      />,
+    );
+
+    expect(mockComposerProps?.submitBehavior).toBe('newline');
+  });
+
+  it('turns the return key into send when the enter-sends preference is on', () => {
+    mockEnterSends = true;
+    render(
+      <ComposerSurface
+        onSend={jest.fn(async () => undefined)}
+        onStop={jest.fn()}
+        streaming={false}
+      />,
+    );
+
+    expect(mockComposerProps?.submitBehavior).toBe('submit');
   });
 
   it('unmounts the attachment row after a successful send clears it', async () => {

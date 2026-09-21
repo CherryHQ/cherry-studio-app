@@ -1117,6 +1117,8 @@
   "settings.documentParser.builtinDescription": "Metin odaklı belgeler için özetlere ve Soru-Cevaplara uygun olarak yalnızca metni çıkarır. Daha düşük jeton kullanımı.",
   "settings.documentParser.saveFailed": "Belge ayrıştırıcı kaydedilemedi",
   "settings.documentParser.title": "Belge ayrıştırıcı",
+  "settings.enterToSend.saveFailed": "Enter tuşu ayarı kaydedilemedi",
+  "settings.enterToSend.title": "Enter tuşu mesajı gönderir",
   "settings.exportWatermark.saveFailed": "Filigran ayarı kaydedilemedi",
   "settings.exportWatermark.title": "Paylaşım filigranı",
   "settings.fontSize.level.extraLarge": "Ekstra büyük",

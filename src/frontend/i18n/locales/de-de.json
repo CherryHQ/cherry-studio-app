@@ -1117,6 +1117,8 @@
   "settings.documentParser.builtinDescription": "Extrahiert nur Text, geeignet für Zusammenfassungen und Fragen und Antworten für textorientierte Dokumente. Geringere Token-Nutzung.",
   "settings.documentParser.saveFailed": "Der Dokumentparser konnte nicht gespeichert werden",
   "settings.documentParser.title": "Dokumentparser",
+  "settings.enterToSend.saveFailed": "Eingabetaste-Einstellung konnte nicht gespeichert werden",
+  "settings.enterToSend.title": "Eingabetaste sendet Nachricht",
   "settings.exportWatermark.saveFailed": "Die Wasserzeicheneinstellung konnte nicht gespeichert werden",
   "settings.exportWatermark.title": "Wasserzeichen beim Teilen",
   "settings.fontSize.level.extraLarge": "Extra groß",

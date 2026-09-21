@@ -48,6 +48,7 @@ function ComposerRoot({
   placeholder,
   streaming = false,
   style,
+  submitBehavior = 'newline',
   testID,
   value,
 }: ComposerProps) {
@@ -55,10 +56,11 @@ function ComposerRoot({
     () => ({
       canSend: canSend ?? value.trim().length > 0,
       labels: labels ? { ...defaultLabels, ...labels } : defaultLabels,
+      submitBehavior,
       streaming,
       value,
     }),
-    [canSend, labels, streaming, value],
+    [canSend, labels, submitBehavior, streaming, value],
   );
 
   // Split from the state on purpose: this half only changes when the caller's

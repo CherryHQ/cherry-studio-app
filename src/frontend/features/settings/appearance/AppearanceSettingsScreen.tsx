@@ -22,6 +22,7 @@ export default function AppearanceSettingsScreen() {
   const [isWatermarkEnabled, setIsWatermarkEnabled] = usePreference(
     'file.export.watermark_enabled',
   );
+  const [enterSends, setEnterSends] = usePreference('chat.input.enter_sends');
   const normalizedFontSizeStep = normalizeFontSizeStep(fontSizeStep);
   const settingPreferences = useSettingPreferences();
   const languageLabel = settingPreferences.language.options.find(
@@ -31,6 +32,12 @@ export default function AppearanceSettingsScreen() {
   const changeWatermark = (value: boolean) => {
     void setIsWatermarkEnabled(value).catch(() => {
       toast.show({ label: t('settings.exportWatermark.saveFailed'), variant: 'danger' });
+    });
+  };
+
+  const changeEnterSends = (value: boolean) => {
+    void setEnterSends(value).catch(() => {
+      toast.show({ label: t('settings.enterToSend.saveFailed'), variant: 'danger' });
     });
   };
 
@@ -66,6 +73,12 @@ export default function AppearanceSettingsScreen() {
                 <ChevronRightIcon className="size-5 text-foreground" />
               </View>
             }
+          />
+          <Section.SwitchItem
+            label={t('settings.enterToSend.title')}
+            onValueChange={changeEnterSends}
+            testID="settings-enter-to-send"
+            value={enterSends}
           />
           <Section.SwitchItem
             label={t('settings.exportWatermark.title')}

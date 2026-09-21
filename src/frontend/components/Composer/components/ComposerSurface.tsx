@@ -2,6 +2,7 @@ import { Composer, useToast } from '@cherrystudio/ui/components';
 import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePreference } from '@/frontend/data/hooks';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
@@ -66,6 +67,7 @@ export function ComposerSurface({
     getSendErrorLabel,
     sendFailedLabel: labels?.sendFailed,
   });
+  const [enterSends] = usePreference('chat.input.enter_sends');
   const { attachments, draft } = useComposerState();
   const { addAttachments, clearAttachments, setDraft } = useComposerActions();
   const { dismissInput } = useComposerPresentationActions();
@@ -139,6 +141,7 @@ export function ComposerSurface({
       onSend={handleSend}
       onStop={onStop}
       streaming={streaming}
+      submitBehavior={enterSends ? 'submit' : 'newline'}
       testID={testID}
       value={draft}
     >

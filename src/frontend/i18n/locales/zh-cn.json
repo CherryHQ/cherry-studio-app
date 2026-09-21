@@ -1112,6 +1112,8 @@
   "settings.documentParser.builtinDescription": "仅提取文本，适合文字为主的文档摘要与问答；Token 消耗较少。",
   "settings.documentParser.saveFailed": "文档解析器设置保存失败",
   "settings.documentParser.title": "文档解析器",
+  "settings.enterToSend.saveFailed": "回车键设置保存失败",
+  "settings.enterToSend.title": "回车键发送消息",
   "settings.exportWatermark.saveFailed": "无法保存水印设置",
   "settings.exportWatermark.title": "分享水印",
   "settings.fontSize.level.extraLarge": "特大",

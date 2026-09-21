@@ -40,6 +40,14 @@ export type ComposerProps = {
   /** Required for `streaming` to be actionable; without it the button stays a send arrow. */
   onStop?: () => void;
   placeholder?: string;
+  /**
+   * What the field's return key does, mirroring React Native's `TextInput` prop
+   * of the same name. `'newline'` (the default) inserts a line break;
+   * `'submit'` sends, exactly like the send button, and keeps the keyboard up.
+   * The key's own label is untouched: the underlying input exposes no
+   * `returnKeyType`, and UIKit's trait only relabels the key anyway.
+   */
+  submitBehavior?: 'newline' | 'submit';
   /** Turns the send arrow into a stop square while a reply streams in. */
   streaming?: boolean;
   style?: StyleProp<ViewStyle>;

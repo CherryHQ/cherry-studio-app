@@ -1117,6 +1117,8 @@
   "settings.documentParser.builtinDescription": "Εξάγει μόνο κείμενο, κατάλληλο για περιλήψεις και Q&A για έγγραφα που εστιάζουν στο κείμενο. Χαμηλότερη χρήση διακριτικού.",
   "settings.documentParser.saveFailed": "Δεν ήταν δυνατή η αποθήκευση του αναλυτή εγγράφων",
   "settings.documentParser.title": "Αναλυτής εγγράφων",
+  "settings.enterToSend.saveFailed": "Δεν ήταν δυνατή η αποθήκευση της ρύθμισης του πλήκτρου Enter",
+  "settings.enterToSend.title": "Το πλήκτρο Enter στέλνει μήνυμα",
   "settings.exportWatermark.saveFailed": "Δεν ήταν δυνατή η αποθήκευση της ρύθμισης υδατογραφήματος",
   "settings.exportWatermark.title": "Υδατογράφημα κοινοποίησης",
   "settings.fontSize.level.extraLarge": "Εξαιρετικά μεγάλο",

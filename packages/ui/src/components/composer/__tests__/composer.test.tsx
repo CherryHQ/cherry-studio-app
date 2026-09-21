@@ -297,6 +297,76 @@ describe('Composer', () => {
     expect(inputRef.current?.setValue).not.toHaveBeenCalled();
   });
 
+  // Return-to-send rides the field's key-press announcement: the native edit
+  // (the newline) cannot be vetoed from JS, so the change that follows a
+  // captured Enter is that keystroke's debris and must not become the draft.
+  it('sends on return under the submit behavior without adopting the keystroke newline', () => {
+    const inputRef = createRef<ComposerInputHandle>();
+    const onChangeText = jest.fn();
+    const onSend = jest.fn();
+    const children = <Composer.Input ref={inputRef} testID="composer-input" />;
+    const tree = render({
+      children,
+      onChangeText,
+      onSend,
+      submitBehavior: 'submit',
+      value: 'Hello',
+    });
+    const input = tree.root.find((node) => typeof node.props.onKeyPress === 'function');
+
+    act(() => {
+      input.props.onKeyPress({ nativeEvent: { key: 'Enter' } });
+    });
+    act(() => {
+      input.props.onChangeMarkdown('Hello\n');
+    });
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onChangeText).not.toHaveBeenCalled();
+    // The captured edit is refused and the caller's value is put back.
+    expect(inputRef.current?.setValue).toHaveBeenCalledWith('Hello');
+  });
+
+  it('lets return insert a newline by default', () => {
+    const onChangeText = jest.fn();
+    const onSend = jest.fn();
+    const tree = render({
+      children: <Composer.Input testID="composer-input" />,
+      onChangeText,
+      onSend,
+      value: 'Hello',
+    });
+    const input = tree.root.find((node) => typeof node.props.onKeyPress === 'function');
+
+    act(() => {
+      input.props.onKeyPress({ nativeEvent: { key: 'Enter' } });
+    });
+    act(() => {
+      input.props.onChangeMarkdown('Hello\n');
+    });
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onChangeText).toHaveBeenCalledWith('Hello\n');
+  });
+
+  it('does not send on return while a reply streams', () => {
+    const onSend = jest.fn();
+    const tree = render({
+      children: <Composer.Input testID="composer-input" />,
+      onSend,
+      streaming: true,
+      submitBehavior: 'submit',
+      value: 'Hello',
+    });
+    const input = tree.root.find((node) => typeof node.props.onKeyPress === 'function');
+
+    act(() => {
+      input.props.onKeyPress({ nativeEvent: { key: 'Enter' } });
+    });
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
   it('carries an icon and a label in a pill without letting the icon shrink', () => {
     const onPress = jest.fn();
     const tree = render({

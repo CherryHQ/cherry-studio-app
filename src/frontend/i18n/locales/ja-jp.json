@@ -1112,6 +1112,8 @@
   "settings.documentParser.builtinDescription": "テキストのみを抽出し、テキスト中心の文書の要約や Q&A に適しています。トークンの使用量が少なくなります。",
   "settings.documentParser.saveFailed": "ドキュメント パーサーを保存できませんでした",
   "settings.documentParser.title": "ドキュメントパーサー",
+  "settings.enterToSend.saveFailed": "Enterキーの設定を保存できませんでした",
+  "settings.enterToSend.title": "Enterキーでメッセージを送信",
   "settings.exportWatermark.saveFailed": "透かしの設定を保存できませんでした",
   "settings.exportWatermark.title": "共有時の透かし",
   "settings.fontSize.level.extraLarge": "特大",

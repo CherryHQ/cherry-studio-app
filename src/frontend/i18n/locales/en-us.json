@@ -1117,6 +1117,8 @@
   "settings.documentParser.builtinDescription": "Extracts text only, suited to summaries and Q&A for text-focused documents. Lower token usage.",
   "settings.documentParser.saveFailed": "Could not save document parser",
   "settings.documentParser.title": "Document parser",
+  "settings.enterToSend.saveFailed": "Could not save Enter key setting",
+  "settings.enterToSend.title": "Enter key sends message",
   "settings.exportWatermark.saveFailed": "Could not save watermark setting",
   "settings.exportWatermark.title": "Share watermark",
   "settings.fontSize.level.extraLarge": "Extra large",
