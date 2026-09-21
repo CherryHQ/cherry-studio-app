@@ -127,7 +127,7 @@ platform opening; this port does not claim that desktop's three modern-format vi
 
 - DOCX uses `docx-preview@0.3.7`, including page breaks, headers, footers, notes, tables and images.
   Pages fit the available width initially; zoom preserves their original layout and permits panning.
-- PPTX uses `@aiden0z/pptx-renderer@1.2.2` with lazy slides/media and a windowed slide list. Mobile
+- PPTX uses `@aiden0z/pptx-renderer@1.3.0` with lazy slides/media and a windowed slide list. Mobile
   starts with two slides and one viewport of overscan. External media relationships are removed.
 - XLSX reuses Desktop's ExcelJS parser, styles/theme/number formatting, cached or evaluated formulas,
   merge geometry, two-axis virtual grid, images and ECharts integration. Unsupported charts and

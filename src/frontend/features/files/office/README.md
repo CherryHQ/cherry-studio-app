@@ -14,12 +14,14 @@ The read-only source was Cherry Desktop `e131f495a9af593ec873bea34b935e97d644f58
 [desktop-source.json](desktop-source.json) records each copied file and its source SHA-256.
 DOCX and PPTX integration follows Desktop's `WordFilePreview.tsx` and
 `PowerPointFilePreview.tsx` at that commit; the mobile React wrappers replace Electron file reads,
-desktop controls, and desktop error UI.
+desktop controls, and desktop error UI. The PPTX engine is ahead of that commit's `1.2.2` pin:
+`1.3.0` keeps the integration API and improves CJK text, tables, 2D charts and connector markers, so
+slides can render differently from Desktop 2.0.12.
 
 | Format | Admitted implementation | Compatibility boundary |
 | --- | --- | --- |
 | DOCX | `docx-preview@0.3.7`, original bytes and Desktop options | Browser pagination/font availability can differ from Word; HTML alt chunks disabled |
-| PPTX | `@aiden0z/pptx-renderer@1.2.2`, lazy media/slides/windowed viewer | Uses the pinned engine's supported shapes/charts; embedded PDF conversion disabled as on Desktop |
+| PPTX | `@aiden0z/pptx-renderer@1.3.0`, lazy media/slides/windowed viewer | Uses the pinned engine's supported shapes/charts; embedded PDF conversion disabled as on Desktop |
 | XLSX | ExcelJS 4.4.0, Desktop parser, virtual grid, formula helpers, ECharts | Supported charts: bar/line/pie/area; other charts get a visible placeholder; formulas without a supported evaluation show their formula |
 
 This is not an AnyDoc reconstruction and does not add legacy DOC/XLS/PPT support. AnyDoc's existing
