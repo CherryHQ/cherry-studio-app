@@ -15,6 +15,19 @@ function subject() {
     endpointConfigs: { 'openai-chat-completions': { baseUrl: 'https://example.test/v1' } },
   } as Provider;
   const dependencies: ProvidersModuleDependencies = {
+    accounts: {
+      getStatus: jest.fn(),
+      begin: jest.fn(),
+      cancel: jest.fn(),
+      receiveRedirect: jest.fn(),
+      refresh: jest.fn(),
+      getCapabilities: jest.fn(() => ({
+        signIn: false,
+        apiKeys: false,
+        balance: false,
+      })),
+      logout: jest.fn(),
+    },
     avatars: { persist: jest.fn(), remove: jest.fn(), resolve: jest.fn() },
     catalog: { isExcluded: () => false, list: () => [] },
     hasAvailableModels: jest.fn(async () => true),

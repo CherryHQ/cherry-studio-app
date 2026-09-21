@@ -17,6 +17,7 @@ import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { Model } from '@/shared/data/types/model';
 
 import { useProviderApiServiceSheetClose, useProviderConfigurationForm } from '../apiService';
+import { ProviderAccountPanel } from '../components/ProviderAccount';
 import { ProviderForm, providerFormAvatarSize } from '../components/ProviderForm';
 import { useProviderDeletion } from '../hooks/useProviderDeletion';
 import { useProviderSetup } from '../hooks/useProviderSetup';
@@ -90,6 +91,9 @@ function ProviderDetailSettings({
   const { models, modelsQuery } = useProviderDetailSettings(providerId);
   const {
     apiKeys,
+    accountChangesDisabled,
+    reloadAccountKeys,
+    setIsAccountBusy,
     canSubmit: canSubmitProvider,
     createInitialValues: createInitialFormValues,
     form,
@@ -346,6 +350,16 @@ function ProviderDetailSettings({
                 )}
               </ProviderForm>
               <View className="gap-6 px-4 pb-8">
+                {provider && providers.accounts.getCapabilities(provider).signIn ? (
+                  <ProviderAccountPanel
+                    capabilities={providers.accounts.getCapabilities(provider)}
+                    providerName={provider.name}
+                    providerId={providerId}
+                    changesDisabled={accountChangesDisabled}
+                    onKeysChanged={reloadAccountKeys}
+                    onBusyChange={setIsAccountBusy}
+                  />
+                ) : null}
                 <ProviderModelCheckSection
                   apiKeys={apiKeys}
                   isDisabled={formMeta.isDirty}

@@ -233,10 +233,17 @@ const DesktopProviderIdentitySchema = z.looseObject({
   name: z.string().min(1),
 });
 
-export const DesktopProviderSnapshotSchema = DesktopProviderPayloadSchema.transform((provider) => ({
-  ...provider,
-  models: collectModels(provider.models),
-}));
+export const DesktopProviderSnapshotSchema = DesktopProviderPayloadSchema.transform((provider) => {
+  const oauth =
+    provider.authType === 'oauth' ||
+    z.object({ type: z.literal('oauth') }).safeParse(provider.authConfig).success;
+  return {
+    ...provider,
+    models: collectModels(provider.models),
+    // Keep import eligibility metadata, but never retain a desktop account grant.
+    ...(oauth ? { authType: 'oauth' as const, authConfig: null } : {}),
+  };
+});
 export type DesktopProviderSnapshot = z.infer<typeof DesktopProviderSnapshotSchema> & {
   /** The desktop sent fields this build cannot read; only the provider's identity survived. */
   unreadable?: boolean;
@@ -309,6 +316,7 @@ export type DesktopImportPreview = {
     models: { action: 'add' | 'skip'; modelId: string; name: string }[];
     name: string;
     unavailableReason?: DesktopImportUnavailableReason;
+    accountNotice?: 'sign-in-for-balance';
   }[];
 };
 

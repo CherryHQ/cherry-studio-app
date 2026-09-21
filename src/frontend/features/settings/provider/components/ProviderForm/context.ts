@@ -6,6 +6,7 @@ import type { Provider } from '@/shared/data/types/provider';
 import type { ProviderFormValues } from './utils/providerFormValues';
 
 export type ProviderFormActions = {
+  replaceSavedApiKey: (value: string) => void;
   reset: (values?: ProviderFormValues) => void;
   setApiKey: (value: string) => void;
   setAvatarUri: (uri: string | null) => void;

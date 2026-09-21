@@ -31,6 +31,7 @@ const followingModel: Model = {
 let mockModels: Model[] = [];
 const mockSave = jest.fn();
 const mockReplaceApiKeys = jest.fn();
+const mockRefetchApiKeys = jest.fn();
 const mockConfirm = jest.fn();
 const mockAlert = jest.fn();
 const mockToast = jest.fn();
@@ -46,6 +47,11 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 jest.mock('@/frontend/data', () => ({
+  useBackendModule: () => ({
+    accounts: {
+      getCapabilities: () => ({ signIn: false, apiKeys: false, balance: false }),
+    },
+  }),
   useQuery: () => ({ data: mockModels, isPending: false, isError: false }),
 }));
 jest.mock('../useProviderApiServiceQueries', () => ({
@@ -54,7 +60,7 @@ jest.mock('../useProviderApiServiceQueries', () => ({
     apiKeys: [{ id: 'key', key: 'sk-test', isEnabled: true }],
     authConfig: null,
     providerQuery: { isPending: false, isError: false },
-    apiKeysQuery: { isPending: false, isError: false },
+    apiKeysQuery: { isPending: false, isError: false, refetch: mockRefetchApiKeys },
     authConfigQuery: { isPending: false, isError: false },
     isSaving: false,
     saveProviderMutation: { mutateAsync: mockSave },
@@ -175,6 +181,20 @@ describe('shared provider configuration saves', () => {
       }),
     );
     expect(mockReplaceApiKeys).not.toHaveBeenCalled();
+    expect(configuration.form.meta.isDirty).toBe(false);
+  });
+  it('adopts saved account keys without marking other unsaved fields as saved', async () => {
+    act(() => configuration.form.actions.setName('Unsaved name'));
+    mockRefetchApiKeys.mockResolvedValue({
+      data: [{ id: 'account', key: 'account-key', isEnabled: true }],
+    });
+    await act(async () => {
+      await configuration.reloadAccountKeys();
+    });
+    expect(configuration.form.state.apiKey).toBe('account-key');
+    expect(configuration.form.state.name).toBe('Unsaved name');
+    expect(configuration.form.meta.isDirty).toBe(true);
+    act(() => configuration.form.actions.setName('Custom'));
     expect(configuration.form.meta.isDirty).toBe(false);
   });
 });

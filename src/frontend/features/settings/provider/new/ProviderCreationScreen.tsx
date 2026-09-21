@@ -11,9 +11,11 @@ import {
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
+import { useBackendModule } from '@/frontend/data';
 import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
 import { useProviderApiServiceSheetClose, useProviderConfigurationForm } from '../apiService';
+import { ProviderAccountPanel } from '../components/ProviderAccount';
 import { providerFormAvatarSize } from '../components/ProviderForm';
 import { useProviderSetup, type ProviderSetupIntent } from '../hooks/useProviderSetup';
 import { ProviderNewFormContent, useNewProviderForm } from './components/ProviderCreationForm';
@@ -145,6 +147,7 @@ function ImportedProviderCreationScreen({
   const { t } = useTranslation();
   const router = useRouter();
   const { isPreparing, openSetup } = useProviderSetup();
+  const accounts = useBackendModule('providers').accounts;
   const importedProviderForm = useProviderConfigurationForm(providerId);
   const saveImportedProvider = importedProviderForm.requestSave;
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
@@ -164,6 +167,18 @@ function ImportedProviderCreationScreen({
       void openSetup(configuredProvider.providerId, returnTo, intent, true, allowNavigation);
     });
   }, [allowNavigation, intent, openSetup, returnTo, router, saveImportedProvider, setupIntent]);
+  const account =
+    importedProviderForm.provider &&
+    accounts.getCapabilities(importedProviderForm.provider).signIn ? (
+      <ProviderAccountPanel
+        capabilities={accounts.getCapabilities(importedProviderForm.provider)}
+        providerName={importedProviderForm.provider.name}
+        providerId={providerId}
+        changesDisabled={importedProviderForm.accountChangesDisabled}
+        onKeysChanged={importedProviderForm.reloadAccountKeys}
+        onBusyChange={importedProviderForm.setIsAccountBusy}
+      />
+    ) : null;
   const displayedProviderName = importedProviderForm.provider?.name ?? providerName ?? '';
 
   return (
@@ -189,6 +204,7 @@ function ImportedProviderCreationScreen({
           form={importedProviderForm.form}
           onSave={handleSave}
         >
+          {account}
           {importedProviderForm.isCustomProvider ? (
             <ProviderSetupCustomFields />
           ) : (
@@ -200,6 +216,7 @@ function ImportedProviderCreationScreen({
         </ProviderSetupFormContent>
       ) : (
         <ProviderNewFormContent
+          account={account}
           avatar={
             <ProviderBrandAvatar
               presetProviderId={importedProviderForm.provider.presetProviderId}

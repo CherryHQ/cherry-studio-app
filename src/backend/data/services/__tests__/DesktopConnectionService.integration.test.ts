@@ -53,7 +53,10 @@ describe('DesktopConnectionService provider synchronization', () => {
 
   beforeEach(async () => {
     testDb = createTestDb(new DatabaseSync(':memory:'));
-    service = new DesktopConnectionService(testDb.dbService);
+    service = new DesktopConnectionService(testDb.dbService, (provider) => {
+      const supported = (provider.presetProviderId ?? provider.id) === 'cherryin';
+      return { signIn: supported, apiKeys: supported, balance: supported };
+    });
     await service.savePair(
       {
         id: connectionId,
@@ -186,6 +189,72 @@ describe('DesktopConnectionService provider synchronization', () => {
         },
       ]);
       expect(await testDb.database.select().from(userModelTable)).toEqual(beforeModels);
+    },
+  );
+
+  it('imports CherryIN model keys without cloning the PC grant or overwriting mobile key identities', async () => {
+    const data = DesktopProvidersSnapshotSchema.parse({
+      version: 1,
+      providers: [
+        {
+          ...provider('cherryin'),
+          authMethods: ['oauth'],
+          authConfig: {
+            type: 'oauth',
+            accessToken: 'desktop-access',
+            refreshToken: 'desktop-refresh',
+          },
+        },
+      ],
+    });
+    expect(await service.preview(data)).toMatchObject({
+      providers: [{ id: 'cherryin', accountNotice: 'sign-in-for-balance' }],
+    });
+    expect((await service.preview(data)).providers[0]?.unavailableReason).toBeUndefined();
+    await importSnapshot(data);
+    const local = [
+      { id: 'mobile-account', key: 'mobile-key', isEnabled: true },
+      { id: 'mobile-copy', key: 'desktop-secret', isEnabled: false },
+    ];
+    await testDb.database.update(userProviderTable).set({ apiKeys: local });
+    data.providers[0]!.apiKeys.push({
+      id: 'mobile-account',
+      key: 'new-desktop-key',
+      isEnabled: true,
+    });
+    await importSnapshot(data);
+    await importSnapshot(data);
+    const [row] = await testDb.database.select().from(userProviderTable);
+    expect(row?.authConfig).toEqual({ type: 'api-key' });
+    expect(row?.apiKeys?.slice(0, 2)).toEqual(local);
+    expect(row?.apiKeys).toHaveLength(3);
+    expect(row?.apiKeys?.[2]).toMatchObject({ key: 'new-desktop-key', isEnabled: true });
+    expect(row?.apiKeys?.[2]?.id).not.toBe('mobile-account');
+    expect(JSON.stringify(row)).not.toContain('desktop-access');
+    expect(JSON.stringify(row)).not.toContain('desktop-refresh');
+  });
+
+  it.each(['cherryin', 'openai-codex'])(
+    'keeps %s OAuth unavailable without an enabled model key',
+    async (id) => {
+      const data = DesktopProvidersSnapshotSchema.parse({
+        version: 1,
+        providers: [
+          {
+            ...provider(id),
+            authType: 'oauth',
+            authMethods: ['oauth'],
+            apiKeys: [{ id: 'disabled', key: 'key', isEnabled: false }],
+          },
+        ],
+      });
+      expect((await service.preview(data)).providers[0]?.unavailableReason).toBe(
+        'unsupported-auth',
+      );
+      await expect(importSnapshot(data)).rejects.toMatchObject({
+        details: { reason: 'unsupported-auth' },
+      });
+      expect(await testDb.database.select().from(userProviderTable)).toHaveLength(0);
     },
   );
 
