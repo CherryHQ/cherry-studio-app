@@ -94,10 +94,14 @@ export const DefaultPersistCache: PersistCacheSchema = {
  * frontend persist cache.
  */
 export type BackendPersistCacheSchema = {
+  // Local date (`YYYY-MM-DD`) of the last analytics activity ping, so cold starts
+  // and foreground entries report at most once a day. Empty means never reported.
+  'analytics.last_activity_date': string;
   'internal.persist_probe': number;
 };
 
 export const DefaultBackendPersistCache: BackendPersistCacheSchema = {
+  'analytics.last_activity_date': '',
   'internal.persist_probe': 0,
 };
 

@@ -1108,6 +1108,34 @@ async function rebuildMessageUsageProjectionTx(
   }
 }
 
+/**
+ * Mirrors newly committed invocations to product analytics.
+ *
+ * Anchored to the insert rather than to the call sites: `onConflictDoNothing`
+ * already rejects a replayed `requestId`, so a retry that reaches this service
+ * twice cannot be counted twice remotely either. Reporting is best effort and
+ * gated on consent inside the service.
+ */
+function reportTokenUsage(rows: readonly InsertAiUsageRecordRow[]): void {
+  let analytics;
+  try {
+    analytics = application.get('AnalyticsService');
+  } catch {
+    // No installed host — recording still works, there is just nobody to report to.
+    return;
+  }
+  for (const row of rows) {
+    if (!row.providerId || !row.modelId) continue;
+    analytics.trackTokenUsage({
+      input_tokens: row.inputTokens ?? 0,
+      model: row.modelId,
+      output_tokens: row.outputTokens ?? 0,
+      provider: row.providerId,
+      source: row.sourceType === 'agent' ? 'agent' : 'chat',
+    });
+  }
+}
+
 /** Endpoint caches a newly committed usage record invalidates. */
 const USAGE_ANALYTICS_PATHS = [
   '/ai-usage-records',
@@ -1141,8 +1169,8 @@ export class AiUsageRecordService {
     if (inputs.length === 0) return;
     try {
       const rows = inputs.map(invocationToRow);
-      const { insertedCount, messagePaths } = await this.dbService.withWriteTx(async (tx) => {
-        let inserted = 0;
+      const { insertedRows, messagePaths } = await this.dbService.withWriteTx(async (tx) => {
+        const insertedRows: InsertAiUsageRecordRow[] = [];
         const messageRefs = new Map<string, MessageRef>();
         const messagePaths = new Set<string>();
         for (const row of rows) {
@@ -1152,7 +1180,7 @@ export class AiUsageRecordService {
             .onConflictDoNothing()
             .returning({ id: aiUsageRecordTable.id });
           if (returned.length > 0) {
-            inserted += 1;
+            insertedRows.push(row);
             if (row.messageKind && row.messageId)
               messageRefs.set(`${row.messageKind}:${row.messageId}`, {
                 kind: row.messageKind,
@@ -1176,9 +1204,12 @@ export class AiUsageRecordService {
           const sessionId = await rebuildMessageUsageProjectionTx(tx, ref);
           if (sessionId) messagePaths.add(`/agent-sessions/${sessionId}/messages`);
         }
-        return { insertedCount: inserted, messagePaths: [...messagePaths] };
+        return { insertedRows, messagePaths: [...messagePaths] };
       });
-      if (insertedCount > 0) publishDataApiChanges([...USAGE_ANALYTICS_PATHS, ...messagePaths]);
+      if (insertedRows.length > 0) {
+        publishDataApiChanges([...USAGE_ANALYTICS_PATHS, ...messagePaths]);
+        reportTokenUsage(insertedRows);
+      }
     } catch (error) {
       logger.error('Failed to record AI usage', error as Error, {
         requestIds: inputs.map(({ requestId }) => requestId),

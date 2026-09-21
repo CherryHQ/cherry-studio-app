@@ -13,6 +13,8 @@ const REQUEST_TIMEOUT_MS = 4_000;
 const logger = loggerService.withContext('DesktopConnection');
 
 const PairResponseSchema = z.looseObject({
+  /** The desktop's analytics identity, which this device adopts. Absent on older desktops. */
+  clientId: z.string().uuid().optional(),
   name: z.string().min(1),
   token: z.string().min(1),
   version: z.string(),

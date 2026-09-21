@@ -2,6 +2,7 @@ import { loggerService } from '@logger';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
+import { application } from '@/backend/core/application/Application';
 import {
   AppStatePolicy,
   BaseService,
@@ -83,7 +84,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       try {
         await SecureStore.setItemAsync(key, paired.token, TOKEN_STORE_OPTIONS);
         signal.throwIfAborted();
-        return await store.savePair(
+        const connection = await store.savePair(
           {
             id,
             baseUrls,
@@ -94,6 +95,17 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           Boolean(qr.connectionId),
           signal,
         );
+        // A paired phone and computer are one user, so the desktop's analytics
+        // identity wins. Caught here rather than by the block below: a reporting
+        // concern must never roll back credentials for a pairing that succeeded.
+        if (paired.clientId) {
+          try {
+            await application.get('AnalyticsService').adoptClientId(paired.clientId);
+          } catch (error) {
+            logger.warn('Could not adopt the desktop analytics identity', error as Error);
+          }
+        }
+        return connection;
       } catch (error) {
         if (previousToken) {
           await SecureStore.setItemAsync(key, previousToken, TOKEN_STORE_OPTIONS);
