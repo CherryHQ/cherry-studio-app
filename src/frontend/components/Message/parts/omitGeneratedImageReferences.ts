@@ -38,7 +38,8 @@ export function omitGeneratedImageReferences(
         continue;
       const image = token.children[0];
       if (image.type !== 'image') continue;
-      const source = image.attrGet('src') ?? '';
+      const source = image.attrGet('src');
+      if (typeof source !== 'string') continue;
       // Models sometimes invent a preview URL from an opaque file id. Match only
       // the complete final path segment of an image already owned by this message.
       const id = source.split(/[?#]/, 1)[0]?.split('/').pop();
