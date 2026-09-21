@@ -677,6 +677,19 @@ change. These native guards require a new installation package; a JavaScript upd
 them. The composer native-patch suite checks the installed sources, while recovery and subsequent
 editing still need device acceptance. See [the stability tracker](https://github.com/CherryHQ/cherry-studio-app/issues/1011).
 
+The field's height is measured natively, not in JavaScript: `maxHeight` caps it and the native input
+reports its own content height back to Fabric. On Android, `replaceTextInRange` suppresses the text
+watcher during edits, so it reports the updated height after formatting is applied. This covers
+markdown paste and programmatic inserts without extending measurement to formatting-only commands.
+
+The Android field also clamps scroll offsets outside the content range when its size changes.
+Native scroll-to-caret can run before Fabric applies the new height, but Android's pre-draw pass
+also adjusts scrolling. The size-change clamp is a defensive measure; its effect on the reported
+first-line clipping still needs device acceptance. Record the view height, text layout height, and
+`scrollY` before and after resizing, including the pre-draw pass, to establish whether a stale offset
+survives. The installed-source guards confirm patch presence, not runtime layout behavior. Both
+native changes require a new installation package.
+
 Rows above the field follow composition order rather than named slots. Use `Composer.Collapsible`
 only when a conditional row should animate the surface height:
 
