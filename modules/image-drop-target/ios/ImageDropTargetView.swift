@@ -193,21 +193,22 @@ public final class ImageDropTargetView: ExpoView {
   }
 
   /// A collision-free cache URL that keeps the source extension and the
-  /// provider's suggested name when both are usable.
+  /// provider's suggested name when both are usable. Path components are read
+  /// through `NSString`: they are NSString APIs, not members of Swift `String`.
   private func uniqueDestinationURL(
     in directory: URL,
     preferredName: String,
     fallbackName: String
   ) -> URL {
-    var name = preferredName.lastPathComponent
+    var name = (preferredName as NSString).lastPathComponent
     if name.isEmpty {
-      name = fallbackName.lastPathComponent
+      name = (fallbackName as NSString).lastPathComponent
     }
     if name.isEmpty {
       name = UUID().uuidString
     }
     if !name.contains(".") {
-      let fallbackExtension = fallbackName.pathExtension
+      let fallbackExtension = (fallbackName as NSString).pathExtension
       if !fallbackExtension.isEmpty {
         name = "\(name).\(fallbackExtension)"
       }

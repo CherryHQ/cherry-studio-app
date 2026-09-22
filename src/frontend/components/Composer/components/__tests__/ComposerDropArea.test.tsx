@@ -1,5 +1,5 @@
-import { type ComponentType, type ReactNode, useEffect } from 'react';
-import { View } from 'react-native';
+import { type ReactNode, useEffect } from 'react';
+import type { NativeSyntheticEvent } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ImageDropEvent } from '../../../../../../modules/image-drop-target';
@@ -11,24 +11,18 @@ import {
 import type { ComposerAttachmentDraft } from '../../utils/composerAttachments';
 import { ComposerDropArea } from '../ComposerDropArea';
 
-const mockToastShow = jest.fn();
-const mockFileDelete = jest.fn();
-const mockConstructedUris: string[] = [];
-let mockDropTargetProps: {
+type MockNativeViewProps = {
+  children?: ReactNode;
   enabled?: boolean;
   onDragEnter?: () => void;
   onDragLeave?: () => void;
-  onDropImages?: (event: ImageDropEvent) => void;
-} | null = null;
-const mockViewRef: {
-  current: ComponentType<{
-    children?: ReactNode;
-    enabled?: boolean;
-    onDragEnter?: () => void;
-    onDragLeave?: () => void;
-    onDropImages?: (event: ImageDropEvent) => void;
-  }> | null;
-} = { current: createMockViewComponent() };
+  onDropImages?: (event: NativeSyntheticEvent<ImageDropEvent>) => void;
+};
+
+const mockToastShow = jest.fn();
+const mockFileDelete = jest.fn();
+const mockConstructedUris: string[] = [];
+let mockDropTargetProps: MockNativeViewProps | null = null;
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToastShow } }),
@@ -48,28 +42,30 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('../../../../../../modules/image-drop-target', () => ({
-  // A getter, so the component re-reads the current stand-in on every render
-  // and its real "unavailable" branch sees null.
-  get ImageDropTargetView() {
-    return mockViewRef.current;
+jest.mock('expo', () => ({
+  // The raw native view stand-in, returned from requireNativeView so the real
+  // ImageDropTargetView wrapper stays in the loop: the mock captures the props
+  // the wrapper forwards, and events fired on it cross the same React Native
+  // synthetic-event boundary the device delivers (see nativeDropEvent).
+  requireNativeView: () => {
+    const React = jest.requireActual('react');
+    const { View } = jest.requireActual('react-native');
+    return function MockNativeImageDropTarget(props: MockNativeViewProps) {
+      mockDropTargetProps = props;
+      return React.createElement(View, { testID: 'mock-drop-target' }, props.children);
+    };
   },
 }));
 
-function createMockViewComponent() {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-
-  return function MockImageDropTargetView(props: {
-    children?: ReactNode;
-    enabled?: boolean;
-    onDragEnter?: () => void;
-    onDragLeave?: () => void;
-    onDropImages?: (event: ImageDropEvent) => void;
-  }) {
-    mockDropTargetProps = props;
-    return React.createElement(View, { testID: 'mock-drop-target' }, props.children);
-  };
+/**
+ * Fires the drop handler the way the native side delivers it: React Native
+ * wraps every view event body in a synthetic event, so the payload rides
+ * `nativeEvent`.
+ */
+function nativeDropEvent(event: ImageDropEvent): NativeSyntheticEvent<ImageDropEvent> {
+  // Only `nativeEvent` is observable to the component; the rest of the
+  // envelope is transport metadata the bridge adds on device.
+  return { nativeEvent: event } as unknown as NativeSyntheticEvent<ImageDropEvent>;
 }
 
 let attachments: readonly ComposerAttachmentDraft[] = [];
@@ -135,7 +131,6 @@ describe('ComposerDropArea', () => {
     jest.clearAllMocks();
     mockConstructedUris.length = 0;
     mockDropTargetProps = null;
-    mockViewRef.current = createMockViewComponent();
     attachments = [];
   });
 
@@ -148,11 +143,13 @@ describe('ComposerDropArea', () => {
     await renderDropArea();
 
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({
-        failedCount: 0,
-        images: [dropImage('first.jpg'), dropImage('second.jpg')],
-        totalDropped: 2,
-      }),
+      mockDropTargetProps?.onDropImages?.(
+        nativeDropEvent({
+          failedCount: 0,
+          images: [dropImage('first.jpg'), dropImage('second.jpg')],
+          totalDropped: 2,
+        }),
+      ),
     );
 
     expect(attachments).toHaveLength(2);
@@ -178,18 +175,22 @@ describe('ComposerDropArea', () => {
     const second = { ...dropImage('photo.jpg', 'b'), uri: first.uri };
 
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({
-        failedCount: 0,
-        images: [first],
-        totalDropped: 1,
-      }),
+      mockDropTargetProps?.onDropImages?.(
+        nativeDropEvent({
+          failedCount: 0,
+          images: [first],
+          totalDropped: 1,
+        }),
+      ),
     );
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({
-        failedCount: 0,
-        images: [second],
-        totalDropped: 1,
-      }),
+      mockDropTargetProps?.onDropImages?.(
+        nativeDropEvent({
+          failedCount: 0,
+          images: [second],
+          totalDropped: 1,
+        }),
+      ),
     );
 
     expect(attachments).toHaveLength(2);
@@ -200,20 +201,22 @@ describe('ComposerDropArea', () => {
     await renderDropArea();
 
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({
-        failedCount: 0,
-        images: [
-          {
-            id: 'drop-pdf',
-            mediaType: 'application/pdf',
-            name: 'brief.pdf',
-            size: 10,
-            uri: 'file:///cache/brief.pdf',
-          },
-          { id: 'drop-txt', mediaType: 'text/plain', name: 'note.txt', uri: 'x' },
-        ],
-        totalDropped: 2,
-      }),
+      mockDropTargetProps?.onDropImages?.(
+        nativeDropEvent({
+          failedCount: 0,
+          images: [
+            {
+              id: 'drop-pdf',
+              mediaType: 'application/pdf',
+              name: 'brief.pdf',
+              size: 10,
+              uri: 'file:///cache/brief.pdf',
+            },
+            { id: 'drop-txt', mediaType: 'text/plain', name: 'note.txt', uri: 'x' },
+          ],
+          totalDropped: 2,
+        }),
+      ),
     );
 
     expect(attachments).toEqual([]);
@@ -224,11 +227,13 @@ describe('ComposerDropArea', () => {
     await renderDropArea();
 
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({
-        failedCount: 0,
-        images: Array.from({ length: 11 }, (_, index) => dropImage(`photo-${index}.jpg`)),
-        totalDropped: 11,
-      }),
+      mockDropTargetProps?.onDropImages?.(
+        nativeDropEvent({
+          failedCount: 0,
+          images: Array.from({ length: 11 }, (_, index) => dropImage(`photo-${index}.jpg`)),
+          totalDropped: 11,
+        }),
+      ),
     );
 
     expect(attachments).toHaveLength(9);
@@ -252,11 +257,13 @@ describe('ComposerDropArea', () => {
 
     // The real native event: an 11-image drop delivers at most 9 payloads.
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({
-        failedCount: 0,
-        images: Array.from({ length: 9 }, (_, index) => dropImage(`kept-${index}.jpg`)),
-        totalDropped: 11,
-      }),
+      mockDropTargetProps?.onDropImages?.(
+        nativeDropEvent({
+          failedCount: 0,
+          images: Array.from({ length: 9 }, (_, index) => dropImage(`kept-${index}.jpg`)),
+          totalDropped: 11,
+        }),
+      ),
     );
 
     // All nine delivered images fit the composer, yet two were discarded
@@ -285,11 +292,13 @@ describe('ComposerDropArea', () => {
 
     await act(async () => mockDropTargetProps?.onDragEnter?.());
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({
-        failedCount: 0,
-        images: [dropImage('first.jpg')],
-        totalDropped: 1,
-      }),
+      mockDropTargetProps?.onDropImages?.(
+        nativeDropEvent({
+          failedCount: 0,
+          images: [dropImage('first.jpg')],
+          totalDropped: 1,
+        }),
+      ),
     );
     expect(renderer?.root.findAllByProps({ testID: 'composer-drop-area-highlight' })).toHaveLength(
       0,
@@ -304,11 +313,13 @@ describe('ComposerDropArea', () => {
     expect(attachments).toHaveLength(8);
 
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({
-        failedCount: 0,
-        images: [dropImage('a.jpg'), dropImage('b.jpg')],
-        totalDropped: 2,
-      }),
+      mockDropTargetProps?.onDropImages?.(
+        nativeDropEvent({
+          failedCount: 0,
+          images: [dropImage('a.jpg'), dropImage('b.jpg')],
+          totalDropped: 2,
+        }),
+      ),
     );
 
     expect(attachments).toHaveLength(9);
@@ -338,15 +349,17 @@ describe('ComposerDropArea', () => {
     // delivered. All three delivered images fit the composer, so the quota
     // was never approached and the limit toast must stay silent.
     await act(async () =>
-      mockDropTargetProps?.onDropImages?.({
-        failedCount: 2,
-        images: [
-          dropImage('survivor-0.jpg'),
-          dropImage('survivor-1.jpg'),
-          dropImage('survivor-2.jpg'),
-        ],
-        totalDropped: 5,
-      }),
+      mockDropTargetProps?.onDropImages?.(
+        nativeDropEvent({
+          failedCount: 2,
+          images: [
+            dropImage('survivor-0.jpg'),
+            dropImage('survivor-1.jpg'),
+            dropImage('survivor-2.jpg'),
+          ],
+          totalDropped: 5,
+        }),
+      ),
     );
 
     expect(attachments).toHaveLength(3);
@@ -366,16 +379,5 @@ describe('ComposerDropArea', () => {
 
     await renderDropArea({ enabled: true });
     expect(mockDropTargetProps?.enabled).toBe(true);
-  });
-
-  it('renders a plain container when the native view is unavailable', async () => {
-    mockViewRef.current = null;
-    try {
-      await renderDropArea();
-      expect(renderer?.root.findAllByProps({ testID: 'mock-drop-target' })).toHaveLength(0);
-      expect(renderer?.root.findByType(View)).toBeTruthy();
-    } finally {
-      mockViewRef.current = createMockViewComponent();
-    }
   });
 });
