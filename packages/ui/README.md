@@ -96,7 +96,12 @@ native renderer. A part that has streamed keeps the streaming renderer for its f
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
 the same theme tokens, syntax palette, LaTeX flags, and typography scale. Native streaming mode ends
 with each part, releasing pending tail blocks and requesting a final layout even when the text
-itself is unchanged. Product code supplies the active font size step, decides how links open, and
+itself is unchanged. TeX `\(...\)` and `\[...\]` delimiters are normalized to dollar math before
+either renderer parses them, preserving code regions and existing dollar math. Physical formula
+newlines become spaces so Markdown cannot interpret equation lines as headings or quotes. During
+streaming, unfinished TeX formulas wait for their closing delimiter; an incomplete final formula
+retains its source. This only changes presentation, not stored messages.
+Product code supplies the active font size step, decides how links open, and
 passes the native copy-menu labels already translated. The renderer presents those menus itself, on
 text selections and on Markdown tables, so omitting the labels leaves the library's English
 defaults:

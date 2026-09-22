@@ -9,6 +9,7 @@ import { StreamdownText } from 'react-native-streamdown';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { resolveTypographyScale, type TypographySizeStep } from '../../../utils/typography-scale';
+import { normalizeLatexDelimiters } from '../utils/normalize-latex-delimiters';
 import { resolveSyntaxColors } from '../utils/syntax-colors';
 
 const markdownThemeVariables = [
@@ -263,7 +264,7 @@ export function MarkdownText({
     <MarkdownRenderer
       allowTrailingMargin={false}
       flavor="github"
-      markdown={markdown}
+      markdown={normalizeLatexDelimiters(markdown, isStreaming)}
       markdownStyle={markdownStyle}
       md4cFlags={{ latexMath: true, superscript: true, underline: false }}
       onLinkPress={handleLinkPress}
