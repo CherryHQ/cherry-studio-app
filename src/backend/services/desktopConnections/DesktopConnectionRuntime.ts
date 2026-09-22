@@ -1,8 +1,9 @@
 import { loggerService } from '@logger';
+import { sha256 } from '@noble/hashes/sha2.js';
 import * as Crypto from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
+import * as Device from 'expo-device';
+import { Platform } from 'react-native';
 
-import { application } from '@/backend/core/application/Application';
 import {
   AppStatePolicy,
   BaseService,
@@ -11,24 +12,20 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import type { DesktopConnectionRow } from '@/backend/data/db/schemas';
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import type { DesktopConnectionsModule } from '@/shared/contracts';
-import { DataApiError } from '@/shared/data/api/errors';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import {
-  DesktopProvidersSnapshotSchema,
-  PairDesktopConnectionSchema,
   type DesktopImportSelectionsDto,
+  type DesktopPairingClaim,
+  DesktopProvidersSnapshotSchema,
   type PairDesktopConnectionDto,
+  PairDesktopConnectionSchema,
 } from '@/shared/data/api/schemas/desktopConnections';
 
-import {
-  AuthorizationError,
-  baseUrlsFromQr,
-  desktopError,
-  fetchSnapshot,
-  pairDesktop,
-  PairingRejectedError,
-} from './desktopConnectionClient';
+import { DesktopSession, DesktopUnreachableError, RemoteFailureError } from './DesktopSession';
+import { loadDeviceIdentity } from './deviceIdentity';
 
 type ConnectionStore = Pick<
   DesktopConnectionService,
@@ -42,20 +39,31 @@ const EXCLUDED_PROVIDER_IDS = new Set([
   'ollama',
   'ovms',
 ]);
+const CLAIM_POLL_MS = 2_000;
+const EXPORT_PAGE_BYTES = 24_576;
 const logger = loggerService.withContext('DesktopConnection');
-const tokenKey = (id: string) => `desktop-connection-token.${id}`;
-const TOKEN_STORE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
-/** Best effort, and never the caller's problem: a missing host means nobody to report to. */
-async function adoptAnalyticsIdentity(clientId: string): Promise<void> {
-  try {
-    await application.get('AnalyticsService').adoptClientId(clientId);
-  } catch (error) {
-    logger.warn('Could not adopt the desktop analytics identity', error as Error);
-  }
+export function desktopError(reason: string, message: string): DataApiError {
+  return new DataApiError(ErrorCode.INVALID_OPERATION, message, { reason });
 }
 
-/** Owns paired credentials and in-flight work; drains before the originating database closes. */
+const toHex = (bytes: Uint8Array) =>
+  Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+const fromBase64 = (value: string) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+const sleep = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    }, ms);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    signal.addEventListener('abort', abort, { once: true });
+  });
+
+/** Owns the device identity, paired desktops and every live session; drains before the database closes. */
 @Injectable('DesktopConnectionRuntime')
 @DependsOn(['DbService'])
 @ServicePhase(Phase.Gate)
@@ -72,52 +80,61 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     this.ensureModelRegistryReady = ensureModelRegistryReady;
   }
 
-  pair(input: PairDesktopConnectionDto, signal: AbortSignal) {
+  pair(
+    input: PairDesktopConnectionDto,
+    signal: AbortSignal,
+    onClaim?: (claim: DesktopPairingClaim) => void,
+  ) {
     return this.run('pair', signal, async (store, signal) => {
       const qr = PairDesktopConnectionSchema.parse(input);
       const id = qr.connectionId ?? Crypto.randomUUID();
       if (qr.connectionId) await store.getRow(id);
-      const baseUrls = baseUrlsFromQr(qr);
-      const paired = await pairDesktop(baseUrls, qr, signal).catch((error: unknown) => {
-        if (error instanceof PairingRejectedError) {
-          throw desktopError('pairing-rejected', 'The pairing code is invalid or expired');
-        }
-        throw error;
-      });
-      signal.throwIfAborted();
-      const key = tokenKey(id);
-      const previousToken = await SecureStore.getItemAsync(key);
-      signal.throwIfAborted();
-      // The queue serializes credential replacement with removal and snapshot reads.
-      // Once a credential write starts, finish or compensate it even if the caller leaves.
+      const session = await this.connect(qr, signal);
       try {
-        await SecureStore.setItemAsync(key, paired.token, TOKEN_STORE_OPTIONS);
-        signal.throwIfAborted();
-        const connection = await store.savePair(
+        const claim = await session.request(
+          'pairing.claim',
           {
-            id,
-            baseUrls,
-            activeBaseUrl: paired.baseUrl,
-            desktopVersion: paired.version,
-            name: paired.name,
+            capabilities: qr.capabilities,
+            deviceName: deviceName(),
+            invitationId: qr.invitationId,
+            invitationSecret: qr.invitationSecret,
+            platform: Platform.OS === 'ios' ? 'ios' : 'android',
           },
-          Boolean(qr.connectionId),
           signal,
         );
-        // A paired phone and computer are one user, so the desktop's analytics
-        // identity wins. Left to run on its own rather than awaited here: it
-        // drains the report queue first, which can retry against the network for
-        // the better part of a minute, and a reporting concern must neither hold
-        // the pairing open nor roll back credentials for one that succeeded.
-        if (paired.clientId) void adoptAnalyticsIdentity(paired.clientId);
-        return connection;
-      } catch (error) {
-        if (previousToken) {
-          await SecureStore.setItemAsync(key, previousToken, TOKEN_STORE_OPTIONS);
-        } else {
-          await SecureStore.deleteItemAsync(key);
+        onClaim?.({ expiresAt: claim.expiresAt, verificationCode: claim.verificationCode });
+        for (;;) {
+          const decision = await session.request('pairing.get', { claimId: claim.claimId }, signal);
+          if (decision.status === 'approved') {
+            return store.savePair(
+              {
+                addresses: [session.address, ...qr.ips.filter((ip) => ip !== session.address)],
+                desktopIdentity: qr.desktopIdentity,
+                deviceId: decision.deviceId,
+                grants: decision.authorization.grants,
+                id,
+                name: qr.name,
+                port: qr.port,
+              },
+              Boolean(qr.connectionId),
+              signal,
+            );
+          }
+          if (decision.status === 'rejected') {
+            throw desktopError('pairing-rejected', 'The desktop rejected this device');
+          }
+          if (decision.status === 'expired') {
+            throw desktopError(
+              'pairing-expired',
+              'The pairing invitation expired before it was approved',
+            );
+          }
+          await sleep(CLAIM_POLL_MS, signal);
         }
-        throw error;
+      } catch (error) {
+        throw translate(error);
+      } finally {
+        session.close();
       }
     });
   }
@@ -125,9 +142,6 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   remove(id: string, signal: AbortSignal) {
     return this.run('remove', signal, async (store, signal) => {
       signal.throwIfAborted();
-      // Delete the credential first. Failure leaves a visible, retryable row.
-      // Both deletes are idempotent, including a retry after the SQL delete failed.
-      await SecureStore.deleteItemAsync(tokenKey(id));
       await store.remove(id);
     });
   }
@@ -152,10 +166,53 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     });
   }
 
+  /** An authenticated session for a paired desktop; revoked or replaced grants mark the row for repair. */
+  async open(store: ConnectionStore, id: string, signal: AbortSignal): Promise<DesktopSession> {
+    const row = await store.getRow(id);
+    signal.throwIfAborted();
+    const session = await this.connect(row, signal);
+    try {
+      const authorization = await session.authenticate(row.deviceId, signal);
+      await store.updateStatus(id, { grants: authorization.grants, status: 'paired' }, signal);
+      return session;
+    } catch (error) {
+      session.close();
+      if (
+        error instanceof RemoteFailureError &&
+        (error.reason === 'UNAUTHENTICATED' || error.reason === 'GRANT_REVOKED')
+      ) {
+        await store.updateStatus(id, { status: 'needs-repair' }, signal);
+        throw desktopError('auth-revoked', 'This desktop connection needs to be paired again');
+      }
+      throw translate(error);
+    }
+  }
+
   protected async onStop(): Promise<void> {
     this.stopped = true;
     for (const controller of this.controllers) controller.abort();
     await this.tail;
+  }
+
+  private async connect(
+    target:
+      | Pick<DesktopConnectionRow, 'addresses' | 'desktopIdentity' | 'port'>
+      | { ips: string[]; desktopIdentity: string; port: number },
+    signal: AbortSignal,
+  ): Promise<DesktopSession> {
+    const identity = await loadDeviceIdentity();
+    signal.throwIfAborted();
+    try {
+      return await DesktopSession.connect({
+        addresses: 'ips' in target ? target.ips : target.addresses,
+        desktopIdentity: target.desktopIdentity,
+        identity,
+        port: target.port,
+        signal,
+      });
+    } catch (error) {
+      throw translate(error);
+    }
   }
 
   private run<T>(
@@ -192,77 +249,76 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     });
   }
 
-  /** The payload itself never reaches a report, so carry what identifies the desktop that sent it. */
-  private reportDrift(
-    error: DataApiError,
-    desktopVersion: string,
-    context: Record<string, unknown>,
-  ): DataApiError {
-    logger.error(error.message, error, {
-      ...context,
-      desktopVersion,
-      operation: 'desktop.snapshot.parse',
-    });
+  /** The payload itself never reaches a report, so carry only what locates the drift. */
+  private reportDrift(error: DataApiError, context: Record<string, unknown>): DataApiError {
+    logger.error(error.message, error, { ...context, operation: 'desktop.snapshot.parse' });
     return error;
   }
 
   private async loadSnapshot(store: ConnectionStore, id: string, signal: AbortSignal) {
-    const connection = await store.getRow(id);
-    signal.throwIfAborted();
-    const token = await SecureStore.getItemAsync(tokenKey(id));
-    signal.throwIfAborted();
-    if (!token) {
-      await store.updateStatus(id, { status: 'needs-repair' }, signal);
-      throw desktopError('auth-revoked', 'This desktop connection needs to be paired again');
+    const row = await store.getRow(id);
+    if (!row.grants.some((grant) => grant.domain === 'configuration')) {
+      throw desktopError(
+        'configuration-not-granted',
+        'The desktop did not allow configuration sync for this device',
+      );
     }
-    const urls = [
-      connection.activeBaseUrl,
-      ...connection.baseUrls.filter((url) => url !== connection.activeBaseUrl),
-    ];
-    const response = await fetchSnapshot(urls, token, signal).catch(async (error: unknown) => {
-      signal.throwIfAborted();
-      if (error instanceof AuthorizationError) {
-        if (error.status === 403) {
-          await store.updateStatus(id, { status: 'needs-repair' }, signal);
-          throw desktopError('auth-revoked', 'This desktop connection needs to be paired again');
-        }
-        throw desktopError('unauthorized', 'The desktop rejected this device token');
+    const session = await this.open(store, id, signal);
+    let payload: unknown;
+    try {
+      const prepared = await session.request('configuration.export.prepare', {}, signal);
+      const bytes = new Uint8Array(Number(prepared.byteLength));
+      let offset = 0;
+      for (;;) {
+        const page = await session.request(
+          'configuration.export.read',
+          { exportId: prepared.exportId, maxBytes: EXPORT_PAGE_BYTES, offset: String(offset) },
+          signal,
+        );
+        const chunk = fromBase64(page.dataBase64);
+        if (offset + chunk.length > bytes.length) break;
+        bytes.set(chunk, offset);
+        offset += chunk.length;
+        if (page.eof || chunk.length === 0) break;
       }
-      throw error;
-    });
+      if (offset !== bytes.length || toHex(sha256(bytes)) !== prepared.sha256) {
+        throw this.reportDrift(
+          desktopError('invalid-snapshot', 'Desktop returned invalid configuration data'),
+          { received: offset, expected: bytes.length },
+        );
+      }
+      payload = JSON.parse(new TextDecoder().decode(bytes));
+    } catch (error) {
+      throw translate(error);
+    } finally {
+      session.close();
+    }
     signal.throwIfAborted();
     const version =
-      typeof response.payload === 'object' && response.payload !== null
-        ? (response.payload as Record<string, unknown>).version
+      typeof payload === 'object' && payload !== null
+        ? (payload as Record<string, unknown>).version
         : undefined;
     if (version !== 1) {
-      const error = desktopError(
-        typeof version === 'number' ? 'unsupported-version' : 'invalid-snapshot',
-        'Desktop returned an unsupported or invalid configuration version',
+      throw this.reportDrift(
+        desktopError(
+          typeof version === 'number' ? 'unsupported-version' : 'invalid-snapshot',
+          'Desktop returned an unsupported or invalid configuration version',
+        ),
+        { snapshotVersion: typeof version === 'number' ? version : typeof version },
       );
-      throw this.reportDrift(error, connection.desktopVersion, {
-        snapshotVersion: typeof version === 'number' ? version : typeof version,
-      });
     }
-    const parsed = DesktopProvidersSnapshotSchema.safeParse(response.payload);
+    const parsed = DesktopProvidersSnapshotSchema.safeParse(payload);
     if (!parsed.success) {
-      const error = desktopError('invalid-snapshot', 'Desktop returned invalid configuration data');
-      // Field paths locate the drift; the rejected values stay out of the report.
-      throw this.reportDrift(error, connection.desktopVersion, {
-        issues: parsed.error.issues
-          .slice(0, 10)
-          .map((issue) => `${issue.path.join('.') || '<root>'}:${issue.code}`),
-      });
+      throw this.reportDrift(
+        desktopError('invalid-snapshot', 'Desktop returned invalid configuration data'),
+        {
+          issues: parsed.error.issues
+            .slice(0, 10)
+            .map((issue) => `${issue.path.join('.') || '<root>'}:${issue.code}`),
+        },
+      );
     }
-    await store.updateStatus(
-      id,
-      {
-        activeBaseUrl: response.baseUrl,
-        lastFetchedAt: Date.now(),
-        status: 'paired',
-      },
-      signal,
-    );
+    await store.updateStatus(id, { lastFetchedAt: Date.now(), status: 'paired' }, signal);
     return {
       ...parsed.data,
       providers: parsed.data.providers.filter(
@@ -272,5 +328,30 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           ),
       ),
     };
+  }
+}
+
+function deviceName(): string {
+  const reported = (Device.deviceName ?? Device.modelName ?? '').trim();
+  return (reported || 'Cherry Studio Mobile').slice(0, 64);
+}
+
+/** Protocol failures become the reason codes the settings screens already translate. */
+function translate(error: unknown): unknown {
+  if (error instanceof DesktopUnreachableError) {
+    return desktopError('unreachable', 'Could not connect to the desktop');
+  }
+  if (!(error instanceof RemoteFailureError)) return error;
+  switch (error.reason) {
+    case 'UPGRADE_REQUIRED':
+      return desktopError('unsupported-version', 'This desktop protocol version is not supported');
+    case 'UNAUTHENTICATED':
+    case 'GRANT_REVOKED':
+      return desktopError('auth-revoked', 'This desktop connection needs to be paired again');
+    case 'FORBIDDEN':
+    case 'CONFLICT':
+      return desktopError('pairing-rejected', error.message);
+    default:
+      return desktopError('desktop-failure', error.message);
   }
 }

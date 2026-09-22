@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBackendModule, useQuery } from '@/frontend/data';
 import type {
   DesktopImportSelectionsDto,
+  DesktopPairingClaim,
   PairDesktopConnectionDto,
 } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
@@ -94,7 +95,8 @@ export function useDesktopConnectionActions() {
   );
 
   const pair = useCallback(
-    (input: PairDesktopConnectionDto) => run('pair', (signal) => connections.pair(input, signal)),
+    (input: PairDesktopConnectionDto, onClaim?: (claim: DesktopPairingClaim) => void) =>
+      run('pair', (signal) => connections.pair(input, signal, onClaim)),
     [connections, run],
   );
   const remove = useCallback(

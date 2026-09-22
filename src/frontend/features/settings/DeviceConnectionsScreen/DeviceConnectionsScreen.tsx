@@ -11,6 +11,7 @@ import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
+import { describeCapabilities } from '../describeCapabilities';
 
 export function DeviceConnectionsScreen() {
   const { t } = useTranslation();
@@ -69,9 +70,7 @@ export function DeviceConnectionsScreen() {
               showSeparator={index > 0}
               statusLabel={t(`settings.deviceConnections.status.${connection.status}`)}
               statusTone={connection.status === 'paired' ? 'success' : 'danger'}
-              subtitle={t('settings.deviceConnections.versionValue', {
-                version: connection.desktopVersion,
-              })}
+              subtitle={describeCapabilities(connection.capabilities, t)}
               onPress={() =>
                 router.push({
                   params: { connectionId: connection.id },

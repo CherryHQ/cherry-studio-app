@@ -11,6 +11,7 @@ import {
 } from '@/frontend/hooks/useDesktopConnections';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
+import { describeCapabilities } from '../describeCapabilities';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
 
 export function DeviceConnectionDetailScreen() {
@@ -68,8 +69,12 @@ export function DeviceConnectionDetailScreen() {
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>
       <Section footer={t('settings.deviceConnections.localNetworkNotice')}>
         <Section.Item
-          label={t('settings.deviceConnections.version')}
-          trailing={<Text className="text-muted-foreground">{connection.desktopVersion}</Text>}
+          label={t('settings.deviceConnections.capabilities.label')}
+          trailing={
+            <Text className="text-muted-foreground">
+              {describeCapabilities(connection.capabilities, t)}
+            </Text>
+          }
         />
         <Section.Item
           label={t('settings.deviceConnections.statusLabel')}
@@ -87,7 +92,7 @@ export function DeviceConnectionDetailScreen() {
         />
       </Section>
 
-      {connection.status === 'paired' ? (
+      {connection.status === 'paired' && connection.capabilities.includes('configuration') ? (
         <Section>
           <Section.Item
             description={t('settings.deviceConnections.syncGuide.entryDescription')}

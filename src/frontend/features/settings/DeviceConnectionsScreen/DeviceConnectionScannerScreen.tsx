@@ -12,6 +12,7 @@ import { useDesktopConnectionActions } from '@/frontend/hooks/useDesktopConnecti
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
 import {
+  type DesktopPairingClaim,
   type DesktopPairingQr,
   DesktopPairingQrSchema,
 } from '@/shared/data/api/schemas/desktopConnections';
@@ -32,11 +33,12 @@ export function DeviceConnectionScannerScreen({
   const [manualValue, setManualValue] = useState('');
   const [hasScanned, setHasScanned] = useState(false);
   const [scanError, setScanError] = useState<string>();
+  const [claim, setClaim] = useState<DesktopPairingClaim>();
   const scanInFlight = useRef(false);
   const mounted = useRef(false);
   const { isPairing, pair } = useDesktopConnectionActions();
   const isReady = isActive && !isPreparing;
-  const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
+  const showCamera = !isPreparing && !scanError && !claim && camera?.state === 'granted';
 
   useEffect(() => {
     mounted.current = true;
@@ -48,6 +50,7 @@ export function DeviceConnectionScannerScreen({
   const retryScan = () => {
     scanInFlight.current = false;
     setScanError(undefined);
+    setClaim(undefined);
     setHasScanned(false);
   };
 
@@ -60,25 +63,46 @@ export function DeviceConnectionScannerScreen({
   const submit = useCallback(
     async (qr: DesktopPairingQr) => {
       try {
-        const connection = await pair({ ...qr, ...(connectionId ? { connectionId } : {}) });
+        // The desktop user decides which of the requested capabilities this device gets.
+        const connection = await pair(
+          {
+            ...qr,
+            capabilities: ['configuration', 'agent'],
+            ...(connectionId ? { connectionId } : {}),
+          },
+          (nextClaim) => {
+            if (mounted.current) setClaim(nextClaim);
+          },
+        );
         if (!mounted.current) return;
         if (!connection) {
           scanInFlight.current = false;
+          setClaim(undefined);
           setHasScanned(false);
           return;
         }
-        // Pairing succeeded, so the sync screen is the next decision. It reports a device that
-        // stopped being usable between here and there, which is the only state a separate
-        // confirmation step used to add.
-        router.replace({
-          params: { connectionId: connection.id },
-          pathname:
-            setupIntent === 'chat'
-              ? '/onboarding/provider-sync'
-              : '/settings/provider/desktop-sync',
-        });
+        // Provider sync is the next decision when it was granted; otherwise show what was.
+        if (connection.capabilities.includes('configuration')) {
+          router.replace({
+            params: { connectionId: connection.id },
+            pathname:
+              setupIntent === 'chat'
+                ? '/onboarding/provider-sync'
+                : '/settings/provider/desktop-sync',
+          });
+        } else if (setupIntent === 'chat') {
+          router.dismissTo('/onboarding');
+        } else {
+          router.replace({
+            params: { connectionId: connection.id },
+            pathname: '/settings/device-connections/[connectionId]',
+          });
+        }
       } catch (error) {
-        if (mounted.current) setScanError(desktopConnectionErrorMessage(error, t));
+        if (mounted.current) {
+          setClaim(undefined);
+          setScanError(desktopConnectionErrorMessage(error, t));
+        }
       }
     },
     [connectionId, pair, router, setupIntent, t],
@@ -119,7 +143,20 @@ export function DeviceConnectionScannerScreen({
             : 'min-h-0 flex-1 overflow-hidden bg-grouped-background'
         }
       >
-        {isPreparing ? (
+        {claim ? (
+          <View className="flex-1 items-center justify-center gap-4 px-6">
+            <Text className="text-center text-sm text-muted-foreground">
+              {t('settings.deviceConnections.scan.approveOnDesktop')}
+            </Text>
+            <Text
+              accessibilityLabel={t('settings.deviceConnections.scan.verificationCode')}
+              className="font-mono text-4xl tracking-[0.3em] text-foreground"
+            >
+              {claim.verificationCode}
+            </Text>
+            <ContentState.Loading title={t('settings.deviceConnections.scan.waiting')} />
+          </View>
+        ) : isPreparing ? (
           <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
         ) : scanError ? (
           <View className="flex-1 justify-center px-6">

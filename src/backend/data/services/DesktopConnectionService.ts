@@ -40,8 +40,7 @@ function desktopError(reason: string, message: string): DataApiError {
 
 function rowToConnection(row: DesktopConnectionRow): DesktopConnection {
   return {
-    activeBaseUrl: row.activeBaseUrl,
-    desktopVersion: row.desktopVersion,
+    capabilities: row.grants.map((grant) => grant.domain),
     id: row.id,
     lastFetchedAt: row.lastFetchedAt,
     name: row.name,
@@ -282,7 +281,7 @@ export class DesktopConnectionService {
   async savePair(
     input: Pick<
       DesktopConnectionRow,
-      'id' | 'activeBaseUrl' | 'baseUrls' | 'desktopVersion' | 'name'
+      'id' | 'addresses' | 'desktopIdentity' | 'deviceId' | 'grants' | 'name' | 'port'
     >,
     replace: boolean,
     signal: AbortSignal,
@@ -312,7 +311,7 @@ export class DesktopConnectionService {
   async updateStatus(
     id: string,
     values: Pick<DesktopConnectionRow, 'status'> &
-      Partial<Pick<DesktopConnectionRow, 'activeBaseUrl' | 'lastFetchedAt'>>,
+      Partial<Pick<DesktopConnectionRow, 'addresses' | 'grants' | 'lastFetchedAt'>>,
     signal: AbortSignal,
   ): Promise<void> {
     await this.dbService.withWriteTx(async (tx) => {

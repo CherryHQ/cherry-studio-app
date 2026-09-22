@@ -24,6 +24,7 @@ import type {
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
+import { describeCapabilities } from '../../describeCapabilities';
 import { desktopConnectionErrorMessage } from '../../desktopConnectionError';
 import { ProviderAvatar } from '../components/ProviderAvatar';
 
@@ -71,7 +72,9 @@ function DesktopProviderSync({
     () =>
       connections.filter(
         (connection) =>
-          connection.status === 'paired' && (!connectionId || connection.id === connectionId),
+          connection.status === 'paired' &&
+          connection.capabilities.includes('configuration') &&
+          (!connectionId || connection.id === connectionId),
       ),
     [connectionId, connections],
   );
@@ -249,9 +252,7 @@ function DesktopProviderSync({
           <Section title={t('settings.provider.desktopSync.chooseDevice')}>
             {availableConnections.map((connection) => (
               <Section.RadioItem
-                description={t('settings.deviceConnections.versionValue', {
-                  version: connection.desktopVersion,
-                })}
+                description={describeCapabilities(connection.capabilities, t)}
                 key={connection.id}
                 label={connection.name}
                 onPress={() => setSelectedConnectionId(connection.id)}

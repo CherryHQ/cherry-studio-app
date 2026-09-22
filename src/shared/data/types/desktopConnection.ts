@@ -1,8 +1,9 @@
+import type { RemoteCapability } from '@cherrystudio/remote-protocol';
+
 export type DesktopConnectionStatus = 'needs-repair' | 'paired';
 
 export type DesktopConnection = {
-  activeBaseUrl: string;
-  desktopVersion: string;
+  capabilities: RemoteCapability[];
   id: string;
   lastFetchedAt: number | null;
   name: string;

@@ -1,3 +1,4 @@
+import { remoteCapabilitiesSchema } from '@cherrystudio/remote-protocol';
 import * as z from 'zod';
 
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
@@ -26,19 +27,26 @@ function isIpAddress(value: string): boolean {
 }
 
 export const DesktopPairingQrSchema = z.object({
-  code: z.string().regex(/^[a-f\d]{32}$/i),
+  desktopIdentity: z.string().min(1).max(256),
+  invitationId: z.string().min(1).max(256),
+  invitationSecret: z.string().min(1).max(256),
   ips: z.array(z.string().refine(isIpAddress, 'Invalid IP address')).min(1),
   name: z.string().min(1).max(128),
   port: z.number().int().min(1).max(65_535),
+  protocolVersions: z.array(z.number().int().positive()).min(1).max(16),
   t: z.literal('cherry-studio-pair'),
-  v: z.literal(1),
+  v: z.literal(2),
 });
 export type DesktopPairingQr = z.infer<typeof DesktopPairingQrSchema>;
 
 export const PairDesktopConnectionSchema = DesktopPairingQrSchema.extend({
+  capabilities: remoteCapabilitiesSchema,
   connectionId: z.string().uuid().optional(),
 });
 export type PairDesktopConnectionDto = z.infer<typeof PairDesktopConnectionSchema>;
+
+/** Shown while the desktop user approves the claim; the code must match the desktop's. */
+export type DesktopPairingClaim = { expiresAt: string; verificationCode: string };
 
 const ApiKeySchema = z.looseObject({
   id: z.string().min(1),

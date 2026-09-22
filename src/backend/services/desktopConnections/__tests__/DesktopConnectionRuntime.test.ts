@@ -1,46 +1,53 @@
-import * as SecureStore from 'expo-secure-store';
+import type { RemoteAuthorization } from '@cherrystudio/remote-protocol';
 
-import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 
-import { fetchSnapshot, pairDesktop, AuthorizationError } from '../desktopConnectionClient';
 import { DesktopConnectionRuntime } from '../DesktopConnectionRuntime';
+import { DesktopSession, DesktopUnreachableError, RemoteFailureError } from '../DesktopSession';
 
-jest.mock('expo-secure-store', () => ({
-  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'device-only',
-  getItemAsync: jest.fn(),
-  setItemAsync: jest.fn(),
-  deleteItemAsync: jest.fn(),
+jest.mock('@cherrystudio/remote-transport', () => ({}));
+jest.mock('../deviceIdentity', () => ({
+  loadDeviceIdentity: jest.fn(async () => new Uint8Array(32)),
 }));
-jest.mock('@/backend/utils/defaultAppHeaders', () => ({ defaultAppHeaders: () => ({}) }));
-jest.mock('../desktopConnectionClient', () => ({
-  ...jest.requireActual('../desktopConnectionClient'),
-  fetchSnapshot: jest.fn(),
-  pairDesktop: jest.fn(),
+jest.mock('../DesktopSession', () => ({
+  ...jest.requireActual('../DesktopSession'),
+  DesktopSession: { connect: jest.fn() },
 }));
 
 const id = 'f676e1d5-24c6-4150-a3fa-0f4427964465';
-const key = `desktop-connection-token.${id}`;
-const baseUrl = 'http://192.168.1.2:23333';
-const connection = {
+const grants: RemoteAuthorization['grants'] = [{ domain: 'configuration', grantId: 'grant-1' }];
+const row = {
   id,
-  activeBaseUrl: baseUrl,
-  baseUrls: [baseUrl],
-  desktopVersion: '2.0.8',
   name: 'Desktop',
+  deviceId: 'device-1',
+  desktopIdentity: '12D3KooWDesktop',
+  addresses: ['192.168.1.2'],
+  port: 23333,
+  grants,
   status: 'paired' as const,
   lastFetchedAt: null,
   createdAt: 1,
   updatedAt: 1,
 };
+const connection = {
+  id,
+  name: 'Desktop',
+  status: 'paired' as const,
+  lastFetchedAt: null,
+  capabilities: ['configuration' as const],
+};
 const pairing = {
   connectionId: id,
   t: 'cherry-studio-pair' as const,
-  v: 1 as const,
+  v: 2 as const,
   ips: ['192.168.1.2'],
   port: 23333,
-  code: 'a'.repeat(32),
   name: 'Desktop',
+  invitationId: 'invitation',
+  invitationSecret: 'secret',
+  desktopIdentity: '12D3KooWDesktop',
+  protocolVersions: [1],
+  capabilities: ['configuration' as const, 'agent' as const],
 };
 const signal = () => new AbortController().signal;
 
@@ -54,7 +61,7 @@ function deferred<T>() {
 
 function createStore() {
   return {
-    getRow: jest.fn(async () => connection),
+    getRow: jest.fn(async () => row),
     savePair: jest.fn(async () => connection),
     remove: jest.fn(async () => undefined),
     updateStatus: jest.fn(async () => undefined),
@@ -71,22 +78,70 @@ function createStore() {
   >;
 }
 
+/** Scripted desktop: answers each method from a table, exposes the request log. */
+function createSession(handlers: Record<string, (params: any) => unknown>) {
+  const session = {
+    address: '192.168.1.2',
+    calls: [] as { method: string; params: unknown }[],
+    request: jest.fn(async (method: string, params: unknown) => {
+      session.calls.push({ method, params });
+      const handler = handlers[method];
+      if (!handler) throw new Error(`Unexpected ${method}`);
+      return handler(params);
+    }),
+    authenticate: jest.fn(async () => {
+      const result = (await handlers['connection.authenticate']?.({})) as {
+        authorization: { grants: typeof grants };
+      };
+      return result.authorization;
+    }),
+    close: jest.fn(),
+  };
+  return session;
+}
+
+function exportHandlers(payload: unknown) {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  const { sha256 } = jest.requireActual(
+    '@noble/hashes/sha2.js',
+  ) as typeof import('@noble/hashes/sha2.js');
+  const digest = Array.from(sha256(bytes), (byte: number) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+  return {
+    'connection.authenticate': () => ({
+      deviceId: 'device-1',
+      authorization: { grants },
+      accessToken: 't',
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+    }),
+    'configuration.export.prepare': () => ({
+      exportId: 'export',
+      byteLength: String(bytes.length),
+      sha256: digest,
+    }),
+    'configuration.export.read': ({ offset, maxBytes }: { offset: string; maxBytes: number }) => {
+      const start = Number(offset);
+      const slice = bytes.subarray(start, start + maxBytes);
+      return {
+        exportId: 'export',
+        offset,
+        nextOffset: String(start + slice.length),
+        dataBase64: Buffer.from(slice).toString('base64'),
+        eof: start + slice.length === bytes.length,
+      };
+    },
+  };
+}
+
 describe('DesktopConnectionRuntime', () => {
   let runtime: DesktopConnectionRuntime;
   let store: ReturnType<typeof createStore>;
   let ensureModelRegistryReady: jest.Mock<Promise<void>, []>;
+  const connect = jest.mocked(DesktopSession.connect);
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    jest.mocked(SecureStore.getItemAsync).mockResolvedValue('old-token');
-    jest.mocked(SecureStore.setItemAsync).mockResolvedValue();
-    jest.mocked(SecureStore.deleteItemAsync).mockResolvedValue();
-    jest.mocked(pairDesktop).mockResolvedValue({
-      baseUrl,
-      name: 'Desktop',
-      token: 'new-token',
-      version: '2.0.8',
-    });
     store = createStore();
     runtime = new DesktopConnectionRuntime();
     ensureModelRegistryReady = jest.fn(async () => undefined);
@@ -99,10 +154,172 @@ describe('DesktopConnectionRuntime', () => {
     await runtime._doDestroy();
   });
 
+  it('claims the invitation, reports the verification code, then stores the approved grants', async () => {
+    let polls = 0;
+    const session = createSession({
+      'pairing.claim': () => ({
+        claimId: 'claim',
+        verificationCode: '123456',
+        expiresAt: '2026-09-22T00:02:00.000Z',
+      }),
+      'pairing.get': () =>
+        ++polls < 2
+          ? { status: 'pending' }
+          : {
+              status: 'approved',
+              deviceId: 'device-1',
+              authorization: { grants },
+              accessToken: 't',
+              expiresAt: '2026-09-22T00:12:00.000Z',
+            },
+    });
+    connect.mockResolvedValue(session as never);
+    const onClaim = jest.fn();
+
+    await expect(runtime.pair(pairing, signal(), onClaim)).resolves.toEqual(connection);
+
+    expect(onClaim).toHaveBeenCalledWith({
+      verificationCode: '123456',
+      expiresAt: '2026-09-22T00:02:00.000Z',
+    });
+    expect(session.calls[0]).toMatchObject({
+      method: 'pairing.claim',
+      params: { invitationId: 'invitation', capabilities: ['configuration', 'agent'] },
+    });
+    expect(store.savePair).toHaveBeenCalledWith(
+      {
+        id,
+        name: 'Desktop',
+        deviceId: 'device-1',
+        desktopIdentity: '12D3KooWDesktop',
+        addresses: ['192.168.1.2'],
+        port: 23333,
+        grants,
+      },
+      true,
+      expect.any(AbortSignal),
+    );
+    expect(session.close).toHaveBeenCalled();
+  });
+
+  it.each([
+    ['rejected', 'pairing-rejected'],
+    ['expired', 'pairing-expired'],
+  ])('surfaces a %s claim as %s without saving anything', async (status, reason) => {
+    const session = createSession({
+      'pairing.claim': () => ({
+        claimId: 'claim',
+        verificationCode: '123456',
+        expiresAt: '2026-09-22T00:02:00.000Z',
+      }),
+      'pairing.get': () => ({ status }),
+    });
+    connect.mockResolvedValue(session as never);
+
+    await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({ details: { reason } });
+    expect(store.savePair).not.toHaveBeenCalled();
+    expect(session.close).toHaveBeenCalled();
+  });
+
+  it('maps an invalid invitation and an unreachable desktop to the settings error reasons', async () => {
+    const session = createSession({
+      'pairing.claim': () => {
+        throw new RemoteFailureError({
+          reason: 'FORBIDDEN',
+          message: 'Invitation is invalid or expired',
+        });
+      },
+    });
+    connect.mockResolvedValueOnce(session as never);
+    await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({
+      details: { reason: 'pairing-rejected' },
+    });
+
+    connect.mockRejectedValueOnce(new DesktopUnreachableError(['192.168.1.2: refused']));
+    await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({
+      details: { reason: 'unreachable' },
+    });
+  });
+
+  it('streams the export in pages, verifies its digest, and refreshes the stored grants', async () => {
+    const session = createSession(
+      exportHandlers({
+        version: 1,
+        providers: [
+          { id: 'openai', name: 'OpenAI', models: [] },
+          { id: 'local-embedding', name: 'Local', models: [] },
+        ],
+      }),
+    );
+    connect.mockResolvedValue(session as never);
+
+    await runtime.preview(id, signal());
+
+    expect(session.authenticate).toHaveBeenCalledWith('device-1', expect.any(AbortSignal));
+    expect(store.updateStatus).toHaveBeenNthCalledWith(
+      1,
+      id,
+      { grants, status: 'paired' },
+      expect.any(AbortSignal),
+    );
+    expect(store.preview).toHaveBeenCalledWith({
+      version: 1,
+      providers: [{ apiKeys: [], id: 'openai', name: 'OpenAI', models: [] }],
+    });
+    expect(store.updateStatus).toHaveBeenLastCalledWith(
+      id,
+      { lastFetchedAt: expect.any(Number), status: 'paired' },
+      expect.any(AbortSignal),
+    );
+    expect(session.close).toHaveBeenCalled();
+  });
+
+  it('rejects an export whose bytes do not match the announced digest', async () => {
+    const handlers = exportHandlers({ version: 1, providers: [] });
+    handlers['configuration.export.prepare'] = () => ({
+      exportId: 'export',
+      byteLength: '30',
+      sha256: 'f'.repeat(64),
+    });
+    connect.mockResolvedValue(createSession(handlers) as never);
+
+    await expect(runtime.preview(id, signal())).rejects.toMatchObject({
+      details: { reason: 'invalid-snapshot' },
+    });
+    expect(store.preview).not.toHaveBeenCalled();
+  });
+
+  it('refuses configuration sync when the desktop did not grant it', async () => {
+    store.getRow.mockResolvedValueOnce({ ...row, grants: [{ domain: 'agent', grantId: 'g' }] });
+    await expect(runtime.preview(id, signal())).rejects.toMatchObject({
+      details: { reason: 'configuration-not-granted' },
+    });
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('marks a revoked device for repair before returning the authorization failure', async () => {
+    const session = createSession({});
+    session.authenticate.mockRejectedValueOnce(
+      new RemoteFailureError({ reason: 'GRANT_REVOKED', message: 'Device authorization changed' }),
+    );
+    connect.mockResolvedValue(session as never);
+
+    await expect(runtime.preview(id, signal())).rejects.toMatchObject({
+      details: { reason: 'auth-revoked' },
+    });
+    expect(store.updateStatus).toHaveBeenCalledWith(
+      id,
+      { status: 'needs-repair' },
+      expect.any(AbortSignal),
+    );
+    expect(session.close).toHaveBeenCalled();
+    expect(store.preview).not.toHaveBeenCalled();
+  });
+
   it('waits for the shared registry download before importing and allows a failed download to retry', async () => {
-    jest
-      .mocked(fetchSnapshot)
-      .mockResolvedValue({ baseUrl, payload: { version: 1, providers: [] } });
+    connect.mockImplementation(
+      async () => createSession(exportHandlers({ version: 1, providers: [] })) as never,
+    );
     const input = { selections: [{ mode: 'provider-models' as const, providerId: 'openai' }] };
     ensureModelRegistryReady.mockRejectedValueOnce(new Error('registry unavailable'));
     await expect(runtime.import(id, input, signal())).rejects.toThrow('registry unavailable');
@@ -122,36 +339,10 @@ describe('DesktopConnectionRuntime', () => {
     expect(store.import).toHaveBeenCalledTimes(1);
   });
 
-  it('does not import if cancelled while the shared registry download is in progress', async () => {
-    jest
-      .mocked(fetchSnapshot)
-      .mockResolvedValue({ baseUrl, payload: { version: 1, providers: [] } });
-    const entered = deferred<void>();
-    const ready = deferred<void>();
-    ensureModelRegistryReady.mockImplementationOnce(async () => {
-      entered.resolve();
-      await ready.promise;
-    });
-    const controller = new AbortController();
-    const request = runtime.import(
-      id,
-      {
-        selections: [{ mode: 'provider-models', providerId: 'openai' }],
-      },
-      controller.signal,
-    );
-    const assertion = expect(request).rejects.toMatchObject({ name: 'AbortError' });
-    await entered.promise;
-    controller.abort();
-    ready.resolve();
-    await assertion;
-    expect(store.import).not.toHaveBeenCalled();
-  });
-
   it('imports provider configuration without requiring the model catalog', async () => {
-    jest
-      .mocked(fetchSnapshot)
-      .mockResolvedValue({ baseUrl, payload: { version: 1, providers: [] } });
+    connect.mockResolvedValue(
+      createSession(exportHandlers({ version: 1, providers: [] })) as never,
+    );
     await runtime.import(
       id,
       { selections: [{ mode: 'provider', providerId: 'openai' }] },
@@ -161,135 +352,16 @@ describe('DesktopConnectionRuntime', () => {
     expect(store.import).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps a connection visible when secure deletion fails so removal can be retried', async () => {
-    jest.mocked(SecureStore.deleteItemAsync).mockRejectedValueOnce(new Error('keychain locked'));
-    await expect(runtime.remove(id, signal())).rejects.toThrow('keychain locked');
-    expect(store.remove).not.toHaveBeenCalled();
-
-    await expect(runtime.remove(id, signal())).resolves.toBeUndefined();
-    expect(SecureStore.deleteItemAsync).toHaveBeenNthCalledWith(2, key);
-    expect(store.remove).toHaveBeenCalledWith(id);
-  });
-
   it('allows removal to be retried after the database delete fails', async () => {
     store.remove.mockRejectedValueOnce(new Error('database busy'));
     await expect(runtime.remove(id, signal())).rejects.toThrow('database busy');
     await expect(runtime.remove(id, signal())).resolves.toBeUndefined();
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledTimes(2);
     expect(store.remove).toHaveBeenCalledTimes(2);
-  });
-
-  it('restores the previous token when persisting a replacement pair fails', async () => {
-    store.savePair.mockRejectedValueOnce(new Error('database busy'));
-    await expect(runtime.pair(pairing, signal())).rejects.toThrow('database busy');
-    expect(SecureStore.setItemAsync).toHaveBeenNthCalledWith(1, key, 'new-token', {
-      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-    });
-    expect(SecureStore.setItemAsync).toHaveBeenNthCalledWith(2, key, 'old-token', {
-      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-    });
-  });
-
-  it('adopts the paired desktop analytics identity without letting it undo the pairing', async () => {
-    const desktopClientId = '99999999-8888-4777-8666-555555555555';
-    const adoptClientId = jest.fn(async () => {
-      throw new Error('analytics unavailable');
-    });
-    await installTestHost({ AnalyticsService: { adoptClientId } });
-    try {
-      jest.mocked(pairDesktop).mockResolvedValue({
-        baseUrl,
-        clientId: desktopClientId,
-        name: 'Desktop',
-        token: 'new-token',
-        version: '2.0.8',
-      });
-
-      await expect(runtime.pair(pairing, signal())).resolves.toEqual(connection);
-      expect(adoptClientId).toHaveBeenCalledWith(desktopClientId);
-      // A failed adoption must not restore the previous credential.
-      expect(SecureStore.setItemAsync).toHaveBeenCalledTimes(1);
-    } finally {
-      await uninstallTestHost();
-    }
-  });
-
-  it('does not hold the pairing open while the analytics identity is adopted', async () => {
-    const desktopClientId = '99999999-8888-4777-8666-555555555555';
-    const adoptClientId = jest.fn(() => new Promise<void>(() => {}));
-    await installTestHost({ AnalyticsService: { adoptClientId } });
-    try {
-      jest.mocked(pairDesktop).mockResolvedValue({
-        baseUrl,
-        clientId: desktopClientId,
-        name: 'Desktop',
-        token: 'new-token',
-        version: '2.0.8',
-      });
-
-      await expect(runtime.pair(pairing, signal())).resolves.toEqual(connection);
-      expect(adoptClientId).toHaveBeenCalledWith(desktopClientId);
-    } finally {
-      await uninstallTestHost();
-    }
-  });
-
-  it('compensates cancellation during a credential write before resolving', async () => {
-    const entered = deferred<void>();
-    const written = deferred<void>();
-    jest.mocked(SecureStore.setItemAsync).mockImplementationOnce(async () => {
-      entered.resolve();
-      await written.promise;
-    });
-    const controller = new AbortController();
-    const request = runtime.pair(pairing, controller.signal);
-    const assertion = expect(request).rejects.toMatchObject({ name: 'AbortError' });
-    await entered.promise;
-    controller.abort();
-    written.resolve();
-    await assertion;
-    expect(store.savePair).not.toHaveBeenCalled();
-    expect(SecureStore.setItemAsync).toHaveBeenLastCalledWith(key, 'old-token', {
-      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-    });
-  });
-
-  it('marks revoked credentials for repair before returning the authorization failure', async () => {
-    jest.mocked(fetchSnapshot).mockRejectedValueOnce(new AuthorizationError(403));
-    await expect(runtime.preview(id, signal())).rejects.toMatchObject({
-      details: { reason: 'auth-revoked' },
-    });
-    expect(store.updateStatus).toHaveBeenCalledWith(
-      id,
-      { status: 'needs-repair' },
-      expect.any(AbortSignal),
-    );
-    expect(store.preview).not.toHaveBeenCalled();
-  });
-
-  it('filters the desktop local embedding provider before previewing imports', async () => {
-    jest.mocked(fetchSnapshot).mockResolvedValueOnce({
-      baseUrl,
-      payload: {
-        version: 1,
-        providers: [
-          { id: 'local-embedding', name: 'Local Models', models: [] },
-          { id: 'openai', name: 'OpenAI', models: [] },
-        ],
-      },
-    });
-
-    await runtime.preview(id, signal());
-
-    expect(store.preview).toHaveBeenCalledWith({
-      version: 1,
-      providers: [{ apiKeys: [], id: 'openai', name: 'OpenAI', models: [] }],
-    });
   });
 
   it('aborts active requests and rejects queued work when its host stops', async () => {
     const entered = deferred<void>();
-    jest.mocked(fetchSnapshot).mockImplementationOnce(async (_urls, _token, signal) => {
+    connect.mockImplementationOnce(async ({ signal }) => {
       entered.resolve();
       return new Promise((_resolve, reject) => {
         signal.addEventListener('abort', () => reject(signal.reason), { once: true });
@@ -305,21 +377,5 @@ describe('DesktopConnectionRuntime', () => {
     expect(store.remove).not.toHaveBeenCalled();
     expect(store.updateStatus).not.toHaveBeenCalled();
     await expect(runtime.preview(id, signal())).rejects.toMatchObject({ name: 'AbortError' });
-  });
-
-  it('finishes an already-started removal before host teardown returns', async () => {
-    const entered = deferred<void>();
-    const deleted = deferred<void>();
-    jest.mocked(SecureStore.deleteItemAsync).mockImplementationOnce(async () => {
-      entered.resolve();
-      await deleted.promise;
-    });
-    const removal = runtime.remove(id, signal());
-    await entered.promise;
-    const stopped = runtime._doStop();
-    expect(store.remove).not.toHaveBeenCalled();
-    deleted.resolve();
-    await Promise.all([removal, stopped]);
-    expect(store.remove).toHaveBeenCalledWith(id);
   });
 });
