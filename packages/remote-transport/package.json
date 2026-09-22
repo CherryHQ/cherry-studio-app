@@ -1,0 +1,36 @@
+{
+  "name": "@cherrystudio/remote-transport",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cherrystudio/remote-protocol": "workspace:*",
+    "@libp2p/crypto": "5.1.23",
+    "@libp2p/interface": "3.3.0",
+    "@libp2p/noise": "17.0.2",
+    "@libp2p/peer-id": "6.0.15",
+    "@libp2p/utils": "7.4.1",
+    "json-rpc-2.0": "1.8.1"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.7",
+    "ws": "^8.18.3"
+  }
+}

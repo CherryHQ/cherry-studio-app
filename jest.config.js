@@ -22,6 +22,8 @@ module.exports = {
     '/packages/ai-core/',
     '/packages/ai-runtime/',
     '/packages/ai-sdk-provider/',
+    '/packages/remote-protocol/',
+    '/packages/remote-transport/',
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
     // The desktop-sync audits spawn hundreds of real git subprocesses against
