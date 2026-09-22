@@ -155,11 +155,19 @@ Step 4 does not wait on the network for a server that has already been listed. T
 reuses each server's last complete `tools/list` result, kept in memory for the current connection
 configuration and in a per-server file under the app cache directory, until that server is
 invalidated by an endpoint, header, or grant change, a disable, a delete, or a plugin connect or
-disconnect. There is no timed refresh: the catalog is reconciled where the network is already in
+disconnect. Plugin connection validation collects the full tool catalog before saving the grant;
+after the save, the runtime caches those definitions under the new grant without a second network
+discovery. A send arriving during that local cache handoff waits for it through the existing turn
+preparation path. The temporary validation client is closed; actual tool calls still use a
+grant-bound client and its live routing checks.
+
+There is no timed refresh: the catalog is reconciled where the network is already in
 use, when a fresh connection lists tools before its first call and whenever the settings screens
-read live. A catalog with partial-discovery warnings is served immediately, refreshed in the
-background, and never written to disk. A server whose discovery failed is not probed again on the
-send path until a backoff expires, while the settings screens may still probe it. The file stores a
+read live. A catalog with partial-discovery warnings is served immediately and never written to
+disk. Both partial and failed discoveries back off before a send can trigger another attempt;
+partial catalogs refresh in the background after that delay. Consecutive failures start at 30
+seconds and double to a five-minute ceiling, resetting only after complete discovery. Settings
+screens may still probe the server. The file stores a
 fingerprint of the connection configuration rather than its headers. Because the frozen tool is
 pinned to the catalog rather than to a live connection, it may execute over a reconnected client for
 the same configuration; execution still rereads the stored server row, and a tool absent from the

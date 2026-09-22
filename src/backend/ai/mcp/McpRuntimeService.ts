@@ -11,6 +11,7 @@ import {
   PluginAuthorizationManager,
   isBuiltInMcpToolAllowed,
   type PluginClient,
+  type PluginToolCatalog,
 } from '@/backend/services/builtInMcp';
 import type {
   McpConnectionConfig,
@@ -86,7 +87,7 @@ type McpToolCallingClient = McpRuntimeClient & {
 type ServerToolCatalog = {
   /** Partial-discovery warnings that describe this catalog; empty when complete. */
   discoveryWarnings: readonly string[];
-  /** A restored catalog came from the file store; a live one from this connection. */
+  /** A live catalog was discovered in this process, including plugin setup. */
   source: 'live' | 'stored';
   tools: ListToolsResult['tools'];
 };
@@ -241,6 +242,7 @@ function isMcpToolCallingClient(client: McpRuntimeClient): client is McpToolCall
 export class McpRuntimeService extends BaseService implements McpModule {
   readonly pluginAuthorizations = new PluginAuthorizationManager();
   private nextGeneration = 0;
+  private readonly catalogPreparations = new Map<string, Promise<void>>();
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
 
@@ -383,6 +385,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * against a service nothing will read again.
    */
   protected async onStop(): Promise<void> {
+    this.catalogPreparations.clear();
     for (const state of [...this.runtimeStates.values()]) {
       this.retireState(state);
     }
@@ -398,6 +401,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * forgets the catalog so the next turn discovers live.
    */
   invalidateServer(serverId: string, options: { preserveSnapshot?: boolean } = {}): void {
+    this.catalogPreparations.delete(serverId);
     const state = this.runtimeStates.get(serverId);
     if (state) {
       this.retireState(state);
@@ -409,28 +413,39 @@ export class McpRuntimeService extends BaseService implements McpModule {
   }
 
   /**
-   * Discover a server in the background so the first send after a plugin
-   * connects finds a catalog. Failures stay in the runtime state and surface
-   * through the ordinary turn and settings paths.
+   * Keep the directory already discovered during plugin validation. The saved
+   * grant owns its cache key; the temporary validation client is never reused.
    */
-  prewarmServer(serverId: string): void {
-    void mcpServerService
+  cachePluginToolCatalog(serverId: string, catalog: PluginToolCatalog): Promise<void> {
+    const preparation = mcpServerService
       .getById(serverId)
       .then(async (server) => {
-        if (!server.isEnabled || !isRunnableMcpServer(server)) return;
+        if (
+          this.catalogPreparations.get(serverId) !== preparation ||
+          server.origin !== 'builtin' ||
+          !server.isEnabled
+        )
+          return;
         const state = this.getRuntimeState(server);
-        if (state.catalog) return;
-        await this.fetchTools(server, state);
+        await this.recordCatalog(server, state, catalog);
       })
       .catch((error: unknown) => {
-        logger.warn('MCP prewarm discovery failed', error as Error, { serverId });
+        // A cache failure must not turn a committed connection into an auth failure.
+        logger.warn('Could not cache the validated plugin tools', error as Error, { serverId });
+      })
+      .finally(() => {
+        if (this.catalogPreparations.get(serverId) === preparation) {
+          this.catalogPreparations.delete(serverId);
+        }
       });
+    this.catalogPreparations.set(serverId, preparation);
+    return preparation;
   }
 
   /**
    * The turn catalog: the current connection's catalog, else the stored file,
    * else one live discovery. A catalog carrying partial-discovery warnings is
-   * served as is and refreshed once in the background.
+   * served as is and refreshed in the background after its backoff expires.
    */
   private async getTurnCatalog(
     server: McpServer,
@@ -439,6 +454,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
   ): Promise<ServerToolCatalog> {
     signal?.throwIfAborted();
     if (!state.catalog) {
+      // A send racing the local cache handoff waits here; it starts no second
+      // discovery and cancellation does not discard the prepared directory.
+      await this.catalogPreparations.get(server.id);
+      signal?.throwIfAborted();
       await this.restoreCatalog(server, state);
       signal?.throwIfAborted();
     }
@@ -891,32 +910,48 @@ export class McpRuntimeService extends BaseService implements McpModule {
       endMcpTrace(trace, error, signal, didTimeout?.());
       throw error;
     }
-    if (server.origin === 'builtin') {
-      rawTools = rawTools.filter((tool) => isBuiltInMcpToolAllowed(server.builtinId, tool.name));
-    }
     if (!this.isCurrentState(state, generation)) {
       trace?.end('cancelled', { 'error.category': 'cancelled' });
       throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
     }
-    trace?.end('ok', { 'mcp.tools_count': rawTools.length });
-
-    const discoveryWarnings = [...(client.discoveryWarnings ?? [])];
-    state.runtimeError = discoveryWarnings.join(' ') || undefined;
-    state.discoveryFailure = undefined;
     state.clientListed = true;
+    const tools = await this.recordCatalog(server, state, {
+      tools: rawTools,
+      discoveryWarnings: client.discoveryWarnings ?? [],
+      serverInfo: client.serverInfo,
+    });
+    trace?.end('ok', { 'mcp.tools_count': tools.length });
+    return tools;
+  }
+
+  private async recordCatalog(
+    server: McpServer,
+    state: ServerRuntimeState,
+    catalog: PluginToolCatalog,
+  ): Promise<ListToolsResult['tools']> {
+    const rawTools =
+      server.origin === 'builtin'
+        ? catalog.tools.filter((tool) => isBuiltInMcpToolAllowed(server.builtinId, tool.name))
+        : catalog.tools;
+    const discoveryWarnings = [...catalog.discoveryWarnings];
+    state.runtimeError = discoveryWarnings.join(' ') || undefined;
+    if (discoveryWarnings.length > 0) this.recordDiscoveryFailure(state);
+    else state.discoveryFailure = undefined;
     state.catalog = { discoveryWarnings, source: 'live', tools: rawTools };
     const discoveredAt = Date.now();
     this.runtimeSnapshots.set(server.id, {
       connectionConfig: state.connectionConfig,
       lastConnectedAt: discoveredAt,
-      serverName: client.serverInfo.name,
-      serverTitle: client.serverInfo.title,
-      serverVersion: client.serverInfo.version,
+      serverName: catalog.serverInfo.name,
+      serverTitle: catalog.serverInfo.title,
+      serverVersion: catalog.serverInfo.version,
       toolCount: rawTools.length,
     });
     if (discoveryWarnings.length === 0) {
+      const connectionKey = await this.getConnectionKey(state);
+      if (!this.isCurrentState(state)) return rawTools;
       await writeMcpToolCatalog({
-        connectionKey: await this.getConnectionKey(state),
+        connectionKey,
         discoveredAt,
         serverId: server.id,
         tools: rawTools,
@@ -926,8 +961,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return rawTools;
   }
 
-  private recordDiscoveryFailure(state: ServerRuntimeState, error: unknown): void {
-    this.recordRuntimeError(state, error);
+  private recordDiscoveryFailure(state: ServerRuntimeState, error?: unknown): void {
+    if (error !== undefined) this.recordRuntimeError(state, error);
     const attempts = (state.discoveryFailure?.attempts ?? 0) + 1;
     const delay = Math.min(DISCOVERY_BACKOFF_MS * 2 ** (attempts - 1), DISCOVERY_BACKOFF_MAX_MS);
     state.discoveryFailure = { attempts, nextAttemptAt: Date.now() + delay };

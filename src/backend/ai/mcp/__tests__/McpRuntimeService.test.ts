@@ -1093,7 +1093,9 @@ describe('catalog reuse', () => {
     expect(storedFiles.has(catalogPath(server.id))).toBe(false);
   });
 
-  it('serves a partial catalog immediately, refreshes it in the background, and never stores it', async () => {
+  it('serves a validated partial catalog while repeated discovery failures back off, then stores recovery', async () => {
+    let now = Date.now();
+    jest.spyOn(Date, 'now').mockImplementation(() => now);
     const warning = 'Feishu document tools could not be loaded (network).';
     const partial = {
       ...makeClient(makeRawTools(['calendar_get_primary'])),
@@ -1111,30 +1113,160 @@ describe('catalog reuse', () => {
     const { service } = makeService([server]);
     const onUnavailable = jest.fn();
 
-    await service.listExecutableToolDescriptors(server.id, onUnavailable);
+    await service.cachePluginToolCatalog(server.id, {
+      tools: makeRawTools(['calendar_get_primary']),
+      discoveryWarnings: [warning],
+      serverInfo: partial.serverInfo,
+    });
+    await expect(
+      service.listExecutableToolDescriptors(server.id, onUnavailable),
+    ).resolves.toHaveLength(1);
     expect(storedFiles.has(catalogPath(server.id))).toBe(false);
-    expect(partial.listTools).toHaveBeenCalledTimes(1);
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+    expect(onUnavailable).toHaveBeenCalledWith(warning);
 
+    let listings = 0;
+    for (const delay of [30_000, 60_000, 120_000, 240_000, 300_000, 300_000]) {
+      now += delay - 1;
+      await expect(service.listExecutableToolDescriptors(server.id)).resolves.toHaveLength(1);
+      await flush();
+      expect(partial.listTools).toHaveBeenCalledTimes(listings);
+
+      now += 1;
+      const refresh = deferred<ListToolsResult>();
+      partial.listTools.mockReturnValueOnce(refresh.promise);
+      // A send returns the partial catalog even while the retry is still pending.
+      await expect(service.listExecutableToolDescriptors(server.id)).resolves.toHaveLength(1);
+      await flush();
+      listings += 1;
+      expect(partial.listTools).toHaveBeenCalledTimes(listings);
+      await service.listExecutableToolDescriptors(server.id);
+      expect(partial.listTools).toHaveBeenCalledTimes(listings);
+      refresh.resolve({ tools: makeRawTools(['calendar_get_primary']) });
+      await flush();
+      expect(storedFiles.has(catalogPath(server.id))).toBe(false);
+    }
+
+    now += 300_000;
     partial.discoveryWarnings = [];
     await service.listExecutableToolDescriptors(server.id, onUnavailable);
     expect(onUnavailable).toHaveBeenCalledTimes(2);
     await flush();
-    expect(partial.listTools).toHaveBeenCalledTimes(2);
+    listings += 1;
+    expect(partial.listTools).toHaveBeenCalledTimes(listings);
     expect(storedFiles.has(catalogPath(server.id))).toBe(true);
+    await service.listExecutableToolDescriptors(server.id);
+    expect(partial.listTools).toHaveBeenCalledTimes(listings);
+
+    // A new partial failure after complete recovery starts at the first delay again.
+    partial.discoveryWarnings = [warning];
+    await service.listTools(server.id);
+    listings += 1;
+    now += 29_999;
+    await service.listExecutableToolDescriptors(server.id);
+    expect(partial.listTools).toHaveBeenCalledTimes(listings);
+    now += 1;
+    await service.listExecutableToolDescriptors(server.id);
+    await flush();
+    expect(partial.listTools).toHaveBeenCalledTimes(listings + 1);
   });
 
-  it('discovers a server in the background when asked to prewarm it', async () => {
-    const client = makeClient(makeRawTools(['search']));
+  it('reuses validated plugin tools across sends and restarts without connecting until invocation', async () => {
+    const client = makeClient(makeRawTools(['get_me']));
     mockCreateMCPClient.mockResolvedValue(client);
-    const server = makeServer();
+    const server: McpServer = {
+      ...makeServer(),
+      origin: 'builtin',
+      builtinId: 'github',
+      endpointUrl: null,
+      headers: undefined,
+      authorizationId: 'grant-1',
+    };
     const { service } = makeService([server]);
-
-    service.prewarmServer(server.id);
-    await flush();
-    await flush();
-
-    expect(client.listTools).toHaveBeenCalledTimes(1);
+    await service.cachePluginToolCatalog(server.id, {
+      tools: makeRawTools(['get_me', 'unreviewed_upstream_tool']),
+      discoveryWarnings: [],
+      serverInfo: client.serverInfo,
+    });
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
     await service.listExecutableToolDescriptors(server.id);
+    const { service: restarted } = makeService([server]);
+    await expect(restarted.listExecutableToolDescriptors(server.id)).resolves.toEqual([
+      expect.objectContaining({ rawToolName: 'get_me' }),
+    ]);
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+    expect(JSON.parse(storedFiles.get(catalogPath(server.id))!).connectionKey).toBe(
+      'builtin:github:grant-1',
+    );
+
+    await executeFrozenTool(service, descriptor!);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
     expect(client.listTools).toHaveBeenCalledTimes(1);
+    expect(client.callTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for the validated catalog handoff when a send arrives before the server read finishes', async () => {
+    const server: McpServer = {
+      ...makeServer(),
+      origin: 'builtin',
+      builtinId: 'github',
+      endpointUrl: null,
+      headers: undefined,
+      authorizationId: 'grant-1',
+    };
+    const { service, getById } = makeService([server]);
+    const saved = deferred<McpServer>();
+    getById.mockImplementationOnce(() => saved.promise);
+    const preparation = service.cachePluginToolCatalog(server.id, {
+      tools: makeRawTools(['get_me']),
+      discoveryWarnings: [],
+      serverInfo: { name: 'GitHub', version: '1' },
+    });
+    let prepared = false;
+    const send = service.listExecutableToolDescriptors(server.id).then((tools) => {
+      prepared = true;
+      return tools;
+    });
+    await flush();
+    expect(prepared).toBe(false);
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+    saved.resolve(server);
+    await preparation;
+    await expect(send).resolves.toHaveLength(1);
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+  });
+
+  it('does not let an invalidated cache handoff overwrite a replacement grant catalog', async () => {
+    const server: McpServer = {
+      ...makeServer(),
+      origin: 'builtin',
+      builtinId: 'github',
+      endpointUrl: null,
+      headers: undefined,
+      authorizationId: 'grant-1',
+    };
+    const replacement = { ...server, authorizationId: 'grant-2' };
+    const { service, getById } = makeService([replacement]);
+    const previous = deferred<McpServer>();
+    getById.mockImplementationOnce(() => previous.promise);
+    const metadata = { discoveryWarnings: [], serverInfo: { name: 'GitHub', version: '1' } };
+    const oldPreparation = service.cachePluginToolCatalog(server.id, {
+      ...metadata,
+      tools: makeRawTools(['get_me']),
+    });
+    service.invalidateServer(server.id);
+    await service.cachePluginToolCatalog(server.id, {
+      ...metadata,
+      tools: makeRawTools(['issue_write']),
+    });
+    previous.resolve(server);
+    await oldPreparation;
+    await expect(service.listExecutableToolDescriptors(server.id)).resolves.toEqual([
+      expect.objectContaining({ rawToolName: 'issue_write' }),
+    ]);
+    expect(JSON.parse(storedFiles.get(catalogPath(server.id))!).connectionKey).toBe(
+      'builtin:github:grant-2',
+    );
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
   });
 });

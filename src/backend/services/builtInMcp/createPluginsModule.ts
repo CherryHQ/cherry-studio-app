@@ -9,6 +9,7 @@ import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
 import type { PluginAuthorizationManager } from './authorization/PluginAuthorizationManager';
+import type { PluginToolCatalog } from './pluginDefinition';
 import {
   getPluginDefinition,
   requirePluginAuthMethod,
@@ -17,7 +18,10 @@ import {
 import { validatePluginConnection } from './transport/validatePluginConnection';
 
 export function createPluginsModule(
-  runtime: { invalidateServer(id: string): void; prewarmServer?(id: string): void },
+  runtime: {
+    invalidateServer(id: string): void;
+    cachePluginToolCatalog(id: string, catalog: PluginToolCatalog): Promise<void>;
+  },
   authorizations: PluginAuthorizationManager,
 ): PluginsModule {
   const pending = new Map<PluginId, Promise<unknown>>();
@@ -38,7 +42,7 @@ export function createPluginsModule(
     return serialize(pluginId, async () => {
       await authorizations.cancelAttempts(pluginId, methodId);
       const { credential, accountLabel, signal } = await auth.prepare(attemptId, attemptSignal);
-      await validatePluginConnection(pluginId, methodId, credential, signal);
+      const { catalog } = await validatePluginConnection(pluginId, methodId, credential, signal);
       let connection;
       try {
         connection = await auth.commit(attemptId, accountLabel, signal);
@@ -49,8 +53,7 @@ export function createPluginsModule(
       }
       authorizations.invalidateGrant(pluginId);
       runtime.invalidateServer(connection.serverId);
-      // The new grant has no catalog yet; discover it now rather than on the first send.
-      runtime.prewarmServer?.(connection.serverId);
+      await runtime.cachePluginToolCatalog(connection.serverId, catalog);
       return connection;
     });
   }
@@ -147,7 +150,7 @@ export function createPluginsModule(
             'Disconnect before replacing this connection.',
           );
         const credential = method.encodeCredentials(fields);
-        const accountLabel = await validatePluginConnection(
+        const { accountLabel, catalog } = await validatePluginConnection(
           parsed.pluginId,
           method.id,
           credential,
@@ -178,7 +181,7 @@ export function createPluginsModule(
         }
         authorizations.invalidateGrant(parsed.pluginId);
         runtime.invalidateServer(connection.serverId);
-        runtime.prewarmServer?.(connection.serverId);
+        await runtime.cachePluginToolCatalog(connection.serverId, catalog);
         return connection;
       });
     },
