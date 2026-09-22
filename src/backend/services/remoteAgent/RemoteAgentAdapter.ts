@@ -212,7 +212,7 @@ export class RemoteAgentAdapter implements AgentController {
       for (const [sessionId, observation] of this.observations) {
         void this.subscribeSession(sessionId, observation).catch(() => undefined);
       }
-      this.actions.recover();
+      this.actions!.recover();
       return client;
     })()
       .catch((error: unknown) => {

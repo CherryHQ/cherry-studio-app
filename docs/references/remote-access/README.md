@@ -5,6 +5,11 @@ access, commands, lifecycle) are still the plan below. The desktop side is imple
 Studio PR #20717 (`zhangjiadi225/lan-agent-remote-design`). This document supersedes the HTTP
 pairing that `main` shipped and the snapshot-based prototype in mobile PR #997.
 
+PR #997 now includes this foundation through its stacked base #1055. Its Agent UI and
+controller prototype are retained, but `prepareAgentConnection` rejects with `agent-version`
+before opening the legacy transport. Pairing and configuration sync remain available; re-pairing
+cannot enable Agent access until slices 4–6 migrate the adapter to the shared protocol.
+
 ## What exists and what is replaced
 
 | Today | Replacement |

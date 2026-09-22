@@ -253,7 +253,7 @@ describe('MessageParts', () => {
       );
 
       expect(rendered.map((node) => node.type)).toEqual([
-        status === 'pending' ? 'MessagePartRenderer' : 'ProcessGroupPart',
+        'ProcessGroupPart',
         'GeneratedFileStrip',
         'MessagePartRenderer',
       ]);

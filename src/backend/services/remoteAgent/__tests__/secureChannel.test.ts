@@ -107,7 +107,7 @@ it('rejects changed identities, tampering, replay and skipped counters', () => {
   const session = new Uint8Array(32).fill(3);
   const channel = new SecureChannel(key.slice(), key.slice(), session.slice());
   const initial = serverFrame(key, session, 0n, { text: '你好🙂' });
-  const changed = initial.slice();
+  const changed = Buffer.from(initial);
   changed[changed.length - 1] ^= 1;
   expect(() => channel.open(changed)).toThrow();
   expect(channel.open(initial)).toEqual({ text: '你好🙂' });

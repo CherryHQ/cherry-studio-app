@@ -55,7 +55,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
 
   return (
     <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
-      {retryableMessageId === message.id ? (
+      {retryAssistantMessage && retryableMessageId === message.id ? (
         <Button
           accessibilityLabel={t(
             message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
@@ -102,7 +102,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
         testID="assistant-message-share"
         variant="ghost"
       />
-      {turnId ? (
+      {deleteMessageTurn && turnId ? (
         <Button
           accessibilityLabel={t('chat.messageActions.delete')}
           disabled={isDeleteDisabled}

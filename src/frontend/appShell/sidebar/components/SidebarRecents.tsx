@@ -248,14 +248,20 @@ function SidebarRecentSessionList({
             accessibilityLabel={showMoreLabel}
             accessibilityRole="button"
             accessibilityState={{ disabled: isLoadingMoreSessions }}
-            className="w-full rounded-xl active:bg-sidebar-accent"
             disabled={isLoadingMoreSessions}
             onPress={handleViewAllPress}
             testID="sidebar-sessions-view-all"
           >
-            <SidebarRowContent leading={leading}>
-              <Text className="min-w-0 flex-1 text-muted-foreground text-sm">{showMoreLabel}</Text>
-            </SidebarRowContent>
+            {({ pressed }) => (
+              <SidebarRowContent
+                className={cn('w-full', pressed && 'bg-sidebar-accent')}
+                leading={leading}
+              >
+                <Text className="min-w-0 flex-1 text-muted-foreground text-sm">
+                  {showMoreLabel}
+                </Text>
+              </SidebarRowContent>
+            )}
           </Pressable>
         </View>
       ) : null}
@@ -336,32 +342,34 @@ function SidebarAgentRow({
           accessibilityLabel={agent.name}
           accessibilityRole="button"
           accessibilityState={{ expanded: isExpanded }}
-          className="rounded-xl active:bg-sidebar-accent"
           onPress={() => setIsExpandedOverride((current) => !(current ?? isDefaultExpanded))}
           testID={`sidebar-agent-${agent.id}`}
         >
-          <SidebarRowContent
-            leading={
-              <SidebarAgentIconSlot>
-                <AgentAvatar
-                  accessibilityLabel={agent.name}
-                  avatar={agent.avatar}
-                  name={agent.name}
-                  size={SIDEBAR_LEADING_SIZE}
-                  uri={agent.avatarUri}
-                />
-              </SidebarAgentIconSlot>
-            }
-          >
-            <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-              {agent.name}
-            </Text>
-            {isExpanded ? (
-              <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
-            ) : (
-              <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
-            )}
-          </SidebarRowContent>
+          {({ pressed }) => (
+            <SidebarRowContent
+              className={cn('w-full', pressed && 'bg-sidebar-accent')}
+              leading={
+                <SidebarAgentIconSlot>
+                  <AgentAvatar
+                    accessibilityLabel={agent.name}
+                    avatar={agent.avatar}
+                    name={agent.name}
+                    size={SIDEBAR_LEADING_SIZE}
+                    uri={agent.avatarUri}
+                  />
+                </SidebarAgentIconSlot>
+              }
+            >
+              <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+                {agent.name}
+              </Text>
+              {isExpanded ? (
+                <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+              ) : (
+                <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+              )}
+            </SidebarRowContent>
+          )}
         </Pressable>
       </View>
       {isExpanded ? (
@@ -411,25 +419,30 @@ function SidebarSessionRow({
       <Pressable
         accessibilityRole="link"
         accessibilityState={{ selected: isSelected }}
-        className={cn(
-          'w-full rounded-xl active:bg-sidebar-accent',
-          isSelected && 'bg-secondary/70',
-        )}
         onPress={onCloseDrawer}
         testID={`sidebar-session-${session.id}`}
       >
-        <SidebarRowContent leading={leading}>
-          <Text
+        {({ pressed }) => (
+          <SidebarRowContent
             className={cn(
-              'min-w-0 flex-1 text-base text-sidebar-foreground',
-              isSelected && 'font-medium',
+              'w-full',
+              isSelected && 'bg-secondary/70',
+              pressed && 'bg-sidebar-accent',
             )}
-            numberOfLines={1}
+            leading={leading}
           >
-            {session.title || t('session.list.untitled')}
-          </Text>
-          <SessionStatus sessionId={session.id} />
-        </SidebarRowContent>
+            <Text
+              className={cn(
+                'min-w-0 flex-1 text-base text-sidebar-foreground',
+                isSelected && 'font-medium',
+              )}
+              numberOfLines={1}
+            >
+              {session.title || t('session.list.untitled')}
+            </Text>
+            <SessionStatus sessionId={session.id} />
+          </SidebarRowContent>
+        )}
       </Pressable>
     </ContextMenuLink>
   );

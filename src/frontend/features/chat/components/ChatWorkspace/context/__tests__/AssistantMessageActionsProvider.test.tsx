@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
   AssistantMessageActionsProvider,
+  ChatMessageActionsProvider,
   useAssistantMessageActions,
   useAssistantMessageActionsState,
 } from '../AssistantMessageActionsProvider';
@@ -131,6 +132,30 @@ describe('AssistantMessageActionsProvider', () => {
     renderer = undefined;
   }
 
+  test('remote presentation exposes copy and share without local transcript mutations', async () => {
+    const share = jest.fn();
+    act(() => {
+      renderer = create(
+        <ChatMessageActionsProvider isAssistantToolbarEnabled onShare={share}>
+          <ContextProbe ref={probeRef} />
+        </ChatMessageActionsProvider>,
+      );
+    });
+    const { actions, state } = probeRef.current!;
+    expect(actions.deleteMessageTurn).toBeUndefined();
+    expect(actions.retryAssistantMessage).toBeUndefined();
+    expect(actions.forkFromAssistantMessage).toBeUndefined();
+    expect(state.isDeleteDisabled).toBe(true);
+    expect(state.isRetryDisabled).toBe(true);
+    await copyAndFlush('pc-answer', 'PC answer');
+    expect(mockSetStringAsync).toHaveBeenCalledWith('PC answer');
+    expect(probeRef.current!.state.copiedMessageId).toBe('pc-answer');
+    act(() => actions.shareAssistantMessage({ messageId: 'pc-answer' }));
+    expect(share).toHaveBeenCalledWith({ messageId: 'pc-answer' });
+    expect(mockDeleteTurn).not.toHaveBeenCalled();
+    expect(mockRetryMessage).not.toHaveBeenCalled();
+  });
+
   test('opens selection at the clicked answer without changing the transcript', () => {
     renderProvider();
     act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer' }));
@@ -191,7 +216,7 @@ describe('AssistantMessageActionsProvider', () => {
     renderProvider();
 
     await act(async () => {
-      probeRef.current?.actions.forkFromAssistantMessage({ messageId: 'assistant-1' });
+      probeRef.current?.actions.forkFromAssistantMessage!({ messageId: 'assistant-1' });
       await Promise.resolve();
     });
 
@@ -210,7 +235,7 @@ describe('AssistantMessageActionsProvider', () => {
   test('deletes a turn only after the destructive confirmation is accepted', async () => {
     renderProvider();
 
-    act(() => probeRef.current?.actions.deleteMessageTurn({ turnId: 'turn-1' }));
+    act(() => probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1' }));
 
     // Nothing has happened yet: the alert is the gate, not a notification.
     expect(mockDeleteTurn).not.toHaveBeenCalled();
@@ -236,7 +261,7 @@ describe('AssistantMessageActionsProvider', () => {
     mockDeleteTurn.mockRejectedValueOnce(error);
     renderProvider();
 
-    act(() => probeRef.current?.actions.deleteMessageTurn({ turnId: 'turn-1' }));
+    act(() => probeRef.current?.actions.deleteMessageTurn!({ turnId: 'turn-1' }));
     await act(async () => {
       mockAlertConfirm.mock.lastCall![0].onConfirm();
       await Promise.resolve();
@@ -256,7 +281,7 @@ describe('AssistantMessageActionsProvider', () => {
     renderProvider();
 
     await act(async () => {
-      probeRef.current?.actions.forkFromAssistantMessage({ messageId: 'assistant-1' });
+      probeRef.current?.actions.forkFromAssistantMessage!({ messageId: 'assistant-1' });
       await Promise.resolve();
     });
 

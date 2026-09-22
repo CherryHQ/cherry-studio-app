@@ -24,7 +24,7 @@ export function RemoteConnectionBanner() {
       ? t('remoteAgent.identityChanged')
       : repair
         ? t('remoteAgent.pairAgain')
-        : state.error === 'agent-unavailable'
+        : state.error === 'agent-unavailable' || state.error === 'agent-version'
           ? t('remoteAgent.unavailable')
           : state.status === 'ready'
             ? t('remoteAgent.connected', { name: connection?.name ?? '' })
@@ -36,7 +36,7 @@ export function RemoteConnectionBanner() {
       <Text accessibilityLiveRegion="polite" className="flex-1 text-sm text-muted-foreground">
         {label}
       </Text>
-      {state.status !== 'ready' ? (
+      {state.status !== 'ready' && state.error !== 'agent-version' ? (
         <Button
           size="sm"
           variant="ghost"

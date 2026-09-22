@@ -12,6 +12,7 @@ import {
 import { Keyboard } from 'react-native';
 import { v7 as uuidv7 } from 'uuid';
 
+import { usePreference } from '@/frontend/data/hooks';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 
 import { chatHref, type ChatTarget, parseChatRoute } from './chatRoute';
@@ -27,7 +28,7 @@ type ChatSourceNavigation = {
   source: ChatSource;
   remoteTarget: RemoteChatTarget;
   viewMode: 'sessions' | 'agents';
-  setViewMode(mode: 'sessions' | 'agents'): void;
+  setViewMode(mode: 'sessions' | 'agents'): Promise<void>;
   selectSource(source: ChatSource): void;
   openRemote(target: RemoteChatTarget): void;
   startRemoteChat(agentId?: string): void;
@@ -45,10 +46,8 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
   const { connections } = useDesktopConnections();
   const lastLocal = useRef<ChatTarget | undefined>(undefined);
   const lastRemote = useRef<RemoteChatTarget | undefined>(undefined);
-  const [viewModes, setViewModes] = useState<{
-    local: 'sessions' | 'agents';
-    remote: 'sessions' | 'agents';
-  }>({ local: 'sessions', remote: 'agents' });
+  const [localViewMode, setLocalViewMode] = usePreference('ui.sidebar.recent_view_mode');
+  const [remoteViewMode, setRemoteViewMode] = useState<'sessions' | 'agents'>('agents');
 
   const openRemote = useCallback(
     (target: RemoteChatTarget) => {
@@ -104,8 +103,11 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
       openRemote({ connectionId: first.id });
   }, [connections, openRemote, remoteTarget.connectionId, source]);
   const setViewMode = useCallback(
-    (mode: 'sessions' | 'agents') => setViewModes((current) => ({ ...current, [source]: mode })),
-    [source],
+    async (mode: 'sessions' | 'agents') => {
+      if (source === 'local') await setLocalViewMode(mode);
+      else setRemoteViewMode(mode);
+    },
+    [source, setLocalViewMode],
   );
   const value = useMemo(
     () => ({
@@ -114,10 +116,19 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
       selectSource,
       openRemote,
       startRemoteChat,
-      viewMode: viewModes[source],
+      viewMode: source === 'local' ? localViewMode : remoteViewMode,
       setViewMode,
     }),
-    [source, remoteTarget, selectSource, openRemote, startRemoteChat, viewModes, setViewMode],
+    [
+      source,
+      remoteTarget,
+      selectSource,
+      openRemote,
+      startRemoteChat,
+      localViewMode,
+      remoteViewMode,
+      setViewMode,
+    ],
   );
   return <Context value={value}>{children}</Context>;
 }

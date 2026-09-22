@@ -60,7 +60,6 @@ describe('ProcessGroupPart', () => {
     const draw = (parts: ToolMessagePart[], status: MessageListItem['status']) => (
       <ProcessGroupPart
         citationText={new Map()}
-        isTextSelectionEnabled
         items={parts.map((part, index) => ({ part, index, key: part.toolCallId }))}
         message={{ id: 'reply', role: 'assistant', status, data: { parts } }}
         messageParts={parts}
@@ -105,7 +104,6 @@ describe('ProcessGroupPart', () => {
       renderer = create(
         <ProcessGroupPart
           citationText={new Map()}
-          isTextSelectionEnabled
           items={parts.map((part, index) => ({ part, index, key: part.toolCallId }))}
           message={{ id: 'reply', role: 'assistant', status: 'success', data: { parts } }}
           messageParts={parts}
@@ -137,7 +135,6 @@ describe('ProcessGroupPart', () => {
       renderer = create(
         <ProcessGroupPart
           citationText={new Map()}
-          isTextSelectionEnabled
           items={parts.slice(0, 2).map((part, index) => ({ part, index, key: `part-${index}` }))}
           message={{ id: 'reply', role: 'assistant', status: 'pending', data: { parts } }}
           messageParts={parts}
@@ -160,7 +157,6 @@ describe('ProcessGroupPart', () => {
       renderer = create(
         <ProcessGroupPart
           citationText={new Map()}
-          isTextSelectionEnabled
           items={[{ index: 0, key: 'reasoning', part }]}
           message={message}
           messageParts={[part]}
