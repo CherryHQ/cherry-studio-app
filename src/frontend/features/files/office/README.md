@@ -39,6 +39,12 @@ sharing always exports original bytes.
   exists for the trusted bundled shell; on iOS its read scope is `Paths.bundle/www.bundle`, including
   sibling scripts and styles. The repository does not install `expo-updates`; adding it requires
   admitting its asset directory explicitly. Source documents only cross bounded reader callbacks.
+- Android requires the `react-native-webview@13.16.1` patch that backports the bridge fix from
+  [upstream commit 2ea1d03](https://github.com/react-native-webview/react-native-webview/commit/2ea1d03f71ec728a03b9b3f5451208a5273d72a7).
+  It exposes `injectedObjectJson()` synchronously before the DOM entry reads the host platform and
+  initial props, avoiding the `$$EXPO_DOM_HOST_OS` startup failure. This changes native Java code:
+  rebuild the Android development client before acceptance; Metro reload alone cannot apply it.
+  The separate upstream change to generic before-content script injection is not included.
 - Browser entry bundles are separated by format, and each entry is one static bundle: no Web
   Worker, no dynamic `import()`, no async Metro chunks. Installed builds use bundled scripts with
   no CDN or runtime download; Expo owns serving and packaging through its documented DOM component

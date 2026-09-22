@@ -263,6 +263,14 @@ The PDF extension adds `react-native-pdf-renderer` alongside the existing `expo-
 `react-native-webview` dependencies. A development-client rebuild is
 required before PDF acceptance; a JavaScript reload alone cannot add the native module.
 
+Android Office preview also requires a rebuilt development client for the
+`react-native-webview@13.16.1` native bridge patch. It backports
+[upstream commit 2ea1d03](https://github.com/react-native-webview/react-native-webview/commit/2ea1d03f71ec728a03b9b3f5451208a5273d72a7)
+so Expo can synchronously read the host platform and initial DOM props before its entry script
+runs. The unpatched Android bridge injects that reader asynchronously and can fail with
+`Top OS ($$EXPO_DOM_HOST_OS) is not defined`. Existing navigation and failure controls remain in
+place. Native-source guards cover patch retention; device acceptance remains required.
+
 Acceptance should cover both light and dark themes, concentrating on Android's former gaps:
 
 1. Generate an image in chat: see the image, open, zoom, save to Photos, and share it.

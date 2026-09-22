@@ -80,6 +80,7 @@ patchedDependencies:
   expo-widgets@57.0.18: patches/expo-widgets@57.0.18.patch
   react-native-streamdown@0.2.0: patches/react-native-streamdown@0.2.0.patch
   expo-observe@57.0.20: patches/expo-observe@57.0.20.patch
+  react-native-webview@13.16.1: patches/react-native-webview@13.16.1.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'
