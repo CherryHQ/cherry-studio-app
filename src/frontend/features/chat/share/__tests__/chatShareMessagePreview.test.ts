@@ -1,8 +1,18 @@
+import type { ConversationMessage } from '@/frontend/appShell/conversation';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
 import { chatShareMessagePreview } from '../chatShareMessagePreview';
 
-const message = (parts: AgentMessageView['parts']) => ({ parts }) as AgentMessageView;
+const message = (parts: AgentMessageView['parts']) =>
+  ({
+    display: {
+      data: {
+        parts: parts.map((part) =>
+          part.type === 'file' ? { ...part, filename: part.name } : part,
+        ),
+      },
+    },
+  }) as unknown as ConversationMessage;
 
 test('uses the answer excerpt without sending the full reply to native text layout', () => {
   expect(

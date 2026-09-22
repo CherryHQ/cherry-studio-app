@@ -15,6 +15,7 @@ import { withUniwind } from 'uniwind';
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
+import { ConversationProvider } from '@/frontend/appShell/conversation';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import {
   getRootHeaderStyle,
@@ -62,7 +63,9 @@ function RootLayout() {
                                 <BackgroundActivityBridge />
                                 <LanguagePreferenceObserver />
                                 <SystemEntryBridge />
-                                <RootStack />
+                                <ConversationProvider>
+                                  <RootStack />
+                                </ConversationProvider>
                                 <PrivacyConsentGate />
                               </RouteHeaderProvider>
                             </BottomSheetProvider>

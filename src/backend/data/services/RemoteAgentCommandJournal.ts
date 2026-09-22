@@ -1,11 +1,13 @@
-import { createMMKV } from 'react-native-mmkv';
+import type { MMKV } from 'react-native-mmkv';
 
 /**
  * Durable outgoing actions, not a cache: synchronous write failures propagate before sending.
  * Pairing generations isolate replacement credentials. No token or session key is stored here.
  */
 export class RemoteAgentCommandJournal {
-  private readonly storage = createMMKV({ id: 'cherry-remote-agent-commands' });
+  constructor(
+    private readonly storage: Pick<MMKV, 'getString' | 'set' | 'getAllKeys' | 'remove'>,
+  ) {}
   read(binding: string): string | undefined {
     return this.storage.getString(binding);
   }

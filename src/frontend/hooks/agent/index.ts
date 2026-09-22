@@ -10,7 +10,3 @@ export {
   useAgentSessions,
   useLatestAgentSession,
 } from './useAgentSessions';
-export {
-  type AgentMessageHistoryWindow,
-  useAgentMessageHistoryWindow,
-} from './useAgentMessageHistoryWindow';

@@ -1,26 +1,20 @@
-import { BackgroundPressExclusion, ContentState, useToast } from '@cherrystudio/ui/components';
-import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useEffect, useMemo } from 'react';
+import { BackgroundPressExclusion, ContentState } from '@cherrystudio/ui/components';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import type {
+  ConversationHistoryView,
+  ConversationSession,
+  ConversationSnapshot,
+} from '@/frontend/appShell/conversation';
 import { type MessageListItem } from '@/frontend/components/Message';
-import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
-import type { AgentUserAnswer } from '@/shared/contracts/agent';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
-import {
-  createAgentMessageListProjectionCache,
-  mergeAgentMessageViews,
-  projectRetryingMessage,
-  toAgentMessageListItems,
-  useAgentChatActions,
-  useAgentChatSession,
-  type PendingChatSend,
-} from '../../runtime';
-import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
-import { UserQuestionSheet } from '../UserQuestionSheet';
+import { type PendingChatSend } from '../../runtime';
+import { ConversationPresenter } from '../../runtime/ConversationPresenter';
+import { ConversationApprovals } from '../ConversationApprovals';
+import { ConversationMessageContent, ConversationAttachments } from '../ConversationMessageContent';
 import { ChatTranscript } from './ChatTranscript';
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
@@ -29,8 +23,6 @@ import { AssistantMessageActionsProvider } from './context/AssistantMessageActio
 import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
 import { shouldWaitForInitialHistoryLayout } from './hooks/useMessageListInitialRenderGate';
 import { getTimestampMessageIds } from './messageTimestamps';
-
-const logger = loggerService.withContext('AgentChatWorkspace');
 
 type ChatWorkspaceProps = {
   enteringUserMessageId?: string;
@@ -46,11 +38,15 @@ type ChatWorkspaceProps = {
   /** Direct source Session named by the fork-origin divider. */
   forkedFromSessionId?: string;
   keyboardOffset: number;
-  messageWindow: AgentMessageHistoryWindow;
+  messageWindow: ConversationHistoryView;
+  snapshot: ConversationSnapshot;
+  conversation?: ConversationSession;
   sessionId?: string;
 };
 
 export function ChatWorkspace({
+  snapshot: live,
+  conversation,
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
@@ -79,46 +75,50 @@ export function ChatWorkspace({
     returnToLatest,
     retry,
   } = messageWindow;
-  const live = useAgentChatSession(sessionId);
   const listKey = sessionId ?? pendingSend?.sessionId;
-  const client = useAgentChatActions();
   const { t } = useTranslation();
-  const { toast } = useToast();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
-  useEffect(() => {
-    if (sessionId) {
-      client.reconcilePersistedMessages(sessionId, messages);
-    }
-  }, [client, messages, sessionId]);
-  const mergedMessages = useMemo(
-    () =>
-      projectRetryingMessage(
-        hasNewerMessages ? messages : mergeAgentMessageViews(messages, live.liveMessages),
-        live.retryingMessageId,
-      ),
-    [hasNewerMessages, live.liveMessages, live.retryingMessageId, messages],
+  const [presentation, setPresentation] = useState(() => ({
+    scope: conversation?.scope,
+    sessionId,
+    presenter: new ConversationPresenter(),
+  }));
+  let presenter = presentation.presenter;
+  if (presentation.scope !== conversation?.scope || presentation.sessionId !== sessionId) {
+    presenter = new ConversationPresenter();
+    setPresentation({ scope: conversation?.scope, sessionId, presenter });
+  }
+  const mergedMessages = presenter.update(
+    live,
+    messages,
+    messageWindow.installedVersion,
+    hasNewerMessages,
   );
   // Only the Session's latest answer is replaceable, and an older window does
   // not hold it (agent-protocol.md "Manual answer retry").
   const retryableMessageId = useMemo(() => {
     if (hasNewerMessages) return undefined;
     const last = mergedMessages.at(-1);
-    return last?.role === 'assistant' ? last.id : undefined;
+    return last?.display.role === 'assistant' ? last.key : undefined;
   }, [hasNewerMessages, mergedMessages]);
   useEffect(() => {
     if (
       pendingSend &&
       pendingSend.messages.every((pending) =>
-        mergedMessages.some((message) => message.id === pending.id),
+        mergedMessages.some((message) => message.key === pending.id),
       )
     ) {
       onPendingSendDisplayed(pendingSend.messages[0].id);
     }
   }, [mergedMessages, onPendingSendDisplayed, pendingSend]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- listKey keys the cache lifetime, not its contents
-  const projectionCache = useMemo(() => createAgentMessageListProjectionCache(), [listKey]);
   const projectedMessages = useMemo(() => {
-    const projected = toAgentMessageListItems(mergedMessages, projectionCache);
+    const projected = mergedMessages
+      .filter((message) => message.display.role !== 'system')
+      .map((message) =>
+        message.key === live.retryingMessageKey
+          ? { ...message.display, status: 'pending' as const, data: { parts: [] } }
+          : message.display,
+      );
     if (!pendingSend) return projected;
     const [user, assistant] = pendingSend.messages;
     const userIndex = projected.findIndex((message) => message.id === user.id);
@@ -129,7 +129,7 @@ export function ChatWorkspace({
     else if (assistantIndex >= 0) result.splice(assistantIndex, 0, user);
     else result.push(user, assistant);
     return result;
-  }, [mergedMessages, pendingSend, projectionCache]);
+  }, [mergedMessages, pendingSend, live.retryingMessageKey]);
   const timestampMessageIds = useMemo(
     () => getTimestampMessageIds(projectedMessages),
     [projectedMessages],
@@ -180,17 +180,35 @@ export function ChatWorkspace({
         ) : null;
       }
 
-      return (
+      const value = mergedMessages.find((item) => item.key === message.id);
+      const content = (
         <ChatMessage
           assistantPresentation={assistantPresentation}
           isMessageActionsEnabled={isAssistantToolbarEnabled}
           isScreenReaderEnabled={isScreenReaderEnabled}
           message={message}
+          attachments={
+            value?.attachments?.length ? <ConversationAttachments message={value} /> : undefined
+          }
           shouldShowTimestamp={timestampMessageIds.has(message.id)}
         />
       );
+      return value && conversation ? (
+        <ConversationMessageContent message={value} session={conversation}>
+          {content}
+        </ConversationMessageContent>
+      ) : (
+        content
+      );
     },
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, timestampMessageIds],
+    [
+      assistantPresentation,
+      isAssistantToolbarEnabled,
+      isScreenReaderEnabled,
+      timestampMessageIds,
+      mergedMessages,
+      conversation,
+    ],
   );
   const messageListExtraData = useMemo(
     () => ({
@@ -201,60 +219,12 @@ export function ChatWorkspace({
     }),
     [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, timestampMessageIds],
   );
-  const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
-    () =>
-      live.pendingApprovals.map((approval) => ({
-        approvalId: approval.id,
-        input: approval.input,
-        displayName: approval.displayName,
-      })),
-    [live.pendingApprovals],
-  );
-  const handleApprovalRespond = useCallback(
-    async (input: { approvalId: string; approved: boolean }) => {
-      if (!sessionId) {
-        return;
-      }
-      try {
-        await client.respondApproval(
-          sessionId,
-          input.approvalId,
-          input.approved ? 'approve' : 'deny',
-        );
-      } catch (approvalError) {
-        logger.error('Tool approval response failed', approvalError as Error);
-        toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
-      }
-    },
-    [client, sessionId, t, toast],
-  );
-  const handleQuestionRespond = useCallback(
-    async (toolCallId: string, answer: AgentUserAnswer) => {
-      if (!sessionId) throw new Error('No active session.');
-      await client.respondQuestion(sessionId, toolCallId, answer);
-    },
-    [client, sessionId],
-  );
-  const handleQuestionCancel = useCallback(async () => {
-    if (sessionId) await client.cancelTurn(sessionId);
-  }, [client, sessionId]);
-  const handleApprovalCancel = useCallback(async () => {
-    if (!sessionId) {
-      return;
-    }
-    try {
-      await client.cancelTurn(sessionId);
-    } catch (cancelError) {
-      logger.error('Turn cancellation from tool approval failed', cancelError as Error);
-      toast.show({ label: t('chat.input.stopFailed'), variant: 'danger' });
-    }
-  }, [client, sessionId, t, toast]);
   const requiresInitialHistoryLayout =
     typeof initialScrollTarget === 'object' ||
     (Boolean(sessionId) &&
       !pendingSend?.isNewSession &&
       shouldWaitForInitialHistoryLayout({
-        hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
+        hasHistoryBeforeActiveTurn: live.hasHistoryBeforeExecution,
         isLoadingInitial,
         messageCount: messages.length,
       }));
@@ -301,14 +271,16 @@ export function ChatWorkspace({
         key={`assistant-actions-${listKey}`}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
         retryableMessageId={retryableMessageId}
-        sessionId={sessionId}
+        session={conversation}
+        snapshot={live}
+        messages={mergedMessages}
       >
         <ChatTranscript
           requiresInitialLayout={requiresInitialHistoryLayout}
           isLoadingMore={isLoadingOlder || isLoadingNewer}
           contentBottomInset={contentBottomInset}
           dataKey={dataKey ?? listKey}
-          enteringMessageId={enteringUserMessageId ?? live.enteringUserMessageId}
+          enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
           extraData={messageListExtraData}
           initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
           initialScrollTarget={initialScrollTarget}
@@ -323,21 +295,7 @@ export function ChatWorkspace({
           renderMessage={renderChatMessage}
         />
       </AssistantMessageActionsProvider>
-      <ChatInitialRenderCover isVisible={isCoverVisible} />
-      <UserQuestionSheet
-        key={`user-question-${sessionId}`}
-        request={live.pendingQuestion ?? null}
-        isOpen={Boolean(live.pendingQuestion) && pendingApprovals.length === 0}
-        onRespond={handleQuestionRespond}
-        onCancel={handleQuestionCancel}
-      />
-      <ToolApprovalSheet
-        key={`tool-approval-${sessionId}`}
-        approvals={pendingApprovals}
-        isOpen={pendingApprovals.length > 0}
-        onCancel={handleApprovalCancel}
-        onRespond={handleApprovalRespond}
-      />
+      {conversation ? <ConversationApprovals session={conversation} snapshot={live} /> : null}
     </View>
   );
 }

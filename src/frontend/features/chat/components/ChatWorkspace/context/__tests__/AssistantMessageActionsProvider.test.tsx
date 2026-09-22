@@ -1,6 +1,8 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { ConversationSession, MessageRef } from '@/frontend/appShell/conversation';
+
 import {
   AssistantMessageActionsProvider,
   ChatMessageActionsProvider,
@@ -10,7 +12,6 @@ import {
 
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
-let mockIsSessionBusy = false;
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefined);
 /** Captures the confirm request so a test can accept it the way a user would. */
@@ -19,7 +20,7 @@ const mockToastShow = jest.fn();
 const mockPush = jest.fn();
 let mockFocusEffect: (() => void) | undefined;
 jest.mock('expo-router', () => ({
-  router: { push: (route: unknown) => mockPush(route) },
+  router: { push: (route: unknown) => mockPush(route), replace: jest.fn() },
   useFocusEffect: (effect: () => void) => {
     mockFocusEffect = effect;
     effect();
@@ -30,17 +31,6 @@ let mockSourceTitle: string | undefined;
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
-}));
-
-jest.mock('../../../../runtime', () => ({
-  useAgentChatDeleteTurn: () => mockDeleteTurn,
-  useAgentChatFork: () => mockForkSession,
-  useAgentChatRetry: () => mockRetryMessage,
-  useAgentChatBusy: () => mockIsSessionBusy,
-}));
-
-jest.mock('@/frontend/hooks/agent', () => ({
-  useAgentSession: () => ({ data: { title: mockSourceTitle } }),
 }));
 
 // Interpolating stub: the fork title is composed here, so a key-only `t` would
@@ -85,9 +75,61 @@ function ContextProbe({ ref }: { ref: Ref<ContextProbeHandle> }) {
   return null;
 }
 
+const session = {
+  ref: { source: { kind: 'local' }, sessionId: 'session-1' },
+} as ConversationSession;
+
 function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
   return (
-    <AssistantMessageActionsProvider isAssistantToolbarEnabled sessionId="session-1">
+    <AssistantMessageActionsProvider
+      isAssistantToolbarEnabled
+      session={session}
+      snapshot={{
+        title: mockSourceTitle ?? '',
+        freshness: { state: 'current' },
+        liveMessages: [],
+        interactions: [],
+        executions: [],
+        actions: {
+          inputPolicy: { attachments: true, modelSelection: true, pluginReferences: true },
+        },
+      }}
+      messages={[
+        {
+          key: 'assistant-1',
+          ref: 'assistant-1' as MessageRef,
+          state: 'success',
+          completeness: 'complete',
+          display: {
+            id: 'assistant-1',
+            role: 'assistant',
+            status: 'success',
+            turnId: 'turn-1',
+            data: {},
+          },
+          actions: {
+            remove: {
+              availability: { state: 'enabled' },
+              execute: async () => {
+                await mockDeleteTurn({ sessionId: 'session-1', turnId: 'turn-1' });
+                return { state: 'applied', value: undefined };
+              },
+            },
+            fork: {
+              availability: { state: 'enabled' },
+              execute: async ({ title }) => {
+                await mockForkSession({
+                  fromMessageId: 'assistant-1',
+                  sessionId: 'session-1',
+                  title,
+                });
+                return { state: 'applied', value: session.ref };
+              },
+            },
+          },
+        },
+      ]}
+    >
       <ContextProbe ref={probeRef} />
     </AssistantMessageActionsProvider>
   );
@@ -99,7 +141,6 @@ describe('AssistantMessageActionsProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockIsSessionBusy = false;
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
     probeRef = createRef<ContextProbeHandle>();
@@ -225,7 +266,7 @@ describe('AssistantMessageActionsProvider', () => {
       sessionId: 'session-1',
       title: 'chat.fork.sessionTitle:Arithmetic drills',
     });
-    expect(mockLoggerError).toHaveBeenCalledWith('Fork assistant message failed', error);
+    expect(mockLoggerError).toHaveBeenCalledWith('Conversation message action failed', error);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'chat.messageActions.forkFailed',
       variant: 'danger',
@@ -267,7 +308,7 @@ describe('AssistantMessageActionsProvider', () => {
       await Promise.resolve();
     });
 
-    expect(mockLoggerError).toHaveBeenCalledWith('Delete message turn failed', error);
+    expect(mockLoggerError).toHaveBeenCalledWith('Conversation message action failed', error);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'chat.messageActions.deleteFailed',
       variant: 'danger',

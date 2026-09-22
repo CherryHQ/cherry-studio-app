@@ -66,17 +66,16 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/frontend/appShell/header', () => ({ MainHeader: () => null }));
 
+jest.mock('@/frontend/appShell/conversation', () => ({
+  useConversation: () => ({ session: undefined, isLoading: false }),
+  useConversationSnapshot: () => ({ historyVersion: undefined }),
+  useConversationHistory: () => ({ isLoadingInitial: false, messages: [] }),
+}));
+
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: (agentId: string | undefined) => ({
     agent: agentId === 'agent-1' ? { id: 'agent-1' } : undefined,
     isLoading: false,
-  }),
-  useAgentMessageHistoryWindow: () => ({
-    isLoadingInitial: false,
-    isLoadingOlder: false,
-    loadOlder: jest.fn(),
-    messages: [],
-    retry: jest.fn(),
   }),
   useAgentSession: () => ({
     data: mockSessionData,
@@ -98,7 +97,8 @@ const mockChatControls = {
 };
 
 jest.mock('../runtime', () => ({
-  latestAgentImageResult: jest.requireActual('../runtime/agentImageResult').latestAgentImageResult,
+  latestConversationImageResult: jest.requireActual('../runtime/agentImageResult')
+    .latestConversationImageResult,
   useAgentChatControls: (input: { agentId?: string; composerKey: number; sessionId?: string }) => {
     chatControlsInput = input;
     return mockChatControls;

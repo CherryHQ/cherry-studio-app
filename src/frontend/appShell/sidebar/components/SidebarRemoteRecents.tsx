@@ -7,17 +7,19 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
-import { useChatSource } from '@/frontend/appShell/navigation/chat';
 import {
-  RemoteAgentProvider,
-  RemoteConnectionBanner,
-  useRemoteAgents,
-  useRemoteConnection,
-  useRemoteSessions,
-} from '@/frontend/appShell/remoteAgent';
+  ConversationSourceBoundary,
+  useConversationAgents,
+  useConversationSourceState,
+  useConversationSource,
+  useConversationSessions,
+  type AgentSummary,
+  type AgentRef,
+} from '@/frontend/appShell/conversation';
+import { conversationHref, useChatSource } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar } from '@/frontend/components/Avatar';
+import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
-import type { ControllerAgent } from '@/shared/contracts/agent/controller';
 
 import NewConversationIcon from '../../icons/NewConversationIcon';
 import { useSidebarActions } from '../context';
@@ -74,10 +76,10 @@ export function SidebarRemoteRecents({
       </View>
     ) : null;
   return connectionId ? (
-    <RemoteAgentProvider
+    <ConversationSourceBoundary
       key={connectionId}
-      connectionId={connectionId}
-      renderFallback={(state) => (
+      source={{ kind: 'desktop', connectionId }}
+      fallback={(state) => (
         <RemoteSidebarFrame header={header} deviceMenu={deviceMenu}>
           {state === 'loading' ? (
             loading
@@ -99,7 +101,7 @@ export function SidebarRemoteRecents({
           registerEndReachedHandler={registerEndReachedHandler}
         />
       </RemoteSidebarFrame>
-    </RemoteAgentProvider>
+    </ConversationSourceBoundary>
   ) : (
     <RemoteSidebarFrame header={header} deviceMenu={deviceMenu}>
       {isSelectingDevice ? (
@@ -145,8 +147,8 @@ function RemoteSidebarFrame({
 
 function RemoteConnectionStatus({ name }: { name: string }) {
   const { t } = useTranslation();
-  const connection = useRemoteConnection();
-  return connection.status === 'ready' ? (
+  const { availability } = useConversationSourceState();
+  return availability.state === 'enabled' ? (
     <View
       accessible
       accessibilityLabel={t('remoteAgent.connected', { name })}
@@ -158,17 +160,20 @@ function RemoteConnectionStatus({ name }: { name: string }) {
 }
 
 function RemoteSidebarContent(props: Props & { showLoading: boolean }) {
-  const connection = useRemoteConnection();
+  const source = useConversationSource();
+  const { availability } = useConversationSourceState();
+  const router = useRouter();
   return (
     <>
-      {connection.status === 'unavailable' || connection.status === 'closed' ? (
-        <RemoteConnectionBanner />
-      ) : null}
+      <ConversationStatus
+        availability={availability}
+        onRepair={() => router.push('/settings/device-connections')}
+      />
       {props.mode === 'agents' ? (
-        <RemoteAgentGroups key={connection.sourceKey} showLoading={props.showLoading} />
+        <RemoteAgentGroups key={source.scope} showLoading={props.showLoading} />
       ) : (
         <RemoteSessions
-          key={connection.sourceKey}
+          key={source.scope}
           showLoading={props.showLoading}
           registerEndReachedHandler={props.registerEndReachedHandler}
         />
@@ -179,9 +184,9 @@ function RemoteSidebarContent(props: Props & { showLoading: boolean }) {
 
 function RemoteAgentGroups({ showLoading }: { showLoading: boolean }) {
   const { t } = useTranslation();
-  const query = useRemoteAgents();
+  const query = useConversationAgents();
   const { remoteTarget } = useChatSource();
-  const currentAgentId = remoteTarget.agentId ?? query.agents[0]?.id;
+  const currentAgentId = remoteTarget.agentId ?? query.items[0]?.id;
   if (query.isPending)
     return showLoading ? <ContentState.Loading title={t('remoteAgent.loading')} /> : null;
   if (query.isError && !query.data)
@@ -193,7 +198,7 @@ function RemoteAgentGroups({ showLoading }: { showLoading: boolean }) {
     );
   return (
     <View className="gap-2">
-      {query.agents.map((agent) => (
+      {query.items.map((agent) => (
         <RemoteAgentGroup
           agent={agent}
           key={agent.id}
@@ -201,7 +206,7 @@ function RemoteAgentGroups({ showLoading }: { showLoading: boolean }) {
           showLoading={showLoading}
         />
       ))}
-      {query.isSuccess && !query.agents.length ? (
+      {query.isSuccess && !query.items.length ? (
         <ContentState.Empty title={t('remoteAgent.noAgents')} />
       ) : null}
       {query.hasNextPage ? (
@@ -216,7 +221,7 @@ function RemoteAgentGroup({
   isDefaultExpanded,
   showLoading,
 }: {
-  agent: ControllerAgent;
+  agent: AgentSummary;
   isDefaultExpanded: boolean;
   showLoading: boolean;
 }) {
@@ -260,28 +265,29 @@ function RemoteAgentGroup({
           <NewConversationIcon className="size-5 text-sidebar-foreground" />
         </Pressable>
       </View>
-      {expanded ? <RemoteSessions agentId={agent.id} showLoading={showLoading} /> : null}
+      {expanded ? <RemoteSessions agentRef={agent.ref} showLoading={showLoading} /> : null}
     </View>
   );
 }
 
 function RemoteSessions({
-  agentId,
+  agentRef,
   registerEndReachedHandler,
   showLoading,
 }: {
-  agentId?: string;
+  agentRef?: AgentRef;
   registerEndReachedHandler?: Props['registerEndReachedHandler'];
   showLoading: boolean;
 }) {
   const { t } = useTranslation();
-  const { remoteTarget, openRemote } = useChatSource();
+  const { remoteTarget } = useChatSource();
+  const router = useRouter();
   const { closeDrawer } = useSidebarActions('Remote sessions');
-  const query = useRemoteSessions(agentId);
+  const query = useConversationSessions(agentRef);
   const [showAll, setShowAll] = useState(false);
   const [limit, setLimit] = useState(10);
-  const leading = agentId ? <SidebarAgentIconSlot /> : undefined;
-  const { hasNextPage, isFetchingNextPage, fetchNextPage, sessions } = query;
+  const leading = agentRef ? <SidebarAgentIconSlot /> : undefined;
+  const { hasNextPage, isFetchingNextPage, fetchNextPage, items: sessions } = query;
   const loadMore = useCallback(() => {
     if (isFetchingNextPage) return;
     setShowAll(true);
@@ -304,20 +310,16 @@ function RemoteSessions({
   return (
     <View className="px-2">
       {sessions.slice(0, limit).map((session) => {
-        const selected = session.id === remoteTarget.sessionId;
+        const selected = session.ref.sessionId === remoteTarget.sessionId;
         return (
           <Pressable
-            key={session.id}
+            key={session.ref.sessionId}
             accessibilityRole="link"
             accessibilityState={{ selected }}
             className="active:bg-sidebar-accent"
             onPress={() => {
               closeDrawer();
-              openRemote({
-                connectionId: remoteTarget.connectionId,
-                agentId: session.agentId,
-                sessionId: session.id,
-              });
+              router.replace(conversationHref(session.ref));
             }}
           >
             <SidebarRowContent leading={leading} className={cn(selected && 'bg-secondary/70')}>
@@ -328,7 +330,7 @@ function RemoteSessions({
                 )}
                 numberOfLines={1}
               >
-                {session.name || t('session.list.untitled')}
+                {session.title || t('session.list.untitled')}
               </Text>
             </SidebarRowContent>
           </Pressable>
@@ -340,7 +342,7 @@ function RemoteSessions({
         </SidebarRowContent>
       ) : null}
       {sessions.length > limit || hasNextPage ? (
-        <LoadMore onPress={loadMore} disabled={isFetchingNextPage} grouped={Boolean(agentId)} />
+        <LoadMore onPress={loadMore} disabled={isFetchingNextPage} grouped={Boolean(agentRef)} />
       ) : null}
     </View>
   );

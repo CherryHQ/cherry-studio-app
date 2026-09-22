@@ -1,7 +1,8 @@
+import type { ConversationSession } from '@/frontend/appShell/conversation';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
-import { loadChatExportMessages } from '../loadChatExportMessages';
+import { prepareChatExport } from '../prepareChatExport';
 import {
   replaceChatCitations,
   toChatExportDocument,
@@ -292,3 +293,27 @@ test('multiline inline code and quoted fences retain citation examples', () => {
     ),
   ).toBe(`${code}[1](<https://example.com/>)`);
 });
+
+async function loadChatExportMessages(
+  ids: readonly string[],
+  readPage: (query: { ids: string[] }) => Promise<{ items: AgentMessageView[] }>,
+  signal: AbortSignal,
+) {
+  const session = {
+    scope: 'scope',
+    ref: { source: { kind: 'local' }, sessionId: 'session' },
+    history: {
+      prepareSelection: async () => {
+        const selected = [...new Set(ids)];
+        const page = await readPage({ ids: selected });
+        return {
+          messages: page.items.filter((message) => selected.includes(message.id)).toReversed(),
+          assets: [],
+          release() {},
+        };
+      },
+    },
+  } as unknown as ConversationSession;
+  const snapshot = await prepareChatExport(session, ids, signal);
+  return snapshot.messages;
+}

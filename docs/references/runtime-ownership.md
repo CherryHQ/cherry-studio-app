@@ -91,14 +91,17 @@ exposes its `AgentProtocol` interface through `Backend.agent`. The Host is app-o
 route-owned. It owns active turns, Runtime sessions, normalized Agent events, approvals, terminal
 persistence, and process-start reconciliation of unfinished turns.
 
-The frontend `ChatProvider` creates one route-owned `AgentSessionChatClient`. The client observes
+The app-shell `ConversationProvider` owns the local conversation source and its
+`AgentSessionChatClient`. The feature `ChatProvider` consumes that client for existing local
+composer/navigation extensions during the conversation migration. The client observes
 only Sessions with React subscribers, composes snapshots and deltas into live state, refreshes those
-observations when the app returns to the foreground, and unsubscribes on route unmount. Removing an
+observations when the app returns to the foreground, and releases route observations on unmount. The app-shell owner disposes the client. Removing an
 observation does not cancel the Host's turn; reopening the route installs a fresh snapshot.
 
-The frontend provider owns route navigation and React Query invalidation. Persisted transcripts are
-ordinary `/agent-sessions/:sessionId/messages` Data API reads; live messages and approvals come from
-the protocol snapshot/events and are merged by stable message id at the presentation boundary.
+The feature ChatProvider owns local composer navigation; the app-shell ConversationProvider owns
+observation and React Query invalidation. The local conversation adapter reads persisted transcripts
+through `/agent-sessions/:sessionId/messages` and projects protocol snapshots/events into the common
+consumption contract. `ConversationPresenter` reconciles history and live rows by stable message id.
 Backend code never imports Expo Router or TanStack Query.
 
 User cancellation affects only the selected Session. One Session allows at most one active turn,
@@ -106,6 +109,25 @@ while different Sessions may run concurrently. App disposal closes Runtime sessi
 tracked turns before lower-level infrastructure closes. OS suspension or termination still does not
 guarantee continued execution or resumable streaming; the next process start marks unfinished local
 turns interrupted.
+
+## Remote Conversation Ownership
+
+The mobile frontend/backend boundary is in-process. The desktop protocol is a separate network
+boundary. `ConversationProvider` owns frontend sources and observation handles; `Backend.remoteAgent`
+exposes credential-free reads and actions. `RemoteAgentRuntime` owns shared Agent scopes and pending
+command recovery, while the desktop remains the execution and transcript authority.
+
+`DesktopConnectionManager` owns physical desktop connections, domain leases and reconnection.
+`DesktopConnectionRuntime` owns pairing and configuration workflows. A route releases reads and
+observation; explicit cancellation is an independent command. Agent and configuration authorization
+are separate even when they share one physical channel. MCP clients and document export sessions
+remain owned by their respective runtimes.
+
+The current graph, actual consumers, release matrix and unresolved dependencies are documented in
+[Service Dependencies And Ownership](./remote-access/service-ownership.md). Remote chat/sidebar now
+consume the common boundary, and the superseded Controller entry is removed. Local composer
+admission, managed export asset leases, pairing-channel adoption and device acceptance remain
+incomplete. Question responses and default-workspace creation need desktop protocol support.
 
 ## Agent Tool Capabilities
 

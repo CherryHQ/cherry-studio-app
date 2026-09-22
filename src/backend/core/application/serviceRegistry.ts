@@ -13,7 +13,10 @@ import { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundA
 import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
-import { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import {
+  DesktopConnectionManager,
+  DesktopConnectionRuntime,
+} from '@/backend/services/desktopConnections';
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -45,6 +48,7 @@ export const services = {
   ResourceScopeCoordinator,
   CacheService,
   DbService,
+  DesktopConnectionManager,
   DesktopConnectionRuntime,
   RemoteAgentRuntime,
   DocumentExportRuntime,

@@ -15,7 +15,7 @@ const mockTraces = { kind: 'traces' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
 const mockDocumentExport = { kind: 'document-export' };
-const mockAgentController = { kind: 'agent-controller' };
+const mockRemoteAgent = { kind: 'agent-controller' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
@@ -24,6 +24,7 @@ const mockPreference = {
   readCached: jest.fn(() => false),
   subscribeChange: jest.fn((_key: string) => (_listener: () => void) => () => {}),
 };
+const mockDesktopConnectionManager = { kind: 'desktop-connection-manager' };
 const mockProviderRegistryUpdater = { kind: 'provider-registry-updater' };
 const mockWebSearch = { kind: 'web-search' };
 const mockBackgroundActivityEnvironment = { configure: jest.fn() };
@@ -100,7 +101,8 @@ const createRuntime = () =>
     CacheService: mockCache,
     DbService: mockDb,
     DesktopConnectionRuntime: mockDesktopConnections,
-    RemoteAgentRuntime: mockAgentController,
+    DesktopConnectionManager: mockDesktopConnectionManager,
+    RemoteAgentRuntime: mockRemoteAgent,
     DocumentExportRuntime: mockDocumentExport,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
@@ -151,7 +153,8 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
-      agentController: mockAgentController,
+      remoteAgent: mockRemoteAgent,
+      desktopConnectionManager: mockDesktopConnectionManager,
       documentExport: mockDocumentExport,
       languageServing: mockAgentRuntime,
       providerRegistryUpdater: mockProviderRegistryUpdater,

@@ -8,26 +8,23 @@ import {
   AppStatePolicy,
   BaseService,
   DependsOn,
-  Emitter,
   Injectable,
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { DesktopConnectionRow } from '@/backend/data/db/schemas';
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import type { DesktopConnectionsModule } from '@/shared/contracts';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import {
   type DesktopImportSelectionsDto,
   type DesktopPairingClaim,
-  type DesktopRemoteAgent,
   DesktopProvidersSnapshotSchema,
   type PairDesktopConnectionDto,
   PairDesktopConnectionSchema,
 } from '@/shared/data/api/schemas/desktopConnections';
 
+import type { DesktopConnectionManager } from './DesktopConnectionManager';
 import { DesktopSession, DesktopUnreachableError, RemoteFailureError } from './DesktopSession';
-import { loadDeviceIdentity } from './deviceIdentity';
 
 type ConnectionStore = Pick<
   DesktopConnectionService,
@@ -65,37 +62,25 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener('abort', abort, { once: true });
   });
 
-/** Owns the device identity, paired desktops and every live session; drains before the database closes. */
+/** Owns pairing/configuration workflows and drains their operations before the connection manager. */
 @Injectable('DesktopConnectionRuntime')
-@DependsOn(['DbService'])
+@DependsOn(['DesktopConnectionManager', 'DbService'])
 @ServicePhase(Phase.Gate)
 @AppStatePolicy('continue')
 export class DesktopConnectionRuntime extends BaseService implements DesktopConnectionsModule {
   private store: ConnectionStore | undefined;
+  private connections?: DesktopConnectionManager;
   private ensureModelRegistryReady: (() => Promise<void>) | undefined;
   private stopped = false;
   private readonly controllers = new Set<AbortController>();
   private tail: Promise<unknown> = Promise.resolve();
 
-  private readonly changeListeners = this.registerDisposable(new Emitter<string>());
-
-  subscribeCredentials(listener: (id: string) => void): () => void {
-    const subscription = this.changeListeners.event(listener);
-    return () => subscription.dispose();
-  }
-
-  /** The prototype must not receive credentials until its Agent protocol is migrated. */
-  prepareAgentConnection(
-    id: string,
-    signal: AbortSignal,
-  ): Promise<{ descriptor: DesktopRemoteAgent; token: string; generation: string; url: string }> {
-    return this.run('agent', signal, async (store) => {
-      await store.getRow(id);
-      throw desktopError('agent-version', 'Agent access requires the Noise JSON-RPC adapter');
-    });
-  }
-
-  configure(store: ConnectionStore, ensureModelRegistryReady: () => Promise<void>): void {
+  configure(
+    store: ConnectionStore,
+    ensureModelRegistryReady: () => Promise<void>,
+    connections: DesktopConnectionManager,
+  ): void {
+    this.connections = connections;
     this.store = store;
     this.ensureModelRegistryReady = ensureModelRegistryReady;
   }
@@ -109,7 +94,9 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       const qr = PairDesktopConnectionSchema.parse(input);
       const id = qr.connectionId ?? Crypto.randomUUID();
       if (qr.connectionId) await store.getRow(id);
-      const session = await this.connect(qr, signal);
+      const session = await this.connect(qr, signal).catch((error: unknown) => {
+        throw translate(error);
+      });
       try {
         const claim = await session.request(
           'pairing.claim',
@@ -139,7 +126,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               Boolean(qr.connectionId),
               signal,
             );
-            this.changeListeners.fire(id);
+            this.connections!.invalidate(id);
             return connection;
           }
           if (decision.status === 'rejected') {
@@ -165,7 +152,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     return this.run('remove', signal, async (store, signal) => {
       signal.throwIfAborted();
       await store.remove(id);
-      this.changeListeners.fire(id);
+      this.connections!.invalidate(id, 'removed');
     });
   }
 
@@ -189,53 +176,20 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     });
   }
 
-  /** An authenticated session for a paired desktop; revoked or replaced grants mark the row for repair. */
-  async open(store: ConnectionStore, id: string, signal: AbortSignal): Promise<DesktopSession> {
-    const row = await store.getRow(id);
-    signal.throwIfAborted();
-    const session = await this.connect(row, signal);
-    try {
-      const authorization = await session.authenticate(row.deviceId, signal);
-      await store.updateStatus(id, { grants: authorization.grants, status: 'paired' }, signal);
-      return session;
-    } catch (error) {
-      session.close();
-      if (
-        error instanceof RemoteFailureError &&
-        (error.reason === 'UNAUTHENTICATED' || error.reason === 'GRANT_REVOKED')
-      ) {
-        await store.updateStatus(id, { status: 'needs-repair' }, signal);
-        throw desktopError('auth-revoked', 'This desktop connection needs to be paired again');
-      }
-      throw translate(error);
-    }
-  }
-
   protected async onStop(): Promise<void> {
     this.stopped = true;
     for (const controller of this.controllers) controller.abort();
     await this.tail;
   }
 
-  private async connect(
-    target:
-      | Pick<DesktopConnectionRow, 'addresses' | 'desktopIdentity' | 'port'>
-      | { ips: string[]; desktopIdentity: string; port: number },
+  private connect(
+    target: { ips: string[]; desktopIdentity: string; port: number },
     signal: AbortSignal,
   ): Promise<DesktopSession> {
-    const identity = await loadDeviceIdentity();
-    signal.throwIfAborted();
-    try {
-      return await DesktopSession.connect({
-        addresses: 'ips' in target ? target.ips : target.addresses,
-        desktopIdentity: target.desktopIdentity,
-        identity,
-        port: target.port,
-        signal,
-      });
-    } catch (error) {
-      throw translate(error);
-    }
+    return this.connections!.connectTemporary(
+      { addresses: target.ips, desktopIdentity: target.desktopIdentity, port: target.port },
+      signal,
+    );
   }
 
   private run<T>(
@@ -286,17 +240,19 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
         'The desktop did not allow configuration sync for this device',
       );
     }
-    const session = await this.open(store, id, signal);
+    const lease = await this.connections!.retain(id, 'configuration', signal);
+    const readSignal = AbortSignal.any([signal, lease.signal]);
     let payload: unknown;
     try {
-      const prepared = await session.request('configuration.export.prepare', {}, signal);
+      const session = await lease.ready(readSignal);
+      const prepared = await session.request('configuration.export.prepare', {}, readSignal);
       const bytes = new Uint8Array(Number(prepared.byteLength));
       let offset = 0;
       for (;;) {
         const page = await session.request(
           'configuration.export.read',
           { exportId: prepared.exportId, maxBytes: EXPORT_PAGE_BYTES, offset: String(offset) },
-          signal,
+          readSignal,
         );
         const chunk = fromBase64(page.dataBase64);
         if (offset + chunk.length > bytes.length) break;
@@ -310,11 +266,19 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           { received: offset, expected: bytes.length },
         );
       }
+      readSignal.throwIfAborted();
       payload = JSON.parse(new TextDecoder().decode(bytes));
     } catch (error) {
+      if (
+        error instanceof RemoteFailureError &&
+        (error.reason === 'GRANT_REVOKED' || error.reason === 'FORBIDDEN')
+      ) {
+        await this.connections!.revoke(id, 'configuration', lease.grantId);
+        throw desktopError('configuration-not-granted', 'Configuration grant was revoked');
+      }
       throw translate(error);
     } finally {
-      session.close();
+      lease.release();
     }
     signal.throwIfAborted();
     const version =
@@ -341,7 +305,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
         },
       );
     }
-    await store.updateStatus(id, { lastFetchedAt: Date.now(), status: 'paired' }, signal);
+    await store.updateStatus(id, { lastFetchedAt: Date.now() }, signal, row);
     return {
       ...parsed.data,
       providers: parsed.data.providers.filter(

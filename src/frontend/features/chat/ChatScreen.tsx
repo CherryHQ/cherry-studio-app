@@ -8,6 +8,11 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  useConversation,
+  useConversationSnapshot,
+  useConversationHistory,
+} from '@/frontend/appShell/conversation';
 import { MainHeader } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
@@ -22,11 +27,7 @@ import {
   ComposerDropArea,
   ComposerSessionProvider,
 } from '@/frontend/components/Composer';
-import {
-  useAgentApiById,
-  useAgentMessageHistoryWindow,
-  useAgentSession,
-} from '@/frontend/hooks/agent';
+import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
@@ -35,7 +36,11 @@ import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
-import { latestAgentImageResult, useAgentChatControls, useAgentChatDraftHandoff } from './runtime';
+import {
+  latestConversationImageResult,
+  useAgentChatControls,
+  useAgentChatDraftHandoff,
+} from './runtime';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 
@@ -73,10 +78,25 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     composerKey: composerSession.key,
   });
   const agent = useAgentApiById(resolvedAgentId);
-  const messageWindow = useAgentMessageHistoryWindow(
-    sessionId,
-    target.kind === 'session' ? target : undefined,
+  const conversation = useConversation(
+    sessionId ? { source: { kind: 'local' }, sessionId } : undefined,
   );
+  const snapshot = useConversationSnapshot(conversation.session);
+  const history = useConversationHistory(
+    conversation.session,
+    snapshot.historyVersion,
+    target.kind === 'session' && target.messageId
+      ? {
+          messageId: target.messageId,
+          key: JSON.stringify([target.messageId, target.messageRequestId]),
+        }
+      : undefined,
+  );
+  const messageWindow = {
+    ...history,
+    isLoadingInitial: conversation.isLoading || history.isLoadingInitial,
+    error: conversation.error ?? history.error,
+  };
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));
   const isNewAgentAvailable =
@@ -126,6 +146,8 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             </View>
           ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
             <ChatWorkspace
+              snapshot={snapshot}
+              conversation={conversation.session}
               pendingSend={controls.pendingSend}
               enteringUserMessageId={controls.enteringUserMessageId}
               onPendingSendDisplayed={controls.completePendingSend}
@@ -154,7 +176,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 imageResult={
                   messageWindow.hasNewerMessages
                     ? undefined
-                    : latestAgentImageResult(messageWindow.messages)
+                    : latestConversationImageResult(messageWindow.messages.map((message) => message.imageResult))
                 }
                 sessionId={sessionId}
               />

@@ -23,12 +23,16 @@ message list keeps its geometry and selection does not subscribe into the chat r
 - `components/ChatInput/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
   edited on the Agent screen; image attachment admission failures restore the managed draft and
   surface a user-facing reason.
-- `components/ChatWorkspace/` merges persisted transcript rows with live Agent messages, adapts protocol parts into
-  the shared `MessageList`, and owns history loading, initial-render gating, and approvals.
-- `runtime/` owns the route-scoped `AgentSessionChatClient`, observes the app-owned Mobile Agent Host
-  through `Backend.agent`, and owns frontend navigation and query invalidation effects. On first
-  send it changes the route only after the new Session has accepted the submission, and carries the
-  originating Agent across that one route handoff while Session detail loads.
+- `components/ChatWorkspace/` consumes Conversation snapshots/history and uses `ConversationPresenter`
+  to retain live rows through durable history installation. It preserves the shared `MessageList`,
+  initial-render gating and pending first-send rows. Message actions and approvals use bound
+  Conversation actions/resources; the page does not choose an execution implementation.
+- `runtime/ChatProvider` owns local composer and navigation extensions. It borrows the
+  app-shell-owned `AgentSessionChatClient`; it neither creates nor disposes that client.
+  `ConversationProvider` owns local observation and query invalidation, while
+  `runtime/ConversationPresenter` owns only history/live display reconciliation. On first send the
+  composer changes the route only after admission and carries the originating Agent across that
+  handoff while Session detail loads.
 
 `useAgentChatControls` runs once in the content leaf, keyed by the existing composer identity.
 Its send action allocates Session/message IDs and synchronously displays the text, files, and
@@ -42,7 +46,7 @@ composer isolates its pending work and prevents a late completion from navigatin
 The visible, focused chat acknowledges the current completed turn through `useSessionReadReceipt`.
 Previews, an open drawer, and background routes do not clear the list's unread completion indicator.
 
-Search results may specify a message destination. `useAgentMessageHistoryWindow` opens a bounded
+Search results may specify a message destination. `useConversationHistory` opens a bounded
 window around that message and supports pagination in both directions. It shows the full target
 window rather than trimming it to the usual recent-message render window. Until its newer edge
 reaches the live transcript, the workspace excludes live rows to avoid displaying a false contiguous
@@ -63,50 +67,29 @@ are submitted as file parts and stay separate from the text draft; text controls
 
 ## Local and remote presentation
 
-The first remote phase is limited to reading/selecting PC Agents, paginated Agent conversation
-lists, conversation history, new conversations with a registered PC workspace, message submission,
-live replies, and approval/question events and responses. PC Agent creation, editing and deletion
-remain outside the mobile scope, including model, instruction and tool configuration.
+`remote/RemoteChatScreen` keeps the `/remote` route, page frame, header and composer layout. It
+retains a ConversationSource, opens a route Session, and feeds common history/snapshots into
+ChatWorkspace. The sidebar uses the same catalog boundary. Runtime wire state and command recovery
+stay behind Backend.remoteAgent; no Controller provider or Controller query keys remain.
 
-The drawer selects the source before opening the chat. `remote/RemoteChatScreen` adapts PC-owned
-conversations on `/remote` within the same drawer stack. Both sources compose `ChatScreenFrame`,
-`MainHeaderView`, `ChatTranscript`, `ChatMessage` and `ChatInputSurface`. Runtime state stays with
-its source; copy feedback, header Agent labels, composer geometry, scrolling and sharing stay
-with these common presentation owners. Remote capabilities determine which actions are offered.
+`RemoteComposer` owns text editing and registered workspace selection. New conversations call the
+bound Draft start action, existing conversations call Session send, and stop targets a selected
+execution. Backend journals own create/send IDs and uncertain-command recovery. Pending/interrupted
+outcomes remain visible in ConversationOperations; navigation does not resend them. The initiating
+route can hand an applied creation to its Session without remounting the composer. Late completion
+from another route cannot navigate the current view. Unsent text is persisted under its stable
+source identity/grant binding, separately from the ephemeral Query scope.
 
-Agent switching stays in the left drawer. The remote workspace control uses the same secondary
-action slot and input expansion/collapse behavior as the local model picker. Drafts can select a
-registered PC workspace or the PC default; existing conversations display their workspace from the
-PC snapshot as read-only.
-Workspace selection is disabled while disconnected or a session creation is pending.
-The plus-menu trigger stays visible and disabled.
+`ConversationMessageContent` renders tool summaries in the shared process layout and passes Session
+resource readers explicitly to deferred sheets. Closing a sheet cancels reads. Attachments currently
+show metadata because the desktop does not provide file bytes. ConversationApprovals uses bound
+input/response actions and cancels only the execution associated with the displayed approval.
 
-Remote tools join reasoning and intermediate text in the shared process disclosure, in PC part
-order. The lightweight part directory supplies names and states; each tool uses the same single-line
-`MessagePart.Tool` summary as local chat. Opening that row mounts its detail content and reads
-arguments/results into the shared bottom sheet. Closing it removes the content observers and cancels
-pending reads. Tool rows resolve the remote controller and connection before opening the sheet and
-pass them to deferred content explicitly; the sheet host does not inherit the route provider.
-`remoteToolTitle` maps the PC Pi, DSH and Claude native tool names to Mobile translations, shared
-by tool rows and interaction sheets. It reuses existing file, web and meta-tool titles, and keeps
-unknown/custom MCP names intact. Display mapping never changes the controller's tool identity.
-Local and remote approvals use `components/ToolApprovalSheet`: pending requests open automatically,
-one at a time, without a separate interaction button. The shared sheet owns approval actions,
-question forms, and non-dismissible presentation. Remote adaptation supplies deferred input,
-optional denial reasons, connection gating, and PC responses. Submitted response commands suppress
-the same request while its receipt is pending or its old snapshot remains visible, including after
-navigation or reconnection. Question choices use CherryUI single-choice rows and selection marks.
-Successful action receipts, repeated outgoing text, and the generic message-details
-footer are omitted. Failures, unresolved actions, downloadable files, and the full-text entry for
-truncated messages remain available. The controller has no message-level execution metadata or
-background-task API/UI.
+The current desktop protocol only accepts approval/denial and requires an explicit registered
+workspace for creation. Question answers, free-form denial reasons and PC default-workspace creation
+from the prototype are not supported by this wire version. The plus-menu remains disabled and
+local model/attachment controls remain local. These are protocol gaps, not frontend fallbacks.
 
-Remote image attachments load automatically and use the shared `FileEntryImage` preview and
-viewer. Other files use `FileAttachmentPreview` metadata rows and read their bytes only on press.
-Artifact queries are scoped to the connection/source and resource, reuse successful downloads, and
-cancel in-flight reads when their rows unmount. Source-owned attachments use `ChatMessage`'s
-attachment slot, so user attachments sit above the bubble and assistant artifacts follow the body.
-
-Remote drafts and session handoff retain one composer identity. Recovered uncertain creates reuse
-the existing PC session; sending waits for fresh PC state. The previous dedicated remote Agent
-and session screens have been removed. See the [PC controller reference](../../../../docs/references/agent/pc-agent-controller.md).
+Both sources share selection preparation and export UI. Prepared local image bytes are not yet
+pinned. See [Service Dependencies And Ownership](../../../../docs/references/remote-access/service-ownership.md)
+for source ownership and remaining work. Local regression tests do not establish device acceptance.

@@ -1,0 +1,282 @@
+import type {
+  RemoteAgentSource,
+  RemoteSessionSnapshot,
+  RemoteSourceState,
+} from '@/shared/contracts/remoteAgent';
+
+import type { DraftId } from '../../contracts';
+import { createRemoteConversationSource } from '../createRemoteConversationSource';
+
+const signal = () => new AbortController().signal;
+const session = {
+  id: 's',
+  agentId: 'a',
+  workspaceId: 'w',
+  title: 'Conversation',
+  updatedAt: '2026-09-22T00:00:00.000Z',
+  historyVersion: '1',
+};
+const message = (id: string) => ({
+  id,
+  version: '1',
+  role: 'assistant' as const,
+  state: 'success' as const,
+  parts: [{ id: `${id}:text`, kind: 'text' as const, text: id, complete: true }],
+});
+function fixture(scope = 'scope') {
+  let state: RemoteSourceState = { status: 'ready' };
+  const states = new Set<() => void>();
+  const operationListeners = new Set<() => void>();
+  let observer: ((value: RemoteSessionSnapshot) => void) | undefined;
+  const unobserve = jest.fn();
+  const remote: RemoteAgentSource = {
+    scope,
+    draftScope: 'binding',
+    getState: () => state,
+    subscribeState: (listener) => {
+      states.add(listener);
+      return () => {
+        states.delete(listener);
+      };
+    },
+    listAgents: jest.fn(async () => ({ items: [{ id: 'a', name: 'Agent' }] })),
+    listWorkspaces: jest.fn(async () => ({ items: [{ id: 'w', name: 'Workspace' }] })),
+    listSessions: jest.fn(async () => ({ items: [session] })),
+    readSession: jest.fn(async () => session),
+    observe: jest.fn((_id, listener) => {
+      observer = listener;
+      return unobserve;
+    }),
+    history: jest.fn(async (_id, _version, cursor) =>
+      cursor
+        ? { items: [message('m1')] }
+        : { items: [message('m3'), message('m2')], next: 'older' },
+    ),
+    readResource: jest.fn(async () => ({ kind: 'text' as const, text: '{"input":true}' })),
+    start: jest.fn(async (input) => ({
+      ...input,
+      id: 'start',
+      status: 'pending' as const,
+      sessionId: 'created',
+    })),
+    send: jest.fn(async () => ({
+      id: 'send',
+      kind: 'send' as const,
+      status: 'confirming' as const,
+      sessionId: 's',
+    })),
+    cancel: jest.fn(async () => ({
+      id: 'cancel',
+      kind: 'cancel' as const,
+      status: 'applied' as const,
+    })),
+    respond: jest.fn(async () => ({
+      id: 'respond',
+      kind: 'respond' as const,
+      status: 'applied' as const,
+    })),
+    getCommands: () => [],
+    getStarts: () => [],
+    subscribeOperations: (listener) => {
+      operationListeners.add(listener);
+      return () => {
+        operationListeners.delete(listener);
+      };
+    },
+    recover: jest.fn(async () => undefined),
+    dismiss: jest.fn(),
+    dispose: jest.fn(),
+  };
+  const source = createRemoteConversationSource('pc', remote);
+  const snapshot: RemoteSessionSnapshot = {
+    session,
+    current: true,
+    messages: [],
+    executions: [],
+    interactions: [],
+    sendTarget: 'idle-1',
+  };
+  return {
+    source,
+    remote,
+    snapshot,
+    unobserve,
+    publish: (value = snapshot) => observer?.(value),
+    setState: (next: RemoteSourceState) => {
+      state = next;
+      for (const listener of states) listener();
+    },
+  };
+}
+const address = { source: { kind: 'desktop' as const, connectionId: 'pc' }, sessionId: 's' };
+
+it('opens without observing, disables send until synchronized, and releases observation without cancelling execution', async () => {
+  const test = fixture();
+  const session = await test.source.openSession(address, signal());
+  expect(test.remote.observe).not.toHaveBeenCalled();
+  expect(session.state.getSnapshot().actions.send?.availability).toEqual({
+    state: 'disabled',
+    reason: 'synchronizing',
+  });
+  const release = session.activate();
+  test.publish();
+  expect(session.state.getSnapshot().actions.send?.availability.state).toBe('enabled');
+  const result = await session.state
+    .getSnapshot()
+    .actions.send!.execute({ parts: [{ type: 'text', text: 'hello' }] });
+  expect(result.state).toBe('pending');
+  release();
+  expect(test.unobserve).toHaveBeenCalledTimes(1);
+  expect(test.remote.cancel).not.toHaveBeenCalled();
+  test.source.dispose();
+});
+
+it('rejects retired callbacks and local-only input before crossing the remote boundary', async () => {
+  const test = fixture();
+  const session = await test.source.openSession(address, signal());
+  session.activate();
+  test.publish();
+  const send = session.state.getSnapshot().actions.send!;
+  const unsupported = await send.execute({
+    parts: [{ type: 'text', text: 'hello' }],
+    reasoningEffort: 'high',
+  });
+  expect(unsupported).toMatchObject({ state: 'rejected', failure: { code: 'unsupported' } });
+  expect(test.remote.send).not.toHaveBeenCalled();
+  test.source.dispose();
+  await expect(send.execute({ parts: [{ type: 'text', text: 'hello' }] })).resolves.toMatchObject({
+    state: 'rejected',
+    failure: { code: 'retired' },
+  });
+});
+
+it('pins a history window and prepares a complete chronological selection before export', async () => {
+  const test = fixture();
+  const session = await test.source.openSession(address, signal());
+  const window = await session.history.openLatest(signal());
+  expect(window.initial.items.map((item) => item.key)).toEqual(['m2', 'm3']);
+  const older = await window.read(window.initial.older!, signal());
+  const prepared = await session.history.prepareSelection(
+    [window.initial.items[1].ref, older.items[0].ref],
+    signal(),
+  );
+  expect(prepared.messages.map((item) => item.id)).toEqual(['m1', 'm3']);
+  expect(jest.mocked(test.remote.history).mock.calls.every((call) => call[1] === '1')).toBe(true);
+  test.setState({ status: 'offline' });
+  expect(prepared.messages[0].parts[0]).toMatchObject({ text: 'm1' });
+  window.dispose();
+  await expect(window.read(window.initial.older!, signal())).rejects.toMatchObject({
+    failure: { code: 'cancelled' },
+  });
+  test.source.dispose();
+});
+
+it('rejects cursors and message references from a different scope', async () => {
+  const left = fixture('left');
+  const right = fixture('right');
+  const a = await left.source.openSession(address, signal());
+  const b = await right.source.openSession(address, signal());
+  const windowA = await a.history.openLatest(signal());
+  const windowB = await b.history.openLatest(signal());
+  await expect(
+    b.history.prepareSelection([windowA.initial.items[0].ref], signal()),
+  ).rejects.toMatchObject({ failure: { code: 'invalid-input' } });
+  expect(() => windowB.read(windowA.initial.older!, signal())).toThrow('invalid-input');
+  left.source.dispose();
+  right.source.dispose();
+});
+
+it('binds workspaces to the selected Agent and never invents a default workspace for first send', async () => {
+  const test = fixture();
+  const agents = await test.source.catalog.listAgents(undefined, signal());
+  const agent = agents.items[0].ref;
+  const draft = await test.source.catalog.prepareDraft(
+    { agent, draftId: 'draft' as DraftId },
+    signal(),
+  );
+  expect(draft.state.getSnapshot().start.availability).toEqual({
+    state: 'disabled',
+    reason: 'workspace-required',
+  });
+  const workspaces = await test.source.catalog.listWorkspaces!(agent, undefined, signal());
+  expect(test.remote.listWorkspaces).toHaveBeenCalledWith('a', undefined, expect.any(AbortSignal));
+  const ready = await test.source.catalog.prepareDraft(
+    { agent, workspace: workspaces.items[0].ref, draftId: 'draft-2' as DraftId },
+    signal(),
+  );
+  await expect(
+    ready.state.getSnapshot().start.execute({ parts: [{ type: 'text', text: 'hello' }] }),
+  ).resolves.toMatchObject({ state: 'pending' });
+  expect(test.remote.start).toHaveBeenCalledWith({
+    draftId: 'draft-2',
+    agentId: 'a',
+    workspaceId: 'w',
+    text: 'hello',
+  });
+  test.source.dispose();
+});
+
+it('keeps an admitted draft disabled when reopening it with a pending or rejected first-send receipt', async () => {
+  const test = fixture();
+  const agent = (await test.source.catalog.listAgents(undefined, signal())).items[0].ref;
+  const workspace = (await test.source.catalog.listWorkspaces!(agent, undefined, signal())).items[0]
+    .ref;
+  for (const status of ['pending', 'rejected'] as const) {
+    test.remote.getStarts = () => [
+      {
+        id: 'start',
+        draftId: 'draft',
+        agentId: 'a',
+        workspaceId: 'w',
+        text: 'original',
+        status,
+        sessionId: 'created',
+      },
+    ];
+    const draft = await test.source.catalog.prepareDraft(
+      { agent, workspace, draftId: 'draft' as DraftId },
+      signal(),
+    );
+    expect(draft.state.getSnapshot().start.availability).toEqual({
+      state: 'disabled',
+      reason: 'busy',
+    });
+    expect(draft.operations.getSnapshot()[0]).toMatchObject({
+      state: status,
+      input: { parts: [{ type: 'text', text: 'original' }] },
+      conversation: { sessionId: 'created' },
+    });
+    draft.dispose();
+  }
+  expect(test.remote.start).not.toHaveBeenCalled();
+  test.source.dispose();
+});
+
+it('exposes source-owned starts without reopening the original draft and separates durable binding from read scope', async () => {
+  const test = fixture('read-generation');
+  test.remote.getStarts = () => [
+    {
+      id: 'pending-start',
+      draftId: 'old-draft',
+      agentId: 'a',
+      workspaceId: 'w',
+      text: 'Retained input',
+      status: 'pending',
+      sessionId: 'created',
+    },
+  ];
+  const source = createRemoteConversationSource('desktop', test.remote);
+  expect(source.draftScope).toBe('binding');
+  expect(source.scope).toBe('read-generation');
+  expect(source.operations.getSnapshot()[0]).toMatchObject({
+    draftId: 'old-draft',
+    state: 'pending',
+    conversation: { sessionId: 'created' },
+    input: { parts: [{ type: 'text', text: 'Retained input' }] },
+  });
+  const session = await source.openSession({ source: source.ref, sessionId: 's' }, signal());
+  expect(session.state.getSnapshot()).toMatchObject({ agentId: 'a', workspaceId: 'w' });
+  source.dispose();
+  expect(source.operations.getSnapshot()).toEqual([]);
+  test.source.dispose();
+});

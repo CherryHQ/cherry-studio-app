@@ -1,14 +1,16 @@
 # Remote Access
 
-Status: slices 1–3 (packages, pairing, configuration sync) are implemented; slices 4–6 (Agent
-access, commands, lifecycle) are still the plan below. The desktop side is implemented in Cherry
-Studio PR #20717 (`zhangjiadi225/lan-agent-remote-design`). This document supersedes the HTTP
-pairing that `main` shipped and the snapshot-based prototype in mobile PR #997.
+Status: slices 1–3 (packages, pairing, configuration sync) are implemented. The slices 4–6
+migration now includes the shared Agent protocol, domain leases, durable projection/command
+recovery, and frontend conversation adapters. Local chat history, message actions, approvals and
+both share routes consume the common contract. The remote chat/sidebar screens now use
+the same source/catalog/session boundary; the old Controller entry and `agent-version` gate have been removed after
+switching consumers and focused regression checks. This is not device acceptance of the new implementation.
 
-PR #997 now includes this foundation through its stacked base #1055. Its Agent UI and
-controller prototype are retained, but `prepareAgentConnection` rejects with `agent-version`
-before opening the legacy transport. Pairing and configuration sync remain available; re-pairing
-cannot enable Agent access until slices 4–6 migrate the adapter to the shared protocol.
+The desktop counterpart is Cherry Studio PR #20717 (`zhangjiadi225/lan-agent-remote-design`).
+Mobile #997 keeps #1055 as its stacked base. The approved conversation design replaces the old
+controller boundary as well as its transport; pairing and provider synchronization retain their
+product interfaces.
 
 ## What exists and what is replaced
 
@@ -16,7 +18,7 @@ cannot enable Agent access until slices 4–6 migrate the adapter to the shared 
 | --- | --- |
 | `main`: `POST /pair` + `GET /v1/export/providers` over plain HTTP (`desktopConnectionClient.ts`), bearer token in SecureStore | One encrypted WebSocket per desktop; pairing and configuration export are JSON-RPC methods inside it; no bearer token |
 | PR #997: `secureChannel.ts` (TweetNaCl box), `protocol.ts` (hand-written schemas), `session.snapshot` full overlays, `messages.parts.get`, `artifacts.read` | Noise XX from the shared transport, schemas and reducer from `@cherrystudio/remote-protocol`, journaled events with checkpoints, `parts.list` + `content.read` |
-| PR #997: `AgentController` contract, `RemoteAgentRuntime`/`Adapter`/`Actions`, `RemoteAgentCommandJournal`, drawer Local/Remote group, shared chat UI, approval sheets | Kept. Only the layer below the adapter changes |
+| PR #997: `AgentController` contract, `RemoteAgentRuntime`/`Adapter`/`Actions`, `RemoteAgentCommandJournal`, drawer Local/Remote group, shared chat UI, approval sheets | Replace the controller with frontend conversation consumption and the narrow `Backend.remoteAgent` module; preserve local execution and existing presentation components |
 
 The desktop removed the HTTP routes outright, so a mobile release without this work cannot pair
 with a current desktop. Configuration sync therefore ships in the first slice, before Agent access.
@@ -62,45 +64,53 @@ with a current desktop. Configuration sync therefore ships in the first slice, b
 
 ## Ownership
 
+[Service Dependencies And Ownership](./service-ownership.md) is the current source-backed graph,
+consumer status, lifecycle matrix and remaining design work. It separates mobile frontend/backend
+ownership from desktop authority and distinguishes implementation from acceptance.
+
 ```text
-Settings / onboarding device screens, DesktopProviderSyncScreen, drawer Remote group, remote chat
-  → Backend.desktopConnections (pair / remove / preview / import)   unchanged contract
-  → Backend.agentController.open(connectionId)                        from PR #997
-  → DesktopConnectionRuntime          owns identity, connections, pairing, one DesktopSession each
-      → DesktopSession                socket + Noise channel + JSON-RPC client + notifications
-  → RemoteAgentAdapter                controller projection, commands, recovery (PR #997)
-      → SessionSync                   checkpoint install, event apply, ack, persisted cursor
+Settings / onboarding → Backend.desktopConnections → DesktopConnectionRuntime (workflows)
+Frontend conversation adapters → Backend.remoteAgent → RemoteAgentRuntime (Agent scopes)
+Both runtimes → DesktopConnectionManager (one channel, domain leases, AppState, reconnect)
+DesktopConnectionManager → DesktopSession (Noise, JSON-RPC, heartbeat and authorization refresh)
+RemoteAgentRuntime → SessionSync / RemoteAgentActions → injected projection store / command journal
 ```
 
-- `src/backend/services/desktopConnections/`
-  - `DesktopConnectionRuntime` stays the credential and connection owner (`Phase.Gate`,
-    `AppStatePolicy('continue')`). It loads or creates the device identity, opens sessions on demand,
-    and exposes `session(connectionId)` to the Agent adapter. No connection is opened at startup.
-  - `deviceIdentity.ts`: one Ed25519 identity per install, protobuf bytes in SecureStore
-    (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`). Losing it means pairing again; that is the intended bound.
-  - `DesktopSession.ts` replaces `desktopConnectionClient.ts`: tries each stored address in order,
-    performs the handshake, `connection.hello`, `connection.authenticate`, refreshes the token before
-    expiry, answers heartbeats, dispatches notifications, reconnects with bounded backoff while it
-    has consumers, and suspends when the app goes to background. It maps `RemoteFailure` reasons to
-    the existing `desktopError()` codes.
-- `src/backend/services/remoteAgent/` keeps `RemoteAgentRuntime`, `RemoteAgentAdapter`,
-  `RemoteAgentActions` and the shared `AgentController` contract. `RemoteAgentClient`,
-  `protocol.ts`, `secureChannel.ts` and `remoteContent.ts` are deleted; `SessionSync.ts` and
-  `remoteContent.ts` are rewritten on the package types.
-- Frontend changes are confined to the pairing screens (v2 QR, verification code, capability
-  choice, waiting for approval) and to the controller mapping in `features/chat/remote`.
+- `DesktopConnectionRuntime` owns pairing/configuration tasks and drains them before the manager.
+  It does not expose an authenticated session to business modules.
+- `DesktopConnectionManager` opens channels only for retained demand and owns domain-specific
+  revocation. Releasing a configuration lease cannot cancel an Agent execution. Temporary pairing
+  channels also belong to its app lifetime; adopting an approved channel into the pool remains a
+  follow-up in the migration.
+- `DesktopSession` owns one physical channel. It dispatches shared protocol methods and notifications;
+  it does not own reconnect policy or provider imports.
+- `RemoteAgentRuntime` retains source scopes and admitted commands across route disposal.
+  Concurrent source acquisitions reserve their consumers before waiting, so cancelling one route
+  cannot release the scope another route is acquiring. `RemoteAgentScope` translates Agent reads/observations/actions. It reacts to lease state instead
+  of registering another physical AppState/reconnect owner. The old `RemoteAgentAdapter`,
+  `RemoteAgentClient`, private protocol and private secure-channel implementation are removed.
+- The frontend `appShell/conversation` module owns local/remote consumption. Its local client now
+  belongs to `ConversationProvider`; the existing local ChatProvider still supplies navigation and
+  composer extensions. Local chat uses the common history hook, presenter, actions and approvals;
+  both share routes use immutable selection preparation. Remote chat/sidebar use the common catalog,
+  history, actions, resource readers and operation recovery views. Prepared managed asset leases
+  remain pending. Retired catalogs/windows/resources are cancelled and evicted from Query. Unsent
+  drafts use a stable identity/grant binding independent of the ephemeral Query scope.
+- Projection storage captures the current host's database. The journal receives its storage from
+  composition. Neither resolves a replacement host through `application.get` during late work.
+- Local Agent/MCP execution and `DocumentExportRuntime` have no desktop connection dependency.
 
 ## Persistence
 
 | Store | Content |
 | --- | --- |
-| `desktop_connection` (migrated) | `id` = desktop-assigned `deviceId`, `name`, `addresses[]`, `port`, `desktopIdentity`, `grants` (`{ domain, grantId }[]`), `status`, `lastFetchedAt`; drops `baseUrls`, `activeBaseUrl`, `desktopVersion`. The migration recreates the table and drops HTTP-era rows, which can no longer connect. |
+| `desktop_connection` (migrated) | `id` is the mobile connection ID; `deviceId` is desktop-assigned, `name`, `addresses[]`, `port`, `desktopIdentity`, `grants` (`{ domain, grantId }[]`), `status`, `lastFetchedAt`; drops `baseUrls`, `activeBaseUrl`, `desktopVersion`. The migration recreates the table and drops HTTP-era rows, which can no longer connect. |
 | SecureStore | `remote-device-identity` (private key protobuf, hex). HTTP-era `desktop-connection-token.*` entries are simply no longer read. |
-| `remote_session_projection` (new) | `connectionId`, `grantId`, `sessionId`, `streamEpoch`, `seq`, `projection` JSON, `updatedAt`. Written in one transaction with each applied batch, before the ACK. |
-| `remote_agent_command` (PR #997 journal) | Unchanged: `commandId`, method, params, connection + grant, status, receipt. |
+| `remote_session_projection` (new) | `connectionId`, `scopeId` (identity + domain grant), `sessionId`, `streamEpoch`, `seq`, `projection` JSON, `updatedAt`. Written in one transaction with each applied batch, before the ACK. |
+| MMKV `cherry-remote-agent-commands` | Version 2 stores fixed command IDs, exact parameters and receipts plus the two-step start workflow. Version 1 records remain readable; old pairing bindings are not silently erased or replayed into a different identity. |
 
 Access tokens are never persisted. History pages, parts and content live in TanStack Query with
-keys including `connectionId` and `grantId`; a new grant (re-pair) invalidates everything.
+opaque source/session/version keys. A new identity or grant retires that source; grants and protocol types do not enter frontend components.
 
 ## Flows
 
@@ -108,7 +118,7 @@ keys including `connectionId` and `grantId`; a new grant (re-pair) invalidates e
 session against the pinned identity without authenticating → `pairing.claim` → show the returned
 six-digit code and "approve on your desktop" → poll `pairing.get` every two seconds until
 `approved` / `rejected` / `expired` (invitation life) → on approval store the connection with its
-grants, keep the session authenticated, and if `configuration` was granted run the existing
+grants, retire the previous pairing scope, and if `configuration` was granted run the existing
 preview/import immediately. Re-pairing an existing desktop replaces its grants and identity binding.
 
 **Configuration import.** `configuration.export.prepare` → `configuration.export.read` in 24 KiB
@@ -128,17 +138,18 @@ applied; the checkpoint lease covers those reads. History is read at the project
 the current revision without touching the live overlay. `history.committed` invalidates the
 history queries; `message.removed` after it releases the live message.
 
-**Commands.** `RemoteAgentCommandJournal` persists `commandId` + params before sending, exactly as in
-PR #997. `messages.send` carries `expectedIdleRevision` from the projection's session; `CONFLICT`
+**Commands.** `RemoteAgentCommandJournal` persists `commandId` + params before sending. First send
+records both create/send IDs before creating a session and retains the created session if sending
+fails. `accepted` remains pending until the owner outcome is known. `messages.send` carries `expectedIdleRevision` from the projection's session; `CONFLICT`
 restores the draft. `executions.cancel` carries the active execution id. `interactions.respond`
 carries `expectedRevision`, `expectedExecutionId` and `inputDigest` from the interaction it shows.
 A lost response is recovered with `agent.commands.get` and, when absent, by resending the same
 `commandId`; `IDEMPOTENCY_CONFLICT` and `interrupted` stop recovery and surface to the user.
 
-**Revocation and repair.** `GRANT_REVOKED`, `UNAUTHENTICATED` on authenticate, or a failed identity
-pin mark the connection `needs-repair`; the drawer hides its agents and the settings row offers
-re-pairing. Configuration and Agent grants are independent: a desktop can revoke one and keep the
-other, and the UI gates each feature on the grant it needs.
+**Revocation and repair.** Domain `GRANT_REVOKED`/`FORBIDDEN` retires only that domain's leases.
+`UNAUTHENTICATED` during authentication or an identity-pin failure requires repairing the device
+pairing. Late refresh results cannot restore a grant that the manager has already revoked.
+Identity/grant comparisons protect credential writes against a concurrent re-pair.
 
 ## App lifecycle
 
@@ -161,6 +172,14 @@ other, and the UI gates each feature on the grant it needs.
 | 6. Lifecycle and acceptance | background/foreground, revocation, multiple desktops, device acceptance per `docs/guides/parallel-device-testing.md` | iOS and Android acceptance with a paired desktop; screenshots on the PR |
 
 Slices 1–3 replace what `main` ships and are releasable on their own; 4–6 land the PR #997 scope.
+
+## Current Consumer Limits
+
+The current desktop schema accepts approval/denial only; the old prototype's question answers and
+free-form denial reasons are not supported. Creation requires an explicit registered workspace ID;
+the current desktop handler has no system/default-workspace creation path. Mobile therefore asks
+for a registered workspace instead of inventing a default ID. These product gaps require a desktop
+protocol change before those prototype behaviors can return.
 
 ## Out of scope
 

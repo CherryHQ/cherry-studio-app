@@ -1,5 +1,5 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import type { DbService } from '@/backend/data/db/DbService';
@@ -310,16 +310,29 @@ export class DesktopConnectionService {
 
   async updateStatus(
     id: string,
-    values: Pick<DesktopConnectionRow, 'status'> &
-      Partial<Pick<DesktopConnectionRow, 'addresses' | 'grants' | 'lastFetchedAt'>>,
+    values: Partial<
+      Pick<DesktopConnectionRow, 'status' | 'addresses' | 'grants' | 'lastFetchedAt'>
+    >,
     signal: AbortSignal,
+    expected?: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
   ): Promise<void> {
     await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
       const [row] = await tx
         .update(desktopConnectionTable)
         .set(values)
-        .where(eq(desktopConnectionTable.id, id))
+        .where(
+          and(
+            eq(desktopConnectionTable.id, id),
+            expected
+              ? and(
+                  eq(desktopConnectionTable.deviceId, expected.deviceId),
+                  eq(desktopConnectionTable.desktopIdentity, expected.desktopIdentity),
+                  eq(desktopConnectionTable.grants, expected.grants),
+                )
+              : undefined,
+          ),
+        )
         .returning({ id: desktopConnectionTable.id });
       if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
       signal.throwIfAborted();

@@ -46,9 +46,14 @@ heading, with the device name retained in its accessibility label. Connection pr
 message and recovery action. Source switching stays inside the drawer chat stack. Remote mode does
 not route into the local Agent editor or local full-text search.
 
-Controller acquisition and loaded content share the same header frame, including a reserved status
+Conversation source acquisition and loaded content share the same header frame, including a reserved status
 dot slot. One 200 ms loading-feedback delay spans controller acquisition, connection, and the first
 list request; it never delays data. Normal connecting/reconnecting states do not insert a banner
 above the list. Pending queries do not render empty rows, and cached lists remain
 visible if a background refresh fails. Device discovery must finish before showing the unpaired
 empty state.
+
+Remote catalogs now use appShell/conversation hooks and ConversationSourceBoundary. Rows receive
+Agent summaries and ConversationRefs, and navigation uses the common conversation address helper.
+Device selection still reads the pairing directory; action availability comes from the Agent
+source. Consumer release cancels its queries without releasing another route's connection demand.

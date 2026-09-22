@@ -18,7 +18,10 @@ import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgr
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
-import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import type {
+  DesktopConnectionManager,
+  DesktopConnectionRuntime,
+} from '@/backend/services/desktopConnections';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
@@ -102,7 +105,10 @@ export function createAppBootstrapRuntime(
   const desktopConnections = host.container.get<DesktopConnectionRuntime>(
     'DesktopConnectionRuntime',
   );
-  const agentController = host.container.get<RemoteAgentRuntime>('RemoteAgentRuntime');
+  const desktopConnectionManager = host.container.get<DesktopConnectionManager>(
+    'DesktopConnectionManager',
+  );
+  const remoteAgent = host.container.get<RemoteAgentRuntime>('RemoteAgentRuntime');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
@@ -124,7 +130,8 @@ export function createAppBootstrapRuntime(
     dbService,
     documentExport,
     desktopConnections,
-    agentController,
+    desktopConnectionManager,
+    remoteAgent,
     languageServing,
     providerRegistryUpdater,
   });

@@ -11,10 +11,11 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { ConversationSession } from '@/frontend/appShell/conversation';
 import { toggleSelection } from '@/frontend/components/Selection';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
-import { type ChatShareSource, useShareChat } from './useShareChat';
+import { useShareChat } from './useShareChat';
 
 type ChatShareSelectionState = {
   isSharing: boolean;
@@ -34,14 +35,13 @@ const ChatShareSelectionStoreContext = createContext<ChatShareSelectionStore | n
 
 export function ChatShareSelectionProvider({
   children,
-  sessionId,
+  session,
   initialMessageId,
-  source,
-}: PropsWithChildren<{ sessionId: string; initialMessageId?: string; source?: ChatShareSource }>) {
+}: PropsWithChildren<{ session: ConversationSession; initialMessageId?: string }>) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [store] = useState(() => createChatShareSelectionStore(initialMessageId));
-  const { shareChat, isSharing, cancelShare } = useShareChat(sessionId, source);
+  const { shareChat, isSharing, cancelShare } = useShareChat(session);
   const toggleMessage = useCallback(
     (messageId: string) => {
       const selectedIds = store.getSnapshot();

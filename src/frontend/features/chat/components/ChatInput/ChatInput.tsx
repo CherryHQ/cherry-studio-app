@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
+import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { chatReturnToHref } from '@/frontend/appShell/navigation/chat';
 import {
@@ -24,7 +25,6 @@ import {
 } from '@/frontend/components/PaintingInput';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
-import type { AgentMessageView } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
@@ -47,7 +47,7 @@ type ChatInputProps = {
   agentId?: string;
   controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
-  imageResult?: AgentMessageView;
+  imageResult?: ConversationImageResult;
   sessionId?: string;
 };
 
@@ -63,22 +63,6 @@ export function ChatInput({
 }: ChatInputProps) {
   const { cancel, canSend, isBusy, sendMessage } = controls;
   const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
-  const paintingResult = latestImageResult
-    ? {
-        id: latestImageResult.id,
-        images: latestImageResult.parts.flatMap((part) =>
-          part.type === 'file' && part.purpose === 'artifact' && part.mediaType.startsWith('image/')
-            ? [
-                {
-                  fileEntryId: part.fileEntryId,
-                  mediaType: part.mediaType,
-                  name: part.name ?? part.fileEntryId,
-                },
-              ]
-            : [],
-        ),
-      }
-    : undefined;
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'all' });
@@ -130,7 +114,7 @@ export function ChatInput({
   }, [cancel]);
 
   return (
-    <PaintingInputProvider result={paintingResult}>
+    <PaintingInputProvider result={latestImageResult}>
       {selectedModelItem && isImageGenerationModel(selectedModelItem.model) ? (
         <PaintingInput
           canSend={canSend}

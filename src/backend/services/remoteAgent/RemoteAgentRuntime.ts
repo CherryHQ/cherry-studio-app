@@ -1,5 +1,3 @@
-import { AppState } from 'react-native';
-
 import {
   AppStatePolicy,
   BaseService,
@@ -8,110 +6,215 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
-import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
-import type { AgentController, AgentControllerModule } from '@/shared/contracts/agent/controller';
+import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
+import type { SessionProjectionStore } from '@/backend/data/services/RemoteSessionProjectionStore';
+import type { DesktopConnections } from '@/backend/services/desktopConnections';
+import type { RemoteAgentModule, RemoteAgentSource } from '@/shared/contracts/remoteAgent';
 
-import { RemoteAgentAdapter } from './RemoteAgentAdapter';
+import { RemoteAgentError } from './RemoteAgentError';
+import { RemoteAgentScope } from './RemoteAgentScope';
+
+type Entry = { scope: RemoteAgentScope; users: number; unwatch: () => void };
+type Opening = { promise: Promise<Entry>; waiters: number };
 
 @Injectable('RemoteAgentRuntime')
-@DependsOn(['DesktopConnectionRuntime', 'DbService'])
+@DependsOn(['DesktopConnectionManager', 'DbService'])
 @ServicePhase(Phase.Gate)
-@AppStatePolicy('foreground-refresh')
-export class RemoteAgentRuntime extends BaseService implements AgentControllerModule {
-  private credentials?: DesktopConnectionRuntime;
-  private files?: Pick<FileEntryService, 'create'>;
-  private journal?: RemoteAgentCommandJournal;
-  private readonly sources = new Map<string, { adapter: RemoteAgentAdapter; users: number }>();
+@AppStatePolicy('continue')
+export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule {
+  private dependencies?: {
+    connections: DesktopConnections;
+    journal: RemoteAgentCommandJournal;
+    projections: SessionProjectionStore;
+  };
+  private readonly sources = new Map<string, Entry>();
+  private readonly opening = new Map<string, Opening>();
   private readonly drains = new Set<Promise<void>>();
-  private stopped = false;
-  configure(credentials: DesktopConnectionRuntime, files: Pick<FileEntryService, 'create'>) {
-    this.credentials = credentials;
-    this.files = files;
+  private readonly lifetime = new AbortController();
+  configure(dependencies: NonNullable<RemoteAgentRuntime['dependencies']>) {
+    this.dependencies = dependencies;
   }
-  protected onInit() {
-    this.journal = new RemoteAgentCommandJournal();
-    this.registerDisposable(
-      this.credentials!.subscribeCredentials((id) => {
-        const source = this.sources.get(id);
-        if (source) {
-          this.sources.delete(id);
-          this.close(source.adapter);
-        }
-        this.journal!.removeConnection(id);
-      }),
-    );
-    this.registerAppStateListener((state) => {
-      for (const { adapter, users } of this.sources.values())
-        adapter.setForeground(state === 'active' && users > 0);
-    });
-  }
-  async open(id: string): Promise<AgentController> {
-    if (this.stopped || !this.journal || !this.credentials || !this.files)
-      throw new Error('REMOTE_AGENT_NOT_READY');
-    let source = this.sources.get(id);
-    if (!source) {
-      const adapter = new RemoteAgentAdapter(id, this.credentials, this.journal, this.files);
-      source = { adapter, users: 0 };
-      this.sources.set(id, source);
-      if (AppState.currentState !== 'active') adapter.setForeground(false);
+  async open(id: string, signal: AbortSignal): Promise<RemoteAgentSource> {
+    signal.throwIfAborted();
+    this.lifetime.signal.throwIfAborted();
+    if (!this.dependencies) throw new Error('Remote Agent not configured');
+    let entry = this.sources.get(id);
+    if (entry?.scope.getState().status === 'retired') {
+      this.close(id, entry);
+      this.opening.delete(id);
+      entry = undefined;
     }
-    source.users++;
-    if (source.users === 1) source.adapter.setForeground(AppState.currentState === 'active');
-    const retained = source;
-    const { adapter } = retained;
+    let reservation: Opening | undefined;
+    try {
+      if (!entry) {
+        let opening = this.opening.get(id);
+        if (!opening) {
+          const dependencies = this.dependencies;
+          const promise = dependencies.connections
+            .retain(id, 'agent', this.lifetime.signal)
+            .then((lease) => {
+              try {
+                this.lifetime.signal.throwIfAborted();
+                const scope = new RemoteAgentScope(
+                  lease,
+                  dependencies.connections,
+                  dependencies.journal,
+                  dependencies.projections,
+                );
+                const created: Entry = { scope, users: 0, unwatch: () => undefined };
+                // Route disposal does not interrupt admitted commands; release demand once they settle.
+                const releaseUnused = () => {
+                  queueMicrotask(() => this.releaseUnused(id, created));
+                };
+                const unoperations = scope.subscribeOperations(releaseUnused);
+                const unstate = scope.subscribeState(releaseUnused);
+                created.unwatch = () => {
+                  unoperations();
+                  unstate();
+                };
+                this.sources.set(id, created);
+                return created;
+              } catch (error) {
+                lease.release();
+                throw error;
+              }
+            });
+          opening = { promise, waiters: 0 };
+          this.opening.set(id, opening);
+        }
+        reservation = opening;
+        reservation.waiters++;
+        entry = await opening.promise;
+      }
+      signal.throwIfAborted();
+      this.lifetime.signal.throwIfAborted();
+      if (entry.scope.getState().status === 'retired') throw new RemoteAgentError('CLOSED');
+      entry.users++;
+    } finally {
+      if (reservation) {
+        reservation.waiters--;
+        if (reservation.waiters === 0 && this.opening.get(id) === reservation) {
+          this.opening.delete(id);
+          if (entry) this.releaseUnused(id, entry);
+        }
+      }
+    }
+    const retained = entry;
+    const scope = entry.scope;
     let disposed = false;
     const subscriptions = new Set<() => void>();
-    const retain = (unsubscribe: () => void) => {
+    const assertActive = () => {
+      if (disposed) throw new DOMException('Source released', 'AbortError');
+    };
+    const subscribe = (unsubscribe: () => void) => {
       subscriptions.add(unsubscribe);
       return () => {
-        subscriptions.delete(unsubscribe);
-        unsubscribe();
+        if (subscriptions.delete(unsubscribe)) unsubscribe();
       };
     };
     return {
-      version: 2,
-      getConnection: adapter.getConnection,
-      subscribeConnection: (listener) => retain(adapter.subscribeConnection(listener)),
-      reconnect: adapter.reconnect,
-      getActions: adapter.getActions,
-      subscribeActions: (listener) => retain(adapter.subscribeActions(listener)),
-      listAgents: adapter.listAgents.bind(adapter),
-      listWorkspaces: adapter.listWorkspaces.bind(adapter),
-      listSessions: adapter.listSessions.bind(adapter),
-      history: adapter.history.bind(adapter),
-      observe: (sessionId, listener) => retain(adapter.observe(sessionId, listener)),
-      createSession: adapter.createSession.bind(adapter),
-      sendMessage: adapter.sendMessage.bind(adapter),
-      cancel: adapter.cancel.bind(adapter),
-      respond: adapter.respond.bind(adapter),
-      retryAction: adapter.retryAction.bind(adapter),
-      dismissAction: adapter.dismissAction.bind(adapter),
-      interaction: adapter.interaction.bind(adapter),
-      details: adapter.details.bind(adapter),
-      readDetail: adapter.readDetail.bind(adapter),
-      download: adapter.download.bind(adapter),
+      scope: scope.scope,
+      draftScope: scope.draftScope,
+      getState: scope.getState,
+      subscribeState: (listener) => {
+        assertActive();
+        return subscribe(scope.subscribeState(listener));
+      },
+      listAgents: (...args) => {
+        assertActive();
+        return scope.listAgents(...args);
+      },
+      listWorkspaces: (...args) => {
+        assertActive();
+        return scope.listWorkspaces(...args);
+      },
+      listSessions: (...args) => {
+        assertActive();
+        return scope.listSessions(...args);
+      },
+      readSession: (...args) => {
+        assertActive();
+        return scope.readSession(...args);
+      },
+      history: (...args) => {
+        assertActive();
+        return scope.history(...args);
+      },
+      readResource: (...args) => {
+        assertActive();
+        return scope.readResource(...args);
+      },
+      observe: (...args) => {
+        assertActive();
+        return subscribe(scope.observe(...args));
+      },
+      start: (...args) => {
+        assertActive();
+        return scope.start(...args);
+      },
+      send: (...args) => {
+        assertActive();
+        return scope.send(...args);
+      },
+      cancel: (...args) => {
+        assertActive();
+        return scope.cancel(...args);
+      },
+      respond: (...args) => {
+        assertActive();
+        return scope.respond(...args);
+      },
+      getCommands: scope.getCommands,
+      getStarts: scope.getStarts,
+      subscribeOperations: (listener) => {
+        assertActive();
+        return subscribe(scope.subscribeOperations(listener));
+      },
+      recover: (operationId) => {
+        assertActive();
+        return scope.recover(operationId);
+      },
+      dismiss: (operationId) => {
+        assertActive();
+        scope.dismiss(operationId);
+      },
       dispose: () => {
         if (disposed) return;
         disposed = true;
         for (const unsubscribe of subscriptions) unsubscribe();
         subscriptions.clear();
-        if (this.sources.get(id) !== retained || --retained.users > 0) return;
-        adapter.setForeground(false);
+        retained.users--;
+        this.releaseUnused(id, retained);
       },
     };
   }
-  private close(adapter: RemoteAgentAdapter) {
-    adapter.dispose();
-    const drain = adapter.drain();
+  private releaseUnused(id: string, entry: Entry) {
+    if (entry.users || this.sources.get(id) !== entry || this.opening.has(id)) return;
+    if (entry.scope.getState().status === 'retired') {
+      this.close(id, entry);
+      return;
+    }
+    if (
+      entry.scope
+        .getCommands()
+        .some((action) => ['confirming', 'accepted'].includes(action.status)) ||
+      entry.scope.getStarts().some((start) => start.status === 'pending')
+    )
+      return;
+    this.close(id, entry);
+  }
+  private close(id: string, entry: Entry) {
+    if (this.sources.get(id) === entry) this.sources.delete(id);
+    entry.unwatch();
+    entry.scope.dispose();
+    const drain = entry.scope.drain();
     this.drains.add(drain);
-    void drain.finally(() => this.drains.delete(drain));
+    void drain.finally(() => this.drains.delete(drain)).catch(() => undefined);
   }
   protected async onStop() {
-    this.stopped = true;
-    for (const source of this.sources.values()) this.close(source.adapter);
-    this.sources.clear();
-    await Promise.allSettled([...this.drains]);
+    this.lifetime.abort();
+    await Promise.allSettled([...this.opening.values()].map((opening) => opening.promise));
+    for (const [id, entry] of this.sources) this.close(id, entry);
+    while (this.drains.size) await Promise.allSettled([...this.drains]);
   }
 }

@@ -1,5 +1,4 @@
 import type { AgentProtocol } from './agent';
-import type { AgentControllerModule } from './agent/controller';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DocumentExportModule } from './documentExport';
 import type { FileModule } from './file';
@@ -10,13 +9,14 @@ import type { PermissionsModule } from './permissions';
 import type { PluginsModule } from './plugins';
 import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
+import type { RemoteAgentModule } from './remoteAgent';
 import type { SystemEntryModule } from './systemEntry';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
   readonly systemEntry: SystemEntryModule;
   readonly agent: AgentProtocol;
-  readonly agentController: AgentControllerModule;
+  readonly remoteAgent: RemoteAgentModule;
   readonly desktopConnections: DesktopConnectionsModule;
   readonly documentExport: DocumentExportModule;
   readonly file: FileModule;

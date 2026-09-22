@@ -18,8 +18,9 @@ closing the export preview retains the existing selection, while a closed system
 dismisses both pages to the chat. At most 128 messages can be selected; an empty selection cannot
 be confirmed. Leaving the page cancels pending export reads.
 
-Confirmation reads only the selected persisted messages through a single bounded ID query and
-restores chronological order, regardless of click order. It does not implicitly include questions
+Confirmation calls the opened ConversationSession history.prepareSelection. Local selection reads
+messages, session title and assistant name in one SQLite snapshot; remote selection reads and
+revalidates a fixed history revision. Both return chronological order, regardless of click order. It does not implicitly include questions
 or unselected messages. The conversation may exceed 128 messages. Missing or unfinished content
 and failed reads reject the export instead of silently sharing a partial selection.
 
@@ -62,7 +63,13 @@ changing the format or switch renders the selected snapshot as needed. Image out
 3x density and sequential page capture, without source-image byte, pixel or count caps. Device resources determine practical
 capacity. Image conversion failures prepare HTML; HTML failures retain the complete Markdown preview.
 
-Remote chats use the same selection controls and exporter through a `ChatShareSource` loader.
-The loader re-reads chosen messages from the bound controller and checks pairing identity before
-and after each page. Remote resources never become local file IDs; artifacts export as named
-attachments. Truncated messages are shown but cannot be selected as complete export content.
+Local and desktop routes use the same Conversation history, selection controls and export preparation.
+The route binds the selection to its source scope. A replaced pairing cannot reuse the previous
+selection. The preparation validates the entire selected set and keeps the prepared snapshot alive
+until the export request closes, including its thinking-content variant. Cancellation and failures
+release the snapshot. Remote resources never become local file IDs; file metadata exports as named
+attachments. Partial messages cannot be selected as complete export content.
+
+Prepared local managed-file asset leases remain part of the ongoing protocol migration. Currently
+local documents keep their existing managed-file references and the document renderer resolves them;
+the common selection lifetime is implemented, but this does not yet pin those underlying bytes.

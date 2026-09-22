@@ -41,6 +41,39 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
+  test('isolates remote projections by connection and grant, rolls back cursors, and cascades removal', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      applyMigrations(database);
+      database.exec(`INSERT INTO desktop_connection (id, name, device_id, desktop_identity, addresses, port, grants, created_at, updated_at) VALUES ('pc', 'PC', 'device', 'identity', '[]', 1, '[]', 1, 1);
+        INSERT INTO remote_session_projection VALUES ('pc', 'grant-1', 'session', 'epoch', '9007199254740993', '{}', 1), ('pc', 'grant-2', 'session', 'epoch-2', '0', '{}', 1);`);
+      expect(
+        database
+          .prepare('SELECT seq FROM remote_session_projection WHERE scope_id = ?')
+          .get('grant-1'),
+      ).toEqual({ seq: '9007199254740993' });
+      expect(() =>
+        database.exec(
+          "INSERT INTO remote_session_projection VALUES ('pc', 'grant-1', 'session', 'epoch', '1', '{}', 1)",
+        ),
+      ).toThrow(/UNIQUE/);
+      database.exec(
+        "BEGIN; UPDATE remote_session_projection SET seq = '2', projection = '{\"updated\":true}' WHERE scope_id = 'grant-1'; ROLLBACK;",
+      );
+      expect(
+        database
+          .prepare('SELECT seq, projection FROM remote_session_projection WHERE scope_id = ?')
+          .get('grant-1'),
+      ).toEqual({ seq: '9007199254740993', projection: '{}' });
+      database.exec("DELETE FROM desktop_connection WHERE id = 'pc'");
+      expect(database.prepare('SELECT * FROM remote_session_projection').all()).toEqual([]);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('initializes row defaults and keeps preferences isolated by scope', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -167,6 +200,7 @@ describe('bundled SQLite migrations', () => {
         'painting',
         'plugin_authorization',
         'preference',
+        'remote_session_projection',
         'user_model',
         'user_provider',
       ]);

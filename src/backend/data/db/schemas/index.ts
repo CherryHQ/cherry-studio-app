@@ -11,6 +11,7 @@ import { mcpServerTable } from './mcpServer';
 import { paintingTable } from './painting';
 import { pluginAuthorizationTable } from './pluginAuthorization';
 import { preferenceTable } from './preference';
+import { remoteSessionProjectionTable } from './remoteSessionProjection';
 import { userModelTable } from './userModel';
 import { userProviderTable } from './userProvider';
 
@@ -20,6 +21,7 @@ export * from './agentSession';
 export * from './agentSessionMessage';
 export * from './aiUsageRecord';
 export * from './desktopConnection';
+export * from './remoteSessionProjection';
 export { monotonicUpdateTimestamp } from './_columnHelpers';
 export * from './job';
 export * from './mcpServer';
@@ -47,6 +49,7 @@ export const schema = {
   aiUsageRecordTable,
   appStateTable,
   desktopConnectionTable,
+  remoteSessionProjectionTable,
   fileEntryTable,
   jobTable,
   mcpServerTable,

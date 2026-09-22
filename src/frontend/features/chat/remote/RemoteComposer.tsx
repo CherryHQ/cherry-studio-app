@@ -8,188 +8,146 @@ import {
   Section,
   useToast,
 } from '@cherrystudio/ui/components';
-import { useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text } from 'react-native';
-import { v7 as uuidv7 } from 'uuid';
+import { ScrollView, Text, View } from 'react-native';
 
 import {
-  useRemoteActions,
-  useRemoteAgent,
-  useRemoteConnection,
-} from '@/frontend/appShell/remoteAgent';
+  useConversationDraft,
+  useConversationOperations,
+  useConversationSource,
+  useConversationWorkspaces,
+  type AgentSummary,
+  type ConversationRef,
+  type ConversationSession,
+  type ConversationSnapshot,
+  type DraftId,
+  type WorkspaceSummary,
+} from '@/frontend/appShell/conversation';
 import {
   ComposerSurface,
   useComposerPresentationActions,
   useComposerState,
+  useComposerActions,
 } from '@/frontend/components/Composer';
 import { usePersistCache } from '@/frontend/data/hooks';
-import type {
-  ControllerAgent,
-  ControllerSessionSnapshot,
-  ControllerWorkspace,
-} from '@/shared/contracts/agent/controller';
 
 import { ChatInputSurface } from '../components/ChatInput';
-import { isRemoteExecutionTerminal } from './useRemoteConversation';
-
-export type RemotePendingSend = { id: string; text: string; createdAt: string; messageId?: string };
+import { ConversationOperations } from '../components/ConversationOperations';
 
 export function RemoteComposer({
   agent,
-  sessionId,
-  draftKey,
+  session,
   snapshot,
+  draftId,
+  draftKey,
   onSessionCreated,
-  onPendingSend,
-  hasPendingSend,
 }: {
-  agent?: ControllerAgent;
-  sessionId?: string;
+  agent?: AgentSummary;
+  session?: ConversationSession;
+  snapshot: ConversationSnapshot;
+  draftId?: DraftId;
   draftKey: string;
-  snapshot?: ControllerSessionSnapshot;
-  onSessionCreated(sessionId: string, agentId: string): void;
-  onPendingSend(pending?: RemotePendingSend): void;
-  hasPendingSend: boolean;
+  onSessionCreated(ref: ConversationRef): boolean;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { controller, connectionId } = useRemoteAgent();
-  const connection = useRemoteConnection();
-  const actions = useRemoteActions();
-  const { draft } = useComposerState();
+  const source = useConversationSource();
+  const existing = draftId === undefined;
+  const { draft: text } = useComposerState();
+  const { setDraft } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
   const [, setDrafts] = usePersistCache('remote_agent.drafts');
-  const [workspace, setWorkspace] = useState<ControllerWorkspace>();
+  const [workspace, setWorkspace] = useState<WorkspaceSummary>();
   const [choosingWorkspace, setChoosingWorkspace] = useState(false);
   const [choosingExecution, setChoosingExecution] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [creationId, setCreationId] = useState<string>();
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const recoveredCreation = actions.find((action) => action.id === creationId);
-  const unresolvedCreation = actions.some(
-    (action) =>
-      action.kind === 'create' && action.agentId === agent?.id && action.status === 'confirming',
+  const workspaces = useConversationWorkspaces(agent?.ref);
+  const selectedWorkspace = workspaces.items.find(
+    (item) => item.id === (snapshot.workspaceId ?? workspace?.id),
   );
   useEffect(() => {
-    if (!sessionId && recoveredCreation?.sessionId && agent) {
-      onSessionCreated(recoveredCreation.sessionId, agent.id);
-      controller.dismissAction(recoveredCreation.id);
-    }
-  }, [sessionId, recoveredCreation, agent, controller, onSessionCreated]);
+    if (
+      snapshot.workspaceId &&
+      !selectedWorkspace &&
+      workspaces.hasNextPage &&
+      !workspaces.isFetchingNextPage &&
+      !workspaces.isError
+    )
+      void workspaces.fetchNextPage();
+  }, [snapshot.workspaceId, selectedWorkspace, workspaces]);
+  const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, draftId);
+  const starts = useConversationOperations(source);
+  const commands = useConversationOperations(session);
+  const handedOff = useRef<string | undefined>(undefined);
   useEffect(() => {
-    setDrafts((current) => ({
-      ...current,
-      [`${connectionId}:${connection.sourceKey}:${sessionId ?? draftKey}`]: draft,
-    }));
-  }, [draft, connectionId, connection.sourceKey, sessionId, draftKey, setDrafts]);
-  const current = Boolean(snapshot?.current) && connection.status === 'ready';
-  const busy = Boolean(current && snapshot && !isRemoteExecutionTerminal(snapshot.status));
-  const canStop = busy && connection.capabilities.cancel && Boolean(snapshot?.executions.length);
-  const stop = async (id: string) => {
-    if (!sessionId || !current) return;
+    const completed = starts.find(
+      (operation) =>
+        operation.draftId === draftId && operation.state === 'applied' && operation.conversation,
+    );
+    if (!session && completed?.conversation && handedOff.current !== completed.id) {
+      handedOff.current = completed.id;
+      if (onSessionCreated(completed.conversation)) completed.dismiss?.();
+    }
+  }, [starts, draftId, session, onSessionCreated]);
+
+  const operations = [
+    ...starts.filter(
+      (operation) => !session || operation.conversation?.sessionId === session.ref.sessionId,
+    ),
+    ...commands,
+  ];
+  const startPending = starts.some(
+    (operation) => operation.draftId === draftId && operation.state === 'pending',
+  );
+  const action = existing ? snapshot.actions.send : draft.state?.start;
+  const cancellations = snapshot.executions.filter((execution) => execution.cancel);
+  const canStop = cancellations.some(
+    (execution) => execution.cancel?.availability.state === 'enabled',
+  );
+  useEffect(() => {
+    setDrafts((current) =>
+      current[draftKey] === text ? current : { ...current, [draftKey]: text },
+    );
+  }, [text, draftKey, setDrafts]);
+  const stop = async (index: number) => {
     setChoosingExecution(false);
-    try {
-      const action = await controller.cancel(sessionId, id);
-      if (action.status === 'failed') throw new Error('CANCEL_REJECTED');
-    } catch {
+    const result = await cancellations[index]?.cancel?.execute(undefined);
+    if (result?.state === 'rejected' || result?.state === 'interrupted')
       toast.show({ label: t('chat.input.stopFailed'), variant: 'danger' });
-    }
   };
-  const send = async ({ text }: { text: string }) => {
-    let targetSessionId = sessionId;
-    const pending = { id: uuidv7(), text, createdAt: new Date().toISOString() };
-    onPendingSend(pending);
-    try {
-      if (!targetSessionId) {
-        if (!agent || creating || unresolvedCreation) throw new Error('CREATE_PENDING');
-        setCreating(true);
-        try {
-          const action = await controller.createSession(agent.id, workspace?.id);
-          if (!action.sessionId) {
-            if (mounted.current) setCreationId(action.id);
-            throw new Error(action.status === 'confirming' ? 'CREATE_PENDING' : 'CREATE_REJECTED');
-          }
-          targetSessionId = action.sessionId;
-          if (mounted.current) onSessionCreated(targetSessionId, agent.id);
-          controller.dismissAction(action.id);
-        } finally {
-          if (mounted.current) setCreating(false);
-        }
-      }
-      const result = await controller.sendMessage(targetSessionId, text);
-      // A missing receipt is recovered by the durable action list, never by submitting twice.
-      if (result.status === 'failed') {
-        controller.dismissAction(result.id);
-        throw new Error('SEND_REJECTED');
-      }
-      if (mounted.current)
-        onPendingSend(
-          result.userMessageId ? { ...pending, messageId: result.userMessageId } : undefined,
-        );
-    } catch (error) {
-      if (mounted.current) onPendingSend(undefined);
-      else
-        setDrafts((current) => ({
-          ...current,
-          [`${connectionId}:${connection.sourceKey}:${targetSessionId ?? draftKey}`]: [
-            text,
-            current[`${connectionId}:${connection.sourceKey}:${targetSessionId ?? draftKey}`],
-          ]
-            .filter(Boolean)
-            .join('\n'),
-        }));
-      throw error;
-    }
-  };
-  const openWorkspace = () => void runInputReplacement(() => setChoosingWorkspace(true));
-  const canChooseWorkspace =
-    !sessionId &&
-    connection.status === 'ready' &&
-    connection.capabilities.workspaces &&
-    !creating &&
-    !unresolvedCreation &&
-    !hasPendingSend;
-  const activeWorkspace = sessionId ? (snapshot?.session.workspace ?? workspace) : workspace;
-  const workspaceLabel =
-    activeWorkspace?.type === 'user'
-      ? activeWorkspace.name
-      : sessionId && !snapshot && !workspace
-        ? t('remoteAgent.loading')
-        : t('remoteAgent.systemWorkspace');
   return (
     <>
+      <View className="max-h-36">
+        <ScrollView keyboardShouldPersistTaps="handled">
+          <ConversationOperations
+            operations={operations}
+            onRestore={(input) =>
+              setDraft((current) =>
+                [
+                  input.parts
+                    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+                    .join('\n'),
+                  current,
+                ]
+                  .filter(Boolean)
+                  .join('\n'),
+              )
+            }
+          />
+        </ScrollView>
+      </View>
       <ComposerSurface
-        canSend={
-          connection.status === 'ready' &&
-          connection.capabilities.send &&
-          Boolean(draft.trim()) &&
-          !creating &&
-          !hasPendingSend &&
-          (sessionId
-            ? current
-            : Boolean(agent && agent.availability === 'configured') && !unresolvedCreation)
-        }
-        dismissKeyboardOnSend
-        getSendErrorLabel={(error) =>
-          t(
-            error instanceof Error && error.message === 'CREATE_PENDING'
-              ? 'remoteAgent.confirming'
-              : 'remoteAgent.sendFailed',
-          )
-        }
+        canSend={action?.availability.state === 'enabled' && Boolean(text.trim()) && !startPending}
         streaming={canStop}
-        onSend={send}
+        dismissKeyboardOnSend
+        onSend={async ({ text }) => {
+          if (!action || action.availability.state !== 'enabled') throw new Error('UNAVAILABLE');
+          const result = await action.execute({ parts: [{ type: 'text', text }] });
+          if (result.state === 'rejected') throw new Error(result.failure.code);
+          // Pending/interrupted admission is visible in operations; never create a second send here.
+        }}
         onStop={() => {
-          if (!snapshot?.executions.length) return;
-          if (snapshot.executions.length === 1) void stop(snapshot.executions[0]!.id);
+          if (cancellations.length === 1) void stop(0);
           else void runInputReplacement(() => setChoosingExecution(true));
         }}
         testID="chat-composer"
@@ -207,35 +165,67 @@ export function RemoteComposer({
             </Composer.Action>
           }
           secondaryAction={
-            connection.capabilities.workspaces || activeWorkspace ? (
-              <Composer.Pill
-                accessibilityLabel={`${t('remoteAgent.workspace')}: ${workspaceLabel}`}
-                disabled={!canChooseWorkspace}
-                icon={<FolderIcon className="size-5 text-foreground" />}
-                onPress={canChooseWorkspace ? openWorkspace : undefined}
-                testID="composer-workspace-button"
+            <Composer.Pill
+              accessibilityLabel={t('remoteAgent.workspace')}
+              disabled={existing || startPending}
+              onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
+              icon={<FolderIcon className="size-5 text-foreground" />}
+              testID="composer-workspace-button"
+            >
+              <Text
+                className="min-w-0 shrink font-semibold text-sm text-foreground"
+                numberOfLines={1}
               >
-                <Text
-                  className="min-w-0 shrink font-semibold text-sm text-foreground"
-                  numberOfLines={1}
-                >
-                  {workspaceLabel}
-                </Text>
-              </Composer.Pill>
-            ) : undefined
+                {selectedWorkspace?.name ?? t('remoteAgent.workspace')}
+              </Text>
+            </Composer.Pill>
           }
         />
       </ComposerSurface>
-      {choosingWorkspace && !sessionId ? (
-        <RemoteWorkspacePicker
-          selectedId={workspace?.id}
+      {draft.error ? <ContentState.Error title={t('remoteAgent.loadFailed')} /> : null}
+      {choosingWorkspace && !existing ? (
+        <BottomSheet
+          open
           onClose={() => setChoosingWorkspace(false)}
-          onSelect={(selected) => {
-            if (!canChooseWorkspace) return;
-            setWorkspace(selected);
-            setChoosingWorkspace(false);
-          }}
-        />
+          title={t('remoteAgent.workspace')}
+          size="medium"
+        >
+          <ScrollView contentContainerClassName="px-4 pb-4">
+            <Section>
+              {workspaces.items.map((item) => (
+                <Section.RadioItem
+                  key={item.ref}
+                  label={item.name}
+                  selected={selectedWorkspace?.id === item.id}
+                  disabled={startPending}
+                  onPress={() => {
+                    setWorkspace(item);
+                    setChoosingWorkspace(false);
+                  }}
+                />
+              ))}
+            </Section>
+            {workspaces.isLoading ? <ContentState.Loading /> : null}
+            {workspaces.isError ? (
+              <ContentState.Error
+                title={t('remoteAgent.loadFailed')}
+                primaryAction={{
+                  children: t('common.retry'),
+                  onPress: () => void workspaces.refetch(),
+                }}
+              />
+            ) : null}
+            {workspaces.hasNextPage ? (
+              <Button
+                variant="ghost"
+                loading={workspaces.isFetchingNextPage}
+                onPress={() => void workspaces.fetchNextPage()}
+              >
+                {t('remoteAgent.loadMore')}
+              </Button>
+            ) : null}
+          </ScrollView>
+        </BottomSheet>
       ) : null}
       {choosingExecution ? (
         <BottomSheet
@@ -245,85 +235,17 @@ export function RemoteComposer({
           size="medium"
         >
           <Section>
-            {snapshot?.executions.map((execution, index) => (
+            {cancellations.map((execution, index) => (
               <Section.Item
-                key={execution.id}
+                key={execution.ref}
                 label={t('remoteAgent.stopExecution', { index: index + 1 })}
-                disabled={!current}
-                onPress={() => void stop(execution.id)}
+                disabled={execution.cancel?.availability.state !== 'enabled'}
+                onPress={() => void stop(index)}
               />
             ))}
           </Section>
         </BottomSheet>
       ) : null}
     </>
-  );
-}
-
-function RemoteWorkspacePicker({
-  selectedId,
-  onSelect,
-  onClose,
-}: {
-  selectedId?: string;
-  onSelect(workspace?: ControllerWorkspace): void;
-  onClose(): void;
-}) {
-  const { t } = useTranslation();
-  const { controller, connectionId } = useRemoteAgent();
-  const connection = useRemoteConnection();
-  const workspaces = useInfiniteQuery({
-    queryKey: ['agentController', connectionId, connection.sourceKey, 'workspaces'],
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam, signal }) => controller.listWorkspaces(pageParam, signal),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-    enabled: connection.status === 'ready',
-    retry: false,
-  });
-  return (
-    <BottomSheet open onClose={onClose} title={t('remoteAgent.workspace')} size="medium">
-      <ScrollView contentContainerClassName="px-4 pb-4">
-        <Section>
-          <Section.RadioItem
-            label={t('remoteAgent.systemWorkspace')}
-            disabled={connection.status !== 'ready'}
-            onPress={() => onSelect()}
-            selected={!selectedId}
-          />
-          {workspaces.data?.pages
-            .flatMap((page) => page.items)
-            .filter((workspace) => workspace.type === 'user')
-            .map((workspace) => (
-              <Section.RadioItem
-                key={workspace.id}
-                label={workspace.name}
-                description={workspace.path}
-                disabled={connection.status !== 'ready'}
-                selected={selectedId === workspace.id}
-                onPress={() => onSelect(workspace)}
-              />
-            ))}
-        </Section>
-        {workspaces.isLoading ? <ContentState.Loading /> : null}
-        {workspaces.isError ? (
-          <ContentState.Error
-            title={t('remoteAgent.loadFailed')}
-            primaryAction={{
-              children: t('common.retry'),
-              onPress: () => void workspaces.refetch(),
-            }}
-          />
-        ) : null}
-        {workspaces.hasNextPage ? (
-          <Button
-            variant="ghost"
-            loading={workspaces.isFetchingNextPage}
-            onPress={() => void workspaces.fetchNextPage()}
-          >
-            {t('remoteAgent.loadMore')}
-          </Button>
-        ) : null}
-      </ScrollView>
-    </BottomSheet>
   );
 }
