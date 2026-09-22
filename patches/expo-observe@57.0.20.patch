@@ -1,0 +1,54 @@
+diff --git a/android/src/main/java/expo/modules/observe/ObservabilityBackgroundWorker.kt b/android/src/main/java/expo/modules/observe/ObservabilityBackgroundWorker.kt
+index e41d7f3ceb58a60431dffdf63767a29df6fd575a..9776c9d4afefc42f6018cd0894f91b0e91cccfcd 100644
+--- a/android/src/main/java/expo/modules/observe/ObservabilityBackgroundWorker.kt
++++ b/android/src/main/java/expo/modules/observe/ObservabilityBackgroundWorker.kt
+@@ -18,6 +18,10 @@ import androidx.work.workDataOf
+ import expo.modules.observe.storage.PendingLogsManager
+ import expo.modules.observe.storage.PendingMetricsManager
+ import expo.modules.appmetrics.storage.SessionManager
++import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.SupervisorJob
++import kotlinx.coroutines.launch
+ 
+ /**
+  * Background worker that dispatches previously queued metrics to EAS Observe.
+@@ -95,10 +99,38 @@ class ObservabilityBackgroundWorker(
+   companion object {
+     private const val WORK_NAME = "eas-observe-dispatch"
+ 
++    /**
++     * `scheduleBackgroundDispatch` is called from `OnActivityEntersBackground`, which Expo
++     * delivers on the main thread. Building the request class-initializes
++     * `androidx.work.impl.model.WorkSpec` together with its `Data`/`Constraints` machinery, and
++     * `WorkManager.getInstance()` resolves the WorkManager singleton, all on the caller's thread.
++     * Production reported that as a main-thread ANR in the first build that enabled background
++     * dispatch. Enqueueing is fire-and-forget under `ExistingWorkPolicy.KEEP`, so it can run on a
++     * worker thread. The dispatch gate deliberately stays inside the worker: when dispatching is
++     * disabled the worker is what drains the pending metrics and logs tables.
++     */
++    private val schedulingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
++
+     fun scheduleBackgroundDispatch(
+       context: Context,
+       projectId: String,
+       baseUrl: String
++    ) {
++      val applicationContext = context.applicationContext
++      schedulingScope.launch {
++        try {
++          enqueueBackgroundDispatch(applicationContext, projectId, baseUrl)
++        } catch (e: Exception) {
++          // A skipped flush is recoverable: the next foreground dispatch drains the same tables.
++          Log.e(OBSERVE_TAG, "Failed to schedule background dispatch", e)
++        }
++      }
++    }
++
++    private fun enqueueBackgroundDispatch(
++      context: Context,
++      projectId: String,
++      baseUrl: String
+     ) {
+       val constraints = Constraints
+         .Builder()

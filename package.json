@@ -10,7 +10,8 @@
       "android": {
         "buildFromSource": [
           "expo-notifications",
-          "expo-image-picker"
+          "expo-image-picker",
+          "expo-observe"
         ]
       }
     }

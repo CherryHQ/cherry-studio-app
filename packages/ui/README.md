@@ -96,7 +96,19 @@ native renderer. A part that has streamed keeps the streaming renderer for its f
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
 the same theme tokens, syntax palette, LaTeX flags, and typography scale. Native streaming mode ends
 with each part, releasing pending tail blocks and requesting a final layout even when the text
-itself is unchanged. Product code supplies the active font size step, decides how links open, and
+itself is unchanged. `normalizeLatexDelimiters` from `@cherrystudio/ui/markdown` rewrites TeX
+`\(...\)` and `\[...\]` delimiters to dollar math before either renderer parses them, and the
+document exporter runs the same function so previews and exports agree. An inline formula never
+crosses a blank line or a code region; a `\[` that owns its line opens a display block that may
+span blank lines until a `\]` ends a line. Nested delimiters of the same kind are balanced and
+the inner pair dropped. `\[...\]` only counts as math when its body carries a TeX signal such as
+a command, `^`, `_`, `=`, or braces, so escaped citations like `\[1\]` stay text. Physical
+formula newlines become spaces (after dropping TeX `%` comments and block-quote markers) so
+Markdown cannot interpret equation lines as headings or quotes. During streaming, output stays
+append-only: a formula whose meaning a later chunk could still change is withheld until its
+paragraph closes, and an incomplete final formula retains its source. This only changes
+presentation, not stored messages. Product code supplies the active font size step, decides how
+links open, and
 passes the native copy-menu labels already translated. The renderer presents those menus itself, on
 text selections and on Markdown tables, so omitting the labels leaves the library's English
 defaults:
