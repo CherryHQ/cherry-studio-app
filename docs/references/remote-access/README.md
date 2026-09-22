@@ -1,9 +1,9 @@
 # Remote Access
 
-Status: plan. The desktop side is implemented in Cherry Studio PR #20717
-(`zhangjiadi225/lan-agent-remote-design`). This document fixes the mobile design against that
-contract; nothing here is built yet. It supersedes the HTTP pairing that `main` ships today and the
-snapshot-based prototype in mobile PR #997.
+Status: slices 1–3 (packages, pairing, configuration sync) are implemented; slices 4–6 (Agent
+access, commands, lifecycle) are still the plan below. The desktop side is implemented in Cherry
+Studio PR #20717 (`zhangjiadi225/lan-agent-remote-design`). This document supersedes the HTTP
+pairing that `main` shipped and the snapshot-based prototype in mobile PR #997.
 
 ## What exists and what is replaced
 
@@ -44,14 +44,16 @@ with a current desktop. Configuration sync therefore ships in the first slice, b
 ## Shared packages
 
 - `packages/remote-protocol`: mirrored from the desktop repository (`desktop-sync-manifest.json`
-  domain `remote-protocol`, strategy `mirror`, like `ai-core`). Backend-only import. Its tests
-  (`applyAgentEvents`, `installAgentCheckpoint`, canonical encoding) run unchanged under Vitest.
-- `packages/remote-transport`: mirrored as well if the first slice proves `@libp2p/noise`,
-  `@libp2p/utils` and `@libp2p/crypto` run under Hermes/Metro (package `exports` resolution,
-  `TextDecoder` with `fatal`, `AbortSignal.any`, `TypedEventTarget`). If they do not, mobile keeps a
-  single `noiseChannel.ts` on `@noble/ciphers` + `@noble/curves` that speaks the identical profile,
-  verified against handshake transcripts recorded from the desktop package tests. The spike is the
-  only gate on the whole plan and runs first.
+  domain `remote-protocol`, strategy `semantic-port`; only `package.json` differs). Backend-only
+  import. Its tests (`applyAgentEvents`, `installAgentCheckpoint`, canonical encoding) run unchanged
+  under Vitest.
+- `packages/remote-transport`: mirrored the same way. Its Node tests pass under the mobile
+  toolchain; the app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
+  along with the service registry (Jest cannot resolve it). Whether `@libp2p/noise`, `@libp2p/utils`
+  and `@libp2p/crypto` run under Hermes/Metro (package `exports` resolution, `TextDecoder` with
+  `fatal`) is still unverified on a device. If they do not, mobile keeps a single `noiseChannel.ts`
+  on `@noble/ciphers` + `@noble/curves` speaking the identical profile, verified against handshake
+  transcripts recorded from the desktop package tests.
 - RN `WebSocket` is wrapped into the transport's `RemoteSocket` shape (`binaryType = 'arraybuffer'`,
   `bufferedAmount` reported as 0, `close(code)`).
 
@@ -89,8 +91,8 @@ Settings / onboarding device screens, DesktopProviderSyncScreen, drawer Remote g
 
 | Store | Content |
 | --- | --- |
-| `desktop_connection` (migrated) | `id` = desktop-assigned `deviceId`, `name`, `addresses[]`, `port`, `desktopIdentity`, `grants` (`{ domain, grantId }[]`), `status`, `lastFetchedAt`; drops `baseUrls`, `activeBaseUrl`, `desktopVersion`. Existing rows become `needs-repair` (re-pair). |
-| SecureStore | `remote-identity` (private key protobuf, base64). The old `desktop-connection-token.*` entries are deleted on migration. |
+| `desktop_connection` (migrated) | `id` = desktop-assigned `deviceId`, `name`, `addresses[]`, `port`, `desktopIdentity`, `grants` (`{ domain, grantId }[]`), `status`, `lastFetchedAt`; drops `baseUrls`, `activeBaseUrl`, `desktopVersion`. The migration recreates the table and drops HTTP-era rows, which can no longer connect. |
+| SecureStore | `remote-device-identity` (private key protobuf, hex). HTTP-era `desktop-connection-token.*` entries are simply no longer read. |
 | `remote_session_projection` (new) | `connectionId`, `grantId`, `sessionId`, `streamEpoch`, `seq`, `projection` JSON, `updatedAt`. Written in one transaction with each applied batch, before the ACK. |
 | `remote_agent_command` (PR #997 journal) | Unchanged: `commandId`, method, params, connection + grant, status, receipt. |
 
