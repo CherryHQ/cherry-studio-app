@@ -164,9 +164,10 @@ Babel. Keep those settings when updating Hermes. Worklets 0.10.2 remains within 
 supported 0.10.x range; removing the experimental mode requires a separate change to streaming
 Markdown processing.
 
-Android builds compile `expo-image-picker`, `expo-notifications`, and `expo-observe` from source through
+Android builds compile `expo-image-picker`, `expo-notifications`, `expo-app-metrics`, and `expo-observe` from source through
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
-instead of using Expo's precompiled binaries. The App Metrics patch retains the main session's
+instead of using Expo's precompiled binaries. Observe's source build requires App Metrics to be
+available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
 
 ### iOS Build 26 Crash Patches
