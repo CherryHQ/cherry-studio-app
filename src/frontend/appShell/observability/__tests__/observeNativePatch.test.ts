@@ -15,6 +15,11 @@ const scheduleBody = worker.slice(
 
 // Upgrade guards for the installed native implementation; these do not replace device
 // acceptance of the background transition or of WorkManager admission.
+test('Android builds the patched observe sources instead of the bundled unpatched AAR', () => {
+  const config = JSON.parse(readFileSync(join(__dirname, '../../../../../package.json'), 'utf8'));
+  expect(config.expo.autolinking.android.buildFromSource).toContain('expo-observe');
+});
+
 test('the background transition hands scheduling to a worker thread', () => {
   expect(observeModule).toMatch(
     /OnActivityEntersBackground \{[\s\S]*?scheduleBackgroundDispatch\(\)/,

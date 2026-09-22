@@ -153,7 +153,7 @@ and slow development startup. See the [Expo SDK 57 release notes](https://expo.d
 Existing development clients must be rebuilt to receive the engine update.
 
 Keep the version-specific patches for Expo Router, Calendar, Notifications, Image Picker, App Metrics,
-Widgets, React Native, Screens, Reanimated, Metro, and Metro Runtime when updating dependencies.
+Observe, Widgets, React Native, Screens, Reanimated, Metro, and Metro Runtime when updating dependencies.
 The upgraded patched direct dependencies use exact versions so an unrelated install cannot select
 a newer unpatched release.
 Metro 0.84.5 is selected by Expo's Metro dependency; its patches support the existing Worklets Bundle
@@ -164,7 +164,7 @@ Babel. Keep those settings when updating Hermes. Worklets 0.10.2 remains within 
 supported 0.10.x range; removing the experimental mode requires a separate change to streaming
 Markdown processing.
 
-Android builds compile `expo-image-picker` and `expo-notifications` from source through
+Android builds compile `expo-image-picker`, `expo-notifications`, and `expo-observe` from source through
 `expo.autolinking.android.buildFromSource` in `package.json`, so their native patches are included
 instead of using Expo's precompiled binaries. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
