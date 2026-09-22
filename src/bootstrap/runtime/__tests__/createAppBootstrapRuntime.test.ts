@@ -35,10 +35,12 @@ const mockServices = {
   webSearch: mockWebSearch,
 };
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
+const mockDisposeSystemEntry = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
   dataApiDependencies: mockDataApiDependencies,
+  disposeSystemEntry: mockDisposeSystemEntry,
 }));
 
 jest.mock('@/backend/data/DataApiService', () => ({
@@ -194,8 +196,8 @@ describe('createAppBootstrapRuntime', () => {
     expect(secondDispose).toBe(firstDispose);
     await firstDispose;
 
-    // Nothing is sequenced ahead of the host. Reverse-order teardown stops the
-    // job runtime before the database it writes through.
+    expect(mockDisposeSystemEntry).toHaveBeenCalledTimes(1);
+    // Native consumers stop before host-owned data and runtimes are disposed.
     expect(application.hasHost).toBe(false);
   });
 

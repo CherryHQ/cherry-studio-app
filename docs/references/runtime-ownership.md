@@ -59,8 +59,8 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 
 - creates an `ApplicationHost` and configures its platform-facing activity environment;
 - creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
-- installs the host, whose dependency graph initializes cache before SQLite seeding and preferences,
-  then waits for the native splash handoff before applying boot theme and i18n;
+- installs the host, whose dependency graph initializes SQLite seeding before preferences, then
+  waits for the native splash handoff before applying boot theme and i18n;
 - starts best-effort post-ready tasks after the gate opens;
 - uninstalls the host on unmount; reverse dependency order drains consumers before their
   infrastructure.
@@ -130,6 +130,12 @@ route changes. Frontend hooks own only observation and UI synchronization. See
 resource-deletion contract.
 
 ## Other Long-Lived Resources
+
+- `SystemEntryBridge` owns the foreground claim pass. `systemEntry` owns the import and the native
+  acknowledgement that ends a claim; bootstrap drains in-flight claims before stopping the host.
+  A claimed share then lives only in the composer, so the process that is killed with an unsent
+  draft loses it. Unclaimed staging survives process restart until consumed or expired. The iOS
+  share extension runs outside the main app process and does not own another Backend or Agent Host.
 
 - `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
 - `WebSearchService` owns API-key rotation state; the host stops it.

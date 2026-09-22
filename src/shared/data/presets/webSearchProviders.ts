@@ -122,10 +122,6 @@ export const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_IDS = [
   'firecrawl',
 ] as const satisfies readonly WebSearchProviderId[];
 
-const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_ID_SET = new Set<WebSearchProviderId>(
-  MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_IDS,
-);
-
 export const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS: readonly WebSearchProviderPreset[] =
   MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_IDS.map((id) => ({
     id,
@@ -136,8 +132,4 @@ export function getMobileSupportedWebSearchProvidersByCapability(capability: Web
   return MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.filter((provider) =>
     provider.capabilities.some((item) => item.feature === capability),
   );
-}
-
-export function isMobileSupportedWebSearchProviderId(providerId: WebSearchProviderId): boolean {
-  return MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_ID_SET.has(providerId);
 }

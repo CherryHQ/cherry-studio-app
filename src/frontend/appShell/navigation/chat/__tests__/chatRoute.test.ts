@@ -26,6 +26,19 @@ describe('shared chat route contract', () => {
     });
   });
 
+  test('carries a composer handoff on a draft and drops it on a Session', () => {
+    const target = { agentId: 'agent-1', kind: 'draft' as const, composerHandoff: 'share-1' };
+    expect(parseChatRoute(chatRouteParams(target))).toEqual({ status: 'ready', target });
+    expect(chatRouteParams({ kind: 'session', sessionId: 'session-1' })).toHaveProperty(
+      'composerHandoff',
+      undefined,
+    );
+    expect(parseChatRoute({ composerHandoff: 'share-1', sessionId: 'session-1' })).toEqual({
+      status: 'ready',
+      target: { kind: 'session', sessionId: 'session-1' },
+    });
+  });
+
   test('serializes complete chat identity for return navigation', () => {
     expect(chatReturnToHref({ kind: 'session', sessionId: 'session / 1' })).toBe(
       '/?sessionId=session%20%2F%201',

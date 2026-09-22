@@ -134,7 +134,7 @@ test('HTML escapes authored markup, rejects executable links, renders tables and
     kind: 'markdown',
     title: '<script>title</script>',
     source:
-      '<script>alert(1)</script>\n\n[bad](javascript:alert(1))\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n$x^2$',
+      '<script>alert(1)</script>\n\n[bad](javascript:alert(1))\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n$x^2$ \\(y_1\\) \\[1\\]',
   });
   const result = await renderHtml(
     document,
@@ -147,7 +147,8 @@ test('HTML escapes authored markup, rejects executable links, renders tables and
   expect(result.html).not.toContain('href="javascript:');
   expect(result.html).toContain('&lt;script&gt;');
   expect(result.html).toContain('<table>');
-  expect(result.html).toContain('<math');
+  expect(result.html.match(/<math/g)).toHaveLength(2);
+  expect(result.html).toContain('[1]');
   expect(result.html).not.toContain('<script src=');
   expect(result.issues).toEqual([]);
 });

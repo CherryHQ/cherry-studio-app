@@ -13,6 +13,10 @@ page.
 - `startup/` owns the frontend startup cover, readiness reporting, and handoff lifecycle.
 - `observability/` owns EAS Observe, the entry-screen interactive marker, and Sentry consent,
   JavaScript event filtering, and the connection to the native crash-reporting module.
+- `privacy/` owns the blocking data-collection disclosure. It is app-wide rather than part of
+  onboarding because an install that has already finished onboarding still has to answer a new
+  policy version. Both answers record the version, so whether collection runs is carried by the
+  settings switch alone; the analytics service reads the resulting consent predicate.
 
 App Shell modules expose deliberate public roots and may depend on shared frontend components,
 data, hooks, and utilities. They must not import page-private code.

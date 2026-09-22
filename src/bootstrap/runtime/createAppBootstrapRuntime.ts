@@ -102,7 +102,7 @@ export function createAppBootstrapRuntime(
     preference,
     webSearch,
   });
-  const { backend, dataApiDependencies } = createBackend(services, {
+  const { backend, dataApiDependencies, disposeSystemEntry } = createBackend(services, {
     dbService,
     documentExport,
     desktopConnections,
@@ -142,9 +142,10 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
-      // Nothing to drain ahead of the host: `JobRuntime` is a service, so
-      // reverse-order teardown settles it before the database it writes through.
+      // Drain system-entry consumers before the host's resources.
+      // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
+        await disposeSystemEntry();
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;
@@ -161,9 +162,7 @@ export function createAppBootstrapRuntime(
       await initializeAppRuntime(services);
     },
     runPostReadyTasks: async () => {
-      // Starts the PostReady phase alongside the hand-run tasks. Both are
-      // best-effort and off the first-paint path; the host logs its own
-      // failures rather than surfacing them here.
+      // Starts the best-effort PostReady phase off the first-paint path.
       host.runPostReady();
     },
   };

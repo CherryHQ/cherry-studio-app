@@ -175,7 +175,7 @@ describe('ChatScreen composer dock wiring', () => {
   });
 
   it.each(['session', 'draft'] as const)(
-    'dismisses the %s composer on a completed background press, but yields to cancelled gestures',
+    'dismisses the %s composer on a completed background tap, but not on scrolls or long presses',
     (target) => {
       if (target === 'draft') {
         mockRouteParams = { agentId: 'agent-1' };
@@ -187,26 +187,37 @@ describe('ChatScreen composer dock wiring', () => {
       const background = renderer!.root.find(
         (node) => typeof node.type === 'string' && node.props.testID === 'chat-background',
       );
-      const nativeTarget = {
-        measure: (callback: (...bounds: number[]) => void) => callback(0, 0, 400, 800, 0, 0),
-      };
-      const event = {
-        currentTarget: nativeTarget,
-        nativeEvent: { pageX: 100, pageY: 100 },
-        persist: jest.fn(),
-        target: nativeTarget,
-      };
+      const touchAt = (pageX: number, pageY: number) => ({
+        nativeEvent: { pageX, pageY },
+      });
 
-      act(() => background.props.onResponderGrant(event));
-      expect(mockDismissInput).not.toHaveBeenCalled();
-      // A native scroll/selection recognizer can cancel this candidate press.
-      expect(background.props.onResponderTerminationRequest()).toBe(true);
-      act(() => background.props.onResponderTerminate(event));
-      expect(mockDismissInput).not.toHaveBeenCalled();
+      // The area never enters the responder negotiation — it must not claim
+      // press eligibility at all, or the list scroll handoff breaks on device.
+      expect(background.props.onStartShouldSetResponder).toBeUndefined();
 
+      // A scroll: the touch moves well beyond the tap slop before ending.
       act(() => {
-        background.props.onResponderGrant(event);
-        background.props.onResponderRelease(event);
+        background.props.onTouchStart(touchAt(100, 100));
+        background.props.onTouchEnd(touchAt(100, 180));
+      });
+      expect(mockDismissInput).not.toHaveBeenCalled();
+
+      // A long press: stationary but held past the tap duration.
+      const nowSpy = jest.spyOn(Date, 'now');
+      try {
+        nowSpy.mockReturnValue(1_000);
+        act(() => background.props.onTouchStart(touchAt(100, 100)));
+        nowSpy.mockReturnValue(1_600);
+        act(() => background.props.onTouchEnd(touchAt(104, 102)));
+      } finally {
+        nowSpy.mockRestore();
+      }
+      expect(mockDismissInput).not.toHaveBeenCalled();
+
+      // A completed tap within the slop and duration dismisses exactly once.
+      act(() => {
+        background.props.onTouchStart(touchAt(100, 100));
+        background.props.onTouchEnd(touchAt(104, 102));
       });
       expect(mockDismissInput).toHaveBeenCalledTimes(1);
     },
@@ -245,6 +256,18 @@ describe('ChatScreen composer dock wiring', () => {
 
     expect(chatInputProps).toBeUndefined();
     expect(chatWorkspaceProps).toMatchObject({ sessionId: 'session-1' });
+
+    // Without a composer there is nothing to dismiss, so a background tap
+    // stays inert.
+    const background = renderer!.root.find(
+      (node) => typeof node.type === 'string' && node.props.testID === 'chat-background',
+    );
+    const touchAt = (pageX: number, pageY: number) => ({ nativeEvent: { pageX, pageY } });
+    act(() => {
+      background.props.onTouchStart(touchAt(100, 100));
+      background.props.onTouchEnd(touchAt(100, 100));
+    });
+    expect(mockDismissInput).not.toHaveBeenCalled();
   });
 
   it('resolves a draft when the requested Session is missing', () => {

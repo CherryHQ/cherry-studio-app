@@ -43,6 +43,7 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
+import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -50,6 +51,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;
+  disposeSystemEntry(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -191,8 +193,14 @@ export function createBackend(
     },
   });
 
+  const systemEntry = createSystemEntryModule({
+    importFiles: createSystemShareImporter(exportFiles),
+  });
+
   return {
+    disposeSystemEntry: systemEntry.dispose,
     backend: {
+      systemEntry: systemEntry.module,
       agent: services.agent,
       desktopConnections: infrastructure.desktopConnections,
       documentExport: infrastructure.documentExport,
