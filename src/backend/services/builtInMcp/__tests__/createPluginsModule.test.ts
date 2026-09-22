@@ -75,7 +75,8 @@ it('commits an observed ready attempt only after read-only validation of its sel
     .mockResolvedValue({ credential, accountLabel: 'Cherry (ou_cherry)', signal });
   const commit = jest.spyOn(auth, 'commit').mockResolvedValue(connection);
   const invalidateServer = jest.fn();
-  const plugins = createModule({ invalidateServer }, authorizations);
+  const prewarmServer = jest.fn();
+  const plugins = createModule({ invalidateServer, prewarmServer }, authorizations);
   const connected = new Promise<unknown>((resolve) => {
     plugins.authorization.observe('feishu', 'feishu_user', (observation) => {
       if (observation.connection) resolve(observation.connection);
@@ -89,6 +90,10 @@ it('commits an observed ready attempt only after read-only validation of its sel
     signal,
   );
   expect(invalidateServer).toHaveBeenCalledWith(connection.serverId);
+  expect(prewarmServer).toHaveBeenCalledWith(connection.serverId);
+  expect(prewarmServer.mock.invocationCallOrder[0]).toBeGreaterThan(
+    invalidateServer.mock.invocationCallOrder[0]!,
+  );
   await auth.stop();
 });
 

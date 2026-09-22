@@ -379,10 +379,16 @@ export async function prepareResolvedTurn(
       logger.warn('Failed to resolve system capabilities; continuing without them', error as Error);
     }
     try {
+      // The turn signal reaches live MCP discovery so cancelling the send
+      // stops the network request rather than only abandoning its result.
       const configured = await raceAbort(
-        dependencies.runtimeTools.resolve(agent.id, (warning) => {
-          if (!signal.aborted) toolDiscoveryWarnings.push(warning);
-        }),
+        dependencies.runtimeTools.resolve(
+          agent.id,
+          (warning) => {
+            if (!signal.aborted) toolDiscoveryWarnings.push(warning);
+          },
+          signal,
+        ),
         signal,
       );
       configuredTools = configured.tools;

@@ -25,7 +25,7 @@ import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { PluginId } from '@/shared/data/types/plugin';
 import { isSameMcpConnectionConfig, normalizeMcpHeaders } from '@/shared/utils/mcpConnectionConfig';
 
-import type { TraceRecorder, TraceSpan } from '../observability';
+import type { TraceRecorder } from '../observability';
 import { endMcpTrace } from './endMcpTrace';
 import {
   createBoundedSignal,
@@ -35,6 +35,12 @@ import {
   McpRuntimeToolError,
   prepareMcpInputSchema,
 } from './mcpRuntimeAdapter';
+import {
+  createMcpConnectionKey,
+  deleteMcpToolCatalog,
+  readMcpToolCatalog,
+  writeMcpToolCatalog,
+} from './mcpToolCatalogStore';
 
 const logger = loggerService.withContext('McpRuntimeService');
 
@@ -43,6 +49,12 @@ const logger = loggerService.withContext('McpRuntimeService');
  * Without it a server that accepts the socket then stalls would pin a client
  * slot indefinitely. */
 const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
+
+/** A failed discovery is not retried on the send path until this much time
+ * has passed; doubled per consecutive failure so a dead server costs one
+ * timeout, then nothing, while the settings screens can still probe it. */
+const DISCOVERY_BACKOFF_MS = 30 * 1000;
+const DISCOVERY_BACKOFF_MAX_MS = 5 * 60 * 1000;
 
 type McpRuntimeConnectionConfig =
   | McpConnectionConfig
@@ -71,15 +83,36 @@ type McpToolCallingClient = McpRuntimeClient & {
   }): Promise<unknown>;
 };
 
+type ServerToolCatalog = {
+  /** Partial-discovery warnings that describe this catalog; empty when complete. */
+  discoveryWarnings: readonly string[];
+  /** A restored catalog came from the file store; a live one from this connection. */
+  source: 'live' | 'stored';
+  tools: ListToolsResult['tools'];
+};
+
 type ServerRuntimeState = {
   /** Cancels every in-flight request of the current generation; replaced on
    * reset so later work runs under a fresh signal. */
   abort: AbortController;
+  /** Last catalog for this connection configuration. Reused by every later
+   * turn until the server is invalidated; never cleared by a transport reset. */
+  catalog?: ServerToolCatalog;
+  /** Identity frozen into descriptors. Unlike `generation` it survives
+   * transport resets, so a frozen tool may run over a reconnected client for
+   * the same configuration; invalidation replaces the whole state. */
+  catalogGeneration: number;
+  catalogRestore?: Promise<void>;
   client?: McpRuntimeClient;
+  /** The pooled client has listed tools since it connected. Composite plugin
+   * clients route calls through that listing, so a fresh client lists first. */
+  clientListed: boolean;
   connectionConfig: McpRuntimeConnectionConfig;
+  connectionKey?: Promise<string>;
   connectionPromise?: Promise<McpRuntimeClient>;
-  discoveredToolNames: Set<string>;
+  discoveryFailure?: { attempts: number; nextAttemptAt: number };
   generation: number;
+  refresh?: Promise<void>;
   runtimeError?: string;
   serverId: string;
 };
@@ -180,21 +213,27 @@ function isMcpToolCallingClient(client: McpRuntimeClient): client is McpToolCall
 /**
  * Runtime MCP client manager for custom servers and official cloud plugins.
  *
- * Every read fetches `tools/list` live, bounded by `TOOLS_FETCH_TIMEOUT_MS`.
- * Fetches reconnect once; tool calls are never replayed.
+ * Settings reads fetch `tools/list` live, bounded by `TOOLS_FETCH_TIMEOUT_MS`;
+ * a fast transport failure reconnects once, a timeout never does. Tool calls
+ * are never replayed.
  *
- * ## TODO: design a mobile caching strategy
+ * ## Catalog reuse on the send path
  *
- * The tool cache this service used to carry was ported from desktop
- * (`MCPService.ts`'s `withCache(..., 5 * 60 * 1000)`) and then patched with
- * mobile-only behaviour — stale-while-revalidate, failure backoff, startup and
- * post-save prewarming, a cache-only chat path. That stack was never designed
- * against mobile constraints, so it was removed wholesale rather than tuned.
- * What replaces it has to answer, for a phone on cellular:
- * - Nothing rate-limits a dead server anymore; that was the backoff's job.
+ * A send must not wait on the network for a server it has already listed. The
+ * turn catalog therefore comes, in order, from the in-memory catalog of the
+ * current connection configuration, from the per-server file the last complete
+ * discovery wrote to the app cache directory, and only then from a live
+ * discovery. A catalog is reused until the server is invalidated (endpoint,
+ * header, or grant change, disable, delete, plugin connect or disconnect);
+ * there is no timed refresh. The catalog is reconciled where the network is
+ * already being used: a fresh connection lists tools before its first call, and
+ * the settings screens always read live. A catalog with partial-discovery
+ * warnings is still served immediately but refreshed in the background, and it
+ * is never written to disk. A server whose discovery failed is not probed again
+ * on the send path until its backoff expires.
  *
- * Connection reuse (`runtimeStates`) deliberately stayed so repeated settings
- * reads do not reconnect for every tools/list request.
+ * Connection reuse (`runtimeStates`) keeps one authenticated client per server
+ * for the lifetime of the process.
  */
 @Injectable('McpRuntimeService')
 @ServicePhase(Phase.PostReady)
@@ -219,7 +258,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
           return [];
         }
         const state = this.getRuntimeState(server);
-        return state.client ? [] : [this.fetchToolsWithRetry(server, state)];
+        return state.client ? [] : [this.fetchTools(server, state)];
       }),
     );
 
@@ -233,17 +272,22 @@ export class McpRuntimeService extends BaseService implements McpModule {
       throw new Error(`MCP server ${server.name} has no valid HTTP URL`);
     }
 
-    const rawTools = await this.fetchToolsWithRetry(server, this.getRuntimeState(server));
+    const rawTools = await this.fetchTools(server, this.getRuntimeState(server));
     return rawTools.map((tool) => ({
       description: tool.description,
       name: tool.name,
     }));
   }
 
-  /** Raw, JSON-safe definitions used by the Host-facing Runtime projection. */
+  /**
+   * Raw, JSON-safe definitions used by the Host-facing Runtime projection.
+   * Served from the reusable catalog when one exists; `signal` cancels a live
+   * discovery together with the turn that requested it.
+   */
   async listExecutableToolDescriptors(
     serverId: string,
     onUnavailable?: (warning: string) => void,
+    signal?: AbortSignal,
   ): Promise<McpExecutableToolDescriptor[]> {
     const server = await mcpServerService.getById(serverId);
     const sourceName =
@@ -256,9 +300,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
       );
     }
 
-    let definitions: ListToolsResult['tools'];
+    const state = this.getRuntimeState(server);
+    let catalog: ServerToolCatalog;
     try {
-      definitions = await this.fetchToolsWithRetry(server, this.getRuntimeState(server));
+      catalog = await this.getTurnCatalog(server, state, signal);
     } catch (error) {
       const reason = error instanceof PluginError ? error.reason : 'unavailable';
       onUnavailable?.(
@@ -273,12 +318,12 @@ export class McpRuntimeService extends BaseService implements McpModule {
         true,
       );
     }
-    const disabledTools = new Set(server.disabledTools);
-    const state = this.runtimeStates.get(server.id);
-    if (!state) {
+    if (!this.isCurrentState(state)) {
       throw unavailableToolError();
     }
-    for (const warning of state.client?.discoveryWarnings ?? []) onUnavailable?.(warning);
+    const definitions = catalog.tools;
+    const disabledTools = new Set(server.disabledTools);
+    for (const warning of catalog.discoveryWarnings) onUnavailable?.(warning);
     if (definitions.length === 0)
       onUnavailable?.(`${sourceName}: the service returned no available tools.`);
     return definitions
@@ -297,8 +342,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
           {
             description: tool.description ? `${sourceName}: ${tool.description}` : sourceName,
             displayName: tool.title ?? tool.annotations?.title ?? tool.name,
-            // Pin the catalog to both its endpoint and live connection generation;
-            // edits, invalidation, or reconnects cannot retarget a frozen tool.
+            // Pin the catalog to its endpoint and catalog generation; edits and
+            // invalidation cannot retarget a frozen tool, while a transport
+            // reconnect for the same configuration keeps it callable.
             endpointUrl: server.endpointUrl,
             ...(server.origin === 'builtin'
               ? {
@@ -306,7 +352,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
                   effect: getBuiltInMcpToolEffect(server.builtinId, tool.name),
                 }
               : {}),
-            generation: state.generation,
+            generation: state.catalogGeneration,
             inputSchema,
             rawToolName: tool.name,
             serverId: server.id,
@@ -345,7 +391,12 @@ export class McpRuntimeService extends BaseService implements McpModule {
     await this.pluginAuthorizations.stop();
   }
 
-  /** Drop one server's runtime after transport change, disable, or delete. */
+  /**
+   * Drop one server's runtime after transport change, disable, or delete. A
+   * preserved snapshot keeps the settings metadata and the stored catalog for
+   * a disabled server, whose configuration is unchanged; anything else also
+   * forgets the catalog so the next turn discovers live.
+   */
   invalidateServer(serverId: string, options: { preserveSnapshot?: boolean } = {}): void {
     const state = this.runtimeStates.get(serverId);
     if (state) {
@@ -353,7 +404,98 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
     if (!options.preserveSnapshot) {
       this.runtimeSnapshots.delete(serverId);
+      deleteMcpToolCatalog(serverId);
     }
+  }
+
+  /**
+   * Discover a server in the background so the first send after a plugin
+   * connects finds a catalog. Failures stay in the runtime state and surface
+   * through the ordinary turn and settings paths.
+   */
+  prewarmServer(serverId: string): void {
+    void mcpServerService
+      .getById(serverId)
+      .then(async (server) => {
+        if (!server.isEnabled || !isRunnableMcpServer(server)) return;
+        const state = this.getRuntimeState(server);
+        if (state.catalog) return;
+        await this.fetchTools(server, state);
+      })
+      .catch((error: unknown) => {
+        logger.warn('MCP prewarm discovery failed', error as Error, { serverId });
+      });
+  }
+
+  /**
+   * The turn catalog: the current connection's catalog, else the stored file,
+   * else one live discovery. A catalog carrying partial-discovery warnings is
+   * served as is and refreshed once in the background.
+   */
+  private async getTurnCatalog(
+    server: McpServer,
+    state: ServerRuntimeState,
+    signal?: AbortSignal,
+  ): Promise<ServerToolCatalog> {
+    signal?.throwIfAborted();
+    if (!state.catalog) {
+      await this.restoreCatalog(server, state);
+      signal?.throwIfAborted();
+    }
+    if (state.catalog) {
+      if (state.catalog.discoveryWarnings.length > 0) this.refreshInBackground(server, state);
+      return state.catalog;
+    }
+    const failure = state.discoveryFailure;
+    if (failure && Date.now() < failure.nextAttemptAt) {
+      throw new McpRuntimeToolError(
+        'mcp_tool_unavailable',
+        'The MCP tool catalog is unavailable.',
+        true,
+      );
+    }
+    const tools = await this.fetchTools(server, state, signal);
+    return state.catalog ?? { discoveryWarnings: [], source: 'live', tools };
+  }
+
+  /** Single-flight restore of the stored catalog for this connection configuration. */
+  private restoreCatalog(server: McpServer, state: ServerRuntimeState): Promise<void> {
+    state.catalogRestore ??= (async () => {
+      const [stored, key] = await Promise.all([
+        readMcpToolCatalog(server.id),
+        this.getConnectionKey(state),
+      ]);
+      if (!stored || stored.connectionKey !== key) return;
+      if (!this.isCurrentState(state) || state.catalog) return;
+      state.catalog = { discoveryWarnings: [], source: 'stored', tools: stored.tools };
+      this.runtimeSnapshots.set(server.id, {
+        ...this.runtimeSnapshots.get(server.id),
+        connectionConfig: state.connectionConfig,
+        lastConnectedAt: stored.discoveredAt,
+        toolCount: stored.tools.length,
+      });
+    })().catch((error: unknown) => {
+      logger.warn('Could not restore the MCP tool catalog', error as Error, {
+        serverId: server.id,
+      });
+    });
+    return state.catalogRestore;
+  }
+
+  private refreshInBackground(server: McpServer, state: ServerRuntimeState): void {
+    const failure = state.discoveryFailure;
+    if (state.refresh || (failure && Date.now() < failure.nextAttemptAt)) return;
+    state.refresh = this.fetchTools(server, state)
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        state.refresh = undefined;
+      });
+  }
+
+  private getConnectionKey(state: ServerRuntimeState): Promise<string> {
+    state.connectionKey ??= createMcpConnectionKey(state.connectionConfig);
+    return state.connectionKey;
   }
 
   /**
@@ -378,8 +520,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
 
     const state: ServerRuntimeState = {
       abort: new AbortController(),
+      catalogGeneration: this.allocateGeneration(),
+      clientListed: false,
       connectionConfig,
-      discoveredToolNames: new Set(),
       generation: this.allocateGeneration(),
       serverId: server.id,
     };
@@ -518,6 +661,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.abort.abort();
     state.abort = new AbortController();
     state.connectionPromise = undefined;
+    state.clientListed = false;
     if (state.client) {
       this.closeQuietly(state.client);
       state.client = undefined;
@@ -587,8 +731,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (
       !state ||
       !isSameMcpConnectionConfig(state.connectionConfig, toMcpConnectionConfig(server)) ||
-      state.generation !== discoveredGeneration ||
-      !state.discoveredToolNames.has(ref.rawToolName)
+      state.catalogGeneration !== discoveredGeneration ||
+      !state.catalog?.tools.some((tool) => tool.name === ref.rawToolName)
     ) {
       throw unavailableToolError();
     }
@@ -601,6 +745,18 @@ export class McpRuntimeService extends BaseService implements McpModule {
       }
       if (!isMcpToolCallingClient(client)) {
         throw unavailableToolError();
+      }
+      if (!state.clientListed) {
+        // A fresh connection lists before its first call: composite plugin
+        // clients route on that listing, and it confirms a catalog restored
+        // from disk still names this tool.
+        const tools = await this.listAndRecord(server, state, client, invocationSignal);
+        if (!this.isCurrentState(state, generation)) {
+          throw unavailableToolError();
+        }
+        if (!tools.some((tool) => tool.name === ref.rawToolName)) {
+          throw unavailableToolError();
+        }
       }
 
       const result = await client.callTool({
@@ -633,26 +789,35 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
   }
 
-  private async fetchToolsWithRetry(
+  /**
+   * Live discovery. A fast transport failure reconnects once, since the pooled
+   * client may be stale (backgrounded socket, expired session); a timeout or a
+   * cancelled caller never does.
+   */
+  private async fetchTools(
     server: McpServer,
     state: ServerRuntimeState,
+    signal?: AbortSignal,
   ): Promise<ListToolsResult['tools']> {
     try {
-      return await this.fetchRawTools(server, state);
+      return await this.fetchRawTools(server, state, signal);
     } catch (error) {
-      if (error instanceof McpEvictedError || error instanceof McpRuntimeToolError) {
+      if (
+        error instanceof McpEvictedError ||
+        error instanceof McpRuntimeToolError ||
+        error instanceof McpTimeoutError ||
+        signal?.aborted
+      ) {
         throw error;
       }
-      // Fail-and-drop: the pooled client may be stale (backgrounded socket,
-      // expired session) — rebuild once before giving up.
       logger.warn('MCP tools() failed, reconnecting once', { serverId: server.id });
       this.resetConnection(state);
       try {
-        return await this.fetchRawTools(server, state);
+        return await this.fetchRawTools(server, state, signal);
       } catch (retryError) {
-        if (!(retryError instanceof McpEvictedError)) {
+        if (!(retryError instanceof McpEvictedError) && !signal?.aborted) {
           this.resetConnection(state);
-          this.recordRuntimeError(state, retryError);
+          this.recordDiscoveryFailure(state, retryError);
         }
         throw retryError;
       }
@@ -662,60 +827,110 @@ export class McpRuntimeService extends BaseService implements McpModule {
   private async fetchRawTools(
     server: McpServer,
     state: ServerRuntimeState,
+    signal?: AbortSignal,
   ): Promise<ListToolsResult['tools']> {
     const generation = state.generation;
     // One bound covers connect + full pagination, matching the old wall-clock
-    // ceiling. Eviction rides the same composed signal.
-    const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS, state.abort.signal);
-    let rawTools: ListToolsResult['tools'];
-    let trace: TraceSpan | undefined;
+    // ceiling. Eviction and the caller's cancellation ride the same signal.
+    const bound = createBoundedSignal(
+      TOOLS_FETCH_TIMEOUT_MS,
+      state.abort.signal,
+      ...(signal ? [signal] : []),
+    );
     try {
       const client = await this.getClient(server, state, bound.signal, bound.didTimeout);
-      trace = this.traces?.startTrace('mcp.list_tools', undefined, {
-        'mcp.server.id': server.id,
-        'mcp.connection.generation': generation,
-      });
-      rawTools = await listAllTools(client, bound.signal);
-      if (server.origin === 'builtin') {
-        rawTools = rawTools.filter((tool) => isBuiltInMcpToolAllowed(server.builtinId, tool.name));
-      }
+      return await this.listAndRecord(server, state, client, bound.signal, bound.didTimeout);
     } catch (error) {
-      endMcpTrace(trace, error, bound.signal, bound.didTimeout());
       if (error instanceof McpEvictedError) {
         throw error;
       }
       if (!this.isCurrentState(state, generation)) {
         throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
       }
+      if (signal?.aborted) {
+        throw new McpRuntimeToolError(
+          'mcp_tool_cancelled',
+          'MCP tool discovery was cancelled.',
+          false,
+        );
+      }
       if (bound.didTimeout()) {
         this.resetConnection(state);
-        throw new McpTimeoutError(
+        const timeout = new McpTimeoutError(
           `MCP server ${server.name} timed out after ${TOOLS_FETCH_TIMEOUT_MS}ms`,
         );
+        this.recordDiscoveryFailure(state, timeout);
+        throw timeout;
       }
       throw error;
     } finally {
       bound.done();
     }
+  }
+
+  /**
+   * List the connected client's tools and make that listing the server's
+   * catalog: in memory for later turns, on disk when it is complete.
+   */
+  private async listAndRecord(
+    server: McpServer,
+    state: ServerRuntimeState,
+    client: McpRuntimeClient,
+    signal: AbortSignal,
+    didTimeout?: () => boolean,
+  ): Promise<ListToolsResult['tools']> {
+    const generation = state.generation;
+    const trace = this.traces?.startTrace('mcp.list_tools', undefined, {
+      'mcp.server.id': server.id,
+      'mcp.connection.generation': generation,
+    });
+    let rawTools: ListToolsResult['tools'];
+    try {
+      rawTools = await listAllTools(client, signal);
+    } catch (error) {
+      endMcpTrace(trace, error, signal, didTimeout?.());
+      throw error;
+    }
+    if (server.origin === 'builtin') {
+      rawTools = rawTools.filter((tool) => isBuiltInMcpToolAllowed(server.builtinId, tool.name));
+    }
     if (!this.isCurrentState(state, generation)) {
       trace?.end('cancelled', { 'error.category': 'cancelled' });
       throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
     }
-
     trace?.end('ok', { 'mcp.tools_count': rawTools.length });
 
-    const client = state.client;
-    state.runtimeError = client?.discoveryWarnings?.join(' ') || undefined;
-    state.discoveredToolNames = new Set(rawTools.map((tool) => tool.name));
+    const discoveryWarnings = [...(client.discoveryWarnings ?? [])];
+    state.runtimeError = discoveryWarnings.join(' ') || undefined;
+    state.discoveryFailure = undefined;
+    state.clientListed = true;
+    state.catalog = { discoveryWarnings, source: 'live', tools: rawTools };
+    const discoveredAt = Date.now();
     this.runtimeSnapshots.set(server.id, {
       connectionConfig: state.connectionConfig,
-      lastConnectedAt: Date.now(),
-      serverName: client?.serverInfo.name,
-      serverTitle: client?.serverInfo.title,
-      serverVersion: client?.serverInfo.version,
+      lastConnectedAt: discoveredAt,
+      serverName: client.serverInfo.name,
+      serverTitle: client.serverInfo.title,
+      serverVersion: client.serverInfo.version,
       toolCount: rawTools.length,
     });
+    if (discoveryWarnings.length === 0) {
+      await writeMcpToolCatalog({
+        connectionKey: await this.getConnectionKey(state),
+        discoveredAt,
+        serverId: server.id,
+        tools: rawTools,
+        version: 1,
+      });
+    }
     return rawTools;
+  }
+
+  private recordDiscoveryFailure(state: ServerRuntimeState, error: unknown): void {
+    this.recordRuntimeError(state, error);
+    const attempts = (state.discoveryFailure?.attempts ?? 0) + 1;
+    const delay = Math.min(DISCOVERY_BACKOFF_MS * 2 ** (attempts - 1), DISCOVERY_BACKOFF_MAX_MS);
+    state.discoveryFailure = { attempts, nextAttemptAt: Date.now() + delay };
   }
 }
 

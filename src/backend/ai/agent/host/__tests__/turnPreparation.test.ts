@@ -269,7 +269,11 @@ describe('turn preparation', () => {
     expect(() =>
       plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
     ).toThrow('already bound');
-    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID, expect.any(Function));
+    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(
+      AGENT_ID,
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
 

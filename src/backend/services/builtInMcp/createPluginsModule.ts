@@ -17,7 +17,7 @@ import {
 import { validatePluginConnection } from './transport/validatePluginConnection';
 
 export function createPluginsModule(
-  runtime: { invalidateServer(id: string): void },
+  runtime: { invalidateServer(id: string): void; prewarmServer?(id: string): void },
   authorizations: PluginAuthorizationManager,
 ): PluginsModule {
   const pending = new Map<PluginId, Promise<unknown>>();
@@ -49,6 +49,8 @@ export function createPluginsModule(
       }
       authorizations.invalidateGrant(pluginId);
       runtime.invalidateServer(connection.serverId);
+      // The new grant has no catalog yet; discover it now rather than on the first send.
+      runtime.prewarmServer?.(connection.serverId);
       return connection;
     });
   }
@@ -176,6 +178,7 @@ export function createPluginsModule(
         }
         authorizations.invalidateGrant(parsed.pluginId);
         runtime.invalidateServer(connection.serverId);
+        runtime.prewarmServer?.(connection.serverId);
         return connection;
       });
     },
