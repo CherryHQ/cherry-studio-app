@@ -89,12 +89,10 @@ describe('service registry', () => {
     const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
 
     // Spelled out rather than left to the generic check above, because this
-    // particular chain is what first paint depends on: the database is seeded
-    // through the cache, and the theme and language come out of preferences.
-    // Before the lifecycle framework it was statement order in
-    // `createAppBootstrapRuntime`; now it is three declared edges.
-    expect(layerOf('CacheService')).toBeGreaterThanOrEqual(0);
-    expect(layerOf('CacheService')).toBeLessThan(layerOf('DbService'));
+    // edge is what first paint depends on: the theme and language come out of
+    // preferences, which read the seeded database. Before the lifecycle
+    // framework it was statement order in `createAppBootstrapRuntime`.
+    expect(layerOf('DbService')).toBeGreaterThanOrEqual(0);
     expect(layerOf('DbService')).toBeLessThan(layerOf('PreferenceService'));
   });
 

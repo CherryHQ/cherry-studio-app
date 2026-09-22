@@ -1,5 +1,4 @@
 import { LifecycleState } from '@/backend/core/lifecycle';
-import type { CacheService } from '@/backend/data/CacheService';
 
 import { DbService } from '../DbService';
 
@@ -25,7 +24,7 @@ describe('DbService connection lifecycle', () => {
   });
 
   test('opens without the pre-close finalize walk that double-frees FTS5 statements', async () => {
-    const service = new DbService({} as CacheService);
+    const service = new DbService();
 
     await service._doInit();
 
@@ -39,7 +38,7 @@ describe('DbService connection lifecycle', () => {
     mockCloseSync.mockImplementation(() => {
       throw new Error('unable to close due to unfinalized statements or unfinished backups');
     });
-    const service = new DbService({} as CacheService);
+    const service = new DbService();
     await service._doInit();
 
     await expect(service._doStop()).resolves.toBeUndefined();
