@@ -9,11 +9,36 @@
 
 // Include C++ implementation defined types
 #include "CherryStudioUI-Swift-Cxx-Umbrella.hpp"
+#include "HybridCherryBackgroundPressViewSpecSwift.hpp"
 #include "HybridCherryMenuViewSpecSwift.hpp"
 #include <NitroModules/NitroDefines.hpp>
 
 namespace margelo::nitro::cherrystudio::ui::bridge::swift {
 
+  // pragma MARK: std::function<void(BackgroundPressPhase /* phase */)>
+  Func_void_BackgroundPressPhase create_Func_void_BackgroundPressPhase(void* NON_NULL swiftClosureWrapper) noexcept {
+    auto swiftClosure = CherryStudioUI::Func_void_BackgroundPressPhase::fromUnsafe(swiftClosureWrapper);
+    return [swiftClosure = std::move(swiftClosure)](BackgroundPressPhase phase) mutable -> void {
+      swiftClosure.call(static_cast<int>(phase));
+    };
+  }
+  
+  // pragma MARK: std::shared_ptr<HybridCherryBackgroundPressViewSpec>
+  std::shared_ptr<HybridCherryBackgroundPressViewSpec> create_std__shared_ptr_HybridCherryBackgroundPressViewSpec_(void* NON_NULL swiftUnsafePointer) noexcept {
+    CherryStudioUI::HybridCherryBackgroundPressViewSpec_cxx swiftPart = CherryStudioUI::HybridCherryBackgroundPressViewSpec_cxx::fromUnsafe(swiftUnsafePointer);
+    return std::make_shared<margelo::nitro::cherrystudio::ui::HybridCherryBackgroundPressViewSpecSwift>(swiftPart);
+  }
+  void* NON_NULL get_std__shared_ptr_HybridCherryBackgroundPressViewSpec_(std__shared_ptr_HybridCherryBackgroundPressViewSpec_ cppType) {
+    std::shared_ptr<margelo::nitro::cherrystudio::ui::HybridCherryBackgroundPressViewSpecSwift> swiftWrapper = std::dynamic_pointer_cast<margelo::nitro::cherrystudio::ui::HybridCherryBackgroundPressViewSpecSwift>(cppType);
+    #ifdef NITRO_DEBUG
+    if (swiftWrapper == nullptr) [[unlikely]] {
+      throw std::runtime_error("Class \"HybridCherryBackgroundPressViewSpec\" is not implemented in Swift!");
+    }
+    #endif
+    CherryStudioUI::HybridCherryBackgroundPressViewSpec_cxx& swiftPart = swiftWrapper->getSwiftPart();
+    return swiftPart.toUnsafe();
+  }
+  
   // pragma MARK: std::function<void(const std::string& /* id */)>
   Func_void_std__string create_Func_void_std__string(void* NON_NULL swiftClosureWrapper) noexcept {
     auto swiftClosure = CherryStudioUI::Func_void_std__string::fromUnsafe(swiftClosureWrapper);

@@ -8,6 +8,10 @@
 #pragma once
 
 // Forward declarations of C++ defined types
+// Forward declaration of `BackgroundPressPhase` to properly resolve imports.
+namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressPhase; }
+// Forward declaration of `HybridCherryBackgroundPressViewSpec` to properly resolve imports.
+namespace margelo::nitro::cherrystudio::ui { class HybridCherryBackgroundPressViewSpec; }
 // Forward declaration of `HybridCherryMenuViewSpec` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { class HybridCherryMenuViewSpec; }
 // Forward declaration of `NativeMenuCheckedState` to properly resolve imports.
@@ -18,10 +22,14 @@ namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuIcon; }
 namespace margelo::nitro::cherrystudio::ui { struct NativeMenuItem; }
 
 // Forward declarations of Swift defined types
+// Forward declaration of `HybridCherryBackgroundPressViewSpec_cxx` to properly resolve imports.
+namespace CherryStudioUI { class HybridCherryBackgroundPressViewSpec_cxx; }
 // Forward declaration of `HybridCherryMenuViewSpec_cxx` to properly resolve imports.
 namespace CherryStudioUI { class HybridCherryMenuViewSpec_cxx; }
 
 // Include C++ defined types
+#include "BackgroundPressPhase.hpp"
+#include "HybridCherryBackgroundPressViewSpec.hpp"
 #include "HybridCherryMenuViewSpec.hpp"
 #include "NativeMenuCheckedState.hpp"
 #include "NativeMenuIcon.hpp"
@@ -39,6 +47,40 @@ namespace CherryStudioUI { class HybridCherryMenuViewSpec_cxx; }
  */
 namespace margelo::nitro::cherrystudio::ui::bridge::swift {
 
+  // pragma MARK: std::function<void(BackgroundPressPhase /* phase */)>
+  /**
+   * Specialized version of `std::function<void(BackgroundPressPhase)>`.
+   */
+  using Func_void_BackgroundPressPhase = std::function<void(BackgroundPressPhase /* phase */)>;
+  /**
+   * Wrapper class for a `std::function<void(BackgroundPressPhase / * phase * /)>`, this can be used from Swift.
+   */
+  class Func_void_BackgroundPressPhase_Wrapper final {
+  public:
+    explicit Func_void_BackgroundPressPhase_Wrapper(std::function<void(BackgroundPressPhase /* phase */)>&& func): _function(std::make_unique<std::function<void(BackgroundPressPhase /* phase */)>>(std::move(func))) {}
+    inline void call(int phase) const noexcept {
+      _function->operator()(static_cast<BackgroundPressPhase>(phase));
+    }
+  private:
+    std::unique_ptr<std::function<void(BackgroundPressPhase /* phase */)>> _function;
+  } SWIFT_NONCOPYABLE;
+  Func_void_BackgroundPressPhase create_Func_void_BackgroundPressPhase(void* NON_NULL swiftClosureWrapper) noexcept;
+  inline Func_void_BackgroundPressPhase_Wrapper wrap_Func_void_BackgroundPressPhase(Func_void_BackgroundPressPhase value) noexcept {
+    return Func_void_BackgroundPressPhase_Wrapper(std::move(value));
+  }
+  
+  // pragma MARK: std::shared_ptr<HybridCherryBackgroundPressViewSpec>
+  /**
+   * Specialized version of `std::shared_ptr<HybridCherryBackgroundPressViewSpec>`.
+   */
+  using std__shared_ptr_HybridCherryBackgroundPressViewSpec_ = std::shared_ptr<HybridCherryBackgroundPressViewSpec>;
+  std::shared_ptr<HybridCherryBackgroundPressViewSpec> create_std__shared_ptr_HybridCherryBackgroundPressViewSpec_(void* NON_NULL swiftUnsafePointer) noexcept;
+  void* NON_NULL get_std__shared_ptr_HybridCherryBackgroundPressViewSpec_(std__shared_ptr_HybridCherryBackgroundPressViewSpec_ cppType);
+  
+  // pragma MARK: std::weak_ptr<HybridCherryBackgroundPressViewSpec>
+  using std__weak_ptr_HybridCherryBackgroundPressViewSpec_ = std::weak_ptr<HybridCherryBackgroundPressViewSpec>;
+  inline std__weak_ptr_HybridCherryBackgroundPressViewSpec_ weakify_std__shared_ptr_HybridCherryBackgroundPressViewSpec_(const std::shared_ptr<HybridCherryBackgroundPressViewSpec>& strong) noexcept { return strong; }
+  
   // pragma MARK: std::vector<NativeMenuItem>
   /**
    * Specialized version of `std::vector<NativeMenuItem>`.

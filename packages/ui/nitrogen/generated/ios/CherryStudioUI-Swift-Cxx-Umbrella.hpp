@@ -8,6 +8,12 @@
 #pragma once
 
 // Forward declarations of C++ defined types
+// Forward declaration of `BackgroundPressMode` to properly resolve imports.
+namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressMode; }
+// Forward declaration of `BackgroundPressPhase` to properly resolve imports.
+namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressPhase; }
+// Forward declaration of `HybridCherryBackgroundPressViewSpec` to properly resolve imports.
+namespace margelo::nitro::cherrystudio::ui { class HybridCherryBackgroundPressViewSpec; }
 // Forward declaration of `HybridCherryMenuViewSpec` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { class HybridCherryMenuViewSpec; }
 // Forward declaration of `NativeMenuCheckedState` to properly resolve imports.
@@ -20,6 +26,9 @@ namespace margelo::nitro::cherrystudio::ui { struct NativeMenuItem; }
 namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuTrigger; }
 
 // Include C++ defined types
+#include "BackgroundPressMode.hpp"
+#include "BackgroundPressPhase.hpp"
+#include "HybridCherryBackgroundPressViewSpec.hpp"
 #include "HybridCherryMenuViewSpec.hpp"
 #include "NativeMenuCheckedState.hpp"
 #include "NativeMenuIcon.hpp"
@@ -42,6 +51,8 @@ namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuTrigger; }
 #include <NitroModules/DateToChronoDate.hpp>
 
 // Forward declarations of Swift defined types
+// Forward declaration of `HybridCherryBackgroundPressViewSpec_cxx` to properly resolve imports.
+namespace CherryStudioUI { class HybridCherryBackgroundPressViewSpec_cxx; }
 // Forward declaration of `HybridCherryMenuViewSpec_cxx` to properly resolve imports.
 namespace CherryStudioUI { class HybridCherryMenuViewSpec_cxx; }
 

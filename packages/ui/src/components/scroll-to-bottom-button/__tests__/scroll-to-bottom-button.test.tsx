@@ -3,6 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ScrollToBottomButton } from '../components/scroll-to-bottom-button';
 
+jest.mock('../../background-press/background-press', () => ({
+  BackgroundPressExclusion: ({ children }: { children?: React.ReactNode }) => children,
+}));
+
 jest.mock('../../../motion', () => ({
   duration: { fast: 160 },
   easing: { settle: 'settle' },

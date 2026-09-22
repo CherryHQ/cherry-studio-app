@@ -1,0 +1,12 @@
+{
+  "uiViewClassName": "CherryBackgroundPressView",
+  "supportsRawText": false,
+  "bubblingEventTypes": {},
+  "directEventTypes": {},
+  "validAttributes": {
+    "enabled": true,
+    "mode": true,
+    "onBackgroundInteraction": true,
+    "hybridRef": true
+  }
+}

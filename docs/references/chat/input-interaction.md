@@ -47,6 +47,25 @@ Draft recovery, attachment failure presentation, approval prompts, model persist
 value policy, and navigation-wide draft storage retain their existing behavior. They require their
 own scoped changes if an observed problem warrants one.
 
+## Implementation Boundaries
+
+`ComposerDismissArea` delegates tap recognition to CherryUI's native `BackgroundPressArea`.
+Android uses `GestureDetector`; iOS uses UIKit recognizers with pan priority. Neither uses a
+JavaScript responder around the list or infers a tap from the touch's final coordinates.
+Message content and the scroll-to-bottom control are explicit exclusions. `ScrollInteractionBoundary`
+owns drag/momentum state for each scroll surface. Menus read that state; the enclosing background
+area subscribes to scroll starts and latches cancellation for its own native touch. Unmounting one
+scroll surface removes only its subscription and cannot reset another surface's scroll state.
+The scroll boundary imports neither menus nor background-press components.
+Native touch-start and tap completion share one ordered callback stream. React Native's batched
+touch events cannot initialize or rearm that stream, because they can arrive after completion.
+
+The composer presentation hook issues at most one blur per editing session. The Android keyboard
+adapter patch also clamps an invalid scroll offset when the closing animation ends, including
+when its last move event did not contain the final height. Valid reading positions and legitimate
+bottom padding remain intact. These changes do not establish a cause for unexpected drawer opens;
+the existing drawer interaction needs separate native acceptance.
+
 ## Acceptance
 
 Source changes remove the identified application commands; they do not establish native keyboard
@@ -61,6 +80,13 @@ or selection conformance. With explicit device-verification authorization, check
 - Tap the empty chat or unused message-list area to blur the input and dismiss its keyboard.
   An empty composer follows its existing collapse animation; dragging or child actions do not
   count as background presses.
+- Drag away and back to the starting point, hold without moving, use multiple fingers, and tap
+  to stop momentum. None dismiss the composer. A subsequent background tap does.
+- In short and long conversations, close the keyboard while following the latest message and
+  while reading history. No stale keyboard-sized gap remains; valid reading positions stay put.
+- Repeat vertical and diagonal scrolling with the keyboard open and closed. Confirm scrolling
+  remains responsive, intentional horizontal drawer swipes work, and vertical scrolling does not
+  open the drawer. Check horizontal code/table scrolling and Android system back separately.
 - With the keyboard open and then closed, open the add menu and plugin picker, scroll the plugins,
   select/reselect a plugin, and cancel through the backdrop or Back. The keyboard stays in its
   original state throughout, without a brief hide/show cycle.
