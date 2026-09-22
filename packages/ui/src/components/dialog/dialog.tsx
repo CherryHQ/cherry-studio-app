@@ -2,6 +2,8 @@ import { Dialog as HeroDialog } from 'heroui-native';
 import type { ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { usePortalBackgroundIsolation } from '../portal/portal-accessibility';
+
 export type DialogProps = {
   children: ReactNode;
   onOpenChange: (isOpen: boolean) => void;
@@ -12,6 +14,8 @@ export type DialogProps = {
 
 /** A controlled decision surface; caller-owned actions determine when it closes. */
 export function Dialog({ children, onOpenChange, open, testID, title }: DialogProps) {
+  usePortalBackgroundIsolation(open);
+
   return (
     <HeroDialog isOpen={open} onOpenChange={onOpenChange} testID={testID}>
       <HeroDialog.Portal unstable_accessibilityContainerViewIsModal>
