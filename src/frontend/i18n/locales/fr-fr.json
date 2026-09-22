@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "Terminé",
   "chat.actions.createImage": "Créer une image",
   "chat.actions.webSearch": "Recherche sur le Web",
+  "chat.attachments.dropFailed_many": "Impossible d'importer {{count}} images déposées.",
   "chat.attachments.dropFailed_one": "Impossible d'importer {{count}} image déposée.",
   "chat.attachments.dropFailed_other": "Impossible d'importer {{count}} images déposées.",
   "chat.attachments.dropLimit": "{{added}} images ajoutées sur {{total}} ; un message contient au maximum {{limit}} images.",

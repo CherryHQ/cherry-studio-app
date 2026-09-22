@@ -138,7 +138,6 @@
   "backgroundActivity.completed": "Hoàn thành",
   "chat.actions.createImage": "Tạo hình ảnh",
   "chat.actions.webSearch": "Tìm kiếm trên web",
-  "chat.attachments.dropFailed_one": "Không thể nhập {{count}} hình ảnh đã thả.",
   "chat.attachments.dropFailed_other": "Không thể nhập {{count}} hình ảnh đã thả.",
   "chat.attachments.dropLimit": "Đã thêm {{added}}/{{total}} hình ảnh được thả; một tin nhắn chứa tối đa {{limit}} hình.",
   "chat.attachments.image": "Hình ảnh đính kèm",

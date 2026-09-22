@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "Completado",
   "chat.actions.createImage": "Crear imagen",
   "chat.actions.webSearch": "Búsqueda web",
+  "chat.attachments.dropFailed_many": "No se pudieron importar {{count}} imágenes soltadas.",
   "chat.attachments.dropFailed_one": "No se pudo importar {{count}} imagen soltada.",
   "chat.attachments.dropFailed_other": "No se pudieron importar {{count}} imágenes soltadas.",
   "chat.attachments.dropLimit": "Se añadieron {{added}} de {{total}} imágenes soltadas; un mensaje admite como máximo {{limit}}.",

@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "Finalizat",
   "chat.actions.createImage": "Creați imagine",
   "chat.actions.webSearch": "Căutare pe web",
+  "chat.attachments.dropFailed_few": "Nu s-au putut importa {{count}} imagini.",
   "chat.attachments.dropFailed_one": "Nu s-a putut importa {{count}} imagine.",
   "chat.attachments.dropFailed_other": "Nu s-au putut importa {{count}} imagini.",
   "chat.attachments.dropLimit": "Au fost adăugate {{added}} din {{total}} imagini; un mesaj cuprinde cel mult {{limit}}.",

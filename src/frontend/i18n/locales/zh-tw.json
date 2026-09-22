@@ -138,7 +138,6 @@
   "backgroundActivity.completed": "已完成",
   "chat.actions.createImage": "創建圖片",
   "chat.actions.webSearch": "網絡搜索",
-  "chat.attachments.dropFailed_one": "有 {{count}} 張拖入的圖片無法匯入。",
   "chat.attachments.dropFailed_other": "有 {{count}} 張拖入的圖片無法匯入。",
   "chat.attachments.dropLimit": "已新增拖入的 {{total}} 張圖片中的 {{added}} 張；單則訊息最多 {{limit}} 張。",
   "chat.attachments.image": "圖片附件",

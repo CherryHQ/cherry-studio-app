@@ -138,7 +138,6 @@
   "backgroundActivity.completed": "完了",
   "chat.actions.createImage": "画像の作成",
   "chat.actions.webSearch": "ウェブ検索",
-  "chat.attachments.dropFailed_one": "{{count}}枚の画像をインポートできませんでした。",
   "chat.attachments.dropFailed_other": "{{count}}枚の画像をインポートできませんでした。",
   "chat.attachments.dropLimit": "ドロップした{{total}}枚のうち{{added}}枚を追加しました。1件のメッセージには最大{{limit}}枚まで添付できます。",
   "chat.attachments.image": "画像添付ファイル",

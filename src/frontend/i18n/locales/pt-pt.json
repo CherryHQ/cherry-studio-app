@@ -138,6 +138,7 @@
   "backgroundActivity.completed": "Concluído",
   "chat.actions.createImage": "Criar imagem",
   "chat.actions.webSearch": "Pesquisa na Web",
+  "chat.attachments.dropFailed_many": "Não foi possível importar {{count}} imagens largadas.",
   "chat.attachments.dropFailed_one": "Não foi possível importar {{count}} imagem largada.",
   "chat.attachments.dropFailed_other": "Não foi possível importar {{count}} imagens largadas.",
   "chat.attachments.dropLimit": "Foram adicionadas {{added}} de {{total}} imagens largadas; uma mensagem comporta no máximo {{limit}}.",
