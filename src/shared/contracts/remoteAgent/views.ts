@@ -1,3 +1,10 @@
+import type { InteractionQuestion } from '../interaction';
+
+export type RemoteWorkspaceSelection = { kind: 'registered'; id: string } | { kind: 'system' };
+export type RemoteStartInput = { draftId: string; agentId: string; text: string } & (
+  | { workspace: RemoteWorkspaceSelection; workspaceId?: never }
+  | { workspaceId: string; workspace?: never }
+);
 /** Durable operation views contain product state, never authorization or wire envelopes. */
 export type RemoteCommand = Readonly<{
   id: string;
@@ -23,7 +30,8 @@ export type RemoteStartOperation = Readonly<{
   id: string;
   draftId: string;
   agentId: string;
-  workspaceId: string;
+  workspaceId?: string;
+  workspace?: RemoteWorkspaceSelection;
   text: string;
   status: 'pending' | 'applied' | 'rejected' | 'interrupted';
   sessionId?: string;
@@ -38,6 +46,7 @@ export type RemoteSessionView = {
   id: string;
   agentId: string;
   workspaceId: string;
+  workspaceKind?: 'registered' | 'system';
   title: string;
   updatedAt: string;
   historyVersion: string;
@@ -97,12 +106,14 @@ export type RemoteSessionSnapshot = {
     id: string;
     executionId?: string;
     title: string;
+    kind?: 'decision' | 'question';
     state: 'pending' | 'approved' | 'denied' | 'expired';
     input: RemoteResource;
     respondTarget?: string;
   }[];
 };
 export type RemoteResourceValue =
+  | { kind: 'question'; questions: readonly InteractionQuestion[] }
   | { kind: 'text'; text: string }
   | { kind: 'metadata'; name: string; mediaType?: string; byteLength?: string };
 export type RemotePage<T> = { items: readonly T[]; next?: string };

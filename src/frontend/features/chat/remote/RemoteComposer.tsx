@@ -62,11 +62,13 @@ export function RemoteComposer({
   const [choosingWorkspace, setChoosingWorkspace] = useState(false);
   const [choosingExecution, setChoosingExecution] = useState(false);
   const workspaces = useConversationWorkspaces(agent?.ref);
-  const selectedWorkspace = workspaces.items.find(
-    (item) => item.id === (snapshot.workspaceId ?? workspace?.id),
-  );
+  const selectedWorkspace = existing
+    ? workspaces.items.find((item) => item.kind !== 'system' && item.id === snapshot.workspaceId)
+    : (workspaces.items.find((item) => item.ref === workspace?.ref) ??
+      (!workspace ? workspaces.items.find((item) => item.kind === 'system') : undefined));
   useEffect(() => {
     if (
+      snapshot.workspaceKind !== 'system' &&
       snapshot.workspaceId &&
       !selectedWorkspace &&
       workspaces.hasNextPage &&
@@ -74,7 +76,7 @@ export function RemoteComposer({
       !workspaces.isError
     )
       void workspaces.fetchNextPage();
-  }, [snapshot.workspaceId, selectedWorkspace, workspaces]);
+  }, [snapshot.workspaceId, snapshot.workspaceKind, selectedWorkspace, workspaces]);
   const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, draftId);
   const starts = useConversationOperations(source);
   const commands = useConversationOperations(session);
@@ -176,7 +178,9 @@ export function RemoteComposer({
                 className="min-w-0 shrink font-semibold text-sm text-foreground"
                 numberOfLines={1}
               >
-                {selectedWorkspace?.name ?? t('remoteAgent.workspace')}
+                {snapshot.workspaceKind === 'system' || selectedWorkspace?.kind === 'system'
+                  ? t('remoteAgent.systemWorkspace')
+                  : (selectedWorkspace?.name ?? t('remoteAgent.workspace'))}
               </Text>
             </Composer.Pill>
           }
@@ -195,8 +199,8 @@ export function RemoteComposer({
               {workspaces.items.map((item) => (
                 <Section.RadioItem
                   key={item.ref}
-                  label={item.name}
-                  selected={selectedWorkspace?.id === item.id}
+                  label={item.kind === 'system' ? t('remoteAgent.systemWorkspace') : item.name}
+                  selected={selectedWorkspace?.ref === item.ref}
                   disabled={startPending}
                   onPress={() => {
                     setWorkspace(item);

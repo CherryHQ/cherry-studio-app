@@ -6,6 +6,7 @@ import type {
   AgentSessionView,
   JsonValue,
 } from '@/shared/contracts/agent';
+import type { InteractionResponse } from '@/shared/contracts/interaction';
 import type { ApiClient } from '@/shared/data/api/types';
 
 import type {
@@ -216,7 +217,9 @@ export function createLocalConversationSession(input: {
         input: resource,
         respond: action(
           'respond',
-          async (decision: 'approve' | 'deny') => {
+          async (decision: InteractionResponse) => {
+            if (decision.kind === 'answer' || (decision.kind === 'deny' && decision.reason))
+              throw new ConversationReadError({ code: 'unsupported', retry: 'none' });
             const current = client
               .getState(sessionId)
               .pendingApprovals.find((candidate) => candidate.id === approval.id);
@@ -226,7 +229,7 @@ export function createLocalConversationSession(input: {
               JSON.stringify(current.input) !== JSON.stringify(approval.input)
             )
               throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
-            await client.respondApproval(sessionId, approval.id, decision);
+            await client.respondApproval(sessionId, approval.id, decision.kind);
           },
           false,
         ),

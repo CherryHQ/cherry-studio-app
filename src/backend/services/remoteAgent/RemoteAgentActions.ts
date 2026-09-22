@@ -1,10 +1,18 @@
-import { agentMethods, commandReceiptSchema } from '@cherrystudio/remote-protocol/agent';
+import {
+  agentMethods,
+  commandReceiptSchema,
+  workspaceSelectionSchema,
+} from '@cherrystudio/remote-protocol/agent';
 import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import { JsonValueSchema } from '@/shared/contracts/agent';
-import type { RemoteCommand, RemoteStartOperation } from '@/shared/contracts/remoteAgent';
+import type {
+  RemoteCommand,
+  RemoteStartInput,
+  RemoteStartOperation,
+} from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentError } from './RemoteAgentError';
 
@@ -35,18 +43,21 @@ const RecordSchema = z.object({
   method: z.string(),
   params: z.record(z.string(), JsonValueSchema),
 });
-const StartSchema = z.object({
-  id: z.string(),
-  draftId: z.string(),
-  agentId: z.string(),
-  workspaceId: z.string(),
-  text: z.string(),
-  createId: z.string(),
-  sendId: z.string(),
-  status: z.enum(['pending', 'applied', 'rejected', 'interrupted']),
-  sessionId: z.string().optional(),
-  error: z.string().optional(),
-});
+const StartSchema = z
+  .object({
+    id: z.string(),
+    draftId: z.string(),
+    agentId: z.string(),
+    workspaceId: z.string().optional(),
+    workspace: workspaceSelectionSchema.optional(),
+    text: z.string(),
+    createId: z.string(),
+    sendId: z.string(),
+    status: z.enum(['pending', 'applied', 'rejected', 'interrupted']),
+    sessionId: z.string().optional(),
+    error: z.string().optional(),
+  })
+  .refine((entry) => (entry.workspaceId !== undefined) !== (entry.workspace !== undefined));
 const JournalSchema = z.union([
   z.object({ version: z.literal(1), records: z.array(RecordSchema) }),
   z.object({ version: z.literal(2), records: z.array(RecordSchema), starts: z.array(StartSchema) }),
@@ -171,18 +182,17 @@ export class RemoteAgentActions {
       return;
     this.commit(this.records.filter((entry) => entry.action.id !== id));
   }
-  async start(input: {
-    draftId: string;
-    agentId: string;
-    workspaceId: string;
-    text: string;
-  }): Promise<RemoteStartOperation> {
+  async start(input: RemoteStartInput): Promise<RemoteStartOperation> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
     let entry = this.starts.find((item) => item.draftId === input.draftId);
     if (
       entry &&
       (entry.agentId !== input.agentId ||
         entry.workspaceId !== input.workspaceId ||
+        entry.workspace?.kind !== input.workspace?.kind ||
+        (entry.workspace?.kind === 'registered' &&
+          input.workspace?.kind === 'registered' &&
+          entry.workspace.id !== input.workspace.id) ||
         entry.text !== input.text)
     )
       throw new RemoteAgentError('IDEMPOTENCY_CONFLICT');
@@ -194,6 +204,13 @@ export class RemoteAgentActions {
         sessionId: 'validation',
         expectedIdleRevision: '0',
         text: input.text,
+      });
+      StartSchema.parse({
+        ...input,
+        id: 'validation',
+        createId: 'validation',
+        sendId: 'validation',
+        status: 'pending',
       });
       entry = {
         ...input,
@@ -226,7 +243,7 @@ export class RemoteAgentActions {
     id: string,
     kind: 'create' | 'send',
     method: string,
-    params: Record<string, string>,
+    params: Record<string, z.infer<typeof JsonValueSchema>>,
     text?: string,
   ) {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
@@ -239,7 +256,9 @@ export class RemoteAgentActions {
     try {
       const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
         agentId: entry.agentId,
-        workspaceId: entry.workspaceId,
+        ...(entry.workspace?.kind === 'system'
+          ? { workspace: entry.workspace }
+          : { workspaceId: entry.workspace?.id ?? entry.workspaceId! }),
       });
       if (this.stopped) return;
       if (created.status !== 'applied') {

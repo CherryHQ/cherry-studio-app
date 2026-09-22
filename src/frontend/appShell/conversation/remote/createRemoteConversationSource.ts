@@ -34,6 +34,7 @@ export function createRemoteConversationSource(
   const scope = remote.scope as QueryScope;
   const refs = createConversationReferences(scope);
   let disposed = false;
+  const systemWorkspaces = new Map<string, WorkspaceRef>();
   const sessions = new Set<ReturnType<typeof createRemoteConversationSession>>();
   const drafts = new Set<ConversationDraft>();
   const assertSource = () => {
@@ -158,12 +159,22 @@ export function createRemoteConversationSource(
             cursor ? refs.resolve(cursor, kind).id : undefined,
             signal,
           );
+          assertSource();
+          signal.throwIfAborted();
+          const systemRef = refs.issue<WorkspaceRef>(`workspace:${id}`, '', 'system');
+          if (page.systemWorkspace) systemWorkspaces.set(id, systemRef);
+          else systemWorkspaces.delete(id);
           return {
-            items: page.items.map((workspace) => ({
-              id: workspace.id,
-              ref: refs.issue<WorkspaceRef>(`workspace:${id}`, workspace.id),
-              name: workspace.name,
-            })),
+            items: [
+              ...(!cursor && page.systemWorkspace
+                ? [{ ref: systemRef, kind: 'system' as const }]
+                : []),
+              ...page.items.map((workspace) => ({
+                id: workspace.id,
+                ref: refs.issue<WorkspaceRef>(`workspace:${id}`, workspace.id),
+                name: workspace.name,
+              })),
+            ],
             ...(page.next ? { next: refs.issue<CatalogCursor>(kind, page.next) } : {}),
           };
         }),
@@ -189,9 +200,16 @@ export function createRemoteConversationSource(
         assertSource();
         signal.throwIfAborted();
         const agentId = refs.resolve(input.agent, 'agent').id;
-        const workspaceId = input.workspace
-          ? refs.resolve(input.workspace, `workspace:${agentId}`).id
+        const selected = input.workspace
+          ? refs.resolve(input.workspace, `workspace:${agentId}`)
           : undefined;
+        const workspace = !selected
+          ? undefined
+          : selected.version === 'system'
+            ? systemWorkspaces.get(agentId) === input.workspace
+              ? { kind: 'system' as const }
+              : undefined
+            : { kind: 'registered' as const, id: selected.id };
         let retired = false;
         let pending = false;
         const draftOperations = createConversationState<readonly ConversationOperation[]>([]);
@@ -207,7 +225,7 @@ export function createRemoteConversationSource(
               availability:
                 availability.state === 'disabled'
                   ? availability
-                  : !workspaceId
+                  : !workspace
                     ? { state: 'disabled', reason: 'workspace-required' }
                     : pending || remote.getStarts().some((start) => start.draftId === input.draftId)
                       ? { state: 'disabled', reason: 'busy' }
@@ -216,7 +234,7 @@ export function createRemoteConversationSource(
                 try {
                   assertSource();
                   if (retired) throw new ConversationReadError({ code: 'retired', retry: 'none' });
-                  if (!workspaceId)
+                  if (!workspace)
                     throw new ConversationReadError({
                       code: 'invalid-input',
                       retry: 'revise-input',
@@ -225,7 +243,7 @@ export function createRemoteConversationSource(
                   pending = true;
                   state.set(snapshot());
                   return outcome(
-                    await remote.start({ draftId: input.draftId, agentId, workspaceId, text }),
+                    await remote.start({ draftId: input.draftId, agentId, workspace, text }),
                   );
                 } catch (error) {
                   return {

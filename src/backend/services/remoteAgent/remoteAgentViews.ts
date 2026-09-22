@@ -16,6 +16,7 @@ export const projectSession = (session: AgentSession): RemoteSessionView => ({
   id: session.sessionId,
   agentId: session.agentId,
   workspaceId: session.workspaceId,
+  workspaceKind: session.workspaceKind,
   title: session.title,
   updatedAt: session.updatedAt,
   historyVersion: session.historyRevision,
@@ -144,6 +145,7 @@ export function projectSnapshot(
       id: interaction.interactionId,
       executionId: interaction.executionId,
       title: interaction.summary,
+      kind: interaction.kind,
       state: interaction.status,
       input: issueResource(sessionId, {
         kind: 'interaction',

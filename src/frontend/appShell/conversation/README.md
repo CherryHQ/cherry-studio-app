@@ -36,6 +36,7 @@ uncertain command. Session metadata supplies Agent/workspace identity. Resource 
 Session explicitly and read only while mounted. Approval cancellation targets its bound execution.
 
 The Controller contract/provider and private remote queries are removed. Local composer extensions,
-prepared managed export assets and actual device acceptance remain pending. Current desktop
-responses support approve/deny only and creation requires a registered workspace ID; question
-answers and default workspace creation require protocol support.
+prepared managed export assets and actual device acceptance remain pending. Remote question
+resources and typed responses preserve complete answers through the command journal. Catalogs
+expose a system-workspace choice only when the desktop advertises support; existing sessions
+retain the real workspace identity and kind. Local approvals keep their decision-only capability.

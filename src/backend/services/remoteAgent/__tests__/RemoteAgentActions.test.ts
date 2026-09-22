@@ -261,3 +261,62 @@ it('retains uncertain workflows and dismisses both records only after a terminal
   actions.dismiss(pending.id);
   expect(actions.getStarts()).toHaveLength(1);
 });
+
+it('restores the exact answer payload and target after process restart', async () => {
+  const { port } = journal();
+  const responseMethod = 'agent.interactions.respond';
+  const params = {
+    sessionId: 's',
+    interactionId: 'question',
+    expectedExecutionId: 'execution',
+    expectedRevision: '3',
+    inputDigest: 'a'.repeat(64),
+    response: { kind: 'answer', answers: { '目录？': 'src 🌍' } },
+  };
+  const request = jest.fn().mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
+  const original = new RemoteAgentActions('binding', port, request, () => {});
+  const action = await original.create('respond', responseMethod, params);
+  original.stop();
+  const retry = jest
+    .fn()
+    .mockRejectedValueOnce(new RemoteAgentError('NOT_FOUND'))
+    .mockResolvedValueOnce(receipt(action.id, 'applied', { method: responseMethod }));
+  const restored = new RemoteAgentActions('binding', port, retry, () => {});
+  await restored.retry(action.id);
+  expect(retry.mock.calls).toEqual([
+    ['agent.commands.get', { commandId: action.id }],
+    [responseMethod, { ...params, commandId: action.id }],
+  ]);
+  expect(restored.get()[0].status).toBe('applied');
+});
+
+it('retains system workspace selection and create command identity through a lost create response', async () => {
+  const { port } = journal();
+  const request = jest.fn().mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
+  const original = new RemoteAgentActions('binding', port, request, () => {});
+  const start = await original.start({
+    draftId: 'system-draft',
+    agentId: 'agent',
+    workspace: { kind: 'system' },
+    text: 'hello',
+  });
+  const create = request.mock.calls[0][1];
+  expect(create).toMatchObject({ workspace: { kind: 'system' } });
+  expect(create).not.toHaveProperty('workspaceId');
+  original.stop();
+  const retry = jest.fn(async (name: string, body: any) => {
+    if (name === 'agent.commands.get') throw new RemoteAgentError('NOT_FOUND');
+    if (name === 'agent.sessions.get') return sessionResult('s');
+    return receipt(body.commandId, 'applied', { method: name });
+  });
+  const restored = new RemoteAgentActions('binding', port, retry, () => {});
+  await restored.retry(start.id);
+  expect(retry.mock.calls.filter(([name]) => name === 'agent.sessions.create')).toEqual([
+    ['agent.sessions.create', create],
+  ]);
+  expect(restored.getStarts()[0]).toMatchObject({
+    status: 'applied',
+    sessionId: 's',
+    workspace: { kind: 'system' },
+  });
+});

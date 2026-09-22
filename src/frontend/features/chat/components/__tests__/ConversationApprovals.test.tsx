@@ -38,11 +38,16 @@ function fixture() {
     operationId: 'command' as never,
   }));
   const cancel = jest.fn(async () => ({ state: 'applied' as const, value: undefined }));
-  const read = jest.fn(async (_ref: ResourceRef, _signal: AbortSignal) => ({
-    kind: 'json' as const,
-    complete: true as const,
-    value: { path: '/approved' },
-  }));
+  const read = jest.fn(
+    async (
+      _ref: ResourceRef,
+      _signal: AbortSignal,
+    ): Promise<import('@/frontend/appShell/conversation/contracts').ResourceValue> => ({
+      kind: 'json' as const,
+      complete: true as const,
+      value: { path: '/approved' },
+    }),
+  );
   let snapshot: ConversationSnapshot = {
     title: '',
     freshness: { state: 'current' },
@@ -126,7 +131,7 @@ it('responds only to the bound loaded decision and treats an accepted pending re
   await act(async () => sheet.onRespond({ approvalId: 'stale-decision', approved: true }));
   expect(test.respond).not.toHaveBeenCalled();
   await act(async () => sheet.onRespond({ approvalId: 'decision', approved: true }));
-  expect(test.respond).toHaveBeenCalledWith('approve');
+  expect(test.respond).toHaveBeenCalledWith({ kind: 'approve' });
   expect(mockToast).not.toHaveBeenCalled();
   await act(async () => sheet.onCancel!());
   expect(test.cancel).toHaveBeenCalledWith(undefined);
@@ -194,4 +199,20 @@ it('cancels only the execution bound to the displayed approval', async () => {
   await act(async () => sheet.onCancel!());
   expect(test.cancel).toHaveBeenCalledTimes(1);
   expect(otherCancel).not.toHaveBeenCalled();
+});
+
+it('submits complete question answers through the bound response without reducing them to approval', async () => {
+  const test = fixture();
+  const questions = [{ question: '目录？', multiple: false, options: [{ label: 'src' }] }];
+  test.read.mockResolvedValue({ kind: 'question', questions });
+  test.update({
+    ...test.snapshot,
+    interactions: test.snapshot.interactions.map((item) => ({ ...item, kind: 'question' })),
+  });
+  await render(test);
+  expect(sheet.canRespond).toBe(true);
+  await act(async () =>
+    sheet.onRespond({ approvalId: 'decision', approved: true, answers: { '目录？': 'src' } }),
+  );
+  expect(test.respond).toHaveBeenCalledWith({ kind: 'answer', answers: { '目录？': 'src' } });
 });

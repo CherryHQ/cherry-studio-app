@@ -17,14 +17,16 @@ RemoteChatScreen / SidebarRemoteRecents
 [Service Dependencies And Ownership](../remote-access/service-ownership.md) owns the current call
 graph, lifetimes and remaining migration work. Local execution stays on `Backend.agent`.
 
-The product keeps existing PC Agent selection, paginated sessions/history, registered workspace
-selection, send/cancel, approval/denial, and shared transcript/export presentation. Agent edits,
-local model IDs, arbitrary PC paths and workspace creation do not cross this boundary.
+The product keeps PC Agent selection, paginated sessions/history, registered and advertised system
+workspace selection, send/cancel, approval/denial, question forms, and shared transcript/export
+presentation. Agent edits, local model IDs, arbitrary PC paths and registered-workspace management
+do not cross this boundary. Desktop owns creation of a session's system workspace.
 
-Current protocol limits differ from the old prototype: responses accept approve/deny only, creation
-requires an explicit registered workspace ID, and files expose metadata only. Question answers,
-free-form denial reasons, default-workspace creation and artifact downloads cannot be restored by
-frontend adaptation alone. The UI does not send unsupported values or silently drop question answers.
+The matching desktop protocol now accepts question answers and denial reasons, and advertises
+system-workspace creation. Mobile preserves complete answers through the common interaction
+contract and command journal. The current sheet has no denial-reason editor. Older desktops still
+support plain decisions and registered workspaces. Files expose metadata only; artifact downloads
+remain a separate protocol task.
 
 Pending commands and their exact parameters belong to the backend journal. Source-level start
 operations remain discoverable after route exit, including original input and a partially created

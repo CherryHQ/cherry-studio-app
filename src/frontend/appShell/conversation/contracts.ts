@@ -5,6 +5,7 @@ import type {
   JsonValue,
 } from '@/shared/contracts/agent';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import type { InteractionResponse, InteractionQuestion } from '@/shared/contracts/interaction';
 
 type Opaque<Tag extends string> = string & { readonly __tag: Tag };
 export type QueryScope = Opaque<'conversation-scope'>;
@@ -120,11 +121,11 @@ export type ConversationExecution = {
 export type ConversationInteraction = {
   execution?: ExecutionRef;
   ref: InteractionRef;
-  kind: 'decision';
+  kind: 'decision' | 'question';
   title: string;
   state: 'pending' | 'approved' | 'denied' | 'expired';
   input: ResourceRef;
-  respond?: ConversationAction<'approve' | 'deny', void>;
+  respond?: ConversationAction<InteractionResponse, void>;
 };
 /** Pure export values, never a deferred remote resource or an executable tool. */
 export type TranscriptMessage = Pick<AgentMessageView, 'id' | 'role' | 'status' | 'stats'> & {
@@ -168,6 +169,7 @@ export type ConversationMessage = {
 export type ConversationSnapshot = {
   agentId?: string;
   workspaceId?: string;
+  workspaceKind?: 'registered' | 'system';
   title: string;
   freshness: ConversationFreshness;
   historyVersion?: HistoryVersion;
@@ -201,6 +203,7 @@ export interface ConversationHistory {
   ): Promise<TranscriptSnapshot>;
 }
 export type ResourceValue =
+  | { kind: 'question'; questions: readonly InteractionQuestion[] }
   | { kind: 'text'; text: string; complete: true }
   | { kind: 'json'; value: JsonValue; complete: true }
   | { kind: 'metadata'; name: string; mediaType?: string; byteLength?: string };
@@ -241,7 +244,9 @@ export type AgentSummary = {
   avatar?: string | null;
   avatarUri?: string | null;
 };
-export type WorkspaceSummary = { ref: WorkspaceRef; id: string; name: string };
+export type WorkspaceSummary =
+  | { ref: WorkspaceRef; id: string; name: string; kind?: 'registered' }
+  | { ref: WorkspaceRef; kind: 'system'; id?: never; name?: never };
 export type ConversationSummary = { ref: ConversationRef; title: string; updatedAt?: string };
 export interface ConversationCatalog {
   listAgents(

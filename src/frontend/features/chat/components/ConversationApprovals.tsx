@@ -23,7 +23,10 @@ export function ConversationApprovals({
   const input = useConversationResource(session, interaction?.input);
   const isOpen = Boolean(interaction) && snapshot.freshness.state !== 'retired';
   const canRespond =
-    isOpen && interaction?.respond?.availability.state === 'enabled' && input.isSuccess;
+    isOpen &&
+    interaction?.respond?.availability.state === 'enabled' &&
+    input.isSuccess &&
+    (interaction.kind !== 'question' || input.data?.kind === 'question');
   const cancellations = snapshot.executions.flatMap((execution) =>
     execution.cancel?.availability.state === 'enabled' &&
     (interaction?.execution
@@ -32,9 +35,15 @@ export function ConversationApprovals({
       ? [execution.cancel]
       : [],
   );
-  const respond = async ({ approvalId, approved }: ToolApprovalRespondInput) => {
+  const respond = async ({ approvalId, approved, answers }: ToolApprovalRespondInput) => {
     if (!canRespond || interaction?.ref !== approvalId) return;
-    const result = await interaction.respond!.execute(approved ? 'approve' : 'deny');
+    const result = await interaction.respond!.execute(
+      !approved
+        ? { kind: 'deny' }
+        : interaction.kind === 'question'
+          ? { kind: 'answer', answers: answers ?? {} }
+          : { kind: 'approve' },
+    );
     if (result.state === 'rejected' || result.state === 'interrupted')
       toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
   };
@@ -55,6 +64,7 @@ export function ConversationApprovals({
               {
                 approvalId: interaction.ref,
                 displayName: interaction.title,
+                questions: input.data?.kind === 'question' ? input.data.questions : undefined,
                 input: input.data?.kind === 'json' ? input.data.value : undefined,
               },
             ]

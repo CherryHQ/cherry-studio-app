@@ -5,6 +5,7 @@ import type { DesktopDomainLease, DesktopLeaseState } from '@/backend/services/d
 import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentScope } from '../RemoteAgentScope';
+import { integrity } from '../remoteContent';
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 function fixture() {
@@ -192,4 +193,78 @@ it('keeps inline tool payloads out of frontend references and rejects another sc
   first.source.dispose();
   other.source.dispose();
   await Promise.all([first.source.drain(), other.source.drain()]);
+});
+
+it('materializes a question only from its bound input revision and preserves the response target', async () => {
+  const test = fixture();
+  const input = {
+    questions: [
+      { question: '目录？', options: [{ label: 'src' }, { label: 'docs' }], multiSelect: true },
+    ],
+  };
+  const text = JSON.stringify(input);
+  const interaction = {
+    interactionId: 'question',
+    executionId: 'e',
+    toolCallId: 'call',
+    revision: '1',
+    status: 'pending' as const,
+    kind: 'question' as const,
+    summary: 'Choose',
+    inputDigest: integrity.sha256(new TextEncoder().encode(text)),
+  };
+  test.projection.interactions.question = interaction;
+  test.projection.executions.e = { executionId: 'e', status: 'awaiting-approval', durable: false };
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.interactions.get')
+      return { interaction: { ...interaction, input: { text } } } as never;
+    if (method === 'agent.interactions.respond')
+      return {
+        commandId: params.commandId,
+        method,
+        status: 'applied',
+        admittedAt: '2026-09-22T00:00:00.000Z',
+      } as never;
+    return request(method, params);
+  });
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  const question = snapshot!.interactions[0];
+  expect(question.kind).toBe('question');
+  await expect(
+    test.source.readResource(question.input, new AbortController().signal),
+  ).resolves.toEqual({
+    kind: 'question',
+    questions: [
+      {
+        question: '目录？',
+        options: input.questions[0].options,
+        header: undefined,
+        multiple: true,
+      },
+    ],
+  });
+  await test.source.respond(question.respondTarget!, {
+    kind: 'answer',
+    answers: { '目录？': 'src, docs' },
+  });
+  const body = test.request.mock.calls.find(
+    ([method]) => method === 'agent.interactions.respond',
+  )![1];
+  expect(body).toMatchObject({
+    expectedExecutionId: 'e',
+    expectedRevision: '1',
+    inputDigest: interaction.inputDigest,
+    response: { kind: 'answer', answers: { '目录？': 'src, docs' } },
+  });
+  interaction.revision = '2';
+  await expect(
+    test.source.readResource(question.input, new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'REVISION_EXPIRED' });
+  test.source.dispose();
+  await test.source.drain();
 });

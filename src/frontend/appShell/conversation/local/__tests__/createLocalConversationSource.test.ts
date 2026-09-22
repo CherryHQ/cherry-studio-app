@@ -190,7 +190,7 @@ test('a changed approval payload replaces its resource identity and rejects the 
   await expect(handle.resources.read(previous.input, f.signal)).rejects.toMatchObject({
     failure: { code: 'resource-unavailable' },
   });
-  expect(await previous.respond!.execute('approve')).toMatchObject({
+  expect(await previous.respond!.execute({ kind: 'approve' })).toMatchObject({
     state: 'rejected',
     failure: { code: 'conflict' },
   });

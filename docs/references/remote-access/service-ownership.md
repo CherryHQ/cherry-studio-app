@@ -145,9 +145,9 @@ These findings come from source inspection, not a reproduction of device failure
 
 1. **Finish product acceptance and local composer admission.** Remote chat/sidebar now consume
    common catalogs, history, actions, operations and deferred resources. Local composer admission
-   still uses its client extension. Current desktop protocol does not accept question answers or
-   denial text and does not expose system/default workspace creation; those behaviors need desktop
-   changes, not invented client requests. The remote composer requires a registered workspace.
+   still uses its client extension. Remote question answers and advertised system-workspace creation
+   now use the matching desktop protocol; denial text is supported by the wire contract but has no
+   mobile editor. Verify these paths against the desktop on a device.
 2. **Complete prepared asset ownership.** Local selection currently returns `assets: []` and a
    no-op `release`. The share flow holds the transcript snapshot, but the exporter later resolves
    managed image IDs. Introduce a real source-preparation file lease or snapshot-owned copy and

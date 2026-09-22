@@ -1,5 +1,7 @@
 import {
   agentMethods,
+  questionInputSchema,
+  interactionResponseSchema,
   type AgentMethod,
   type AgentPart,
   type AgentProjection,
@@ -169,6 +171,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     const page = await this.request('agent.workspaces.list', { agentId, cursor }, signal);
     return {
       items: page.items.map((item) => ({ id: item.workspaceId, name: item.name })),
+      systemWorkspace: page.systemWorkspace === true,
       next: page.nextCursor ?? undefined,
     };
   }
@@ -260,6 +263,18 @@ export class RemoteAgentScope implements RemoteAgentSource {
             );
       if (integrity.sha256(new TextEncoder().encode(text)) !== interaction.inputDigest)
         throw new RemoteAgentError('PROTOCOL_ERROR');
+      if (interaction.kind === 'question') {
+        const parsed = questionInputSchema.parse(JSON.parse(text));
+        return {
+          kind: 'question',
+          questions: parsed.questions.map((question) => ({
+            question: question.question,
+            header: question.header,
+            options: question.options,
+            multiple: question.multiSelect ?? false,
+          })),
+        };
+      }
       return { kind: 'text', text };
     }
     const part = value.part;
@@ -419,11 +434,14 @@ export class RemoteAgentScope implements RemoteAgentSource {
       this.actions.create('cancel', 'agent.executions.cancel', this.target(target, 'cancel')),
     );
   }
-  respond(target: string, decision: 'approve' | 'deny') {
+  respond(target: string, input: Parameters<RemoteAgentSource['respond']>[1]) {
+    const response = interactionResponseSchema.parse(input);
     return this.track(
       this.actions.create('respond', 'agent.interactions.respond', {
         ...this.target(target, 'respond'),
-        decision,
+        ...(response.kind === 'approve' || (response.kind === 'deny' && !response.reason)
+          ? { decision: response.kind }
+          : { response }),
       }),
     );
   }

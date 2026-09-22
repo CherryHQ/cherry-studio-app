@@ -173,16 +173,34 @@ Identity/grant comparisons protect credential writes against a concurrent re-pai
 
 Slices 1–3 replace what `main` ships and are releasable on their own; 4–6 land the PR #997 scope.
 
-## Current Consumer Limits
+## Questions And Workspace Selection
 
-The current desktop schema accepts approval/denial only; the old prototype's question answers and
-free-form denial reasons are not supported. Creation requires an explicit registered workspace ID;
-the current desktop handler has no system/default-workspace creation path. Mobile therefore asks
-for a registered workspace instead of inventing a default ID. These product gaps require a desktop
-protocol change before those prototype behaviors can return.
+`agent.interactions.respond` accepts an explicit `response`: `{ kind: 'approve' }`,
+`{ kind: 'deny', reason? }`, or `{ kind: 'answer', answers }`. Answers are keyed by the original
+question text. Question interactions advertise `kind: 'question'`; their input remains an
+inline/content-ref resource, so checkpoints and event summaries do not duplicate the form.
+The desktop validates all question keys and nonblank answers against the current revision,
+execution and input digest, then passes the original input plus answers to its existing runtime.
+The mobile adapter materializes the form into the common interaction resource and reuses the
+question sheet. Exact response parameters and command IDs survive receipt recovery.
+
+`agent.workspaces.list` advertises `systemWorkspace: true` when supported. Creation accepts
+`workspace: { kind: 'system' }` or `{ kind: 'registered', id }`; only the desktop resolves the
+physical directory. The returned session includes the real `workspaceId` and `workspaceKind`.
+Mobile offers the localized default choice only after the desktop advertises it; an older desktop
+still requires a registered workspace. The system choice has a source-bound frontend ref, never
+a fabricated workspace ID on the wire.
+
+Legacy `decision: approve | deny` and `workspaceId` commands remain valid for existing clients and
+persisted journals. Mobile keeps these wire forms for plain decisions and registered workspaces;
+new answers, denial text and system creation use the explicit forms. A command cannot combine both
+forms. Desktop supports denial reasons in the protocol; the current mobile sheet has no reason
+editor. Local Agent approvals retain their existing decision-only capability.
+
+These additions require the matching desktop implementation. Device acceptance is still pending.
 
 ## Out of scope
 
 Relay service, file bytes for `file` parts (desktop exposes metadata only), approval cards that the
 desktop persists after a turn (listed and answerable, not streamed), and any write to desktop
-Agents or workspaces.
+Agents or registered workspaces. Creating a session-owned system workspace is supported.

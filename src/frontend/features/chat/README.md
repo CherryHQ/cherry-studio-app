@@ -72,7 +72,7 @@ retains a ConversationSource, opens a route Session, and feeds common history/sn
 ChatWorkspace. The sidebar uses the same catalog boundary. Runtime wire state and command recovery
 stay behind Backend.remoteAgent; no Controller provider or Controller query keys remain.
 
-`RemoteComposer` owns text editing and registered workspace selection. New conversations call the
+`RemoteComposer` owns text editing and registered/system workspace selection. New conversations call the
 bound Draft start action, existing conversations call Session send, and stop targets a selected
 execution. Backend journals own create/send IDs and uncertain-command recovery. Pending/interrupted
 outcomes remain visible in ConversationOperations; navigation does not resend them. The initiating
@@ -85,10 +85,11 @@ resource readers explicitly to deferred sheets. Closing a sheet cancels reads. A
 show metadata because the desktop does not provide file bytes. ConversationApprovals uses bound
 input/response actions and cancels only the execution associated with the displayed approval.
 
-The current desktop protocol only accepts approval/denial and requires an explicit registered
-workspace for creation. Question answers, free-form denial reasons and PC default-workspace creation
-from the prototype are not supported by this wire version. The plus-menu remains disabled and
-local model/attachment controls remain local. These are protocol gaps, not frontend fallbacks.
+The matching desktop protocol supports question answers and system-workspace creation. Question
+forms consume a bound resource; responses carry complete answers rather than a boolean approval.
+The default workspace is offered only when advertised; older desktops still require a registered
+workspace. Denial reasons are supported by the protocol but have no editor in the current sheet.
+The plus-menu remains disabled and local model/attachment controls remain local.
 
 Both sources share selection preparation and export UI. Prepared local image bytes are not yet
 pinned. See [Service Dependencies And Ownership](../../../../docs/references/remote-access/service-ownership.md)

@@ -1,5 +1,7 @@
+import type { InteractionResponse } from '../interaction';
 import type {
   RemoteCommand,
+  RemoteStartInput,
   RemoteMessageView,
   RemotePage,
   RemoteResource,
@@ -24,7 +26,7 @@ export interface RemoteAgentSource {
     agentId: string,
     cursor: string | undefined,
     signal: AbortSignal,
-  ): Promise<RemotePage<{ id: string; name: string }>>;
+  ): Promise<RemotePage<{ id: string; name: string }> & { systemWorkspace?: boolean }>;
   listSessions(
     agentId: string | undefined,
     cursor: string | undefined,
@@ -39,15 +41,10 @@ export interface RemoteAgentSource {
     signal: AbortSignal,
   ): Promise<RemotePage<RemoteMessageView>>;
   readResource(resource: RemoteResource, signal: AbortSignal): Promise<RemoteResourceValue>;
-  start(input: {
-    draftId: string;
-    agentId: string;
-    workspaceId: string;
-    text: string;
-  }): Promise<RemoteStartOperation>;
+  start(input: RemoteStartInput): Promise<RemoteStartOperation>;
   send(target: string, text: string): Promise<RemoteCommand>;
   cancel(target: string): Promise<RemoteCommand>;
-  respond(target: string, decision: 'approve' | 'deny'): Promise<RemoteCommand>;
+  respond(target: string, response: InteractionResponse): Promise<RemoteCommand>;
   getCommands(): readonly RemoteCommand[];
   getStarts(): readonly RemoteStartOperation[];
   subscribeOperations(listener: () => void): () => void;

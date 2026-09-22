@@ -210,7 +210,7 @@ it('binds workspaces to the selected Agent and never invents a default workspace
   expect(test.remote.start).toHaveBeenCalledWith({
     draftId: 'draft-2',
     agentId: 'a',
-    workspaceId: 'w',
+    workspace: { kind: 'registered', id: 'w' },
     text: 'hello',
   });
   test.source.dispose();
@@ -278,5 +278,32 @@ it('exposes source-owned starts without reopening the original draft and separat
   expect(session.state.getSnapshot()).toMatchObject({ agentId: 'a', workspaceId: 'w' });
   source.dispose();
   expect(source.operations.getSnapshot()).toEqual([]);
+  test.source.dispose();
+});
+
+it('offers a system workspace only when advertised and sends an explicit selection', async () => {
+  const test = fixture();
+  const agent = (await test.source.catalog.listAgents(undefined, signal())).items[0].ref;
+  expect(
+    (await test.source.catalog.listWorkspaces!(agent, undefined, signal())).items.some(
+      (item) => item.kind === 'system',
+    ),
+  ).toBe(false);
+  test.remote.listWorkspaces = async () => ({ items: [], systemWorkspace: true });
+  const workspace = (await test.source.catalog.listWorkspaces!(agent, undefined, signal()))
+    .items[0];
+  expect(workspace.kind).toBe('system');
+  expect(workspace).not.toHaveProperty('id');
+  const draft = await test.source.catalog.prepareDraft(
+    { agent, workspace: workspace.ref, draftId: 'system' as DraftId },
+    signal(),
+  );
+  await draft.state.getSnapshot().start!.execute({ parts: [{ type: 'text', text: 'hello' }] });
+  expect(test.remote.start).toHaveBeenCalledWith({
+    agentId: 'a',
+    draftId: 'system',
+    workspace: { kind: 'system' },
+    text: 'hello',
+  });
   test.source.dispose();
 });

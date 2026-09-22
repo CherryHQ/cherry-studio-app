@@ -1,3 +1,4 @@
+import type { InteractionResponse } from '@/shared/contracts/interaction';
 import type {
   RemoteAgentSource,
   RemoteCommand,
@@ -207,6 +208,7 @@ export function createRemoteConversationSession(
       title: session.title,
       agentId: session.agentId,
       workspaceId: session.workspaceId,
+      workspaceKind: session.workspaceKind,
       freshness:
         disposed || sourceState.status === 'retired'
           ? { state: 'retired' }
@@ -244,13 +246,13 @@ export function createRemoteConversationSession(
           ...(interaction.executionId
             ? { execution: refs.issue<ExecutionRef>('execution', interaction.executionId) }
             : {}),
-          kind: 'decision' as const,
+          kind: interaction.kind ?? 'decision',
           title: interaction.title,
           state: interaction.state,
           input: resource(interaction.input),
           ...(interaction.state === 'pending'
             ? {
-                respond: action<'approve' | 'deny', void>(
+                respond: action<InteractionResponse, void>(
                   `respond:${interaction.id}`,
                   interaction.respondTarget,
                   (target, decision) => source.respond(target, decision),
