@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 
 import { fetchSnapshot, pairDesktop, AuthorizationError } from '../desktopConnectionClient';
@@ -187,6 +188,50 @@ describe('DesktopConnectionRuntime', () => {
     expect(SecureStore.setItemAsync).toHaveBeenNthCalledWith(2, key, 'old-token', {
       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
+  });
+
+  it('adopts the paired desktop analytics identity without letting it undo the pairing', async () => {
+    const desktopClientId = '99999999-8888-4777-8666-555555555555';
+    const adoptClientId = jest.fn(async () => {
+      throw new Error('analytics unavailable');
+    });
+    await installTestHost({ AnalyticsService: { adoptClientId } });
+    try {
+      jest.mocked(pairDesktop).mockResolvedValue({
+        baseUrl,
+        clientId: desktopClientId,
+        name: 'Desktop',
+        token: 'new-token',
+        version: '2.0.8',
+      });
+
+      await expect(runtime.pair(pairing, signal())).resolves.toEqual(connection);
+      expect(adoptClientId).toHaveBeenCalledWith(desktopClientId);
+      // A failed adoption must not restore the previous credential.
+      expect(SecureStore.setItemAsync).toHaveBeenCalledTimes(1);
+    } finally {
+      await uninstallTestHost();
+    }
+  });
+
+  it('does not hold the pairing open while the analytics identity is adopted', async () => {
+    const desktopClientId = '99999999-8888-4777-8666-555555555555';
+    const adoptClientId = jest.fn(() => new Promise<void>(() => {}));
+    await installTestHost({ AnalyticsService: { adoptClientId } });
+    try {
+      jest.mocked(pairDesktop).mockResolvedValue({
+        baseUrl,
+        clientId: desktopClientId,
+        name: 'Desktop',
+        token: 'new-token',
+        version: '2.0.8',
+      });
+
+      await expect(runtime.pair(pairing, signal())).resolves.toEqual(connection);
+      expect(adoptClientId).toHaveBeenCalledWith(desktopClientId);
+    } finally {
+      await uninstallTestHost();
+    }
   });
 
   it('compensates cancellation during a credential write before resolving', async () => {

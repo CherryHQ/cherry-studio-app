@@ -75,10 +75,33 @@ OpenVINO Model Server), including copies identified by their preset provider ID 
 ## Provider Form
 
 `ProviderForm` is a compound component over one draft: `ProviderForm.Avatar`, `.Name`, `.BaseUrl`,
-`.Endpoint`, `.Endpoints`, and `.ApiKey`. `useProviderFormDraft` owns field state; `useProviderConfigurationForm` adds loading,
+`.Endpoint`, `.Endpoints`, and `.ApiKeys`. `useProviderFormDraft` owns field state; `useProviderConfigurationForm` adds loading,
 validation, endpoint impact confirmation, and saving for existing providers. Creation keeps its
 own initial persistence step. Each screen drives its actions from the same draft that its fields
 consume and composes the slots it needs.
+
+`ProviderForm.ApiKeys` edits a dynamic list of credential entries. Each row keeps its ID, key,
+optional label, and enabled state together; removing another row never reassigns that identity.
+Each credential occupies one grouped-list row showing its optional note (or default name), a
+masked key, an enable switch, and a Settings button. The switch and Settings button have separate
+touch targets. Scroll cancellation stays with the page scroller and shared controls; the row adds
+no long-press or swipe recognizers.
+
+Adding or opening Settings presents a dedicated `BottomSheet` for that key, with the key and an
+optional note explaining its identification-only purpose. Existing keys edit the page draft
+directly; closing the sheet keeps those edits. New keys stay in a local buffer until Add validates
+and inserts the entry; cancelling an addition leaves the list unchanged.
+Delete is a full-width destructive button below the existing-key sheet's fields.
+There is no second confirmation action for editing a key. Empty,
+duplicate, or multi-key input shows an error in the sheet and list and blocks page save; it also
+blocks Add for a new key. Short keys are fully masked; longer keys expose only their last four
+characters in the list.
+All edits, including enabling keys during setup, remain in the page draft until the explicit page
+save succeeds. Editing unrelated fields does not replace keys updated by background synchronization.
+
+The data model follows desktop's `ProviderApiKeyListDrawer`; presentation and editing follow
+Mobile's grouped rows, keyboard-aware sheet, and page save/discard contract. No database or device
+synchronization protocol change is needed.
 
 Endpoint fields share protocol labels, full request URL previews with explicit copying, and
 correction hints for pasted request paths. Base URLs accept the desktop-compatible trailing `#` to

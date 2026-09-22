@@ -2,62 +2,60 @@ import * as Crypto from 'expo-crypto';
 
 import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
-function createApiKeyEntryId(): string {
-  return Crypto.randomUUID();
+export type ApiKeyValidationError = 'empty' | 'duplicate' | 'invalidFormat';
+
+export const API_KEY_ERROR_LABELS = {
+  empty: 'settings.provider.apiService.apiKeyRequired',
+  duplicate: 'settings.provider.apiService.keys.duplicate',
+  invalidFormat: 'settings.provider.apiService.keys.invalidFormat',
+} as const satisfies Record<ApiKeyValidationError, string>;
+
+export function createApiKeyEntry(): ApiKeyEntry {
+  return { id: Crypto.randomUUID(), isEnabled: true, key: '' };
 }
 
-export function normalizeApiKeySingleLine(value: string): string {
-  return value.replaceAll(/[\r\n]+/g, '');
+/** Keep short credentials fully hidden and expose only a small suffix for recognition. */
+export function maskProviderApiKey(key: string): string {
+  const trimmedKey = key.trim();
+  return trimmedKey.length > 8 ? `•••• ${trimmedKey.slice(-4)}` : '••••••••';
 }
 
-export function buildApiKeysInputFromEntries(apiKeys: readonly ApiKeyEntry[]): string {
-  return apiKeys.flatMap((entry) => entry.key.trim() || []).join(',');
+export function getApiKeyValidationError(
+  entry: ApiKeyEntry,
+  entries: readonly ApiKeyEntry[],
+): ApiKeyValidationError | undefined {
+  const key = entry.key.trim();
+  if (!key) return 'empty';
+  if (/[\s,，]/.test(key)) return 'invalidFormat';
+  if (entries.some((other) => other.id !== entry.id && other.key.trim() === key)) {
+    return 'duplicate';
+  }
+  return undefined;
 }
 
-export function buildApiKeyEntriesFromInput(
-  input: string,
-  currentEntries: readonly ApiKeyEntry[],
-): ApiKeyEntry[] {
-  const keys = [
-    ...new Set(
-      input
-        .split(/[\n,]/)
-        .map((key) => key.trim())
-        .filter(Boolean),
-    ),
-  ];
-
-  return keys.map((key, index) => ({
-    ...(currentEntries[index] ?? createEmptyApiKeyEntry()),
-    key,
+/** Normalize values without dropping entries or changing their identities. */
+export function normalizeApiKeyEntries(apiKeys: readonly ApiKeyEntry[]): ApiKeyEntry[] {
+  return apiKeys.map((entry) => ({
+    ...entry,
+    key: entry.key.trim(),
+    ...(entry.label !== undefined ? { label: entry.label.trim() } : {}),
   }));
 }
 
-function createEmptyApiKeyEntry(): ApiKeyEntry {
-  return {
-    id: createApiKeyEntryId(),
-    isEnabled: true,
-    key: '',
-  };
-}
-
-export function normalizeApiKeyEntries(apiKeys: readonly ApiKeyEntry[]): ApiKeyEntry[] {
-  const seen = new Set<string>();
-  const entries: ApiKeyEntry[] = [];
-
-  for (const entry of apiKeys) {
-    const key = entry.key.trim();
-
-    if (!key || seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    entries.push({
-      ...entry,
-      key,
-    });
-  }
-
-  return entries;
+export function areApiKeyEntriesEqual(
+  left: readonly ApiKeyEntry[],
+  right: readonly ApiKeyEntry[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((entry, index) => {
+      const other = right[index];
+      return (
+        entry.id === other.id &&
+        entry.key === other.key &&
+        (entry.label ?? '') === (other.label ?? '') &&
+        entry.isEnabled === other.isEnabled
+      );
+    })
+  );
 }

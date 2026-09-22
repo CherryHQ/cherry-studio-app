@@ -425,7 +425,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.initialAdmissions.add(admission);
     let openedRuntimeSession: AgentRuntimeSession | undefined;
     let isRuntimeSessionInstalled = false;
-    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+    const preparationLease = this.backgroundReply.acquirePreparation(parsed.sessionId, (reason) =>
       abortController.abort(reason),
     );
 
@@ -572,7 +572,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     const abortController = new AbortController();
     const { signal } = abortController;
     this.admittingSessions.set(sessionId, { abortController, completion: completion.promise });
-    const lease = this.backgroundReply.acquirePreparation((reason) =>
+    const lease = this.backgroundReply.acquirePreparation(sessionId, (reason) =>
       abortController.abort(reason),
     );
     try {
@@ -671,7 +671,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       abortController,
       completion: completion.promise,
     });
-    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+    const preparationLease = this.backgroundReply.acquirePreparation(sessionId, (reason) =>
       abortController.abort(reason),
     );
     try {

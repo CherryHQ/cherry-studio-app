@@ -1,9 +1,10 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import type { EndpointType } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
+import { areApiKeyEntriesEqual } from '../../../apiService/utils/providerApiServiceApiKeys';
 import {
   canEditProviderEndpoint,
   getPrimaryEndpoint,
@@ -19,7 +20,7 @@ import {
  * slots a screen composes.
  */
 export type ProviderFormValues = {
-  apiKey: string;
+  apiKeys: ApiKeyEntry[];
   avatarUri: string | null;
   defaultChatEndpoint: EndpointType;
   endpointUrls: Partial<Record<EndpointType, string>>;
@@ -31,7 +32,7 @@ export const NEW_PROVIDER_ENDPOINT_TYPES: readonly EndpointType[] = CHAT_ENDPOIN
 
 export function createEmptyProviderFormValues(): ProviderFormValues {
   return {
-    apiKey: '',
+    apiKeys: [],
     avatarUri: null,
     defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
     endpointUrls: {},
@@ -52,11 +53,11 @@ export function resolveProviderFormEndpointTypes(provider: Provider): readonly E
 }
 
 export function createProviderFormValues({
-  apiKey = '',
+  apiKeys = [],
   avatarUri,
   provider,
 }: {
-  apiKey?: string;
+  apiKeys?: ApiKeyEntry[];
   avatarUri: string | null;
   provider: Provider;
 }): ProviderFormValues {
@@ -69,7 +70,7 @@ export function createProviderFormValues({
     ) as Partial<Record<EndpointType, string>>;
 
     return {
-      apiKey,
+      apiKeys,
       avatarUri,
       defaultChatEndpoint: normalizeCustomProviderDefaultEndpoint(
         endpointUrls,
@@ -83,7 +84,7 @@ export function createProviderFormValues({
   const primaryEndpoint = getPrimaryEndpoint(provider);
 
   return {
-    apiKey,
+    apiKeys,
     avatarUri,
     defaultChatEndpoint: primaryEndpoint,
     endpointUrls: { [primaryEndpoint]: getProviderPrimaryBaseUrl(provider) },
@@ -119,7 +120,7 @@ export function isProviderFormDirty({
   if (
     values.name !== initialValues.name ||
     values.avatarUri !== initialValues.avatarUri ||
-    values.apiKey !== initialValues.apiKey ||
+    !areApiKeyEntriesEqual(values.apiKeys, initialValues.apiKeys) ||
     values.defaultChatEndpoint !== initialValues.defaultChatEndpoint
   ) {
     return true;

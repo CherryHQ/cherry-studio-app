@@ -18,9 +18,18 @@ jest.mock('heroui-native/utils', () => ({
   cn: (...classes: (false | null | string | undefined)[]) => classes.filter(Boolean).join(' '),
 }));
 
-jest.mock('uniwind', () => ({
-  useCSSVariable: () => 24,
-}));
+jest.mock('uniwind', () => {
+  const variables: Record<string, number | string> = {
+    '--color-muted-foreground': '#666666',
+    '--color-secondary': 'rgba(0, 0, 0, 0.05)',
+    '--ui-text-base--line-height': 24,
+  };
+
+  return {
+    useCSSVariable: (names: string | string[]) =>
+      Array.isArray(names) ? names.map((name) => variables[name]) : variables[names],
+  };
+});
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   default: () => ({ fontScale: 1, height: 800, scale: 2, width: 400 }),

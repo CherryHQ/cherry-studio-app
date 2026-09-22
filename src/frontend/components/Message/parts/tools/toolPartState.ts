@@ -69,26 +69,6 @@ function getCherryToolType(part: ToolMessagePart) {
   return typeof tool?.type === 'string' ? tool.type : undefined;
 }
 
-export type ToolGroupSummary = {
-  dangerCount: number;
-  state: 'complete' | 'running';
-  tone: ToolStatusTone;
-  warningCount: number;
-};
-
-/** Derives one group-level state and tone from a run of tool calls. */
-export function deriveToolGroupSummary(parts: readonly ToolMessagePart[]): ToolGroupSummary {
-  const dangerCount = parts.filter((part) => getToolStatusTone(part) === 'danger').length;
-  const warningCount = parts.filter((part) => getToolStatusTone(part) === 'warning').length;
-
-  return {
-    dangerCount,
-    state: parts.some((part) => getToolDisplayState(part) === 'running') ? 'running' : 'complete',
-    tone: dangerCount > 0 ? 'danger' : warningCount > 0 ? 'warning' : 'default',
-    warningCount,
-  };
-}
-
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

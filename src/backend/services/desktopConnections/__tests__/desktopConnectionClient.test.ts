@@ -1,10 +1,14 @@
 import { loggerService } from '@logger';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import { fetchSnapshot, requestWithTimeout } from '../desktopConnectionClient';
+import { fetchSnapshot, pairDesktop, requestWithTimeout } from '../desktopConnectionClient';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('@/backend/utils/defaultAppHeaders', () => ({ defaultAppHeaders: () => ({}) }));
+// Keeps pairing on the ordinary transport instead of the iOS-only native POST.
+jest.mock('../../../../../modules/local-network-access', () => ({
+  getLocalNetworkAccess: () => null,
+}));
 
 const mockFetch = jest.mocked(expoFetch);
 
@@ -111,5 +115,38 @@ describe('desktop connection request lifetime', () => {
       fetchSnapshot(['http://192.168.1.2'], 'token', controller.signal),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('pairing response tolerance', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
+  function respondWith(payload: Record<string, unknown>) {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => payload,
+    } as Response as Awaited<ReturnType<typeof expoFetch>>);
+  }
+
+  const pair = () =>
+    pairDesktop(['http://192.168.1.2'], { code: 'code' } as never, new AbortController().signal);
+
+  it.each([['not-a-uuid'], [''], [42], [null]])(
+    'pairs anyway when the desktop reports %p as its analytics identity',
+    async (clientId) => {
+      respondWith({ clientId, name: 'Desktop', token: 'token', version: '2.0.8' });
+
+      await expect(pair()).resolves.toMatchObject({ name: 'Desktop', token: 'token' });
+    },
+  );
+
+  it('carries a usable identity through', async () => {
+    const clientId = '99999999-8888-4777-8666-555555555555';
+    respondWith({ clientId, name: 'Desktop', token: 'token', version: '2.0.8' });
+
+    await expect(pair()).resolves.toMatchObject({ clientId });
   });
 });

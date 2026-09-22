@@ -13,25 +13,23 @@ export type MessageBodyItem = { kind: 'part'; index: number; part: CherryMessage
 export type PartitionedMessageParts = {
   /** Turn-boundary compaction markers stay visible before the process disclosure. */
   boundaries: readonly MessageBodyItem[];
-  /** The final result text, carrying its original index for citation resolution. */
+  /** Images and final result text in transcript order, retaining their original indices. */
   body: readonly MessageBodyItem[];
-  /** Every file in the message, shown as one row after the body. */
+  /** Non-image files, shown as one row after the body. */
   files: readonly MessageFilePart[];
-  /** Every visible transcript part except the final result text. */
+  /** Intermediate prose, reasoning, and tools. */
   process: readonly MessageProcessItem[];
 };
 
 /**
- * Splits a message into its timed process, final result text, and produced
- * files. Only the last visible text part remains in the article body; earlier
- * prose, reasoning, and tools all belong to the process disclosure.
+ * Splits a message into its timed process, illustrated answer, and downloadable
+ * files. The last visible text part and images remain in the article body;
+ * earlier prose, reasoning, and tools belong to the process disclosure.
  *
- * Files are lifted out of the stream and shown after the answer rather than at
- * the tool call that wrote them. A deliverable buried between two blocks of
- * prose is hard to find on a phone, and the position it was emitted at says
- * nothing a reader wants — it is the answer the file belongs to, not the step.
+ * Images retain their position relative to the answer: a tool can produce an
+ * image before the model explains it. Other files collect after the answer.
  *
- * The split keys on part type and never on a file's declared purpose: a
+ * The split keys on part and media type, never on a file's declared purpose: a
  * transcript replayed from a peer that has no purpose field of its own must lay
  * out identically to a locally produced one. Nothing is lost by ignoring it,
  * because only assistant messages reach here with files at all — the user row
@@ -57,7 +55,11 @@ export function partitionMessageParts(
     }
 
     if (part.type === 'file') {
-      files.push(part);
+      if (part.mediaType.toLowerCase().startsWith('image/')) {
+        body.push({ index, kind: 'part', part });
+      } else {
+        files.push(part);
+      }
       return;
     }
 

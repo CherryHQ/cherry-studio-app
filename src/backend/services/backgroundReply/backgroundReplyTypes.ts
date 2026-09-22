@@ -42,8 +42,12 @@ export type BackgroundReplyTurnInput = {
 };
 
 export type BackgroundReplyLifecycle = {
-  /** Protect submission preparation until the turn acquires its own execution lease. */
-  acquirePreparation: (onInterrupt: (reason: Error) => void) => KeepAliveLease;
+  /**
+   * Protects submission preparation until the turn acquires its own execution
+   * lease, and gives the Session a surface for the whole preparation stage:
+   * a user who leaves the app before the turn exists still gets one.
+   */
+  acquirePreparation: (sessionId: string, onInterrupt: (reason: Error) => void) => KeepAliveLease;
   clearSession: (sessionId: string) => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
   updateSessionTitle: (sessionId: string, title: string) => void;

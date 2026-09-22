@@ -165,14 +165,6 @@ export function fileEntryUrl(id: FileEntryId): string {
   return `${FILE_ENTRY_URL_PREFIX}${id}`;
 }
 
-export function parseFileEntryUrl(url: string): FileEntryId | null {
-  if (!url.startsWith(FILE_ENTRY_URL_PREFIX)) {
-    return null;
-  }
-  const parsed = FileEntryIdSchema.safeParse(url.slice(FILE_ENTRY_URL_PREFIX.length));
-  return parsed.success ? parsed.data : null;
-}
-
 // Owners hold their own file ids — message parts carry them in JSON, a painting
 // row carries them in its `files` column. There is no association table and no
 // reverse index: nothing needs to ask which owners use a given file, and a file

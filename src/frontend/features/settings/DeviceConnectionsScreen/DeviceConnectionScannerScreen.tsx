@@ -67,12 +67,15 @@ export function DeviceConnectionScannerScreen({
           setHasScanned(false);
           return;
         }
+        // Pairing succeeded, so the sync screen is the next decision. It reports a device that
+        // stopped being usable between here and there, which is the only state a separate
+        // confirmation step used to add.
         router.replace({
           params: { connectionId: connection.id },
           pathname:
             setupIntent === 'chat'
-              ? '/onboarding/device-connections/sync-guide'
-              : '/settings/device-connections/sync-guide',
+              ? '/onboarding/provider-sync'
+              : '/settings/provider/desktop-sync',
         });
       } catch (error) {
         if (mounted.current) setScanError(desktopConnectionErrorMessage(error, t));
@@ -104,6 +107,11 @@ export function DeviceConnectionScannerScreen({
   return (
     <View className="flex-1 bg-grouped-background">
       <RouteHeader title={t('settings.deviceConnections.scan.title')} />
+      <View className="px-4 pt-3 pb-4">
+        <Text className="text-sm text-muted-foreground">
+          {t('settings.deviceConnections.scan.guidance')}
+        </Text>
+      </View>
       <View
         className={
           showCamera

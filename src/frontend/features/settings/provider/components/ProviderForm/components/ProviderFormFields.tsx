@@ -1,7 +1,6 @@
 import { Input, TextField } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import { normalizeApiKeySingleLine } from '../../../apiService/utils/providerApiServiceApiKeys';
 import { useProviderForm } from '../context';
 
 export function ProviderFormName() {
@@ -26,35 +25,3 @@ export function ProviderFormName() {
 }
 
 ProviderFormName.displayName = 'ProviderForm.Name';
-
-/** One or more comma-separated API keys edited as part of the provider draft. */
-export function ProviderFormApiKey({ autoFocus = false }: { autoFocus?: boolean }) {
-  const { t } = useTranslation();
-  const { actions, meta, state } = useProviderForm('ProviderForm.ApiKey');
-
-  return (
-    <TextField disabled={meta.isSubmitting}>
-      <TextField.Label>{t('settings.provider.apiService.apiKey')}</TextField.Label>
-      <Input
-        accessibilityLabel={t('settings.provider.apiService.apiKey')}
-        autoFocus={autoFocus}
-        disabled={meta.isSubmitting}
-        lineBreakModeIOS="clip"
-        numberOfLines={1}
-        onChangeText={(value) => actions.setApiKey(normalizeApiKeySingleLine(value))}
-        placeholder={t('settings.provider.apiService.apiKey')}
-        returnKeyType="done"
-        scrollEnabled={false}
-        testID="provider-api-key-input"
-        type="password"
-        value={state.apiKey}
-        visibilityAccessibilityLabels={{
-          hide: t('settings.provider.apiService.hideApiKeys'),
-          show: t('settings.provider.apiService.showApiKeys'),
-        }}
-      />
-    </TextField>
-  );
-}
-
-ProviderFormApiKey.displayName = 'ProviderForm.ApiKey';
