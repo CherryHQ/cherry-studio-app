@@ -74,6 +74,7 @@ function createSession(markdown = 'Content') {
       sections: [{ id: 'document', blocks: [{ kind: 'markdown' as const, source: markdown }] }],
     },
     markdown,
+    previewMarkdown: () => `<p>${markdown}</p>`,
     render: jest.fn(
       async (
         target: DocumentExportTarget,
@@ -91,28 +92,34 @@ afterEach(() => {
   renderer = undefined;
 });
 
-test('default Markdown and its unchecked snapshot stay in memory until sharing', async () => {
+test('Markdown preview and sharing use the same prepared image-bearing artifact', async () => {
   const ref = createRef<Preview>();
   const checked = createSession('Thinking and answer');
   const unchecked = createSession('Answer');
+  const checkedArtifact = {
+    ...markdownArtifact,
+    text: 'Thinking and answer\n![Image](data:image/png;base64,AA==)',
+  };
+  const uncheckedArtifact = {
+    ...markdownArtifact,
+    text: 'Answer\n![Image](data:image/png;base64,AA==)',
+  };
+  checked.render.mockResolvedValue(checkedArtifact);
+  unchecked.render.mockResolvedValue(uncheckedArtifact);
   await act(async () => {
     renderer = create(<Probe ref={ref} session={checked} format="markdown" revision={0} />);
   });
-  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Thinking and answer' });
-  expect(checked.render).not.toHaveBeenCalled();
+  expect(ref.current?.state).toEqual({ status: 'ready', artifact: checkedArtifact });
   await act(async () => {
     renderer?.update(<Probe ref={ref} session={unchecked} format="markdown" revision={1} />);
   });
-  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Answer' });
-  expect(unchecked.render).not.toHaveBeenCalled();
+  expect(ref.current?.state).toEqual({ status: 'ready', artifact: uncheckedArtifact });
   await expect(ref.current?.getArtifact(new AbortController().signal)).resolves.toBe(
-    markdownArtifact,
+    uncheckedArtifact,
   );
-  expect(unchecked.render).toHaveBeenCalledWith(
-    { format: 'markdown', watermark: undefined },
-    { signal: expect.any(AbortSignal) },
-  );
-  expect(checked.render).not.toHaveBeenCalled();
+  expect(unchecked.render).toHaveBeenCalledTimes(1);
+  expect(unchecked.save).not.toHaveBeenCalled();
+  expect(checked.render).toHaveBeenCalledTimes(1);
 });
 
 test('image fallback retains the same brand signature in Markdown preview and delivery', async () => {
@@ -153,7 +160,7 @@ test('image fallback retains the same brand signature in Markdown preview and de
   );
 });
 
-test('sharing Markdown waits for the cancelled conversion and never starts an image render', async () => {
+test('preparing Markdown waits for the cancelled conversion and disables sharing until ready', async () => {
   const ref = createRef<Preview>();
   const session = createSession();
   const pending = deferred<DocumentExportArtifact>();
@@ -166,11 +173,14 @@ test('sharing Markdown waits for the cancelled conversion and never starts an im
     renderer?.update(<Probe ref={ref} session={session} format="markdown" revision={1} />);
   });
   expect(signal.aborted).toBe(true);
-  const sharing = ref.current!.getArtifact(new AbortController().signal);
-  await Promise.resolve();
+  await expect(ref.current!.getArtifact(new AbortController().signal)).rejects.toMatchObject({
+    code: 'busy',
+  });
   expect(session.render).toHaveBeenCalledTimes(1);
   await act(async () => pending.resolve(htmlArtifact));
-  await expect(sharing).resolves.toBe(markdownArtifact);
+  await expect(ref.current!.getArtifact(new AbortController().signal)).resolves.toBe(
+    markdownArtifact,
+  );
   expect(session.render.mock.calls.map(([target]) => target.format)).toEqual(['html', 'markdown']);
 });
 
@@ -301,6 +311,6 @@ test('cancelling an old image request does not start a fallback for the supersed
   await act(async () => {
     reject(new DocumentExportError('capture-failed'));
   });
-  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Content' });
-  expect(session.render).toHaveBeenCalledTimes(1);
+  expect(ref.current?.state).toEqual({ status: 'ready', artifact: markdownArtifact });
+  expect(session.render.mock.calls.map(([target]) => target.format)).toEqual(['image', 'markdown']);
 });

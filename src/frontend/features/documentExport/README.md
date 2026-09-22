@@ -7,27 +7,39 @@ Closing retains the caller's selection. Dismissing the system share sheet return
 
 Chat exports default to paged PNG images. Short content produces one image; longer content adds
 pages without reducing resolution or omitting messages. The layout menu retains a single-long-image
-option. HTML and Markdown remain available for every nonempty selection. Markdown stays in memory
-until Share. An optional unchecked source toggle selects an alternate immutable document.
+option. HTML and Markdown remain available for every nonempty selection. Markdown prepares its
+temporary file, including embedded local/generated pictures, before preview; Share delivers that same
+artifact. An optional unchecked source toggle selects an alternate immutable document.
 
 Images use a fixed 360-logical-pixel layout and 3x output density, independent of the device window.
 Typography follows the frozen accessibility step; semantic colors follow the theme until delivery
-starts. The existing numbered message treatment, Cherry signature and frozen local timestamp stay
-inside the export. HTML retains its document presentation and window-derived width.
+starts. Chat images use right-aligned user bubbles, full-width answers and fixed-height code previews,
+without document titles or message numbering. The Cherry signature and frozen timestamp remain.
+HTML uses the same chat layout in a responsive column capped at 720 points, with full code content
+scrolling inside 192-point panels. Images show the opening code viewport. Sources use a compact
+count row with a single inline Globe icon and localized count; inline citations use gray superscripts.
+Individual source cards are omitted from images and HTML.
+Markdown preview renders the exact output text, including resource notes and signature, through
+`session.previewMarkdown` and the same HTML typography/table styles. Local/generated PNG/JPEG images
+are embedded as Base64 data URLs and displayed without captions. Remote image references remain
+compact name/domain entries and retain their original URLs in the file. A browser failure falls back
+to the lightweight selectable source, without exposing the generated Base64 payloads.
+Delivered Markdown keeps full tables/code. External readers may filter data URLs.
+The preview surface adds no horizontal gutters on top of the document's own content padding.
 
 The frontend supplies one resolved `watermark` for HTML and images, preserved during format fallback.
 The request follows the global Share watermark setting, enabled by default, unless the caller
 explicitly selects `cherry` or `none`. `none` omits the brand footer from both the preview and saved
 output, including Markdown. The image-only `imageFrame` uses the document background
-and label. Image content spans the output width with ordinary text padding and no decorative outer frame.
+and accessible label. Image content spans the output width with ordinary text padding and no decorative outer frame.
 With Cherry watermarks, Markdown preview and saved text use the
 same separated brand/time footer without logo bytes. The signature appears at the end of the
 document. PNG pages do not include page numbers or reserve space for an ordinal footer.
 
 The signature uses the same full-width white footer as painting and file image exports: the
 original Cherry logo and Cherry Studio name on the left, with the time aligned to the right.
-Shared geometry has a 56-point minimum height at 360 points wide, scales with export width, and
-grows for wrapped text. The timestamp uses `YYYY.MM.DD HH:mm` and stays frozen across format,
+Shared geometry has a 48-point minimum height at 360 points wide and grows for wrapped text.
+Image footers scale with capture width; responsive HTML retains the base footer typography. The timestamp uses `YYYY.MM.DD HH:mm` and stays frozen across format,
 theme and thinking-option changes. Constant color tokens keep the signature white with black text.
 Active saving/delivery holds its current presentation until the share sheet finishes.
 
@@ -40,8 +52,16 @@ each image to the capture limit, moving the cut back only to avoid painted conte
 paragraph boundaries do not trigger early cuts. Headings stay with the
 following line, normal table rows stay together, and oversized table rows can continue between
 lines. Images are contained within a page. An indivisible object that cannot fit fails conversion
-instead of losing content. Included process/reasoning details expand before capture; Markdown and
-HTML retain their interactive disclosures.
+instead of losing content. Included process/reasoning details expand before capture; HTML retains
+interactive disclosures and Markdown uses nested blockquotes. Fenced and indented code use
+fixed-height labelled previews; inline code remains visible. Tables retain their header row and
+column grid in every format. Images fit columns to the page width and wrap cell content; HTML and
+Markdown previews use content-based column widths and allow horizontal scrolling for wide tables.
+Failed image decoding and overwide formulas
+fall back to readable resource entries or formula source before measurement. Code/resource headings
+stay with their following line; code panels stay together. Clipped code does not contribute invisible
+ranges to pagination. See [Document Export](../../../../docs/references/document-export.md)
+for the shared content and degradation contract.
 
 Paged capture reuses HTML image conversion's 8192-pixel edge budget. At 3x density, each content
 slice is at most 2714 logical pixels high, with 16 pixels of top spacing and no page-number footer,

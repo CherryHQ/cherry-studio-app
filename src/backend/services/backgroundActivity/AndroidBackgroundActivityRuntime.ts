@@ -68,7 +68,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   constructor(
     private readonly environment: Pick<
       BackgroundActivityEnvironment,
-      'translate' | 'onForegroundAttention'
+      'isReplyCompletionNotificationEnabled' | 'translate' | 'onForegroundAttention'
     >,
   ) {
     super();
@@ -344,6 +344,13 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
       return;
     const phase = record.props.phase;
     const requiresAttention = phase === 'awaiting-approval' || phase === 'failed';
+    // A plain completion follows its own preference; failures and approvals
+    // stay attention regardless. Consume the phase so a later preference
+    // change or title update never replays it.
+    if (phase === 'completed' && !this.environment.isReplyCompletionNotificationEnabled()) {
+      record.attention = kind;
+      return;
+    }
     // Foreground completion stays silent even if delivery runs after background entry.
     if (!occurredInBackground && !requiresAttention) {
       record.attention = kind;

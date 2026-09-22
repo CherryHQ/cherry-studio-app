@@ -15,6 +15,7 @@ const options: ChatExportOptions = {
     user: 'You',
     assistant: 'Assistant',
     process: (seconds) => `Took ${seconds}s`,
+    sources: (count) => `${count} sources`,
     reasoning: 'Reasoning',
     file: 'File',
     status: 'Status',
@@ -95,6 +96,64 @@ test('process includes the visible reasoning and intermediate text without times
     ]),
   });
   expect(document.sections[0].metadata).toEqual([]);
+});
+
+test('generated images retain transcript order and their invented preview references are omitted', () => {
+  const id = '00000000-0000-4000-8000-000000000002';
+  const reference = `![三国名将阵营图](https://preview.cherry.ai/${id})`;
+  const text = `${reference}\n\n这张图将三国名将按 **蜀汉 / 曹魏 / 东吴 + 吕布** 四大板块布局。`;
+  const generated = message('generated', 'assistant', [
+    {
+      id: 'image',
+      type: 'file',
+      fileEntryId: id,
+      mediaType: 'image/png',
+      name: '三国名将阵营图',
+      purpose: 'artifact',
+    },
+    { id: 'explanation', type: 'text', text, state: 'done' },
+  ]);
+
+  const document = toChatExportDocument([generated], options);
+
+  expect(document.sections[0].blocks).toEqual([
+    { kind: 'image', assetId: 'generated:image', alt: '三国名将阵营图' },
+    { kind: 'markdown', source: '这张图将三国名将按 **蜀汉 / 曹魏 / 东吴 + 吕布** 四大板块布局。' },
+  ]);
+  expect(JSON.stringify(document)).not.toContain('preview.cherry.ai');
+  expect(generated.parts[1]).toMatchObject({ text });
+
+  const withTrailingReference = {
+    ...generated,
+    parts: [
+      ...generated.parts,
+      { id: 'duplicate', type: 'text' as const, text: reference, state: 'done' as const },
+    ],
+  };
+  expect(toChatExportDocument([withTrailingReference], options).sections[0].blocks).toEqual(
+    document.sections[0].blocks,
+  );
+});
+
+test('only duplicate standalone image references are removed, preserving code and unrelated images', () => {
+  const id = '00000000-0000-4000-8000-000000000003';
+  const reference = `![Generated](https://preview.cherry.ai/${id})`;
+  const preserved = `\`\`\`markdown\n${reference}\n\`\`\`\n\n![Other](https://example.com/photo.png)`;
+  const generated = message('generated', 'assistant', [
+    {
+      id: 'image',
+      type: 'file',
+      fileEntryId: id,
+      mediaType: 'image/png',
+      name: 'Generated',
+      purpose: 'artifact',
+    },
+    { id: 'explanation', type: 'text', text: `${reference}\n\n${preserved}`, state: 'done' },
+  ]);
+  expect(toChatExportDocument([generated], options).sections[0].blocks[1]).toEqual({
+    kind: 'markdown',
+    source: preserved,
+  });
 });
 
 test('reasoning after text is still process rather than a final answer', () => {

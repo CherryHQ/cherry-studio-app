@@ -67,10 +67,8 @@ class Application {
         this.host = null;
       }
 
-      // Installed before starting, because startup work resolves through here:
-      // `DbService.onInit` seeds the database, and the seeders reach their data
-      // services as module singletons, which resolve `DbService` from
-      // `application`. The outgoing host is already gone by this point, so the
+      // Install before starting so lifecycle hooks can resolve this generation's
+      // collaborators. The outgoing host is already gone by this point, so the
       // window never exposes two generations.
       this.host = host;
       try {
