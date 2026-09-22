@@ -3912,6 +3912,38 @@ describe('PiRuntime mapping', () => {
     },
   );
 
+  test('does not time out while waiting for user input and continues after the answer', async () => {
+    jest.useFakeTimers();
+    try {
+      const runtime = createTestRuntime({ ...DEFAULT_PI_RUNTIME_LIMITS, turnTimeoutMs: 100 });
+      let answer!: (value: RuntimeToolResult) => void;
+      let entered!: () => void;
+      const waiting = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const tool: RuntimeTool = {
+        ...askTool(() => undefined),
+        approval: 'auto',
+        interaction: 'user-input',
+        execute: () =>
+          new Promise<RuntimeToolResult>((resolve) => {
+            answer = resolve;
+            entered();
+          }),
+      };
+      arrange(runtime, approvalProgram('question'));
+      const session = await runtime.open();
+      const events = collect(session.execute(baseRequest('waiting-turn', { tools: [tool] })));
+      await waiting;
+      await jest.advanceTimersByTimeAsync(10_000);
+      answer({ value: { answer: 'Writing' }, artifacts: [] });
+      expect((await events).at(-1)).toEqual({ type: 'completed' });
+      await session.close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('aborts the model and reports a classified whole-turn timeout', async () => {
     const runtime = createTestRuntime({
       maxToolCalls: 16,

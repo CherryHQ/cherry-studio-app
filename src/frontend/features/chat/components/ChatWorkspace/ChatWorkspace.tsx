@@ -9,6 +9,7 @@ import { mainHeaderRowHeight } from '@/frontend/appShell/header';
 import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
 import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
+import type { AgentUserAnswer } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
@@ -22,6 +23,7 @@ import {
   type PendingChatSend,
 } from '../../runtime';
 import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
+import { UserQuestionSheet } from '../UserQuestionSheet';
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
@@ -237,6 +239,16 @@ export function ChatWorkspace({
     },
     [client, sessionId, t, toast],
   );
+  const handleQuestionRespond = useCallback(
+    async (toolCallId: string, answer: AgentUserAnswer) => {
+      if (!sessionId) throw new Error('No active session.');
+      await client.respondQuestion(sessionId, toolCallId, answer);
+    },
+    [client, sessionId],
+  );
+  const handleQuestionCancel = useCallback(async () => {
+    if (sessionId) await client.cancelTurn(sessionId);
+  }, [client, sessionId]);
   const handleApprovalCancel = useCallback(async () => {
     if (!sessionId) {
       return;
@@ -330,6 +342,13 @@ export function ChatWorkspace({
         />
       </AssistantMessageActionsProvider>
       <ChatInitialRenderCover isVisible={isCoverVisible} />
+      <UserQuestionSheet
+        key={`user-question-${sessionId}`}
+        request={live.pendingQuestion ?? null}
+        isOpen={Boolean(live.pendingQuestion) && pendingApprovals.length === 0}
+        onRespond={handleQuestionRespond}
+        onCancel={handleQuestionCancel}
+      />
       <ToolApprovalSheet
         key={`tool-approval-${sessionId}`}
         approvals={pendingApprovals}

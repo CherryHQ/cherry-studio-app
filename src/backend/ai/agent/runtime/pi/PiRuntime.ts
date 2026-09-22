@@ -245,6 +245,9 @@ type ActiveTurn = {
   inputPreviews: PiToolInputPreviewBuffer;
   terminalMessage?: AssistantMessage;
   timeoutHandle?: ReturnType<typeof setTimeout>;
+  timeoutDeadline: number;
+  timeoutRemainingMs: number;
+  userInputWaits: number;
   toolCallCount: number;
   toolBudgetError?: RuntimeError;
   toolBindingsByProviderName: Map<string, PiToolBinding>;
@@ -620,6 +623,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
         turn.toolParts.set(toolCallId, { ...part, inputPreview: preview });
         this.emit(turn, { type: 'tool.input.preview', partId: part.id, preview });
       }),
+      timeoutDeadline: performance.now() + this.limits.turnTimeoutMs,
+      timeoutRemainingMs: this.limits.turnTimeoutMs,
+      userInputWaits: 0,
       toolCallCount: 0,
       toolBindingsByProviderName: new Map(),
       toolParts: new Map(),
@@ -1407,6 +1413,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
     this.replaceToolPart(turn, part, { state: 'running' });
     const toolStartedAt = performance.now();
+    if (runtimeTool.interaction === 'user-input' && turn.userInputWaits++ === 0) {
+      clearTimeout(turn.timeoutHandle);
+      turn.timeoutRemainingMs = Math.max(0, turn.timeoutDeadline - performance.now());
+    }
     turn.runtimeTimingSink?.onToolExecutionStart({
       callId: toolCallId,
       toolName: runtimeTool.providerName,
@@ -1459,6 +1469,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
       turn.settledToolCalls.add(toolCallId);
       return output;
     } finally {
+      if (
+        runtimeTool.interaction === 'user-input' &&
+        --turn.userInputWaits === 0 &&
+        turn.phase === 'running'
+      ) {
+        turn.timeoutDeadline = performance.now() + turn.timeoutRemainingMs;
+        turn.timeoutHandle = setTimeout(() => this.timeoutTurn(turn), turn.timeoutRemainingMs);
+      }
       turn.runtimeTimingSink?.onToolExecutionEnd({
         callId: toolCallId,
         toolName: runtimeTool.providerName,

@@ -501,7 +501,8 @@ results, with instructions to disclose uncertainty and unfinished work. A succes
 completes the turn; further tool requests fail with the budget error. Tool definitions remain in the
 request to keep tool history valid; the final provider payload forces tool choice to `none` (Google:
 `NONE`). Context exhaustion still stops before another provider request, and the final response shares
-the whole turn's ten-minute deadline. Cancellation and timeout abort the model, approval waiters, and
+the whole turn's ten-minute execution deadline. Tools marked `interaction: 'user-input'` pause
+that deadline while awaiting a human response and restore its remaining budget afterward. Cancellation and timeout abort the model, approval waiters, and
 the callback signal before terminalizing live tool parts. Streamable HTTP MCP callbacks add their own
 60-second invocation bound.
 

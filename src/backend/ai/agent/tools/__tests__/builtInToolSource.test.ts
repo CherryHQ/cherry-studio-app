@@ -38,13 +38,27 @@ describe('createSystemCapabilitySource', () => {
 
     // Every device tool needs a permission, web tools need a configured
     // provider, and generate_image needs a drawing model, so only the
-    // unconditional file tools survive.
-    expect(capabilityIds(tools)).toEqual(['edit_file', 'read_file', 'write_file']);
+    // unconditional Agent management, question and file tools survive.
+    expect(capabilityIds(tools)).toEqual([
+      'agent_create',
+      'agent_get',
+      'agent_list',
+      'agent_update',
+      'ask_user_question',
+      'edit_file',
+      'read_file',
+      'write_file',
+    ]);
   });
 
   test('adds a device tool once every scope it needs is grantable', async () => {
     const readOnly = await resolve({ deviceAccess: { 'calendar.read': 'granted' } });
     expect(capabilityIds(readOnly)).toEqual([
+      'agent_create',
+      'agent_get',
+      'agent_list',
+      'agent_update',
+      'ask_user_question',
       'calendar_list_collections',
       'calendar_list_events',
       'edit_file',
@@ -84,7 +98,16 @@ describe('createSystemCapabilitySource', () => {
       disabledCapabilities: ['calendar'],
     });
 
-    expect(capabilityIds(tools)).toEqual(['edit_file', 'read_file', 'write_file']);
+    expect(capabilityIds(tools)).toEqual([
+      'agent_create',
+      'agent_get',
+      'agent_list',
+      'agent_update',
+      'ask_user_question',
+      'edit_file',
+      'read_file',
+      'write_file',
+    ]);
   });
 
   test('reads mutations as ask and lookups as auto', async () => {

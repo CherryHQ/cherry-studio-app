@@ -341,7 +341,8 @@ export function useAgentChatControls(input: {
       (pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready')))
         ? false
         : undefined,
-    isApprovalPending: activeTurnStatus === 'awaiting-approval',
+    isApprovalPending:
+      activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
     isBusy: isSessionBusy,
     sendMessage: send,
   };

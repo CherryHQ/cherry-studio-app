@@ -27,7 +27,7 @@ export type BackgroundReplyUpdateOptions = {
  * superseded by a newer generation become no-ops.
  */
 export type BackgroundReplyTurn = {
-  awaitApproval: (message?: BackgroundReplyMessage) => void;
+  awaitApproval: (message?: BackgroundReplyMessage, reason?: 'question') => void;
   /** Shows terminal content immediately; `waitFor` delays only final surface dismissal. */
   finish: (outcome: BackgroundReplyOutcome, options?: { waitFor?: Promise<unknown> }) => void;
   update: (message: BackgroundReplyMessage, options?: BackgroundReplyUpdateOptions) => void;

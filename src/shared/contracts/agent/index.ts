@@ -93,3 +93,15 @@ export {
   type AgentView,
   type JsonValue,
 } from './views';
+
+export {
+  AgentPendingQuestionSchema,
+  type AgentPendingQuestion,
+  AgentUserQuestionSchema,
+  AgentUserAnswerSchema,
+  AgentRespondQuestionSchema,
+  validateUserAnswer,
+  type AgentUserQuestion,
+  type AgentUserAnswer,
+  type AgentRespondQuestionInput,
+} from './userQuestion';

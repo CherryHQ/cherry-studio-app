@@ -366,6 +366,7 @@ export async function prepareResolvedTurn(
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
+          agentId: agent.id,
           disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
           resources,

@@ -1,6 +1,6 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import { isProviderWebSearchToolPart, isToolMessagePart } from './tools/toolPartState';
+import { getToolName, isProviderWebSearchToolPart, isToolMessagePart } from './tools/toolPartState';
 
 type MessageFilePart = Extract<CherryMessagePart, { type: 'file' }>;
 export type MessageProcessItem = {
@@ -75,6 +75,16 @@ export function partitionMessageParts(
     // A transcript failure is the outcome, not hidden execution process. Keep
     // it inline even when reasoning or partial answer text came before it.
     if (part.type === 'data-error') {
+      body.push({ index, kind: 'part', part });
+      return;
+    }
+
+    if (
+      isToolMessagePart(part) &&
+      (getToolName(part) === 'ask_user_question' ||
+        ((getToolName(part) === 'agent_create' || getToolName(part) === 'agent_update') &&
+          part.state === 'output-available'))
+    ) {
       body.push({ index, kind: 'part', part });
       return;
     }

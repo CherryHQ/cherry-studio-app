@@ -19,6 +19,7 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
+import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
@@ -42,6 +43,8 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
+import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
+import { createAskUserQuestionTool } from './askUserQuestionTool';
 import {
   createCalendarTools,
   createHealthTools,
@@ -85,6 +88,7 @@ export type { TurnFileScope, TurnToolResources } from '../resources/managedFileR
 export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
+    agentId?: string;
     documentParserMode: DocumentParserMode;
     disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
@@ -96,6 +100,7 @@ export type SystemCapabilitySource = {
 
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
+    agents: AgentManagementData;
     painting: PaintingToolDependencies;
     platform: string;
     preference: PaintingToolDependencies['preference'];
@@ -121,6 +126,7 @@ export function createSystemCapabilitySource(
 ): SystemCapabilitySource {
   return {
     async getTools({
+      agentId,
       disabledCapabilities,
       model,
       resources,
@@ -140,6 +146,7 @@ export function createSystemCapabilitySource(
         resources,
         documentParserMode,
         resolveUsageAttribution,
+        agentId,
       );
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
@@ -220,9 +227,12 @@ function createCatalog(
   resources: TurnToolResources,
   documentParserMode: DocumentParserMode,
   resolveUsageAttribution?: AiUsageAttributionResolver,
+  agentId?: string,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
+    createAskUserQuestionTool(),
+    ...createAgentManagementTools(deps.agents, agentId),
     createEditFileTool(
       {
         createTextEntry: fileContent.createTextEntry,
@@ -350,6 +360,7 @@ function resolveDependencies(
   overrides: Partial<SystemCapabilitySourceDependencies>,
 ): SystemCapabilitySourceDependencies {
   return {
+    agents: overrides.agents ?? agentService,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     painting: overrides.painting ?? productionPaintingDependencies(services),
     platform: overrides.platform ?? Platform.OS,

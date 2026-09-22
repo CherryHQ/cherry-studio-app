@@ -56,3 +56,10 @@ surfaces.
   frame after the push finishes. The bottom inset stays hand-rolled either way, because the avatar
   picker's full-screen modal wipes whatever the scroll view adjusted for itself.
 - Cross-screen UI comes from neutral modules under `src/frontend/components`.
+
+
+Agents can also be created and edited through the conversation's built-in Agent management tools.
+They reuse `AgentService`; tool-created Agents inherit the global default model and the editor's
+capability defaults. Guarded tool updates preserve omitted fields and reject stale `updatedAt`
+versions. Committed create/update operations publish Data API cache invalidations for the list and
+changed record. Existing editor drafts are not replaced by incoming cache refreshes.

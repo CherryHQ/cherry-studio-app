@@ -1540,6 +1540,7 @@ describe('MobileAgentHost', () => {
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(getTools).toHaveBeenCalledWith({
+      agentId: AGENT_ID,
       disabledCapabilities: ['health'],
       documentParserMode: 'builtin',
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
