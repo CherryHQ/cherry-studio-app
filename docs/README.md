@@ -63,6 +63,7 @@ They are the source of truth for how the repository works today.
 | [Job Runtime](./references/job-runtime.md) | Durable job ledger, dispatch, cancellation, recovery, and painting generation |
 | [Lifecycle](./references/lifecycle/README.md) | Service host, startup phases, teardown, and resource-scope coordination |
 | [Storage Engine](./references/data/storage-engine.md) | Current SQLite engine, workarounds, and migration criteria |
+| [Remote Access](./references/remote-access/README.md) | Plan for pairing, configuration sync, and Agent access over the desktop's encrypted channel |
 | [Web Search](./references/web-search.md) | External search providers and provider-native web search |
 
 ## Documentation Governance
