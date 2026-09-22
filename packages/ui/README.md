@@ -913,9 +913,3 @@ If the root app adds or removes the workspace dependency, also update
 ```sh
 pnpm install --lockfile-only
 ```
-
-
-`QuestionCard` supplies `Root`, `Title`, `Options`, and `Option` for short user questions. Option
-rows own full-width touch targets, radio/checkbox accessibility state, wrapping labels, descriptions,
-and selection indicators; callers own state, submission, localization, and sheet presentation.
-Chat uses these parts in its user-question sheet and renders only read-only records in history.

@@ -1,6 +1,5 @@
-import { QuestionCard } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { AgentUserAnswerSchema, AgentUserQuestionSchema } from '@/shared/contracts/agent';
 
@@ -27,8 +26,10 @@ export function UserQuestionPart({ part }: { part: ToolMessagePart }) {
   const answer = result?.success ? result.data : undefined;
   const waiting = part.state === 'input-available';
   return (
-    <QuestionCard.Root>
-      <QuestionCard.Title>{question.question}</QuestionCard.Title>
+    <View className="w-full gap-3 rounded-2xl bg-card p-4">
+      <Text accessibilityRole="header" className="font-semibold text-foreground text-lg">
+        {question.question}
+      </Text>
       <Text className="text-muted-foreground text-base" selectable>
         {answer
           ? answer.skipped
@@ -43,6 +44,6 @@ export function UserQuestionPart({ part }: { part: ToolMessagePart }) {
                 .join(' · ')
           : t(waiting ? 'chat.question.waiting' : 'chat.question.closed')}
       </Text>
-    </QuestionCard.Root>
+    </View>
   );
 }

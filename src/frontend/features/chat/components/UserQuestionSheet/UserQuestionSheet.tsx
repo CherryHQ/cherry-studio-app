@@ -1,7 +1,7 @@
-import { BottomSheet, Button, Input, QuestionCard } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Input, SelectionIndicator } from '@cherrystudio/ui/components';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -96,18 +96,19 @@ function QuestionForm({
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
       >
-        <QuestionCard.Title>{question.question}</QuestionCard.Title>
+        <Text accessibilityRole="header" className="font-semibold text-foreground text-lg">
+          {question.question}
+        </Text>
         <Text className="text-muted-foreground text-sm">
           {t(isMultiple ? 'chat.question.multiple' : 'chat.question.single')}
         </Text>
-        <QuestionCard.Options>
+        <View className="gap-2">
           {question.options.map((option) => (
-            <QuestionCard.Option
+            <QuestionOption
               key={option.id}
-              label={option.label}
-              description={option.description}
-              selected={selected.includes(option.id)}
-              selection={question.selection}
+              option={option}
+              isSelected={selected.includes(option.id)}
+              isMultiple={isMultiple}
               disabled={disabled || busy}
               onPress={() => {
                 if (submitting.current) return;
@@ -128,7 +129,7 @@ function QuestionForm({
               }}
             />
           ))}
-        </QuestionCard.Options>
+        </View>
         <Input
           accessibilityLabel={t('chat.question.custom')}
           disabled={disabled || busy}
@@ -174,6 +175,40 @@ function QuestionForm({
         </View>
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+function QuestionOption({
+  option,
+  isSelected,
+  isMultiple,
+  disabled,
+  onPress,
+}: {
+  option: AgentPendingQuestion['question']['options'][number];
+  isSelected: boolean;
+  isMultiple: boolean;
+  disabled: boolean;
+  onPress(): void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={option.label}
+      accessibilityHint={option.description}
+      accessibilityRole={isMultiple ? 'checkbox' : 'radio'}
+      accessibilityState={{ checked: isSelected, disabled }}
+      className={`min-h-14 flex-row items-center gap-3 rounded-xl border p-3 ${isSelected ? 'border-primary bg-primary/10' : 'border-border bg-background'} active:opacity-70`}
+      disabled={disabled}
+      onPress={onPress}
+    >
+      <View className="min-w-0 flex-1 gap-1">
+        <Text className="font-medium text-foreground text-base">{option.label}</Text>
+        {option.description ? (
+          <Text className="text-muted-foreground text-sm">{option.description}</Text>
+        ) : null}
+      </View>
+      <SelectionIndicator selected={isSelected} />
+    </Pressable>
   );
 }
 

@@ -30,5 +30,3 @@ export * from './tabs';
 export * from './text-animation';
 export * from './text-field';
 export * from './toast';
-
-export * from './question-card';
