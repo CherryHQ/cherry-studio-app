@@ -1,6 +1,9 @@
 // Accept fences inside quotes and lists as well as at the document root.
 const CODE_FENCE = /^(?: {0,3}>[ \t]?)* {0,3}(?:(?:[-+*]|\d+[.)])[ \t]+)?(`{3,}|~{3,})(.*)$/;
-// A paragraph ends at the first blank line. Code spans and math spans cannot cross it.
+// A `\[` that owns its line opens a display block that may span blank lines.
+const BLOCK_OPENER = /^((?: {0,3}>[ \t]?)*) {0,3}\\\[[ \t]*\r?$/;
+const QUOTE_PREFIX = /^(?: {0,3}>[ \t]?)+/;
+// A paragraph ends at the first blank line. Code spans and inline math cannot cross it.
 const BLANK_LINE = /\n[ \t]*\r?\n/g;
 // `\[1\]` is how Markdown escapes a citation bracket; only convert brackets that
 // contain something a TeX formula needs.
@@ -8,9 +11,9 @@ const TEX_SIGNAL = /[\\^_={}+<>]/;
 
 /**
  * Adapt TeX `\(...\)` and `\[...\]` delimiters to dollar math without rewriting
- * stored messages. Decisions never depend on text beyond the current paragraph,
- * and while streaming an undecidable tail is withheld, so every output is a
- * prefix of the next one.
+ * stored messages. Inline decisions never depend on text beyond the current
+ * paragraph, and while streaming an undecidable tail is withheld, so every
+ * output is a prefix of the next one.
  */
 export function normalizeLatexDelimiters(markdown: string, isStreaming = false): string {
   if (!markdown.includes('\\')) return markdown;
@@ -48,6 +51,22 @@ export function normalizeLatexDelimiters(markdown: string, isStreaming = false):
         index = lineEnd + 1;
         continue;
       }
+
+      const block = BLOCK_OPENER.exec(line);
+      if (block) {
+        const opener = index + line.indexOf('\\[');
+        const closing = findBlockEnd(markdown, lineEnd);
+        if (closing === -1 && isStreaming) {
+          return parts.join('') + markdown.slice(copiedUntil, opener);
+        }
+        if (closing !== -1) {
+          const body = formulaBody(markdown.slice(lineEnd, closing), '[', Boolean(block[1]));
+          parts.push(markdown.slice(copiedUntil, opener), '$$', body, '$$');
+          index = closing + 2;
+          copiedUntil = index;
+          continue;
+        }
+      }
     }
 
     if (index >= paragraphEnd) {
@@ -71,12 +90,7 @@ export function normalizeLatexDelimiters(markdown: string, isStreaming = false):
     if (character === '\\') {
       const next = markdown[index + 1];
       if (next === '(' || next === '[') {
-        const closing = findClosingDelimiter(
-          markdown,
-          index + 2,
-          next === '(' ? '\\)' : '\\]',
-          paragraphEnd,
-        );
+        const closing = findClosingDelimiter(markdown, index + 2, next, paragraphEnd);
         // Streaming withholds the tail while a later chunk could still change
         // this formula, which keeps Streamdown's input append-only.
         const undecided = closing === -1 ? paragraphEnd === markdown.length : pendingCodeSpan;
@@ -86,7 +100,11 @@ export function normalizeLatexDelimiters(markdown: string, isStreaming = false):
           continue;
         }
 
-        const body = formulaBody(markdown.slice(index + 2, closing));
+        const body = formulaBody(
+          markdown.slice(index + 2, closing),
+          next,
+          isQuoted(markdown, index),
+        );
         if (next === '[' && !TEX_SIGNAL.test(body)) {
           index += 2;
           continue;
@@ -139,33 +157,63 @@ function findCodeSpanEnd(text: string, start: number, length: number, limit: num
   return -1;
 }
 
-function findClosingDelimiter(
-  text: string,
-  start: number,
-  delimiter: string,
-  limit: number,
-): number {
+/** Locate the `\)` or `\]` that balances an opener, counting nested delimiters. */
+function findClosingDelimiter(text: string, start: number, opener: string, limit: number): number {
+  const closer = opener === '(' ? ')' : ']';
+  let depth = 1;
   let index = start;
   while (index < limit) {
-    if (text.startsWith(delimiter, index)) return index;
-    index += text[index] === '\\' ? 2 : 1;
+    if (text[index] === '\\') {
+      const next = text[index + 1];
+      if (next === opener) depth += 1;
+      if (next === closer && --depth === 0) return index;
+      index += 2;
+    } else {
+      index += 1;
+    }
   }
   return -1;
+}
+
+/** A display block closes at a balanced `\]` that ends its line. */
+function findBlockEnd(text: string, start: number): number {
+  const closing = findClosingDelimiter(text, start, '[', text.length);
+  if (closing === -1) return -1;
+  const lineEnd = text.indexOf('\n', closing);
+  const tail = text.slice(closing + 2, lineEnd === -1 ? text.length : lineEnd);
+  return tail.trim() ? -1 : closing;
+}
+
+function isQuoted(text: string, index: number): boolean {
+  const lineStart = text.lastIndexOf('\n', index - 1) + 1;
+  return text.slice(lineStart, index).trimStart().startsWith('>');
 }
 
 // MD4C parses blocks before math spans, so physical newlines inside a formula
 // must not become headings, quotes, or paragraph boundaries. Joining lines
 // would extend a TeX `%` comment over the rest of the formula, so comments go
-// first. TeX's explicit `\\` row separators remain intact.
-function formulaBody(source: string): string {
+// first, as do the quote markers of continuation lines. Nested delimiters of
+// the same kind are dropped the way KaTeX users expect; TeX's explicit `\\`
+// row separators remain intact.
+function formulaBody(source: string, opener: string, quoted: boolean): string {
+  const closer = opener === '(' ? ')' : ']';
   return source
     .split(/\r\n?|\n/)
-    .map((line) => {
+    .map((rawLine) => {
+      const line = quoted ? rawLine.replace(QUOTE_PREFIX, '') : rawLine;
+      let result = '';
       let index = 0;
       while (index < line.length && line[index] !== '%') {
-        index += line[index] === '\\' ? 2 : 1;
+        if (line[index] !== '\\') {
+          result += line[index];
+          index += 1;
+          continue;
+        }
+        const next = line[index + 1];
+        if (next !== opener && next !== closer) result += line.slice(index, index + 2);
+        index += 2;
       }
-      return line.slice(0, index);
+      return result;
     })
     .join(' ');
 }

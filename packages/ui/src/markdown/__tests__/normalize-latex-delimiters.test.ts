@@ -88,11 +88,37 @@ y &= 2\end{aligned}\]`),
     );
   });
 
-  test('never lets a formula cross a blank line', () => {
+  test('never lets an inline formula cross a blank line', () => {
     const markdown = 'Use \\( to start.\n\nSome paragraph.\n\n# Heading\n\nAnd \\) to end.';
     expect(normalizeLatexDelimiters(markdown)).toBe(markdown);
-    expect(normalizeLatexDelimiters('\\[\nE\n\n= 1\n\\]')).toBe('\\[\nE\n\n= 1\n\\]');
+    expect(normalizeLatexDelimiters('Text \\[\nE\n\n= 1\n\\]')).toBe('Text \\[\nE\n\n= 1\n\\]');
     expect(normalizeLatexDelimiters('Stray \\( here.\n\n\\(x\\)')).toBe('Stray \\( here.\n\n$x$');
+  });
+
+  test('lets a display block that owns its opening line span blank lines', () => {
+    expect(normalizeLatexDelimiters('Before.\n\n\\[\nh_i\n=\n\n\\frac{a}{c}\n\\]\n\nAfter.')).toBe(
+      'Before.\n\n$$ h_i =  \\frac{a}{c} $$\n\nAfter.',
+    );
+    expect(normalizeLatexDelimiters('  \\[  \nx = 1 \\]  \nAfter.')).toBe(
+      '  $$ x = 1 $$  \nAfter.',
+    );
+    // A closer that does not end its line falls back to inline handling.
+    expect(normalizeLatexDelimiters('\\[\nx = 1\n\n\\] tail')).toBe('\\[\nx = 1\n\n\\] tail');
+    expect(normalizeLatexDelimiters('\\[\nx = 1 \\] tail')).toBe('$$ x = 1 $$ tail');
+  });
+
+  test('strips quote markers from multiline formulas inside block quotes', () => {
+    expect(normalizeLatexDelimiters('> \\[\n> a\n>\n> b^2\n> \\]')).toBe('> $$ a  b^2 $$');
+    expect(normalizeLatexDelimiters('> Inline \\(x\n> + y\\).')).toBe('> Inline $x + y$.');
+  });
+
+  test('balances nested delimiters and drops the inner pair', () => {
+    expect(normalizeLatexDelimiters(String.raw`\(a + \(b + c\)\)`)).toBe('$a + b + c$');
+    expect(normalizeLatexDelimiters(String.raw`\[outer \[inner\] x^2\]`)).toBe(
+      '$$outer inner x^2$$',
+    );
+    // An unbalanced outer opener stays literal; the inner pair still renders.
+    expect(normalizeLatexDelimiters(String.raw`\(a + \(b\) more`)).toBe(String.raw`\(a + $b$ more`);
   });
 
   test.each([
@@ -146,12 +172,21 @@ Done.`),
     ['a backtick that never closes', 'Press ` then \\(x\\) here.\n\nNext \\(y\\).'],
     ['a citation bracket', String.raw`See \[1\] and \[x^2\] after.`],
     ['an opener released by a blank line', 'Use \\[ here. More text.\n\nThen \\(z\\).'],
+    [
+      'a display block across a blank line',
+      'Before.\n\n\\[\nh_i\n=\n\n\\frac{a}{c}\n\\]\n\nAfter.',
+    ],
+    ['nested delimiters', String.raw`Sum \(a + \(b + c\)\) done.`],
   ])('streams append-only with %s', (_name, markdown) => {
     expectAppendOnly(markdown);
   });
 
   test('releases a withheld tail when its paragraph ends or streaming stops', () => {
     expect(normalizeLatexDelimiters('Use \\[ here. More text', true)).toBe('Use ');
+    expect(normalizeLatexDelimiters('Before.\n\\[\nx = 1\n\nStill open', true)).toBe('Before.\n');
+    expect(normalizeLatexDelimiters('Before.\n\\[\nx = 1\n\nStill open', false)).toBe(
+      'Before.\n\\[\nx = 1\n\nStill open',
+    );
     expect(normalizeLatexDelimiters('Use \\[ here. More text\n\nNext', true)).toBe(
       'Use \\[ here. More text\n\nNext',
     );
