@@ -5,16 +5,20 @@ import {
   remoteFailureSchema,
   remoteLimits,
   type RemoteAuthorization,
-  type RemoteFailure,
 } from '@cherrystudio/remote-protocol';
 import { configurationMethods } from '@cherrystudio/remote-protocol/configuration';
 import type { SecureChannel } from '@cherrystudio/remote-transport';
+import { loggerService } from '@logger';
 import { JSONRPCClient, JSONRPCErrorException } from 'json-rpc-2.0';
 import type * as z from 'zod';
 
+import { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
 import { openWebSocketStream, remoteUrl } from './remoteSocket';
 import { transportLogger } from './transportLogger';
 
+export { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
+
+const logger = loggerService.withContext('DesktopSession');
 const PROTOCOL_VERSIONS = [1];
 const REFRESH_MARGIN_MS = 60_000;
 
@@ -27,17 +31,6 @@ export type DesktopMethod = keyof typeof desktopMethods;
 export type DesktopParams<M extends DesktopMethod> = z.input<(typeof desktopMethods)[M]['params']>;
 export type DesktopResult<M extends DesktopMethod> = z.output<(typeof desktopMethods)[M]['result']>;
 export type DesktopNotification = { method: string; params?: unknown };
-
-/** A desktop-reported failure; `reason` is the protocol's stable code. */
-export class RemoteFailureError extends Error {
-  constructor(readonly failure: RemoteFailure) {
-    super(failure.message);
-    this.name = 'RemoteFailureError';
-  }
-  get reason() {
-    return this.failure.reason;
-  }
-}
 
 export type DialChannel = (url: string, signal: AbortSignal) => Promise<SecureChannel>;
 
@@ -111,7 +104,9 @@ export class DesktopSession {
         options.signal.throwIfAborted();
         channel?.abort(error instanceof Error ? error : new Error('Handshake failed'));
         if (error instanceof RemoteFailureError) throw error;
-        failures.push(`${address}: ${error instanceof Error ? error.message : String(error)}`);
+        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        logger.warn('Desktop address failed', { address, channel: Boolean(channel), message });
+        failures.push(`${address}: ${message}`);
       }
     }
     throw new DesktopUnreachableError(failures);
@@ -218,12 +213,5 @@ export class DesktopSession {
       this.client.rejectAllPendingRequests('Connection closed');
       this.listeners.clear();
     }
-  }
-}
-
-export class DesktopUnreachableError extends Error {
-  constructor(readonly attempts: string[]) {
-    super(`Could not connect to the desktop (${attempts.join('; ') || 'no address'})`);
-    this.name = 'DesktopUnreachableError';
   }
 }

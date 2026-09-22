@@ -339,9 +339,16 @@ function deviceName(): string {
 /** Protocol failures become the reason codes the settings screens already translate. */
 function translate(error: unknown): unknown {
   if (error instanceof DesktopUnreachableError) {
+    logger.warn('Desktop unreachable', { attempts: error.attempts });
     return desktopError('unreachable', 'Could not connect to the desktop');
   }
-  if (!(error instanceof RemoteFailureError)) return error;
+  if (!(error instanceof RemoteFailureError)) {
+    if (error instanceof Error && error.name !== 'AbortError') {
+      logger.warn('Desktop connection failed', { error: error.message, name: error.name });
+    }
+    return error;
+  }
+  logger.warn('Desktop refused the request', { reason: error.reason, message: error.message });
   switch (error.reason) {
     case 'UPGRADE_REQUIRED':
       return desktopError('unsupported-version', 'This desktop protocol version is not supported');

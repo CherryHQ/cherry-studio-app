@@ -20,7 +20,7 @@ with a current desktop. Configuration sync therefore ships in the first slice, b
 
 - **Invitation QR** (`v: 2`, `t: 'cherry-studio-pair'`): `name`, `port`, `ips`, `invitationId`,
   `invitationSecret`, `desktopIdentity` (Ed25519 peer id), `protocolVersions`. Valid two minutes.
-- **Endpoint**: `ws://<ip>:<port>/v1/remote/connect`, binary frames, no `Origin` header. Every other
+- **Endpoint**: `ws://<ip>:<port>/v1/remote/connect`, binary frames; native clients may include an `Origin` header. Every other
   HTTP route on that listener answers `403` to a LAN peer.
 - **Handshake**: length-prefixed plaintext prelude (`{ protocolVersions }` → `{ protocolVersion }`),
   then Noise XX (`@libp2p/noise`, pure-JS crypto) with the negotiated version bound into the
@@ -49,11 +49,9 @@ with a current desktop. Configuration sync therefore ships in the first slice, b
   under Vitest.
 - `packages/remote-transport`: mirrored the same way. Its Node tests pass under the mobile
   toolchain; the app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
-  along with the service registry (Jest cannot resolve it). Whether `@libp2p/noise`, `@libp2p/utils`
-  and `@libp2p/crypto` run under Hermes/Metro (package `exports` resolution, `TextDecoder` with
-  `fatal`) is still unverified on a device. If they do not, mobile keeps a single `noiseChannel.ts`
-  on `@noble/ciphers` + `@noble/curves` speaking the identical profile, verified against handshake
-  transcripts recorded from the desktop package tests.
+  along with the service registry (Jest cannot resolve it). Android device pairing and configuration sync were verified against the desktop on 2026-09-22.
+  Metro applies the libp2p legacy browser maps so native bundles use the pure-JS entries.
+  iOS interoperability and Agent execution remain unverified.
 - RN `WebSocket` is wrapped into the transport's `RemoteSocket` shape (`binaryType = 'arraybuffer'`,
   `bufferedAmount` reported as 0, `close(code)`).
 

@@ -1,4 +1,3 @@
-import { remoteCapabilitiesSchema } from '@cherrystudio/remote-protocol';
 import * as z from 'zod';
 
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
@@ -39,8 +38,13 @@ export const DesktopPairingQrSchema = z.object({
 });
 export type DesktopPairingQr = z.infer<typeof DesktopPairingQrSchema>;
 
+/** Mirrors `remoteCapabilitiesSchema`; the protocol package stays off the app's startup path. */
 export const PairDesktopConnectionSchema = DesktopPairingQrSchema.extend({
-  capabilities: remoteCapabilitiesSchema,
+  capabilities: z
+    .array(z.enum(['configuration', 'agent']))
+    .min(1)
+    .max(2)
+    .refine((values) => new Set(values).size === values.length, 'Capabilities must be unique'),
   connectionId: z.string().uuid().optional(),
 });
 export type PairDesktopConnectionDto = z.infer<typeof PairDesktopConnectionSchema>;
