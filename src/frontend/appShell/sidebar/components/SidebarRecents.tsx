@@ -54,17 +54,9 @@ function SidebarAgentIconSlot({ children }: { children?: ReactNode }) {
   );
 }
 
-function SidebarRowContent({
-  children,
-  className,
-  leading,
-}: {
-  children: ReactNode;
-  className?: string;
-  leading?: ReactNode;
-}) {
+function SidebarRowContent({ children, leading }: { children: ReactNode; leading?: ReactNode }) {
   return (
-    <View className={cn('flex-row items-center gap-3 rounded-xl px-3 py-2.5', className)}>
+    <View className="flex-row items-center gap-3 px-3 py-2.5">
       {leading}
       <View className="min-w-0 flex-1 flex-row items-center gap-2">{children}</View>
     </View>
@@ -246,7 +238,7 @@ function SidebarRecentSessionList({
             accessibilityLabel={showMoreLabel}
             accessibilityRole="button"
             accessibilityState={{ disabled: isLoadingMoreSessions }}
-            className="w-full active:bg-sidebar-accent"
+            className="w-full rounded-xl active:bg-sidebar-accent"
             disabled={isLoadingMoreSessions}
             onPress={handleViewAllPress}
             testID="sidebar-sessions-view-all"
@@ -334,7 +326,7 @@ function SidebarAgentRow({
           accessibilityLabel={agent.name}
           accessibilityRole="button"
           accessibilityState={{ expanded: isExpanded }}
-          className="active:bg-sidebar-accent"
+          className="rounded-xl active:bg-sidebar-accent"
           onPress={() => setIsExpandedOverride((current) => !(current ?? isDefaultExpanded))}
           testID={`sidebar-agent-${agent.id}`}
         >
@@ -409,11 +401,14 @@ function SidebarSessionRow({
       <Pressable
         accessibilityRole="link"
         accessibilityState={{ selected: isSelected }}
-        className="w-full active:bg-sidebar-accent"
+        className={cn(
+          'w-full rounded-xl active:bg-sidebar-accent',
+          isSelected && 'bg-secondary/70',
+        )}
         onPress={onCloseDrawer}
         testID={`sidebar-session-${session.id}`}
       >
-        <SidebarRowContent className={cn(isSelected && 'bg-secondary/70')} leading={leading}>
+        <SidebarRowContent leading={leading}>
           <Text
             className={cn(
               'min-w-0 flex-1 text-base text-sidebar-foreground',

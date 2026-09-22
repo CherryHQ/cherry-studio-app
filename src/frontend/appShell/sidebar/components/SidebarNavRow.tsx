@@ -21,7 +21,7 @@ export function SidebarNavRow({ icon: Icon, label, onPress, testID }: SidebarNav
   return (
     <Pressable
       accessibilityRole="button"
-      className="w-full active:bg-sidebar-accent"
+      className="w-full rounded-xl active:bg-sidebar-accent"
       onPress={onPress}
       testID={testID}
     >
