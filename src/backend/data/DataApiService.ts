@@ -1,3 +1,4 @@
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import type {
   BodyForPath,
@@ -99,7 +100,9 @@ export class DataApiService implements ApiClient {
       matchedTemplate = route.template;
       const handler = route.handlers[method];
       if (handler) {
-        const result = await handler({ ...payload, params });
+        const result = await (method === 'GET'
+          ? handler({ ...payload, params })
+          : storageMutationGate.run(() => handler({ ...payload, params })));
         payload.signal?.throwIfAborted();
         return result;
       }

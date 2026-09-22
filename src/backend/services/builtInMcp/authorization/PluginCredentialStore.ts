@@ -1,6 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { PluginSecretReferenceSchema, type PluginSecretReference } from '@/backend/data/db/schemas';
 import {
   pluginAuthorizationService,
@@ -51,6 +52,7 @@ export class PluginCredentialStore {
   ) {}
 
   private run<T>(operation: () => Promise<T>): Promise<T> {
+    const releaseMutation = storageMutationGate.enter();
     const result = this.tail
       .catch(() => {})
       .then(async () => {
@@ -65,8 +67,9 @@ export class PluginCredentialStore {
           throw new PluginError('storage', 'Could not access plugin credentials. Connect again.');
         }
       });
-    this.tail = result;
-    return result;
+    const settled = result.finally(releaseMutation);
+    this.tail = settled;
+    return settled;
   }
 
   async stop() {

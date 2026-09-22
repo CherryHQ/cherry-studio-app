@@ -4,6 +4,11 @@ import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import * as SQLite from 'expo-sqlite';
 
 import { BaseService, Injectable } from '@/backend/core/lifecycle';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
+import {
+  assertStorageDatabaseExists,
+  databaseDirectory,
+} from '@/backend/data/storage/storagePaths';
 
 import { customSqlStatements } from './customSql';
 import { migrations } from './migrations';
@@ -48,7 +53,8 @@ export class DbService extends BaseService {
   protected async onInit(): Promise<void> {
     this.assertOpen();
 
-    const sqlite = SQLite.openDatabaseSync(databaseName, openDatabaseOptions);
+    assertStorageDatabaseExists();
+    const sqlite = SQLite.openDatabaseSync(databaseName, openDatabaseOptions, databaseDirectory());
     this.connection = { db: createDrizzleDatabase(sqlite), sqlite };
 
     await this.configurePragmas();
@@ -106,6 +112,7 @@ export class DbService extends BaseService {
   async withWriteTx<TValue>(fn: (tx: Database) => Promise<TValue>): Promise<TValue> {
     this.assertOpen();
 
+    const releaseMutation = storageMutationGate.enter();
     const previous = this.writeTail;
     let release: () => void = () => {};
     this.writeTail = new Promise<void>((resolve) => {
@@ -118,6 +125,7 @@ export class DbService extends BaseService {
       return await this.runExclusiveWriteTx(fn);
     } finally {
       release();
+      releaseMutation();
     }
   }
 

@@ -12,8 +12,13 @@ const mockAgent = { kind: 'agent' };
 const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
 const mockTraces = { kind: 'traces' };
-const mockCache = { kind: 'cache' };
+const mockCache = { kind: 'cache', resetForRestore: jest.fn() };
 const mockDb = { kind: 'db' };
+const mockBackup = { configure: jest.fn() };
+const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
+const mockCommitStorageBoot = jest.fn();
+const mockFailStorageBoot = jest.fn();
+const mockValidateRestoringStorage = jest.fn(async () => {});
 const mockDocumentExport = { kind: 'document-export' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
 const mockJobRuntime = { kind: 'job-runtime' };
@@ -45,6 +50,18 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
 
 jest.mock('@/backend/data/DataApiService', () => ({
   DataApiService: jest.fn(() => mockDataApi),
+}));
+jest.mock('@/backend/data/storage/storagePaths', () => ({
+  getStorageBoot: () => mockStorageBoot(),
+  commitStorageBoot: () => mockCommitStorageBoot(),
+  failStorageBoot: () => mockFailStorageBoot(),
+  cleanupStorageAfterBoot: jest.fn(),
+}));
+jest.mock('@/backend/services/backup/restoreStartup', () => ({
+  validateRestoringStorage: () => mockValidateRestoringStorage(),
+}));
+jest.mock('@/backend/services/file/filePreviewStorage', () => ({
+  resetFilePreviewsForRestore: jest.fn(),
 }));
 jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
   createDataApiHandlers: jest.fn(() => mockDataApiHandlers),
@@ -98,6 +115,7 @@ const createRuntime = () =>
     BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
     CacheService: mockCache,
     DbService: mockDb,
+    BackupRuntime: mockBackup,
     DesktopConnectionRuntime: mockDesktopConnections,
     DocumentExportRuntime: mockDocumentExport,
     JobRuntime: mockJobRuntime,
@@ -110,6 +128,7 @@ const createRuntime = () =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockStorageBoot.mockReturnValue({ restoring: false, resetCaches: false });
 });
 
 afterEach(async () => {
@@ -117,6 +136,45 @@ afterEach(async () => {
 });
 
 describe('createAppBootstrapRuntime', () => {
+  test('commits a restore only after candidate validation and required initialization finish', async () => {
+    mockStorageBoot.mockReturnValue({ restoring: true, resetCaches: true });
+    let initialized!: () => void;
+    let reachedInitialization!: () => void;
+    const initializing = new Promise<void>((resolve) => {
+      reachedInitialization = resolve;
+    });
+    mockInitializeAppRuntime.mockImplementationOnce(
+      () =>
+        new Promise<undefined>((resolve) => {
+          initialized = () => resolve(undefined);
+          reachedInitialization();
+        }),
+    );
+    const runtime = createRuntime();
+    const boot = runtime.initialize();
+    // Wait for the owned bootstrap boundary, not an arbitrary timer.
+    await Promise.race([initializing, boot]);
+    expect(mockValidateRestoringStorage).toHaveBeenCalledTimes(1);
+    expect(mockCache.resetForRestore).toHaveBeenCalledTimes(1);
+    expect(mockCommitStorageBoot).not.toHaveBeenCalled();
+    initialized();
+    await boot;
+    expect(mockCommitStorageBoot).toHaveBeenCalledTimes(1);
+    expect(mockFailStorageBoot).not.toHaveBeenCalled();
+  });
+
+  test('failed validation cannot open the candidate host or commit it', async () => {
+    mockStorageBoot.mockReturnValue({ restoring: true, resetCaches: true });
+    mockValidateRestoringStorage.mockRejectedValueOnce(new Error('hash mismatch'));
+    const runtime = createRuntime();
+    await expect(runtime.initialize()).rejects.toMatchObject({ code: 'restart-required' });
+    expect(application.hasHost).toBe(false);
+    expect(mockCommitStorageBoot).not.toHaveBeenCalled();
+    expect(mockFailStorageBoot).toHaveBeenCalledTimes(1);
+    expect(mockInitializeAppRuntime).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
   test('composes the backend from the host-resolved infrastructure services', async () => {
     const runtime = createRuntime();
 
@@ -147,6 +205,7 @@ describe('createAppBootstrapRuntime', () => {
       translate: expect.any(Function),
     });
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
+      backup: mockBackup,
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
       documentExport: mockDocumentExport,

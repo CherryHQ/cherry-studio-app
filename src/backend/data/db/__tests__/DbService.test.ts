@@ -11,6 +11,10 @@ jest.mock('expo-sqlite', () => ({
 jest.mock('drizzle-orm/expo-sqlite/migrator', () => ({ migrate: jest.fn() }));
 jest.mock('../seeding', () => ({ seedDatabase: jest.fn() }));
 jest.mock('../customSql', () => ({ customSqlStatements: [] }));
+jest.mock('@/backend/data/storage/storagePaths', () => ({
+  assertStorageDatabaseExists: jest.fn(),
+  databaseDirectory: () => 'file:///test/SQLite',
+}));
 
 describe('DbService connection lifecycle', () => {
   beforeEach(() => {
@@ -31,6 +35,7 @@ describe('DbService connection lifecycle', () => {
     expect(mockOpenDatabaseSync).toHaveBeenCalledWith(
       'cherry.db',
       expect.objectContaining({ finalizeUnusedStatementsBeforeClosing: false }),
+      'file:///test/SQLite',
     );
   });
 

@@ -110,6 +110,11 @@ export default function SettingsScreen() {
           </Section>
           <Section>
             <Section.Item
+              label={t('backup.title')}
+              onPress={() => router.push('/settings/backup')}
+              testID="settings-backup"
+            />
+            <Section.Item
               label={t('settings.privacy.title')}
               leading={<ShieldIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/privacy')}

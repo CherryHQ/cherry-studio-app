@@ -1,7 +1,9 @@
 import { randomUUID } from 'expo-crypto';
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
+import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const logger = loggerService.withContext('UserContentImageStorage');
@@ -50,12 +52,13 @@ export type UserContentImageStorage = {
 export function createUserContentImageStorage(
   config: UserContentImageStorageConfig,
 ): UserContentImageStorage {
-  const directory = () => new Directory(Paths.document, config.directoryName);
+  const directory = () => new Directory(storageDirectory(), config.directoryName);
   const storedFile = (storedName: string): File | undefined =>
     config.storedNamePattern.test(storedName) ? new File(directory(), storedName) : undefined;
 
   return {
     create: async (sourceUri, namePrefix) => {
+      const releaseMutation = storageMutationGate.enter();
       let normalizedUri: string | undefined;
 
       try {
@@ -70,12 +73,14 @@ export function createUserContentImageStorage(
         await new File(normalizedUri).copy(new File(target, storedName));
         return storedName;
       } finally {
+        releaseMutation();
         if (normalizedUri) {
           deleteTemporaryImage(normalizedUri);
         }
       }
     },
     remove: async (storedName) => {
+      storageMutationGate.assertWritable();
       const file = storedFile(storedName);
       if (!file?.exists) {
         return false;

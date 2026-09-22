@@ -13,6 +13,7 @@ import { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundA
 import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
+import { BackupRuntime } from '@/backend/services/backup';
 import { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
@@ -44,6 +45,7 @@ export const services = {
   ResourceScopeCoordinator,
   CacheService,
   DbService,
+  BackupRuntime,
   DesktopConnectionRuntime,
   DocumentExportRuntime,
   PreferenceService,

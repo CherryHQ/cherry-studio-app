@@ -20,6 +20,7 @@ import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
+import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import {
@@ -64,6 +65,7 @@ export function createBackend(
   services: BackendServices,
   infrastructure: {
     dbService: DbService;
+    backup: BackupRuntime;
     documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
     languageServing: LanguageServingSupport & AgentRuntime;
@@ -200,6 +202,7 @@ export function createBackend(
   return {
     disposeSystemEntry: systemEntry.dispose,
     backend: {
+      backup: infrastructure.backup,
       systemEntry: systemEntry.module,
       agent: services.agent,
       desktopConnections: infrastructure.desktopConnections,
