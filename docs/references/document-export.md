@@ -119,15 +119,15 @@ on every PNG page. PNG pages have no page numbers or reserved ordinal-footer spa
 | --- | --- | --- |
 | Plain user text | Escaped formatting markers and preserved line breaks | Right-aligned user bubbles and full-width assistant answers |
 | Prose and lists | Authored Markdown | Shared typography and spacing |
-| Code blocks | Complete authored fences | HTML keeps labelled code panels; images use compact code placeholders with language and omission note |
+| Code blocks | Complete authored fences | Fixed 192-point panels show the opening code; HTML scrolls to the complete source and images clip to the opening viewport |
 | Inline code | Authored inline code | Kept in the surrounding prose |
-| Tables | Authored table | Short tables use content-based widths; tables over three columns become labelled records in images and labelled fields on narrow HTML/Markdown previews |
+| Tables | Authored table | Preserve the header row, column grid and alignment; images fit columns to the page width and wrap cells, while HTML/Markdown previews scroll horizontally for wide tables |
 | Math | Authored source | KaTeX MathML with bounded expansion; unsupported formulas retain source |
 | Managed images | Embedded Base64 PNG/JPEG; failed reads retain an unavailable note | Embedded PNG/JPEG without filenames or captions; generic unavailable-image placeholder |
 | Remote images | Eligible external URL | Fetch without credentials, then embed or use a placeholder |
 | Attachments | Name, readable type and eligible link; otherwise an explicit metadata-only note | Matching resource entries; documents are not embedded or rasterized |
 | Included process/details | Nested blockquotes; all included content readable without HTML support | HTML starts collapsed; image capture expands included details |
-| References | Labelled section with numbered links | Compact source titles and domains; complete URLs remain in HTML links |
+| References | Labelled section with numbered links | Compact localized source-count row with a single Globe icon and gray superscript citations; no card list, and citation URLs remain in HTML links |
 
 HTML embeds displayed resources and inline CSS. Raw authored HTML is escaped. Links admit HTTP,
 HTTPS and mailto without credentials. CSP disables scripts, remote subresources and forms. HTML
@@ -145,12 +145,12 @@ adapter supplies two snapshots when thinking exists: omitted by default and incl
 and readable tool names, never raw payloads, credentials or diagnostics. The image capture expands
 those supplied details so their content is readable without an interactive disclosure.
 
-HTML code blocks display complete escaped source with a language label and basic styling, without
-syntax highlighting. HTML preserves code whitespace with horizontal scrolling. Images replace every
-fenced or indented code block with a compact `</>` placeholder, its language when available, and a
-localized omission note. Image conversion skips code-body layout entirely; the complete source remains
-in HTML and Markdown. Inline code remains visible. Pagination keeps each ordinary code placeholder
-together.
+HTML and image code blocks use fixed 192-point panels with a language label and basic styling,
+without syntax highlighting. HTML preserves the complete escaped source and whitespace with internal
+scrolling. Images show the same opening viewport without scrolling. Markdown keeps the complete
+source, and inline code remains visible. Sources use a compact count row with a single inline Globe
+icon and a source-localized summary, without individual source cards. The export does not fetch favicons. Pagination
+keeps code panels together and excludes their clipped text from line measurement.
 Image capture replaces undecodable content images with a generic unavailable note, and
 replaces formulas wider than their content region or taller than a page with their original source.
 These component fallbacks precede the existing whole-format fallback.

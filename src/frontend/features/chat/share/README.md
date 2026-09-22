@@ -41,8 +41,11 @@ the message-list hierarchy: attachments above right-aligned user bubbles and ful
 under the assistant name. They omit article titles and message numbering. Markdown retains the
 conversation title and ordinary role headings. All preserve chronological order.
 The export renderers own code, resource, source-list and table presentation and their format-specific
-fallbacks. Image code blocks become compact placeholders with an explicit omission note; HTML
-and Markdown retain full code. Inline code stays visible in every format. All formats follow the global Share watermark setting. Images and HTML share the white
+fallbacks. Images and HTML show the opening code inside fixed 192-point panels; HTML retains full
+code with internal scrolling, and Markdown keeps the complete authored source. Images and HTML show
+one compact source-count row with a single Globe icon and the same localized count as the chat,
+plus quiet superscript citations, without individual source cards.
+Inline code stays visible in every format. All formats follow the global Share watermark setting. Images and HTML share the white
 Cherry footer; Markdown uses the matching brand/time text row.
 
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's

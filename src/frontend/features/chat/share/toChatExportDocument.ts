@@ -22,6 +22,7 @@ export type ChatExportOptions = {
     user: string;
     assistant: string;
     process(seconds: number): string;
+    sources(count: number): string;
     reasoning: string;
     file: string;
     status: string;
@@ -111,6 +112,7 @@ export function toChatExportDocument(
     if (sources.size)
       blocks.push({
         kind: 'links',
+        summary: options.labels.sources(sources.size),
         items: [...sources.values()].map((source, index) => ({
           label: `${index + 1}. ${source.title}`,
           url: source.url,

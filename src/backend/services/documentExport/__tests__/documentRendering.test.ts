@@ -394,7 +394,7 @@ test('chat exports keep user bubbles and answer rows while Markdown keeps portab
   }
 });
 
-test('images replace all block code with labelled placeholders but keep prose and inline code', async () => {
+test('images show labelled code previews alongside prose and inline code', async () => {
   const source = [
     'Before. Use `inlineValue`.',
     '```js\nconst onlyInCode = "__CODE_SOURCE__";\n```',
@@ -414,14 +414,14 @@ test('images replace all block code with labelled placeholders but keep prose an
     jest.fn(),
     new AbortController().signal,
   );
-  expect(html.match(/<div class="code-placeholder">/g)).toHaveLength(3);
-  expect(html).toContain('代码内容已省略');
-  expect(html).toContain('<span class="code-language">js</span>');
-  expect(html).toContain('<span class="code-language">mermaid</span>');
+  expect(html.match(/<div class="code-block">/g)).toHaveLength(3);
+  expect(html).not.toContain('代码内容已省略');
+  expect(html).toContain('<span>js</span>');
+  expect(html).toContain('<span>mermaid</span>');
   expect(html).toContain('<code>inlineValue</code>');
   expect(html).toContain('Before.');
   expect(html).toContain('After.');
-  expect(html).not.toContain('<pre');
+  expect(html).toContain('<pre><code>');
   const browser = await renderHtml(
     document,
     presentation,
@@ -430,13 +430,13 @@ test('images replace all block code with labelled placeholders but keep prose an
     new AbortController().signal,
   );
   for (const code of ['__CODE_SOURCE__', '__DIAGRAM_SOURCE__', '__INDENTED_CODE__']) {
-    expect(html).not.toContain(code);
+    expect(html).toContain(code);
     expect(browser.html).toContain(code);
     expect(renderMarkdown(document)).toContain(code);
   }
 });
 
-test('HTML code blocks preserve language labels and complete escaped source for any language and length', async () => {
+test('HTML code previews keep complete escaped source accessible in a fixed-height scroll viewport', async () => {
   const longCode = '<tag>'.repeat(5000);
   const document = normalizeDocument({
     kind: 'markdown',
@@ -455,12 +455,15 @@ test('HTML code blocks preserve language labels and complete escaped source for 
   expect(html).not.toContain('<script>');
   expect(html).toContain('graph TD; A--&gt;B');
   expect(html).toContain('&lt;tag&gt;'.repeat(5000));
+  expect(html).toContain('height:192px');
+  expect(html).toContain('.code-block pre{flex:1;min-height:0;overflow:auto}');
+  expect(html).toContain('<pre tabindex="0"><code>');
   expect(renderMarkdown(document)).toContain(longCode);
 });
 
-test('wide image tables retain every header and cell, including prepared images, as labelled records', async () => {
+test('four-column tables retain their rows, headers, alignment and media in image and HTML exports', async () => {
   const source =
-    '| Name | Link | Image | Note |\n| --- | --- | --- | --- |\n| Alpha | [Docs](https://example.com/docs) | ![Photo](https://example.com/photo.png) | **Keep me** |';
+    '| Name | Link | Image | Note |\n| --- | :---: | --- | ---: |\n| Alpha | [Docs](https://example.com/docs) | ![Photo](https://example.com/photo.png) | **Keep me** |';
   const document = normalizeDocument({ kind: 'markdown', source });
   const cache = new Map([
     ['https://example.com/photo.png', { dataUrl: 'data:image/png;base64,AA==' }],
@@ -473,7 +476,12 @@ test('wide image tables retain every header and cell, including prepared images,
     read,
     new AbortController().signal,
   );
-  expect(html).not.toContain('<table>');
+  expect(html).toContain('<table>');
+  expect(html.match(/<tr>/g)).toHaveLength(2);
+  expect(html.match(/<th(?:\s[^>]*)?>/g)).toHaveLength(4);
+  expect(html).toContain('<th style="text-align:center">Link</th>');
+  expect(html).toContain('<th style="text-align:right">Note</th>');
+  expect(html).not.toContain('table-record');
   for (const text of [
     'Name',
     'Link',
@@ -492,9 +500,11 @@ test('wide image tables retain every header and cell, including prepared images,
     read,
     new AbortController().signal,
   );
-  expect(browser.html).toContain('<table class="table-wide">');
-  expect(browser.html).toContain('data-label="Name"');
-  expect(browser.html).toContain('data-label="Note"');
+  expect(browser.html).toContain('<table>');
+  expect(browser.html).toContain('<th style="text-align:center">Link</th>');
+  expect(browser.html).toContain('<th style="text-align:right">Note</th>');
+  expect(browser.html).not.toContain('table-wide');
+  expect(browser.html).not.toContain('data-label=');
   expect(renderMarkdown(document)).toBe(`${source}\n`);
   expect(read).not.toHaveBeenCalled();
 });
@@ -514,8 +524,10 @@ test('Markdown preview keeps image references readable without image layout or l
   expect(html).toContain('example.com');
   expect(html).not.toContain('Image unavailable');
   expect(html).toContain('<strong>emphasis</strong>');
-  expect(html).toContain('<table class="table-wide">');
-  expect(html).toContain('data-label="核心名将"');
+  expect(html).toContain('<table>');
+  expect(html).toContain('<th>核心名将</th>');
+  expect(html).not.toContain('table-wide');
+  expect(html).not.toContain('data-label=');
   expect(html).toContain('完整内容');
   expect(html).toContain('const answer = 42;');
 });
@@ -536,27 +548,46 @@ test('localized resource fallbacks are frozen and never imply that a private att
               url: 'file:///private/report.pdf',
               mediaType: 'application/pdf',
             },
-            { kind: 'links', items: [{ label: '1. Docs', url: 'https://example.com/docs' }] },
+            {
+              kind: 'links',
+              summary: '1 个来源',
+              items: [{ label: '1. Docs', url: 'https://example.com/docs' }],
+            },
+            {
+              kind: 'markdown',
+              source:
+                'Cited [1](https://example.com/docs). Ordinary [Docs](https://example.com/docs) and [2](https://elsewhere.example/).',
+            },
           ],
         },
       ],
     },
   });
   labels.fileMetadataOnly = 'Changed';
-  const { html } = await renderHtml(
-    document,
-    presentation,
-    new Map(),
-    jest.fn(),
-    new AbortController().signal,
-  );
   const markdown = renderMarkdown(document);
-  for (const value of [html, markdown]) {
-    expect(value).toContain('仅包含文件信息');
-    expect(value).toContain('来源');
-    expect(value).toContain('PDF');
-    expect(value).not.toContain('file:///');
-    expect(value).not.toContain('Changed');
+  for (const imageFrame of [undefined, { background: '#ffffff', label: 'Document' }]) {
+    const { html } = await renderHtml(
+      document,
+      { ...presentation, imageFrame },
+      new Map(),
+      jest.fn(),
+      new AbortController().signal,
+    );
+    for (const value of [html, markdown]) {
+      expect(value).toContain('仅包含文件信息');
+      expect(value).toContain('来源');
+      expect(value).toContain('PDF');
+      expect(value).not.toContain('file:///');
+      expect(value).not.toContain('Changed');
+    }
+    expect(html).toContain('<span>1 个来源</span>');
+    expect(html.match(/<svg class="reference-icon"/g)).toHaveLength(1);
+    expect(html).not.toContain('reference-icons');
+    expect(html).not.toContain('reference-card');
+    expect(html).not.toContain('1. Docs');
+    expect(html).toContain('<a href="https://example.com/docs" class="citation-link">1</a>');
+    expect(html).toContain('<a href="https://example.com/docs">Docs</a>');
+    expect(html).toContain('<a href="https://elsewhere.example/">2</a>');
   }
   expect(Object.isFrozen(document.labels)).toBe(true);
   expect(() =>

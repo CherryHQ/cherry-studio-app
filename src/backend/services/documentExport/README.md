@@ -36,9 +36,12 @@ owns its limits, cancellation and rendering constraints.
 
 Chat HTML and images share message-list layout; Markdown keeps portable title/role headings.
 `contentPresentation.ts` owns readable file types and default copy; `renderHtmlStyles.ts` owns
-HTML/image/Markdown-preview styling. Images replace block code with compact labelled placeholders while retaining
-inline code and prose.
-HTML code blocks preserve complete escaped source with language labels and basic styling.
-`renderTables.ts` adapts wide tables to labelled records for static images and labelled fields
-on narrow HTML/Markdown previews; short tables use content-based column widths. Markdown keeps authored
+HTML/image/Markdown-preview styling. Block code uses a fixed 192-point panel with a language label
+and a visible opening excerpt. HTML and Markdown previews scroll within the panel to the complete
+escaped source; images clip to the same opening viewport. Sources use one compact count row with
+a single inline Globe icon and a source-localized summary, without a card list. Inline citations use quiet gray
+superscripts and retain their destination URLs in HTML.
+`renderTables.ts` preserves table rows, column headers, alignment and cell content in every format.
+Images fit columns to the page width and wrap cell content. HTML/Markdown previews use content-based
+column widths with horizontal scrolling for wide tables. Markdown keeps authored
 content, represents resources explicitly, and uses portable blockquotes for included process text.

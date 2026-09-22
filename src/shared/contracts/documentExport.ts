@@ -28,7 +28,12 @@ export type ExportBlock =
       presentation?: 'process' | 'reasoning';
       blocks: readonly ExportBlock[];
     }
-  | { kind: 'links'; items: readonly { label: string; url: string }[] };
+  | {
+      kind: 'links';
+      /** Source-localized count label for the compact summary. */
+      summary?: string;
+      items: readonly { label: string; url: string }[];
+    };
 
 export type ExportDocument = {
   title?: string;

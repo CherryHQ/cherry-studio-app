@@ -40,20 +40,23 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
       var node;
       while(node=walker.nextNode()){
         if(!node.textContent.trim())continue;
+        // Clipped previews are measured by their visible frame, never their hidden text ranges.
+        if(node.parentElement.closest('.code-block'))continue;
         var range=document.createRange();range.selectNodeContents(node);
         Array.from(range.getClientRects()).forEach(function(rect){if(rect.width&&rect.height)ink.push(bounds(rect));});
       }
-      main.querySelectorAll('img,math,svg,tr,.code-placeholder').forEach(function(element){
+      main.querySelectorAll('img,math,svg,tr,.code-block').forEach(function(element){
         var rect=element.getBoundingClientRect();
         if(!rect.width||!rect.height)return;
-        if(element.tagName==='TR'||element.classList.contains('code-placeholder')){
+        if(element.matches('tr,.code-block')){
           // Adjacent fractional row borders must not merge into one indivisible table.
           // Text ranges still protect glyphs at either edge of the row.
           if(rect.height<=${IMAGE_PAGE_HEIGHT})ink.push([Math.ceil(rect.top-origin),Math.floor(rect.bottom-origin)]);
         }else ink.push(bounds(rect));
       });
       var lines=ink.slice().sort(function(a,b){return a[0]-b[0];});
-      main.querySelectorAll('h1,h2,h3,h4,h5,h6,.code-heading,.resource-heading,.table-field-label,summary,thead').forEach(function(element){
+      main.querySelectorAll('h1,h2,h3,h4,h5,h6,.code-heading,.resource-heading,summary,thead').forEach(function(element){
+        if(element.closest('.code-block'))return;
         var rect=element.getBoundingClientRect();if(!rect.height)return;
         var heading=bounds(rect);
         var low=0,high=lines.length;

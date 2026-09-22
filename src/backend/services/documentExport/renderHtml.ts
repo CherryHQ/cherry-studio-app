@@ -76,14 +76,23 @@ function createHtmlRenderer(
   const renderCode = (source: string, info: string) => {
     const language = parser.utils.unescapeAll(info).trim().split(/\s+/)[0].toLowerCase();
     const label = /^[\w#+.-]{1,40}$/.test(language) ? language : labels.code;
-    // Static shares prioritize the conversation without laying out the code source.
-    if (isImage)
-      return `<div class="code-placeholder"><span class="code-symbol" aria-hidden="true">&lt;/&gt;</span><div class="code-placeholder-body"><div class="code-placeholder-heading"><strong>${escapeHtml(labels.code)}</strong>${label !== labels.code ? `<span class="code-language">${escapeHtml(label)}</span>` : ''}</div><span class="resource-note">${escapeHtml(labels.codeOmitted)}</span></div></div>\n`;
-    return `<div class="code-block"><div class="code-heading"><span>${escapeHtml(label)}</span></div><pre tabindex="0"><code>${escapeHtml(source)}</code></pre></div>\n`;
+    return `<div class="code-block"><div class="code-heading"><span>${escapeHtml(label)}</span></div><pre${isImage ? '' : ' tabindex="0"'}><code>${escapeHtml(source)}</code></pre></div>\n`;
   };
   parser.renderer.rules.fence = (tokens, index) =>
     renderCode(tokens[index].content, tokens[index].info);
   parser.renderer.rules.code_block = (tokens, index) => renderCode(tokens[index].content, '');
+  parser.renderer.rules.link_open = (tokens, index, options, environment, renderer) => {
+    const references: ReadonlySet<string> | undefined = environment.exportReferenceUrls;
+    const label = tokens[index + 1];
+    if (
+      references?.has(tokens[index].attrGet('href') ?? '') &&
+      label?.type === 'text' &&
+      /^\d+$/.test(label.content) &&
+      tokens[index + 2]?.type === 'link_close'
+    )
+      tokens[index].attrSet('class', 'citation-link');
+    return renderer.renderToken(tokens, index, options);
+  };
   parser.inline.ruler.before('escape', 'export_math', (state, silent) => {
     const start = state.pos;
     const opening = ['$$', '$'].find((value) => state.src.startsWith(value, start));
@@ -164,14 +173,17 @@ function createHtmlRenderer(
     };
     // Install table presentation after discovering resources in the original token tree.
     configureExportTables(parser, isImage, labels.table);
-    const renderBlocks = (blocks: readonly ExportBlock[]): string =>
+    const renderBlocks = (
+      blocks: readonly ExportBlock[],
+      references: ReadonlySet<string>,
+    ): string =>
       blocks
         .map((block) => {
           switch (block.kind) {
             case 'text':
               return `<div class="plain-text">${escapeHtml(block.text)}</div>`;
             case 'markdown':
-              return `<div class="markdown">${parser.render(normalizeLatexDelimiters(block.source))}</div>`;
+              return `<div class="markdown">${parser.render(normalizeLatexDelimiters(block.source), { exportReferenceUrls: references })}</div>`;
             case 'image':
               return image(`asset:${block.assetId}`, block.alt);
             case 'attachment': {
@@ -184,22 +196,27 @@ function createHtmlRenderer(
               );
             }
             case 'links':
-              return `<aside class="references"><h3 class="reference-heading">${escapeHtml(labels.sources)}</h3><ul>${block.items
-                .map((item) => {
-                  const url = safeExportUrl(item.url);
-                  const address = url ? new URL(url).hostname || url : '';
-                  return `<li><span class="reference-title">${link(item.label, url)}</span>${address ? `<span class="reference-url">${escapeHtml(address)}</span>` : ''}</li>`;
-                })
-                .join('')}</ul></aside>`;
+              // Lucide Globe geometry, embedded for offline HTML and image capture.
+              return `<aside class="references"><svg class="reference-icon" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg><span>${escapeHtml(block.summary ?? `${labels.sources} · ${block.items.length}`)}</span></aside>`;
             case 'details':
               return block.blocks.length
-                ? `<details class="${block.presentation ?? 'reasoning'}"><summary>${escapeHtml(block.summary)}</summary><div class="details-content">${renderBlocks(block.blocks)}</div></details>`
+                ? `<details class="${block.presentation ?? 'reasoning'}"><summary>${escapeHtml(block.summary)}</summary><div class="details-content">${renderBlocks(block.blocks, references)}</div></details>`
                 : `<div class="process-step">${escapeHtml(block.summary)}</div>`;
           }
         })
         .join('\n');
     const body = document.sections
       .map((section) => {
+        const references = new Set(
+          section.blocks.flatMap((block) =>
+            block.kind === 'links'
+              ? block.items.flatMap((item) => {
+                  const url = safeExportUrl(item.url);
+                  return url ? [url] : [];
+                })
+              : [],
+          ),
+        );
         const metadata = (section.metadata ?? [])
           .map(
             (item) => `<p class="muted">${escapeHtml(item.label)}: ${escapeHtml(item.value)}</p>`,
@@ -212,10 +229,10 @@ function createHtmlRenderer(
           const content = section.blocks.filter(
             (block) => block.kind !== 'image' && block.kind !== 'attachment',
           );
-          return `<section class="bubble-row" aria-label="${escapeHtml(section.heading ?? '')}"><div class="bubble-column">${attachments.length ? `<div class="attachments">${renderBlocks(attachments)}</div>` : ''}${content.length || metadata ? `<div class="bubble">${metadata}${renderBlocks(content)}</div>` : ''}</div></section>`;
+          return `<section class="bubble-row" aria-label="${escapeHtml(section.heading ?? '')}"><div class="bubble-column">${attachments.length ? `<div class="attachments">${renderBlocks(attachments, references)}</div>` : ''}${content.length || metadata ? `<div class="bubble">${metadata}${renderBlocks(content, references)}</div>` : ''}</div></section>`;
         }
         const isMessage = section.presentation === 'message';
-        return `<section class="${isMessage ? 'message-row' : 'document-section'}">${section.heading ? `<h2 class="${isMessage ? 'message-heading' : 'section-heading'}">${escapeHtml(section.heading)}</h2>` : ''}<div class="message-content">${metadata}${renderBlocks(section.blocks)}</div></section>`;
+        return `<section class="${isMessage ? 'message-row' : 'document-section'}">${section.heading ? `<h2 class="${isMessage ? 'message-heading' : 'section-heading'}">${escapeHtml(section.heading)}</h2>` : ''}<div class="message-content">${metadata}${renderBlocks(section.blocks, references)}</div></section>`;
       })
       .join('\n');
     const signature = getExportSignature(presentation.watermark);

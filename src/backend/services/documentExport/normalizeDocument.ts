@@ -29,6 +29,7 @@ const block: z.ZodType<ExportBlock> = z.lazy(() =>
     }),
     z.strictObject({
       kind: z.literal('links'),
+      summary: z.string().max(256).optional(),
       items: z.array(z.strictObject({ label: text, url: text })).max(256),
     }),
   ]),

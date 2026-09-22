@@ -15,6 +15,7 @@ const options: ChatExportOptions = {
     user: 'You',
     assistant: 'Assistant',
     process: (seconds) => `Took ${seconds}s`,
+    sources: (count) => `${count} sources`,
     reasoning: 'Reasoning',
     file: 'File',
     status: 'Status',

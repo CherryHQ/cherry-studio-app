@@ -13,9 +13,12 @@ artifact. An optional unchecked source toggle selects an alternate immutable doc
 
 Images use a fixed 360-logical-pixel layout and 3x output density, independent of the device window.
 Typography follows the frozen accessibility step; semantic colors follow the theme until delivery
-starts. Chat images use right-aligned user bubbles, full-width answers and compact code placeholders,
+starts. Chat images use right-aligned user bubbles, full-width answers and fixed-height code previews,
 without document titles or message numbering. The Cherry signature and frozen timestamp remain.
-HTML uses the same chat layout in a responsive column capped at 720 points, with full code content.
+HTML uses the same chat layout in a responsive column capped at 720 points, with full code content
+scrolling inside 192-point panels. Images show the opening code viewport. Sources use a compact
+count row with a single inline Globe icon and localized count; inline citations use gray superscripts.
+Individual source cards are omitted from images and HTML.
 Markdown preview renders the exact output text, including resource notes and signature, through
 `session.previewMarkdown` and the same HTML typography/table styles. Local/generated PNG/JPEG images
 are embedded as Base64 data URLs and displayed without captions. Remote image references remain
@@ -50,12 +53,14 @@ paragraph boundaries do not trigger early cuts. Headings stay with the
 following line, normal table rows stay together, and oversized table rows can continue between
 lines. Images are contained within a page. An indivisible object that cannot fit fails conversion
 instead of losing content. Included process/reasoning details expand before capture; HTML retains
-interactive disclosures and Markdown uses nested blockquotes. Fenced and indented code become
-compact labelled placeholders; inline code remains visible. Tables
-with more than three columns use labelled records. HTML and Markdown previews show those same
-fields vertically below 480 points; short tables distribute width by content instead of equal columns. Failed image decoding and overwide formulas
+interactive disclosures and Markdown uses nested blockquotes. Fenced and indented code use
+fixed-height labelled previews; inline code remains visible. Tables retain their header row and
+column grid in every format. Images fit columns to the page width and wrap cell content; HTML and
+Markdown previews use content-based column widths and allow horizontal scrolling for wide tables.
+Failed image decoding and overwide formulas
 fall back to readable resource entries or formula source before measurement. Code/resource headings
-stay with their following line; code placeholders stay together. See [Document Export](../../../../docs/references/document-export.md)
+stay with their following line; code panels stay together. Clipped code does not contribute invisible
+ranges to pagination. See [Document Export](../../../../docs/references/document-export.md)
 for the shared content and degradation contract.
 
 Paged capture reuses HTML image conversion's 8192-pixel edge budget. At 3x density, each content
