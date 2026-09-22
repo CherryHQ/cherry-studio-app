@@ -40,7 +40,6 @@ export function useDocumentExport() {
       const labels = {
         code: t('documentExport.content.code'),
         codeOmitted: t('documentExport.content.codeOmitted'),
-        plainText: t('documentExport.content.plainText'),
         file: t('documentExport.content.file'),
         fileMetadataOnly: t('documentExport.content.fileMetadataOnly'),
         image: t('documentExport.content.image'),

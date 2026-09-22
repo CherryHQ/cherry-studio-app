@@ -461,7 +461,6 @@
   "documentExport.content.fileMetadataOnly": "Только сведения о файле; вложение не включено.",
   "documentExport.content.image": "Изображение",
   "documentExport.content.imageUnavailable": "Изображение недоступно",
-  "documentExport.content.plainText": "Обычный текст",
   "documentExport.content.sources": "Источники",
   "documentExport.content.table": "Таблица",
   "documentExport.conversation": "Разговор",

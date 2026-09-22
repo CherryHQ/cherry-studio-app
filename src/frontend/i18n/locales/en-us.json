@@ -453,7 +453,6 @@
   "documentExport.content.fileMetadataOnly": "File information only; attachment not included.",
   "documentExport.content.image": "Image",
   "documentExport.content.imageUnavailable": "Image unavailable",
-  "documentExport.content.plainText": "Plain text",
   "documentExport.content.sources": "Sources",
   "documentExport.content.table": "Table",
   "documentExport.conversation": "Conversation",

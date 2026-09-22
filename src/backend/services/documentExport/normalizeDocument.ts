@@ -39,7 +39,6 @@ const documentSchema = z.strictObject({
     .strictObject({
       code: z.string().max(256),
       codeOmitted: z.string().max(256),
-      plainText: z.string().max(256),
       file: z.string().max(256),
       fileMetadataOnly: z.string().max(256),
       image: z.string().max(256),

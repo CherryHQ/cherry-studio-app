@@ -449,7 +449,6 @@
   "documentExport.content.fileMetadataOnly": "Chỉ có thông tin tệp; không bao gồm tệp đính kèm.",
   "documentExport.content.image": "Hình ảnh",
   "documentExport.content.imageUnavailable": "Không thể hiển thị hình ảnh",
-  "documentExport.content.plainText": "Văn bản thuần",
   "documentExport.content.sources": "Nguồn",
   "documentExport.content.table": "Bảng",
   "documentExport.conversation": "Cuộc trò chuyện",

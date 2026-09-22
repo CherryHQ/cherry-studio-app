@@ -145,15 +145,12 @@ adapter supplies two snapshots when thinking exists: omitted by default and incl
 and readable tool names, never raw payloads, credentials or diagnostics. The image capture expands
 those supplied details so their content is readable without an interactive disclosure.
 
-HTML code highlighting registers only Bash, CSS, Java, JavaScript, JSON, Python, SQL, TypeScript,
-XML/HTML and YAML grammars and their aliases. It uses explicit languages, never autodetection or
-remote scripts. Unknown languages (including diagram source), blocks over 24,000 code units,
-unsupported grammar behavior or excessive highlighted output keep the complete escaped source.
-HTML preserves code whitespace with horizontal scrolling. Images replace every fenced or indented
-code block with a compact `</>` placeholder, its language when available, and a localized omission
-note. Image conversion skips code highlighting and code-body layout entirely; the complete source
-remains in HTML and Markdown. Inline code remains visible. Pagination keeps each ordinary code
-placeholder together.
+HTML code blocks display complete escaped source with a language label and basic styling, without
+syntax highlighting. HTML preserves code whitespace with horizontal scrolling. Images replace every
+fenced or indented code block with a compact `</>` placeholder, its language when available, and a
+localized omission note. Image conversion skips code-body layout entirely; the complete source remains
+in HTML and Markdown. Inline code remains visible. Pagination keeps each ordinary code placeholder
+together.
 Image capture replaces undecodable content images with a generic unavailable note, and
 replaces formulas wider than their content region or taller than a page with their original source.
 These component fallbacks precede the existing whole-format fallback.

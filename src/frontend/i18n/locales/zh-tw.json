@@ -449,7 +449,6 @@
   "documentExport.content.fileMetadataOnly": "僅包含檔案資訊，未附帶檔案內容。",
   "documentExport.content.image": "圖片",
   "documentExport.content.imageUnavailable": "無法顯示圖片",
-  "documentExport.content.plainText": "純文字",
   "documentExport.content.sources": "來源",
   "documentExport.content.table": "表格",
   "documentExport.conversation": "對話",

@@ -60,13 +60,8 @@ code{background:${colors.inlineCode};color:${colors.inlineCodeForeground};border
 .code-placeholder-heading{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
 .code-language{color:${colors.muted};font-family:"SFMono-Regular",Consolas,monospace}
 .code-heading{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid ${colors.border};font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;font-weight:500}
-.code-fallback{color:${colors.muted};font-weight:400}
 pre{margin:0;padding:14px;white-space:pre;overflow-x:auto}
 pre code{color:${colors.foreground};background:transparent;border:0;padding:0}
-.hljs-comment,.hljs-quote{color:${colors.muted}}
-.hljs-keyword,.hljs-selector-tag,.hljs-tag,.hljs-name{color:${colors.link};font-weight:600}
-.hljs-string,.hljs-attr,.hljs-number,.hljs-literal,.hljs-type{color:${colors.inlineCodeForeground}}
-.hljs-title,.hljs-section{font-weight:600}
 .table-scroll{max-width:100%;overflow-x:auto;border:1px solid ${colors.border};border-radius:8px}
 table{width:100%;border-spacing:0;margin:0;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
 td,th{min-width:0;padding:9px 10px;text-align:left;vertical-align:top;overflow-wrap:anywhere}

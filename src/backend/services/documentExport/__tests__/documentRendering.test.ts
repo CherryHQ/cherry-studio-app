@@ -435,7 +435,7 @@ test('images replace all block code with labelled placeholders but keep prose an
   }
 });
 
-test('explicit code languages highlight offline while unknown and oversized code preserve escaped source', async () => {
+test('HTML code blocks preserve language labels and complete escaped source for any language and length', async () => {
   const longCode = '<tag>'.repeat(5000);
   const document = normalizeDocument({
     kind: 'markdown',
@@ -448,12 +448,12 @@ test('explicit code languages highlight offline while unknown and oversized code
     jest.fn(),
     new AbortController().signal,
   );
-  expect(html).toContain('<span class="hljs-keyword">const</span>');
-  expect(html).toContain('&lt;script&gt;');
+  expect(html).toContain('<span>js</span>');
+  expect(html).toContain('<span>mermaid</span>');
+  expect(html).toContain('const message = &quot;&lt;script&gt;&quot;;');
   expect(html).not.toContain('<script>');
   expect(html).toContain('graph TD; A--&gt;B');
   expect(html).toContain('&lt;tag&gt;'.repeat(5000));
-  expect(html).toContain('Plain text');
   expect(renderMarkdown(document)).toContain(longCode);
 });
 

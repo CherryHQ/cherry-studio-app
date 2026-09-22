@@ -453,7 +453,6 @@
   "documentExport.content.fileMetadataOnly": "Nur Dateiinformationen; der Anhang ist nicht enthalten.",
   "documentExport.content.image": "Bild",
   "documentExport.content.imageUnavailable": "Bild nicht verfügbar",
-  "documentExport.content.plainText": "Klartext",
   "documentExport.content.sources": "Quellen",
   "documentExport.content.table": "Tabelle",
   "documentExport.conversation": "Gespräch",

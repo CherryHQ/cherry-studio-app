@@ -429,9 +429,6 @@ importers:
       heroui-native:
         specifier: ^1.0.5
         version: 1.0.5(809a16cab2fe3aabe9d056fd7d663301)
-      highlight.js:
-        specifier: 11.12.0
-        version: 11.12.0
       i18next:
         specifier: ^26.1.0
         version: 26.2.0(typescript@6.0.3)
@@ -6995,10 +6992,6 @@ packages:
         optional: true
       react-native-screens:
         optional: true
-
-  highlight.js@11.12.0:
-    resolution: {integrity: sha512-nbfWpyRMcMrPMmDwJB+dhX/eiaPKtc2RB+0QZskqJ3WjRA/FDS0e9hZrx8EC/lbEv8gXy98FcDbNa/dspAaJMg==}
-    engines: {node: '>=12.0.0'}
 
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
@@ -16462,8 +16455,6 @@ snapshots:
     optionalDependencies:
       '@gorhom/bottom-sheet': 5.2.14(f5d6f9f2360e349168a569e9710882e0)
       react-native-screens: 4.26.2(patch_hash=544b1e7aa371b58cd449b5dedca0893c8e04dc7bc6f3f66dab74b3dcedc63804)(react-native@0.86.3(patch_hash=5cff80f1c85ad62edb2c5da0f36ee87f0c095775bc36bd2bc3dec211184a6de6)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
-
-  highlight.js@11.12.0: {}
 
   hoist-non-react-statics@3.3.2:
     dependencies:

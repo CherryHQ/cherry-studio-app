@@ -457,7 +457,6 @@
   "documentExport.content.fileMetadataOnly": "Informations du fichier uniquement ; pièce jointe non incluse.",
   "documentExport.content.image": "Image",
   "documentExport.content.imageUnavailable": "Image indisponible",
-  "documentExport.content.plainText": "Texte brut",
   "documentExport.content.sources": "Sources",
   "documentExport.content.table": "Tableau",
   "documentExport.conversation": "Conversation",

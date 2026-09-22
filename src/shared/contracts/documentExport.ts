@@ -9,7 +9,6 @@ export const DOCUMENT_EXPORT_MAX_SECTIONS = 128;
 export type ExportContentLabels = {
   code: string;
   codeOmitted: string;
-  plainText: string;
   file: string;
   fileMetadataOnly: string;
   image: string;

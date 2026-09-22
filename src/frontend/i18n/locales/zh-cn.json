@@ -449,7 +449,6 @@
   "documentExport.content.fileMetadataOnly": "仅包含文件信息，未附带文件内容。",
   "documentExport.content.image": "图片",
   "documentExport.content.imageUnavailable": "图片无法显示",
-  "documentExport.content.plainText": "纯文本",
   "documentExport.content.sources": "来源",
   "documentExport.content.table": "表格",
   "documentExport.conversation": "对话记录",

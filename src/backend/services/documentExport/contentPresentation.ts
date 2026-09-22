@@ -6,7 +6,6 @@ import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes'
 export const DEFAULT_CONTENT_LABELS: ExportContentLabels = {
   code: 'Code',
   codeOmitted: 'Code content omitted',
-  plainText: 'Plain text',
   file: 'File',
   fileMetadataOnly: 'File information only; attachment not included.',
   image: 'Image',

@@ -12,7 +12,6 @@ import {
 import { getExportSignature } from '@/shared/contracts/fileExport';
 
 import { DEFAULT_CONTENT_LABELS, exportFileType } from './contentPresentation';
-import { highlightCode } from './highlightCode';
 import { escapeHtml, safeExportUrl } from './normalizeDocument';
 import { renderHtmlStyles } from './renderHtmlStyles';
 import { configureExportTables } from './renderTables';
@@ -76,11 +75,10 @@ function createHtmlRenderer(
   const renderCode = (source: string, info: string) => {
     const language = parser.utils.unescapeAll(info).trim().split(/\s+/)[0].toLowerCase();
     const label = /^[\w#+.-]{1,40}$/.test(language) ? language : labels.code;
-    // Static shares prioritize the conversation. Never highlight or lay out the code source.
+    // Static shares prioritize the conversation without laying out the code source.
     if (isImage)
       return `<div class="code-placeholder"><span class="code-symbol" aria-hidden="true">&lt;/&gt;</span><div class="code-placeholder-body"><div class="code-placeholder-heading"><strong>${escapeHtml(labels.code)}</strong>${label !== labels.code ? `<span class="code-language">${escapeHtml(label)}</span>` : ''}</div><span class="resource-note">${escapeHtml(labels.codeOmitted)}</span></div></div>\n`;
-    const result = highlightCode(source, language);
-    return `<div class="code-block"><div class="code-heading"><span>${escapeHtml(label)}</span>${result.highlighted ? '' : `<span class="code-fallback">${escapeHtml(labels.plainText)}</span>`}</div><pre tabindex="0"><code>${result.html}</code></pre></div>\n`;
+    return `<div class="code-block"><div class="code-heading"><span>${escapeHtml(label)}</span></div><pre tabindex="0"><code>${escapeHtml(source)}</code></pre></div>\n`;
   };
   parser.renderer.rules.fence = (tokens, index) =>
     renderCode(tokens[index].content, tokens[index].info);

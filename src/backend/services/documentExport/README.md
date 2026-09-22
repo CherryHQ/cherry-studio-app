@@ -38,7 +38,7 @@ Chat HTML and images share message-list layout; Markdown keeps portable title/ro
 `contentPresentation.ts` owns readable file types and default copy; `renderHtmlStyles.ts` owns
 HTML/image/Markdown-preview styling. Images replace block code with compact labelled placeholders while retaining
 inline code and prose.
-`highlightCode.ts` bounds HTML-only offline highlighting and keeps full escaped source on fallback.
+HTML code blocks preserve complete escaped source with language labels and basic styling.
 `renderTables.ts` adapts wide tables to labelled records for static images and labelled fields
 on narrow HTML/Markdown previews; short tables use content-based column widths. Markdown keeps authored
 content, represents resources explicitly, and uses portable blockquotes for included process text.

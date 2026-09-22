@@ -449,7 +449,6 @@
   "documentExport.content.fileMetadataOnly": "ファイル情報のみです。添付ファイルの内容は含まれません。",
   "documentExport.content.image": "画像",
   "documentExport.content.imageUnavailable": "画像を表示できません",
-  "documentExport.content.plainText": "プレーンテキスト",
   "documentExport.content.sources": "出典",
   "documentExport.content.table": "表",
   "documentExport.conversation": "会話",
