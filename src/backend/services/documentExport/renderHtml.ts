@@ -82,10 +82,13 @@ function createHtmlRenderer(
     renderCode(tokens[index].content, tokens[index].info);
   parser.renderer.rules.code_block = (tokens, index) => renderCode(tokens[index].content, '');
   parser.renderer.rules.link_open = (tokens, index, options, environment, renderer) => {
-    const references: ReadonlySet<string> | undefined = environment.exportReferenceUrls;
+    const references = environment?.exportReferenceUrls;
+    const href = tokens[index].attrGet('href');
     const label = tokens[index + 1];
     if (
-      references?.has(tokens[index].attrGet('href') ?? '') &&
+      references instanceof Set &&
+      typeof href === 'string' &&
+      references.has(href) &&
       label?.type === 'text' &&
       /^\d+$/.test(label.content) &&
       tokens[index + 2]?.type === 'link_close'
