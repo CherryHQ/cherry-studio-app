@@ -84,6 +84,8 @@ compatibility adapter or generic frontend selector for persistence services.
 - [Web Search](./web-search.md): external providers versus provider-native web search.
 - [Navigation And Insets](./navigation-and-insets.md): Expo Router, tabs, stacks, sheets, and insets.
 - [UI Components](./ui-components.md): shared controls and feature-local UI.
+- [System Integration Design](./system-integration-design.md): system sharing, composer handoff,
+  and native-extension boundaries.
 - [Extending Cherry Mobile](../guides/extending.md): how to extend data, workflows, backend behavior, and UI.
 
 ## Current Baseline

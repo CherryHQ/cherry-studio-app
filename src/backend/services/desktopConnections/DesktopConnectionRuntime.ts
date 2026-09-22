@@ -2,6 +2,7 @@ import { loggerService } from '@logger';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
+import { application } from '@/backend/core/application/Application';
 import {
   AppStatePolicy,
   BaseService,
@@ -45,6 +46,15 @@ const logger = loggerService.withContext('DesktopConnection');
 const tokenKey = (id: string) => `desktop-connection-token.${id}`;
 const TOKEN_STORE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
+/** Best effort, and never the caller's problem: a missing host means nobody to report to. */
+async function adoptAnalyticsIdentity(clientId: string): Promise<void> {
+  try {
+    await application.get('AnalyticsService').adoptClientId(clientId);
+  } catch (error) {
+    logger.warn('Could not adopt the desktop analytics identity', error as Error);
+  }
+}
+
 /** Owns paired credentials and in-flight work; drains before the originating database closes. */
 @Injectable('DesktopConnectionRuntime')
 @DependsOn(['DbService'])
@@ -83,7 +93,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       try {
         await SecureStore.setItemAsync(key, paired.token, TOKEN_STORE_OPTIONS);
         signal.throwIfAborted();
-        return await store.savePair(
+        const connection = await store.savePair(
           {
             id,
             baseUrls,
@@ -94,6 +104,13 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           Boolean(qr.connectionId),
           signal,
         );
+        // A paired phone and computer are one user, so the desktop's analytics
+        // identity wins. Left to run on its own rather than awaited here: it
+        // drains the report queue first, which can retry against the network for
+        // the better part of a minute, and a reporting concern must neither hold
+        // the pairing open nor roll back credentials for one that succeeded.
+        if (paired.clientId) void adoptAnalyticsIdentity(paired.clientId);
+        return connection;
       } catch (error) {
         if (previousToken) {
           await SecureStore.setItemAsync(key, previousToken, TOKEN_STORE_OPTIONS);

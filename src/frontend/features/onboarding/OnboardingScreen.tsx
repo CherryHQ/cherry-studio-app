@@ -6,6 +6,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { chatHref } from '@/frontend/appShell/navigation/chat';
+import { usePrivacyConsentPending } from '@/frontend/appShell/privacy';
 import { usePreference } from '@/frontend/data';
 import { useAgentsApi } from '@/frontend/hooks/agent';
 
@@ -18,6 +19,9 @@ export function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const [, setStatus] = usePreference('app.onboarding.status');
   const agents = useAgentsApi();
+  // The consent sheet covers this page on a first launch. Holding the reveal
+  // spends it on the moment the sheet falls away instead of behind it.
+  const isPrivacyConsentPending = usePrivacyConsentPending();
   const [pendingAction, setPendingAction] = useState<'provider' | 'desktop' | 'skip' | null>(null);
   const isFocused = useRef(false);
   const isSaving = useRef(false);
@@ -67,7 +71,7 @@ export function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-grow items-center justify-center gap-8 px-8 py-12">
-          <LogoDrawAnimation size={104} />
+          <LogoDrawAnimation autoPlay={!isPrivacyConsentPending} size={104} />
           <View className="items-center gap-3">
             <Text
               accessibilityRole="header"

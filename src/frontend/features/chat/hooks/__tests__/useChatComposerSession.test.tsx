@@ -69,6 +69,38 @@ describe('useChatComposerSession', () => {
     });
   });
 
+  it('opens a fresh composer for an arriving handoff and keeps it across Agent switches', () => {
+    const shared = { agentId: 'agent-1', kind: 'draft', composerHandoff: 'share-1' } as const;
+    const retargeted = { agentId: 'agent-2', kind: 'draft' } as const;
+    const nextShare = { agentId: 'agent-2', kind: 'draft', composerHandoff: 'share-2' } as const;
+
+    act(() => {
+      renderer = create(
+        <Probe onChange={captureComposerSession} target={{ agentId: 'agent-1', kind: 'draft' }} />,
+      );
+    });
+    const draftKey = current().key;
+
+    act(() => {
+      renderer?.update(<Probe onChange={captureComposerSession} target={shared} />);
+    });
+
+    expect(current()).toEqual({ key: draftKey + 1, seedHandoff: 'share-1', target: shared });
+
+    // The shared text and attachments belong to the user, not to the Agent they arrived under.
+    act(() => {
+      renderer?.update(<Probe onChange={captureComposerSession} target={retargeted} />);
+    });
+
+    expect(current()).toEqual({ key: draftKey + 1, seedHandoff: 'share-1', target: retargeted });
+
+    act(() => {
+      renderer?.update(<Probe onChange={captureComposerSession} target={nextShare} />);
+    });
+
+    expect(current()).toEqual({ key: draftKey + 2, seedHandoff: 'share-2', target: nextShare });
+  });
+
   it('starts a fresh composer for every unrelated chat identity', () => {
     const draftTarget = { agentId: 'agent-1', kind: 'draft' } as const;
     const firstSessionTarget = { kind: 'session', sessionId: 'session-1' } as const;

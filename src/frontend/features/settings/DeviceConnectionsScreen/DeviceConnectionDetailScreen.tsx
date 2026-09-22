@@ -95,7 +95,7 @@ export function DeviceConnectionDetailScreen() {
             onPress={() =>
               router.push({
                 params: { connectionId: connection.id },
-                pathname: '/settings/device-connections/sync-guide',
+                pathname: '/settings/provider/desktop-sync',
               })
             }
           />

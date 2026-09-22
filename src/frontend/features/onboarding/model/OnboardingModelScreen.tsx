@@ -26,13 +26,11 @@ export function OnboardingModelScreen() {
   const providerId = getSingleRouteParam(params.providerId);
   // Changing the setup source discards its selection and manual draft.
   return (
-    <ModelRegistryGate>
-      <OnboardingModelSelection
-        connectionId={connectionId}
-        key={`${providerId ?? 'all'}:${connectionId ?? 'manual'}`}
-        providerId={providerId}
-      />
-    </ModelRegistryGate>
+    <OnboardingModelSelection
+      connectionId={connectionId}
+      key={`${providerId ?? 'all'}:${connectionId ?? 'manual'}`}
+      providerId={providerId}
+    />
   );
 }
 
@@ -138,188 +136,194 @@ function OnboardingModelSelection({
         style={{ flex: 1 }}
         testID="onboarding-model"
       >
-        {selectionMode === 'manual' && data.provider ? (
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            contentContainerClassName="px-4 py-3"
-          >
-            <TextField disabled={isBusy}>
-              <TextField.Label>{t('onboarding.model.manualLabel')}</TextField.Label>
-              <Input
-                accessibilityLabel={t('onboarding.model.manualLabel')}
-                autoCapitalize="none"
-                autoCorrect={false}
-                onChangeText={setManualId}
-                placeholder={t('onboarding.model.manualPlaceholder')}
-                returnKeyType="done"
-                testID="onboarding-model-manual-input"
-                value={manualId}
-                onSubmitEditing={start}
-              />
-              <TextField.Description>
-                {t('onboarding.model.manualDescription')}
-              </TextField.Description>
-            </TextField>
-          </ScrollView>
-        ) : data.isLoading ? (
-          <View className="flex-1 justify-center px-6">
-            <ContentState.Loading title={t('onboarding.model.loading')} />
-          </View>
-        ) : data.loadError ? (
-          <View className="flex-1 justify-center px-6">
-            <ContentState.Error
-              accessibilityLiveRegion="polite"
-              title={t(`onboarding.model.error.${data.loadError.reason}`)}
-              primaryAction={{
-                children: t(shouldEditConnection ? 'onboarding.connection.edit' : 'common.retry'),
-                onPress: shouldEditConnection ? editConnection : data.retry,
-              }}
-            />
-          </View>
-        ) : data.items.length === 0 ? (
-          <View className="flex-1 justify-center px-6">
-            <ContentState.Empty
-              description={connectionId ? t('onboarding.device.noChatModels') : undefined}
-              title={t(
-                providerId || connectionId
-                  ? 'onboarding.model.empty'
-                  : 'onboarding.model.noProvider',
-              )}
-              primaryAction={
-                connectionId
-                  ? { children: t('onboarding.device.syncAgain'), onPress: syncAgain }
-                  : providerId
-                    ? {
-                        children: t('onboarding.model.manual'),
-                        onPress: () => setSelectionMode('manual'),
-                        disabled: !data.provider,
-                      }
-                    : { children: t('onboarding.welcome.connect'), onPress: openProviderSetup }
-              }
-              secondaryAction={
-                connectionId
-                  ? { children: t('onboarding.welcome.connect'), onPress: openProviderSetup }
-                  : undefined
-              }
-            />
-          </View>
-        ) : (
-          <>
-            {data.isRefreshing || data.pullError ? (
-              <View className="px-4 pb-3" accessibilityLiveRegion="polite">
-                {data.isRefreshing ? (
-                  <ContentState.Loading layout="row" title={t('onboarding.model.loading')} />
-                ) : data.pullError ? (
-                  <View className="flex-row items-center gap-3">
-                    <Text className="flex-1 text-xs text-muted-foreground">
-                      {t('onboarding.model.savedFallback', {
-                        reason: t(`onboarding.model.error.${data.pullError.reason}`),
-                      })}
-                    </Text>
-                    <Button
-                      disabled={isBusy}
-                      onPress={
-                        data.pullError.action === 'editConnection' ? editConnection : data.retry
-                      }
-                      size="inline"
-                      variant="link"
-                    >
-                      {t(
-                        data.pullError.action === 'editConnection'
-                          ? 'onboarding.connection.edit'
-                          : 'common.retry',
-                      )}
-                    </Button>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-            <FlatList
-              className="min-h-0 flex-1"
-              contentInsetAdjustmentBehavior="automatic"
-              data={results}
-              extraData={{ isBusy, selectedId: selectedModel?.id }}
-              keyExtractor={(model) => model.id}
-              keyboardDismissMode="on-drag"
+        {/* The catalog gate wraps content only: the native search bar has to register with the
+            header as the screen mounts, not after a catalog download resolves. */}
+        <ModelRegistryGate>
+          {selectionMode === 'manual' && data.provider ? (
+            <ScrollView
               keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={
-                <View className="px-4 py-8">
-                  <ContentState.Empty title={t('onboarding.model.noResults')} />
-                </View>
-              }
-              renderItem={({ item }) => (
-                <Section.RadioItem
-                  disabled={isBusy}
-                  label={item.name}
-                  description={
-                    providerId
-                      ? item.modelId
-                      : (data.providers.find((provider) => provider.id === item.providerId)?.name ??
-                        item.providerId)
-                  }
-                  leading={
-                    <ModelPickerIcon
-                      model={item}
-                      provider={data.providers.find((provider) => provider.id === item.providerId)}
-                    />
-                  }
-                  onPress={() => setSelectedId(item.id)}
-                  selected={item.id === selectedModel?.id}
-                  testID={`onboarding-model-${item.id}`}
+              keyboardDismissMode="on-drag"
+              contentContainerClassName="px-4 py-3"
+            >
+              <TextField disabled={isBusy}>
+                <TextField.Label>{t('onboarding.model.manualLabel')}</TextField.Label>
+                <Input
+                  accessibilityLabel={t('onboarding.model.manualLabel')}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onChangeText={setManualId}
+                  placeholder={t('onboarding.model.manualPlaceholder')}
+                  returnKeyType="done"
+                  testID="onboarding-model-manual-input"
+                  value={manualId}
+                  onSubmitEditing={start}
                 />
-              )}
-              testID="onboarding-model-list"
-            />
-          </>
-        )}
-        <View className="gap-2 px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
-          {selectionMode === 'manual' || data.items.length > 0 ? (
+                <TextField.Description>
+                  {t('onboarding.model.manualDescription')}
+                </TextField.Description>
+              </TextField>
+            </ScrollView>
+          ) : data.isLoading ? (
+            <View className="flex-1 justify-center px-6">
+              <ContentState.Loading title={t('onboarding.model.loading')} />
+            </View>
+          ) : data.loadError ? (
+            <View className="flex-1 justify-center px-6">
+              <ContentState.Error
+                accessibilityLiveRegion="polite"
+                title={t(`onboarding.model.error.${data.loadError.reason}`)}
+                primaryAction={{
+                  children: t(shouldEditConnection ? 'onboarding.connection.edit' : 'common.retry'),
+                  onPress: shouldEditConnection ? editConnection : data.retry,
+                }}
+              />
+            </View>
+          ) : data.items.length === 0 ? (
+            <View className="flex-1 justify-center px-6">
+              <ContentState.Empty
+                description={connectionId ? t('onboarding.device.noChatModels') : undefined}
+                title={t(
+                  providerId || connectionId
+                    ? 'onboarding.model.empty'
+                    : 'onboarding.model.noProvider',
+                )}
+                primaryAction={
+                  connectionId
+                    ? { children: t('onboarding.device.syncAgain'), onPress: syncAgain }
+                    : providerId
+                      ? {
+                          children: t('onboarding.model.manual'),
+                          onPress: () => setSelectionMode('manual'),
+                          disabled: !data.provider,
+                        }
+                      : { children: t('onboarding.welcome.connect'), onPress: openProviderSetup }
+                }
+                secondaryAction={
+                  connectionId
+                    ? { children: t('onboarding.welcome.connect'), onPress: openProviderSetup }
+                    : undefined
+                }
+              />
+            </View>
+          ) : (
             <>
-              <Text className="text-center text-xs text-muted-foreground">
-                {t('onboarding.model.checkHint')}
-              </Text>
+              {data.isRefreshing || data.pullError ? (
+                <View className="px-4 pb-3" accessibilityLiveRegion="polite">
+                  {data.isRefreshing ? (
+                    <ContentState.Loading layout="row" title={t('onboarding.model.loading')} />
+                  ) : data.pullError ? (
+                    <View className="flex-row items-center gap-3">
+                      <Text className="flex-1 text-xs text-muted-foreground">
+                        {t('onboarding.model.savedFallback', {
+                          reason: t(`onboarding.model.error.${data.pullError.reason}`),
+                        })}
+                      </Text>
+                      <Button
+                        disabled={isBusy}
+                        onPress={
+                          data.pullError.action === 'editConnection' ? editConnection : data.retry
+                        }
+                        size="inline"
+                        variant="link"
+                      >
+                        {t(
+                          data.pullError.action === 'editConnection'
+                            ? 'onboarding.connection.edit'
+                            : 'common.retry',
+                        )}
+                      </Button>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+              <FlatList
+                className="min-h-0 flex-1"
+                contentInsetAdjustmentBehavior="automatic"
+                data={results}
+                extraData={{ isBusy, selectedId: selectedModel?.id }}
+                keyExtractor={(model) => model.id}
+                keyboardDismissMode="on-drag"
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={
+                  <View className="px-4 py-8">
+                    <ContentState.Empty title={t('onboarding.model.noResults')} />
+                  </View>
+                }
+                renderItem={({ item }) => (
+                  <Section.RadioItem
+                    disabled={isBusy}
+                    label={item.name}
+                    description={
+                      providerId
+                        ? item.modelId
+                        : (data.providers.find((provider) => provider.id === item.providerId)
+                            ?.name ?? item.providerId)
+                    }
+                    leading={
+                      <ModelPickerIcon
+                        model={item}
+                        provider={data.providers.find(
+                          (provider) => provider.id === item.providerId,
+                        )}
+                      />
+                    }
+                    onPress={() => setSelectedId(item.id)}
+                    selected={item.id === selectedModel?.id}
+                    testID={`onboarding-model-${item.id}`}
+                  />
+                )}
+                testID="onboarding-model-list"
+              />
+            </>
+          )}
+          <View className="gap-2 px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
+            {selectionMode === 'manual' || data.items.length > 0 ? (
+              <>
+                <Text className="text-center text-xs text-muted-foreground">
+                  {t('onboarding.model.checkHint')}
+                </Text>
+                <Button
+                  disabled={!canStart || data.isLoading || Boolean(data.error)}
+                  loading={isBusy}
+                  onPress={start}
+                  size="lg"
+                  testID="onboarding-model-start"
+                >
+                  {t(
+                    phase === 'checking'
+                      ? 'onboarding.check.checking'
+                      : phase === 'idle'
+                        ? 'onboarding.model.start'
+                        : 'onboarding.check.saving',
+                  )}
+                </Button>
+              </>
+            ) : null}
+            {isBusy ? (
+              <Button onPress={cancel} testID="onboarding-model-cancel" variant="ghost">
+                {t('common.cancel')}
+              </Button>
+            ) : providerId &&
+              (data.items.length > 0 || selectionMode === 'manual' || isShowingLoadError) ? (
               <Button
-                disabled={!canStart || data.isLoading || Boolean(data.error)}
-                loading={isBusy}
-                onPress={start}
-                size="lg"
-                testID="onboarding-model-start"
+                disabled={!data.provider || Boolean(data.error)}
+                onPress={() => setSelectionMode(selectionMode === 'manual' ? 'catalog' : 'manual')}
+                testID="onboarding-model-mode-toggle"
+                variant="ghost"
               >
                 {t(
-                  phase === 'checking'
-                    ? 'onboarding.check.checking'
-                    : phase === 'idle'
-                      ? 'onboarding.model.start'
-                      : 'onboarding.check.saving',
+                  selectionMode === 'manual'
+                    ? 'onboarding.model.chooseFromList'
+                    : 'onboarding.model.manual',
                 )}
               </Button>
-            </>
-          ) : null}
-          {isBusy ? (
-            <Button onPress={cancel} testID="onboarding-model-cancel" variant="ghost">
-              {t('common.cancel')}
-            </Button>
-          ) : providerId &&
-            (data.items.length > 0 || selectionMode === 'manual' || isShowingLoadError) ? (
-            <Button
-              disabled={!data.provider || Boolean(data.error)}
-              onPress={() => setSelectionMode(selectionMode === 'manual' ? 'catalog' : 'manual')}
-              testID="onboarding-model-mode-toggle"
-              variant="ghost"
-            >
-              {t(
-                selectionMode === 'manual'
-                  ? 'onboarding.model.chooseFromList'
-                  : 'onboarding.model.manual',
-              )}
-            </Button>
-          ) : providerId && !data.isLoading && data.items.length === 0 ? (
-            <Button onPress={data.retry} testID="onboarding-model-reload" variant="ghost">
-              {t('onboarding.model.reload')}
-            </Button>
-          ) : null}
-        </View>
+            ) : providerId && !data.isLoading && data.items.length === 0 ? (
+              <Button onPress={data.retry} testID="onboarding-model-reload" variant="ghost">
+                {t('onboarding.model.reload')}
+              </Button>
+            ) : null}
+          </View>
+        </ModelRegistryGate>
       </KeyboardAvoidingView>
     </>
   );

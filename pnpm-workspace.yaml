@@ -108,3 +108,4 @@ minimumReleaseAgeExclude:
   - react-native-enriched-markdown@1.0.1
   - expo-camera@57.0.3
   - '@legendapp/list@3.3.3'
+  - '@cherrystudio/analytics-client@1.4.0'

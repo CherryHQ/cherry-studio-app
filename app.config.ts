@@ -43,7 +43,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       bundleIdentifier,
       entitlements: {
         ...config.ios?.entitlements,
-        'com.apple.security.application-groups': [groupIdentifier],
+        'com.apple.security.application-groups': [
+          groupIdentifier,
+          `group.${bundleIdentifier}.system-integration`,
+        ],
       },
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
@@ -88,6 +91,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
                   targetName: 'ExpoWidgetsTarget',
                   bundleIdentifier: widgetBundleIdentifier,
                   entitlements: { 'com.apple.security.application-groups': [groupIdentifier] },
+                },
+                {
+                  targetName: 'CherryShareExtension',
+                  bundleIdentifier: `${bundleIdentifier}.CherryShareExtension`,
+                  entitlements: {
+                    'com.apple.security.application-groups': [
+                      `group.${bundleIdentifier}.system-integration`,
+                    ],
+                  },
                 },
               ],
             },

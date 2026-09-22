@@ -30,8 +30,21 @@ export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
 export interface PreferenceSchema {
   'app.language': LanguageVarious | null;
   'app.onboarding.status': 'unseen' | 'pending' | 'skipped' | 'completed';
+  /** Opt-out switch for anonymous product analytics. Only honoured under the current policy. */
+  'app.privacy.data_collection.enabled': boolean;
+  /**
+   * Disclosure the user was last shown. Both consent answers record it, so whether
+   * collection runs is carried by the switch above; anything but the latest version
+   * revokes collection and asks again.
+   */
+  'app.privacy.policy_version': string;
   /** `avatar-file:{uuid}.webp` for a managed avatar image, or a direct image URI. */
   'app.user.avatar': string;
+  /**
+   * Analytics client identity (UUID). Generated on first use, and replaced by the
+   * desktop's own identity when this device pairs with a computer.
+   */
+  'app.user.id': string;
   'app.user.name': string;
 
   /** Also gates all iOS Live Activity surfaces, including painting; keep the persisted key. */
@@ -64,7 +77,13 @@ export interface PreferenceSchema {
 export const PreferenceDefaults = {
   'app.language': null,
   'app.onboarding.status': 'unseen',
+  'app.privacy.data_collection.enabled': true,
+  // Empty until the consent sheet records a choice, so nothing is collected before
+  // the disclosure is shown. A later policy bump leaves stored installs behind the
+  // current version and shows the sheet again.
+  'app.privacy.policy_version': '',
   'app.user.avatar': '',
+  'app.user.id': '',
   'app.user.name': '',
 
   'chat.background_reply.enabled': true,

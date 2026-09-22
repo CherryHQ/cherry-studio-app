@@ -1,3 +1,5 @@
+import { providerService } from '@/backend/data/services/ProviderService';
+import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 import {
   WEB_SEARCH_PROVIDER_PRESET_MAP,
@@ -80,6 +82,24 @@ export function mergeWebSearchProviderPreset(
   };
 }
 
+async function inheritZhipuModelProviderApiKeys(
+  provider: WebSearchProvider,
+): Promise<WebSearchProvider> {
+  if (provider.id !== 'zhipu') {
+    return provider;
+  }
+
+  try {
+    const { keys } = await providerService.listApiKeys('zhipu', { enabled: true });
+    return { ...provider, apiKeys: trimStringList(keys.map((entry) => entry.key)) };
+  } catch (error) {
+    if (isDataApiError(error) && error.code === ErrorCode.NOT_FOUND) {
+      return { ...provider, apiKeys: [] };
+    }
+    throw error;
+  }
+}
+
 export async function getRuntimeConfig(
   preferences: WebSearchPreferenceReader,
 ): Promise<WebSearchExecutionConfig> {
@@ -105,8 +125,11 @@ export async function getProviderById<TProviderId extends WebSearchProvider['id'
   const providerOverrides = await getProviderOverrides(preferences);
   const override = providerOverrides[providerId];
   const preset = getWebSearchProviderPresetById(providerId);
+  const provider = mergeWebSearchProviderPreset(preset, override);
 
-  return mergeWebSearchProviderPreset(preset, override) as WebSearchProvider & { id: TProviderId };
+  return (await inheritZhipuModelProviderApiKeys(provider)) as WebSearchProvider & {
+    id: TProviderId;
+  };
 }
 
 export async function getProviderForCapability(
