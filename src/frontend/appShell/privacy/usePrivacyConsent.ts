@@ -8,14 +8,14 @@ const CONSENT_KEYS = {
   policyVersion: 'app.privacy.policy_version',
 } as const;
 
-/** Consent must be on disk before the sheet closes, so an optimistic write will not do. */
+/** Consent must be on disk before the dialog closes, so an optimistic write will not do. */
 const PESSIMISTIC = { optimistic: false } as const;
 
 /**
  * Whether the current disclosure still has to be shown.
  *
  * Read separately from {@link usePrivacyConsent} by surfaces that only need to
- * stay out of the sheet's way, such as holding the onboarding logo reveal.
+ * stay out of the dialog's way, such as holding the onboarding logo reveal.
  */
 export function usePrivacyConsentPending(): boolean {
   const [policyVersion] = usePreference('app.privacy.policy_version');
