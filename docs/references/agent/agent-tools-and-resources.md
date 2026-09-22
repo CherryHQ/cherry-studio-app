@@ -151,6 +151,28 @@ Cherry are repeated inside `execute()` immediately before the side effect. A mis
 permission, deleted file, or disconnected server fails closed; the callback never performs a
 fallback action with broader access.
 
+Step 4 does not wait on the network for a server that has already been listed. The MCP runtime
+reuses each server's last complete `tools/list` result, kept in memory for the current connection
+configuration and in a per-server file under the app cache directory, until that server is
+invalidated by an endpoint, header, or grant change, a disable, a delete, or a plugin connect or
+disconnect. Plugin connection validation collects the full tool catalog before saving the grant;
+after the save, the runtime caches those definitions under the new grant without a second network
+discovery. A send arriving during that local cache handoff waits for it through the existing turn
+preparation path. The temporary validation client is closed; actual tool calls still use a
+grant-bound client and its live routing checks.
+
+There is no timed refresh: the catalog is reconciled where the network is already in
+use, when a fresh connection lists tools before its first call and whenever the settings screens
+read live. A catalog with partial-discovery warnings is served immediately and never written to
+disk. Both partial and failed discoveries back off before a send can trigger another attempt;
+partial catalogs refresh in the background after that delay. Consecutive failures start at 30
+seconds and double to a five-minute ceiling, resetting only after complete discovery. Settings
+screens may still probe the server. The file stores a
+fingerprint of the connection configuration rather than its headers. Because the frozen tool is
+pinned to the catalog rather than to a live connection, it may execute over a reconnected client for
+the same configuration; execution still rereads the stored server row, and a tool absent from the
+live listing fails closed.
+
 The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
 application function by name: every callable target must still exist in the frozen turn catalog.
 The Pi binding consumes the Host-prepared application prompt, exposes system capabilities directly,
@@ -313,10 +335,11 @@ retry; cancellation still propagates without becoming a cached failure.
 - Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
   adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
   a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
-- The Host freezes the discovered tools for the turn, including the endpoint URL and live Runtime
-  generation that produced them. An endpoint edit, invalidation, or reconnect makes an old callback
+- The Host freezes the discovered tools for the turn, including the endpoint URL and the catalog
+  generation that produced them. An endpoint edit or invalidation makes an old callback
   unavailable; rediscovery may populate the next snapshot but never silently retargets the active
-  catalog, even when the server row keeps the same URL.
+  catalog, even when the server row keeps the same URL. A transport reconnect for the same
+  configuration keeps the frozen callback usable and lists the live catalog before its first call.
 - Third-party MCP bindings project to a base per-call `ask` policy. An explicit `deny` remains
   denied, while any legacy binding-level `auto` row is downgraded to `ask`. The Agent's automatic
   approval mode may then promote that effective turn policy to `auto` without rewriting the row.

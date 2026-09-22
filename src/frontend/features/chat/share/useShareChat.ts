@@ -63,6 +63,7 @@ export function useShareChat(sessionId?: string) {
               user: t('chat.share.user'),
               assistant: agent.name || t('chat.share.assistant'),
               process: (seconds) => t('chat.process.duration', { seconds }),
+              sources: (count) => t('chat.sources.count', { count }),
               reasoning: t('chat.reasoningStatus.thought'),
               file: t('chat.share.file'),
               status: t('chat.share.status'),

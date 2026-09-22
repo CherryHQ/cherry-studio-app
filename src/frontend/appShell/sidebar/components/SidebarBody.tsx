@@ -3,7 +3,7 @@ import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import { ContextMenuScrollBoundary, ScrollShadow } from '@cherrystudio/ui/components';
-import { type PropsWithChildren, useCallback, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,10 +25,9 @@ const endReachedThreshold = 24;
  * The sidebar's only scroller: nav rows and the recent sessions scroll together
  * under the floating header and footer, which is why the content padding clears
  * both. `ScrollShadow` dissolves rows into the sidebar surface at the top, and
- * the header's blur lives in its `SidebarFade` layer. Children replace the
- * default composition wholesale.
+ * the header's blur lives in its `SidebarFade` layer.
  */
-export function SidebarBody({ children }: PropsWithChildren) {
+export function SidebarBody() {
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
   const backgroundColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
@@ -51,44 +50,38 @@ export function SidebarBody({ children }: PropsWithChildren) {
   }, []);
 
   return (
-    <View className="flex-1">
-      <ScrollShadow className="flex-1" color={backgroundColor} size={headerInset} visibility="top">
-        <ContextMenuScrollBoundary>
-          {(scrollHandlers) => (
-            <ScrollView
-              {...scrollHandlers}
-              contentContainerStyle={{
-                // Clears the floating dock at its shared composer-aligned position.
-                paddingBottom: dockBottomPadding + appSidebar.dockHeight + appSidebar.headerGapY,
-                paddingLeft: insets.left,
-                paddingTop: headerInset,
-              }}
-              contentInsetAdjustmentBehavior="never"
-              onScroll={handleScroll}
-              showsVerticalScrollIndicator={false}
-              scrollEventThrottle={16}
-            >
-              {children ?? (
-                <SidebarBodyDefault registerEndReachedHandler={registerEndReachedHandler} />
-              )}
-            </ScrollView>
-          )}
-        </ContextMenuScrollBoundary>
-      </ScrollShadow>
-    </View>
+    <ScrollShadow className="flex-1" color={backgroundColor} size={headerInset} visibility="top">
+      <ContextMenuScrollBoundary>
+        {(scrollHandlers) => (
+          <ScrollView
+            {...scrollHandlers}
+            contentContainerStyle={{
+              // Clears the floating dock at its shared composer-aligned position.
+              paddingBottom: dockBottomPadding + appSidebar.dockHeight + appSidebar.headerGapY,
+              paddingLeft: insets.left,
+              paddingTop: headerInset,
+            }}
+            contentInsetAdjustmentBehavior="never"
+            onScroll={handleScroll}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+          >
+            <SidebarBodyContent registerEndReachedHandler={registerEndReachedHandler} />
+          </ScrollView>
+        )}
+      </ContextMenuScrollBoundary>
+    </ScrollShadow>
   );
 }
 
-SidebarBody.displayName = 'Sidebar.Body';
-
-function SidebarBodyDefault({
+function SidebarBodyContent({
   registerEndReachedHandler,
 }: {
   registerEndReachedHandler: RegisterEndReachedHandler;
 }) {
   const { t } = useTranslation();
   const { navigateAgents, openLibrary, openPaintings, openPlugins } =
-    useSidebarActions('Sidebar.Body');
+    useSidebarActions('SidebarBody');
 
   return (
     <>

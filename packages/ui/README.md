@@ -228,6 +228,14 @@ the at-bottom state and the one-shot scroll action:
 />;
 ```
 
+`Dialog` is the shared centered content dialog for decisions that need custom content, such as
+an external link. Pass `open`, `onOpenChange`, and `title`, then compose content and action buttons
+as children. Actions do not automatically dismiss it, so callers can wait for a successful save.
+Backdrop presses and swipe dismissal are disabled; `onOpenChange` handles system dismissal
+requests. Content scrolls when large text or a small viewport requires it.
+Mount it inside `Portal.AccessibilityBoundary` so an open dialog hides background content from
+screen readers; closing or unmounting the dialog releases that isolation.
+
 `Alert` is the shared native dialog primitive. Mount one provider at the application root and
 inject localized default action labels there; feature code can then enqueue informational,
 confirmation, and prompt dialogs through `useAlert()` without owning dialog rendering:

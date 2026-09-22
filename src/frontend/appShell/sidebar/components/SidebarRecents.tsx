@@ -36,6 +36,8 @@ type SidebarRecentsProps = {
 };
 
 const SIDEBAR_LEADING_SIZE = 28;
+const SIDEBAR_ROW_CLASS_NAME =
+  'w-full flex-row items-center gap-3 rounded-xl px-3 py-2.5 active:bg-sidebar-accent';
 
 function useSidebarChatTarget() {
   // The drawer sits outside the chat screen's local route context.
@@ -54,21 +56,8 @@ function SidebarAgentIconSlot({ children }: { children?: ReactNode }) {
   );
 }
 
-function SidebarRowContent({
-  children,
-  className,
-  leading,
-}: {
-  children: ReactNode;
-  className?: string;
-  leading?: ReactNode;
-}) {
-  return (
-    <View className={cn('flex-row items-center gap-3 rounded-xl px-3 py-2.5', className)}>
-      {leading}
-      <View className="min-w-0 flex-1 flex-row items-center gap-2">{children}</View>
-    </View>
-  );
+function SidebarRowContent({ children }: { children: ReactNode }) {
+  return <View className="min-w-0 flex-1 flex-row items-center gap-2">{children}</View>;
 }
 
 export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
@@ -226,47 +215,45 @@ function SidebarRecentSessionList({
   }
 
   return (
-    <>
-      <View className="px-2">
-        {visibleSessions.map((session) => (
-          <SidebarSessionRow
-            key={session.id}
-            isSelected={session.id === selectedSessionId}
-            leading={leading}
-            onCloseDrawer={closeDrawer}
-            onDelete={requestDelete}
-            onRename={requestRename}
-            session={session}
-          />
-        ))}
-      </View>
+    <View className="px-2">
+      {visibleSessions.map((session) => (
+        <SidebarSessionRow
+          key={session.id}
+          isSelected={session.id === selectedSessionId}
+          leading={leading}
+          onCloseDrawer={closeDrawer}
+          onDelete={requestDelete}
+          onRename={requestRename}
+          session={session}
+        />
+      ))}
       {canShowMoreSessions ? (
-        <View className="px-2">
-          <Pressable
-            accessibilityLabel={showMoreLabel}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: isLoadingMoreSessions }}
-            className="w-full active:bg-sidebar-accent"
-            disabled={isLoadingMoreSessions}
-            onPress={handleViewAllPress}
-            testID="sidebar-sessions-view-all"
-          >
-            <SidebarRowContent leading={leading}>
-              <Text className="min-w-0 flex-1 text-muted-foreground text-sm">{showMoreLabel}</Text>
-            </SidebarRowContent>
-          </Pressable>
-        </View>
+        <Pressable
+          accessibilityLabel={showMoreLabel}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isLoadingMoreSessions }}
+          className={SIDEBAR_ROW_CLASS_NAME}
+          disabled={isLoadingMoreSessions}
+          onPress={handleViewAllPress}
+          testID="sidebar-sessions-view-all"
+        >
+          {leading}
+          <SidebarRowContent>
+            <Text className="min-w-0 flex-1 text-muted-foreground text-sm">{showMoreLabel}</Text>
+          </SidebarRowContent>
+        </Pressable>
       ) : null}
       {isShowingAllSessions && isLoadingMoreSessions ? (
-        <View className="px-2">
-          <SidebarRowContent leading={leading}>
+        <View className="flex-row items-center gap-3 px-3 py-2.5">
+          {leading}
+          <SidebarRowContent>
             <Text className="min-w-0 flex-1 text-muted-foreground text-sm">
               {t('session.list.loading')}
             </Text>
           </SidebarRowContent>
         </View>
       ) : null}
-    </>
+    </View>
   );
 }
 
@@ -334,23 +321,20 @@ function SidebarAgentRow({
           accessibilityLabel={agent.name}
           accessibilityRole="button"
           accessibilityState={{ expanded: isExpanded }}
-          className="active:bg-sidebar-accent"
+          className={SIDEBAR_ROW_CLASS_NAME}
           onPress={() => setIsExpandedOverride((current) => !(current ?? isDefaultExpanded))}
           testID={`sidebar-agent-${agent.id}`}
         >
-          <SidebarRowContent
-            leading={
-              <SidebarAgentIconSlot>
-                <AgentAvatar
-                  accessibilityLabel={agent.name}
-                  avatar={agent.avatar}
-                  name={agent.name}
-                  size={SIDEBAR_LEADING_SIZE}
-                  uri={agent.avatarUri}
-                />
-              </SidebarAgentIconSlot>
-            }
-          >
+          <SidebarAgentIconSlot>
+            <AgentAvatar
+              accessibilityLabel={agent.name}
+              avatar={agent.avatar}
+              name={agent.name}
+              size={SIDEBAR_LEADING_SIZE}
+              uri={agent.avatarUri}
+            />
+          </SidebarAgentIconSlot>
+          <SidebarRowContent>
             <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
               {agent.name}
             </Text>
@@ -409,11 +393,12 @@ function SidebarSessionRow({
       <Pressable
         accessibilityRole="link"
         accessibilityState={{ selected: isSelected }}
-        className="w-full active:bg-sidebar-accent"
+        className={cn(SIDEBAR_ROW_CLASS_NAME, isSelected && 'bg-secondary/70')}
         onPress={onCloseDrawer}
         testID={`sidebar-session-${session.id}`}
       >
-        <SidebarRowContent className={cn(isSelected && 'bg-secondary/70')} leading={leading}>
+        {leading}
+        <SidebarRowContent>
           <Text
             className={cn(
               'min-w-0 flex-1 text-base text-sidebar-foreground',

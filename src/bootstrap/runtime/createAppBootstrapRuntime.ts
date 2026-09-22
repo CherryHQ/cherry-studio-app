@@ -17,6 +17,7 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
+import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -63,6 +64,14 @@ export function createAppBootstrapRuntime(
     Platform.OS === 'android'
       ? host.container.get<AndroidBackgroundActivityRuntime>('AndroidBackgroundActivityRuntime')
       : undefined;
+  const isReplyCompletionNotificationEnabled = () =>
+    preference.readCached('chat.completion_notifications.enabled');
+  // iOS delivers completion notices from the reply runtime's logical terminal
+  // events; Android raises them inside its own attention runtime.
+  const replyCompletionNotifications =
+    Platform.OS === 'ios'
+      ? createReplyCompletionNotifier({ isReplyCompletionNotificationEnabled })
+      : undefined;
   backgroundActivityEnvironment.configure({
     assistantPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
@@ -70,6 +79,8 @@ export function createAppBootstrapRuntime(
     // Android's switch controls chat execution; its service notifications remain mandatory.
     isPresentationEnabled: () =>
       Platform.OS !== 'ios' || preference.readCached('chat.background_reply.enabled'),
+    isReplyCompletionNotificationEnabled,
+    ...(replyCompletionNotifications ? { replyNotifications: replyCompletionNotifications } : {}),
     subscribePresentationEnabled: (listener) =>
       preference.subscribeChange('chat.background_reply.enabled')(listener),
     onForegroundAttention: publishForegroundActivityAttention,
@@ -77,6 +88,11 @@ export function createAppBootstrapRuntime(
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(PaintingActivity),
     subscribeVisibleTask: subscribeVisibleBackgroundTask,
     translate: (key) => i18n.t(key),
+  });
+  // Opening a destination retires its delivered completion notice, mirroring
+  // the manager's settled-surface dismissal on the same visible-task source.
+  const unsubscribeVisibleTask = subscribeVisibleBackgroundTask((deepLinkUrl) => {
+    if (deepLinkUrl) replyCompletionNotifications?.dismissDestination(deepLinkUrl);
   });
   const agent = host.container.get<MobileAgentHost>('MobileAgentHost');
   const ai = host.container.get<AiService>('AiService');
@@ -145,6 +161,7 @@ export function createAppBootstrapRuntime(
       // Drain system-entry consumers before the host's resources.
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
+        unsubscribeVisibleTask();
         await disposeSystemEntry();
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host

@@ -38,7 +38,7 @@ flowchart TD
     Copy --> Capture
     Copy --> Artifact[Publish complete ordered artifact]
     HTML --> Artifact
-    Markdown --> Materialize[Share creates Markdown file]
+    Markdown --> Materialize[Prepare Markdown with embedded local images]
     Materialize --> Save[Persist managed files]
     Artifact --> Save
     Save --> Library[File library]
@@ -55,10 +55,18 @@ A document contains an optional title, ordered sections, headings/metadata and t
 image, attachment, detail or reference blocks. Optional bubble/message hints express source-owned
 hierarchy without exposing chat models. Assets refer to managed file IDs or eligible remote URLs.
 Markdown image references are discovered through parsed tokens so code examples never download
-resources. `{ kind: 'markdown', source, title? }` normalizes to the same model.
+resources. `{ kind: 'markdown', source, title?, labels? }` normalizes to the same model.
+The app-shell entry supplies localized content labels; programmatic callers may omit them for
+English defaults. Labels are copied and frozen with the document.
 
 Input is copied and deeply frozen. Successful image reads become reusable byte snapshots; failed
 reads can retry. `session.document` and `session.markdown` are available without files or asset reads.
+Markdown rendering reads local/generated PNG/JPEG images into the existing asset cache and embeds
+them as Base64 data URLs before preview. The preview and delivery use the same prepared artifact.
+`session.previewMarkdown(text, presentation)` styles that exact text and signature with the shared
+HTML renderer; embedded images display without captions, while remote image references remain compact
+name/domain entries. Original remote links stay in the file. Some external Markdown readers filter
+data URLs; Base64 embedding is not universally portable.
 
 ```ts
 const session = backend.documentExport.createSession({ kind: 'markdown', source: '# Notes' });
@@ -74,8 +82,9 @@ try {
 `render` accepts an abort signal and semantic progress, including the current image ordinal and
 total. HTML/image targets receive validated logical width, resolved typography and semantic colors.
 The page freezes typography/time at opening. Images always use a 360-logical-pixel width; HTML
-retains its window-derived width. Theme changes regenerate the preview except during delivery.
-Image output includes numbered messages, theme surfaces, Cherry branding and the local
+uses a responsive reading column capped at 720 logical pixels. Theme changes regenerate the preview
+except during delivery.
+Image output uses the message-list hierarchy, theme surfaces, Cherry branding and the local
 `YYYY.MM.DD HH:mm` timestamp inside the captured document.
 
 Markdown/HTML artifacts hold one file and source text. Image artifacts hold a layout (`pages` or
@@ -97,8 +106,8 @@ The Cherry variant contains a `signature` with resolved background/text colors, 
 logo, brand name and frozen timestamp. The frontend supplies the shared white
 footer with black text used by painting and file image exports. The renderer copies and validates
 the presentation, escapes its text and includes the signature after the content inside `main`.
-The image-only `imageFrame` uses the document background and supplies a localized label. Image content
-spans the output width with ordinary text padding, without a contrasting outer frame. Image-to-HTML fallbacks
+The image-only `imageFrame` uses the document background and supplies an accessible document label.
+Image content spans the output width with ordinary text padding, without a contrasting outer frame. Image-to-HTML fallbacks
 retain the watermark. Markdown uses the same resolved watermark's brand name and timestamp in a
 separated text footer; preview and saved text share its formatter.
 `session.markdown` remains the unbranded source. The signature ends the document and is not repeated
@@ -108,14 +117,17 @@ on every PNG page. PNG pages have no page numbers or reserved ordinal-footer spa
 
 | Content | Markdown | HTML and image |
 | --- | --- | --- |
-| Plain user text | Escaped formatting markers and preserved line breaks | Literal text; HTML bubbles or numbered image sections |
-| Prose, lists, tables, code | Authored Markdown | `markdown-it`; code wraps and tables fit width |
+| Plain user text | Escaped formatting markers and preserved line breaks | Right-aligned user bubbles and full-width assistant answers |
+| Prose and lists | Authored Markdown | Shared typography and spacing |
+| Code blocks | Complete authored fences | Fixed 192-point panels show the opening code; HTML scrolls to the complete source and images clip to the opening viewport |
+| Inline code | Authored inline code | Kept in the surrounding prose |
+| Tables | Authored table | Preserve the header row, column grid and alignment; images fit columns to the page width and wrap cells, while HTML/Markdown previews scroll horizontally for wide tables |
 | Math | Authored source | KaTeX MathML with bounded expansion; unsupported formulas retain source |
-| Managed images | Alt/name placeholder | Validated embedded PNG/JPEG or a placeholder |
+| Managed images | Embedded Base64 PNG/JPEG; failed reads retain an unavailable note | Embedded PNG/JPEG without filenames or captions; generic unavailable-image placeholder |
 | Remote images | Eligible external URL | Fetch without credentials, then embed or use a placeholder |
-| Attachments | Name/type and eligible link | Name/type and eligible link; documents are not rasterized |
-| Included process/details | Nested collapsed `<details>` retaining content | HTML starts collapsed; image capture expands included details |
-| References | Numbered links | Numbered links and readable URLs |
+| Attachments | Name, readable type and eligible link; otherwise an explicit metadata-only note | Matching resource entries; documents are not embedded or rasterized |
+| Included process/details | Nested blockquotes; all included content readable without HTML support | HTML starts collapsed; image capture expands included details |
+| References | Labelled section with numbered links | Compact localized source-count row with a single Globe icon and gray superscript citations; no card list, and citation URLs remain in HTML links |
 
 HTML embeds displayed resources and inline CSS. Raw authored HTML is escaped. Links admit HTTP,
 HTTPS and mailto without credentials. CSP disables scripts, remote subresources and forms. HTML
@@ -123,11 +135,25 @@ preview disables JavaScript. The capture WebView accepts only its injected proto
 navigation, file access, cookies and new windows, and waits for assets/fonts/layout before capture.
 Image preview contains actual PNGs, so it has no interactive links or disclosures.
 
-Chat HTML retains the native bubble/message hierarchy, accessibility typography and existing
-surface/code tokens. The source adapter supplies two snapshots when thinking exists: omitted by
-default and included by the switch. Included content covers visible reasoning, intermediate prose
+Chat HTML and images follow the message list: user attachments above right-aligned bubbles,
+assistant names above full-width answers, and ordinary message spacing without document numbering,
+section rules or a large conversation title. The title remains in file metadata and Markdown.
+HTML, images and Markdown preview share `renderHtmlStyles.ts`, accessibility typography and surface/code tokens.
+Markdown preview renders the actual complete output text, including title, resource notes and signature,
+with embedded pictures displayed and remote references shown as compact name/domain entries. The source
+adapter supplies two snapshots when thinking exists: omitted by default and included by the switch. Included content covers visible reasoning, intermediate prose
 and readable tool names, never raw payloads, credentials or diagnostics. The image capture expands
 those supplied details so their content is readable without an interactive disclosure.
+
+HTML and image code blocks use fixed 192-point panels with a language label and basic styling,
+without syntax highlighting. HTML preserves the complete escaped source and whitespace with internal
+scrolling. Images show the same opening viewport without scrolling. Markdown keeps the complete
+source, and inline code remains visible. Sources use a compact count row with a single inline Globe
+icon and a source-localized summary, without individual source cards. The export does not fetch favicons. Pagination
+keeps code panels together and excludes their clipped text from line measurement.
+Image capture replaces undecodable content images with a generic unavailable note, and
+replaces formulas wider than their content region or taller than a page with their original source.
+These component fallbacks precede the existing whole-format fallback.
 
 ## Image Layout And Capture
 

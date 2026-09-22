@@ -3,8 +3,12 @@ import { PluginAuthorizationManager } from '../authorization/PluginAuthorization
 import { createPluginsModule as createModule } from '../createPluginsModule';
 import type { FeishuAuthorizationRuntime } from '../plugins/feishu/FeishuAuthorizationRuntime';
 
-function createPluginsModule(runtime: Parameters<typeof createModule>[0]) {
-  return createModule(runtime, authorizations);
+type Runtime = Parameters<typeof createModule>[0];
+function createPluginsModule(runtime: Pick<Runtime, 'invalidateServer'> & Partial<Runtime>) {
+  return createModule(
+    { cachePluginToolCatalog: jest.fn(async () => undefined), ...runtime },
+    authorizations,
+  );
 }
 
 const mockConnect = jest.fn();
@@ -43,13 +47,21 @@ const connection = {
   serverId: 'server-1',
   connectedAt: '2026-09-09T00:00:00.000Z',
 };
+const validation = {
+  accountLabel: 'cherry',
+  catalog: {
+    tools: [{ name: 'get_me', inputSchema: { type: 'object' as const, properties: {} } }],
+    discoveryWarnings: [],
+    serverInfo: { name: 'GitHub', version: '1' },
+  },
+};
 let mockFixture: ReturnType<typeof authorizationStoreFixture>;
 let authorizations: PluginAuthorizationManager;
 beforeEach(() => {
   jest.resetAllMocks();
   mockFixture = authorizationStoreFixture();
   authorizations = new PluginAuthorizationManager();
-  mockValidateConnection.mockResolvedValue('cherry');
+  mockValidateConnection.mockResolvedValue(validation);
   mockConnect.mockResolvedValue(connection);
   mockList.mockResolvedValue([connection]);
   mockDisconnect.mockResolvedValue({ serverId: 'server-1' });
@@ -75,7 +87,8 @@ it('commits an observed ready attempt only after read-only validation of its sel
     .mockResolvedValue({ credential, accountLabel: 'Cherry (ou_cherry)', signal });
   const commit = jest.spyOn(auth, 'commit').mockResolvedValue(connection);
   const invalidateServer = jest.fn();
-  const plugins = createModule({ invalidateServer }, authorizations);
+  const cachePluginToolCatalog = jest.fn(async () => undefined);
+  const plugins = createPluginsModule({ invalidateServer, cachePluginToolCatalog });
   const connected = new Promise<unknown>((resolve) => {
     plugins.authorization.observe('feishu', 'feishu_user', (observation) => {
       if (observation.connection) resolve(observation.connection);
@@ -89,6 +102,10 @@ it('commits an observed ready attempt only after read-only validation of its sel
     signal,
   );
   expect(invalidateServer).toHaveBeenCalledWith(connection.serverId);
+  expect(cachePluginToolCatalog).toHaveBeenCalledWith(connection.serverId, validation.catalog);
+  expect(cachePluginToolCatalog.mock.invocationCallOrder[0]).toBeGreaterThan(
+    invalidateServer.mock.invocationCallOrder[0]!,
+  );
   await auth.stop();
 });
 
@@ -97,7 +114,7 @@ it('saves an existing application through the plugin field rules before user aut
   const useApplication = jest
     .spyOn(auth, 'useApplication')
     .mockResolvedValue({ status: 'application-ready', applicationId: 'cli_cherry' });
-  const plugins = createModule({ invalidateServer: jest.fn() }, authorizations);
+  const plugins = createPluginsModule({ invalidateServer: jest.fn() });
   expect(() =>
     plugins.authorization.useApplication('feishu', 'feishu_user', {
       appId: 'bad id',
@@ -123,9 +140,7 @@ it('invalidates pending user authorization synchronously and keeps the applicati
     .spyOn(auth, 'cancel')
     .mockResolvedValue({ status: 'application-ready', applicationId: 'cli_cherry' });
   const signal = auth.attemptSignal;
-  const disconnect = createModule({ invalidateServer: jest.fn() }, authorizations).disconnect(
-    'feishu',
-  );
+  const disconnect = createPluginsModule({ invalidateServer: jest.fn() }).disconnect('feishu');
   expect(signal.aborted).toBe(true);
   await disconnect;
   expect(cancel).toHaveBeenCalledTimes(1);
@@ -134,13 +149,15 @@ it('invalidates pending user authorization synchronously and keeps the applicati
 
 it('validates credentials upstream before storing anything', async () => {
   const invalidateServer = jest.fn();
-  const plugins = createPluginsModule({ invalidateServer });
+  const cachePluginToolCatalog = jest.fn(async () => undefined);
+  const plugins = createPluginsModule({ invalidateServer, cachePluginToolCatalog });
   mockValidateConnection.mockRejectedValueOnce(new Error('invalid token'));
   await expect(plugins.connect(input)).rejects.toThrow('invalid token');
   expect(mockConnect).not.toHaveBeenCalled();
   mockConnect.mockRejectedValueOnce(new Error('storage error'));
   await expect(plugins.connect(input)).rejects.toThrow('Could not save');
   expect(invalidateServer).not.toHaveBeenCalled();
+  expect(cachePluginToolCatalog).not.toHaveBeenCalled();
 });
 
 it('invalidates the runtime only after the new grant commits', async () => {
@@ -149,9 +166,15 @@ it('invalidates the runtime only after the new grant commits', async () => {
     operations.push('commit');
     return connection;
   });
-  const plugins = createPluginsModule({ invalidateServer: () => operations.push('invalidate') });
+  const plugins = createPluginsModule({
+    invalidateServer: () => operations.push('invalidate'),
+    cachePluginToolCatalog: async (_id, catalog) => {
+      expect(catalog).toBe(validation.catalog);
+      operations.push('cache');
+    },
+  });
   await expect(plugins.connect(input)).resolves.toEqual(connection);
-  expect(operations).toEqual(['commit', 'invalidate']);
+  expect(operations).toEqual(['commit', 'invalidate', 'cache']);
   expect(mockConnect.mock.calls[0][0]).toEqual({
     pluginId: 'github',
     authMethod: 'personal_token',
@@ -161,12 +184,33 @@ it('invalidates the runtime only after the new grant commits', async () => {
   });
 });
 
+it('finishes the connection after the validated catalog has been cached', async () => {
+  let finishCache!: () => void;
+  const cachePluginToolCatalog = jest.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finishCache = resolve;
+      }),
+  );
+  const plugins = createPluginsModule({ invalidateServer: jest.fn(), cachePluginToolCatalog });
+  let connected = false;
+  const connect = plugins.connect(input).then((value) => {
+    connected = true;
+    return value;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(cachePluginToolCatalog).toHaveBeenCalledWith(connection.serverId, validation.catalog);
+  expect(connected).toBe(false);
+  finishCache();
+  await expect(connect).resolves.toEqual(connection);
+});
+
 it('serializes disconnect behind an in-progress connect and leaves it disconnected', async () => {
   let finishValidation!: () => void;
   mockValidateConnection.mockImplementation(
     () =>
       new Promise((resolve) => {
-        finishValidation = () => resolve('cherry');
+        finishValidation = () => resolve(validation);
       }),
   );
   const operations: string[] = [];
@@ -192,7 +236,7 @@ it('does not commit when the authorization form is cancelled after validation', 
   const controller = new AbortController();
   mockValidateConnection.mockImplementation(async () => {
     controller.abort();
-    return 'cherry';
+    return validation;
   });
   const plugins = createPluginsModule({ invalidateServer: jest.fn() });
   await expect(plugins.connect(input, controller.signal)).rejects.toThrow();
