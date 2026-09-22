@@ -35,6 +35,19 @@ const block: z.ZodType<ExportBlock> = z.lazy(() =>
 );
 const documentSchema = z.strictObject({
   title: text.optional(),
+  labels: z
+    .strictObject({
+      code: z.string().max(256),
+      codeOmitted: z.string().max(256),
+      plainText: z.string().max(256),
+      file: z.string().max(256),
+      fileMetadataOnly: z.string().max(256),
+      image: z.string().max(256),
+      imageUnavailable: z.string().max(256),
+      sources: z.string().max(256),
+      table: z.string().max(256),
+    })
+    .optional(),
   sections: z
     .array(
       z.strictObject({
@@ -77,6 +90,7 @@ export function normalizeDocument(input: DocumentExportInput): ExportDocument {
     input.kind === 'markdown'
       ? {
           title: input.title,
+          labels: input.labels,
           sections: [{ id: 'document', blocks: [{ kind: 'markdown', source: input.source }] }],
         }
       : input.document;

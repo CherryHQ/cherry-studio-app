@@ -29,10 +29,10 @@ import type {
   ExportPresentation,
 } from '@/shared/contracts/documentExport';
 import type { ExportWatermarkStyle } from '@/shared/contracts/fileExport';
+import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import { DocumentExportImagePreview } from './components/DocumentExportImagePreview';
-import { DocumentExportTextPreview } from './components/DocumentExportTextPreview';
 import { useDocumentExportHtmlCapture } from './hooks/useDocumentExportHtmlCapture';
 import { useDocumentExportPreview } from './hooks/useDocumentExportPreview';
 import { IMAGE_LAYOUT_WIDTH } from './utils/imagePagePlan';
@@ -150,7 +150,7 @@ function DocumentExportBody({
   const [layout] = useState(() => {
     const { base, sm, lg, xl } = resolveTypographyScale(fontStep);
     return {
-      width: Math.floor(Math.min(600, Math.max(280, windowWidth))),
+      width: 720,
       typography: { base, sm, lg, xl },
     };
   });
@@ -231,6 +231,12 @@ function DocumentExportBody({
   useEffect(() => () => sharing.current?.abort(), []);
   const isReady = state.status === 'markdown' || state.status === 'ready';
   const artifact = state.status === 'ready' ? state.artifact : undefined;
+  const markdownText =
+    state.status === 'markdown'
+      ? state.text
+      : artifact?.format === 'markdown'
+        ? artifact.text
+        : undefined;
   const activeFormat = state.status === 'markdown' ? 'markdown' : (artifact?.format ?? format);
   const selectFormat = useCallback(
     (value: ExportFormat) => {
@@ -296,20 +302,20 @@ function DocumentExportBody({
   return (
     <View className="min-h-0 flex-1">
       <View className="min-h-0 flex-1" onLayout={onCaptureLayout}>
-        {state.status === 'markdown' ? (
-          <ScrollView className="flex-1" contentContainerClassName="px-6 py-4">
-            <DocumentExportTextPreview
-              key={revision}
-              document={session.document}
-              watermark={previewPresentation.watermark}
-            />
-          </ScrollView>
+        {markdownText !== undefined ? (
+          <MarkdownPreview
+            key={revision}
+            session={session}
+            presentation={previewPresentation}
+            text={markdownText}
+            width={Math.max(1, windowWidth - left - right)}
+          />
         ) : artifact ? (
           <ArtifactPreview
             key={artifact.id}
             artifact={artifact}
             onError={previewFallback}
-            width={Math.max(1, windowWidth - left - right - 48)}
+            width={Math.max(1, windowWidth - left - right)}
           />
         ) : (
           <View className="flex-1 overflow-hidden">
@@ -484,6 +490,48 @@ function ArtifactPreview({
   if (artifact.format === 'image')
     return <DocumentExportImagePreview artifact={artifact} onError={onError} width={width} />;
   if (!source) return null;
+  return <HtmlPreview source={source} onError={onError} width={width} />;
+}
+
+function MarkdownPreview({
+  session,
+  presentation,
+  text,
+  width,
+}: {
+  session: DocumentExportSession;
+  presentation: ExportPresentation;
+  text: string;
+  width: number;
+}) {
+  const [failed, setFailed] = useState(false);
+  const source = useMemo(() => {
+    try {
+      return { html: session.previewMarkdown(text, presentation) };
+    } catch {
+      return undefined;
+    }
+  }, [session, text, presentation]);
+  if (failed || !source)
+    return (
+      <ScrollView className="flex-1" contentContainerClassName="px-5 py-4">
+        <Text selectable className="font-mono text-foreground text-sm">
+          {session.markdown + renderMarkdownSignature(presentation.watermark)}
+        </Text>
+      </ScrollView>
+    );
+  return <HtmlPreview source={source} width={width} onError={() => setFailed(true)} />;
+}
+
+function HtmlPreview({
+  source,
+  onError,
+  width,
+}: {
+  source: { html: string };
+  onError(): void;
+  width: number;
+}) {
   return (
     <WebView
       allowFileAccess={false}
