@@ -336,7 +336,7 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
-  test('tracks turns without surfaces while only completion notifications are on', async () => {
+  test('keeps the session lease alive through notify-only generation', async () => {
     enabled = false;
     notificationsEnabled = true;
     const notifyTurnFinished = jest.fn(async () => true);
@@ -346,49 +346,106 @@ describe('BackgroundReplyRuntime', () => {
       notifyTurnFinished,
       requestPermissionOnce: jest.fn(),
     });
+    // The full notify-only lifecycle: preparation opens the logical turn, the
+    // turn starts, and the preparation lease is released right after — the
+    // generation interval must keep its own execution lease to ever reach the
+    // terminal event that schedules the notice.
+    const lease = runtime.acquirePreparation('session-1', jest.fn());
     const turn = runtime.startTurn({
       agentId: 'agent-1',
       agentName: 'Alpha',
       sessionId: 'session-1',
       sessionTitle: 'First session',
     });
+    lease.release();
 
-    // The Live Activities switch is off: the turn is still tracked, but no
-    // surface is created, and the destination's notice channel is engaged.
+    // Live Activities are off, so no surface presents, but the session exists
+    // and its generating keep-alive bit survives the preparation release. The
+    // destination's notice channel is engaged for the new reply.
     expect(runtime.isActivated).toBe(true);
-    expect(mockStartSession).not.toHaveBeenCalled();
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+    expect(mockSessions[0]?.input).toMatchObject({
+      deepLinkUrl: 'cherrystudio:///?sessionId=session-1',
+      keepAlive: true,
+      props: expect.objectContaining({ phase: 'preparing' }),
+    });
+    expect(mockSessions[0]?.cancel).not.toHaveBeenCalled();
     expect(dismissDestination).toHaveBeenCalledWith('cherrystudio:///?sessionId=session-1');
 
-    turn.update({ parts: [textPart('hi')] });
     turn.finish('completed');
     await flushOperations();
 
+    // The terminal event drains the session's own lease and delivers the
+    // notice the whole run was kept alive for.
+    expect(mockSessions[0]?.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'completed' }),
+      { keepAlive: false, urgent: true },
+    );
     expect(notifyTurnFinished).toHaveBeenCalledTimes(1);
     expect(notifyTurnFinished).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'completed', occurredInBackground: false }),
     );
+    await runtime._doStop();
+  });
+
+  test('the completion switch alone cannot activate runtime execution without a notifier', async () => {
+    enabled = false;
+    notificationsEnabled = true;
+    // Android composes no independent notifier: with Background replies off,
+    // the completion switch must leave chat execution off entirely — no
+    // preparation lease, no session, no foreground-service activation.
+    const runtime = await createRuntime();
+    expect(runtime.isActivated).toBe(false);
+
+    const lease = runtime.acquirePreparation('session-1', jest.fn());
+    expect(acquire).not.toHaveBeenCalled();
+    expect(preparationRelease).not.toHaveBeenCalled();
+
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+    turn.finish('completed');
+    await flushOperations();
+
+    expect(mockStartSession).not.toHaveBeenCalled();
     expect(mockSessions).toHaveLength(0);
+    lease.release();
+    expect(preparationRelease).not.toHaveBeenCalled();
     await runtime._doStop();
   });
 
   test('re-presents surfaces when the Live Activities switch returns mid-tracking', async () => {
     enabled = false;
     notificationsEnabled = true;
-    const runtime = await createRuntime();
+    const runtime = await createRuntime(undefined, {
+      dismissDestination: jest.fn(),
+      notifyTurnFinished: jest.fn(async () => true),
+      requestPermissionOnce: jest.fn(),
+    });
     const turn = runtime.startTurn({
       agentId: 'agent-1',
       agentName: 'Alpha',
       sessionId: 'session-1',
       sessionTitle: 'First session',
     });
-    expect(mockStartSession).not.toHaveBeenCalled();
+    // Notify-only: the session exists (its lease rides it) while the manager
+    // suppresses the surface.
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
 
     enabled = true;
     preferenceListener?.();
     await flushOperations();
     expect(runtime.isActivated).toBe(true);
+    // The switch coming back on re-presents the inherited session — the
+    // runtime refreshes its content rather than creating a second one.
     expect(mockStartSession).toHaveBeenCalledTimes(1);
-    expect(mockSessions[0]?.input.props).toMatchObject({ phase: 'preparing' });
+    expect(mockSessions[0]?.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'preparing' }),
+      expect.objectContaining({ keepAlive: true, urgent: true }),
+    );
 
     turn.finish('completed');
     await flushOperations();

@@ -126,7 +126,8 @@ export class BackgroundReplyRuntime
   protected onInit(): void {
     // Both switches drive this runtime: the Live Activities switch controls
     // the surfaces, the completion-notifications switch keeps the logical
-    // turn tracking — and with it the notice channel — alive on its own.
+    // turn tracking — and with it the notice channel — alive on its own,
+    // wherever an independent notifier actually exists.
     this.registerDisposable(
       this.preference.subscribeChange(ACTIVITY_PREFERENCE_KEY)(() => this.handlePreferenceChange()),
     );
@@ -164,9 +165,13 @@ export class BackgroundReplyRuntime
   }
 
   private shouldRun(): boolean {
+    // The completion switch keeps this runtime alive only where an independent
+    // notifier exists (iOS). Elsewhere it must not resurrect chat execution
+    // that the background-replies switch turned off.
     return (
       this.preference.readCached(ACTIVITY_PREFERENCE_KEY) ||
-      this.preference.readCached(NOTIFICATION_PREFERENCE_KEY)
+      (this.preference.readCached(NOTIFICATION_PREFERENCE_KEY) &&
+        this.environment.replyNotifications !== undefined)
     );
   }
 
@@ -324,9 +329,9 @@ export class BackgroundReplyRuntime
   }
 
   private handlePreferenceChange(): void {
-    // Live Activities going off drops only the surfaces; the turn tracking and
-    // the notice channel keep running while their own switch is on.
-    if (!this.preference.readCached(ACTIVITY_PREFERENCE_KEY)) this.cancelSessions();
+    // Live Activities going off drops only the surfaces (the manager retires
+    // them through its own presentation subscription); the session, its lease,
+    // and the turn tracking keep running while a switch still needs them.
     const wasActivated = this.isActivated;
     const transition = this.shouldRun() ? this.activate() : this.deactivate();
     void transition
@@ -426,8 +431,11 @@ export class BackgroundReplyRuntime
     // The notice and the final delivery must outlive the session's own lease
     // (dropped by the keepAlive:false update below): hold a short delivery
     // lease until both settle, or a backgrounded app can be suspended
-    // mid-submission.
-    const deliveryLease = this.keepAlive.acquire('chat.replyNotice');
+    // mid-submission. With neither channel left there is nothing to protect.
+    const deliveryLease =
+      record.session || this.environment.replyNotifications
+        ? this.keepAlive.acquire('chat.replyNotice')
+        : undefined;
     try {
       record.session?.update(this.toActivityProps(record), { keepAlive: false, urgent: true });
       if (waitFor) {
@@ -447,7 +455,7 @@ export class BackgroundReplyRuntime
         if (this.turns.get(key) === record) this.turns.delete(key);
       });
     } finally {
-      deliveryLease.release();
+      deliveryLease?.release();
     }
   }
 
@@ -505,13 +513,16 @@ export class BackgroundReplyRuntime
     if (timeout !== undefined) clearTimeout(timeout);
   }
 
-  /** Starts the conversation's activity, or re-syncs an inherited one, when enabled. */
+  /**
+   * Starts the conversation's activity, or re-syncs an inherited one, whenever
+   * the runtime is active. The session exists even with Live Activities off:
+   * its keep-alive bit is the generation's execution lease, and the manager —
+   * not this runtime — decides whether a surface presents it.
+   */
   private ensureSession(record: TurnRecord, activating = false): void {
     // `onActivate` runs before BaseService flips `isActivated`; callers during
     // normal operation use the public state as the preference gate.
     if ((!activating && !this.isActivated) || this.disposed) return;
-    // A notify-only run tracks the turn without any surface.
-    if (!this.preference.readCached(ACTIVITY_PREFERENCE_KEY)) return;
 
     const keepAlive = isGeneratingPhase(record.content.phase);
     if (record.session) {

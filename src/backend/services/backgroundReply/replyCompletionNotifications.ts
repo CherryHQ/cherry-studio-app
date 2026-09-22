@@ -51,7 +51,6 @@ export function createReplyCompletionNotifier(
 ): ReplyCompletionNotifier {
   let notifications: Notifications | undefined;
   let permissionRequested = false;
-  const delivered = new Map<string, string>();
 
   // Lazy native-module load matches the other native services so CommonJS test
   // environments keep their mocks and unsupported platforms never load it.
@@ -78,7 +77,6 @@ export function createReplyCompletionNotifier(
     `cherry-reply-${deepLinkUrl.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
   const dismissDestination = (deepLinkUrl: string): void => {
-    delivered.delete(deepLinkUrl);
     // The identifier is deterministic per destination, so dismissal works
     // without prior in-memory knowledge — including a notice delivered
     // before a process restart.
@@ -111,7 +109,6 @@ export function createReplyCompletionNotifier(
         data: { owner: BACKGROUND_NOTIFICATION_OWNER, terminal: true, url: event.deepLinkUrl },
       },
     });
-    delivered.set(event.deepLinkUrl, identifier);
     return true;
   };
 
