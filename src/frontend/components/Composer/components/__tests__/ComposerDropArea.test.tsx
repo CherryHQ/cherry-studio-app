@@ -334,17 +334,28 @@ describe('ComposerDropArea', () => {
   it('reports native staging failures to the user', async () => {
     await renderDropArea();
 
+    // The real native event: five items dropped, two failed staging, three
+    // delivered. All three delivered images fit the composer, so the quota
+    // was never approached and the limit toast must stay silent.
     await act(async () =>
       mockDropTargetProps?.onDropImages?.({
         failedCount: 2,
-        images: [dropImage('survivor.jpg')],
+        images: [
+          dropImage('survivor-0.jpg'),
+          dropImage('survivor-1.jpg'),
+          dropImage('survivor-2.jpg'),
+        ],
         totalDropped: 5,
       }),
     );
 
-    expect(attachments).toHaveLength(1);
+    expect(attachments).toHaveLength(3);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: expect.stringContaining('chat.attachments.dropFailed'),
+      variant: 'warning',
+    });
+    expect(mockToastShow).not.toHaveBeenCalledWith({
+      label: expect.stringContaining('chat.attachments.dropLimit'),
       variant: 'warning',
     });
   });

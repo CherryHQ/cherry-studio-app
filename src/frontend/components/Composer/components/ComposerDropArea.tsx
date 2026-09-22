@@ -81,9 +81,10 @@ export function ComposerDropArea({ children, enabled = true }: ComposerDropAreaP
           variant: 'warning',
         });
       }
-      // The copy the composer did not accept includes items the native side
-      // truncated before delivery, so the feedback describes the whole drop.
-      const droppedTotal = event.totalDropped - unsupported.length;
+      // Staging failures already got their dedicated toast; the quota count
+      // covers only the items that were eligible to reach the composer, so
+      // native truncation still shows up without double-reporting failures.
+      const droppedTotal = event.totalDropped - event.failedCount - unsupported.length;
       if (droppedTotal > accepted.length) {
         toast.show({
           label: t('chat.attachments.dropLimit', {
