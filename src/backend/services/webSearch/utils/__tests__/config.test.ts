@@ -1,6 +1,9 @@
+import { providerService } from '@/backend/data/services/ProviderService';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 
 import {
+  getProviderById,
   getProviderForCapability,
   getRuntimeConfig,
   mergeWebSearchProviderPreset,
@@ -8,7 +11,22 @@ import {
 
 type PreferenceMap = Partial<PreferenceSchema>;
 
+jest.mock('@/backend/data/services/ProviderService', () => ({
+  providerService: {
+    listApiKeys: jest.fn(),
+  },
+}));
+
+const listProviderApiKeysMock = providerService.listApiKeys as jest.MockedFunction<
+  typeof providerService.listApiKeys
+>;
+
 describe('web search config', () => {
+  beforeEach(() => {
+    listProviderApiKeysMock.mockReset();
+    listProviderApiKeysMock.mockResolvedValue({ keys: [] });
+  });
+
   test('merges provider presets with trimmed overrides', () => {
     expect(
       mergeWebSearchProviderPreset(
@@ -66,6 +84,44 @@ describe('web search config', () => {
         cutoffLimit: 2000,
       },
     });
+  });
+
+  test('uses the current enabled Zhipu model provider keys for web search', async () => {
+    listProviderApiKeysMock.mockResolvedValue({
+      keys: [{ id: 'key-1', isEnabled: true, key: ' current-model-key ' }],
+    });
+    const preferences = createPreferenceReader({
+      'chat.web_search.provider_overrides': {
+        zhipu: { apiKeys: ['stale-web-search-key'] },
+      },
+    });
+
+    await expect(getProviderById('zhipu', preferences)).resolves.toMatchObject({
+      id: 'zhipu',
+      apiKeys: ['current-model-key'],
+    });
+    expect(listProviderApiKeysMock).toHaveBeenCalledWith('zhipu', { enabled: true });
+  });
+
+  test('ignores stale Zhipu web search keys when the model provider is missing', async () => {
+    listProviderApiKeysMock.mockRejectedValue(DataApiErrorFactory.notFound('Provider', 'zhipu'));
+    const preferences = createPreferenceReader({
+      'chat.web_search.provider_overrides': {
+        zhipu: { apiKeys: ['stale-web-search-key'] },
+      },
+    });
+
+    await expect(getProviderById('zhipu', preferences)).resolves.toMatchObject({
+      id: 'zhipu',
+      apiKeys: [],
+    });
+  });
+
+  test('does not hide unexpected failures while resolving Zhipu model provider keys', async () => {
+    const error = new Error('database unavailable');
+    listProviderApiKeysMock.mockRejectedValue(error);
+
+    await expect(getProviderById('zhipu', createPreferenceReader())).rejects.toBe(error);
   });
 
   test('throws when default provider is missing or capability is unsupported', async () => {
