@@ -89,6 +89,14 @@ export const AllStates: Story = {
                 <MarkdownText
                   fontSizeStep={0}
                   isStreaming={false}
+                  markdown={'$$\n\\int_0^{\\infty} e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$'}
+                  onLinkPress={onLinkPress}
+                />
+              </StoryExample>
+              <StoryExample title="TeX delimiters">
+                <MarkdownText
+                  fontSizeStep={0}
+                  isStreaming={false}
                   markdown={
                     'Inline \\(E > V_{\\min}\\).\n\n\\[\n\\int_0^{\\infty} e^{-x^2}\\,dx\n=\n\\frac{\\sqrt{\\pi}}{2}\n\\]'
                   }

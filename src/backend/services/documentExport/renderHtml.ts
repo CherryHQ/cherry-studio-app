@@ -1,3 +1,4 @@
+import { normalizeLatexDelimiters } from '@cherrystudio/ui/markdown';
 import { renderToString } from 'katex';
 import MarkdownIt from 'markdown-it';
 
@@ -44,17 +45,16 @@ export async function renderHtml(
   parser.validateLink = (value) => Boolean(safeExportUrl(value));
   parser.inline.ruler.before('escape', 'export_math', (state, silent) => {
     const start = state.pos;
-    const opening = ['$$', '\\[', '\\(', '$'].find((value) => state.src.startsWith(value, start));
+    const opening = ['$$', '$'].find((value) => state.src.startsWith(value, start));
     if (!opening) return false;
-    const closing = opening === '\\[' ? '\\]' : opening === '\\(' ? '\\)' : opening;
-    const end = state.src.indexOf(closing, start + opening.length);
+    const end = state.src.indexOf(opening, start + opening.length);
     if (end < 0 || end - start > 8192) return false;
     if (!silent) {
       const token = state.push('export_math', '', 0);
       token.content = state.src.slice(start + opening.length, end);
-      token.block = opening === '$$' || opening === '\\[';
+      token.block = opening === '$$';
     }
-    state.pos = end + closing.length;
+    state.pos = end + opening.length;
     return true;
   });
   parser.renderer.rules.export_math = (tokens, index) => {
@@ -80,7 +80,7 @@ export async function renderHtml(
         if (source) sources.set(`asset:${block.assetId}`, source);
       } else if (block.kind === 'details') visitBlocks(block.blocks);
       else if (block.kind === 'markdown') {
-        for (const token of parser.parse(block.source, {})) {
+        for (const token of parser.parse(normalizeLatexDelimiters(block.source), {})) {
           for (const child of token.children ?? []) {
             const url = child.type === 'image' ? child.attrGet('src') : null;
             if (typeof url === 'string' && safeExportUrl(url))
@@ -110,7 +110,7 @@ export async function renderHtml(
           case 'text':
             return `<div class="plain-text">${escapeHtml(block.text)}</div>`;
           case 'markdown':
-            return `<div class="markdown">${parser.render(block.source)}</div>`;
+            return `<div class="markdown">${parser.render(normalizeLatexDelimiters(block.source))}</div>`;
           case 'image':
             return image(`asset:${block.assetId}`, block.alt);
           case 'attachment':
