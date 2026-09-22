@@ -20,7 +20,7 @@ import { SidebarFade } from './SidebarFade/SidebarFade';
  */
 export function SidebarHeader() {
   const { t } = useTranslation();
-  const { openSearch } = useSidebarActions('Sidebar.Header');
+  const { openSearch } = useSidebarActions('SidebarHeader');
   const insets = useSafeAreaInsets();
   const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
 
@@ -61,5 +61,3 @@ export function SidebarHeader() {
     </View>
   );
 }
-
-SidebarHeader.displayName = 'Sidebar.Header';

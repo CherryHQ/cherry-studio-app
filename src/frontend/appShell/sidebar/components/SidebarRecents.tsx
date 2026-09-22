@@ -215,51 +215,45 @@ function SidebarRecentSessionList({
   }
 
   return (
-    <>
-      <View className="px-2">
-        {visibleSessions.map((session) => (
-          <SidebarSessionRow
-            key={session.id}
-            isSelected={session.id === selectedSessionId}
-            leading={leading}
-            onCloseDrawer={closeDrawer}
-            onDelete={requestDelete}
-            onRename={requestRename}
-            session={session}
-          />
-        ))}
-      </View>
+    <View className="px-2">
+      {visibleSessions.map((session) => (
+        <SidebarSessionRow
+          key={session.id}
+          isSelected={session.id === selectedSessionId}
+          leading={leading}
+          onCloseDrawer={closeDrawer}
+          onDelete={requestDelete}
+          onRename={requestRename}
+          session={session}
+        />
+      ))}
       {canShowMoreSessions ? (
-        <View className="px-2">
-          <Pressable
-            accessibilityLabel={showMoreLabel}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: isLoadingMoreSessions }}
-            className={SIDEBAR_ROW_CLASS_NAME}
-            disabled={isLoadingMoreSessions}
-            onPress={handleViewAllPress}
-            testID="sidebar-sessions-view-all"
-          >
-            {leading}
-            <SidebarRowContent>
-              <Text className="min-w-0 flex-1 text-muted-foreground text-sm">{showMoreLabel}</Text>
-            </SidebarRowContent>
-          </Pressable>
-        </View>
+        <Pressable
+          accessibilityLabel={showMoreLabel}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isLoadingMoreSessions }}
+          className={SIDEBAR_ROW_CLASS_NAME}
+          disabled={isLoadingMoreSessions}
+          onPress={handleViewAllPress}
+          testID="sidebar-sessions-view-all"
+        >
+          {leading}
+          <SidebarRowContent>
+            <Text className="min-w-0 flex-1 text-muted-foreground text-sm">{showMoreLabel}</Text>
+          </SidebarRowContent>
+        </Pressable>
       ) : null}
       {isShowingAllSessions && isLoadingMoreSessions ? (
-        <View className="px-2">
-          <View className="flex-row items-center gap-3 px-3 py-2.5">
-            {leading}
-            <SidebarRowContent>
-              <Text className="min-w-0 flex-1 text-muted-foreground text-sm">
-                {t('session.list.loading')}
-              </Text>
-            </SidebarRowContent>
-          </View>
+        <View className="flex-row items-center gap-3 px-3 py-2.5">
+          {leading}
+          <SidebarRowContent>
+            <Text className="min-w-0 flex-1 text-muted-foreground text-sm">
+              {t('session.list.loading')}
+            </Text>
+          </SidebarRowContent>
         </View>
       ) : null}
-    </>
+    </View>
   );
 }
 
