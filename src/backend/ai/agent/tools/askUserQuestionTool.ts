@@ -17,7 +17,7 @@ export function createAskUserQuestionTool(ask?: AskUser): RuntimeTool {
     providerName: ASK_USER_QUESTION_TOOL_NAME,
     displayName: 'Ask user',
     description:
-      'Ask one concise question when a user decision materially changes the task. Supply 2–4 short options in the user’s language, each with a stable id and optional explanation (empty string allowed). Use single for one choice or multiple for several. Free text and skipping are always available. Wait for the returned answer before continuing. Do not ask for information already provided, routine implementation choices, or duplicate tool approvals. Ask only one question at a time, never in parallel.',
+      'Resolve a consequential missing preference or decision with one concise question and 2–4 short, distinct options in the user’s language. Each option needs a stable id and a description (empty when unnecessary). Use single for one choice or multiple for several. Free text and skipping are always available. Do not ask for information already provided or routine implementation choices, or substitute questions for tool approval. Ask only one question at a time, never in parallel; wait for the answer before dependent work. Skipping is not consent: proceed only without that decision, or explain what is blocked.',
     inputSchema: toRuntimeInputSchema(AgentUserQuestionSchema),
     approval: 'auto',
     interaction: 'user-input',
