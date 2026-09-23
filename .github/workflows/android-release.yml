@@ -77,11 +77,10 @@ jobs:
           jq -e 'length == 1 and .[0].status == "FINISHED" and .[0].platform == "ANDROID"' "$build_json"
           build_id="$(jq -er '.[0].id' "$build_json")"
           apk_url="$(jq -er '.[0].artifacts.applicationArchiveUrl' "$build_json")"
-          version="$(jq -r '.expo.version' app.json)"
-          release_date="$(TZ=Asia/Shanghai date +%F)"
+          version="${RELEASE_TAG#v}"
           artifact_dir="$RUNNER_TEMP/android-release"
           mkdir -p "$artifact_dir"
-          apk_name="cherry-studio-${version}-${release_date}-android.apk"
+          apk_name="cherry-studio-${version}-android.apk"
           curl --fail --location --retry 3 --connect-timeout 30 --max-time 900 \
             "$apk_url" --output "$artifact_dir/$apk_name"
           unzip -tq "$artifact_dir/$apk_name"
@@ -95,7 +94,7 @@ jobs:
           ## Installation
 
           - Android: download the attached APK (ARM64) and install it on your device.
-          - iOS: distributed through TestFlight after Apple processing and tester setup. The iOS workflow runs independently.
+          - Google Play and iOS App Store availability depend on their independent uploads, review, and publication. This GitHub release does not publish either store listing.
           - SHA-256 checksums are included in SHA256SUMS.
 
           Source: $GITHUB_SHA

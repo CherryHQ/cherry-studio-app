@@ -8,7 +8,7 @@ The existing `eas-build-post-install` hook builds the workspace packages during 
 | --- | --- | --- |
 | `development` / `development-simulator` | Disabled | Disabled |
 | `preview` | Disabled | Disabled |
-| `production` | Enabled per service registry; Sentry additionally requires a DSN and current user consent | Enabled for Sentry; requires an upload token |
+| `production` / `production-google-play` | Enabled per service registry; Sentry additionally requires a DSN and current user consent | Enabled for Sentry; requires an upload token |
 
 The shared [reporting registry](../../src/frontend/appShell/observability/reportingServices.json)
 owns per-service build flags. Sentry uses immutable native metadata and rejects debug binaries.
@@ -43,7 +43,11 @@ development identity. An unset `PROFILE` defaults to production; unknown values 
 | --- | --- | --- | --- |
 | `development` | Cherry Studio Dev | `.dev` | `cherrystudio-dev` |
 | `preview` | Cherry Studio Preview | `.preview` | `cherrystudio-preview` |
-| `production` | Cherry Studio | none | `cherrystudio` |
+| `production` / `production-google-play` | Cherry Studio | none | `cherrystudio` |
+
+`production-google-play` inherits `PROFILE=production`. It changes Android's artifact format to
+AAB without adding an app identity or runtime environment. The `production` profile continues
+to create APKs for GitHub downloads and IPAs for iOS.
 
 The base IDs are `com.cherryai.cherrystudio-app` (iOS) and
 `com.cherryai.cherrystudio_app` (Android). Widget identifiers and iOS App Groups follow the selected
@@ -107,9 +111,12 @@ pnpm build:local --platform android
 pnpm build:local --platform ios
 ```
 
-Pass `--output /absolute/path/to/package.apk` or `--output /absolute/path/to/package.ipa` to choose
-the artifact location. For an iOS simulator package, select `--profile development-simulator`;
-that profile produces a simulator artifact rather than an IPA for a physical device.
+Pass `--output /absolute/path/to/cherry-studio-0.1.0-android.apk` or
+`--output /absolute/path/to/cherry-studio-0.1.0-ios.ipa` to choose the artifact location. Use the
+release version without a leading `v` or date; preserve a prerelease suffix when one is specified.
+The local wrapper does not generate filenames or archive directories automatically. For an iOS
+simulator package, select `--profile development-simulator`; that profile produces a simulator
+artifact rather than an IPA for a physical device.
 
 To create a standalone preview package, select the existing preview profile:
 
@@ -119,8 +126,18 @@ pnpm build:local --platform ios --profile preview
 ```
 
 Preview and development bundles do not report to Sentry, even when the native dependency and a DSN
-are present. Production builds require `--profile production`; that profile is never the wrapper's
-default.
+are present. Production APK and IPA builds require `--profile production`; that profile is never
+the wrapper's default. When a Google Play release build is explicitly requested, use its separate
+AAB profile:
+
+```bash
+pnpm build:local --platform android --profile production-google-play --output /absolute/path/to/cherry-studio-0.1.0-android.aab
+```
+
+Google Play requires an AAB for a new app; renaming an APK does not convert its format. See
+[Cloud Releases](./cloud-releases.md) for the independent GitHub APK, Google Play AAB build,
+and iOS upload workflows and their signing requirements. Google Play AABs are uploaded manually
+in Play Console; no Google service account is needed.
 
 For production monitoring, provide a valid upload token and keep automatic uploads enabled.
 `SENTRY_DISABLE_AUTO_UPLOAD=true` skips uploads but does not disable runtime reporting. Without

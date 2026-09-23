@@ -14,7 +14,7 @@ Guides are task-oriented procedures for changing or extending the application.
 | [Internationalization](./guides/internationalization.md) | Supported languages, shared resolution, translation resources, and PR checks |
 | [GitHub Plugin Authorization](./guides/github-plugin-authorization.md) | Publisher OAuth App configuration, in-app browser authorization, token renewal, and acceptance prerequisites |
 | [Local EAS Builds](./guides/local-builds.md) | Local installation packages, Sentry environment variables, and build profiles |
-| [Cloud Releases](./guides/cloud-releases.md) | EAS production builds, GitHub/GitCode APK releases, TestFlight uploads, and retry procedures |
+| [Cloud Releases](./guides/cloud-releases.md) | EAS production builds, GitHub/GitCode APK releases, Google Play AAB builds, TestFlight uploads, and retry procedures |
 | [Parallel Device Testing](./guides/parallel-device-testing.md) | Agent self-test preparation design, configuration and development-client reuse, Conductor device isolation, and cleanup |
 | [Testing And CI](./guides/testing-and-ci.md) | Focused checks, test value, local PR gates, and remote CI |
 | [UI Development](./guides/ui-development.md) | CherryUI ownership and reusable React component composition |
