@@ -12,6 +12,18 @@ import NitroModules
 public final class CherryStudioUIAutolinking {
   public typealias bridge = margelo.nitro.cherrystudio.ui.bridge.swift
 
+  public static func createCherryBackgroundPressView() -> bridge.std__shared_ptr_HybridCherryBackgroundPressViewSpec_ {
+    let hybridObject = HybridCherryBackgroundPressView()
+    return { () -> bridge.std__shared_ptr_HybridCherryBackgroundPressViewSpec_ in
+      let __cxxWrapped = hybridObject.getCxxWrapper()
+      return __cxxWrapped.getCxxPart()
+    }()
+  }
+  
+  public static func isCherryBackgroundPressViewRecyclable() -> Bool {
+    return HybridCherryBackgroundPressView.self is any RecyclableView.Type
+  }
+  
   public static func createCherryMenuView() -> bridge.std__shared_ptr_HybridCherryMenuViewSpec_ {
     let hybridObject = HybridCherryMenuView()
     return { () -> bridge.std__shared_ptr_HybridCherryMenuViewSpec_ in

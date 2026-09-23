@@ -198,5 +198,10 @@ function createDependencies(overrides: { generateImage?: () => Promise<never> } 
 }
 
 function execute(tool: RuntimeTool, input: RuntimeJsonValue): Promise<RuntimeToolResult> {
-  return tool.execute({ input, signal: new AbortController().signal, toolCallId: 'call-1' });
+  return tool.execute({
+    input,
+    signal: new AbortController().signal,
+    toolCallId: 'call-1',
+    turnId: 'turn-1',
+  });
 }

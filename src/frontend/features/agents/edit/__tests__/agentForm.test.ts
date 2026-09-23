@@ -1,6 +1,6 @@
 import type { Agent } from '@/shared/data/types/agent';
 
-import { buildAgentDto, createAgentFormState } from '../agentForm';
+import { buildAgentDto, createAgentFormState, setAgentCapabilityEnabled } from '../agentForm';
 
 const baseForm = createAgentFormState();
 
@@ -29,10 +29,10 @@ describe('createAgentFormState', () => {
     });
   });
 
-  it('starts a new agent with no avatar draft and the device groups off', () => {
+  it('starts a new agent with no avatar draft and the device groups and Agent management off', () => {
     expect(createAgentFormState()).toMatchObject({
       avatarUri: null,
-      disabledCapabilities: ['calendar', 'health', 'location', 'reminders'],
+      disabledCapabilities: ['agents', 'calendar', 'health', 'location', 'reminders'],
       toolApprovalMode: 'auto',
     });
   });
@@ -95,5 +95,13 @@ describe('buildAgentDto', () => {
       name: 'Researcher',
       toolApprovalMode: 'auto',
     });
+  });
+});
+
+describe('setAgentCapabilityEnabled', () => {
+  it('removes an enabled group from the deny-list and adds a disabled one once', () => {
+    expect(setAgentCapabilityEnabled(['agents', 'health'], 'agents', true)).toEqual(['health']);
+    expect(setAgentCapabilityEnabled(['health'], 'agents', false)).toEqual(['health', 'agents']);
+    expect(setAgentCapabilityEnabled(['agents'], 'agents', false)).toEqual(['agents']);
   });
 });

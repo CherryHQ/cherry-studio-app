@@ -14,6 +14,7 @@ const mockCreateInternalEntry = jest.fn();
 const mockDeleteEntry = jest.fn(async () => true);
 const mockToastShow = jest.fn();
 const mockLoggerWarn = jest.fn();
+const mockCleanupDropStagedFile = jest.fn();
 const mockFileModule = {
   createInternalEntry: mockCreateInternalEntry,
   delete: mockDeleteEntry,
@@ -22,6 +23,11 @@ const mockFileModule = {
 
 jest.mock('@/frontend/data', () => ({
   useBackendModule: () => mockFileModule,
+}));
+
+jest.mock('@/frontend/components/Composer/utils/composerAttachments', () => ({
+  ...jest.requireActual('@/frontend/components/Composer/utils/composerAttachments'),
+  cleanupDropStagedFile: (...args: unknown[]) => mockCleanupDropStagedFile(...args),
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -95,6 +101,48 @@ describe('useManagedComposerAttachments', () => {
       variant: 'danger',
     });
     expect(JSON.stringify(mockLoggerWarn.mock.calls)).not.toContain('file:///');
+  });
+
+  it('releases a drop-staged source whose managed import fails', async () => {
+    mockCreateInternalEntry.mockRejectedValue(new Error('copy failed'));
+    await renderHook();
+    const dropped = dropSource('dropped.jpg');
+
+    await act(async () => snapshot?.addAttachments([dropped]));
+    await act(flushPromises);
+
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockCleanupDropStagedFile).toHaveBeenCalledWith(dropped.uri);
+  });
+
+  it('leaves non-staged sources alone when their import fails', async () => {
+    mockCreateInternalEntry.mockRejectedValue(new Error('copy failed'));
+    await renderHook();
+    const picked = source('picked.pdf');
+
+    await act(async () => snapshot?.addAttachments([picked]));
+    await act(flushPromises);
+
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockCleanupDropStagedFile).not.toHaveBeenCalled();
+  });
+
+  it('releases a drop-staged source the composer rejects as a duplicate', async () => {
+    mockCreateInternalEntry.mockResolvedValue(
+      resolvedFile('00000000-0000-7000-8000-000000000041', 'dup.jpg'),
+    );
+    await renderHook();
+    const first = dropSource('dup.jpg');
+    await act(async () => snapshot?.addAttachments([first]));
+    await act(flushPromises);
+    mockCleanupDropStagedFile.mockClear();
+    // Same payload id: the composer already holds it, so the staged copy
+    // behind the rejected draft has no owner left.
+    await act(async () => snapshot?.addAttachments([{ ...first }]));
+    await act(flushPromises);
+
+    expect(snapshot?.attachments).toHaveLength(1);
+    expect(mockCleanupDropStagedFile).toHaveBeenCalledWith(first.uri);
   });
 
   it('keeps a completed import in the library after its placeholder was removed', async () => {
@@ -356,6 +404,16 @@ function imageSource(name: string, mediaType: string): ComposerAttachmentSource 
     mediaType,
     name,
     uri: `file:///source/${name}`,
+  };
+}
+
+function dropSource(name: string): ComposerAttachmentSource {
+  return {
+    id: `drop:${name}`,
+    kind: 'image',
+    mediaType: 'image/jpeg',
+    name,
+    uri: `file:///cache/ImageDropTarget/${name}`,
   };
 }
 

@@ -163,6 +163,7 @@ describe('writeFileTool', () => {
         input: { content: 'late', filename: 'late.txt' },
         signal: controller.signal,
         toolCallId: 'call-1',
+        turnId: 'turn-1',
       }),
     ).rejects.toThrow('turn cancelled');
     expect(files.createTextEntry).not.toHaveBeenCalled();
@@ -208,5 +209,10 @@ function execute(
   tool: ReturnType<typeof createWriteFileTool>,
   input: RuntimeJsonValue,
 ): Promise<RuntimeToolResult> {
-  return tool.execute({ input, signal: new AbortController().signal, toolCallId: 'call-1' });
+  return tool.execute({
+    input,
+    signal: new AbortController().signal,
+    toolCallId: 'call-1',
+    turnId: 'turn-1',
+  });
 }

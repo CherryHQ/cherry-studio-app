@@ -1,5 +1,7 @@
 import type {
   AgentApprovalView,
+  AgentPendingQuestion,
+  AgentUserAnswer,
   AgentEvent,
   AgentMessageDelta,
   AgentMessageView,
@@ -28,6 +30,7 @@ export type AgentSessionChatState = {
   hasHistoryBeforeActiveTurn?: boolean;
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
+  pendingQuestion: AgentPendingQuestion | null;
   sessionId: string;
   snapshot?: AgentSessionSnapshot;
   status: AgentSessionChatStatus;
@@ -79,6 +82,7 @@ function createSessionState(sessionId: string): AgentSessionChatState {
     activeTurn: null,
     liveMessages: [],
     pendingApprovals: [],
+    pendingQuestion: null,
     sessionId,
     status: 'idle',
   };
@@ -366,6 +370,18 @@ export class AgentSessionChatClient {
     await this.protocol.cancelTurn({ sessionId, turnId: turn.id });
   }
 
+  async respondQuestion(
+    sessionId: string,
+    toolCallId: string,
+    answer: AgentUserAnswer,
+  ): Promise<void> {
+    const question = this.getEntry(sessionId).state.pendingQuestion;
+    if (!question || question.toolCallId !== toolCallId) {
+      throw new Error('This question is no longer pending.');
+    }
+    await this.protocol.respondQuestion({ sessionId, turnId: question.turnId, toolCallId, answer });
+  }
+
   async respondApproval(
     sessionId: string,
     approvalId: string,
@@ -442,6 +458,7 @@ export class AgentSessionChatClient {
       hasHistoryBeforeActiveTurn: snapshot.hasHistoryBeforeActiveTurn ?? undefined,
       liveMessages: [...entry.liveMessages.values()],
       pendingApprovals: snapshot.pendingApprovals,
+      pendingQuestion: snapshot.pendingQuestion,
       sessionId: snapshot.session.id,
       snapshot,
       status: 'ready',
@@ -450,6 +467,9 @@ export class AgentSessionChatClient {
 
   private applyEvent(entry: SessionEntry, event: AgentEvent): void {
     switch (event.type) {
+      case 'question.updated':
+        this.updateState(entry, { ...entry.state, pendingQuestion: event.question });
+        return;
       case 'session.updated':
         this.updateState(entry, {
           ...entry.state,
@@ -468,6 +488,9 @@ export class AgentSessionChatClient {
         this.updateState(entry, {
           ...entry.state,
           activeTurn: event.turn,
+          pendingQuestion: TERMINAL_TURN_STATUSES.has(event.turn.status)
+            ? null
+            : entry.state.pendingQuestion,
           pendingApprovals: TERMINAL_TURN_STATUSES.has(event.turn.status)
             ? []
             : entry.state.pendingApprovals,
@@ -542,7 +565,9 @@ export class AgentSessionChatClient {
         // transcript; keeping its view would report a turn nothing can show.
         const isActiveTurnDeleted = entry.state.activeTurn?.id === event.turnId;
         this.commitLiveMessages(entry, {
-          ...(isActiveTurnDeleted ? { activeTurn: null, pendingApprovals: [] } : {}),
+          ...(isActiveTurnDeleted
+            ? { activeTurn: null, pendingApprovals: [], pendingQuestion: null }
+            : {}),
           ...(entry.state.enteringUserMessageId &&
           event.messageIds.includes(entry.state.enteringUserMessageId)
             ? { enteringUserMessageId: undefined }

@@ -39,6 +39,10 @@ jest.mock('@cherrystudio/app-icons/icons/triangle-alert', () => {
   };
 });
 
+jest.mock('../../background-press/background-press', () => ({
+  BackgroundPressExclusion: (props: object) =>
+    jest.requireActual('react').createElement(jest.requireActual('react-native').View, props),
+}));
 jest.mock('../../bottom-sheet', () => {
   const { View } = jest.requireActual('react-native');
 

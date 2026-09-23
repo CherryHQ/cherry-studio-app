@@ -11,6 +11,7 @@
         "buildFromSource": [
           "expo-notifications",
           "expo-image-picker",
+          "expo-app-metrics",
           "expo-observe"
         ]
       }

@@ -52,6 +52,10 @@ import type {
 } from '@/backend/services/backgroundReply';
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
+  AgentRespondQuestionSchema,
+  type AgentRespondQuestionInput,
+  type AgentPendingQuestion,
+  type AgentUserQuestion,
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
@@ -92,6 +96,7 @@ import type { LanguageVarious } from '@/shared/data/preference';
 import { traceErrorAttributes, type TraceRecorder, type TraceSpan } from '../../observability';
 import type { ManagedFileResolver, TurnResourceLedger } from '../resources/managedFileResolver';
 import type {
+  RuntimeToolCall,
   AgentRuntime,
   AgentRuntimeSession,
   RuntimeContextCheckpoint,
@@ -131,6 +136,7 @@ import {
 } from './turnPreparation';
 import { prepareRetryTurn } from './turnRetry';
 import { toRuntimeHistory, toRuntimeInputParts } from './turnRuntimeInput';
+import { TurnUserQuestions } from './TurnUserQuestions';
 
 const logger = loggerService.withContext('MobileAgentHost');
 
@@ -202,6 +208,8 @@ type ActiveTurnState = {
   backgroundReply: BackgroundReplyTurn;
   hasHistoryBeforeActiveTurn: boolean;
   pendingApprovals: Map<string, AgentApprovalView>;
+  userQuestions: TurnUserQuestions;
+  pendingQuestion: AgentPendingQuestion | null;
   pendingContextCheckpoint: RuntimeContextCheckpoint | null;
   resources: TurnResourceLedger;
   runtimeTiming: MessageRuntimeTimingCollector;
@@ -319,6 +327,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private get turnPreparation(): TurnPreparationDependencies {
     return {
       agents: this.ports.agents,
+      askUser: (question, call) => this.askUserQuestion(question, call),
       documentParserMode: () => this.ports.documentParserMode(),
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
@@ -730,6 +739,60 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     await active.runtimeSession?.cancel(parsed.turnId);
   }
 
+  /**
+   * The `ask_user_question` response channel bound into every turn's catalog.
+   * The call's turn id selects the live turn; a call from a turn that is no
+   * longer active fails closed instead of reaching a different session.
+   */
+  private async askUserQuestion(question: AgentUserQuestion, call: RuntimeToolCall) {
+    call.signal.throwIfAborted();
+    const state = [...this.activeTurns.values()].find((entry) => entry.turn.id === call.turnId);
+    if (!state || state.abortController.signal.aborted) {
+      throw new Error('The question does not belong to an active turn.');
+    }
+    const sessionId = state.turn.sessionId;
+    // Register before publishing: an observer may answer synchronously.
+    if (state.pendingQuestion)
+      throw new Error('Wait for the current question before asking another.');
+    const response = state.userQuestions.ask(question, call);
+    state.pendingQuestion = { turnId: state.turn.id, toolCallId: call.toolCallId, question };
+    state.turn = { ...state.turn, status: 'awaiting-input' };
+    state.backgroundReply.awaitApproval(state.assistantMessage, 'question');
+    this.publish(sessionId, { type: 'question.updated', question: state.pendingQuestion });
+    this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
+    try {
+      return await response;
+    } finally {
+      state.pendingQuestion = null;
+      if (this.activeTurns.get(sessionId) === state) {
+        this.publish(sessionId, { type: 'question.updated', question: null });
+      }
+      if (this.activeTurns.get(sessionId) === state && state.turn.status === 'awaiting-input') {
+        state.turn = {
+          ...state.turn,
+          status: [...state.pendingApprovals.values()].some(
+            (approval) => approval.status === 'pending',
+          )
+            ? 'awaiting-approval'
+            : 'running',
+        };
+        this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
+      }
+    }
+  }
+
+  async respondQuestion(input: AgentRespondQuestionInput): Promise<void> {
+    const parsed = AgentRespondQuestionSchema.parse(input);
+    const active = this.activeTurns.get(parsed.sessionId);
+    if (!active || active.turn.id !== parsed.turnId || active.abortController.signal.aborted) {
+      fail('QUESTION_NOT_FOUND', 'This question does not belong to the active turn.');
+    }
+    if (active.pendingQuestion?.toolCallId !== parsed.toolCallId) {
+      fail('QUESTION_NOT_FOUND', 'This question is no longer waiting for an answer.');
+    }
+    active.userQuestions.respond(parsed.toolCallId, parsed.answer);
+  }
+
   async respondApproval(input: {
     sessionId: string;
     turnId: string;
@@ -790,6 +853,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           activeUserMessage: active?.activeUserMessage ?? null,
           hasHistoryBeforeActiveTurn: active?.hasHistoryBeforeActiveTurn ?? null,
           streamingMessage: active?.assistantMessage ?? null,
+          pendingQuestion: active?.pendingQuestion ?? null,
           pendingApprovals: active
             ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
             : [],
@@ -861,6 +925,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }),
       hasHistoryBeforeActiveTurn: plan.hasMessages,
       pendingApprovals: new Map(),
+      userQuestions: new TurnUserQuestions(),
+      pendingQuestion: null,
       pendingContextCheckpoint: null,
       resources: plan.resources,
       runtimeTiming,
@@ -1189,7 +1255,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           (entry) => entry.status === 'pending',
         );
         if (!hasPending && state.turn.status === 'awaiting-approval') {
-          state.turn = { ...state.turn, status: 'running' };
+          state.turn = {
+            ...state.turn,
+            status: state.pendingQuestion ? 'awaiting-input' : 'running',
+          };
           this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
         }
         this.publish(sessionId, { type: 'approval.resolved', approval });

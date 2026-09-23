@@ -35,6 +35,7 @@ import {
   type RuntimeUsageContext,
 } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
+import { createAskUserQuestionTool } from '../../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from '../agentDefinitions';
@@ -1540,6 +1541,8 @@ describe('MobileAgentHost', () => {
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(getTools).toHaveBeenCalledWith({
+      agentId: AGENT_ID,
+      askUser: expect.any(Function),
       disabledCapabilities: ['health'],
       documentParserMode: 'builtin',
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
@@ -2109,6 +2112,82 @@ describe('MobileAgentHost', () => {
     expect(events.find((event) => event.type === 'message.finalized')).toMatchObject({
       message: { status: 'success', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
     });
+  });
+
+  test('answers ask_user_question through the catalog-bound channel of the calling turn', async () => {
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const question = {
+      question: 'Which focus?',
+      selection: 'single' as const,
+      options: [
+        { id: 'a', label: 'Writing', description: '' },
+        { id: 'b', label: 'Reading', description: '' },
+      ],
+    };
+    let answered: unknown;
+    runtime.script(async (controller) => {
+      const ask = controller.request.tools[0];
+      if (!ask) throw new Error('The question tool was not offered.');
+      const result = await ask.execute({
+        input: question,
+        signal: controller.signal,
+        toolCallId: 'question-1',
+        turnId: controller.turnId,
+      });
+      answered = result.value;
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime, noOpNaming, noFiles, {
+      getTools: async ({ askUser }) => [createAskUserQuestionTool(askUser)],
+    });
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Pick one.' }],
+    });
+    await waitFor(
+      () => events.some((event) => event.type === 'question.updated' && event.question !== null),
+      'the question to be published',
+    );
+    const pending = events.find((event) => event.type === 'question.updated');
+    if (pending?.type !== 'question.updated' || !pending.question) throw new Error('No question.');
+    expect(pending.question).toMatchObject({ toolCallId: 'question-1', question });
+    expect(
+      events.some(
+        (event) => event.type === 'turn.updated' && event.turn.status === 'awaiting-input',
+      ),
+    ).toBe(true);
+    const answer = { selectedOptionIds: ['a'], text: '', skipped: false };
+    // A response for another turn never reaches the waiter.
+    await expect(
+      host.respondQuestion({
+        sessionId: session.id,
+        turnId: 'other-turn',
+        toolCallId: 'question-1',
+        answer,
+      }),
+    ).rejects.toMatchObject({ view: { code: 'QUESTION_NOT_FOUND' } });
+
+    await host.respondQuestion({
+      sessionId: session.id,
+      turnId: pending.question.turnId,
+      toolCallId: 'question-1',
+      answer,
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(answered).toMatchObject({
+      selectedOptionIds: ['a'],
+      selectedOptions: [{ id: 'a', label: 'Writing', description: '' }],
+    });
+    expect(
+      events.some((event) => event.type === 'question.updated' && event.question === null),
+    ).toBe(true);
+    expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
   });
 
   test('runs the turn tool-less when the catalog cannot be resolved', async () => {

@@ -17,6 +17,7 @@ function execute(signal = new AbortController().signal) {
     input: { includeAddress: false },
     signal,
     toolCallId: 'location-1',
+    turnId: 'turn-1',
   });
 }
 

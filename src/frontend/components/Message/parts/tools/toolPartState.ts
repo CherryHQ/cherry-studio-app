@@ -53,6 +53,17 @@ export function isWebSearchToolPart(part: ToolMessagePart) {
   return WEB_SEARCH_TOOL_NAMES.has(getToolName(part));
 }
 
+/** The Host's `ask_user_question` tool; its record renders inline, never as process. */
+export function isUserQuestionToolPart(part: ToolMessagePart) {
+  return getToolName(part) === 'ask_user_question';
+}
+
+/** A built-in Agent write whose saved definition is a result worth showing inline. */
+export function isAgentMutationToolPart(part: ToolMessagePart) {
+  const name = getToolName(part);
+  return name === 'agent_create' || name === 'agent_update';
+}
+
 /** A provider-executed web search; its renderer suppresses it entirely. */
 export function isProviderWebSearchToolPart(part: ToolMessagePart) {
   return (
