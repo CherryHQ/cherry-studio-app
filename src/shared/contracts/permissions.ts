@@ -44,7 +44,7 @@ export type SystemPermissionState =
 export type DevicePermissionStatus = {
   state: SystemPermissionState;
   canAskAgain: boolean;
-  reason?: 'unsupported' | 'install-required' | 'service-disabled' | 'native-unavailable';
+  reason?: 'unsupported' | 'service-disabled' | 'native-unavailable';
   accuracy?: 'approximate' | 'precise';
 };
 export type PermissionStatuses = Partial<Record<DevicePermissionScope, DevicePermissionStatus>>;

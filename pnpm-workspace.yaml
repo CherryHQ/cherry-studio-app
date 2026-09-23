@@ -80,6 +80,7 @@ patchedDependencies:
   expo-widgets@57.0.19: patches/expo-widgets@57.0.19.patch
   react-native-streamdown@0.2.0: patches/react-native-streamdown@0.2.0.patch
   expo-observe@57.0.20: patches/expo-observe@57.0.20.patch
+  react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'
