@@ -109,12 +109,6 @@ export class DevicePermissions implements PermissionsModule {
       await startActivityAsync(ActivityAction.LOCATION_SOURCE_SETTINGS);
       return;
     }
-    if (permission === 'health' && Platform.OS === 'android') {
-      const health = this.loadHealthAccess();
-      if (!health) throw new Error('Health access native module is missing');
-      await health.openSettings();
-      return;
-    }
     await Linking.openSettings();
   }
 
@@ -215,7 +209,7 @@ export class DevicePermissions implements PermissionsModule {
   private async getHealthStatuses(types: readonly HealthDataType[]): Promise<PermissionStatuses> {
     const fill = (status: DevicePermissionStatus): PermissionStatuses =>
       Object.fromEntries(types.map((type) => [healthPermissionScope(type), status]));
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return fill(unsupported);
+    if (Platform.OS !== 'ios') return fill(unsupported);
     try {
       const health = this.loadHealthAccess();
       if (!health) return fill({ ...failed, reason: 'native-unavailable' });

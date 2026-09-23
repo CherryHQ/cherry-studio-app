@@ -1,0 +1,25 @@
+diff --git a/android/build.gradle b/android/build.gradle
+index 6c2b8d5a2ad8dea655036622a265e2c9c314bb50..f1b3b5d7d8b64c7d821bde71e76f4e66cb22184a 100644
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -14,6 +14,10 @@ apply plugin: 'org.jetbrains.kotlin.android'
+ android {
+   namespace "com.tula.anydoc"
+   compileSdkVersion rootProject.hasProperty('compileSdkVersion') ? rootProject.compileSdkVersion : 35
++  // Build with the app's NDK instead of AGP's default.
++  if (rootProject.ext.has("ndkVersion")) {
++    ndkVersion rootProject.ext.ndkVersion
++  }
+ 
+   defaultConfig {
+     minSdkVersion rootProject.hasProperty('minSdkVersion') ? rootProject.minSdkVersion : 24
+@@ -32,7 +36,8 @@ android {
+     externalNativeBuild {
+       cmake {
+         cppFlags "-frtti -fexceptions -Wall -fstack-protector-all"
+-        arguments "-DANDROID_STL=c++_shared"
++        // Google Play requires 16 KB ELF alignment; NDK r27 still defaults to 4 KB.
++        arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+       }
+     }
+   }

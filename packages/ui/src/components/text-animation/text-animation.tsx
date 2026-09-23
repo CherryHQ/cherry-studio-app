@@ -5,15 +5,20 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withDelay,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
-import { duration as motionDuration, easing } from '../../motion';
+import { duration as motionDuration, easing, spring } from '../../motion';
 import { cn } from '../../utils';
 
 // Adapted from PanelUI. See packages/ui/third-party-notices.md.
 const DEFAULT_ROTATION_DURATION = 2200;
-const ROTATION_DISTANCE = 22;
+const ROTATION_DISTANCE = 8;
+// The outgoing phrase clears before the incoming one gains weight, so the two never read as one smear.
+const EXIT_FADE_DURATION = 120;
+const ENTER_FADE_DELAY = 60;
 
 type TextAnimationContextValue = {
   delay?: number;
@@ -64,12 +69,16 @@ function useTextAnimationSetting<Key extends keyof TextAnimationContextValue>(
   return (ownValue ?? inheritedValue ?? fallback) as NonNullable<TextAnimationContextValue[Key]>;
 }
 
+export type TextAnimationDirection = 'down' | 'up';
+
 export type TextAnimationRotatingProps = Omit<TextProps, 'children' | 'className'> &
   Readonly<{
     /** Styles the clipping container. */
     className?: string;
     /** Milliseconds before the first phrase change. */
     delay?: number;
+    /** Travel of each change: `up` brings the next phrase in from below, `down` from above. */
+    direction?: TextAnimationDirection;
     /** How long each phrase remains visible, in milliseconds. */
     duration?: number;
     /** Whether this variant animates. Reduce Motion always takes precedence. */
@@ -84,12 +93,14 @@ type RotatingContentProps = Omit<
   TextAnimationRotatingProps,
   'delay' | 'duration' | 'enabled' | 'text'
 > & {
+  direction: TextAnimationDirection;
   still: boolean;
 };
 
 function TextAnimationRotating({
   className,
   delay,
+  direction = 'up',
   duration,
   enabled,
   text,
@@ -101,7 +112,7 @@ function TextAnimationRotating({
   const isEnabled = useTextAnimationSetting('enabled', enabled, true);
   const isStill = useReducedMotion() || !isEnabled;
 
-  const contentProps = { className, still: isStill, textClassName, ...textProps };
+  const contentProps = { className, direction, still: isStill, textClassName, ...textProps };
 
   return typeof text === 'string' ? (
     <RotatingValue {...contentProps} text={text} />
@@ -159,6 +170,7 @@ function RotatingSequence({
     <RotatingLayout
       activeIndex={normalizedActiveIndex}
       phrases={phrases}
+      revealOnMount={false}
       still={still}
       {...props}
     />
@@ -171,57 +183,74 @@ type RotatingValueProps = RotatingContentProps & {
 
 type RotatingValueState = {
   current: string;
-  previous?: string;
+  direction: TextAnimationDirection;
+  exiting: readonly string[];
   transitionId: number;
 };
 
-function RotatingValue({ still, text, ...props }: RotatingValueProps) {
+function RotatingValue({ direction, still, text, ...props }: RotatingValueProps) {
   const [value, setValue] = useState<RotatingValueState>(() => ({
     current: text,
+    direction,
+    exiting: [],
     transitionId: 0,
   }));
 
   // Retarget before commit so a new value cannot flash at its final position.
+  // Direction is captured per change so a direction-only update cannot replay the entry.
   if (value.current !== text) {
     setValue({
       current: text,
-      previous: still ? undefined : value.current,
+      direction,
+      // Rapid changes keep every outgoing phrase mounted until it has faded, instead of dropping it mid-fade.
+      exiting: still ? [] : [...value.exiting.filter((phrase) => phrase !== text), value.current],
       transitionId: value.transitionId + 1,
     });
   }
 
+  const hasExiting = value.exiting.length > 0;
   useEffect(() => {
-    if (value.previous === undefined) {
+    if (!hasExiting) {
       return;
     }
 
     const transitionId = value.transitionId;
     const timeout = setTimeout(() => {
       setValue((current) =>
-        current.transitionId === transitionId ? { ...current, previous: undefined } : current,
+        current.transitionId === transitionId ? { ...current, exiting: [] } : current,
       );
     }, motionDuration.base);
 
     return () => clearTimeout(timeout);
-  }, [value.previous, value.transitionId]);
+  }, [hasExiting, value.transitionId]);
 
-  const phrases =
-    still || value.previous === undefined ? [value.current] : [value.previous, value.current];
+  const phrases = still ? [value.current] : [...value.exiting, value.current];
 
   return (
-    <RotatingLayout activeIndex={phrases.length - 1} phrases={phrases} still={still} {...props} />
+    <RotatingLayout
+      {...props}
+      activeIndex={phrases.length - 1}
+      direction={value.direction}
+      phrases={phrases}
+      revealOnMount={value.transitionId > 0}
+      still={still}
+    />
   );
 }
 
 type RotatingLayoutProps = RotatingContentProps & {
   activeIndex: number;
   phrases: readonly string[];
+  /** Whether a phrase that mounts already active animates in; the initial phrase appears settled. */
+  revealOnMount: boolean;
 };
 
 function RotatingLayout({
   activeIndex,
   className,
+  direction,
   phrases,
+  revealOnMount,
   still,
   testID,
   textClassName,
@@ -255,9 +284,11 @@ function RotatingLayout({
       {phraseItems.map(({ key, phrase }, index) => (
         <RotatingPhrase
           active={index === activeIndex}
+          direction={direction}
           key={`phrase-${key}`}
           measured={index === 0}
           phrase={phrase}
+          revealOnMount={revealOnMount}
           still={still}
           textClassName={textClassName}
           textProps={textProps}
@@ -269,8 +300,10 @@ function RotatingLayout({
 
 type RotatingPhraseProps = {
   active: boolean;
+  direction: TextAnimationDirection;
   measured: boolean;
   phrase: string;
+  revealOnMount: boolean;
   still: boolean;
   textClassName?: string;
   textProps: Omit<TextProps, 'children' | 'className'>;
@@ -278,40 +311,52 @@ type RotatingPhraseProps = {
 
 function RotatingPhrase({
   active,
+  direction,
   measured,
   phrase,
+  revealOnMount,
   still,
   textClassName,
   textProps,
 }: RotatingPhraseProps) {
-  const translateY = useSharedValue(active ? 0 : ROTATION_DISTANCE);
-  const opacity = useSharedValue(active ? 1 : 0);
+  const enterFrom = direction === 'up' ? ROTATION_DISTANCE : -ROTATION_DISTANCE;
+  const settled = active && (still || !revealOnMount);
+  const translateY = useSharedValue(settled ? 0 : enterFrom);
+  const opacity = useSharedValue(settled ? 1 : 0);
 
   useEffect(() => {
     cancelAnimation(translateY);
     cancelAnimation(opacity);
 
     if (still) {
-      translateY.set(active ? 0 : ROTATION_DISTANCE);
+      translateY.set(active ? 0 : enterFrom);
       opacity.set(active ? 1 : 0);
       return;
     }
 
+    const hidden = opacity.get() < 0.01;
     if (active) {
-      translateY.set(ROTATION_DISTANCE);
-      translateY.set(withTiming(0, { duration: motionDuration.base, easing: easing.settle }));
-      opacity.set(withTiming(1, { duration: motionDuration.fast }));
+      // A still-visible phrase that is called back keeps its position and velocity; only an
+      // invisible one restarts from the entry edge.
+      if (hidden) {
+        translateY.set(enterFrom);
+      }
+      translateY.set(withSpring(0, spring.settle));
+      opacity.set(
+        withDelay(
+          ENTER_FADE_DELAY,
+          withTiming(1, { duration: motionDuration.fast, easing: easing.settle }),
+        ),
+      );
       return;
     }
 
-    translateY.set(
-      withTiming(-ROTATION_DISTANCE, {
-        duration: motionDuration.base,
-        easing: easing.settle,
-      }),
-    );
-    opacity.set(withTiming(0, { duration: motionDuration.fast }));
-  }, [active, opacity, still, translateY]);
+    if (hidden) {
+      return;
+    }
+    translateY.set(withSpring(-enterFrom, spring.settle));
+    opacity.set(withTiming(0, { duration: EXIT_FADE_DURATION, easing: easing.settle }));
+  }, [active, enterFrom, opacity, still, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.get(),

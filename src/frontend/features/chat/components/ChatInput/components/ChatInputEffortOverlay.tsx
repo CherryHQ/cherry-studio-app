@@ -1,8 +1,8 @@
-import { Portal, TextAnimation } from '@cherrystudio/ui/components';
-import { easing } from '@cherrystudio/ui/motion';
+import { Portal, TextAnimation, type TextAnimationDirection } from '@cherrystudio/ui/components';
+import { duration, easing } from '@cherrystudio/ui/motion';
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { OverKeyboardView, useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, {
@@ -29,7 +29,7 @@ import { ChatInputEffortBackdrop } from './ChatInputEffortBackdrop/ChatInputEffo
 import { ChatInputEffortGauge } from './ChatInputEffortGauge';
 
 const openDurationMs = 150;
-const closeDurationMs = 120;
+const closeDurationMs = duration.base;
 const EFFORT_BACKDROP_FADE_INSET = 96;
 
 type ActiveEffortLayout = ChatInputEffortOverlayLayout & {
@@ -41,7 +41,6 @@ type ActiveEffortLayout = ChatInputEffortOverlayLayout & {
 
 type ChatInputEffortOverlayProps = {
   children: (gauge: ReactNode) => ReactNode;
-  modelLabel?: string;
   onChange: (value: ChatInputReasoningEffort) => void;
   reasoningEffort: ChatInputReasoningEffort;
   reasoningEfforts: readonly ChatInputReasoningEffort[];
@@ -50,7 +49,6 @@ type ChatInputEffortOverlayProps = {
 /** Floats a gauge-anchored effort slider over the still-mounted composer. */
 export function ChatInputEffortOverlay({
   children,
-  modelLabel,
   onChange,
   reasoningEffort,
   reasoningEfforts,
@@ -82,7 +80,12 @@ export function ChatInputEffortOverlay({
     options.findIndex((option) => option.value === reasoningEffort),
   );
   const currentLabel = options[valueIndex]?.label ?? '';
-  const displayLabel = `${modelLabel ?? t('chat.model.select')} ${currentLabel}`.trim();
+  const [labelIndex, setLabelIndex] = useState(valueIndex);
+  const [labelDirection, setLabelDirection] = useState<TextAnimationDirection>('up');
+  if (labelIndex !== valueIndex) {
+    setLabelIndex(valueIndex);
+    setLabelDirection(valueIndex > labelIndex ? 'up' : 'down');
+  }
 
   const close = useCallback(() => {
     if (!layout) {
@@ -204,6 +207,9 @@ export function ChatInputEffortOverlay({
       Extrapolation.CLAMP,
     ),
   }));
+  const sliderContentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0.5, 1], [0, 1], Extrapolation.CLAMP),
+  }));
   const labelStyle = useAnimatedStyle(() => {
     const reveal = interpolate(progress.value, [0.58, 1], [0, 1], Extrapolation.CLAMP);
 
@@ -259,14 +265,23 @@ export function ChatInputEffortOverlay({
         style={[sliderContainerStyle, { shadowColor: scrimColor }, sliderStyle]}
         testID="chat-input-effort-slider"
       >
-        <View className="absolute inset-0 justify-center overflow-hidden rounded-full">
-          <EffortSlider
-            accessibilityLabel={t('chat.reasoning.title')}
-            onChange={handleChange}
-            options={options}
-            testID="chat-input-effort-slider-control"
-            value={reasoningEffort}
-          />
+        <View className="absolute inset-0 items-center justify-center overflow-hidden rounded-full">
+          {/* Fixed at the resting size so the morph clips the track instead of re-laying it out every frame. */}
+          <Animated.View
+            className="justify-center"
+            style={[
+              { height: layout.sliderFrame.height, width: layout.sliderFrame.width },
+              sliderContentStyle,
+            ]}
+          >
+            <EffortSlider
+              accessibilityLabel={t('chat.reasoning.title')}
+              onChange={handleChange}
+              options={options}
+              testID="chat-input-effort-slider-control"
+              value={reasoningEffort}
+            />
+          </Animated.View>
         </View>
       </Animated.View>
 
@@ -274,13 +289,32 @@ export function ChatInputEffortOverlay({
         pointerEvents="none"
         style={[labelContainerStyle, layout.labelFrame, labelStyle]}
       >
-        <TextAnimation.Rotating
-          ellipsizeMode="tail"
-          numberOfLines={1}
-          text={displayLabel}
-          textClassName="text-center font-semibold text-foreground text-base"
-          testID="chat-input-effort-label"
-        />
+        <View testID="chat-input-effort-label">
+          {/* Reserve the widest effort label so a centered label never re-centers mid-rotation. */}
+          <View
+            accessibilityElementsHidden
+            className="h-0"
+            importantForAccessibility="no-hide-descendants"
+          >
+            {options.map((option) => (
+              <Text
+                key={option.value}
+                className="font-semibold text-base opacity-0"
+                numberOfLines={1}
+              >
+                {option.label}
+              </Text>
+            ))}
+          </View>
+          {/* Unclipped so the rotation's cross-fade stays visible instead of a hard mask. */}
+          <TextAnimation.Rotating
+            className="overflow-visible"
+            direction={labelDirection}
+            numberOfLines={1}
+            text={currentLabel}
+            textClassName="text-center font-semibold text-base text-foreground"
+          />
+        </View>
       </Animated.View>
     </>
   ) : null;
