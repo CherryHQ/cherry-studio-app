@@ -250,8 +250,9 @@ public model ID, provider ID, and display name cross the boundary.
 
 ## Upgrading from the connection foundation
 
-The connection foundation (#1055) can apply location migration 0003 without installing Agent
-projection migration 0002. Drizzle selects upgrades by timestamp, so #997 includes the later
-idempotent `0004_remote_projection_upgrade` to create the missing projection table. Original
-migration timestamps and existing projection data remain unchanged. The upgrade regression tests
-exercise the real SQLite migration dialect for foundation-only and existing Agent databases.
+The connection foundation (#1055) applies `0001_hot_cammi` directly to the final Noise pairing
+schema, including configured endpoints. The Agent layer (#997) adds `0002_daffy_nemesis` to create
+`remote_session_projection`. Journal entries and snapshots follow this same linear order.
+Unreleased development schemas are not supported upgrade sources; there is no compatibility
+backfill migration. Regression tests exercise Drizzle's real SQLite migration dialect when adding
+Agent persistence to the foundation, preserving pairing data and enforcing projection foreign keys.

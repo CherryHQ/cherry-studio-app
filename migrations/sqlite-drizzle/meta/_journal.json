@@ -22,20 +22,6 @@
       "when": 1790074521050,
       "tag": "0002_daffy_nemesis",
       "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1790161519492,
-      "tag": "0003_ordinary_trish_tilby",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1790161519493,
-      "tag": "0004_remote_projection_upgrade",
-      "breakpoints": true
     }
   ]
 }

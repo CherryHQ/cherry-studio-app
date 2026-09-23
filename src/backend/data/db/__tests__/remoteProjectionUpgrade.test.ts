@@ -41,11 +41,11 @@ function migrate(db: DatabaseSync, indices: number[]) {
 
 const allIndices = journal.entries.map(({ idx }) => idx);
 
-it('adds Agent persistence after the foundation has already applied the newer location migration', () => {
+it('adds Agent persistence after the connection foundation without changing pairing data', () => {
   const db = new DatabaseSync(':memory:');
   try {
     db.exec('PRAGMA foreign_keys=ON');
-    migrate(db, [0, 1, 3]);
+    migrate(db, [0, 1]);
     db.exec(`INSERT INTO desktop_connection(id,name,device_id,desktop_identity,grants,configured_endpoints,created_at,updated_at)
       VALUES('desktop','Work','phone','peer','[{"domain":"agent","grantId":"grant"}]','[{"host":"pc.local","port":23333,"security":"ws"}]',1,2)`);
     expect(
@@ -68,28 +68,6 @@ it('adds Agent persistence after the foundation has already applied the newer lo
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     db.exec("DELETE FROM desktop_connection WHERE id='desktop'");
     expect(db.prepare('SELECT * FROM remote_session_projection').all()).toEqual([]);
-  } finally {
-    db.close();
-  }
-});
-
-it.each([
-  [0, 1, 2],
-  [0, 1, 2, 3],
-])('preserves cached Agent recovery when upgrading migrations %j', (...indices) => {
-  const db = new DatabaseSync(':memory:');
-  try {
-    db.exec('PRAGMA foreign_keys=ON');
-    migrate(db, indices);
-    const locationColumns = indices.includes(3) ? '' : ',addresses,port';
-    const locationValues = indices.includes(3) ? '' : ",'[]',23333";
-    db.exec(`INSERT INTO desktop_connection(id,name,device_id,desktop_identity,grants,created_at,updated_at${locationColumns})
-      VALUES('desktop','Work','phone','peer','[]',1,2${locationValues});
-      INSERT INTO remote_session_projection VALUES('desktop','grant','session','epoch','42','{"pendingCommand":"command"}',3)`);
-    const cached = db.prepare('SELECT * FROM remote_session_projection').get();
-    migrate(db, allIndices);
-    expect(db.prepare('SELECT * FROM remote_session_projection').get()).toEqual(cached);
-    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   } finally {
     db.close();
   }
