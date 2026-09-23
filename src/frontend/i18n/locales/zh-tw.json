@@ -145,6 +145,8 @@
   "chat.agentTool.list": "尋找智能體",
   "chat.agentTool.update": "編輯智能體",
   "chat.agentTool.updated": "智能體已更新",
+  "chat.attachments.dropFailed_other": "有 {{count}} 張拖入的圖片無法匯入。",
+  "chat.attachments.dropLimit": "已新增拖入的 {{total}} 張圖片中的 {{added}} 張；單則訊息最多 {{limit}} 張。",
   "chat.attachments.image": "圖片附件",
   "chat.attachments.importFailed_other": "有 {{count}} 個附件匯入失敗。",
   "chat.attachments.unsupportedImageFormat": "僅支持 JPEG、PNG、GIF 和 WebP 格式的圖片。",

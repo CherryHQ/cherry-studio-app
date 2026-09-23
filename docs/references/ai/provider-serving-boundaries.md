@@ -96,10 +96,15 @@ selection still belongs to the binding, and neither traces nor persisted message
 chat readiness.
 
 Pi selects the first API key through `ProviderService`'s per-provider round-robin cursor. Before
-any content event is emitted, an HTTP 401 or 429 advances through the remaining enabled keys in
-that same cyclic order. The working key stays active across subsequent tool steps in the turn;
-failed keys are not revisited in that turn or persistently disabled. Explicit probe-key overrides
-disable failover. Cancellation, other errors, and errors after content starts do not advance keys.
+substantive content or a tool-call event is emitted, an HTTP 401/429 or a recognized structured
+authentication/rate-limit error advances through the remaining enabled keys in that same cyclic
+order. Provider adapters preserve in-stream error codes and bodies; arbitrary error text does not
+trigger key switching. Empty text/thinking events are buffered until content, a tool-call event,
+or successful completion commits the response, and discarded when switching keys. Signed or
+redacted content remains substantive even without visible text. The working key stays active across
+subsequent tool steps in the turn; failed keys are not revisited in that turn or persistently disabled.
+Explicit probe-key overrides disable failover. Cancellation, other errors, and errors after
+substantive content or tool-call events do not advance keys.
 The binding updates usage attribution to the serving key and redacts every candidate credential.
 This policy belongs to Pi; non-conversation AI SDK and image calls retain their existing behavior.
 

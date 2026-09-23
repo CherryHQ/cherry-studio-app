@@ -145,6 +145,8 @@
   "chat.agentTool.list": "エージェントを検索",
   "chat.agentTool.update": "エージェントを編集",
   "chat.agentTool.updated": "エージェントを更新しました",
+  "chat.attachments.dropFailed_other": "{{count}}枚の画像をインポートできませんでした。",
+  "chat.attachments.dropLimit": "ドロップした{{total}}枚のうち{{added}}枚を追加しました。1件のメッセージには最大{{limit}}枚まで添付できます。",
   "chat.attachments.image": "画像添付ファイル",
   "chat.attachments.importFailed_other": "{{count}} 件の添付ファイルを追加できませんでした。",
   "chat.attachments.unsupportedImageFormat": "JPEG、PNG、GIF、および WebP 画像のみがサポートされます。",

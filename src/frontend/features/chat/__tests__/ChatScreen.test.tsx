@@ -44,6 +44,7 @@ jest.mock('@/frontend/components/Composer', () => ({
     dockProps = props;
     return children;
   },
+  ComposerDropArea: ({ children }: { children?: React.ReactNode }) => children,
   ComposerSessionProvider: ({ children }: { children?: React.ReactNode }) => {
     const { useState } = jest.requireActual<typeof import('react')>('react');
     const [instance] = useState(() => ++mockComposerProviderMountCount);

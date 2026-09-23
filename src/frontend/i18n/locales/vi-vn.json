@@ -145,6 +145,8 @@
   "chat.agentTool.list": "Tìm tác nhân",
   "chat.agentTool.update": "Chỉnh sửa tác nhân",
   "chat.agentTool.updated": "Đã cập nhật tác nhân",
+  "chat.attachments.dropFailed_other": "Không thể nhập {{count}} hình ảnh đã thả.",
+  "chat.attachments.dropLimit": "Đã thêm {{added}}/{{total}} hình ảnh được thả; một tin nhắn chứa tối đa {{limit}} hình.",
   "chat.attachments.image": "Hình ảnh đính kèm",
   "chat.attachments.importFailed_other": "Không thể thêm {{count}} tệp đính kèm.",
   "chat.attachments.unsupportedImageFormat": "Chỉ hỗ trợ hình ảnh JPEG, PNG, GIF và WebP.",
