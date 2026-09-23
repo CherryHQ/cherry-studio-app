@@ -26,9 +26,6 @@ public final class ImageDropTargetView: ExpoView {
   /// enforced before any provider I/O so an oversized drop does not start work
   /// whose results would only be discarded.
   private static let selectionLimit = 9
-  /// Provider loads run concurrently but bounded, so a large Files drop cannot
-  /// start one unbounded copy operation per item.
-  private static let maxConcurrentLoads = 3
   /// What the send pipeline consumes; anything else is transcoded to JPEG.
   private static let supportedImageMIMETypes: Set<String> = [
     "image/gif", "image/jpeg", "image/png", "image/webp",
@@ -316,31 +313,21 @@ extension ImageDropTargetView: UIDropInteractionDelegate {
     }
 
     let group = DispatchGroup()
-    let inFlight = DispatchSemaphore(value: Self.maxConcurrentLoads)
-    let loadQueue = DispatchQueue(label: "cherry.imageDropTarget.load", attributes: .concurrent)
     let lock = NSLock()
     var indexedPayloads: [Int: [String: Any]] = [:]
 
+    // Every load must start before performDrop returns: once the session ends,
+    // a load requested later never calls back. The provider delivers results
+    // on its own callback queue, so no extra dispatching is needed here.
     for (index, item) in acceptedItems.enumerated() {
       group.enter()
-      loadQueue.async { [weak self] in
-        inFlight.wait()
-        // The view can be released while this worker queued on the semaphore;
-        // leaving without its load would block the remaining workers forever.
-        guard let self else {
-          inFlight.signal()
-          group.leave()
-          return
+      loadImagePayload(from: item.itemProvider) { payload in
+        if let payload {
+          lock.lock()
+          indexedPayloads[index] = payload
+          lock.unlock()
         }
-        self.loadImagePayload(from: item.itemProvider) { payload in
-          if let payload {
-            lock.lock()
-            indexedPayloads[index] = payload
-            lock.unlock()
-          }
-          inFlight.signal()
-          group.leave()
-        }
+        group.leave()
       }
     }
 
