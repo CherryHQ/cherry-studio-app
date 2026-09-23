@@ -1,7 +1,7 @@
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { Agent } from '@/shared/data/types/agent';
 import { DEFAULT_DISABLED_AGENT_CAPABILITIES } from '@/shared/data/types/agentCapability';
-import { AgentToolRecordSchema } from '@/shared/contracts/agentManagement';
+import { AgentToolRecordSchema } from '@/shared/data/types/agentManagementTool';
 
 import type { RuntimeJsonValue } from '../../runtime';
 import { createAgentManagementTools, type AgentManagementData } from '../agentManagementTools';

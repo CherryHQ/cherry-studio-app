@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { AgentSchema } from '@/shared/data/types/agent';
+import { AgentSchema } from './agent';
 
 /** Tool results expose configuration, never managed avatar paths or provider credentials. */
 export const AgentToolRecordSchema = AgentSchema.pick({

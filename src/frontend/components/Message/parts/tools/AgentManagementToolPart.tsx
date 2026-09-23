@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { chatHref } from '@/frontend/appShell/navigation/chat';
-import { AgentMutationToolResultSchema } from '@/shared/contracts/agentManagement';
+import { AgentMutationToolResultSchema } from '@/shared/data/types/agentManagementTool';
 
 import { GenericToolPart } from './GenericToolPart';
 import type { ToolMessagePart } from './toolPartState';

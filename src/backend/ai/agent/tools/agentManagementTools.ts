@@ -1,11 +1,11 @@
 import * as z from 'zod';
 
 import type { AgentService } from '@/backend/data/services/AgentService';
-import { AgentToolRecordSchema } from '@/shared/contracts/agentManagement';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { UpdateAgentSchema } from '@/shared/data/api/schemas/agents';
 import { AgentIdSchema } from '@/shared/data/types/agent';
 import { DEFAULT_DISABLED_AGENT_CAPABILITIES } from '@/shared/data/types/agentCapability';
+import { AgentToolRecordSchema } from '@/shared/data/types/agentManagementTool';
 import { UNIQUE_MODEL_ID_SEPARATOR, UniqueModelIdSchema } from '@/shared/data/types/model';
 
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
