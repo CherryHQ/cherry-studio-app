@@ -860,7 +860,7 @@ describe('BackgroundReplyRuntime', () => {
     translate: (key: string) => string = (key) =>
       key === 'chat.backgroundReply.assistant'
         ? 'Localized assistant'
-        : key === 'backgroundActivity.awaitingApproval'
+        : key === 'chat.backgroundReply.awaitingApproval'
           ? '等待审批'
           : key === 'backgroundActivity.cancelled'
             ? '已取消'

@@ -240,6 +240,7 @@ describe('turn preparation', () => {
 
     expect(harness.routeExecutionTarget).toHaveBeenCalledWith(SESSION.executionTarget);
     expect(harness.getSystemTools).toHaveBeenCalledWith({
+      agentId: AGENT.id,
       disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       resources: plan.resources,
