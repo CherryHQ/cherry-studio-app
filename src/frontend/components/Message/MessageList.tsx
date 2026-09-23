@@ -1,4 +1,4 @@
-import { ContextMenuScrollBoundary, ScrollToBottomButton } from '@cherrystudio/ui/components';
+import { ScrollInteractionBoundary, ScrollToBottomButton } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -156,7 +156,7 @@ export function MessageList({
   return (
     <MessageListDisclosureProvider onDisclosureToggle={handleDisclosureToggle}>
       <View className="flex-1" testID="chat-message-list">
-        <ContextMenuScrollBoundary
+        <ScrollInteractionBoundary
           onMomentumScrollBegin={handleMomentumScrollBegin}
           onMomentumScrollEnd={handleMomentumScrollEnd}
           onScrollBeginDrag={handleScrollBeginDrag}
@@ -204,7 +204,7 @@ export function MessageList({
               className="flex-1"
             />
           )}
-        </ContextMenuScrollBoundary>
+        </ScrollInteractionBoundary>
         {messages.length > 0 ? (
           <ScrollToBottomButton
             accessibilityLabel={t('chat.message.scrollToBottom')}

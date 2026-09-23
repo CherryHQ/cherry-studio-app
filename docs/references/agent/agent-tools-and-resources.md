@@ -3,11 +3,12 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, health, location, web search and fetch,
-image generation, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
+image generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
 `{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location) are enabled per Agent in the editor; the three file tools belong to every turn. An
+health, location, agents) are enabled per Agent in the editor; `ask_user_question` and the three file tools belong to
+every turn. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -560,3 +561,59 @@ desktop event labels or persistence shapes.
 - Mobile Skills cannot add tools, approvals, credentials, or resource-ledger grants.
 - Cancellation, denial, unavailable tools, and process interruption all fail closed without late
   side effects entering the transcript or non-terminal tool calls entering later model history.
+
+
+## User Questions
+
+`ask_user_question` is a core system tool, available when the model supports tool calls. It asks
+one bounded question with two to four options and single or multiple selection. The tool waits
+for a user response; it is not a tool-approval request and never auto-selects an answer. A custom
+text answer and skipping are always available. Skipping does not authorize an action.
+
+The Host supplies the response channel to the catalog through turn preparation; each call carries
+its turn id, so the Host correlates the question to the live turn and tool-call ID. The Protocol
+publishes `question.updated` and includes `pendingQuestion` in observation snapshots. While a
+question is pending, the turn reports `awaiting-input`. The mobile chat displays a non-dismissible
+bottom sheet, locks the ordinary composer, and accepts single-tap answers, multi-selection plus
+Continue, free text, Skip, or Stop. Approval requests take presentation priority if tools were
+called concurrently. A second simultaneous question is rejected.
+
+Question arguments and successful answers use ordinary persisted tool parts. The transcript shows
+a read-only question/answer record. Pending callbacks and waiting state are memory-only, like
+approvals: leaving a route does not cancel the turn, but cancellation, host disposal, and process
+restart invalidate the question. Persisted unanswered questions are not resumable controls.
+
+Pi pauses its execution deadline while a `RuntimeTool` with `interaction: 'user-input'` waits,
+exactly as it does for an approval wait, then restores the remaining budget. Background activity uses the existing approval attention phase
+with a question-specific label and releases its keep-alive lease. This does not promise indefinite
+background execution or recovery after the operating system terminates the app.
+
+
+## Agent Management
+
+The `agents` capability group contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
+The editor lists it as Agent management alongside the other capability groups; it needs no OS
+permission. New Agents start with it disabled,
+whether created from the editor or by these tools; the seeded default Agent keeps it enabled so a
+fresh installation can create Agents from conversation. Reads use automatic approval; writes start at `ask` and follow the current Agent's approval
+preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
+or change MCP bindings.
+
+Creation accepts a name, instructions, and optional definition fields. Omitting `modelId` lets
+`AgentService` resolve the global default Agent model; omitted capability settings use the same
+disabled groups as the manual create form. A saved Agent without a model remains editable
+but cannot start chatting. The model derives instructions from the conversation and may use
+`ask_user_question` for material missing requirements.
+
+`agent_list` supports name search and pagination, returns at most 50 compact records per call,
+and omits instructions. `agent_get` returns the editable definition and `updatedAt`; both get and
+update accept `current` to refer to the originating conversation's Agent. Update requires that
+version and an explicit field patch. The persistence transaction compares the row timestamp before
+writing, rejecting a concurrent edit or deletion. A conflict requires reading and reconciling the
+latest definition. Changes to the active Agent apply to future turns only.
+
+Create/update publish committed Data API cache invalidations, including when a turn has no visible
+chat subscriber. Successful writes render a compact saved-Agent card with a Start chat action when a model is
+configured. List/read results remain in the process disclosure. Results omit managed
+avatar paths and credentials. Writes are not automatically replayed: after an uncertain outcome,
+inspect current saved records before deciding whether another write is needed.

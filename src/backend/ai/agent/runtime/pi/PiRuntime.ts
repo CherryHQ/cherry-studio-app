@@ -245,6 +245,11 @@ type ActiveTurn = {
   inputPreviews: PiToolInputPreviewBuffer;
   terminalMessage?: AssistantMessage;
   timeoutHandle?: ReturnType<typeof setTimeout>;
+  /** Absolute execution deadline while running; the remaining budget while paused for a human. */
+  timeoutDeadline: number;
+  timeoutRemainingMs: number;
+  /** Outstanding approval and user-input waits; the deadline resumes when this returns to zero. */
+  humanWaits: number;
   toolCallCount: number;
   toolBudgetError?: RuntimeError;
   toolBindingsByProviderName: Map<string, PiToolBinding>;
@@ -620,6 +625,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
         turn.toolParts.set(toolCallId, { ...part, inputPreview: preview });
         this.emit(turn, { type: 'tool.input.preview', partId: part.id, preview });
       }),
+      timeoutDeadline: performance.now() + this.limits.turnTimeoutMs,
+      timeoutRemainingMs: this.limits.turnTimeoutMs,
+      humanWaits: 0,
       toolCallCount: 0,
       toolBindingsByProviderName: new Map(),
       toolParts: new Map(),
@@ -1382,7 +1390,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           status: 'pending',
         },
       });
-      const decision = await decisionPromise;
+      const decision = await this.awaitHuman(turn, decisionPromise);
       this.emit(turn, {
         type: 'approval.resolved',
         approval: {
@@ -1415,11 +1423,16 @@ class PiRuntimeSession implements AgentRuntimeSession {
       const callbackSignal = signal
         ? AbortSignal.any([turn.abortController.signal, signal])
         : turn.abortController.signal;
-      const output = await runtimeTool.execute({
+      const execution = runtimeTool.execute({
         input,
         signal: callbackSignal,
         toolCallId,
+        turnId: turn.turnId,
       });
+      const output =
+        runtimeTool.interaction === 'user-input'
+          ? await this.awaitHuman(turn, execution)
+          : await execution;
       if (turn.phase !== 'running' || callbackSignal.aborted) {
         return this.interruptToolCall(turn, part);
       }
@@ -1693,6 +1706,27 @@ class PiRuntimeSession implements AgentRuntimeSession {
       });
       turn.failedToolCalls.add(part.toolCallId);
       turn.settledToolCalls.add(part.toolCallId);
+    }
+  }
+
+  /**
+   * Human response time is not model execution: the deadline stops while an
+   * approval or a user-input tool waits and resumes with its remaining budget.
+   * Overlapping waits share one pause. Cancellation and timeout still abort
+   * the waiter through the turn signal.
+   */
+  private async awaitHuman<T>(turn: ActiveTurn, wait: Promise<T>): Promise<T> {
+    if (turn.humanWaits++ === 0) {
+      clearTimeout(turn.timeoutHandle);
+      turn.timeoutRemainingMs = Math.max(0, turn.timeoutDeadline - performance.now());
+    }
+    try {
+      return await wait;
+    } finally {
+      if (--turn.humanWaits === 0 && turn.phase === 'running') {
+        turn.timeoutDeadline = performance.now() + turn.timeoutRemainingMs;
+        turn.timeoutHandle = setTimeout(() => this.timeoutTurn(turn), turn.timeoutRemainingMs);
+      }
     }
   }
 

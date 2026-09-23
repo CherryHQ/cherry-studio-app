@@ -129,6 +129,7 @@ describe('turn preparation', () => {
         input: { file_entry_id: FILE_ENTRY_ID },
         signal: new AbortController().signal,
         toolCallId: 'read-1',
+        turnId: 'turn-1',
       });
       expect(read.value).toMatchObject({
         parser: 'anydoc',
@@ -172,6 +173,7 @@ describe('turn preparation', () => {
             input: { file_entry_id: FILE_ENTRY_ID },
             signal: new AbortController().signal,
             toolCallId: 'read-2',
+            turnId: 'turn-1',
           })
         ).value,
       ).toMatchObject({ parser: 'builtin', text: 'built-in result' });
@@ -240,6 +242,8 @@ describe('turn preparation', () => {
 
     expect(harness.routeExecutionTarget).toHaveBeenCalledWith(SESSION.executionTarget);
     expect(harness.getSystemTools).toHaveBeenCalledWith({
+      agentId: AGENT.id,
+      askUser: harness.askUser,
       disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       resources: plan.resources,
@@ -517,8 +521,12 @@ function createHarness() {
   });
   const preflightModel = jest.spyOn(runtime, 'preflightModel');
   const routeExecutionTarget = jest.fn(() => runtime);
+  const askUser = jest.fn(async () => {
+    throw new Error('Preparation never asks the user.');
+  });
   const dependencies: TurnPreparationDependencies = {
     agents: { getAgent },
+    askUser,
     documentParserMode: () => 'anydoc',
     files,
     inferenceModel: resolveInferenceModel,
@@ -529,6 +537,7 @@ function createHarness() {
   };
 
   return {
+    askUser,
     configuredTool,
     dependencies,
     files,

@@ -553,6 +553,7 @@ describe('Runtime tool adapter', () => {
         input: { query: 'cherry' },
         signal: controller.signal,
         toolCallId: 'call-1',
+        turnId: 'turn-1',
       }),
     ).resolves.toEqual({
       artifacts: [],
@@ -587,6 +588,7 @@ describe('Runtime tool adapter', () => {
         input: { query: 'cherry' },
         signal: new AbortController().signal,
         toolCallId: 'call-1',
+        turnId: 'turn-1',
       }),
     ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
     expect(client.callTool).not.toHaveBeenCalled();
@@ -609,6 +611,7 @@ describe('Runtime tool adapter', () => {
         input: { query: 'cherry' },
         signal: new AbortController().signal,
         toolCallId: 'call-1',
+        turnId: 'turn-1',
       }),
     ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
     expect(secondClient.callTool).not.toHaveBeenCalled();
@@ -737,7 +740,12 @@ describe('built-in plugin identities', () => {
       const [descriptor] = await service.listExecutableToolDescriptors(server.id);
       const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
       await expect(
-        tool!.execute({ input: {}, signal: new AbortController().signal, toolCallId: 'write' }),
+        tool!.execute({
+          input: {},
+          signal: new AbortController().signal,
+          toolCallId: 'write',
+          turnId: 'turn-1',
+        }),
       ).rejects.toMatchObject({
         code,
         message: 'Safe plugin failure.',
@@ -817,6 +825,7 @@ describe('built-in plugin identities', () => {
             input: {},
             signal: new AbortController().signal,
             toolCallId: 'body-failure',
+            turnId: 'turn-1',
           })
           .catch((failure: unknown) => failure);
         expect(error).toMatchObject({ code, retryable, stack: undefined });
@@ -884,7 +893,12 @@ describe('built-in plugin identities', () => {
     const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
     server.authorizationId = 'grant-2';
     await expect(
-      tool!.execute({ input: {}, signal: new AbortController().signal, toolCallId: 'call-1' }),
+      tool!.execute({
+        input: {},
+        signal: new AbortController().signal,
+        toolCallId: 'call-1',
+        turnId: 'turn-1',
+      }),
     ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
     expect(client.callTool).not.toHaveBeenCalled();
     service.invalidateServer(server.id);
@@ -898,6 +912,7 @@ describe('catalog reuse', () => {
       input: { query: 'cherry' },
       signal: new AbortController().signal,
       toolCallId: 'call-1',
+      turnId: 'turn-1',
     });
   }
 

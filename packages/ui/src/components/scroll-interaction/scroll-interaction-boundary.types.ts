@@ -4,7 +4,7 @@ import type { GestureResponderEvent, NativeScrollEvent, NativeSyntheticEvent } f
 type ScrollEventHandler = (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 type TouchEventHandler = (event: GestureResponderEvent) => void;
 
-export type ContextMenuScrollHandlers = {
+export type ScrollInteractionHandlers = {
   onMomentumScrollBegin?: ScrollEventHandler;
   onMomentumScrollEnd?: ScrollEventHandler;
   onScrollBeginDrag?: ScrollEventHandler;
@@ -14,6 +14,6 @@ export type ContextMenuScrollHandlers = {
   onTouchStart?: TouchEventHandler;
 };
 
-export type ContextMenuScrollBoundaryProps = ContextMenuScrollHandlers & {
-  children: (handlers: ContextMenuScrollHandlers) => ReactElement;
+export type ScrollInteractionBoundaryProps = ScrollInteractionHandlers & {
+  children: (handlers: ScrollInteractionHandlers) => ReactElement;
 };

@@ -33,6 +33,7 @@ let mockAgentChatSession: {
   hasHistoryBeforeActiveTurn?: boolean;
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
+  pendingQuestion: null;
   retryingMessageId?: string;
   sessionId: string;
   status: 'ready';
@@ -72,6 +73,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     ActionMenu: ({ children }: { children: ReactNode }) => children,
+    BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
     Button: (props: object) => createElement('Button', props),
     ContentState: {
       Error: (props: object) => createElement('ContentState.Error', props),
@@ -288,6 +290,7 @@ describe('ChatWorkspace message rendering integration', () => {
       activeTurn: null,
       liveMessages: [],
       pendingApprovals: [],
+      pendingQuestion: null,
       sessionId: 'session-1',
       status: 'ready',
     };

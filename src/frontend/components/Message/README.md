@@ -340,3 +340,14 @@ uses the shared CherryUI motion vocabulary. Pending assistant and reasoning rows
 their label with the shared `ShimmerText` highlight instead of pulsing row opacity.
 File-input generation uses a static title while its adjacent content updates; the title resumes
 the normal running animation during tool execution.
+
+
+`ask_user_question` tool parts stay visible in the message body as read-only question/answer
+records. They never submit responses from history. The chat feature owns the active response
+sheet, including input, cancellation, and Protocol correlation.
+
+
+Successful `agent_create` and `agent_update` parts render saved-Agent result cards in the body,
+with a Start chat action when a model is configured. The card uses persisted result metadata; navigation opens the
+current record, so a later-deleted Agent follows the destination's ordinary unavailable state.
+Agent list/read calls remain in the execution disclosure.

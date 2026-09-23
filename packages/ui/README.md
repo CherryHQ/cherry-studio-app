@@ -163,6 +163,16 @@ scroll-cancellation contract in
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md)
 and verify the native interaction boundary on each supported platform.
 
+`BackgroundPressArea` recognizes background taps without taking the list's JavaScript responder.
+Its native view is the only owner of the press decision: movement and long-press thresholds,
+scrolling, a touch that stops momentum, extra pointers and nested areas cancel it on the UI thread,
+and JavaScript receives only completed presses. Readable content remains a background target.
+Wrap controls with their own taps in `BackgroundPressExclusion`, keeping each exclusion bounded to
+the press target and carrying the target's outer margins instead of covering a full-screen
+overlay. CherryUI press targets that render inside background areas exclude themselves. The native
+implementation requires regenerating Nitro bindings and rebuilding the development client when
+changed.
+
 Typography utilities are exported from `@cherrystudio/ui/utils`: `normalizeFontSizeStep`,
 `resolveTypographyScale`, and `createTypographyCSSVariables` keep native style objects, runtime CSS
 variables, MessageList geometry, and settings previews on the same three-step scale.
@@ -501,7 +511,7 @@ component instead of configuring a trigger:
 import {
   ActionMenu,
   ContextMenu,
-  ContextMenuScrollBoundary,
+  ScrollInteractionBoundary,
   type MenuItem,
 } from '@cherrystudio/ui/components';
 
@@ -521,9 +531,9 @@ const items = [
 </ContextMenu>;
 
 // The scroll owner exposes drag and momentum state to every descendant context menu.
-<ContextMenuScrollBoundary>
+<ScrollInteractionBoundary>
   {(scrollHandlers) => <ScrollView {...scrollHandlers}>{rows}</ScrollView>}
-</ContextMenuScrollBoundary>;
+</ScrollInteractionBoundary>;
 ```
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
@@ -580,12 +590,13 @@ selection sheets, forms, and system media/share interfaces retain their own inte
 Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
 Wrap every scroll component containing a gesture-owned `ContextMenu` in one
-`ContextMenuScrollBoundary`. The boundary supplies drag, momentum, and touch handlers through its
+`ScrollInteractionBoundary`. The boundary supplies drag, momentum, and touch handlers through its
 render callback without rendering another native view. Pass an existing scroll handler to the
-boundary itself when it needs to be composed with menu arbitration. A touch that only stops
-momentum stays ineligible for a context menu until that touch ends. iOS forwards the caller's scroll
-handlers and relies on UIKit arbitration. A custom trigger for a gesture-owned menu component must
-forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
+boundary itself when it needs to be composed with interaction arbitration. Android menus read
+the nearest boundary's state. A touch that only stops momentum stays ineligible until a new touch
+begins. The boundary is shared across platforms, while iOS keeps its native context-menu
+recognition and UIKit arbitration.
+A custom trigger for a gesture-owned menu component must forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
 target.
 
 `ContextMenu` recognition follows

@@ -42,6 +42,7 @@ import type {
   AgentSessionStore,
   StoredRuntimeTurnContext,
 } from '../sessionStore/AgentSessionStore';
+import type { AskUserQuestion } from '../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
@@ -66,6 +67,8 @@ function fail(code: AgentErrorView['code'], message: string, retryable = false):
 
 export type TurnPreparationDependencies = {
   agents: AgentDefinitionSource;
+  /** The Host's `ask_user_question` response channel; calls correlate by turn id. */
+  askUser: AskUserQuestion;
   documentParserMode(): DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
@@ -366,6 +369,8 @@ export async function prepareResolvedTurn(
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
+          agentId: agent.id,
+          askUser: dependencies.askUser,
           disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
           resources,
