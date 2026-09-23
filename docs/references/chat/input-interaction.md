@@ -50,15 +50,18 @@ own scoped changes if an observed problem warrants one.
 ## Implementation Boundaries
 
 `ComposerDismissArea` delegates tap recognition to CherryUI's native `BackgroundPressArea`.
-Android uses `GestureDetector`; iOS uses UIKit recognizers with pan priority. Neither uses a
-JavaScript responder around the list or infers a tap from the touch's final coordinates.
-Message content and the scroll-to-bottom control are explicit exclusions. `ScrollInteractionBoundary`
-owns drag/momentum state for each scroll surface. Menus read that state; the enclosing background
-area subscribes to scroll starts and latches cancellation for its own native touch. Unmounting one
-scroll surface removes only its subscription and cannot reset another surface's scroll state.
-The scroll boundary imports neither menus nor background-press components.
-Native touch-start and tap completion share one ordered callback stream. React Native's batched
-touch events cannot initialize or rearm that stream, because they can arrive after completion.
+Android uses `GestureDetector`; iOS uses UIKit recognizers with pan priority, installed on the
+Fabric component host because React children are mounted beside the Nitro content view. Neither
+uses a JavaScript responder around the list or infers a tap from the touch's final coordinates.
+The native view alone decides whether a touch is a background press. Scrolling, a touch that
+stops momentum, extra pointers, nested areas and exclusions cancel it on the UI thread; JavaScript
+receives only completed presses, so batched React Native touch or scroll events cannot race it.
+
+Message text stays a background target, so tapping it dismisses the composer. Controls with their
+own taps are exclusions: message-part disclosures and cards, sources, file strips, the assistant
+toolbar, painting results and retry actions, and the scroll-to-bottom control. Content presented
+in sheets is outside the area. `ScrollInteractionBoundary` owns drag/momentum state for context
+menus and has no background-press policy.
 
 The composer presentation hook issues at most one blur per editing session. The Android keyboard
 adapter patch also clamps an invalid scroll offset when the closing animation ends, including
@@ -77,7 +80,8 @@ or selection conformance. With explicit device-verification authorization, check
   remain stable without a brief hide/show cycle.
 - Send a message to blur the input, end editing, and dismiss the keyboard. Scrolling and message
   actions do not issue additional keyboard-dismiss commands.
-- Tap the empty chat or unused message-list area to blur the input and dismiss its keyboard.
+- Tap the empty chat, the unused message-list area, or message text to blur the input and dismiss
+  its keyboard. Tapping a message control performs only that control's action.
   An empty composer follows its existing collapse animation; dragging or child actions do not
   count as background presses.
 - Drag away and back to the starting point, hold without moving, use multiple fingers, and tap

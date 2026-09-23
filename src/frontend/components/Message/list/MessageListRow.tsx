@@ -1,4 +1,3 @@
-import { BackgroundPressExclusion } from '@cherrystudio/ui/components';
 import { memo } from 'react';
 import { StyleSheet, type StyleProp, View, type ViewStyle } from 'react-native';
 
@@ -16,11 +15,7 @@ export const MessageListRow = memo(function MessageListRow({
   message,
   renderMessage,
 }: MessageListRowProps) {
-  return (
-    <View style={messageRowStyles[message.role]}>
-      <BackgroundPressExclusion>{renderMessage(message)}</BackgroundPressExclusion>
-    </View>
-  );
+  return <View style={messageRowStyles[message.role]}>{renderMessage(message)}</View>;
 });
 
 const styles = StyleSheet.create({
