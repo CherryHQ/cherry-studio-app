@@ -1,0 +1,103 @@
+name: Google Play AAB
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - '!v*.*.*-*'
+
+permissions:
+  contents: read
+
+env:
+  EAS_CLI_VERSION: 24.4.2
+
+concurrency:
+  group: google-play-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-android:
+    name: Build Google Play AAB on EAS
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "${RELEASE_TAG#v}" = "$(jq -r '.expo.version' app.json)"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.2.1
+
+      - name: Configure EAS CLI install scripts
+        # Match expo-github-action's temporary CLI directory; allowBuilds is project-only.
+        run: |
+          eas_cli_dir="$RUNNER_TEMP/eas-cli/$EAS_CLI_VERSION/$(node -p 'require("node:os").arch()')"
+          mkdir -p "$eas_cli_dir"
+          pnpm --dir "$eas_cli_dir" config set --location=project --json allowBuilds '{"dtrace-provider": false, "protobufjs": false}'
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: ${{ env.EAS_CLI_VERSION }}
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Android on EAS and wait for completion
+        run: |
+          eas build --platform android --profile production-google-play --non-interactive --wait --json > "$RUNNER_TEMP/google-play-build.json"
+          jq -e 'length == 1 and .[0].status == "FINISHED" and .[0].platform == "ANDROID"' "$RUNNER_TEMP/google-play-build.json"
+          build_id="$(jq -er '.[0].id' "$RUNNER_TEMP/google-play-build.json")"
+          echo "Google Play EAS build: $build_id" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download AAB for manual Google Play upload
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          aab_url="$(jq -er '.[0].artifacts.applicationArchiveUrl' "$RUNNER_TEMP/google-play-build.json")"
+          artifact_dir="$RUNNER_TEMP/google-play-release"
+          mkdir -p "$artifact_dir"
+          aab_name="cherry-studio-${RELEASE_TAG#v}-android.aab"
+          curl --fail --location --retry 3 --connect-timeout 30 --max-time 900 \
+            "$aab_url" --output "$artifact_dir/$aab_name"
+          unzip -tq "$artifact_dir/$aab_name"
+          unzip -Z1 "$artifact_dir/$aab_name" | grep -x 'base/manifest/AndroidManifest.xml'
+          (cd "$artifact_dir" && sha256sum "$aab_name" > SHA256SUMS)
+
+      - name: Save Google Play bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-play-release
+          path: ${{ runner.temp }}/google-play-release/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+          overwrite: true
+
+      - name: Explain manual Google Play upload
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          Download the `google-play-release` artifact from this run and extract the ZIP.
+          It contains the signed AAB and `SHA256SUMS`; the artifact is retained for 30 days.
+          Upload the `.aab` file to your chosen release track in Google Play Console, then complete the release and submit it for review there.
+          This workflow only builds and saves the bundle; it does not upload to Google Play or submit for review.
+          EOF

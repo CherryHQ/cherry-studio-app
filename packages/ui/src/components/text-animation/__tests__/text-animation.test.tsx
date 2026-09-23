@@ -6,6 +6,7 @@ import { TextAnimation } from '../text-animation';
 let mockReducedMotion = false;
 const mockCancelAnimation = jest.fn();
 const mockWithTiming = jest.fn((value: number, _config?: unknown) => value);
+const mockWithSpring = jest.fn((value: number, _config?: unknown) => value);
 
 jest.mock('heroui-native/utils', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
@@ -46,9 +47,17 @@ jest.mock('react-native-reanimated', () => {
     useAnimatedStyle: (factory: () => object) => factory(),
     useReducedMotion: () => mockReducedMotion,
     useSharedValue,
+    withDelay: (_delay: number, animation: number) => animation,
+    withSpring: (value: number, config?: unknown) => mockWithSpring(value, config),
     withTiming: (value: number, config?: unknown) => mockWithTiming(value, config),
   };
 });
+
+function activePhraseOpacity(renderer: ReactTestRenderer) {
+  const [, animatedStyle] = renderer.root.findAllByProps({ importantForAccessibility: 'auto' })[0]
+    .props.style;
+  return animatedStyle.opacity;
+}
 
 function activePhrase(renderer: ReactTestRenderer) {
   return renderer.root.findAllByProps({ importantForAccessibility: 'auto' })[0].findByType(Text)
@@ -63,6 +72,7 @@ describe('TextAnimation.Rotating', () => {
     mockReducedMotion = false;
     mockCancelAnimation.mockClear();
     mockWithTiming.mockClear();
+    mockWithSpring.mockClear();
   });
 
   afterEach(() => {
@@ -161,6 +171,7 @@ describe('TextAnimation.Rotating', () => {
     act(() => jest.advanceTimersByTime(1000));
     expect(activePhrase(renderer!)).toBe('One');
     expect(mockWithTiming).not.toHaveBeenCalled();
+    expect(mockWithSpring).not.toHaveBeenCalled();
     expect(mockCancelAnimation).toHaveBeenCalled();
   });
 
@@ -205,6 +216,92 @@ describe('TextAnimation.Rotating', () => {
         .findAllByType(Text)
         .map((node) => node.props.children),
     ).toEqual(['Complete']);
+  });
+
+  it.each([
+    ['up', -8],
+    ['down', 8],
+  ] as const)('moves the previous value %s when the string changes', (direction, exitTarget) => {
+    act(() => {
+      renderer = create(<TextAnimation.Rotating direction={direction} text="Low" />);
+    });
+    mockWithSpring.mockClear();
+
+    act(() => {
+      renderer!.update(<TextAnimation.Rotating direction={direction} text="High" />);
+    });
+
+    const targets = mockWithSpring.mock.calls.map(([target]) => target);
+    expect(targets).toContain(exitTarget);
+    expect(targets).not.toContain(-exitTarget);
+  });
+
+  it('does not replay the current value when only the direction changes', () => {
+    act(() => {
+      renderer = create(<TextAnimation.Rotating direction="up" text="Medium" />);
+    });
+    mockWithTiming.mockClear();
+    mockWithSpring.mockClear();
+
+    act(() => {
+      renderer!.update(<TextAnimation.Rotating direction="down" text="Medium" />);
+    });
+
+    expect(mockWithTiming).not.toHaveBeenCalled();
+    expect(mockWithSpring).not.toHaveBeenCalled();
+  });
+
+  it('keeps every outgoing value mounted through rapid changes until the last one settles', () => {
+    const sizerPhrases = () =>
+      renderer!.root
+        .findByProps({ pointerEvents: 'none' })
+        .findAllByType(Text)
+        .map((node) => node.props.children);
+
+    act(() => {
+      renderer = create(<TextAnimation.Rotating text="Low" />);
+    });
+    act(() => {
+      renderer!.update(<TextAnimation.Rotating text="Medium" />);
+    });
+    act(() => jest.advanceTimersByTime(100));
+    act(() => {
+      renderer!.update(<TextAnimation.Rotating text="High" />);
+    });
+
+    expect(activePhrase(renderer!)).toBe('High');
+    expect(sizerPhrases()).toEqual(['Low', 'Medium', 'High']);
+
+    act(() => {
+      renderer!.update(<TextAnimation.Rotating text="Medium" />);
+    });
+    expect(sizerPhrases()).toEqual(['Low', 'High', 'Medium']);
+
+    act(() => jest.advanceTimersByTime(250));
+    expect(sizerPhrases()).toEqual(['Medium']);
+  });
+
+  it.each([
+    ['a string value', 'Ready'],
+    ['a phrase list', ['Ready', 'Set']],
+  ] as const)('shows the initial phrase of %s without an entrance', (_case, text) => {
+    act(() => {
+      renderer = create(<TextAnimation.Rotating text={text} />);
+    });
+
+    expect(activePhraseOpacity(renderer!)).toBe(1);
+  });
+
+  it('animates a changed string value in from hidden', () => {
+    act(() => {
+      renderer = create(<TextAnimation.Rotating text="Low" />);
+    });
+    act(() => {
+      renderer!.update(<TextAnimation.Rotating text="High" />);
+    });
+
+    expect(activePhrase(renderer!)).toBe('High');
+    expect(activePhraseOpacity(renderer!)).toBe(0);
   });
 
   it('updates a changing string immediately with Reduce Motion enabled', () => {

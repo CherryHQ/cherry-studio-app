@@ -22,5 +22,6 @@ Events:
 
 Android has no system-wide equivalent of inter-app drag sessions for this
 scenario; the platform is deliberately out of scope (TODO on the JS side).
-Physical iOS verification (iPad Split View drag from Photos, iPhone drag from
-Safari) is still required; the simulator does not exercise inter-app drags.
+An iPad simulator with windowed apps exercises inter-app drags from Photos.
+Physical iOS verification (iPad drag from Photos, iPhone drag from Safari) is
+still required.

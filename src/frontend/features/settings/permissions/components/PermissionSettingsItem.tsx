@@ -12,10 +12,7 @@ import {
   type PermissionKind,
   permissionConfig,
 } from '../permissionConfig';
-import {
-  healthSettingsNeedInstructions,
-  PermissionListLeading,
-} from './PermissionListPresentation/PermissionListPresentation';
+import { PermissionListLeading } from './PermissionListPresentation/PermissionListPresentation';
 
 export function PermissionSettingsItem({
   kind,
@@ -36,13 +33,7 @@ export function PermissionSettingsItem({
   // An add-only calendar grant can still be upgraded by a system request.
   const action = getPermissionAction(kind === 'calendar' ? statuses['calendar.read'] : status);
   const label = t(`settings.permissions.type.${kind}`);
-  const actionLabel = action
-    ? t(
-        status?.reason === 'install-required'
-          ? 'settings.permissions.action.install'
-          : `settings.permissions.action.${action}`,
-      )
-    : '';
+  const actionLabel = action ? t(`settings.permissions.action.${action}`) : '';
 
   const handlePress = async () => {
     if (pending || !action) return;
@@ -51,7 +42,7 @@ export function PermissionSettingsItem({
       if (action === 'request') {
         await permissions.request([...config.requestScopes]);
       } else if (action === 'open-settings') {
-        if (kind === 'health' && healthSettingsNeedInstructions) {
+        if (kind === 'health') {
           alert.show({
             title: t('settings.permissions.health.manage'),
             description: t('settings.permissions.health.appleInstructions'),

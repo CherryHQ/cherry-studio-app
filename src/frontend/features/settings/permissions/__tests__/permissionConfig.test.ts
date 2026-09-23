@@ -56,10 +56,7 @@ describe('permission settings', () => {
     expect(getPermissionAction({ ...denied, canAskAgain: true })).toBe('request');
     expect(getPermissionAction(denied)).toBe('open-settings');
   });
-  test('keeps install, retry, and unsupported outcomes distinct', () => {
-    expect(
-      getPermissionAction({ state: 'unavailable', canAskAgain: false, reason: 'install-required' }),
-    ).toBe('open-settings');
+  test('keeps retry and unsupported outcomes distinct', () => {
     expect(getPermissionAction({ state: 'error', canAskAgain: false })).toBe('retry');
     expect(
       getPermissionAction({ state: 'unavailable', canAskAgain: false, reason: 'unsupported' }),

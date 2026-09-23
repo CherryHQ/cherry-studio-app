@@ -86,6 +86,15 @@ internal class BackgroundPressView(context: Context) : FrameLayout(context) {
         super.onDetachedFromWindow()
     }
 
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        // Yoga also owns child measurement. FrameLayout would re-measure flattened children such
+        // as Text at this view's full size, leaving their content laid out wider than their frame.
+        setMeasuredDimension(
+            View.MeasureSpec.getSize(widthMeasureSpec),
+            View.MeasureSpec.getSize(heightMeasureSpec),
+        )
+    }
+
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         // Yoga owns child layout; FrameLayout must not overwrite it.
     }
