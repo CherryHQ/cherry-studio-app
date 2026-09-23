@@ -9,9 +9,10 @@ import { GenericToolPart } from './GenericToolPart';
 import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import { isMetaToolPart, MetaToolPartRenderer } from './metaTool/MetaToolPartRenderer';
 import { isReadFileToolPart, ReadFileToolPart } from './ReadFileToolPart';
-import { getToolName } from './toolPartState';
 import {
+  isAgentMutationToolPart,
   isProviderWebSearchToolPart,
+  isUserQuestionToolPart,
   isWebSearchToolPart,
   type ToolMessagePart,
 } from './toolPartState';
@@ -64,10 +65,13 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
     return <ReadFileToolPart part={part} />;
   }
 
-  if (getToolName(part) === 'ask_user_question') return <UserQuestionPart part={part} />;
+  if (isUserQuestionToolPart(part)) {
+    return <UserQuestionPart part={part} />;
+  }
 
-  if (getToolName(part) === 'agent_create' || getToolName(part) === 'agent_update')
+  if (isAgentMutationToolPart(part)) {
     return <AgentManagementToolPart part={part} />;
+  }
 
   return <GenericToolPart part={part} />;
 }

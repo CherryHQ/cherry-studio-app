@@ -1,6 +1,11 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import { getToolName, isProviderWebSearchToolPart, isToolMessagePart } from './tools/toolPartState';
+import {
+  isAgentMutationToolPart,
+  isProviderWebSearchToolPart,
+  isToolMessagePart,
+  isUserQuestionToolPart,
+} from './tools/toolPartState';
 
 type MessageFilePart = Extract<CherryMessagePart, { type: 'file' }>;
 export type MessageProcessItem = {
@@ -79,11 +84,11 @@ export function partitionMessageParts(
       return;
     }
 
+    // A question and a saved Agent are outcomes the reader acts on, not process.
     if (
       isToolMessagePart(part) &&
-      (getToolName(part) === 'ask_user_question' ||
-        ((getToolName(part) === 'agent_create' || getToolName(part) === 'agent_update') &&
-          part.state === 'output-available'))
+      (isUserQuestionToolPart(part) ||
+        (isAgentMutationToolPart(part) && part.state === 'output-available'))
     ) {
       body.push({ index, kind: 'part', part });
       return;
