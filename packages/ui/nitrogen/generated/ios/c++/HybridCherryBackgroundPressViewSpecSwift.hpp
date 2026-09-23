@@ -14,11 +14,8 @@ namespace CherryStudioUI { class HybridCherryBackgroundPressViewSpec_cxx; }
 
 // Forward declaration of `BackgroundPressMode` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressMode; }
-// Forward declaration of `BackgroundPressPhase` to properly resolve imports.
-namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressPhase; }
 
 #include "BackgroundPressMode.hpp"
-#include "BackgroundPressPhase.hpp"
 #include <functional>
 
 #include "CherryStudioUI-Swift-Cxx-Umbrella.hpp"
@@ -80,12 +77,12 @@ namespace margelo::nitro::cherrystudio::ui {
     inline void setMode(BackgroundPressMode mode) noexcept override {
       _swiftPart.setMode(static_cast<int>(mode));
     }
-    inline std::function<void(BackgroundPressPhase /* phase */)> getOnBackgroundInteraction() noexcept override {
-      auto __result = _swiftPart.getOnBackgroundInteraction();
+    inline std::function<void()> getOnBackgroundPress() noexcept override {
+      auto __result = _swiftPart.getOnBackgroundPress();
       return __result;
     }
-    inline void setOnBackgroundInteraction(const std::function<void(BackgroundPressPhase /* phase */)>& onBackgroundInteraction) noexcept override {
-      _swiftPart.setOnBackgroundInteraction(onBackgroundInteraction);
+    inline void setOnBackgroundPress(const std::function<void()>& onBackgroundPress) noexcept override {
+      _swiftPart.setOnBackgroundPress(onBackgroundPress);
     }
 
   public:

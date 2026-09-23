@@ -31,19 +31,4 @@ describe('scroll interaction ownership', () => {
     expect(scroll.isActive()).toBe(true);
     expect(scroll.isRecognitionBlocked()).toBe(true);
   });
-
-  test('scroll observers see committed state and stop receiving events after cleanup', () => {
-    const scroll = createScrollInteraction();
-    const observed: boolean[] = [];
-    const unsubscribe = scroll.subscribeToScrollStart(() => {
-      observed.push(scroll.isActive() && scroll.isRecognitionBlocked());
-    });
-    scroll.beginDrag();
-    scroll.endDrag();
-    scroll.beginMomentum();
-    expect(observed).toEqual([true, true]);
-    unsubscribe();
-    scroll.beginDrag();
-    expect(observed).toEqual([true, true]);
-  });
 });

@@ -10,8 +10,6 @@
 // Forward declarations of C++ defined types
 // Forward declaration of `BackgroundPressMode` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressMode; }
-// Forward declaration of `BackgroundPressPhase` to properly resolve imports.
-namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressPhase; }
 // Forward declaration of `HybridCherryBackgroundPressViewSpec` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { class HybridCherryBackgroundPressViewSpec; }
 // Forward declaration of `HybridCherryMenuViewSpec` to properly resolve imports.
@@ -27,7 +25,6 @@ namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuTrigger; }
 
 // Include C++ defined types
 #include "BackgroundPressMode.hpp"
-#include "BackgroundPressPhase.hpp"
 #include "HybridCherryBackgroundPressViewSpec.hpp"
 #include "HybridCherryMenuViewSpec.hpp"
 #include "NativeMenuCheckedState.hpp"

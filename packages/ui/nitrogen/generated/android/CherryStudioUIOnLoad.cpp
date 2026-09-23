@@ -16,7 +16,7 @@
 #include <NitroModules/HybridObjectRegistry.hpp>
 
 #include "JHybridCherryBackgroundPressViewSpec.hpp"
-#include "JFunc_void_BackgroundPressPhase.hpp"
+#include "JFunc_void.hpp"
 #include "views/JHybridCherryBackgroundPressViewStateUpdater.hpp"
 #include "JHybridCherryMenuViewSpec.hpp"
 #include "JFunc_void_std__string.hpp"
@@ -54,7 +54,7 @@ void registerAllNatives() {
 
   // Register native JNI methods
   margelo::nitro::cherrystudio::ui::JHybridCherryBackgroundPressViewSpec::CxxPart::registerNatives();
-  margelo::nitro::cherrystudio::ui::JFunc_void_BackgroundPressPhase_cxx::registerNatives();
+  margelo::nitro::cherrystudio::ui::JFunc_void_cxx::registerNatives();
   margelo::nitro::cherrystudio::ui::views::JHybridCherryBackgroundPressViewStateUpdater::registerNatives();
   margelo::nitro::cherrystudio::ui::JHybridCherryMenuViewSpec::CxxPart::registerNatives();
   margelo::nitro::cherrystudio::ui::JFunc_void_std__string_cxx::registerNatives();

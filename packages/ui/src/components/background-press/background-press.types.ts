@@ -8,6 +8,5 @@ export type BackgroundPressAreaProps = ViewProps & {
 export type BackgroundPressAdapterProps = ViewProps & {
   enabled: boolean;
   mode: 'background' | 'exclusion';
-  onBackgroundTouchStart: (touch: object) => void;
   onBackgroundPress: () => void;
 };

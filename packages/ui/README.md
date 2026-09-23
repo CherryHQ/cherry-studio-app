@@ -164,15 +164,14 @@ scroll-cancellation contract in
 and verify the native interaction boundary on each supported platform.
 
 `BackgroundPressArea` recognizes background taps without taking the list's JavaScript responder.
-Native recognizers own movement and long-press thresholds. Wrap selectable content and controls in
-`BackgroundPressExclusion`, keeping each exclusion bounded to its content instead of covering a
-full-screen overlay. Wrap each scroll surface in `ScrollInteractionBoundary`, which owns its
-drag/momentum state and registers with the enclosing area for its mounted lifetime. The area
-subscribes to scroll cancellation without copying or resetting the scroll state. A touch stopping
-momentum cannot dismiss the area after momentum ends. Native start/completion phases
-share one callback stream; batched React Native touch events do not own that gesture's lifecycle.
-The native implementation
-requires regenerating Nitro bindings and rebuilding the development client when changed.
+Its native view is the only owner of the press decision: movement and long-press thresholds,
+scrolling, a touch that stops momentum, extra pointers and nested areas cancel it on the UI thread,
+and JavaScript receives only completed presses. Readable content remains a background target.
+Wrap controls with their own taps in `BackgroundPressExclusion`, keeping each exclusion bounded to
+the press target and carrying the target's outer margins instead of covering a full-screen
+overlay. CherryUI press targets that render inside background areas exclude themselves. The native
+implementation requires regenerating Nitro bindings and rebuilding the development client when
+changed.
 
 Typography utilities are exported from `@cherrystudio/ui/utils`: `normalizeFontSizeStep`,
 `resolveTypographyScale`, and `createTypographyCSSVariables` keep native style objects, runtime CSS
@@ -594,9 +593,9 @@ Wrap every scroll component containing a gesture-owned `ContextMenu` in one
 `ScrollInteractionBoundary`. The boundary supplies drag, momentum, and touch handlers through its
 render callback without rendering another native view. Pass an existing scroll handler to the
 boundary itself when it needs to be composed with interaction arbitration. Android menus read
-the nearest boundary's state; an enclosing background-press area observes scroll starts separately.
-A touch that only stops momentum stays ineligible until a new touch begins. The boundary is shared
-across platforms, while iOS keeps its native context-menu recognition and UIKit arbitration.
+the nearest boundary's state. A touch that only stops momentum stays ineligible until a new touch
+begins. The boundary is shared across platforms, while iOS keeps its native context-menu
+recognition and UIKit arbitration.
 A custom trigger for a gesture-owned menu component must forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
 target.
 

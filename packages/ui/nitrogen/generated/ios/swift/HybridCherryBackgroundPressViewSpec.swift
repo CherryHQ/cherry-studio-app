@@ -12,7 +12,7 @@ public protocol HybridCherryBackgroundPressViewSpec_protocol: HybridObject, Hybr
   // Properties
   var enabled: Bool { get set }
   var mode: BackgroundPressMode { get set }
-  var onBackgroundInteraction: (_ phase: BackgroundPressPhase) -> Void { get set }
+  var onBackgroundPress: () -> Void { get set }
 
   // Methods
   

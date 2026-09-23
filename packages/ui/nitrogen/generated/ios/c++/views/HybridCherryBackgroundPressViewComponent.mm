@@ -89,10 +89,10 @@ using namespace margelo::nitro::cherrystudio::ui::views;
     swiftPart.setMode(static_cast<int>(newViewProps.mode.value));
     newViewProps.mode.isDirty = false;
   }
-  // onBackgroundInteraction: function
-  if (newViewProps.onBackgroundInteraction.isDirty) {
-    swiftPart.setOnBackgroundInteraction(newViewProps.onBackgroundInteraction.value);
-    newViewProps.onBackgroundInteraction.isDirty = false;
+  // onBackgroundPress: function
+  if (newViewProps.onBackgroundPress.isDirty) {
+    swiftPart.setOnBackgroundPress(newViewProps.onBackgroundPress.value);
+    newViewProps.onBackgroundPress.isDirty = false;
   }
 
   swiftPart.afterUpdate();

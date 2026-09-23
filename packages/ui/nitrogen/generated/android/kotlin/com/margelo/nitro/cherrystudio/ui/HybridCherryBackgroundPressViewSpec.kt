@@ -39,18 +39,18 @@ abstract class HybridCherryBackgroundPressViewSpec: HybridView() {
   @set:Keep
   abstract var mode: BackgroundPressMode
   
-  abstract var onBackgroundInteraction: (phase: BackgroundPressPhase) -> Unit
+  abstract var onBackgroundPress: () -> Unit
   
-  private var onBackgroundInteraction_cxx: Func_void_BackgroundPressPhase
+  private var onBackgroundPress_cxx: Func_void
     @Keep
     @DoNotStrip
     get() {
-      return Func_void_BackgroundPressPhase_java(onBackgroundInteraction)
+      return Func_void_java(onBackgroundPress)
     }
     @Keep
     @DoNotStrip
     set(value) {
-      onBackgroundInteraction = value
+      onBackgroundPress = value
     }
 
   // Methods

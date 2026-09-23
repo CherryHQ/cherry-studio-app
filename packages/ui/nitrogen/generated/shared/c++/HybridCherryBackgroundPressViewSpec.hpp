@@ -15,11 +15,8 @@
 
 // Forward declaration of `BackgroundPressMode` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressMode; }
-// Forward declaration of `BackgroundPressPhase` to properly resolve imports.
-namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressPhase; }
 
 #include "BackgroundPressMode.hpp"
-#include "BackgroundPressPhase.hpp"
 #include <functional>
 
 namespace margelo::nitro::cherrystudio::ui {
@@ -53,8 +50,8 @@ namespace margelo::nitro::cherrystudio::ui {
       virtual void setEnabled(bool enabled) = 0;
       virtual BackgroundPressMode getMode() = 0;
       virtual void setMode(BackgroundPressMode mode) = 0;
-      virtual std::function<void(BackgroundPressPhase /* phase */)> getOnBackgroundInteraction() = 0;
-      virtual void setOnBackgroundInteraction(const std::function<void(BackgroundPressPhase /* phase */)>& onBackgroundInteraction) = 0;
+      virtual std::function<void()> getOnBackgroundPress() = 0;
+      virtual void setOnBackgroundPress(const std::function<void()>& onBackgroundPress) = 0;
 
     public:
       // Methods

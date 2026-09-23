@@ -54,8 +54,8 @@ namespace margelo::nitro::cherrystudio::ui {
     void setEnabled(bool enabled) override;
     BackgroundPressMode getMode() override;
     void setMode(BackgroundPressMode mode) override;
-    std::function<void(BackgroundPressPhase /* phase */)> getOnBackgroundInteraction() override;
-    void setOnBackgroundInteraction(const std::function<void(BackgroundPressPhase /* phase */)>& onBackgroundInteraction) override;
+    std::function<void()> getOnBackgroundPress() override;
+    void setOnBackgroundPress(const std::function<void()>& onBackgroundPress) override;
 
   public:
     // Methods

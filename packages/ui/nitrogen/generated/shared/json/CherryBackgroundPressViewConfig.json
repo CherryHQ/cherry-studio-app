@@ -6,7 +6,7 @@
   "validAttributes": {
     "enabled": true,
     "mode": true,
-    "onBackgroundInteraction": true,
+    "onBackgroundPress": true,
     "hybridRef": true
   }
 }

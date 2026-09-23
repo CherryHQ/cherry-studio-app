@@ -46,14 +46,14 @@ namespace margelo::nitro::cherrystudio::ui::views {
         throw std::runtime_error(std::string("CherryBackgroundPressView.mode: ") + exc.what());
       }
     }()),
-    onBackgroundInteraction([&]() -> CachedProp<std::function<void(BackgroundPressPhase /* phase */)>> {
+    onBackgroundPress([&]() -> CachedProp<std::function<void()>> {
       try {
-        const react::RawValue* rawValue = rawProps.at("onBackgroundInteraction", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.onBackgroundInteraction;
+        const react::RawValue* rawValue = rawProps.at("onBackgroundPress", nullptr, nullptr);
+        if (rawValue == nullptr) return sourceProps.onBackgroundPress;
         const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::function<void(BackgroundPressPhase /* phase */)>>::fromRawValue(*runtime, value.asObject(*runtime).getProperty(*runtime, PropNameIDCache::get(*runtime, "f")), sourceProps.onBackgroundInteraction);
+        return CachedProp<std::function<void()>>::fromRawValue(*runtime, value.asObject(*runtime).getProperty(*runtime, PropNameIDCache::get(*runtime, "f")), sourceProps.onBackgroundPress);
       } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("CherryBackgroundPressView.onBackgroundInteraction: ") + exc.what());
+        throw std::runtime_error(std::string("CherryBackgroundPressView.onBackgroundPress: ") + exc.what());
       }
     }()),
     hybridRef([&]() -> CachedProp<std::optional<std::function<void(const std::shared_ptr<HybridCherryBackgroundPressViewSpec>& /* ref */)>>> {
@@ -71,7 +71,7 @@ namespace margelo::nitro::cherrystudio::ui::views {
     switch (hashString(propName)) {
       case hashString("enabled"): return true;
       case hashString("mode"): return true;
-      case hashString("onBackgroundInteraction"): return true;
+      case hashString("onBackgroundPress"): return true;
       case hashString("hybridRef"): return true;
       default: return false;
     }

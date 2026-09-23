@@ -1,16 +1,13 @@
-import { use, useLayoutEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { createScrollInteraction } from './scroll-interaction';
 import type {
   ScrollInteractionBoundaryProps,
   ScrollInteractionHandlers,
 } from './scroll-interaction-boundary.types';
-import {
-  ScrollInteractionContext,
-  ScrollInteractionObserverContext,
-} from './scroll-interaction-context';
+import { ScrollInteractionContext } from './scroll-interaction-context';
 
-/** One state owner per scroll surface; contains no menu, background-press, or keyboard policy. */
+/** One state owner per scroll surface; contains no menu or keyboard policy. */
 export function ScrollInteractionBoundary({
   children,
   onMomentumScrollBegin,
@@ -22,8 +19,6 @@ export function ScrollInteractionBoundary({
   onTouchStart,
 }: ScrollInteractionBoundaryProps) {
   const [interaction] = useState(createScrollInteraction);
-  const observeScroll = use(ScrollInteractionObserverContext);
-  useLayoutEffect(() => observeScroll?.(interaction), [interaction, observeScroll]);
 
   const handlers = useMemo<ScrollInteractionHandlers>(
     () => ({

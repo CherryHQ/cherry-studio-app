@@ -8,8 +8,6 @@
 #pragma once
 
 // Forward declarations of C++ defined types
-// Forward declaration of `BackgroundPressPhase` to properly resolve imports.
-namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressPhase; }
 // Forward declaration of `HybridCherryBackgroundPressViewSpec` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { class HybridCherryBackgroundPressViewSpec; }
 // Forward declaration of `HybridCherryMenuViewSpec` to properly resolve imports.
@@ -28,7 +26,6 @@ namespace CherryStudioUI { class HybridCherryBackgroundPressViewSpec_cxx; }
 namespace CherryStudioUI { class HybridCherryMenuViewSpec_cxx; }
 
 // Include C++ defined types
-#include "BackgroundPressPhase.hpp"
 #include "HybridCherryBackgroundPressViewSpec.hpp"
 #include "HybridCherryMenuViewSpec.hpp"
 #include "NativeMenuCheckedState.hpp"
@@ -47,26 +44,26 @@ namespace CherryStudioUI { class HybridCherryMenuViewSpec_cxx; }
  */
 namespace margelo::nitro::cherrystudio::ui::bridge::swift {
 
-  // pragma MARK: std::function<void(BackgroundPressPhase /* phase */)>
+  // pragma MARK: std::function<void()>
   /**
-   * Specialized version of `std::function<void(BackgroundPressPhase)>`.
+   * Specialized version of `std::function<void()>`.
    */
-  using Func_void_BackgroundPressPhase = std::function<void(BackgroundPressPhase /* phase */)>;
+  using Func_void = std::function<void()>;
   /**
-   * Wrapper class for a `std::function<void(BackgroundPressPhase / * phase * /)>`, this can be used from Swift.
+   * Wrapper class for a `std::function<void()>`, this can be used from Swift.
    */
-  class Func_void_BackgroundPressPhase_Wrapper final {
+  class Func_void_Wrapper final {
   public:
-    explicit Func_void_BackgroundPressPhase_Wrapper(std::function<void(BackgroundPressPhase /* phase */)>&& func): _function(std::make_unique<std::function<void(BackgroundPressPhase /* phase */)>>(std::move(func))) {}
-    inline void call(int phase) const noexcept {
-      _function->operator()(static_cast<BackgroundPressPhase>(phase));
+    explicit Func_void_Wrapper(std::function<void()>&& func): _function(std::make_unique<std::function<void()>>(std::move(func))) {}
+    inline void call() const noexcept {
+      _function->operator()();
     }
   private:
-    std::unique_ptr<std::function<void(BackgroundPressPhase /* phase */)>> _function;
+    std::unique_ptr<std::function<void()>> _function;
   } SWIFT_NONCOPYABLE;
-  Func_void_BackgroundPressPhase create_Func_void_BackgroundPressPhase(void* NON_NULL swiftClosureWrapper) noexcept;
-  inline Func_void_BackgroundPressPhase_Wrapper wrap_Func_void_BackgroundPressPhase(Func_void_BackgroundPressPhase value) noexcept {
-    return Func_void_BackgroundPressPhase_Wrapper(std::move(value));
+  Func_void create_Func_void(void* NON_NULL swiftClosureWrapper) noexcept;
+  inline Func_void_Wrapper wrap_Func_void(Func_void value) noexcept {
+    return Func_void_Wrapper(std::move(value));
   }
   
   // pragma MARK: std::shared_ptr<HybridCherryBackgroundPressViewSpec>

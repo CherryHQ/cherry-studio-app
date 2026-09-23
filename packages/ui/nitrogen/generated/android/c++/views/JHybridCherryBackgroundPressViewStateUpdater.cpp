@@ -45,9 +45,9 @@ void JHybridCherryBackgroundPressViewStateUpdater::updateViewProps(jni::alias_re
     hybridView->setMode(props->mode.value);
     props->mode.isDirty = false;
   }
-  if (props->onBackgroundInteraction.isDirty) {
-    hybridView->setOnBackgroundInteraction(props->onBackgroundInteraction.value);
-    props->onBackgroundInteraction.isDirty = false;
+  if (props->onBackgroundPress.isDirty) {
+    hybridView->setOnBackgroundPress(props->onBackgroundPress.value);
+    props->onBackgroundPress.isDirty = false;
   }
 
   // Update hybridRef if it changed

@@ -143,20 +143,20 @@ open class HybridCherryBackgroundPressViewSpec_cxx {
     }
   }
   
-  public final var onBackgroundInteraction: bridge.Func_void_BackgroundPressPhase {
+  public final var onBackgroundPress: bridge.Func_void {
     @inline(__always)
     get {
-      return { () -> bridge.Func_void_BackgroundPressPhase in
-        let __closureWrapper = Func_void_BackgroundPressPhase(self.__implementation.onBackgroundInteraction)
-        return bridge.create_Func_void_BackgroundPressPhase(__closureWrapper.toUnsafe())
+      return { () -> bridge.Func_void in
+        let __closureWrapper = Func_void(self.__implementation.onBackgroundPress)
+        return bridge.create_Func_void(__closureWrapper.toUnsafe())
       }()
     }
     @inline(__always)
     set {
-      self.__implementation.onBackgroundInteraction = { () -> (BackgroundPressPhase) -> Void in
-        let __wrappedFunction = bridge.wrap_Func_void_BackgroundPressPhase(newValue)
-        return { (__phase: BackgroundPressPhase) -> Void in
-          __wrappedFunction.call(__phase.rawValue)
+      self.__implementation.onBackgroundPress = { () -> () -> Void in
+        let __wrappedFunction = bridge.wrap_Func_void(newValue)
+        return { () -> Void in
+          __wrappedFunction.call()
         }
       }()
     }

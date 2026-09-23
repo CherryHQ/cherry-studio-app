@@ -18,8 +18,8 @@ namespace margelo::nitro::cherrystudio::ui {
       prototype.registerHybridSetter("enabled", &HybridCherryBackgroundPressViewSpec::setEnabled);
       prototype.registerHybridGetter("mode", &HybridCherryBackgroundPressViewSpec::getMode);
       prototype.registerHybridSetter("mode", &HybridCherryBackgroundPressViewSpec::setMode);
-      prototype.registerHybridGetter("onBackgroundInteraction", &HybridCherryBackgroundPressViewSpec::getOnBackgroundInteraction);
-      prototype.registerHybridSetter("onBackgroundInteraction", &HybridCherryBackgroundPressViewSpec::setOnBackgroundInteraction);
+      prototype.registerHybridGetter("onBackgroundPress", &HybridCherryBackgroundPressViewSpec::getOnBackgroundPress);
+      prototype.registerHybridSetter("onBackgroundPress", &HybridCherryBackgroundPressViewSpec::setOnBackgroundPress);
     });
   }
 

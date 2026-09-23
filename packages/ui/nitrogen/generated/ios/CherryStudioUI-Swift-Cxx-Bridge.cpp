@@ -15,11 +15,11 @@
 
 namespace margelo::nitro::cherrystudio::ui::bridge::swift {
 
-  // pragma MARK: std::function<void(BackgroundPressPhase /* phase */)>
-  Func_void_BackgroundPressPhase create_Func_void_BackgroundPressPhase(void* NON_NULL swiftClosureWrapper) noexcept {
-    auto swiftClosure = CherryStudioUI::Func_void_BackgroundPressPhase::fromUnsafe(swiftClosureWrapper);
-    return [swiftClosure = std::move(swiftClosure)](BackgroundPressPhase phase) mutable -> void {
-      swiftClosure.call(static_cast<int>(phase));
+  // pragma MARK: std::function<void()>
+  Func_void create_Func_void(void* NON_NULL swiftClosureWrapper) noexcept {
+    auto swiftClosure = CherryStudioUI::Func_void::fromUnsafe(swiftClosureWrapper);
+    return [swiftClosure = std::move(swiftClosure)]() mutable -> void {
+      swiftClosure.call();
     };
   }
   

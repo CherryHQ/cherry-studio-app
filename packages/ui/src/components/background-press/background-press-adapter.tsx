@@ -9,21 +9,15 @@ export function BackgroundPressAdapter({
   enabled,
   mode,
   onBackgroundPress,
-  onBackgroundTouchStart,
-  onTouchStart,
   ...props
 }: BackgroundPressAdapterProps) {
   return mode === 'exclusion' ? (
-    <View {...props} onTouchStart={onTouchStart} />
+    <View {...props} />
   ) : (
     <Pressable
       {...props}
       disabled={!enabled}
       onLongPress={ignoreLongPress}
-      onPressIn={(event) => {
-        onBackgroundTouchStart(event.nativeEvent);
-        onTouchStart?.(event);
-      }}
       onPress={onBackgroundPress}
     />
   );

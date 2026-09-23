@@ -10,7 +10,11 @@ import androidx.annotation.Keep
 import com.facebook.proguard.annotations.DoNotStrip
 import com.facebook.react.uimanager.ThemedReactContext
 
-/** Observes platform taps without intercepting a descendant's native or RN gesture. */
+/**
+ * Observes platform taps without intercepting a descendant's native or RN gesture. This view is
+ * the only owner of the press decision: scrolling, nested areas, exclusions, and extra pointers
+ * cancel it on the UI thread before a completed tap can be reported.
+ */
 internal class BackgroundPressView(context: Context) : FrameLayout(context) {
     var mode = BackgroundPressMode.BACKGROUND
         set(value) {
@@ -23,7 +27,7 @@ internal class BackgroundPressView(context: Context) : FrameLayout(context) {
             field = value
             if (!value) cancelled = true
         }
-    var onBackgroundInteraction: (BackgroundPressPhase) -> Unit = {}
+    var onBackgroundPress: () -> Unit = {}
     private var cancelled = true
 
     // GestureDetector reads ViewConfiguration: movement cancellation is sticky, long holds
@@ -34,7 +38,7 @@ internal class BackgroundPressView(context: Context) : FrameLayout(context) {
         override fun onSingleTapUp(event: MotionEvent): Boolean {
             if (cancelled || !recognitionEnabled) return false
             cancelled = true
-            onBackgroundInteraction(BackgroundPressPhase.PRESS)
+            onBackgroundPress()
             return true
         }
     }).apply { setOnDoubleTapListener(null) }
@@ -43,7 +47,6 @@ internal class BackgroundPressView(context: Context) : FrameLayout(context) {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             cancelAncestorPress()
             cancelled = !recognitionEnabled || mode != BackgroundPressMode.BACKGROUND
-            if (!cancelled) onBackgroundInteraction(BackgroundPressPhase.START)
         }
         if (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN ||
             event.actionMasked == MotionEvent.ACTION_CANCEL
@@ -52,7 +55,8 @@ internal class BackgroundPressView(context: Context) : FrameLayout(context) {
         }
 
         // Descendant exclusions and ScrollView interception cancel synchronously before a
-        // completed tap is delivered. No responder is acquired and no child is sent CANCEL.
+        // completed tap is delivered. A ScrollView also requests disallow-intercept when a touch
+        // stops its fling. No responder is acquired and no child is sent CANCEL.
         val handled = super.dispatchTouchEvent(event)
         if (mode == BackgroundPressMode.BACKGROUND) detector.onTouchEvent(event)
         return handled
@@ -99,7 +103,7 @@ class HybridCherryBackgroundPressView(reactContext: ThemedReactContext? = null) 
     override var enabled: Boolean
         get() = container.recognitionEnabled
         set(value) { container.recognitionEnabled = value }
-    override var onBackgroundInteraction: (BackgroundPressPhase) -> Unit
-        get() = container.onBackgroundInteraction
-        set(value) { container.onBackgroundInteraction = value }
+    override var onBackgroundPress: () -> Unit
+        get() = container.onBackgroundPress
+        set(value) { container.onBackgroundPress = value }
 }

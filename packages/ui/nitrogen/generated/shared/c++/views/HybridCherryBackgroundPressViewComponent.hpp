@@ -17,7 +17,6 @@
 #include <react/renderer/components/view/ViewProps.h>
 
 #include "BackgroundPressMode.hpp"
-#include "BackgroundPressPhase.hpp"
 #include <functional>
 #include <memory>
 #include "HybridCherryBackgroundPressViewSpec.hpp"
@@ -45,7 +44,7 @@ namespace margelo::nitro::cherrystudio::ui::views {
   public:
     CachedProp<bool> enabled;
     CachedProp<BackgroundPressMode> mode;
-    CachedProp<std::function<void(BackgroundPressPhase /* phase */)>> onBackgroundInteraction;
+    CachedProp<std::function<void()>> onBackgroundPress;
     CachedProp<std::optional<std::function<void(const std::shared_ptr<HybridCherryBackgroundPressViewSpec>& /* ref */)>>> hybridRef;
 
   private:

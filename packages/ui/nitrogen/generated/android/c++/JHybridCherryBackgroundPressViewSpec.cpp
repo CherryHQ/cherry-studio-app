@@ -9,16 +9,12 @@
 
 // Forward declaration of `BackgroundPressMode` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressMode; }
-// Forward declaration of `BackgroundPressPhase` to properly resolve imports.
-namespace margelo::nitro::cherrystudio::ui { enum class BackgroundPressPhase; }
 
 #include "BackgroundPressMode.hpp"
 #include "JBackgroundPressMode.hpp"
-#include "BackgroundPressPhase.hpp"
 #include <functional>
-#include "JFunc_void_BackgroundPressPhase.hpp"
+#include "JFunc_void.hpp"
 #include <NitroModules/JNICallable.hpp>
-#include "JBackgroundPressPhase.hpp"
 
 namespace margelo::nitro::cherrystudio::ui {
 
@@ -68,22 +64,22 @@ namespace margelo::nitro::cherrystudio::ui {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JBackgroundPressMode> /* mode */)>("setMode");
     method(_javaPart, JBackgroundPressMode::fromCpp(mode));
   }
-  std::function<void(BackgroundPressPhase /* phase */)> JHybridCherryBackgroundPressViewSpec::getOnBackgroundInteraction() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFunc_void_BackgroundPressPhase::javaobject>()>("getOnBackgroundInteraction_cxx");
+  std::function<void()> JHybridCherryBackgroundPressViewSpec::getOnBackgroundPress() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JFunc_void::javaobject>()>("getOnBackgroundPress_cxx");
     auto __result = method(_javaPart);
-    return [&]() -> std::function<void(BackgroundPressPhase /* phase */)> {
-      if (__result->isInstanceOf(JFunc_void_BackgroundPressPhase_cxx::javaClassStatic())) [[likely]] {
-        auto downcast = jni::static_ref_cast<JFunc_void_BackgroundPressPhase_cxx::javaobject>(__result);
+    return [&]() -> std::function<void()> {
+      if (__result->isInstanceOf(JFunc_void_cxx::javaClassStatic())) [[likely]] {
+        auto downcast = jni::static_ref_cast<JFunc_void_cxx::javaobject>(__result);
         return downcast->cthis()->getFunction();
       } else {
         auto __resultRef = jni::make_global(__result);
-        return JNICallable<JFunc_void_BackgroundPressPhase, void(BackgroundPressPhase)>(std::move(__resultRef));
+        return JNICallable<JFunc_void, void()>(std::move(__resultRef));
       }
     }();
   }
-  void JHybridCherryBackgroundPressViewSpec::setOnBackgroundInteraction(const std::function<void(BackgroundPressPhase /* phase */)>& onBackgroundInteraction) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void_BackgroundPressPhase::javaobject> /* onBackgroundInteraction */)>("setOnBackgroundInteraction_cxx");
-    method(_javaPart, JFunc_void_BackgroundPressPhase_cxx::fromCpp(onBackgroundInteraction));
+  void JHybridCherryBackgroundPressViewSpec::setOnBackgroundPress(const std::function<void()>& onBackgroundPress) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void::javaobject> /* onBackgroundPress */)>("setOnBackgroundPress_cxx");
+    method(_javaPart, JFunc_void_cxx::fromCpp(onBackgroundPress));
   }
 
   // Methods
