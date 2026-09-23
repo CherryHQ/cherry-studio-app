@@ -1,5 +1,6 @@
 import type { LucideIconComponent } from '@cherrystudio/app-icons';
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
+import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import CalendarIcon from '@cherrystudio/app-icons/icons/calendar';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
@@ -23,28 +24,30 @@ type AgentCapabilitiesSectionProps = {
 };
 
 type CapabilityRow = {
-  capability: SystemCapability;
+  capability: AgentCapability;
   permissionScopes: readonly DevicePermissionScope[];
 };
 
+// App-owned groups first, then device groups that also need an OS permission.
 const CAPABILITY_DISPLAY_ORDER = [
   'web',
   'image',
+  'agents',
   'calendar',
   'reminders',
   'health',
   'location',
 ] as const satisfies readonly AgentCapability[];
-type SystemCapability = (typeof CAPABILITY_DISPLAY_ORDER)[number];
 
 const CAPABILITY_ICONS = {
+  agents: BotIcon,
   calendar: CalendarIcon,
   health: HeartPulseIcon,
   image: ImageIcon,
   location: MapPinIcon,
   reminders: BellIcon,
   web: GlobeIcon,
-} satisfies Record<SystemCapability, LucideIconComponent>;
+} satisfies Record<AgentCapability, LucideIconComponent>;
 
 // Platform support is static; device support is checked from live statuses below.
 // Keep the observed scope array stable for the permission hook.

@@ -59,8 +59,8 @@ surfaces.
 
 
 Agents can also be created and edited through the conversation's built-in Agent management tools.
-The editor's Built-in tools section toggles them per Agent through the `agents` capability group; new
-Agents start with it off, while the seeded default Agent keeps it on. The tools reuse `AgentService`; tool-created Agents inherit the global default model and the editor's
+The capabilities section toggles them per Agent through the `agents` capability group, in the same
+list as the device groups; new Agents start with it off, while the seeded default Agent keeps it on. The tools reuse `AgentService`; tool-created Agents inherit the global default model and the editor's
 capability defaults. Guarded tool updates preserve omitted fields and reject stale `updatedAt`
 versions. Committed create/update operations publish Data API cache invalidations for the list and
 changed record. Existing editor drafts are not replaced by incoming cache refreshes.

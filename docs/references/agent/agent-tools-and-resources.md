@@ -592,7 +592,8 @@ background execution or recovery after the operating system terminates the app.
 ## Agent Management
 
 The `agents` capability group contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
-The editor shows it as Agent management under Built-in tools. New Agents start with it disabled,
+The editor lists it as Agent management alongside the other capability groups; it needs no OS
+permission. New Agents start with it disabled,
 whether created from the editor or by these tools; the seeded default Agent keeps it enabled so a
 fresh installation can create Agents from conversation. Reads use automatic approval; writes start at `ask` and follow the current Agent's approval
 preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,

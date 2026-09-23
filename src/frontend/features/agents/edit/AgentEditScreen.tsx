@@ -42,7 +42,6 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
 import { createAgentToolBindingDraft } from './agentToolSettings';
-import { AgentBuiltInToolsSection } from './components/AgentBuiltInToolsSection';
 import { AgentCapabilitiesSection } from './components/AgentCapabilitiesSection';
 import { AgentToolsSection } from './components/AgentToolsSection';
 import { useAgentAutoSave } from './useAgentAutoSave';
@@ -420,10 +419,6 @@ function AgentEditForm({
         {/* Capability groups gate which built-in tools a turn may offer; the
             approval setting above changes interaction policy only. */}
         <AgentCapabilitiesSection
-          disabledCapabilities={form.disabledCapabilities}
-          onChange={(next) => updateForm('disabledCapabilities', next)}
-        />
-        <AgentBuiltInToolsSection
           disabledCapabilities={form.disabledCapabilities}
           onChange={(next) => updateForm('disabledCapabilities', next)}
         />
