@@ -1,53 +1,36 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { ActionMenu, ContentState, type MenuItem, useToast } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
-import { useGlobalSearchParams, usePathname } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
 
-import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/appShell/navigation';
-import {
-  chatHref,
-  type ChatRouteParamsInput,
-  parseChatRoute,
-  useChatSource,
-} from '@/frontend/appShell/navigation/chat';
-import { AgentAvatar } from '@/frontend/components/Avatar';
-import {
-  SessionListProvider,
-  SessionStatus,
-  useSessionListActions,
-  useSessionActionAlerts,
-  useSessionListSessions,
-} from '@/frontend/components/SessionList';
-import { useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
-import { appSidebar } from '@/frontend/utils/constants';
-import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
-import type { Agent } from '@/shared/data/types/agent';
+import { ConversationSourceBoundary } from '@/frontend/appShell/conversation';
+import { useChatSource } from '@/frontend/appShell/navigation/chat';
 
-import { useSidebarActions } from '../context';
-import { SidebarRemoteRecents } from './SidebarRemoteRecents';
-import { SidebarAgentIconSlot, SidebarRowContent, SIDEBAR_LEADING_SIZE } from './SidebarRowContent';
+import { SidebarConversationList } from './SidebarConversationList';
+import { SidebarDesktopSource } from './SidebarDesktopSource';
 
 type SidebarRecentsProps = {
   registerEndReachedHandler: (handler?: () => void) => void;
 };
 
-function useSidebarChatTarget() {
-  // The drawer sits outside the chat screen's local route context.
-  const params = useGlobalSearchParams<ChatRouteParamsInput>();
-  const pathname = usePathname();
-  const route = parseChatRoute(params);
-  return pathname === '/' && route.status === 'ready' ? route.target : undefined;
-}
-
 export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
-  const { source, selectSource, viewMode: mode, setViewMode: setMode } = useChatSource();
+  const {
+    source,
+    remoteTarget,
+    selectSource,
+    viewMode: mode,
+    setViewMode: setMode,
+  } = useChatSource();
   const { toast } = useToast();
+  const loadingKey = `${source}:${remoteTarget.connectionId ?? ''}:${mode}`;
+  const [loadingFeedback, setLoadingFeedback] = useState<string>();
+  useEffect(() => {
+    const timer = setTimeout(() => setLoadingFeedback(loadingKey), 200);
+    return () => clearTimeout(timer);
+  }, [loadingKey]);
+  const showLoading = source === 'local' || loadingFeedback === loadingKey;
   const isSessionMode = mode === 'sessions';
   const modeLabel = t(isSessionMode ? 'navigation.sessions' : 'navigation.agents');
   const handleModeChange = useCallback(
@@ -108,342 +91,41 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
       </View>
     </ActionMenu>
   );
-  if (source === 'remote') {
+  const content = (
+    <SidebarConversationList
+      key={mode}
+      mode={mode}
+      showLoading={showLoading}
+      registerEndReachedHandler={registerEndReachedHandler}
+    />
+  );
+  if (source === 'remote')
     return (
-      <SidebarRemoteRecents
-        header={header}
-        mode={mode}
-        registerEndReachedHandler={registerEndReachedHandler}
-      />
+      <SidebarDesktopSource header={header} showLoading={showLoading}>
+        {content}
+      </SidebarDesktopSource>
     );
-  }
   return (
     <>
       <View className="px-5 pt-4 pb-1">{header}</View>
-      {isSessionMode ? (
-        <SessionListProvider>
-          <SidebarRecentSessionList registerEndReachedHandler={registerEndReachedHandler} />
-        </SessionListProvider>
-      ) : (
-        <SidebarAgentSessionList />
-      )}
-    </>
-  );
-}
-
-function SidebarRecentSessionList({
-  leading,
-  registerEndReachedHandler,
-}: {
-  leading?: ReactNode;
-  registerEndReachedHandler?: SidebarRecentsProps['registerEndReachedHandler'];
-}) {
-  const { t } = useTranslation();
-  const target = useSidebarChatTarget();
-  const selectedSessionId = target?.kind === 'session' ? target.sessionId : undefined;
-  const [isShowingAllSessions, setIsShowingAllSessions] = useState(false);
-  const [visibleSessionLimit, setVisibleSessionLimit] = useState<number>(
-    appSidebar.recentSessionLimit,
-  );
-  const {
-    hasMoreSessions,
-    isLoadingMoreSessions,
-    isSessionListLoading,
-    sessionQueryError,
-    sessions,
-  } = useSessionListSessions();
-  const { loadMoreSessions } = useSessionListActions();
-  const { requestDelete, requestRename } = useSessionActionAlerts();
-  const { closeDrawer } = useSidebarActions('Sidebar recent sessions');
-  const visibleSessions = sessions.slice(0, visibleSessionLimit);
-  // Agent groups page independently; only the flat list owns the drawer's end-reached handler.
-  const canShowMoreSessions =
-    (!isShowingAllSessions || !registerEndReachedHandler) &&
-    (sessions.length > visibleSessionLimit || hasMoreSessions);
-  const showMoreLabel = t(
-    registerEndReachedHandler ? 'session.list.viewAll' : 'session.list.loadMore',
-  );
-
-  const revealNextSessionBatch = useCallback(() => {
-    if (
-      isLoadingMoreSessions ||
-      sessionQueryError ||
-      (visibleSessionLimit >= sessions.length && !hasMoreSessions)
-    ) {
-      return;
-    }
-
-    const nextLimit = visibleSessionLimit + appSidebar.recentSessionLimit;
-    setVisibleSessionLimit(nextLimit);
-
-    if (nextLimit > sessions.length && hasMoreSessions) {
-      loadMoreSessions();
-    }
-  }, [
-    hasMoreSessions,
-    isLoadingMoreSessions,
-    loadMoreSessions,
-    sessionQueryError,
-    sessions.length,
-    visibleSessionLimit,
-  ]);
-  const handleEndReached = useCallback(() => {
-    if (isShowingAllSessions) {
-      revealNextSessionBatch();
-    }
-  }, [isShowingAllSessions, revealNextSessionBatch]);
-
-  useEffect(() => {
-    registerEndReachedHandler?.(handleEndReached);
-    return () => registerEndReachedHandler?.();
-  }, [handleEndReached, registerEndReachedHandler]);
-
-  const handleViewAllPress = () => {
-    setIsShowingAllSessions(true);
-    revealNextSessionBatch();
-  };
-
-  if (isSessionListLoading) {
-    return (
-      <View className="py-4">
-        <ContentState.Loading title={t('session.list.loading')} />
-      </View>
-    );
-  }
-
-  if (sessionQueryError) {
-    return (
-      <View className="px-5 py-4">
-        <ContentState.Error title={t('session.list.loadFailed')} />
-      </View>
-    );
-  }
-
-  if (visibleSessions.length === 0) {
-    return (
-      <View className="px-5 py-4">
-        <ContentState.Empty description={t('session.list.empty')} />
-      </View>
-    );
-  }
-
-  return (
-    <>
-      <View className="px-2">
-        {visibleSessions.map((session) => (
-          <SidebarSessionRow
-            key={session.id}
-            isSelected={session.id === selectedSessionId}
-            leading={leading}
-            onCloseDrawer={closeDrawer}
-            onDelete={requestDelete}
-            onRename={requestRename}
-            session={session}
-          />
-        ))}
-      </View>
-      {canShowMoreSessions ? (
-        <View className="px-2">
-          <Pressable
-            accessibilityLabel={showMoreLabel}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: isLoadingMoreSessions }}
-            disabled={isLoadingMoreSessions}
-            onPress={handleViewAllPress}
-            testID="sidebar-sessions-view-all"
-          >
-            {({ pressed }) => (
-              <SidebarRowContent
-                className={cn('w-full', pressed && 'bg-sidebar-accent')}
-                leading={leading}
-              >
-                <Text className="min-w-0 flex-1 text-muted-foreground text-sm">
-                  {showMoreLabel}
-                </Text>
-              </SidebarRowContent>
-            )}
-          </Pressable>
-        </View>
-      ) : null}
-      {isShowingAllSessions && isLoadingMoreSessions ? (
-        <View className="px-2">
-          <SidebarRowContent leading={leading}>
-            <Text className="min-w-0 flex-1 text-muted-foreground text-sm">
-              {t('session.list.loading')}
-            </Text>
-          </SidebarRowContent>
-        </View>
-      ) : null}
-    </>
-  );
-}
-
-function SidebarAgentSessionList() {
-  const { t } = useTranslation();
-  const { agents, error, isLoading } = useAgentsApi();
-  const target = useSidebarChatTarget();
-  const currentSession = useAgentSession(target?.kind === 'session' ? target.sessionId : undefined);
-  const currentAgentId = target?.kind === 'draft' ? target.agentId : currentSession.data?.agentId;
-  const defaultExpandedAgentId =
-    currentAgentId ?? (currentSession.isLoading ? undefined : agents[0]?.id);
-
-  if (isLoading) {
-    return (
-      <View className="py-4">
-        <ContentState.Loading title={t('agent.list.loading')} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View className="px-5 py-4">
-        <ContentState.Error title={t('agent.list.loadFailed')} />
-      </View>
-    );
-  }
-
-  if (agents.length === 0) {
-    return (
-      <View className="px-5 py-4">
-        <ContentState.Empty description={t('agent.list.emptyTitle')} />
-      </View>
-    );
-  }
-
-  return (
-    <View className="gap-2">
-      {agents.map((agent) => (
-        <SidebarAgentRow
-          key={agent.id}
-          agent={agent}
-          isDefaultExpanded={agent.id === defaultExpandedAgentId}
-        />
-      ))}
-    </View>
-  );
-}
-
-function SidebarAgentRow({
-  agent,
-  isDefaultExpanded,
-}: {
-  agent: Agent;
-  isDefaultExpanded: boolean;
-}) {
-  // The current Agent can resolve after mount; explicit toggles take precedence over that default.
-  const [isExpandedOverride, setIsExpandedOverride] = useState<boolean>();
-  const isExpanded = isExpandedOverride ?? isDefaultExpanded;
-
-  return (
-    <View testID={`sidebar-agent-group-${agent.id}`}>
-      <View className="px-2">
-        <Pressable
-          accessibilityLabel={agent.name}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: isExpanded }}
-          onPress={() => setIsExpandedOverride((current) => !(current ?? isDefaultExpanded))}
-          testID={`sidebar-agent-${agent.id}`}
-        >
-          {({ pressed }) => (
-            <SidebarRowContent
-              className={cn('w-full', pressed && 'bg-sidebar-accent')}
-              leading={
-                <SidebarAgentIconSlot>
-                  <AgentAvatar
-                    accessibilityLabel={agent.name}
-                    avatar={agent.avatar}
-                    name={agent.name}
-                    size={SIDEBAR_LEADING_SIZE}
-                    uri={agent.avatarUri}
-                  />
-                </SidebarAgentIconSlot>
-              }
-            >
-              <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-                {agent.name}
-              </Text>
-              {isExpanded ? (
-                <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
-              ) : (
-                <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
-              )}
-            </SidebarRowContent>
-          )}
-        </Pressable>
-      </View>
-      {isExpanded ? (
-        <SessionListProvider agentId={agent.id}>
-          <SidebarRecentSessionList leading={<SidebarAgentIconSlot />} />
-        </SessionListProvider>
-      ) : null}
-    </View>
-  );
-}
-
-type SidebarSessionRowProps = {
-  isSelected: boolean;
-  leading?: ReactNode;
-  onCloseDrawer: () => void;
-  onDelete: (session: AgentSessionEntity) => void;
-  onRename: (session: AgentSessionEntity) => void;
-  session: AgentSessionEntity;
-};
-
-function SidebarSessionRow({
-  isSelected,
-  leading,
-  onCloseDrawer,
-  onDelete,
-  onRename,
-  session,
-}: SidebarSessionRowProps) {
-  const { t } = useTranslation();
-  const href = chatHref({ kind: 'session', sessionId: session.id });
-  const menuItems: readonly ContextMenuLinkItem[] = [
-    {
-      id: 'rename',
-      label: t('common.rename'),
-      onPress: () => onRename(session),
-    },
-    {
-      destructive: true,
-      id: 'delete',
-      label: t('common.delete'),
-      onPress: () => onDelete(session),
-    },
-  ];
-
-  return (
-    <ContextMenuLink href={href} items={menuItems}>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityState={{ selected: isSelected }}
-        onPress={onCloseDrawer}
-        testID={`sidebar-session-${session.id}`}
+      <ConversationSourceBoundary
+        source={{ kind: 'local' }}
+        fallback={(state) =>
+          state === 'loading' ? (
+            showLoading ? (
+              <View className="py-4">
+                <ContentState.Loading title={t('session.list.loading')} />
+              </View>
+            ) : null
+          ) : (
+            <View className="px-5 py-4">
+              <ContentState.Error title={t('session.list.loadFailed')} />
+            </View>
+          )
+        }
       >
-        {({ pressed }) => (
-          <SidebarRowContent
-            className={cn(
-              'w-full',
-              isSelected && 'bg-secondary/70',
-              pressed && 'bg-sidebar-accent',
-            )}
-            leading={leading}
-          >
-            <Text
-              className={cn(
-                'min-w-0 flex-1 text-base text-sidebar-foreground',
-                isSelected && 'font-medium',
-              )}
-              numberOfLines={1}
-            >
-              {session.title || t('session.list.untitled')}
-            </Text>
-            <SessionStatus sessionId={session.id} />
-          </SidebarRowContent>
-        )}
-      </Pressable>
-    </ContextMenuLink>
+        {content}
+      </ConversationSourceBoundary>
+    </>
   );
 }

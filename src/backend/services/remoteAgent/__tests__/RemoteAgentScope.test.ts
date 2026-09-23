@@ -31,6 +31,8 @@ function fixture() {
   };
   const request = jest.fn(async (method: string, params: any) => {
     switch (method) {
+      case 'agent.agents.list':
+        return { items: [{ agentId: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }], nextCursor: null };
       case 'agent.sessions.subscribe':
         return {
           subscriptionId: 'sub',
@@ -165,6 +167,7 @@ it('keeps inline tool payloads out of frontend references and rejects another sc
     messageId: 'm',
     revision: '1',
     role: 'assistant',
+    status: 'pending',
     partIds: ['input'],
   };
   first.projection.parts.input = {
@@ -267,4 +270,17 @@ it('materializes a question only from its bound input revision and preserves the
   ).rejects.toMatchObject({ code: 'REVISION_EXPIRED' });
   test.source.dispose();
   await test.source.drain();
+});
+
+test('catalog preserves the desktop emoji without creating a session observation', async () => {
+  const f = fixture();
+  expect(await f.source.listAgents(undefined, new AbortController().signal)).toEqual({
+    items: [{ id: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }],
+    next: undefined,
+  });
+  expect(f.request.mock.calls.some(([method]) => method === 'agent.sessions.subscribe')).toBe(
+    false,
+  );
+  f.source.dispose();
+  await f.source.drain();
 });

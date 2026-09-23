@@ -12,6 +12,7 @@ export class ConversationPresenter {
   >();
   private lastLive: readonly ConversationMessage[] = [];
   private previousVersion?: HistoryVersion;
+  private readonly settled = new Set<string>();
   private result: readonly ConversationMessage[] = [];
   update(
     snapshot: ConversationSnapshot,
@@ -22,6 +23,7 @@ export class ConversationPresenter {
     if (snapshot.freshness.state === 'retired') {
       this.retained.clear();
       this.lastLive = [];
+      this.settled.clear();
       this.result = [];
       return this.result;
     }
@@ -30,10 +32,18 @@ export class ConversationPresenter {
       if (!liveKeys.has(message.key) && !this.retained.has(message.key))
         this.retained.set(message.key, { message, previousVersion: this.previousVersion });
     const persistedKeys = new Set(history.map((message) => message.key));
+    const terminalKeys = new Set(
+      snapshot.executions.flatMap((execution) =>
+        execution.terminal && !this.settled.has(execution.ref)
+          ? [execution.terminal.message.key]
+          : [],
+      ),
+    );
     for (const [key, value] of this.retained) {
       if (
         liveKeys.has(key) ||
-        (installedVersion === snapshot.historyVersion &&
+        (!terminalKeys.has(key) &&
+          installedVersion === snapshot.historyVersion &&
           installedVersion !== undefined &&
           (persistedKeys.has(key) || installedVersion !== value.previousVersion))
       )
@@ -46,6 +56,52 @@ export class ConversationPresenter {
     for (const { message } of this.retained.values())
       if (!merged.has(message.key)) merged.set(message.key, message);
     for (const message of snapshot.liveMessages) merged.set(message.key, message);
+    const executions = new Set<string>(snapshot.executions.map((execution) => execution.ref));
+    for (const ref of this.settled) if (!executions.has(ref)) this.settled.delete(ref);
+    for (const execution of snapshot.executions) {
+      const terminal = execution.terminal;
+      if (!terminal || this.settled.has(execution.ref)) continue;
+      const row = terminal.message;
+      const persisted = history.find((message) => message.key === row.key);
+      if (
+        terminal.durable &&
+        terminal.historyReady &&
+        installedVersion === snapshot.historyVersion &&
+        persisted?.state === row.state
+      ) {
+        this.settled.add(execution.ref);
+        this.retained.delete(row.key);
+        merged.set(row.key, persisted);
+        continue;
+      }
+      const existing = merged.get(row.key);
+      const content =
+        existing?.display.data?.parts?.flatMap((part, index) =>
+          part.type === 'data-error'
+            ? []
+            : [{ part, key: existing.display.data?.partKeys?.[index] }],
+        ) ?? [];
+      merged.set(
+        row.key,
+        existing
+          ? {
+              ...existing,
+              state: row.state,
+              display: {
+                ...existing.display,
+                status: row.display.status,
+                data: {
+                  ...existing.display.data,
+                  parts: [...content.map(({ part }) => part), ...(row.display.data?.parts ?? [])],
+                  partKeys: content.every(({ key }) => key !== undefined)
+                    ? [...content.map(({ key }) => key!), ...(row.display.data?.partKeys ?? [])]
+                    : undefined,
+                },
+              },
+            }
+          : row,
+      );
+    }
     const next = [...merged.values()];
     if (
       next.length !== this.result.length ||

@@ -229,6 +229,32 @@ export function createRemoteConversationSession(
         latest?.executions.map((execution) => ({
           ref: refs.issue<ExecutionRef>('execution', execution.id),
           state: execution.state,
+          failure: execution.failure,
+          persistenceFailure: execution.persistenceFailure,
+          ...(execution.messageId && (execution.failure || execution.persistenceFailure)
+            ? {
+                terminal: {
+                  message: project({
+                    id: execution.messageId,
+                    version: execution.history?.messageRevision ?? execution.id,
+                    role: 'assistant',
+                    parts: [],
+                    state:
+                      execution.state === 'failed'
+                        ? 'error'
+                        : execution.state === 'cancelled' || execution.state === 'interrupted'
+                          ? 'cancelled'
+                          : 'success',
+                    failure: execution.failure,
+                    persistenceFailure: execution.persistenceFailure,
+                  }),
+                  durable: execution.durable === true,
+                  historyReady:
+                    !!execution.history &&
+                    BigInt(session.historyVersion) >= BigInt(execution.history.historyRevision),
+                },
+              }
+            : {}),
           ...(['running', 'awaiting-approval', 'finalizing'].includes(execution.state)
             ? {
                 cancel: action(

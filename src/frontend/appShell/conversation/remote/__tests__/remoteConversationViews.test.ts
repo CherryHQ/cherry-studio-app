@@ -1,7 +1,50 @@
 import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';
 
 import type { MessageRef, ResourceRef } from '../../contracts';
-import { remoteMessage } from '../remoteConversationViews';
+import { remoteMessage, remoteTranscriptMessage } from '../remoteConversationViews';
+
+it('keeps the same provider failure in message presentation and exported history without duplicating data parts', () => {
+  const failure = {
+    message: 'Subscription required',
+    retryable: false,
+    failure: {
+      version: 1 as const,
+      reasonCode: 'permission' as const,
+      source: { layer: 'provider' as const },
+      context: { statusCode: 403 },
+    },
+  };
+  const message: RemoteMessageView = {
+    id: 'failed',
+    version: '3',
+    role: 'assistant',
+    state: 'error',
+    failure,
+    parts: [{ id: 'legacy-error', kind: 'data', name: 'data-error', resource: 'resource' }],
+  };
+  const view = remoteMessage(message, 'failed' as MessageRef, (id) => id as ResourceRef);
+  expect(view.display).toMatchObject({
+    status: 'error',
+    data: {
+      parts: [
+        {
+          type: 'data-error',
+          data: {
+            code: 'EXECUTION_FAILED',
+            reasonCode: 'permission',
+            message: failure.message,
+            context: { statusCode: 403 },
+          },
+        },
+      ],
+    },
+  });
+  expect(view.display.data.parts).toHaveLength(1);
+  expect(remoteTranscriptMessage(message)).toMatchObject({
+    status: 'error',
+    parts: [{ type: 'error', error: { code: 'EXECUTION_FAILED', ...failure } }],
+  });
+});
 
 it('keeps tools in process order without putting deferred input/output values into the shared renderer', () => {
   const message: RemoteMessageView = {

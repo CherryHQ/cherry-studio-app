@@ -4,6 +4,7 @@ import type {
   AgentSubmitMessageInput,
   JsonValue,
 } from '@/shared/contracts/agent';
+import type { ExecutionFailure } from '@/shared/contracts/aiFailure';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { InteractionResponse, InteractionQuestion } from '@/shared/contracts/interaction';
 
@@ -34,6 +35,7 @@ export type ConversationFailure = {
     | 'offline'
     | 'version-expired'
     | 'unsupported'
+    | 'upgrade-required'
     | 'resource-unavailable'
     | 'idempotency-conflict'
     | 'cancelled'
@@ -54,6 +56,7 @@ export type Availability =
         | 'needs-repair'
         | 'model-unavailable'
         | 'workspace-required'
+        | 'upgrade-required'
         | 'resource-unavailable'
         | 'retired';
     };
@@ -108,6 +111,9 @@ export type ConversationActions = {
 };
 export type ConversationExecution = {
   ref: ExecutionRef;
+  failure?: ExecutionFailure;
+  persistenceFailure?: ExecutionFailure;
+  terminal?: { message: ConversationMessage; durable: boolean; historyReady: boolean };
   state:
     | 'running'
     | 'awaiting-approval'
@@ -241,14 +247,32 @@ export type AgentSummary = {
   ref: AgentRef;
   name: string;
   configuration: 'available' | 'unavailable' | 'unknown';
+  emoji?: string;
   avatar?: string | null;
   avatarUri?: string | null;
 };
 export type WorkspaceSummary =
   | { ref: WorkspaceRef; id: string; name: string; kind?: 'registered' }
   | { ref: WorkspaceRef; kind: 'system'; id?: never; name?: never };
-export type ConversationSummary = { ref: ConversationRef; title: string; updatedAt?: string };
+export type ConversationSummary = {
+  ref: ConversationRef;
+  agentId?: string;
+  title: string;
+  updatedAt?: string;
+};
+export type ConversationListStatus = 'running' | 'awaiting-approval' | 'awaiting-input' | 'failed' | 'unread';
+/** Lightweight list metadata/actions. Does not open a transcript observation. */
+export type ConversationPreview = {
+  status?: Readable<ConversationListStatus | undefined>;
+  rename?: ConversationAction<{ title: string }, void>;
+  remove?: ConversationAction<void, void>;
+};
 export interface ConversationCatalog {
+  /** Stable metadata namespace; excludes runtime resources, workspace choices and actions. */
+  readonly cacheScope?: QueryScope;
+  subscribe?(listener: (kind: 'agents' | 'sessions') => void): () => void;
+  readSession?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary>;
+  previewSession?(ref: ConversationRef): ConversationPreview;
   listAgents(
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,

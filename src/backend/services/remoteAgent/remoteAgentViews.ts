@@ -98,9 +98,13 @@ export function projectMessage(
     version: message.revision,
     role: message.role,
     parts: result,
-    state: parts.some((part) => 'state' in part && part.state === 'streaming')
-      ? 'streaming'
-      : 'success',
+    state:
+      message.status === 'pending'
+        ? 'streaming'
+        : message.status === 'paused'
+          ? 'cancelled'
+          : message.status,
+    ...(message.failure ? { failure: message.failure } : {}),
   };
 }
 export function projectSnapshot(
@@ -132,6 +136,11 @@ export function projectSnapshot(
     executions: Object.values(value.executions).map((execution) => ({
       id: execution.executionId,
       state: execution.status,
+      messageId: execution.messageId,
+      failure: execution.failure,
+      persistenceFailure: execution.persistenceFailure,
+      durable: execution.durable,
+      history: execution.history,
       ...(current && value.session.activeExecutionId === execution.executionId
         ? {
             cancelTarget: commandTarget(scope, 'cancel', {

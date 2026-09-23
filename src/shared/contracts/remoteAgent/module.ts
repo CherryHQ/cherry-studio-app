@@ -21,7 +21,7 @@ export interface RemoteAgentSource {
   listAgents(
     cursor: string | undefined,
     signal: AbortSignal,
-  ): Promise<RemotePage<{ id: string; name: string }>>;
+  ): Promise<RemotePage<{ id: string; name: string; emoji?: string }>>;
   listWorkspaces(
     agentId: string,
     cursor: string | undefined,

@@ -8,6 +8,12 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./failure": {
+      "types": "./src/failure.ts",
+      "react-native": "./src/failure.ts",
+      "import": "./src/failure.ts",
+      "default": "./src/failure.ts"
+    },
     ".": {
       "types": "./src/index.ts",
       "react-native": "./src/index.ts",

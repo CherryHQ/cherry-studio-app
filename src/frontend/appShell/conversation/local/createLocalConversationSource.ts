@@ -29,11 +29,16 @@ import {
   LOCAL_INPUT_POLICY,
 } from './createLocalConversationSession';
 import { localConversationFailure } from './localConversationFailure';
+import {
+  createLocalConversationPreview,
+  type ConversationReadMarks,
+} from './localConversationPreview';
 
 /** Owns local observation and admission, never a desktop connection or a second execution engine. */
 export function createLocalConversationSource(input: {
   agent: AgentProtocol;
   api: ApiClient;
+  readMarks?: ConversationReadMarks;
   onSessionChanged?: (sessionId: string) => void;
   onTranscriptChanged?: (sessionId: string) => void;
 }) {
@@ -53,6 +58,18 @@ export function createLocalConversationSource(input: {
   const assertSource = () => {
     if (disposed) throw new ConversationReadError({ code: 'retired', retry: 'none' });
   };
+  const catalogListeners = new Set<(kind: 'agents' | 'sessions') => void>();
+  const publishCatalog = (kind: 'agents' | 'sessions') => {
+    if (!disposed) for (const listener of catalogListeners) listener(kind);
+  };
+  let unchanges: (() => void) | undefined;
+  const observeChanges = () =>
+    input.api.subscribeChanges?.((paths) => {
+      if (paths.some((path) => path === '/agents' || path.startsWith('/agents/')))
+        publishCatalog('agents');
+      if (paths.some((path) => path === '/agent-sessions' || path.startsWith('/agent-sessions/')))
+        publishCatalog('sessions');
+    });
   const changed = (sessionId: string, history: boolean) => {
     for (const session of sessions)
       if (session.handle.ref.sessionId === sessionId) session.changed(history);
@@ -60,6 +77,7 @@ export function createLocalConversationSource(input: {
   const client = new AgentSessionChatClient(input.agent, {
     onSessionChanged: (id) => {
       changed(id, false);
+      publishCatalog('sessions');
       input.onSessionChanged?.(id);
     },
     onTranscriptChanged: (id) => {
@@ -78,6 +96,44 @@ export function createLocalConversationSource(input: {
     scope,
     state,
     catalog: {
+      subscribe: (listener) => {
+        if (disposed) return () => {};
+        catalogListeners.add(listener);
+        unchanges ??= observeChanges();
+        return () => {
+          catalogListeners.delete(listener);
+          if (!catalogListeners.size) {
+            unchanges?.();
+            unchanges = undefined;
+          }
+        };
+      },
+      readSession: async (address, signal) => {
+        assertSource();
+        signal.throwIfAborted();
+        if (address.source.kind !== 'local')
+          throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+        const session = await input.api.get(`/agent-sessions/${address.sessionId}`, { signal });
+        assertSource();
+        signal.throwIfAborted();
+        return {
+          ref: address,
+          agentId: session.agentId,
+          title: session.title,
+          updatedAt: session.lastActivityAt,
+        };
+      },
+      previewSession: (address) =>
+        createLocalConversationPreview({
+          ...input,
+          address,
+          assertSource,
+          onChanged: (id) => {
+            changed(id, false);
+            publishCatalog('sessions');
+            input.onSessionChanged?.(id);
+          },
+        }),
       listAgents: async (cursor, signal) => {
         assertSource();
         signal.throwIfAborted();
@@ -117,6 +173,7 @@ export function createLocalConversationSource(input: {
         return {
           items: result.items.map((session) => ({
             ref: { source: ref, sessionId: session.id },
+            agentId: session.agentId,
             title: session.title,
             updatedAt: session.lastActivityAt,
           })),
@@ -262,6 +319,9 @@ export function createLocalConversationSource(input: {
       disposed = true;
       state.set({ availability: { state: 'disabled', reason: 'retired' } });
       for (const entry of [...sessions]) entry.handle.dispose();
+      unchanges?.();
+      unchanges = undefined;
+      catalogListeners.clear();
       client.dispose();
     },
   };

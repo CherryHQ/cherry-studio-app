@@ -21,9 +21,11 @@ export function ConversationStatus({
         {t(
           repair
             ? 'remoteAgent.pairAgain'
-            : availability.reason === 'synchronizing'
-              ? 'remoteAgent.connecting'
-              : 'remoteAgent.disconnected',
+            : availability.reason === 'upgrade-required'
+              ? 'remoteAgent.upgradeRequired'
+              : availability.reason === 'synchronizing'
+                ? 'remoteAgent.connecting'
+                : 'remoteAgent.disconnected',
         )}
       </Text>
       {repair ? (

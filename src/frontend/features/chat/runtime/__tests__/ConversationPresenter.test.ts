@@ -56,3 +56,88 @@ it('keeps an older search window separate from live rows and clears retained dat
     presenter.update({ ...snapshot([], '1'), freshness: { state: 'retired' } }, older, undefined),
   ).toEqual([]);
 });
+
+const failed = (): ConversationMessage => ({
+  ...message('answer'),
+  state: 'error',
+  display: {
+    id: 'answer',
+    role: 'assistant',
+    status: 'error',
+    data: {
+      parts: [
+        {
+          type: 'data-error',
+          data: {
+            code: 'EXECUTION_FAILED',
+            message: 'Subscription required',
+            reasonCode: 'permission',
+          },
+        },
+      ],
+      partKeys: ['answer:failure'],
+    },
+  },
+});
+const terminal = (live: ConversationMessage[] = [], durable = true): ConversationSnapshot => ({
+  ...snapshot(live, '2'),
+  executions: [
+    {
+      ref: 'execution' as ConversationSnapshot['executions'][number]['ref'],
+      state: 'failed',
+      terminal: { message: failed(), durable, historyReady: true },
+    },
+  ],
+});
+
+it('shows a failure whose message was created and removed in one batch, then hands off exactly once', () => {
+  const presenter = new ConversationPresenter();
+  expect(presenter.update(terminal(), [], undefined)).toEqual([failed()]);
+  expect(presenter.update(terminal(), [], version('2'))).toEqual([failed()]);
+  const persisted = failed();
+  expect(presenter.update(terminal(), [persisted], version('2'))).toEqual([persisted]);
+  expect(presenter.update(terminal(), [persisted], version('2'))).toEqual([persisted]);
+  expect(
+    presenter.update({ ...terminal(), historyVersion: version('3') }, [], version('3')),
+  ).toEqual([]);
+});
+
+it('retains partial text and stable part keys while a failed answer waits for history', () => {
+  const presenter = new ConversationPresenter();
+  const live: ConversationMessage = {
+    ...message('answer'),
+    state: 'streaming',
+    display: {
+      id: 'answer',
+      role: 'assistant',
+      status: 'pending',
+      data: { parts: [{ type: 'text', text: 'Partial' }], partKeys: ['text'] },
+    },
+  };
+  presenter.update(snapshot([live], '1'), [], version('1'));
+  const rows = presenter.update(terminal(), [], undefined);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    state: 'error',
+    display: {
+      status: 'error',
+      data: {
+        partKeys: ['text', 'answer:failure'],
+        parts: [{ type: 'text', text: 'Partial' }, { type: 'data-error' }],
+      },
+    },
+  });
+  expect(presenter.update(terminal(), [message('older')], version('2'), true)).toEqual([
+    message('older'),
+  ]);
+  expect(presenter.update(terminal(), [], undefined)[0].display.data.parts).toHaveLength(2);
+});
+
+it('does not let an older saved row acknowledge an unsaved terminal result', () => {
+  const presenter = new ConversationPresenter();
+  const persisted = failed();
+  persisted.display = { ...persisted.display, data: { parts: [] } };
+  expect(
+    presenter.update(terminal([], false), [persisted], version('2'))[0].display.data.parts,
+  ).toHaveLength(1);
+});

@@ -5,7 +5,6 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useChatSource } from '@/frontend/appShell/navigation/chat';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
@@ -23,7 +22,6 @@ export function SidebarHeader() {
   const { t } = useTranslation();
   const { openSearch } = useSidebarActions('SidebarHeader');
   const insets = useSafeAreaInsets();
-  const { source } = useChatSource();
   const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
 
   return (
@@ -41,7 +39,7 @@ export function SidebarHeader() {
         <Text className="flex-1 font-semibold text-2xl text-sidebar-foreground" numberOfLines={1}>
           Cherry Studio
         </Text>
-        {source === 'local' ? (
+        {openSearch ? (
           <Surface interactive shape="circle">
             <Pressable
               accessibilityLabel={t('session.search.placeholder')}

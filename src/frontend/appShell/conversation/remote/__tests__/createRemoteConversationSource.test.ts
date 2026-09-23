@@ -23,7 +23,7 @@ const message = (id: string) => ({
   state: 'success' as const,
   parts: [{ id: `${id}:text`, kind: 'text' as const, text: id, complete: true }],
 });
-function fixture(scope = 'scope') {
+function fixture(scope = 'scope', binding = 'binding') {
   let state: RemoteSourceState = { status: 'ready' };
   const states = new Set<() => void>();
   const operationListeners = new Set<() => void>();
@@ -31,7 +31,7 @@ function fixture(scope = 'scope') {
   const unobserve = jest.fn();
   const remote: RemoteAgentSource = {
     scope,
-    draftScope: 'binding',
+    draftScope: binding,
     getState: () => state,
     subscribeState: (listener) => {
       states.add(listener);
@@ -39,7 +39,7 @@ function fixture(scope = 'scope') {
         states.delete(listener);
       };
     },
-    listAgents: jest.fn(async () => ({ items: [{ id: 'a', name: 'Agent' }] })),
+    listAgents: jest.fn(async () => ({ items: [{ id: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }] })),
     listWorkspaces: jest.fn(async () => ({ items: [{ id: 'w', name: 'Workspace' }] })),
     listSessions: jest.fn(async () => ({ items: [session] })),
     readSession: jest.fn(async () => session),
@@ -306,4 +306,39 @@ it('offers a system workspace only when advertised and sends an explicit selecti
     text: 'hello',
   });
   test.source.dispose();
+});
+
+test('selected catalog metadata does not observe history or expose unsupported row mutations', async () => {
+  const { source, remote } = fixture();
+  const ref = { source: source.ref, sessionId: 's' };
+  expect(await source.catalog.readSession!(ref, signal())).toMatchObject({
+    agentId: 'a',
+    title: 'Conversation',
+  });
+  expect(remote.observe).not.toHaveBeenCalled();
+  expect(source.catalog.previewSession?.(ref)).toBeUndefined();
+  await expect(
+    source.catalog.readSession!(
+      { source: { kind: 'desktop', connectionId: 'other' }, sessionId: 's' },
+      signal(),
+    ),
+  ).rejects.toMatchObject({ failure: { code: 'invalid-input' } });
+  source.dispose();
+});
+
+test('metadata refs survive reconnect within a grant but never cross a replacement grant', async () => {
+  const first = fixture('old');
+  const catalog = await first.source.catalog.listAgents(undefined, signal());
+  expect(catalog.items[0]).toMatchObject({ emoji: '🧑🏽‍💻' });
+  first.source.dispose();
+  const replacement = fixture('new');
+  await expect(
+    replacement.source.catalog.listSessions({ agent: catalog.items[0].ref }, undefined, signal()),
+  ).resolves.toMatchObject({ items: [{ agentId: 'a' }] });
+  const other = fixture('new-grant', 'other-binding');
+  await expect(
+    other.source.catalog.listSessions({ agent: catalog.items[0].ref }, undefined, signal()),
+  ).rejects.toMatchObject({ failure: { code: 'invalid-input' } });
+  replacement.source.dispose();
+  other.source.dispose();
 });

@@ -25,10 +25,13 @@ export function Sidebar({ navigation }: SidebarProps) {
   const actions = useMemo<SidebarActions>(
     () => ({
       closeDrawer: () => navigation.closeDrawer(),
-      openSearch: () => {
-        navigation.closeDrawer();
-        openSessionSearch();
-      },
+      openSearch:
+        source === 'local'
+          ? () => {
+              navigation.closeDrawer();
+              openSessionSearch();
+            }
+          : undefined,
       navigateAgents: () => {
         if (source === 'remote') {
           setViewMode('agents');

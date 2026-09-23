@@ -52,6 +52,15 @@ function fixture() {
   };
 }
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+const executionFailure = {
+  message: 'Subscription required',
+  retryable: false,
+  failure: {
+    version: 1 as const,
+    reasonCode: 'permission' as const,
+    source: { layer: 'provider' as const },
+  },
+};
 function setup(initial?: AgentProjection) {
   const { page, descriptor } = fixture();
   let stored = initial;
@@ -139,7 +148,13 @@ function batch(seq = '1', subscriptionId = 'sub-1', streamEpoch = 'epoch') {
         {
           seq,
           kind: 'message.created',
-          payload: { messageId: 'm', revision: '1', role: 'assistant', partIds: [] },
+          payload: {
+            messageId: 'm',
+            revision: '1',
+            role: 'assistant',
+            status: 'pending',
+            partIds: [],
+          },
         },
       ],
     },
@@ -158,6 +173,115 @@ it('installs the shared checkpoint fixture durably before activating, then write
   expect(test.order.indexOf('write:1')).toBeLessThan(test.order.indexOf('agent.subscriptions.ack'));
   expect(test.publish.mock.calls.at(-1)[0].messages.m).toMatchObject({ messageId: 'm' });
   expect(test.failed).not.toHaveBeenCalled();
+  test.sync.stop();
+  await test.sync.drain();
+});
+
+it('persists a failed execution before ACK and recovers it without a live message after restart and replay', async () => {
+  const test = setup();
+  await test.sync.start();
+  const notification = {
+    method: 'agent.events',
+    params: {
+      subscriptionId: 'sub-1',
+      sessionId: 's',
+      streamEpoch: 'epoch',
+      events: [
+        {
+          seq: '1',
+          kind: 'execution.updated',
+          payload: {
+            executionId: 'e',
+            status: 'failed',
+            messageId: 'm',
+            durable: true,
+            failure: executionFailure,
+            history: { historyRevision: '1', messageRevision: '1' },
+          },
+        },
+      ],
+    },
+  };
+  test.notify(notification);
+  await settle();
+  expect(test.order.indexOf('write:1')).toBeLessThan(test.order.indexOf('agent.subscriptions.ack'));
+  expect(test.stored()?.executions.e.failure).toEqual(executionFailure);
+  expect(test.stored()?.messages).toEqual({});
+  test.sync.stop();
+  await test.sync.drain();
+  const restarted = setup(JSON.parse(JSON.stringify(test.stored())));
+  await restarted.sync.start();
+  restarted.notify(notification);
+  await settle();
+  expect(restarted.stored()?.cursor.seq).toBe('1');
+  expect(Object.values(restarted.stored()!.executions)).toHaveLength(1);
+  expect(restarted.publish.mock.calls.at(-1)[0].executions.e).toMatchObject({
+    status: 'failed',
+    failure: executionFailure,
+  });
+  restarted.sync.stop();
+  await restarted.sync.drain();
+});
+
+it('publishes a failure before deferred text finishes and keeps it visible if that resource cannot be read', async () => {
+  const state = projection();
+  state.executions.e = {
+    executionId: 'e',
+    status: 'failed',
+    messageId: 'm',
+    durable: false,
+    failure: executionFailure,
+    persistenceFailure: executionFailure,
+  };
+  state.messages.m = {
+    messageId: 'm',
+    revision: '1',
+    role: 'assistant',
+    partIds: ['p'],
+    status: 'error',
+    failure: executionFailure,
+  };
+  state.parts.p = {
+    partId: 'p',
+    revision: '1',
+    kind: 'text',
+    state: 'completed',
+    content: {
+      ref: {
+        contentId: 'p',
+        revision: '1',
+        byteLength: '3',
+        mediaType: 'text/plain',
+        sha256: 'a'.repeat(64),
+      },
+    },
+  };
+  const test = setup(state);
+  const original = test.request.getMockImplementation()!;
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.content.read') {
+      await wait;
+      throw new Error('Resource expired');
+    }
+    return original(method, params);
+  });
+  const started = test.sync.start();
+  await settle();
+  expect(test.publish.mock.calls.at(-1)).toMatchObject([
+    { executions: { e: { failure: executionFailure } } },
+    true,
+  ]);
+  release();
+  await started;
+  expect(test.failed).not.toHaveBeenCalled();
+  expect(test.publish.mock.calls.at(-1)[0].messages.m).toMatchObject({
+    status: 'error',
+    failure: executionFailure,
+  });
   test.sync.stop();
   await test.sync.drain();
 });

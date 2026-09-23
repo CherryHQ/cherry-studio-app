@@ -17,6 +17,7 @@ export {
 
 export {
   conversationHref,
+  useConversationTarget,
   conversationShareHref,
   conversationRefFromRoute,
 } from './conversationRoute';

@@ -1,6 +1,6 @@
 # Service Dependencies And Ownership
 
-Status: source audit of the in-progress #997 migration on 2026-09-22. This describes the current
+Status: source audit of the in-progress #997 migration on 2026-09-23. This describes the current
 working tree, including uncommitted implementation; it is not a statement that the remote chat
 path has shipped or passed device acceptance. See [Remote Access](./README.md) for the wire contract
 and [Runtime Ownership](../runtime-ownership.md) for general lifecycle rules.
@@ -23,7 +23,8 @@ flowchart TB
     Consumer[appShell/conversation: sources and session handles]
     LocalAdapter[Local adapter: client and Data API history]
     RemoteAdapter[Remote adapter: consumption values]
-    Remote[RemoteChatScreen / SidebarRemoteRecents]
+    Remote[RemoteChatScreen]
+    Sidebar[Shared local and remote sidebar]
     Settings[Pairing and configuration UI]
     Export[Share preparation / export preview]
     Local --> UI --> Consumer
@@ -31,6 +32,7 @@ flowchart TB
     Consumer --> LocalAdapter
     Consumer --> RemoteAdapter
     Remote --> Consumer
+    Sidebar --> Consumer
     Share --> Export
   end
   subgraph Backend[Mobile backend]
@@ -192,4 +194,4 @@ coverage against the assigned desktop/mobile instances.
   [sharing](../../../src/frontend/features/chat/share/README.md).
 - Remote frontend path: [source boundary](../../../src/frontend/appShell/conversation/ConversationSourceBoundary.tsx),
   [remote screen](../../../src/frontend/features/chat/remote/RemoteChatScreen.tsx),
-  [remote sidebar](../../../src/frontend/appShell/sidebar/components/SidebarRemoteRecents.tsx).
+  [shared sidebar](../../../src/frontend/appShell/sidebar/components/SidebarConversationList.tsx).

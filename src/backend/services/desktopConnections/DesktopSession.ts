@@ -85,6 +85,7 @@ async function dialWebSocket(
 
 /** One encrypted JSON-RPC connection to a desktop: request/response, notifications, heartbeat, token refresh. */
 export class DesktopSession {
+  agentFailureVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
     const dial: DialChannel =
       options.dial ??
@@ -96,11 +97,12 @@ export class DesktopSession {
       try {
         channel = await dial(remoteUrl(address, options.port), options.signal);
         const session = new DesktopSession(channel, address);
-        await session.request(
+        const hello = await session.request(
           'connection.hello',
           { protocolVersions: PROTOCOL_VERSIONS },
           options.signal,
         );
+        session.agentFailureVersion = hello.agentFailureVersion;
         return session;
       } catch (error) {
         options.signal.throwIfAborted();
@@ -155,6 +157,11 @@ export class DesktopSession {
   ): Promise<DesktopResult<M>> {
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
     signal?.throwIfAborted();
+    if (method.startsWith('agent.') && this.agentFailureVersion !== 1)
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop Agent failure contract is not supported',
+      });
     if (this.inFlight >= remoteLimits.inFlightRequests)
       throw new RemoteFailureError({ reason: 'RESOURCE_EXHAUSTED', message: 'Too many requests' });
     const schema = desktopMethods[method];

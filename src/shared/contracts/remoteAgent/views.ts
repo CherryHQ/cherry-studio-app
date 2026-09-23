@@ -1,3 +1,4 @@
+import type { ExecutionFailure } from '../aiFailure';
 import type { InteractionQuestion } from '../interaction';
 
 export type RemoteWorkspaceSelection = { kind: 'registered'; id: string } | { kind: 'system' };
@@ -83,7 +84,9 @@ export type RemoteMessageView = {
   version: string;
   role: 'user' | 'assistant' | 'system';
   parts: readonly RemoteMessagePart[];
-  state: 'streaming' | 'success' | 'error';
+  state: 'streaming' | 'success' | 'error' | 'cancelled';
+  failure?: ExecutionFailure;
+  persistenceFailure?: ExecutionFailure;
 };
 export type RemoteSessionSnapshot = {
   session: RemoteSessionView;
@@ -92,6 +95,11 @@ export type RemoteSessionSnapshot = {
   messages: readonly RemoteMessageView[];
   executions: readonly {
     id: string;
+    messageId?: string;
+    failure?: ExecutionFailure;
+    persistenceFailure?: ExecutionFailure;
+    durable?: boolean;
+    history?: { historyRevision: string; messageRevision: string };
     state:
       | 'running'
       | 'awaiting-approval'

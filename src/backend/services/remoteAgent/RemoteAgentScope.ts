@@ -150,6 +150,10 @@ export class RemoteAgentScope implements RemoteAgentSource {
       return value;
     } catch (error) {
       if (error instanceof RemoteFailureError) {
+        if (error.reason === 'UPGRADE_REQUIRED') {
+          this.state = { ...this.state, reason: 'upgrade-required' };
+          for (const listener of this.stateListeners) listener();
+        }
         if (error.reason === 'FORBIDDEN' || error.reason === 'GRANT_REVOKED')
           await this.connections.revoke(this.lease.connectionId, 'agent', this.lease.grantId);
         throw new RemoteAgentError(
@@ -163,7 +167,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   async listAgents(cursor: string | undefined, signal: AbortSignal) {
     const page = await this.request('agent.agents.list', { cursor }, signal);
     return {
-      items: page.items.map((item) => ({ id: item.agentId, name: item.name })),
+      items: page.items.map((item) => ({ id: item.agentId, name: item.name, emoji: item.emoji })),
       next: page.nextCursor ?? undefined,
     };
   }

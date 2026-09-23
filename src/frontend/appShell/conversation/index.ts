@@ -15,6 +15,8 @@ export type {
   ConversationAction,
   ConversationDraft,
   ConversationCatalog,
+  ConversationListStatus,
+  ConversationPreview,
   ConversationOperation,
   OperationOutcome,
   QueryScope,
@@ -60,6 +62,8 @@ export { useConversationResource } from './useConversationResource';
 export {
   useConversationAgents,
   useConversationSessions,
+  useConversationPreview,
+  useConversationSummary,
   useConversationWorkspaces,
 } from './useConversationCatalog';
 export { useConversationDraft, useConversationOperations } from './useConversationDraft';

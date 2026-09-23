@@ -6,7 +6,7 @@ The old provider, private queries/resource loaders, Controller contract and `age
 were removed together after switching consumers and running focused regression checks.
 
 ```text
-RemoteChatScreen / SidebarRemoteRecents
+RemoteChatScreen / SidebarConversationList
   → ConversationSource / Catalog / Session / Draft
   → Backend.remoteAgent
   → RemoteAgentRuntime + DesktopConnectionManager

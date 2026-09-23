@@ -3,8 +3,10 @@ import { createContext, type PropsWithChildren, use, useEffect, useRef, useState
 import { AppState } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
+import { cacheService } from '@/frontend/data/CacheService';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
 
+import { subscribeCatalogDirectoryChanges } from './conversationCatalogCache';
 import { createConversationSources } from './createConversationSources';
 
 const ConversationContext = createContext<ReturnType<typeof createConversationSources> | null>(
@@ -22,6 +24,18 @@ export function ConversationProvider({ children }: PropsWithChildren) {
       agent,
       remoteAgent,
       api,
+      readMarks: {
+        get: (id) => cacheService.get(`chat.last_seen_turn.${id}`),
+        subscribe: (id, listener) => {
+          const key = `chat.last_seen_turn.${id}` as const;
+          cacheService.registerHook(key);
+          const unsubscribe = cacheService.subscribe(key, listener);
+          return () => {
+            unsubscribe();
+            cacheService.unregisterHook(key);
+          };
+        },
+      },
       onSessionChanged: (sessionId) => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
         void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.detail(sessionId) });
@@ -33,6 +47,7 @@ export function ConversationProvider({ children }: PropsWithChildren) {
       },
     }),
   );
+  useEffect(() => subscribeCatalogDirectoryChanges(api, queryClient), [api, queryClient]);
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;

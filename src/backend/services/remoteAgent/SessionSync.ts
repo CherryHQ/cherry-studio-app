@@ -194,19 +194,51 @@ export class SessionSync {
     await this.present(projection, current);
   }
   private async present(projection: AgentProjection, current: boolean) {
+    this.lifetime.signal.throwIfAborted();
+    const caughtUp =
+      !this.highWatermark ||
+      (projection.cursor.streamEpoch === this.highWatermark.streamEpoch &&
+        BigInt(projection.cursor.seq) >= BigInt(this.highWatermark.seq));
     const parts = { ...projection.parts };
-    const retained = new Set<string>();
+    const view = () => ({
+      ...projection,
+      parts: { ...parts },
+      interactions: Object.assign(
+        Object.create(null),
+        Object.fromEntries(this.persistedInteractions.map((item) => [item.interactionId, item])),
+        projection.interactions,
+      ),
+    });
     for (const part of Object.values(parts)) {
+      if ((part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content) {
+        const ref = part.content.ref;
+        const text = this.textCache.get(`${ref.contentId}:${ref.revision}:${ref.sha256}`);
+        if (text !== undefined) parts[part.partId] = { ...part, content: { text } };
+      }
+    }
+    if (
+      Object.values(projection.executions).some(
+        (execution) => execution.failure || execution.persistenceFailure,
+      )
+    )
+      this.publish(view(), current && caughtUp);
+    const retained = new Set<string>();
+    for (const part of Object.values(projection.parts)) {
       if ((part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content) {
         const ref = part.content.ref;
         const key = `${ref.contentId}:${ref.revision}:${ref.sha256}`;
         retained.add(key);
         let text = this.textCache.get(key);
         if (text === undefined) {
-          text = decodeContent(
-            await readContent(this.connection.request, this.sessionId, ref, this.lifetime.signal),
-          );
-          this.textCache.set(key, text);
+          try {
+            text = decodeContent(
+              await readContent(this.connection.request, this.sessionId, ref, this.lifetime.signal),
+            );
+            this.textCache.set(key, text);
+          } catch {
+            this.lifetime.signal.throwIfAborted();
+            continue;
+          }
         }
         parts[part.partId] = { ...part, content: { text } };
       }
@@ -229,16 +261,7 @@ export class SessionSync {
       this.interactionRevision = projection.session.historyRevision;
     }
     this.lifetime.signal.throwIfAborted();
-    const interactions = Object.assign(
-      Object.create(null),
-      Object.fromEntries(this.persistedInteractions.map((item) => [item.interactionId, item])),
-      projection.interactions,
-    );
-    const caughtUp =
-      !this.highWatermark ||
-      (projection.cursor.streamEpoch === this.highWatermark.streamEpoch &&
-        BigInt(projection.cursor.seq) >= BigInt(this.highWatermark.seq));
-    this.publish({ ...projection, parts, interactions }, current && caughtUp);
+    this.publish(view(), current && caughtUp);
   }
   stop() {
     this.lifetime.abort();

@@ -33,6 +33,8 @@ export function createRemoteConversationSource(
   const ref = { kind: 'desktop' as const, connectionId };
   const scope = remote.scope as QueryScope;
   const refs = createConversationReferences(scope);
+  const cacheScope = JSON.stringify([connectionId, remote.draftScope]) as QueryScope;
+  const catalogRefs = createConversationReferences(cacheScope);
   let disposed = false;
   const systemWorkspaces = new Map<string, WorkspaceRef>();
   const sessions = new Set<ReturnType<typeof createRemoteConversationSession>>();
@@ -134,25 +136,39 @@ export function createRemoteConversationSource(
     scope,
     state,
     catalog: {
+      cacheScope,
+      readSession: (address, signal) =>
+        read(signal, async () => {
+          if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
+            throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+          const session = await remote.readSession(address.sessionId, signal);
+          return {
+            ref: address,
+            agentId: session.agentId,
+            title: session.title,
+            updatedAt: session.updatedAt,
+          };
+        }),
       listAgents: (cursor, signal) =>
         read(signal, async () => {
           const page = await remote.listAgents(
-            cursor ? refs.resolve(cursor, 'agents').id : undefined,
+            cursor ? catalogRefs.resolve(cursor, 'agents').id : undefined,
             signal,
           );
           return {
             items: page.items.map((agent) => ({
               id: agent.id,
-              ref: refs.issue<AgentRef>('agent', agent.id),
+              ref: catalogRefs.issue<AgentRef>('agent', agent.id),
               name: agent.name,
+              emoji: agent.emoji,
               configuration: 'unknown' as const,
             })),
-            ...(page.next ? { next: refs.issue<CatalogCursor>('agents', page.next) } : {}),
+            ...(page.next ? { next: catalogRefs.issue<CatalogCursor>('agents', page.next) } : {}),
           };
         }),
       listWorkspaces: (agent, cursor, signal) =>
         read(signal, async () => {
-          const id = refs.resolve(agent, 'agent').id;
+          const id = catalogRefs.resolve(agent, 'agent').id;
           const kind = `workspaces:${id}`;
           const page = await remote.listWorkspaces(
             id,
@@ -180,26 +196,27 @@ export function createRemoteConversationSource(
         }),
       listSessions: ({ agent }, cursor, signal) =>
         read(signal, async () => {
-          const id = agent ? refs.resolve(agent, 'agent').id : undefined;
+          const id = agent ? catalogRefs.resolve(agent, 'agent').id : undefined;
           const kind = `sessions:${id ?? ''}`;
           const page = await remote.listSessions(
             id,
-            cursor ? refs.resolve(cursor, kind).id : undefined,
+            cursor ? catalogRefs.resolve(cursor, kind).id : undefined,
             signal,
           );
           return {
             items: page.items.map((session) => ({
               ref: { source: ref, sessionId: session.id },
+              agentId: session.agentId,
               title: session.title,
               updatedAt: session.updatedAt,
             })),
-            ...(page.next ? { next: refs.issue<CatalogCursor>(kind, page.next) } : {}),
+            ...(page.next ? { next: catalogRefs.issue<CatalogCursor>(kind, page.next) } : {}),
           };
         }),
       prepareDraft: async (input, signal) => {
         assertSource();
         signal.throwIfAborted();
-        const agentId = refs.resolve(input.agent, 'agent').id;
+        const agentId = catalogRefs.resolve(input.agent, 'agent').id;
         const selected = input.workspace
           ? refs.resolve(input.workspace, `workspace:${agentId}`)
           : undefined;

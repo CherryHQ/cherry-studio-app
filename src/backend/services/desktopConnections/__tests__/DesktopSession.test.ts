@@ -84,6 +84,43 @@ const options = (channels: Record<string, ReturnType<typeof fakeChannel>>) => ({
 });
 
 describe('DesktopSession', () => {
+  it('blocks unsupported Agent contracts without disconnecting configuration access', async () => {
+    const channel = fakeChannel({
+      ...hello,
+      'configuration.export.prepare': () => ({
+        exportId: 'export',
+        byteLength: '2',
+        sha256: 'a'.repeat(64),
+        expiresAt: '2026-09-23T00:00:00Z',
+      }),
+      'connection.ping': ({ nonce }: any) => ({ nonce, serverTime: '2026-09-23T00:00:00Z' }),
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    await expect(session.request('agent.agents.list', {})).rejects.toMatchObject({
+      reason: 'UPGRADE_REQUIRED',
+    });
+    expect(session.isOpen).toBe(true);
+    await expect(session.request('configuration.export.prepare', {})).resolves.toMatchObject({
+      exportId: 'export',
+    });
+    await expect(session.request('connection.ping', { nonce: 'ok' })).resolves.toMatchObject({
+      nonce: 'ok',
+    });
+    session.close();
+  });
+
+  it('accepts Agent methods only when the desktop advertises the failure contract', async () => {
+    const channel = fakeChannel({
+      'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),
+      'agent.agents.list': () => ({ items: [], nextCursor: null }),
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    await expect(session.request('agent.agents.list', {})).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    session.close();
+  });
   it('falls through unreachable addresses and completes hello on the first that answers', async () => {
     const good = fakeChannel(hello);
     const session = await DesktopSession.connect(

@@ -5,6 +5,7 @@ import type { ApiClient } from '@/shared/data/api/types';
 import type { ConversationSource, ConversationSourceRef } from './contracts';
 import { ConversationReadError } from './conversationState';
 import { createLocalConversationSource } from './local/createLocalConversationSource';
+import type { ConversationReadMarks } from './local/localConversationPreview';
 import { createRemoteConversationSource } from './remote/createRemoteConversationSource';
 
 /** The only source-kind dispatch. Construction never opens a desktop channel. */
@@ -12,11 +13,12 @@ export function createConversationSources(input: {
   agent: AgentProtocol;
   remoteAgent: RemoteAgentModule;
   api: ApiClient;
+  readMarks?: ConversationReadMarks;
   onSessionChanged(sessionId: string): void;
   onTranscriptChanged(sessionId: string): void;
 }) {
   const local = createLocalConversationSource(input);
-  const remoteSources = new Set<ConversationSource>();
+  const remoteSources = new Map<string, { source: ConversationSource; users: number }>();
   const lifetime = new AbortController();
   return {
     local,
@@ -33,20 +35,31 @@ export function createConversationSources(input: {
         remote.dispose();
         throw new ConversationReadError({ code: 'cancelled', retry: 'none' });
       }
-      const source = createRemoteConversationSource(ref.connectionId, remote);
-      remoteSources.add(source);
+      let entry = remoteSources.get(remote.scope);
+      if (entry) remote.dispose();
+      else {
+        entry = { source: createRemoteConversationSource(ref.connectionId, remote), users: 0 };
+        remoteSources.set(remote.scope, entry);
+      }
+      const retained = entry;
+      retained.users++;
+      let released = false;
       return {
-        source,
+        source: retained.source,
         release: () => {
-          remoteSources.delete(source);
-          source.dispose();
+          if (released) return;
+          released = true;
+          if (--retained.users === 0) {
+            remoteSources.delete(remote.scope);
+            retained.source.dispose();
+          }
         },
       };
     },
     dispose() {
       lifetime.abort();
       local.source.dispose();
-      for (const source of remoteSources) source.dispose();
+      for (const { source } of remoteSources.values()) source.dispose();
       remoteSources.clear();
     },
   };

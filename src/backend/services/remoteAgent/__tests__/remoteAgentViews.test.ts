@@ -5,6 +5,7 @@ const message = {
   messageId: 'm',
   revision: '1',
   role: 'assistant' as const,
+  status: 'success' as const,
   partIds: ['input', 'output', 'answer'],
 };
 it('distinguishes completed tool arguments from a completed invocation and keeps tool failure local to the part', () => {

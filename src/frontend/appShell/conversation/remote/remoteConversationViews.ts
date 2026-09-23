@@ -13,6 +13,8 @@ import type {
 export function remoteConversationFailure(error: unknown): ConversationFailure {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   switch (code) {
+    case 'UPGRADE_REQUIRED':
+      return { code: 'upgrade-required', retry: 'none' };
     case 'CLOSED':
       return { code: 'retired', retry: 'none' };
     case 'FORBIDDEN':
@@ -44,6 +46,8 @@ export function remoteConversationFailure(error: unknown): ConversationFailure {
   return { code: 'internal', retry: 'none' };
 }
 export function remoteAvailability(source: RemoteSourceState, disposed: boolean): Availability {
+  if (!disposed && source.status !== 'retired' && source.reason === 'upgrade-required')
+    return { state: 'disabled', reason: 'upgrade-required' };
   if (disposed || source.status === 'retired')
     return {
       state: 'disabled',
@@ -111,6 +115,30 @@ export function remoteMessage(
         resource: resource(part.resource),
       });
   }
+  if (message.failure) {
+    parts.push({
+      type: 'data-error',
+      data: {
+        code: 'EXECUTION_FAILED',
+        message: message.failure.message,
+        retryable: message.failure.retryable,
+        ...message.failure.failure,
+      },
+    });
+    keys.push(`${message.id}:failure`);
+  }
+  if (message.persistenceFailure) {
+    parts.push({
+      type: 'data-error',
+      data: {
+        code: 'PERSISTENCE_FAILED',
+        message: message.persistenceFailure.message,
+        retryable: false,
+        ...message.persistenceFailure.failure,
+      },
+    });
+    keys.push(`${message.id}:persistence-failure`);
+  }
   return {
     ref,
     key: message.id,
@@ -123,7 +151,12 @@ export function remoteMessage(
     display: {
       id: message.id,
       role: message.role,
-      status: message.state === 'streaming' ? 'pending' : message.state,
+      status:
+        message.state === 'streaming'
+          ? 'pending'
+          : message.state === 'cancelled'
+            ? 'paused'
+            : message.state,
       data: { parts, partKeys: keys },
     },
     actions: {},
@@ -142,6 +175,12 @@ export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptM
       parts.push({ type: 'tool-summary', id: part.id, displayName: part.name });
     else if (part.kind === 'file') attachments.push({ name: part.name, mediaType: part.mediaType });
   }
+  if (message.failure)
+    parts.push({
+      id: `${message.id}:failure`,
+      type: 'error',
+      error: { code: 'EXECUTION_FAILED', ...message.failure },
+    });
   return {
     id: message.id,
     role: message.role,

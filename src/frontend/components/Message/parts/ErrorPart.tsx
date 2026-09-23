@@ -6,6 +6,16 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 export function ErrorPart({ part }: { part: Extract<CherryMessagePart, { type: 'data-error' }> }) {
   const { t } = useTranslation();
+  if (part.data.code === 'PERSISTENCE_FAILED') {
+    return (
+      <ContextMenuExclusion>
+        <MessagePart.Error
+          message={t('chat.errorPart.notSaved.message')}
+          title={t('chat.errorPart.notSaved.title')}
+        />
+      </ContextMenuExclusion>
+    );
+  }
   if (part.data.code === 'INTERRUPTED') {
     return (
       <ContextMenuExclusion>

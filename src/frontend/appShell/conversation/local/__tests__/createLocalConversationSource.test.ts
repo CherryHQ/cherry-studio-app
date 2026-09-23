@@ -3,6 +3,7 @@ import type {
   AgentStartSessionInput,
   AgentSessionSnapshot,
   AgentSessionView,
+  AgentSessionStatus,
 } from '@/shared/contracts/agent';
 import type { ApiClient } from '@/shared/data/api/types';
 
@@ -33,7 +34,21 @@ const snapshot: AgentSessionSnapshot = {
 };
 function fixture() {
   const unsubscribe = jest.fn();
+  let turn: AgentSessionStatus | null = null;
+  let readMark: string | undefined;
+  const statusListeners = new Set<() => void>();
+  const readListeners = new Set<() => void>();
+  const changes = new Set<(paths: readonly string[]) => void>();
   const protocol = {
+    getSessionStatus: () => turn,
+    subscribeSessionStatus: (_id: string, listener: () => void) => {
+      statusListeners.add(listener);
+      return () => {
+        statusListeners.delete(listener);
+      };
+    },
+    renameSession: jest.fn(async () => undefined),
+    deleteSession: jest.fn(async () => undefined),
     observeSession: jest.fn(async () => ({ snapshot, unsubscribe })),
     startSession: jest.fn(async (_input: AgentStartSessionInput) => session),
     submitMessage: jest.fn(async () => ({
@@ -44,6 +59,12 @@ function fixture() {
     cancelTurn: jest.fn(),
   };
   const api = {
+    subscribeChanges: (listener: (paths: readonly string[]) => void) => {
+      changes.add(listener);
+      return () => {
+        changes.delete(listener);
+      };
+    },
     get: jest.fn(async (path: string) => {
       if (path === '/agents/agent') return { id: 'agent', name: 'Agent', modelId: 'model' };
       if (path.endsWith('/messages')) return { items: [], nextCursor: 'older' };
@@ -51,12 +72,39 @@ function fixture() {
     }),
   };
   const { source } = createLocalConversationSource({
+    readMarks: {
+      get: () => readMark,
+      subscribe: (_id, listener) => {
+        readListeners.add(listener);
+        return () => {
+          readListeners.delete(listener);
+        };
+      },
+    },
     agent: protocol as unknown as AgentProtocol,
     api: api as unknown as ApiClient,
   });
   const signal = new AbortController().signal;
   const agent = createConversationReferences(source.scope).issue<AgentRef>('agent', 'agent');
-  return { source, protocol, api, signal, agent, unsubscribe };
+  return {
+    source,
+    protocol,
+    api,
+    signal,
+    agent,
+    unsubscribe,
+    changes,
+    statusListeners,
+    readListeners,
+    setTurn(value: AgentSessionStatus) {
+      turn = value;
+      for (const listener of statusListeners) listener();
+    },
+    markRead(value: string) {
+      readMark = value;
+      for (const listener of readListeners) listener();
+    },
+  };
 }
 
 test('opening a local handle does not observe; releasing observers never cancels execution', async () => {
@@ -198,5 +246,67 @@ test('a changed approval payload replaces its resource identity and rejects the 
     value: { path: 'replacement' },
   });
   release();
+  f.source.dispose();
+});
+
+test('catalog previews retain status and unread updates without opening transcripts', async () => {
+  const f = fixture();
+  const ref = { source: f.source.ref, sessionId: 'session' };
+  const metadata = await f.source.catalog.readSession!(ref, f.signal);
+  expect(metadata).toMatchObject({ agentId: 'agent', title: 'Conversation' });
+  const preview = f.source.catalog.previewSession!(ref);
+  const changed = jest.fn();
+  const release = preview.status!.subscribe(changed);
+  f.setTurn({ turnId: 'turn', status: 'running' });
+  expect(preview.status!.getSnapshot()).toBe('running');
+  f.setTurn({ turnId: 'turn', status: 'awaiting-approval' });
+  expect(preview.status!.getSnapshot()).toBe('awaiting-approval');
+  f.setTurn({ turnId: 'turn', status: 'completed' });
+  expect(preview.status!.getSnapshot()).toBe('unread');
+  f.markRead('turn');
+  expect(preview.status!.getSnapshot()).toBeUndefined();
+  expect(changed).toHaveBeenCalledTimes(4);
+  expect(f.protocol.observeSession).not.toHaveBeenCalled();
+  release();
+  expect(f.statusListeners.size).toBe(0);
+  expect(f.readListeners.size).toBe(0);
+  f.source.dispose();
+});
+
+test('catalog changes and row actions refresh lists, and retired actions cannot mutate', async () => {
+  const f = fixture();
+  const changed = jest.fn();
+  const release = f.source.catalog.subscribe!(changed);
+  for (const listener of f.changes) listener(['/agents/agent']);
+  expect(changed).toHaveBeenLastCalledWith('agents');
+  for (const listener of f.changes) listener(['/agent-sessions/session']);
+  expect(changed).toHaveBeenLastCalledWith('sessions');
+  const preview = f.source.catalog.previewSession!({ source: f.source.ref, sessionId: 'session' });
+  expect(await preview.rename!.execute({ title: ' Renamed ' })).toMatchObject({ state: 'applied' });
+  expect(f.protocol.renameSession).toHaveBeenCalledWith({ sessionId: 'session', title: 'Renamed' });
+  expect(changed).toHaveBeenLastCalledWith('sessions');
+  expect(await preview.remove!.execute(undefined)).toMatchObject({ state: 'applied' });
+  expect(f.protocol.deleteSession).toHaveBeenCalledWith({ sessionId: 'session' });
+  f.source.dispose();
+  expect(f.changes.size).toBe(0);
+  expect(await preview.remove!.execute(undefined)).toMatchObject({
+    state: 'rejected',
+    failure: { code: 'retired' },
+  });
+  expect(f.protocol.deleteSession).toHaveBeenCalledTimes(1);
+  expect(f.protocol.observeSession).not.toHaveBeenCalled();
+  release();
+});
+
+test('only active catalog consumers retain the local change subscription', () => {
+  const f = fixture();
+  expect(f.changes.size).toBe(0);
+  const releaseFirst = f.source.catalog.subscribe!(jest.fn());
+  const releaseSecond = f.source.catalog.subscribe!(jest.fn());
+  expect(f.changes.size).toBe(1);
+  releaseFirst();
+  expect(f.changes.size).toBe(1);
+  releaseSecond();
+  expect(f.changes.size).toBe(0);
   f.source.dispose();
 });
