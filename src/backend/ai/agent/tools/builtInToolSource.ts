@@ -44,7 +44,7 @@ import type { TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
-import { createAskUserQuestionTool } from './askUserQuestionTool';
+import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
   createCalendarTools,
   createHealthTools,
@@ -89,6 +89,8 @@ export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
     agentId?: string;
+    /** The Host's response channel for `ask_user_question`. */
+    askUser: AskUserQuestion;
     documentParserMode: DocumentParserMode;
     disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
@@ -127,6 +129,7 @@ export function createSystemCapabilitySource(
   return {
     async getTools({
       agentId,
+      askUser,
       disabledCapabilities,
       model,
       resources,
@@ -147,6 +150,7 @@ export function createSystemCapabilitySource(
         documentParserMode,
         resolveUsageAttribution,
         agentId,
+        askUser,
       );
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
@@ -226,12 +230,13 @@ function createCatalog(
   scope: BuiltInToolScope,
   resources: TurnToolResources,
   documentParserMode: DocumentParserMode,
-  resolveUsageAttribution?: AiUsageAttributionResolver,
-  agentId?: string,
+  resolveUsageAttribution: AiUsageAttributionResolver | undefined,
+  agentId: string | undefined,
+  askUser: AskUserQuestion,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
-    createAskUserQuestionTool(),
+    createAskUserQuestionTool(askUser),
     ...createAgentManagementTools(deps.agents, agentId),
     createEditFileTool(
       {

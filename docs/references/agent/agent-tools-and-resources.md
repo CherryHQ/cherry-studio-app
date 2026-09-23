@@ -570,7 +570,8 @@ one bounded question with two to four options and single or multiple selection. 
 for a user response; it is not a tool-approval request and never auto-selects an answer. A custom
 text answer and skipping are always available. Skipping does not authorize an action.
 
-The Host binds the response callback to the active Session, turn, and tool-call ID. The Protocol
+The Host supplies the response channel to the catalog through turn preparation; each call carries
+its turn id, so the Host correlates the question to the live turn and tool-call ID. The Protocol
 publishes `question.updated` and includes `pendingQuestion` in observation snapshots. While a
 question is pending, the turn reports `awaiting-input`. The mobile chat displays a non-dismissible
 bottom sheet, locks the ordinary composer, and accepts single-tap answers, multi-selection plus
@@ -583,7 +584,7 @@ approvals: leaving a route does not cancel the turn, but cancellation, host disp
 restart invalidate the question. Persisted unanswered questions are not resumable controls.
 
 Pi pauses its execution deadline while a `RuntimeTool` with `interaction: 'user-input'` waits,
-then restores the remaining budget. Background activity uses the existing approval attention phase
+exactly as it does for an approval wait, then restores the remaining budget. Background activity uses the existing approval attention phase
 with a question-specific label and releases its keep-alive lease. This does not promise indefinite
 background execution or recovery after the operating system terminates the app.
 

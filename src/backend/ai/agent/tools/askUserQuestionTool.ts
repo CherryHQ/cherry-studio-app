@@ -8,10 +8,17 @@ import type { RuntimeTool, RuntimeToolCall } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 
 export const ASK_USER_QUESTION_TOOL_NAME = 'ask_user_question';
-type AskUser = (question: AgentUserQuestion, call: RuntimeToolCall) => Promise<AgentUserAnswer>;
 
-/** The Host binds the turn-local response channel immediately before execution. */
-export function createAskUserQuestionTool(ask?: AskUser): RuntimeTool {
+/**
+ * The Host's response channel. The call carries the turn id, so one Host-wide
+ * callback can correlate each question to its live turn.
+ */
+export type AskUserQuestion = (
+  question: AgentUserQuestion,
+  call: RuntimeToolCall,
+) => Promise<AgentUserAnswer>;
+
+export function createAskUserQuestionTool(ask: AskUserQuestion): RuntimeTool {
   return {
     ref: { source: 'builtin', capabilityId: ASK_USER_QUESTION_TOOL_NAME },
     providerName: ASK_USER_QUESTION_TOOL_NAME,
@@ -26,7 +33,6 @@ export function createAskUserQuestionTool(ask?: AskUser): RuntimeTool {
       if (new Set(question.options.map((option) => option.id)).size !== question.options.length) {
         throw new Error('Question option ids must be unique.');
       }
-      if (!ask) throw new Error('The question response channel is unavailable.');
       const answer = await ask(question, call);
       return {
         value: {

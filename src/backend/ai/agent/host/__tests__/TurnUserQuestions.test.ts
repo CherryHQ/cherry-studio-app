@@ -13,7 +13,7 @@ const question: AgentUserQuestion = {
 const answer = { selectedOptionIds: ['writing'], text: '', skipped: false };
 
 function call(controller = new AbortController(), toolCallId = 'question-1') {
-  return { input: {}, signal: controller.signal, toolCallId };
+  return { input: {}, signal: controller.signal, toolCallId, turnId: 'turn-1' };
 }
 
 describe('TurnUserQuestions', () => {

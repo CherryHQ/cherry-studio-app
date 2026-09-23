@@ -110,10 +110,6 @@ import {
   omitTransientCompactionParts,
   settleStreamingTextParts,
 } from '../sessionStore/messageSettlement';
-import {
-  createAskUserQuestionTool,
-  ASK_USER_QUESTION_TOOL_NAME,
-} from '../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
@@ -331,6 +327,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private get turnPreparation(): TurnPreparationDependencies {
     return {
       agents: this.ports.agents,
+      askUser: (question, call) => this.askUserQuestion(question, call),
       documentParserMode: () => this.ports.documentParserMode(),
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
@@ -742,12 +739,18 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     await active.runtimeSession?.cancel(parsed.turnId);
   }
 
-  private async askUserQuestion(
-    sessionId: string,
-    state: ActiveTurnState,
-    question: AgentUserQuestion,
-    call: RuntimeToolCall,
-  ) {
+  /**
+   * The `ask_user_question` response channel bound into every turn's catalog.
+   * The call's turn id selects the live turn; a call from a turn that is no
+   * longer active fails closed instead of reaching a different session.
+   */
+  private async askUserQuestion(question: AgentUserQuestion, call: RuntimeToolCall) {
+    call.signal.throwIfAborted();
+    const state = [...this.activeTurns.values()].find((entry) => entry.turn.id === call.turnId);
+    if (!state || state.abortController.signal.aborted) {
+      throw new Error('The question does not belong to an active turn.');
+    }
+    const sessionId = state.turn.sessionId;
     // Register before publishing: an observer may answer synchronously.
     if (state.pendingQuestion)
       throw new Error('Wait for the current question before asking another.');
@@ -1054,16 +1057,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         contextCheckpoint: plan.runtimeContextCheckpoint,
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
         ...(resume.length ? { resume } : {}),
-        tools: plan.tools.map((tool) =>
-          tool.ref.source === 'builtin' && tool.ref.capabilityId === ASK_USER_QUESTION_TOOL_NAME
-            ? {
-                ...tool,
-                execute: createAskUserQuestionTool((question, call) =>
-                  this.askUserQuestion(sessionId, state, question, call),
-                ).execute,
-              }
-            : tool,
-        ),
+        tools: [...plan.tools],
         options: plan.agent.options,
         runtimeTimingSink: state.runtimeTiming.sink,
         trace: state.trace,

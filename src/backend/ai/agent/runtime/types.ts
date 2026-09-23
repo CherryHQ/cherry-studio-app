@@ -217,6 +217,8 @@ export type RuntimeToolCall = {
   input: RuntimeJsonValue;
   signal: AbortSignal;
   toolCallId: string;
+  /** The executing turn, so a Host-bound tool can correlate to its live turn state. */
+  turnId: string;
 };
 
 export type RuntimeTool = {

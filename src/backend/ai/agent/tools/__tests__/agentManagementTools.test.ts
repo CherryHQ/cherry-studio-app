@@ -1,7 +1,7 @@
-import { AgentToolRecordSchema } from '@/shared/contracts/agentManagement';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { Agent } from '@/shared/data/types/agent';
 import { DEFAULT_DISABLED_AGENT_CAPABILITIES } from '@/shared/data/types/agentCapability';
+import { AgentToolRecordSchema } from '@/shared/contracts/agentManagement';
 
 import type { RuntimeJsonValue } from '../../runtime';
 import { createAgentManagementTools, type AgentManagementData } from '../agentManagementTools';
@@ -42,7 +42,7 @@ function setup() {
   const tools = createAgentManagementTools(data, agent.id);
   const invoke = (name: string, input: RuntimeJsonValue, signal = new AbortController().signal) => {
     const tool = tools.find((entry) => entry.providerName === name)!;
-    return tool.execute({ input, signal, toolCallId: 'call-1' });
+    return tool.execute({ input, signal, toolCallId: 'call-1', turnId: 'turn-1' });
   };
   return { data, invoke };
 }

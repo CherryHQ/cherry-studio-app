@@ -1423,7 +1423,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
       const callbackSignal = signal
         ? AbortSignal.any([turn.abortController.signal, signal])
         : turn.abortController.signal;
-      const execution = runtimeTool.execute({ input, signal: callbackSignal, toolCallId });
+      const execution = runtimeTool.execute({
+        input,
+        signal: callbackSignal,
+        toolCallId,
+        turnId: turn.turnId,
+      });
       const output =
         runtimeTool.interaction === 'user-input'
           ? await this.awaitHuman(turn, execution)

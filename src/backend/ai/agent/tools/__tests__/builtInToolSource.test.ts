@@ -7,6 +7,7 @@ import { createUniqueModelId } from '@/shared/data/types/model';
 import type { TurnToolResources } from '../../resources/managedFileResolver';
 import { managedFileResolver } from '../../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../../runtime';
+import type { AskUserQuestion } from '../askUserQuestionTool';
 import {
   createSystemCapabilitySource,
   type SystemCapabilityServices,
@@ -21,6 +22,9 @@ jest.mock('@/backend/services/permissions', () => ({
 }));
 
 const MODEL: RuntimeModel = { providerId: 'openai', modelId: 'gpt-test' };
+const noAskUser: AskUserQuestion = async () => {
+  throw new Error('This scenario asks no questions.');
+};
 const TURN_RESOURCES: TurnToolResources = {
   availableFiles: new Map(),
   draftFileEntryIds: new Set<string>(),
@@ -162,6 +166,41 @@ describe('createSystemCapabilitySource', () => {
     expect(capabilityIds(tools)).toContain('ask_user_question');
   });
 
+  test('binds the Host response channel into ask_user_question with the calling turn', async () => {
+    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(async () => ({
+      selectedOptionIds: ['a'],
+      text: '',
+      skipped: false,
+    }));
+    const tools = await resolve({}, { askUser });
+    const question = {
+      question: 'Which?',
+      selection: 'single',
+      options: [
+        { id: 'a', label: 'A', description: '' },
+        { id: 'b', label: 'B', description: '' },
+      ],
+    };
+    const ask = tools.find((tool) => tool.providerName === 'ask_user_question');
+    if (!ask) throw new Error('ask_user_question was not available.');
+
+    const result = await ask.execute({
+      input: question,
+      signal: new AbortController().signal,
+      toolCallId: 'question-1',
+      turnId: 'turn-7',
+    });
+
+    expect(askUser).toHaveBeenCalledWith(
+      question,
+      expect.objectContaining({ toolCallId: 'question-1', turnId: 'turn-7' }),
+    );
+    expect(result.value).toMatchObject({
+      selectedOptionIds: ['a'],
+      selectedOptions: [{ id: 'a', label: 'A', description: '' }],
+    });
+  });
+
   test('offers generate_image only with a drawing model and the group enabled', async () => {
     const withoutModel = await resolve({ paintingModel: null });
     expect(capabilityIds(withoutModel)).not.toContain('generate_image');
@@ -233,6 +272,7 @@ describe('createSystemCapabilitySource', () => {
     };
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
@@ -245,6 +285,7 @@ describe('createSystemCapabilitySource', () => {
       input: { content: 'report', filename: 'report.txt' },
       signal: new AbortController().signal,
       toolCallId: 'call-1',
+      turnId: 'turn-1',
     });
 
     expect(grantFile).toHaveBeenCalledWith(entry.id);
@@ -285,6 +326,7 @@ describe('createSystemCapabilitySource', () => {
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
@@ -302,6 +344,7 @@ describe('createSystemCapabilitySource', () => {
       input: { file_entry_id: sourceId, old_string: 'old', new_string: 'new' },
       signal: new AbortController().signal,
       toolCallId: 'call-2',
+      turnId: 'turn-1',
     });
 
     expect(grantFile).toHaveBeenCalledWith(entry.id);
@@ -339,6 +382,7 @@ describe('createSystemCapabilitySource', () => {
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
@@ -356,6 +400,7 @@ describe('createSystemCapabilitySource', () => {
       input: { file_entry_id: draftId, old_string: 'old', new_string: 'new' },
       signal: new AbortController().signal,
       toolCallId: 'call-3',
+      turnId: 'turn-1',
     });
 
     expect(rewriteTextEntry).toHaveBeenCalledWith(
@@ -383,6 +428,7 @@ describe('createSystemCapabilitySource', () => {
       .mockResolvedValue(new TextEncoder().encode('a\nb'));
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
@@ -396,11 +442,13 @@ describe('createSystemCapabilitySource', () => {
       input: { file_entry_id: knownId },
       signal,
       toolCallId: 'c4',
+      turnId: 'turn-1',
     });
     const unknown = await readFile.execute({
       input: { file_entry_id: unknownId },
       signal,
       toolCallId: 'c5',
+      turnId: 'turn-1',
     });
 
     expect(known.value).toMatchObject({ status: 'ok', text: 'a\nb', totalLines: 2 });
@@ -418,13 +466,14 @@ type Scenario = {
 
 async function resolve(
   scenario: Scenario,
-  options: { platform?: string } = {},
+  options: { askUser?: AskUserQuestion; platform?: string } = {},
 ): Promise<readonly RuntimeTool[]> {
   const source = createSystemCapabilitySource(SERVICES, {
     ...dependencies(scenario),
     platform: options.platform ?? 'ios',
   });
   return source.getTools({
+    askUser: options.askUser ?? noAskUser,
     documentParserMode: 'builtin',
     disabledCapabilities: scenario.disabledCapabilities ?? [],
     model: MODEL,
