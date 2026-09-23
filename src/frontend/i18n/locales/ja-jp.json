@@ -1399,7 +1399,6 @@
   "settings.provider.catalog.import": "追加",
   "settings.provider.catalog.importFailed": "プロバイダーの追加に失敗しました",
   "settings.provider.catalog.importing": "追加中...",
-  "settings.provider.catalog.installed": "追加",
   "settings.provider.catalog.loadFailed": "プロバイダーのロードに失敗しました",
   "settings.provider.catalog.loading": "プロバイダーを読み込み中...",
   "settings.provider.catalog.searchEmpty": "一致するプロバイダーがありません。",

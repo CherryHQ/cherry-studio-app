@@ -1405,7 +1405,6 @@
   "settings.provider.catalog.import": "Προσθήκη",
   "settings.provider.catalog.importFailed": "Αποτυχία προσθήκης παρόχου",
   "settings.provider.catalog.importing": "Προσθήκη...",
-  "settings.provider.catalog.installed": "Προστέθηκε",
   "settings.provider.catalog.loadFailed": "Αποτυχία φόρτωσης παρόχων",
   "settings.provider.catalog.loading": "Φόρτωση παρόχων...",
   "settings.provider.catalog.searchEmpty": "Δεν υπάρχουν πάροχοι που να ταιριάζουν.",

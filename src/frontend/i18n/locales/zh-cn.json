@@ -1399,7 +1399,6 @@
   "settings.provider.catalog.import": "添加",
   "settings.provider.catalog.importFailed": "添加服务商失败",
   "settings.provider.catalog.importing": "正在添加...",
-  "settings.provider.catalog.installed": "已添加",
   "settings.provider.catalog.loadFailed": "加载服务商失败",
   "settings.provider.catalog.loading": "正在加载服务商...",
   "settings.provider.catalog.searchEmpty": "没有匹配的服务商。",

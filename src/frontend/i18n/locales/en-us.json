@@ -1405,7 +1405,6 @@
   "settings.provider.catalog.import": "Add",
   "settings.provider.catalog.importFailed": "Failed to add provider",
   "settings.provider.catalog.importing": "Adding...",
-  "settings.provider.catalog.installed": "Added",
   "settings.provider.catalog.loadFailed": "Failed to load providers",
   "settings.provider.catalog.loading": "Loading providers...",
   "settings.provider.catalog.searchEmpty": "No matching providers.",

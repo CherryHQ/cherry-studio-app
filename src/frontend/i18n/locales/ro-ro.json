@@ -1411,7 +1411,6 @@
   "settings.provider.catalog.import": "Adăugați",
   "settings.provider.catalog.importFailed": "Nu s-a putut adăuga furnizorul",
   "settings.provider.catalog.importing": "Se adaugă...",
-  "settings.provider.catalog.installed": "Adăugat",
   "settings.provider.catalog.loadFailed": "Nu s-au încărcat furnizorii",
   "settings.provider.catalog.loading": "Se încarcă furnizorii...",
   "settings.provider.catalog.searchEmpty": "Niciun furnizor care se potrivește.",

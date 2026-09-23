@@ -1405,7 +1405,6 @@
   "settings.provider.catalog.import": "Ekle",
   "settings.provider.catalog.importFailed": "Sağlayıcı eklenemedi",
   "settings.provider.catalog.importing": "Ekleniyor...",
-  "settings.provider.catalog.installed": "Eklendi",
   "settings.provider.catalog.loadFailed": "Sağlayıcılar yüklenemedi",
   "settings.provider.catalog.loading": "Sağlayıcılar yükleniyor...",
   "settings.provider.catalog.searchEmpty": "Eşleşen sağlayıcı yok.",

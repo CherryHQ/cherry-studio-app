@@ -1405,7 +1405,6 @@
   "settings.provider.catalog.import": "Hinzufügen",
   "settings.provider.catalog.importFailed": "Anbieter konnte nicht hinzugefügt werden",
   "settings.provider.catalog.importing": "Hinzufügen...",
-  "settings.provider.catalog.installed": "Hinzugefügt",
   "settings.provider.catalog.loadFailed": "Anbieter konnten nicht geladen werden",
   "settings.provider.catalog.loading": "Anbieter werden geladen...",
   "settings.provider.catalog.searchEmpty": "Keine passenden Anbieter.",

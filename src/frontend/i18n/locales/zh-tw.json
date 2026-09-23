@@ -1399,7 +1399,6 @@
   "settings.provider.catalog.import": "新增",
   "settings.provider.catalog.importFailed": "添加供應商失敗",
   "settings.provider.catalog.importing": "正在添加...",
-  "settings.provider.catalog.installed": "已添加",
   "settings.provider.catalog.loadFailed": "加載供應商失敗",
   "settings.provider.catalog.loading": "正在加載供應商...",
   "settings.provider.catalog.searchEmpty": "沒有匹配的供應商。",

@@ -1399,7 +1399,6 @@
   "settings.provider.catalog.import": "Thêm",
   "settings.provider.catalog.importFailed": "Không thêm được nhà cung cấp",
   "settings.provider.catalog.importing": "Đang thêm...",
-  "settings.provider.catalog.installed": "Đã thêm",
   "settings.provider.catalog.loadFailed": "Không tải được nhà cung cấp",
   "settings.provider.catalog.loading": "Đang tải nhà cung cấp...",
   "settings.provider.catalog.searchEmpty": "Không có nhà cung cấp phù hợp.",

@@ -1417,7 +1417,6 @@
   "settings.provider.catalog.import": "Добавить",
   "settings.provider.catalog.importFailed": "Не удалось добавить провайдера.",
   "settings.provider.catalog.importing": "Добавление...",
-  "settings.provider.catalog.installed": "Добавлено",
   "settings.provider.catalog.loadFailed": "Не удалось загрузить поставщиков.",
   "settings.provider.catalog.loading": "Загрузка поставщиков...",
   "settings.provider.catalog.searchEmpty": "Нет подходящих поставщиков.",

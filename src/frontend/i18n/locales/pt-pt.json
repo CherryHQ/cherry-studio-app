@@ -1411,7 +1411,6 @@
   "settings.provider.catalog.import": "Adicionar",
   "settings.provider.catalog.importFailed": "Falha ao adicionar fornecedor",
   "settings.provider.catalog.importing": "Adicionando...",
-  "settings.provider.catalog.installed": "Adicionado",
   "settings.provider.catalog.loadFailed": "Falha ao carregar fornecedores",
   "settings.provider.catalog.loading": "Carregando fornecedores...",
   "settings.provider.catalog.searchEmpty": "Sem fornecedor correspondente.",
