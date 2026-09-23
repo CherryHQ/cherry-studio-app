@@ -147,10 +147,14 @@ JavaScript update alone.
 
 ## Expo 57 Dependency Baseline
 
-The project uses Expo 57.0.21 and React Native 0.86.3, which includes Hermes V1
+The project uses Expo 57.0.24 and React Native 0.86.3, which includes Hermes V1
 250829098.0.17. This contains the upstream fixes for the Worklets/Reanimated memory regression
 and slow development startup. See the [Expo SDK 57 release notes](https://expo.dev/changelog/sdk-57#known-regressions).
 Existing development clients must be rebuilt to receive the engine update.
+
+`expo-build-properties` enables iOS scene support for Xcode 27 builds. Expo 57.0.23 and newer
+provide the scene runtime, and a new native build is required to avoid the iOS 27 launch assertion.
+See [Expo's SDK 57 scene migration guide](https://github.com/expo/fyi/blob/main/ios-scene-lifecycle.md#staying-on-sdk-57-with-xcode-27).
 
 Keep the version-specific patches for Expo Router, Calendar, Notifications, Image Picker, App Metrics,
 Observe, Widgets, React Native, Screens, Reanimated, Metro, and Metro Runtime when updating dependencies.
@@ -179,7 +183,7 @@ JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspa
   replacement. This is the mitigation from [React Native #56680](https://github.com/facebook/react-native/pull/56680),
   not a guarantee against every concurrent delegate lifetime race. iOS already uses
   `buildReactNativeFromSource`, which is required for this native header patch to take effect.
-- Widgets 57.0.18 reads `isActivityFullscreen` only on iOS 18 and newer, returning `false` on older
+- Widgets 57.0.19 reads `isActivityFullscreen` only on iOS 18 and newer, returning `false` on older
   systems. Build 26's five iOS 17.6.1 widget samples all return to binary offset `0x24bf98` after
   calling this missing weak-linked WidgetKit getter. Although the SDK declares it available earlier,
   [Apple's developer forum](https://developer.apple.com/forums/thread/763594) also reports the missing

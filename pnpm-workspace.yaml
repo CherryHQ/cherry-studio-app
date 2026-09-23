@@ -77,7 +77,7 @@ patchedDependencies:
   expo-app-metrics@57.0.17: patches/expo-app-metrics@57.0.17.patch
   react-native-screens@4.26.2: patches/react-native-screens@4.26.2.patch
   react-native@0.86.3: patches/react-native@0.86.3.patch
-  expo-widgets@57.0.18: patches/expo-widgets@57.0.18.patch
+  expo-widgets@57.0.19: patches/expo-widgets@57.0.19.patch
   react-native-streamdown@0.2.0: patches/react-native-streamdown@0.2.0.patch
   expo-observe@57.0.20: patches/expo-observe@57.0.20.patch
 
