@@ -133,7 +133,6 @@
   "attachments.notice.sourceTruncated": "Extragerea documentelor a atins limita; doar o parte din sursă era disponibilă.",
   "attachments.notice.withFilename": "{{name}}: {{notice}}",
   "attachments.sendRejected": "Atașamentele nu au putut fi trimise",
-  "backgroundActivity.awaitingApproval": "Se așteaptă aprobarea",
   "backgroundActivity.cancelled": "Anulat",
   "backgroundActivity.completed": "Finalizat",
   "chat.actions.createImage": "Creați imagine",

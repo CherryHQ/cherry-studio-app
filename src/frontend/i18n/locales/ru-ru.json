@@ -133,7 +133,6 @@
   "attachments.notice.sourceTruncated": "Извлечение документов достигло своего предела; была доступна только часть источника.",
   "attachments.notice.withFilename": "{{name}}: {{notice}}",
   "attachments.sendRejected": "Не удалось отправить вложения.",
-  "backgroundActivity.awaitingApproval": "Ожидание одобрения",
   "backgroundActivity.cancelled": "Отменено",
   "backgroundActivity.completed": "Завершено",
   "chat.actions.createImage": "Создать изображение",

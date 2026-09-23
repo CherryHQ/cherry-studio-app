@@ -133,7 +133,6 @@
   "attachments.notice.sourceTruncated": "文檔提取達到限制，僅獲取了部分內容。",
   "attachments.notice.withFilename": "{{name}}：{{notice}}",
   "attachments.sendRejected": "無法發送這些附件",
-  "backgroundActivity.awaitingApproval": "等待審批",
   "backgroundActivity.cancelled": "已取消",
   "backgroundActivity.completed": "已完成",
   "chat.actions.createImage": "創建圖片",

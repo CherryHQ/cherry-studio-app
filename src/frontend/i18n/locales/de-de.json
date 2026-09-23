@@ -133,7 +133,6 @@
   "attachments.notice.sourceTruncated": "Die Dokumentenextraktion hat ihre Grenzen erreicht; nur ein Teil der Quelle war verfügbar.",
   "attachments.notice.withFilename": "{{name}}: {{notice}}",
   "attachments.sendRejected": "Anhänge konnten nicht gesendet werden",
-  "backgroundActivity.awaitingApproval": "Warten auf Genehmigung",
   "backgroundActivity.cancelled": "Abgesagt",
   "backgroundActivity.completed": "Abgeschlossen",
   "chat.actions.createImage": "Bild erstellen",

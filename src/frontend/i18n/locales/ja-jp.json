@@ -133,7 +133,6 @@
   "attachments.notice.sourceTruncated": "文書抽出は限界に達しました。ソースの一部しか入手できませんでした。",
   "attachments.notice.withFilename": "{{name}}: {{notice}}",
   "attachments.sendRejected": "添付ファイルを送信できませんでした",
-  "backgroundActivity.awaitingApproval": "承認待ち",
   "backgroundActivity.cancelled": "キャンセル",
   "backgroundActivity.completed": "完了",
   "chat.actions.createImage": "画像の作成",

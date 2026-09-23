@@ -133,7 +133,6 @@
   "attachments.notice.sourceTruncated": "Việc trích xuất tài liệu đã đạt đến giới hạn; chỉ có một phần của nguồn có sẵn.",
   "attachments.notice.withFilename": "{{name}}: {{notice}}",
   "attachments.sendRejected": "Không thể gửi tệp đính kèm",
-  "backgroundActivity.awaitingApproval": "Đang chờ phê duyệt",
   "backgroundActivity.cancelled": "Đã hủy",
   "backgroundActivity.completed": "Hoàn thành",
   "chat.actions.createImage": "Tạo hình ảnh",

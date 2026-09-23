@@ -133,7 +133,6 @@
   "attachments.notice.sourceTruncated": "Η εξαγωγή εγγράφων έφτασε στο όριο. μόνο ένα μέρος της πηγής ήταν διαθέσιμο.",
   "attachments.notice.withFilename": "{{name}}: {{notice}}",
   "attachments.sendRejected": "Δεν ήταν δυνατή η αποστολή συνημμένων",
-  "backgroundActivity.awaitingApproval": "Αναμονή έγκρισης",
   "backgroundActivity.cancelled": "Ακυρώθηκε",
   "backgroundActivity.completed": "Ολοκληρώθηκε",
   "chat.actions.createImage": "Δημιουργία εικόνας",

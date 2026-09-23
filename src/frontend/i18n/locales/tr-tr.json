@@ -133,7 +133,6 @@
   "attachments.notice.sourceTruncated": "Belge çıkarma sınırına ulaştı; kaynağın yalnızca bir kısmı mevcuttu.",
   "attachments.notice.withFilename": "{{name}}: {{notice}}",
   "attachments.sendRejected": "Ekler gönderilemedi",
-  "backgroundActivity.awaitingApproval": "Onay bekleniyor",
   "backgroundActivity.cancelled": "İptal edildi",
   "backgroundActivity.completed": "Tamamlandı",
   "chat.actions.createImage": "Resim oluştur",

@@ -133,7 +133,6 @@
   "attachments.notice.sourceTruncated": "Document extraction reached its limit; only part of the source was available.",
   "attachments.notice.withFilename": "{{name}}: {{notice}}",
   "attachments.sendRejected": "Attachments could not be sent",
-  "backgroundActivity.awaitingApproval": "Awaiting approval",
   "backgroundActivity.cancelled": "Cancelled",
   "backgroundActivity.completed": "Completed",
   "chat.actions.createImage": "Create image",
