@@ -383,7 +383,11 @@ function SidebarSessionStatus({ status }: { status?: ConversationListStatus }) {
     return (
       <View className="shrink-0 rounded-full border border-warning-border bg-warning-subtle px-1.5">
         <Text className="font-medium text-warning-subtle-foreground text-xs" numberOfLines={1}>
-          {t(status === 'awaiting-input' ? 'chat.question.waiting' : 'session.status.awaitingApproval')}
+          {t(
+            status === 'awaiting-input'
+              ? 'chat.question.waiting'
+              : 'session.status.awaitingApproval',
+          )}
         </Text>
       </View>
     );

@@ -1,4 +1,3 @@
-import type { InteractionResponse } from '@/shared/contracts/interaction';
 import type {
   RemoteAgentSource,
   RemoteCommand,
@@ -9,6 +8,7 @@ import type {
 import type {
   ConversationAction,
   ConversationInput,
+  ConversationInteractionResponse,
   ConversationOperation,
   ConversationRef,
   ConversationSession,
@@ -288,10 +288,14 @@ export function createRemoteConversationSession(
           input: resource(interaction.input),
           ...(interaction.state === 'pending'
             ? {
-                respond: action<InteractionResponse, void>(
+                respond: action<ConversationInteractionResponse, void>(
                   `respond:${interaction.id}`,
                   interaction.respondTarget,
-                  (target, decision) => source.respond(target, decision),
+                  (target, decision) => {
+                    if (decision.kind === 'user-answer')
+                      throw new ConversationReadError({ code: 'unsupported', retry: 'none' });
+                    return source.respond(target, decision);
+                  },
                   undefined,
                 ),
               }

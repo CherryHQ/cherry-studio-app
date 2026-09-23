@@ -46,7 +46,11 @@ The Controller contract/provider and private remote queries are removed. Local c
 prepared managed export assets and actual device acceptance remain pending. Remote question
 resources and typed responses preserve complete answers through the command journal. Catalogs
 expose a system-workspace choice only when the desktop advertises support; existing sessions
-retain the real workspace identity and kind. Local approvals keep their decision-only capability.
+retain the real workspace identity and kind. Local tool approvals keep their decision-only capability.
+Local user questions expose a separate typed resource and answer capability, preserving option IDs,
+free text and skipping. Responses bind to the question contents and execution; stale callbacks
+cannot answer a replacement question. The common consumer selects the existing question sheet
+from the resource shape, without inspecting the session source.
 
 Sidebar presentation is shared across sources. Catalogs expose Agent identity on session summaries,
 an optional selected-session metadata read, and optional metadata invalidation. Row previews supply

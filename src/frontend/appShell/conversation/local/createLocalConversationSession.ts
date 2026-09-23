@@ -1,18 +1,14 @@
 import { v7 as uuidv7 } from 'uuid';
 
-import type {
-  AgentMessageView,
-  AgentProtocol,
-  AgentSessionView,
-  JsonValue,
-} from '@/shared/contracts/agent';
-import type { InteractionResponse } from '@/shared/contracts/interaction';
+import type { AgentMessageView, AgentProtocol, AgentSessionView } from '@/shared/contracts/agent';
 import type { ApiClient } from '@/shared/data/api/types';
 
 import type {
   Availability,
   ConversationAction,
   ConversationInput,
+  ConversationInteraction,
+  ConversationInteractionResponse,
   ConversationMessage,
   ConversationOperation,
   ConversationRef,
@@ -25,6 +21,7 @@ import type {
   OperationOutcome,
   QueryScope,
   ResourceRef,
+  ResourceValue,
   Submission,
 } from '../contracts';
 import {
@@ -63,8 +60,9 @@ export function createLocalConversationSession(input: {
   const refs = createConversationReferences(scope, sessionId);
   const cache = createAgentMessageListProjectionCache();
   const operations = createConversationState<readonly ConversationOperation[]>([]);
-  const resources = new Map<ResourceRef, JsonValue>();
+  const resources = new Map<ResourceRef, ResourceValue>();
   const approvalResources = new Map<string, { input: string; turnId: string; ref: ResourceRef }>();
+  let questionBinding: { key: string; ref: ResourceRef } | undefined;
   const pendingKinds = new Set<ConversationOperation['kind']>();
   let disposed = false;
   let observers = 0;
@@ -195,19 +193,19 @@ export function createLocalConversationSession(input: {
     for (const id of approvalResources.keys())
       if (!live.pendingApprovals.some((approval) => approval.id === id))
         approvalResources.delete(id);
-    const interactions = live.pendingApprovals.map((approval) => {
+    const interactions: ConversationInteraction[] = live.pendingApprovals.map((approval) => {
       const inputKey = JSON.stringify(approval.input);
       let binding = approvalResources.get(approval.id);
       if (!binding || binding.input !== inputKey || binding.turnId !== approval.turnId) {
         binding = {
           input: inputKey,
           turnId: approval.turnId,
-          ref: refs.issue<ResourceRef>('approval', approval.id, uuidv7()),
+          ref: refs.issue<ResourceRef>('interaction-input', approval.id, uuidv7()),
         };
         approvalResources.set(approval.id, binding);
       }
       const resource = binding.ref;
-      resources.set(resource, approval.input);
+      resources.set(resource, { kind: 'json', value: approval.input, complete: true });
       return {
         ref: refs.issue<InteractionRef>('interaction', approval.id, approval.turnId),
         execution: refs.issue<ExecutionRef>('execution', approval.turnId),
@@ -217,8 +215,11 @@ export function createLocalConversationSession(input: {
         input: resource,
         respond: action(
           'respond',
-          async (decision: InteractionResponse) => {
-            if (decision.kind === 'answer' || (decision.kind === 'deny' && decision.reason))
+          async (decision: ConversationInteractionResponse) => {
+            if (
+              (decision.kind !== 'approve' && decision.kind !== 'deny') ||
+              (decision.kind === 'deny' && decision.reason)
+            )
               throw new ConversationReadError({ code: 'unsupported', retry: 'none' });
             const current = client
               .getState(sessionId)
@@ -235,6 +236,38 @@ export function createLocalConversationSession(input: {
         ),
       };
     });
+    const question = live.pendingQuestion;
+    if (question) {
+      const key = JSON.stringify(question);
+      if (questionBinding?.key !== key) {
+        questionBinding = {
+          key,
+          ref: refs.issue<ResourceRef>('interaction-input', question.toolCallId, uuidv7()),
+        };
+      }
+      resources.set(questionBinding.ref, { kind: 'user-question', question: question.question });
+      interactions.push({
+        ref: refs.issue<InteractionRef>('interaction', question.toolCallId, question.turnId),
+        execution: refs.issue<ExecutionRef>('execution', question.turnId),
+        kind: 'question',
+        title: question.question.question,
+        state: 'pending',
+        input: questionBinding.ref,
+        respond: action(
+          'respond',
+          async (response: ConversationInteractionResponse) => {
+            if (response.kind !== 'user-answer')
+              throw new ConversationReadError({ code: 'unsupported', retry: 'none' });
+            if (JSON.stringify(client.getState(sessionId).pendingQuestion) !== key)
+              throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+            await client.respondQuestion(sessionId, question.toolCallId, response.answer);
+          },
+          false,
+        ),
+      });
+    } else {
+      questionBinding = undefined;
+    }
     return {
       title: knownSession.title,
       freshness: disposed
@@ -320,11 +353,11 @@ export function createLocalConversationSession(input: {
     resources: {
       read: async (resource, signal) => {
         assertCurrent(signal);
-        refs.resolve(resource, 'approval');
+        refs.resolve(resource, 'interaction-input');
         const value = resources.get(resource);
         if (value === undefined)
           throw new ConversationReadError({ code: 'resource-unavailable', retry: 'read-again' });
-        return { kind: 'json', value, complete: true };
+        return value;
       },
       materializer: () => undefined,
     },
@@ -360,6 +393,7 @@ export function createLocalConversationSession(input: {
       });
       resources.clear();
       approvalResources.clear();
+      questionBinding = undefined;
       input.onDispose();
     },
   };

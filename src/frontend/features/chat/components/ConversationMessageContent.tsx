@@ -88,7 +88,11 @@ function ConversationResourceSection({
         ? JSON.stringify(result.data.value, null, 2)
         : result.data.kind === 'metadata'
           ? result.data.name
-          : JSON.stringify(result.data.questions, null, 2);
+          : JSON.stringify(
+              result.data.kind === 'user-question' ? result.data.question : result.data.questions,
+              null,
+              2,
+            );
   return <MessagePart.TextSection title={title} value={value} />;
 }
 export function ConversationAttachments({ message }: { message: ConversationMessage }) {

@@ -1,5 +1,6 @@
 import type {
   AgentProtocol,
+  AgentEvent,
   AgentStartSessionInput,
   AgentSessionSnapshot,
   AgentSessionView,
@@ -29,10 +30,12 @@ const snapshot: AgentSessionSnapshot = {
   activeUserMessage: null,
   streamingMessage: null,
   pendingApprovals: [],
+  pendingQuestion: null,
   hasHistoryBeforeActiveTurn: false,
   capabilities: { attachments: true, reasoning: true, tools: true, approvals: true },
 };
-function fixture() {
+function fixture(initialSnapshot = snapshot) {
+  let publish!: (event: AgentEvent) => void;
   const unsubscribe = jest.fn();
   let turn: AgentSessionStatus | null = null;
   let readMark: string | undefined;
@@ -49,7 +52,11 @@ function fixture() {
     },
     renameSession: jest.fn(async () => undefined),
     deleteSession: jest.fn(async () => undefined),
-    observeSession: jest.fn(async () => ({ snapshot, unsubscribe })),
+    observeSession: jest.fn(async (_id: string, listener: (event: AgentEvent) => void) => {
+      publish = listener;
+      return { snapshot: initialSnapshot, unsubscribe };
+    }),
+    respondQuestion: jest.fn(async () => undefined),
     startSession: jest.fn(async (_input: AgentStartSessionInput) => session),
     submitMessage: jest.fn(async () => ({
       turnId: 'turn',
@@ -94,6 +101,7 @@ function fixture() {
     agent,
     unsubscribe,
     changes,
+    publish: (event: AgentEvent) => publish(event),
     statusListeners,
     readListeners,
     setTurn(value: AgentSessionStatus) {
@@ -261,11 +269,13 @@ test('catalog previews retain status and unread updates without opening transcri
   expect(preview.status!.getSnapshot()).toBe('running');
   f.setTurn({ turnId: 'turn', status: 'awaiting-approval' });
   expect(preview.status!.getSnapshot()).toBe('awaiting-approval');
+  f.setTurn({ turnId: 'turn', status: 'awaiting-input' });
+  expect(preview.status!.getSnapshot()).toBe('awaiting-input');
   f.setTurn({ turnId: 'turn', status: 'completed' });
   expect(preview.status!.getSnapshot()).toBe('unread');
   f.markRead('turn');
   expect(preview.status!.getSnapshot()).toBeUndefined();
-  expect(changed).toHaveBeenCalledTimes(4);
+  expect(changed).toHaveBeenCalledTimes(5);
   expect(f.protocol.observeSession).not.toHaveBeenCalled();
   release();
   expect(f.statusListeners.size).toBe(0);
@@ -325,5 +335,56 @@ test('late message data changes advance only the affected open history without a
   expect(handle.state.getSnapshot().historyVersion).not.toBe(before);
   handle.dispose();
   expect(f.changes.size).toBe(0);
+  f.source.dispose();
+});
+
+test.each([
+  { selectedOptionIds: ['a'], text: 'more context', skipped: false },
+  { selectedOptionIds: [], text: '', skipped: true },
+])('preserves a user answer through the bound question capability: %j', async (answer) => {
+  const question = {
+    turnId: 'turn',
+    toolCallId: 'question',
+    question: {
+      question: 'Choose a focus',
+      selection: 'single' as const,
+      options: [
+        { id: 'a', label: 'Writing', description: '' },
+        { id: 'b', label: 'Reading', description: '' },
+      ],
+    },
+  };
+  const f = fixture({ ...snapshot, pendingQuestion: question });
+  const handle = await f.source.openSession(
+    { source: f.source.ref, sessionId: 'session' },
+    f.signal,
+  );
+  const release = handle.activate();
+  await handle.refresh(f.signal);
+  const interaction = handle.state.getSnapshot().interactions[0];
+  expect(interaction.kind).toBe('question');
+  expect(await handle.resources.read(interaction.input, f.signal)).toEqual({
+    kind: 'user-question',
+    question: question.question,
+  });
+  expect(await interaction.respond!.execute({ kind: 'user-answer', answer })).toEqual({
+    state: 'applied',
+    value: undefined,
+  });
+  expect(f.protocol.respondQuestion).toHaveBeenCalledWith({
+    sessionId: 'session',
+    turnId: 'turn',
+    toolCallId: 'question',
+    answer,
+  });
+  f.publish({ type: 'question.updated', question: { ...question, turnId: 'replacement' } });
+  expect(await interaction.respond!.execute({ kind: 'user-answer', answer })).toMatchObject({
+    state: 'rejected',
+    failure: { code: 'conflict' },
+  });
+  expect(f.protocol.respondQuestion).toHaveBeenCalledTimes(1);
+  await expect(handle.resources.read(interaction.input, f.signal)).rejects.toThrow();
+  release();
+  handle.dispose();
   f.source.dispose();
 });

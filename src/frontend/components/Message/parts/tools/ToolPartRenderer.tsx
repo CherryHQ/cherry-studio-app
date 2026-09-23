@@ -16,8 +16,8 @@ import {
   isWebSearchToolPart,
   type ToolMessagePart,
 } from './toolPartState';
-import { UserQuestionPart } from './UserQuestionPart';
 import { useToolRenderer } from './ToolRendererContext';
+import { UserQuestionPart } from './UserQuestionPart';
 import { WebSearchToolPart } from './WebSearchToolPart';
 import { isWriteFileToolPart, WriteFileToolPart } from './WriteFileToolPart';
 

@@ -71,9 +71,7 @@ function renderChatAssistantMessage(
           <BackgroundPressExclusion>
             <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
               <AssistantMessageToolbar message={message} />
-              <View className="min-w-0 max-w-full flex-1 items-end">
-                {usage}
-              </View>
+              <View className="min-w-0 max-w-full flex-1 items-end">{usage}</View>
             </ContextMenuExclusion>
           </BackgroundPressExclusion>
         ) : null}

@@ -6,10 +6,23 @@ import type {
   ConversationSnapshot,
   ResourceRef,
 } from '@/frontend/appShell/conversation';
+import type { AgentPendingQuestion, AgentUserAnswer } from '@/shared/contracts/agent';
 
 import { ConversationApprovals } from '../ConversationApprovals';
 import type { ToolApprovalRespondInput } from '../ToolApprovalSheet';
 
+let questionSheet: {
+  request: AgentPendingQuestion | null;
+  isOpen: boolean;
+  onRespond(id: string, answer: AgentUserAnswer): Promise<void>;
+  onCancel(): Promise<void>;
+};
+jest.mock('../UserQuestionSheet', () => ({
+  UserQuestionSheet: (props: typeof questionSheet) => {
+    questionSheet = props;
+    return null;
+  },
+}));
 const mockToast = jest.fn();
 let sheet: {
   canRespond: boolean;
@@ -215,4 +228,43 @@ it('submits complete question answers through the bound response without reducin
     sheet.onRespond({ approvalId: 'decision', approved: true, answers: { '目录？': 'src' } }),
   );
   expect(test.respond).toHaveBeenCalledWith({ kind: 'answer', answers: { '目录？': 'src' } });
+});
+
+it('preserves option IDs and skipping, and allows retry when a user answer is rejected', async () => {
+  const test = fixture();
+  test.read.mockResolvedValue({
+    kind: 'user-question',
+    question: {
+      question: 'Choose',
+      selection: 'single',
+      options: [
+        { id: 'a', label: 'Same label', description: '' },
+        { id: 'b', label: 'Same label', description: '' },
+      ],
+    },
+  });
+  test.update({
+    ...test.snapshot,
+    interactions: test.snapshot.interactions.map((item) => ({ ...item, kind: 'question' })),
+  });
+  await render(test);
+  const answer = { selectedOptionIds: [], text: '', skipped: true };
+  await act(async () => questionSheet.onRespond('decision', answer));
+  expect(test.respond).toHaveBeenCalledWith({ kind: 'user-answer', answer });
+  test.respond.mockResolvedValueOnce({ state: 'rejected', failure: { code: 'conflict' } } as never);
+  await expect(
+    questionSheet.onRespond('decision', {
+      selectedOptionIds: ['b'],
+      text: 'extra',
+      skipped: false,
+    }),
+  ).rejects.toThrow();
+  expect(test.respond).toHaveBeenLastCalledWith({
+    kind: 'user-answer',
+    answer: { selectedOptionIds: ['b'], text: 'extra', skipped: false },
+  });
+  await expect(questionSheet.onRespond('stale-question', answer)).rejects.toThrow();
+  expect(test.respond).toHaveBeenCalledTimes(2);
+  test.cancel.mockResolvedValueOnce({ state: 'rejected', failure: { code: 'conflict' } } as never);
+  await expect(questionSheet.onCancel()).rejects.toThrow();
 });

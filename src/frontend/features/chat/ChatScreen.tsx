@@ -180,7 +180,9 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 imageResult={
                   messageWindow.hasNewerMessages
                     ? undefined
-                    : latestConversationImageResult(messageWindow.messages.map((message) => message.imageResult))
+                    : latestConversationImageResult(
+                        messageWindow.messages.map((message) => message.imageResult),
+                      )
                 }
                 sessionId={sessionId}
               />

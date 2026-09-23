@@ -129,6 +129,7 @@ export function AssistantMessageActionsProvider({
     (execution) =>
       execution.state === 'running' ||
       execution.state === 'awaiting-approval' ||
+      execution.state === 'awaiting-input' ||
       execution.state === 'finalizing',
   );
   const retry = ({ messageId }: { messageId: string }) => {

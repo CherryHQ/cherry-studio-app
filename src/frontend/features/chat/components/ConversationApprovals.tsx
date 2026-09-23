@@ -8,6 +8,7 @@ import {
 } from '@/frontend/appShell/conversation';
 
 import { ToolApprovalSheet, type ToolApprovalRespondInput } from './ToolApprovalSheet';
+import { UserQuestionSheet } from './UserQuestionSheet';
 
 /** The sheet consumes a bound decision and resource, never a connection or protocol method. */
 export function ConversationApprovals({
@@ -26,7 +27,9 @@ export function ConversationApprovals({
     isOpen &&
     interaction?.respond?.availability.state === 'enabled' &&
     input.isSuccess &&
-    (interaction.kind !== 'question' || input.data?.kind === 'question');
+    (interaction.kind !== 'question' ||
+      input.data?.kind === 'question' ||
+      input.data?.kind === 'user-question');
   const cancellations = snapshot.executions.flatMap((execution) =>
     execution.cancel?.availability.state === 'enabled' &&
     (interaction?.execution
@@ -56,6 +59,38 @@ export function ConversationApprovals({
       }
     }
   };
+  if (interaction && input.data?.kind === 'user-question') {
+    return (
+      <UserQuestionSheet
+        key={interaction.input}
+        request={
+          canRespond
+            ? {
+                toolCallId: interaction.ref,
+                turnId: interaction.execution ?? interaction.ref,
+                question: input.data.question,
+              }
+            : null
+        }
+        isOpen={isOpen}
+        onRespond={async (id, answer) => {
+          if (!canRespond || id !== interaction.ref)
+            throw new Error('Question is no longer available');
+          const result = await interaction.respond!.execute({ kind: 'user-answer', answer });
+          if (result.state === 'rejected' || result.state === 'interrupted')
+            throw new Error('Question response failed');
+        }}
+        onCancel={async () => {
+          if (!cancellations.length) throw new Error('Cancellation is unavailable');
+          for (const action of cancellations) {
+            const result = await action.execute(undefined);
+            if (result.state === 'rejected' || result.state === 'interrupted')
+              throw new Error('Question cancellation failed');
+          }
+        }}
+      />
+    );
+  }
   return (
     <ToolApprovalSheet
       approvals={

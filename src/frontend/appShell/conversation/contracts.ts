@@ -2,6 +2,8 @@ import type { MessageListItem } from '@/frontend/components/Message';
 import type {
   AgentMessageView,
   AgentSubmitMessageInput,
+  AgentUserQuestion,
+  AgentUserAnswer,
   JsonValue,
 } from '@/shared/contracts/agent';
 import type { ExecutionFailure } from '@/shared/contracts/aiFailure';
@@ -119,6 +121,7 @@ export type ConversationExecution = {
   state:
     | 'running'
     | 'awaiting-approval'
+    | 'awaiting-input'
     | 'finalizing'
     | 'completed'
     | 'cancelled'
@@ -126,6 +129,9 @@ export type ConversationExecution = {
     | 'interrupted';
   cancel?: ConversationAction<void, void>;
 };
+export type ConversationInteractionResponse =
+  | InteractionResponse
+  | { kind: 'user-answer'; answer: AgentUserAnswer };
 export type ConversationInteraction = {
   execution?: ExecutionRef;
   ref: InteractionRef;
@@ -133,7 +139,7 @@ export type ConversationInteraction = {
   title: string;
   state: 'pending' | 'approved' | 'denied' | 'expired';
   input: ResourceRef;
-  respond?: ConversationAction<InteractionResponse, void>;
+  respond?: ConversationAction<ConversationInteractionResponse, void>;
 };
 /** Pure export values, never a deferred remote resource or an executable tool. */
 export type TranscriptMessage = Pick<AgentMessageView, 'id' | 'role' | 'status' | 'stats'> & {
@@ -211,6 +217,7 @@ export interface ConversationHistory {
   ): Promise<TranscriptSnapshot>;
 }
 export type ResourceValue =
+  | { kind: 'user-question'; question: AgentUserQuestion }
   | { kind: 'question'; questions: readonly InteractionQuestion[] }
   | { kind: 'text'; text: string; complete: true }
   | { kind: 'json'; value: JsonValue; complete: true }
@@ -262,7 +269,12 @@ export type ConversationSummary = {
   title: string;
   updatedAt?: string;
 };
-export type ConversationListStatus = 'running' | 'awaiting-approval' | 'awaiting-input' | 'failed' | 'unread';
+export type ConversationListStatus =
+  | 'running'
+  | 'awaiting-approval'
+  | 'awaiting-input'
+  | 'failed'
+  | 'unread';
 /** Lightweight list metadata/actions. Does not open a transcript observation. */
 export type ConversationPreview = {
   status?: Readable<ConversationListStatus | undefined>;

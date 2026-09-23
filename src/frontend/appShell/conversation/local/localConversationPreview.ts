@@ -45,7 +45,12 @@ export function createLocalConversationPreview(input: {
       getSnapshot: (): ConversationListStatus | undefined => {
         const turn = agent.getSessionStatus(sessionId);
         if (turn?.status === 'running' || turn?.status === 'cancelling') return 'running';
-        if (turn?.status === 'awaiting-approval' || turn?.status === 'awaiting-input' || turn?.status === 'failed') return turn.status;
+        if (
+          turn?.status === 'awaiting-approval' ||
+          turn?.status === 'awaiting-input' ||
+          turn?.status === 'failed'
+        )
+          return turn.status;
         if (turn?.status === 'completed' && turn.turnId !== readMarks?.get(sessionId))
           return 'unread';
         return undefined;
