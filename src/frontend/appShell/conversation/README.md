@@ -64,3 +64,8 @@ sources clear their binding on retirement. Workspace choices, resources, command
 remain runtime-owned and never borrow metadata cache authority. No disk catalog is introduced.
 Desktop emoji travels as optional catalog metadata, including multi-code-point sequences; image
 avatars remain on their existing local image path and cache policy.
+
+Admission rejections retain the desktop reason and diagnostic message through the durable command
+journal, first-send workflow, action result and operation snapshot. The UI translates the closed
+failure code; diagnostic text is available only through an explicit details action. Expected
+rejections restore the composer draft without replacing the explanation with a generic error.

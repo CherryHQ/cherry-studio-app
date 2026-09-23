@@ -310,3 +310,20 @@ test('only active catalog consumers retain the local change subscription', () =>
   expect(f.changes.size).toBe(0);
   f.source.dispose();
 });
+
+test('late message data changes advance only the affected open history without a sidebar subscription', async () => {
+  const f = fixture();
+  const handle = await f.source.openSession(
+    { source: f.source.ref, sessionId: 'session' },
+    f.signal,
+  );
+  const before = handle.state.getSnapshot().historyVersion;
+  for (const changed of f.changes) changed(['/ai-usage-records', '/agent-sessions/other/messages']);
+  expect(handle.state.getSnapshot().historyVersion).toBe(before);
+  for (const changed of f.changes)
+    changed(['/ai-usage-records', '/agent-sessions/session/messages']);
+  expect(handle.state.getSnapshot().historyVersion).not.toBe(before);
+  handle.dispose();
+  expect(f.changes.size).toBe(0);
+  f.source.dispose();
+});

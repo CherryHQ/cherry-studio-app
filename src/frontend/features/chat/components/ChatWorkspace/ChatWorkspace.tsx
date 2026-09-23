@@ -1,5 +1,5 @@
 import { BackgroundPressExclusion, ContentState } from '@cherrystudio/ui/components';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -42,6 +42,7 @@ type ChatWorkspaceProps = {
   snapshot: ConversationSnapshot;
   conversation?: ConversationSession;
   sessionId?: string;
+  renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
 export function ChatWorkspace({
@@ -60,6 +61,7 @@ export function ChatWorkspace({
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
+  renderUsage,
 }: ChatWorkspaceProps) {
   const {
     dataKey,
@@ -187,6 +189,7 @@ export function ChatWorkspace({
           isMessageActionsEnabled={isAssistantToolbarEnabled}
           isScreenReaderEnabled={isScreenReaderEnabled}
           message={message}
+          usage={renderUsage?.(message)}
           attachments={
             value?.attachments?.length ? <ConversationAttachments message={value} /> : undefined
           }
@@ -208,6 +211,7 @@ export function ChatWorkspace({
       timestampMessageIds,
       mergedMessages,
       conversation,
+      renderUsage,
     ],
   );
   const messageListExtraData = useMemo(

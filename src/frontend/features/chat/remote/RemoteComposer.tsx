@@ -34,6 +34,7 @@ import { usePersistCache } from '@/frontend/data/hooks';
 
 import { ChatInputSurface } from '../components/ChatInput';
 import { ConversationOperations } from '../components/ConversationOperations';
+import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
 
 export function RemoteComposer({
   agent,
@@ -139,13 +140,18 @@ export function RemoteComposer({
         </ScrollView>
       </View>
       <ComposerSurface
+        getSendErrorLabel={(error) =>
+          error instanceof ConversationActionError
+            ? t(conversationFailureKey(error.failure))
+            : undefined
+        }
         canSend={action?.availability.state === 'enabled' && Boolean(text.trim()) && !startPending}
         streaming={canStop}
         dismissKeyboardOnSend
         onSend={async ({ text }) => {
           if (!action || action.availability.state !== 'enabled') throw new Error('UNAVAILABLE');
           const result = await action.execute({ parts: [{ type: 'text', text }] });
-          if (result.state === 'rejected') throw new Error(result.failure.code);
+          if (result.state === 'rejected') throw new ConversationActionError(result.failure);
           // Pending/interrupted admission is visible in operations; never create a second send here.
         }}
         onStop={() => {

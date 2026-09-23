@@ -36,6 +36,7 @@ const ActionSchema = z.object({
     'failed',
   ]),
   error: z.string().optional(),
+  errorMessage: z.string().max(512).optional(),
 });
 const RecordSchema = z.object({
   action: ActionSchema,
@@ -56,6 +57,7 @@ const StartSchema = z
     status: z.enum(['pending', 'applied', 'rejected', 'interrupted']),
     sessionId: z.string().optional(),
     error: z.string().optional(),
+    errorMessage: z.string().max(512).optional(),
   })
   .refine((entry) => (entry.workspaceId !== undefined) !== (entry.workspace !== undefined));
 const JournalSchema = z.union([
@@ -65,11 +67,25 @@ const JournalSchema = z.union([
 type StartEntry = z.infer<typeof StartSchema>;
 type RecordEntry = z.infer<typeof RecordSchema>;
 
-function projectAction({ action, params }: RecordEntry): RemoteCommand {
+function projectAction({ action, params, receipt }: RecordEntry): RemoteCommand {
+  if (receipt?.error) action = { ...action, errorMessage: receipt.error.message };
   if (action.status === 'accepted') action = { ...action, status: 'confirming' };
   return action.kind === 'respond' && typeof params.interactionId === 'string'
     ? { ...action, interactionId: params.interactionId }
     : action;
+}
+
+function projectStart(
+  { createId, sendId, ...view }: StartEntry,
+  records: RecordEntry[],
+): RemoteStartOperation {
+  const record =
+    records.find((entry) => entry.action.id === sendId) ??
+    records.find((entry) => entry.action.id === createId);
+  const errorMessage =
+    view.errorMessage ??
+    (record?.receipt?.error?.reason === view.error ? record?.receipt?.error?.message : undefined);
+  return { ...view, ...(errorMessage ? { errorMessage } : {}) };
 }
 
 export class RemoteAgentActions {
@@ -91,7 +107,7 @@ export class RemoteAgentActions {
     const parsed = stored === undefined ? undefined : JournalSchema.parse(JSON.parse(stored));
     this.records = parsed?.records ?? [];
     this.starts = parsed?.version === 2 ? parsed.starts : [];
-    this.startSnapshot = this.starts.map(({ createId: _create, sendId: _send, ...view }) => view);
+    this.startSnapshot = this.starts.map((entry) => projectStart(entry, this.records));
     this.snapshot = this.records.map(projectAction);
   }
   stop() {
@@ -111,7 +127,7 @@ export class RemoteAgentActions {
     this.journal.write(this.binding, JSON.stringify({ version: 2, records, starts }));
     this.records = records;
     this.starts = starts;
-    this.startSnapshot = starts.map(({ createId: _create, sendId: _send, ...view }) => view);
+    this.startSnapshot = starts.map((entry) => projectStart(entry, records));
     this.snapshot = records.map(projectAction);
     for (const listener of this.listeners) listener();
   }
@@ -302,6 +318,7 @@ export class RemoteAgentActions {
           ...entry,
           status: error.code === 'COMMAND_INTERRUPTED' ? 'interrupted' : 'rejected',
           error: error.code,
+          errorMessage: error.detail,
         });
     }
     this.changed();
@@ -317,7 +334,7 @@ export class RemoteAgentActions {
             : sent && command.status === 'applied'
               ? 'applied'
               : 'pending',
-      ...(command.error ? { error: command.error } : {}),
+      ...(command.error ? { error: command.error, errorMessage: command.errorMessage } : {}),
     });
     this.changed();
   }
@@ -337,6 +354,7 @@ export class RemoteAgentActions {
       ...entry.action,
       status: 'confirming' as RemoteCommand['status'],
       error: undefined,
+      errorMessage: undefined,
     };
     if (recover && entry.action.status !== 'confirming')
       this.commit(
@@ -362,7 +380,7 @@ export class RemoteAgentActions {
       action = {
         ...action,
         status: parsed.status === 'rejected' ? 'failed' : parsed.status,
-        ...(parsed.error ? { error: parsed.error.reason } : {}),
+        ...(parsed.error ? { error: parsed.error.reason, errorMessage: parsed.error.message } : {}),
         ...(parsed.sessionId ? { sessionId: parsed.sessionId } : {}),
       };
     } catch (error) {
@@ -375,6 +393,7 @@ export class RemoteAgentActions {
           ...action,
           status: error.code === 'COMMAND_INTERRUPTED' ? 'interrupted' : 'failed',
           error: error.code,
+          errorMessage: error.detail,
         };
       }
       // Timeouts, malformed/lost replies and transport failures remain uncertain, never a fresh action.

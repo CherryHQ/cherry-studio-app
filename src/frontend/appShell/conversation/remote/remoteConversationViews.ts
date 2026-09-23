@@ -11,8 +11,20 @@ import type {
 } from '../contracts';
 
 export function remoteConversationFailure(error: unknown): ConversationFailure {
+  const failure = classifyRemoteFailure(error);
+  if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
+    const message =
+      'detail' in error && typeof error.detail === 'string' ? error.detail : undefined;
+    if (message) return { ...failure, detail: { code: error.code, message } };
+  }
+  return failure;
+}
+
+function classifyRemoteFailure(error: unknown): ConversationFailure {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   switch (code) {
+    case 'TARGET_UNAVAILABLE':
+      return { code: 'target-unavailable', retry: 'revise-input' };
     case 'UPGRADE_REQUIRED':
       return { code: 'upgrade-required', retry: 'none' };
     case 'CLOSED':

@@ -159,6 +159,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
         throw new RemoteAgentError(
           error.reason,
           ['RATE_LIMITED', 'TOKEN_EXPIRED', 'RESOURCE_EXHAUSTED'].includes(error.reason),
+          error.message,
         );
       }
       throw error;

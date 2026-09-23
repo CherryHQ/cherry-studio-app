@@ -1,7 +1,11 @@
 import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';
 
 import type { MessageRef, ResourceRef } from '../../contracts';
-import { remoteMessage, remoteTranscriptMessage } from '../remoteConversationViews';
+import {
+  remoteConversationFailure,
+  remoteMessage,
+  remoteTranscriptMessage,
+} from '../remoteConversationViews';
 
 it('keeps the same provider failure in message presentation and exported history without duplicating data parts', () => {
   const failure = {
@@ -120,4 +124,21 @@ it('preserves trailing live prose and keeps metadata-only files out of local fil
   expect(projected.display.data.parts?.[0]).toMatchObject({ state: 'input-streaming' });
   expect(projected.attachments?.[0]).toMatchObject({ name: 'result.png', resource: 'pc-file' });
   expect(JSON.stringify(projected.display)).not.toContain('pc-file');
+});
+
+it('preserves known admission failure details instead of flattening them to internal', () => {
+  expect(
+    remoteConversationFailure({
+      code: 'TARGET_UNAVAILABLE',
+      detail: 'Agent has no model configured',
+    }),
+  ).toEqual({
+    code: 'target-unavailable',
+    retry: 'revise-input',
+    detail: { code: 'TARGET_UNAVAILABLE', message: 'Agent has no model configured' },
+  });
+  expect(remoteConversationFailure(new Error('private implementation error'))).toEqual({
+    code: 'internal',
+    retry: 'none',
+  });
 });

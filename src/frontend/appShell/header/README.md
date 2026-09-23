@@ -52,8 +52,9 @@ This module owns Expo Router header adapters used by the app screens.
   Android draws a borderless translucent card tint over the header's existing blur,
   in the flexible space between the action groups. The capsule reuses that blur without another
   blur view or sampling target; Android versions below 12 retain the translucent material fallback.
-  The capsule is a non-interactive label with no press feedback. Long names truncate at the end.
-  Agent switching belongs to the left drawer for both local and remote conversations.
+  Long names truncate at the end. The local capsule opens the Agent picker with switching, editing,
+  and creation shortcuts. The remote capsule remains a non-interactive label; remote Agent switching
+  belongs to the left drawer.
 
 `MainHeader` supplies local Agent data to `MainHeaderView`; the remote chat supplies PC Agent data
 to the same view. The source adapters do not duplicate platform chrome.

@@ -319,3 +319,61 @@ it('retires displayed history and sensitive cache values when the session bindin
       .every((query) => !query.state.data),
   ).toBe(true);
 });
+
+it.each([undefined, '4'])(
+  'preserves loaded pages with fresh cursors after a history revision (anchor %s)',
+  async (anchor) => {
+    const test = setup();
+    const row = (id: string) => test.window(id).initial.items[0];
+    function window(revision: string): HistoryWindow {
+      return {
+        ...test.window(revision),
+        initial: {
+          items: ['3', '4'].map(row),
+          older: `${revision}:older` as HistoryCursor,
+          newer: `${revision}:newer` as HistoryCursor,
+        },
+        read: async (cursor) => {
+          if (cursor === `${revision}:older`) return { items: ['1', '2'].map(row) };
+          if (cursor === `${revision}:newer`)
+            return { items: (revision === '2' ? ['5', '6', '7'] : ['5', '6']).map(row) };
+          throw new Error('Cursor belongs to the previous window');
+        },
+      };
+    }
+    await render(test.session, '1', anchor);
+    await act(async () => {
+      test.opens.at(-1)!.result.resolve(window('1'));
+      await settle();
+    });
+    await act(settle);
+    await act(async () => {
+      await result.loadOlder();
+      await settle();
+    });
+    await act(settle);
+    await act(async () => {
+      await result.loadNewer();
+      await settle();
+    });
+    await act(settle);
+    expect(result.messages.map((message) => message.key)).toEqual(['1', '2', '3', '4', '5', '6']);
+    await render(test.session, '2', anchor);
+    await act(async () => {
+      test.opens.at(-1)!.result.resolve(window('2'));
+      await settle();
+    });
+    await act(settle);
+    expect(result.messages.map((message) => message.key)).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+    ]);
+    expect(result.installedVersion).toBe('2');
+    expect(result.hasNewerMessages).toBe(false);
+  },
+);

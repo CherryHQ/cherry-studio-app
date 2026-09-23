@@ -20,7 +20,7 @@ const HEADER_BLUR_BAND_HEIGHT_RATIOS = [1, 0.72, 0.46, 0.22] as const;
 const HEADER_BLUR_INTENSITY = 9;
 const legacyHeaderBackground = () => <LegacyHeaderBackground />;
 
-export function MainHeaderView({ agent, onNewChat }: MainHeaderViewProps) {
+export function MainHeaderView({ agent, onAgentPress, onNewChat }: MainHeaderViewProps) {
   const isPreview = useIsPreview();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat);
   if (isPreview) {
@@ -54,7 +54,7 @@ export function MainHeaderView({ agent, onNewChat }: MainHeaderViewProps) {
         {agent ? (
           <Stack.Toolbar.View>
             <View className={isLiquidGlassAvailable ? undefined : 'rounded-full bg-card/70'}>
-              <MainHeaderAgentLabel agent={agent} />
+              <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} />
             </View>
           </Stack.Toolbar.View>
         ) : null}

@@ -60,3 +60,6 @@ The usage button uses CherryUI's release-time press action.
 Scrolling and system cancellation must cancel that tap; accessibility
 activation opens the same detail. The maintained sheet owns scrolling and dismissal. No feature-local
 gesture recognizer is added.
+
+Local chat supplies `AssistantMessageUsage` through the workspace usage slot. Shared message rows
+have no implicit usage lookup; remote chat does not query the mobile usage ledger.

@@ -1,7 +1,14 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ConversationSession, MessageRef } from '@/frontend/appShell/conversation';
+import type {
+  OperationOutcome,
+  Submission,
+  ConversationSession,
+  MessageRef,
+} from '@/frontend/appShell/conversation';
+import { localConversationFailure } from '@/frontend/appShell/conversation/local/localConversationFailure';
+import { AgentProtocolError, type AgentErrorView } from '@/shared/contracts/agent';
 
 import {
   AssistantMessageActionsProvider,
@@ -10,6 +17,7 @@ import {
   useAssistantMessageActionsState,
 } from '../AssistantMessageActionsProvider';
 
+let mockRetryOutcome: OperationOutcome<Submission>;
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
@@ -83,6 +91,7 @@ function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
   return (
     <AssistantMessageActionsProvider
       isAssistantToolbarEnabled
+      retryableMessageId="assistant-1"
       session={session}
       snapshot={{
         title: mockSourceTitle ?? '',
@@ -108,6 +117,7 @@ function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
             data: {},
           },
           actions: {
+            retry: { availability: { state: 'enabled' }, execute: async () => mockRetryOutcome },
             remove: {
               availability: { state: 'enabled' },
               execute: async () => {
@@ -143,6 +153,10 @@ describe('AssistantMessageActionsProvider', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
+    mockRetryOutcome = {
+      state: 'applied',
+      value: { conversation: session.ref, userMessage: 'user-1' as MessageRef },
+    };
     probeRef = createRef<ContextProbeHandle>();
   });
 
@@ -196,6 +210,33 @@ describe('AssistantMessageActionsProvider', () => {
     expect(mockDeleteTurn).not.toHaveBeenCalled();
     expect(mockRetryMessage).not.toHaveBeenCalled();
   });
+
+  test.each([
+    ['AGENT_MODEL_NOT_CONFIGURED', 'chat.input.sendError.modelNotConfigured'],
+    ['ATTACHMENT_UNAVAILABLE', 'chat.input.attachmentUnavailable'],
+    ['TOOL_CALLING_UNSUPPORTED', 'chat.input.sendError.toolCallingUnsupported'],
+    ['MESSAGE_NOT_FOUND', 'chat.messageActions.retryFailed'],
+  ] as const)(
+    'explains a retry rejection for %s without showing raw diagnostics',
+    async (code, label) => {
+      mockRetryOutcome = {
+        state: 'rejected',
+        failure: localConversationFailure(
+          new AgentProtocolError({
+            code,
+            message: 'private diagnostic',
+            retryable: false,
+          } as AgentErrorView),
+        ),
+      };
+      renderProvider();
+      await act(async () => {
+        probeRef.current!.actions.retryAssistantMessage!({ messageId: 'assistant-1' });
+      });
+      expect(mockToastShow).toHaveBeenCalledWith({ label, variant: 'danger' });
+      expect(JSON.stringify(mockToastShow.mock.calls)).not.toContain('private diagnostic');
+    },
+  );
 
   test('opens selection at the clicked answer without changing the transcript', () => {
     renderProvider();

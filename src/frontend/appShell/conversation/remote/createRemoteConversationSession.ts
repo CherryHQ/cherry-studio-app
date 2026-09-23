@@ -62,7 +62,10 @@ export function commandOutcome<T>(
 ): OperationOutcome<T> {
   if (command.status === 'applied') return { state: 'applied', value };
   if (command.status === 'failed')
-    return { state: 'rejected', failure: remoteConversationFailure({ code: command.error }) };
+    return {
+      state: 'rejected',
+      failure: remoteConversationFailure({ code: command.error, detail: command.errorMessage }),
+    };
   if (command.status === 'interrupted') return { state: 'interrupted', operationId: id };
   return { state: 'pending', operationId: id };
 }
@@ -133,7 +136,14 @@ export function createRemoteConversationSession(
           ...(command.text
             ? { input: { parts: [{ type: 'text' as const, text: command.text }] } }
             : {}),
-          ...(command.error ? { failure: remoteConversationFailure({ code: command.error }) } : {}),
+          ...(command.error
+            ? {
+                failure: remoteConversationFailure({
+                  code: command.error,
+                  detail: command.errorMessage,
+                }),
+              }
+            : {}),
           ...(!['confirming', 'accepted', 'queued'].includes(command.status)
             ? {
                 dismiss: () => {

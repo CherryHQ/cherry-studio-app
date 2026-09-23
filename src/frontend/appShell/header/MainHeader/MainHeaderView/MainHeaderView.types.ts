@@ -7,4 +7,5 @@ export type MainHeaderViewProps = {
   agent?: Pick<Agent, 'name'> & Partial<Pick<Agent, 'avatar' | 'avatarUri'>>;
   blurTarget: RefObject<View | null>;
   onNewChat: () => void;
+  onAgentPress?: () => void;
 };

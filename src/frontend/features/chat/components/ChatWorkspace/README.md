@@ -6,7 +6,8 @@ placement. The virtualized list and message rendering live in `@/frontend/compon
 
 ## Public Interface
 
-- `ChatWorkspace` is exported from `index.ts` for Agent Session screens.
+- `ChatWorkspace` is exported from `index.ts` for Agent Session screens. Local chat supplies the
+  exported `AssistantMessageUsage` through its `renderUsage` slot.
 - Internal workspace pieces should be imported through relative paths inside this module.
 - The composer placement itself is not here — `ChatScreen` keeps the shared composer in normal
   parent flow, while CherryUI owns reusable keyboard and safe-area behavior. This module only

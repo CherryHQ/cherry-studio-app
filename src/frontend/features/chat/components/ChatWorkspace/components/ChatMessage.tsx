@@ -15,7 +15,6 @@ import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { AssistantMessageUsage } from './AssistantMessageUsage';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -73,7 +72,7 @@ function renderChatAssistantMessage(
             <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
               <AssistantMessageToolbar message={message} />
               <View className="min-w-0 max-w-full flex-1 items-end">
-                {usage === undefined ? <AssistantMessageUsage message={message} /> : usage}
+                {usage}
               </View>
             </ContextMenuExclusion>
           </BackgroundPressExclusion>

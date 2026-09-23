@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { Keyboard, Text, View } from 'react-native';
+import { Keyboard, Pressable, Text, View } from 'react-native';
 
 import {
   type ChatRouteParamsInput,
@@ -39,15 +39,20 @@ export function useMainHeaderAgent() {
 
 export function MainHeaderAgentLabel({
   agent,
+  onPress,
 }: {
+  onPress?: () => void;
   agent: Pick<Agent, 'name'> & Partial<Pick<Agent, 'avatar' | 'avatarUri'>>;
 }) {
+  const Container = onPress ? Pressable : View;
   return (
-    <View
+    <Container
       accessible
       accessibilityLabel={agent.name}
-      accessibilityRole="text"
-      className="min-h-10 max-w-56 min-w-0 shrink flex-row items-center gap-2 rounded-full px-3 py-1"
+      accessibilityRole={onPress ? 'button' : 'text'}
+      onPress={onPress}
+      hitSlop={onPress ? 8 : undefined}
+      className={`min-h-10 max-w-56 min-w-0 shrink flex-row items-center gap-2 rounded-full px-3 py-1${onPress ? ' active:opacity-60' : ''}`}
       testID="current-agent-label"
     >
       <AgentAvatar avatar={agent.avatar} name={agent.name} size={24} uri={agent.avatarUri} />
@@ -59,6 +64,6 @@ export function MainHeaderAgentLabel({
       >
         {agent.name}
       </Text>
-    </View>
+    </Container>
   );
 }

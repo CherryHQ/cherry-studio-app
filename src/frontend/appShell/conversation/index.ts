@@ -4,6 +4,7 @@ export {
   type AgentSessionChatState,
 } from './local/AgentSessionChatClient';
 export type {
+  ConversationFailure,
   ConversationSource,
   ConversationSourceRef,
   ConversationSession,

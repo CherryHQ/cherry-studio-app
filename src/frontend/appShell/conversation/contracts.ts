@@ -27,6 +27,7 @@ export type ConversationRef = { source: ConversationSourceRef; sessionId: string
 export type Readable<T> = { getSnapshot(): T; subscribe(listener: () => void): () => void };
 export type ConversationFailure = {
   code:
+    | 'target-unavailable'
     | 'invalid-input'
     | 'conflict'
     | 'not-found'
@@ -41,6 +42,7 @@ export type ConversationFailure = {
     | 'cancelled'
     | 'retired'
     | 'internal';
+  detail?: { code: string; message?: string };
   retry: 'read-again' | 'revise-input' | 'repair-source' | 'none';
 };
 export type Availability =

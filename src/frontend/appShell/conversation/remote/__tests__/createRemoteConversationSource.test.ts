@@ -342,3 +342,32 @@ test('metadata refs survive reconnect within a grant but never cross a replaceme
   replacement.source.dispose();
   other.source.dispose();
 });
+
+it('carries the rejected send explanation through both the action and its operation snapshot', async () => {
+  const test = fixture();
+  const command = {
+    id: 'send',
+    kind: 'send' as const,
+    status: 'failed' as const,
+    sessionId: 's',
+    error: 'TARGET_UNAVAILABLE',
+    errorMessage: 'Agent has no model configured',
+  };
+  test.remote.send = jest.fn(async () => command);
+  test.remote.getCommands = () => [command];
+  const handle = await test.source.openSession(address, signal());
+  handle.activate();
+  test.publish();
+  const failure = {
+    code: 'target-unavailable',
+    detail: { code: 'TARGET_UNAVAILABLE', message: 'Agent has no model configured' },
+  };
+  expect(
+    await handle.state
+      .getSnapshot()
+      .actions.send!.execute({ parts: [{ type: 'text', text: 'hello' }] }),
+  ).toMatchObject({ state: 'rejected', failure });
+  expect(handle.operations.getSnapshot()[0]).toMatchObject({ state: 'rejected', failure });
+  handle.dispose();
+  test.source.dispose();
+});

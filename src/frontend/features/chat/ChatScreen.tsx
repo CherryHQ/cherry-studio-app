@@ -27,13 +27,14 @@ import {
   ComposerDropArea,
   ComposerSessionProvider,
 } from '@/frontend/components/Composer';
+import type { MessageListItem } from '@/frontend/components/Message';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
-import { ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
 import {
@@ -43,6 +44,7 @@ import {
 } from './runtime';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
+const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage message={message} />;
 
 export function ChatScreen() {
   return (
@@ -96,6 +98,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     ...history,
     isLoadingInitial: conversation.isLoading || history.isLoadingInitial,
     error: conversation.error ?? history.error,
+    retry: conversation.error ? async () => conversation.retry() : history.retry,
   };
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));
@@ -146,6 +149,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             </View>
           ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
             <ChatWorkspace
+              renderUsage={renderLocalUsage}
               snapshot={snapshot}
               conversation={conversation.session}
               pendingSend={controls.pendingSend}

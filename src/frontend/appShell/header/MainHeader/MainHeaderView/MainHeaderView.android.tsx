@@ -14,7 +14,12 @@ import type { MainHeaderViewProps } from './MainHeaderView.types';
 const HEADER_HORIZONTAL_INSET = 16;
 const HEADER_BLUR_INTENSITY = 24;
 
-export function MainHeaderView({ agent, onNewChat, blurTarget }: MainHeaderViewProps) {
+export function MainHeaderView({
+  agent,
+  onAgentPress,
+  onNewChat,
+  blurTarget,
+}: MainHeaderViewProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat);
@@ -67,7 +72,7 @@ export function MainHeaderView({ agent, onNewChat, blurTarget }: MainHeaderViewP
                 {/* The header already blurs the chat underneath. Keep this tint
                     translucent so the capsule shares that blur without another pass. */}
                 <View className="absolute inset-0 rounded-full bg-card/70" pointerEvents="none" />
-                <MainHeaderAgentLabel agent={agent} />
+                <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} />
               </View>
             ) : null}
           </View>

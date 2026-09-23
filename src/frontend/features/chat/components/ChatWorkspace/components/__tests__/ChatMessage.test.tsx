@@ -10,6 +10,7 @@ const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
 const mockCopyMessage = jest.fn();
 const mockDeleteMessageTurn = jest.fn();
 const mockShareMessage = jest.fn();
+const mockLocalUsage = jest.fn(() => null);
 
 jest.mock('@cherrystudio/ui/components', () => ({
   BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
@@ -53,7 +54,7 @@ jest.mock('../AssistantMessageToolbar', () => ({
 }));
 
 jest.mock('../AssistantMessageUsage', () => ({
-  AssistantMessageUsage: () => null,
+  AssistantMessageUsage: () => mockLocalUsage(),
 }));
 
 describe('ChatMessage', () => {
@@ -66,6 +67,26 @@ describe('ChatMessage', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('only displays usage supplied by the conversation owner, without reading the local ledger by default', () => {
+    act(() => {
+      renderer = create(renderMessage(createMessage('success')));
+    });
+    expect(mockLocalUsage).not.toHaveBeenCalled();
+    act(() => {
+      renderer!.update(
+        <ChatMessage
+          assistantPresentation={{ name: 'Assistant' }}
+          isMessageActionsEnabled
+          shouldShowTimestamp
+          message={createMessage('success')}
+          usage="42 Tokens"
+        />,
+      );
+    });
+    expect(JSON.stringify(renderer!.toJSON())).toContain('42 Tokens');
+    expect(mockLocalUsage).not.toHaveBeenCalled();
   });
 
   test('enables copy and share only after an assistant answer settles', () => {

@@ -65,6 +65,9 @@ export function createLocalConversationSource(input: {
   let unchanges: (() => void) | undefined;
   const observeChanges = () =>
     input.api.subscribeChanges?.((paths) => {
+      for (const session of sessions)
+        if (paths.includes(`/agent-sessions/${session.handle.ref.sessionId}/messages`))
+          session.changed(true);
       if (paths.some((path) => path === '/agents' || path.startsWith('/agents/')))
         publishCatalog('agents');
       if (paths.some((path) => path === '/agent-sessions' || path.startsWith('/agent-sessions/')))
@@ -102,7 +105,7 @@ export function createLocalConversationSource(input: {
         unchanges ??= observeChanges();
         return () => {
           catalogListeners.delete(listener);
-          if (!catalogListeners.size) {
+          if (!catalogListeners.size && !sessions.size) {
             unchanges?.();
             unchanges = undefined;
           }
@@ -309,9 +312,16 @@ export function createLocalConversationSource(input: {
         session,
         scope,
         assertSource,
-        onDispose: () => sessions.delete(entry),
+        onDispose: () => {
+          sessions.delete(entry);
+          if (!sessions.size && !catalogListeners.size) {
+            unchanges?.();
+            unchanges = undefined;
+          }
+        },
       });
       sessions.add(entry);
+      unchanges ??= observeChanges();
       return entry.handle;
     },
     dispose: () => {

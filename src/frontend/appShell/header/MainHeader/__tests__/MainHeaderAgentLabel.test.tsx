@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { Agent } from '@/shared/data/types/agent';
 
+import { MainHeader } from '../MainHeader';
 import { MainHeaderAgentLabel, useMainHeaderAgent } from '../MainHeaderAgentLabel';
 
 const mockPush = jest.fn();
@@ -43,6 +44,7 @@ jest.mock('@/frontend/appShell/navigation/chat', () => ({
 }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
+  useAgentsApi: () => ({ agents: mockAgent ? [mockAgent] : [], isLoading: false }),
   useAgentApiById: (agentId: string | undefined) => ({
     agent: agentId === mockAgent?.id ? mockAgent : undefined,
   }),
@@ -50,6 +52,41 @@ jest.mock('@/frontend/hooks/agent', () => ({
     data: mockSessionAgentId ? { agentId: mockSessionAgentId } : undefined,
   }),
 }));
+
+jest.mock('../MainHeaderView/MainHeaderView', () => ({
+  MainHeaderView: ({ agent, onAgentPress }: { agent?: Agent; onAgentPress?: () => void }) => {
+    const { MainHeaderAgentLabel } = jest.requireActual('../MainHeaderAgentLabel');
+    return agent ? <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} /> : null;
+  },
+}));
+
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+
+jest.mock('@cherrystudio/ui/components', () => {
+  const { createElement } = jest.requireActual('react');
+  const Button = Object.assign((props: object) => createElement('Button', props), {
+    Label: ({ children }: { children: React.ReactNode }) => children,
+  });
+  return {
+    BottomSheet: ({
+      open,
+      children,
+      footer,
+    }: {
+      open: boolean;
+      children: React.ReactNode;
+      footer: React.ReactNode;
+    }) =>
+      open ? (
+        <>
+          {children}
+          {footer}
+        </>
+      ) : null,
+    Button,
+    ContentState: { Loading: () => null, Error: () => null, Empty: () => null },
+  };
+});
 
 function Harness() {
   const { agent } = useMainHeaderAgent();
@@ -97,6 +134,40 @@ describe('MainHeaderAgentLabel', () => {
     expect(label?.props.accessibilityRole).toBe('text');
     expect(label?.props.onPress).toBeUndefined();
   });
+
+  it.each(['edit', 'switch', 'create'] as const)(
+    'opens the local header picker and lets the user %s an Agent',
+    async (action) => {
+      await act(async () => {
+        renderer = create(<MainHeader blurTarget={{ current: null }} />);
+      });
+      expect(renderer!.root.findAllByProps({ accessibilityRole: 'radio' })).toHaveLength(0);
+      await act(async () =>
+        renderer!.root.findByProps({ testID: 'current-agent-label' }).props.onPress(),
+      );
+      if (action === 'edit') {
+        await act(async () =>
+          renderer!.root.findByProps({ accessibilityLabel: 'common.edit: Peanut' }).props.onPress(),
+        );
+        expect(mockPush).toHaveBeenCalledWith({
+          pathname: '/agents/[agentId]/edit',
+          params: { agentId: 'agent-1' },
+        });
+      } else if (action === 'switch') {
+        await act(async () =>
+          renderer!.root.findByProps({ accessibilityRole: 'radio' }).props.onPress(),
+        );
+        expect(mockSetParams).toHaveBeenCalledWith({ agentId: 'agent-1', sessionId: undefined });
+      } else {
+        await act(async () => renderer!.root.findByType('Button').props.onPress());
+        expect(mockPush).toHaveBeenCalledWith({
+          pathname: '/agents/new',
+          params: { startChat: 'true' },
+        });
+      }
+      expect(renderer!.root.findAllByProps({ accessibilityRole: 'radio' })).toHaveLength(0);
+    },
+  );
 
   it('waits for the Session entity to resolve its Agent', async () => {
     mockSessionAgentId = undefined;

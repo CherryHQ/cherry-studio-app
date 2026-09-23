@@ -64,15 +64,26 @@ export function useConversationHistory(
       ] as const,
     [session, consumer, version, around, navigationKey, retryGeneration, retired],
   );
+  const extentKey = JSON.stringify([session?.scope, session?.ref.sessionId, around, navigationKey]);
+  const [retainedExtent, setRetainedExtent] = useState(() => ({
+    key: extentKey,
+    older: 0,
+    newer: 0,
+  }));
+  let extent = retainedExtent;
+  if (extent.key !== extentKey) {
+    extent = { key: extentKey, older: 0, newer: 0 };
+    setRetainedExtent(extent);
+  }
   const readerKey = JSON.stringify(queryKey);
   const [owned, setOwned] = useState(() => ({
     key: readerKey,
     session,
-    reader: createHistoryReader(session, around, version),
+    reader: createHistoryReader(session, around, version, extent),
   }));
   let reader = owned.reader;
   if (owned.key !== readerKey || owned.session !== session) {
-    reader = createHistoryReader(session, around, version);
+    reader = createHistoryReader(session, around, version, extent);
     setOwned({ key: readerKey, session, reader });
   }
   useEffect(
@@ -161,9 +172,15 @@ function createHistoryReader(
   session: ConversationSession | undefined,
   around: string | undefined,
   version: HistoryVersion | undefined,
+  extent: { older: number; newer: number },
 ) {
   let lifetime: AbortController | undefined;
   let window: HistoryWindow | undefined;
+  const directions = new Map<HistoryCursor, 'older' | 'newer'>();
+  const remember = (page: HistoryPage) => {
+    if (page.older) directions.set(page.older, 'older');
+    if (page.newer) directions.set(page.newer, 'newer');
+  };
   return {
     async read(cursor: HistoryCursor | undefined, caller: AbortSignal) {
       caller.throwIfAborted();
@@ -188,11 +205,31 @@ function createHistoryReader(
         }
         window?.dispose();
         window = opened;
-        return { page: opened.initial, version };
+        // Rebuild the loaded depth with the new window's cursors, never the expired ones.
+        const page = { ...opened.initial };
+        const items = [page.items];
+        for (const direction of ['older', 'newer'] as const) {
+          const requested = extent[direction];
+          let loaded = 0;
+          while (loaded < requested && page[direction]) {
+            const next = await opened.read(page[direction]!, signal);
+            signal.throwIfAborted();
+            if (direction === 'older') items.unshift(next.items);
+            else items.push(next.items);
+            page[direction] = next[direction];
+            loaded++;
+          }
+        }
+        page.items = items.flat();
+        remember(page);
+        return { page, version };
       }
       if (!window) throw new Error('History window is not open');
       const page = await window.read(cursor, signal);
       signal.throwIfAborted();
+      const direction = directions.get(cursor);
+      if (direction) extent[direction]++;
+      remember(page);
       return { page, version };
     },
     dispose() {

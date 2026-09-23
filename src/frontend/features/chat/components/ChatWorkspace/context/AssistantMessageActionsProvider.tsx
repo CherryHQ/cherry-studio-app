@@ -23,6 +23,8 @@ import type {
 import { conversationHref, conversationShareHref } from '@/frontend/appShell/navigation/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
+
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
 /** Matches the Session title column, which the fork input also caps at 255. */
 const SESSION_TITLE_MAX_LENGTH = 255;
@@ -106,7 +108,14 @@ export function AssistantMessageActionsProvider({
       if (current.current !== session) return;
       if (outcome.state === 'applied') applied?.(outcome.value);
       else if (outcome.state === 'rejected' || outcome.state === 'interrupted')
-        toast.show({ label: t(`chat.messageActions.${errorLabel}`), variant: 'danger' });
+        toast.show({
+          label: t(
+            (outcome.state === 'rejected' &&
+              getSendErrorCodeLabelKey(outcome.failure.detail?.code)) ||
+              `chat.messageActions.${errorLabel}`,
+          ),
+          variant: 'danger',
+        });
     } catch (error) {
       logger.error('Conversation message action failed', error as Error);
       if (current.current === session)

@@ -26,6 +26,7 @@ export type RemoteCommand = Readonly<{
     | 'interrupted'
     | 'failed';
   error?: string;
+  errorMessage?: string;
 }>;
 export type RemoteStartOperation = Readonly<{
   id: string;
@@ -37,6 +38,7 @@ export type RemoteStartOperation = Readonly<{
   status: 'pending' | 'applied' | 'rejected' | 'interrupted';
   sessionId?: string;
   error?: string;
+  errorMessage?: string;
 }>;
 
 export type RemoteSourceState = Readonly<{

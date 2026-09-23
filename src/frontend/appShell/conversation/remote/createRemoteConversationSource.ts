@@ -65,7 +65,10 @@ export function createRemoteConversationSource(
         value: { conversation: { source: ref, sessionId: start.sessionId } },
       };
     if (start.status === 'rejected')
-      return { state: 'rejected', failure: remoteConversationFailure({ code: start.error }) };
+      return {
+        state: 'rejected',
+        failure: remoteConversationFailure({ code: start.error, detail: start.errorMessage }),
+      };
     if (start.status === 'interrupted') return { state: 'interrupted', operationId };
     return { state: 'pending', operationId };
   }
@@ -83,7 +86,14 @@ export function createRemoteConversationSource(
           draftId: start.draftId as DraftId,
           ...(start.sessionId ? { conversation: { source: ref, sessionId: start.sessionId } } : {}),
           input: { parts: [{ type: 'text', text: start.text }] },
-          ...(start.error ? { failure: remoteConversationFailure({ code: start.error }) } : {}),
+          ...(start.error
+            ? {
+                failure: remoteConversationFailure({
+                  code: start.error,
+                  detail: start.errorMessage,
+                }),
+              }
+            : {}),
           ...(start.status === 'pending'
             ? {
                 recovery: {

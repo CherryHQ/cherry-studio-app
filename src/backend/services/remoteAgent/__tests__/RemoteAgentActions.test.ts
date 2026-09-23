@@ -74,6 +74,7 @@ it.each(['interrupted', 'rejected'])('does not retry terminal %s receipts', asyn
     status: status === 'rejected' ? 'failed' : 'interrupted',
     text: 'restore this draft',
     error: 'CONFLICT',
+    errorMessage: 'changed',
   });
   await actions.retry(action.id);
   expect(request).toHaveBeenCalledTimes(1);
@@ -318,5 +319,75 @@ it('retains system workspace selection and create command identity through a los
     status: 'applied',
     sessionId: 's',
     workspace: { kind: 'system' },
+  });
+});
+
+// A rejection must keep the desktop explanation after reconnect and process restart.
+it('retains command rejection details in the journal and recovered snapshots', async () => {
+  const { port } = journal();
+  const request = jest.fn(async (_method: string, body: any) =>
+    receipt(body.commandId, 'rejected', {
+      error: { reason: 'TARGET_UNAVAILABLE', message: 'Agent has no model configured' },
+    }),
+  );
+  const original = new RemoteAgentActions('pc:grant', port, request, () => {});
+  const action = await original.create('send', method, params);
+  original.stop();
+  const restored = new RemoteAgentActions('pc:grant', port, request, () => {});
+  expect(restored.get()).toEqual([
+    expect.objectContaining({
+      id: action.id,
+      status: 'failed',
+      error: 'TARGET_UNAVAILABLE',
+      errorMessage: 'Agent has no model configured',
+    }),
+  ]);
+  await restored.retry(action.id);
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
+it('retains RPC rejection details for sends that never returned a command receipt', async () => {
+  const { port } = journal();
+  const request = jest
+    .fn()
+    .mockRejectedValue(
+      new RemoteAgentError('TARGET_UNAVAILABLE', false, 'Agent has no model configured'),
+    );
+  const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  expect(await actions.create('send', method, params)).toMatchObject({
+    status: 'failed',
+    errorMessage: 'Agent has no model configured',
+  });
+});
+
+it('recovers first-send diagnostics from an older journal receipt', async () => {
+  const { port, storage } = journal();
+  const request = jest.fn(async (name: string, body: any) => {
+    if (name === 'agent.sessions.get') return sessionResult('s');
+    return {
+      ...receipt(
+        body.commandId,
+        name === method ? 'rejected' : 'applied',
+        name === method
+          ? { error: { reason: 'TARGET_UNAVAILABLE', message: 'Agent has no model configured' } }
+          : {},
+      ),
+      method: name,
+    };
+  });
+  const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  expect(await actions.start(startInput)).toMatchObject({
+    status: 'rejected',
+    errorMessage: 'Agent has no model configured',
+  });
+  actions.stop();
+  const saved = JSON.parse(storage.read('pc:grant')!);
+  for (const start of saved.starts) delete start.errorMessage;
+  for (const entry of saved.records) delete entry.action.errorMessage;
+  storage.write('pc:grant', JSON.stringify(saved));
+  const restored = new RemoteAgentActions('pc:grant', port, request, () => {});
+  expect(restored.getStarts()[0]).toMatchObject({
+    status: 'rejected',
+    errorMessage: 'Agent has no model configured',
   });
 });

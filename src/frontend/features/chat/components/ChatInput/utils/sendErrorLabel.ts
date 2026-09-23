@@ -24,5 +24,11 @@ export function getSendErrorLabelKey(error: unknown): string | undefined {
   if (!(error instanceof AgentProtocolError)) {
     return undefined;
   }
-  return SEND_ERROR_LABEL_KEYS[error.view.code];
+  return getSendErrorCodeLabelKey(error.view.code);
+}
+
+export function getSendErrorCodeLabelKey(code: string | undefined): string | undefined {
+  return code && Object.hasOwn(SEND_ERROR_LABEL_KEYS, code)
+    ? SEND_ERROR_LABEL_KEYS[code as AgentErrorView['code']]
+    : undefined;
 }
