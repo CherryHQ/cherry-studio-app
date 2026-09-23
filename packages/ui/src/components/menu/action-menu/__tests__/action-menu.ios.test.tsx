@@ -64,6 +64,7 @@ describe('ActionMenu', () => {
         checked: 'off',
         destructive: false,
         disabled: false,
+        group: '',
         icon: 'none',
         id: 'edit',
         label: 'Edit',
@@ -72,6 +73,7 @@ describe('ActionMenu', () => {
         checked: 'on',
         destructive: true,
         disabled: true,
+        group: '',
         icon: 'none',
         id: 'delete',
         label: 'Delete',
@@ -81,6 +83,40 @@ describe('ActionMenu', () => {
     act(() => menu.props.onAction('delete'));
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it('preserves section groups and dispatches actions by id rather than group', () => {
+    const onCopy = jest.fn();
+    const onShare = jest.fn();
+    const onDelete = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <ActionMenu
+          items={[
+            { group: 'content', id: 'copy', label: 'Copy', onPress: onCopy },
+            { group: 'content', id: 'share', label: 'Share', onPress: onShare },
+            { group: 'manage', id: 'delete', label: 'Delete', onPress: onDelete },
+          ]}
+        >
+          <Text>Open</Text>
+        </ActionMenu>,
+      );
+    });
+
+    const menu = renderer!.root.findByProps({ mockComponent: 'native-menu' });
+    expect(
+      menu.props.items.map(({ group, id }: { group: string; id: string }) => ({ group, id })),
+    ).toEqual([
+      { group: 'content', id: 'copy' },
+      { group: 'content', id: 'share' },
+      { group: 'manage', id: 'delete' },
+    ]);
+
+    act(() => menu.props.onAction('share'));
+    expect(onShare).toHaveBeenCalledTimes(1);
+    expect(onCopy).not.toHaveBeenCalled();
+    expect(onDelete).not.toHaveBeenCalled();
   });
 
   it('uses none for regular actions and ignores unknown native ids', () => {
