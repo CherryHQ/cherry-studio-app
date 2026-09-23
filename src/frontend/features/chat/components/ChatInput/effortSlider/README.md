@@ -35,9 +35,24 @@ model renders 5–6 detents.
   The progress pill uses `primary`; the thumb and translucent dots use its
   paired `primary-foreground`.
 
+## Motion
+
+- **Gauge morph** — tapping the gauge morphs its frame into the slider capsule
+  over 150 ms; dismissing reverses it over 250 ms, both on `easing.settle`. The
+  track stays at its resting size inside the morphing clip, so the morph crops
+  it instead of re-laying it out each frame, and the track is visible only over
+  the second half of the progress: it fades out early when closing and in late
+  when opening.
+- **Effort label** — the label above the track shows only the effort level and
+  appears settled when the overlay opens. Each level change rotates it with
+  `TextAnimation.Rotating`: raising the level brings the new label in from
+  below, lowering it brings the new label in from above, so the direction
+  reports the change. A reversal mid-change continues from the current position.
+
 ## Theming & accessibility
 
-Reduced motion skips programmatic thumb animation. The slider remains an
+Reduced motion skips programmatic thumb animation, the gauge morph, and the
+label rotation; the slider and label change in place. The slider remains an
 `adjustable` accessibility element with increment/decrement actions and a
 localized current-value label.
 
