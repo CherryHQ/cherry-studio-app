@@ -6,6 +6,7 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { UpdateAgentSchema } from '@/shared/data/api/schemas/agents';
 import { AgentIdSchema } from '@/shared/data/types/agent';
 import { DEFAULT_DISABLED_AGENT_CAPABILITIES } from '@/shared/data/types/agentCapability';
+import { UNIQUE_MODEL_ID_SEPARATOR, UniqueModelIdSchema } from '@/shared/data/types/model';
 
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
@@ -16,9 +17,14 @@ const targetSchema = z
   .describe(
     'An exact id returned by agent_list/agent_get, or current for the Agent in this conversation.',
   );
+// `UniqueModelIdSchema` is a zod custom type, which JSON Schema cannot represent.
+const modelIdSchema = z
+  .templateLiteral([z.string().min(1), UNIQUE_MODEL_ID_SEPARATOR, z.string().min(1)])
+  .refine((value) => UniqueModelIdSchema.safeParse(value).success, 'Invalid model id');
 const fields = UpdateAgentSchema.extend({
   name: z.string().trim().min(1).max(255).optional(),
   instructions: z.string().max(64_000).optional(),
+  modelId: modelIdSchema.nullable().optional(),
 });
 const createSchema = fields.required({ name: true, instructions: true });
 const getSchema = z.strictObject({ agent_id: targetSchema });
