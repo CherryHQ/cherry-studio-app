@@ -18,7 +18,10 @@ import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgr
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
-import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import type {
+  DesktopConnectionManager,
+  DesktopConnectionRuntime,
+} from '@/backend/services/desktopConnections';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
@@ -98,6 +101,9 @@ export function createAppBootstrapRuntime(
   const ai = host.container.get<AiService>('AiService');
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
+  const desktopConnectionManager = host.container.get<DesktopConnectionManager>(
+    'DesktopConnectionManager',
+  );
   const desktopConnections = host.container.get<DesktopConnectionRuntime>(
     'DesktopConnectionRuntime',
   );
@@ -122,6 +128,7 @@ export function createAppBootstrapRuntime(
     dbService,
     documentExport,
     desktopConnections,
+    desktopConnectionManager,
     languageServing,
     providerRegistryUpdater,
   });
@@ -137,6 +144,7 @@ export function createAppBootstrapRuntime(
       aiUsageRecords: services.aiUsageRecord,
       contentSearch: services.contentSearch,
       desktopConnections: services.desktopConnection,
+      desktopConnectionEndpointsChanged: (id) => desktopConnectionManager.refreshEndpoints(id),
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,

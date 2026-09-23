@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 type MigrationJournal = {
-  entries: { tag: string }[];
+  entries: { idx: number; tag: string }[];
 };
 
 describe('bundled SQLite migrations', () => {
@@ -126,8 +126,8 @@ describe('bundled SQLite migrations', () => {
     const journal = readMigrationJournal();
     const bundleSource = readFileSync(`${process.cwd()}/src/backend/data/db/migrations.ts`, 'utf8');
 
-    for (const [index, { tag }] of journal.entries.entries()) {
-      const moduleName = `m${index.toString().padStart(4, '0')}`;
+    for (const { idx, tag } of journal.entries) {
+      const moduleName = `m${idx.toString().padStart(4, '0')}`;
       expect(bundleSource).toContain(
         `import ${moduleName} from '../../../../migrations/sqlite-drizzle/${tag}.sql';`,
       );
@@ -198,13 +198,12 @@ describe('bundled SQLite migrations', () => {
         'name',
         'device_id',
         'desktop_identity',
-        'addresses',
-        'port',
         'grants',
         'status',
         'last_fetched_at',
         'created_at',
         'updated_at',
+        'configured_endpoints',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'scope',

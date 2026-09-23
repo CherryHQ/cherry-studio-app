@@ -5,6 +5,13 @@ access, commands, lifecycle) are still the plan below. The desktop side is imple
 Studio PR #20717 (`zhangjiadi225/lan-agent-remote-design`). This document supersedes the HTTP
 pairing that `main` shipped and the snapshot-based prototype in mobile PR #997.
 
+## Connection foundation ownership
+
+PR #1055 owns `DesktopConnectionManager`, domain leases, authorization invalidation notifications,
+foreground lifecycle, endpoint resolution, native discovery, pairing and provider sync.
+Agent subscriptions, read caches, commands and projection persistence remain in PR #997.
+See [Desktop location and stable pairing](./connectivity.md) for the discovery and address migration contract.
+
 ## What exists and what is replaced
 
 | Today | Replacement |

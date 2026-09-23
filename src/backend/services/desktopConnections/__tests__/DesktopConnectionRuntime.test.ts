@@ -1,11 +1,23 @@
 import type { RemoteAuthorization } from '@cherrystudio/remote-protocol';
+import { AppState } from 'react-native';
 
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 
+import { DesktopConnectionManager } from '../DesktopConnectionManager';
 import { DesktopConnectionRuntime } from '../DesktopConnectionRuntime';
 import { DesktopSession, DesktopUnreachableError, RemoteFailureError } from '../DesktopSession';
+import { openWebSocketStream } from '../remoteSocket';
 
 jest.mock('@cherrystudio/remote-transport', () => ({}));
+jest.mock('../remoteSocket', () => ({ openWebSocketStream: jest.fn() }));
+jest.mock('../desktopDiscovery', () => ({
+  DesktopDiscovery: class {
+    setActive() {}
+    browse() {
+      return () => {};
+    }
+  },
+}));
 jest.mock('../deviceIdentity', () => ({
   loadDeviceIdentity: jest.fn(async () => new Uint8Array(32)),
 }));
@@ -21,6 +33,7 @@ const row = {
   name: 'Desktop',
   deviceId: 'device-1',
   desktopIdentity: '12D3KooWDesktop',
+  configuredEndpoints: [{ host: '192.168.1.2', port: 23333, security: 'ws' as const }],
   addresses: ['192.168.1.2'],
   port: 23333,
   grants,
@@ -30,6 +43,7 @@ const row = {
   updatedAt: 1,
 };
 const connection = {
+  configuredEndpoints: [],
   id,
   name: 'Desktop',
   status: 'paired' as const,
@@ -80,8 +94,13 @@ function createStore() {
 
 /** Scripted desktop: answers each method from a table, exposes the request log. */
 function createSession(handlers: Record<string, (params: any) => unknown>) {
+  const closed = deferred<void>();
   const session = {
+    isOpen: true,
+    done: closed.promise,
+    currentAuthorization: { grants },
     address: '192.168.1.2',
+    onAuthorization: jest.fn(() => () => undefined),
     calls: [] as { method: string; params: unknown }[],
     request: jest.fn(async (method: string, params: unknown) => {
       session.calls.push({ method, params });
@@ -93,9 +112,13 @@ function createSession(handlers: Record<string, (params: any) => unknown>) {
       const result = (await handlers['connection.authenticate']?.({})) as {
         authorization: { grants: typeof grants };
       };
+      session.currentAuthorization = result.authorization;
       return result.authorization;
     }),
-    close: jest.fn(),
+    close: jest.fn(() => {
+      session.isOpen = false;
+      closed.resolve();
+    }),
   };
   return session;
 }
@@ -136,22 +159,40 @@ function exportHandlers(payload: unknown) {
 
 describe('DesktopConnectionRuntime', () => {
   let runtime: DesktopConnectionRuntime;
+  let manager: DesktopConnectionManager;
   let store: ReturnType<typeof createStore>;
   let ensureModelRegistryReady: jest.Mock<Promise<void>, []>;
   const connect = jest.mocked(DesktopSession.connect);
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    jest.mocked(openWebSocketStream).mockImplementation(async () => ({ abort() {} }) as never);
+    AppState.currentState = 'active';
+    jest.mocked(AppState.addEventListener).mockReturnValue({ remove: jest.fn() });
     store = createStore();
     runtime = new DesktopConnectionRuntime();
     ensureModelRegistryReady = jest.fn(async () => undefined);
-    runtime.configure(store, ensureModelRegistryReady);
+    manager = new DesktopConnectionManager();
+    manager.configure(store);
+    await manager._doInit();
+    runtime.configure(store, ensureModelRegistryReady, manager);
     await runtime._doInit();
   });
 
   afterEach(async () => {
     await runtime._doStop();
     await runtime._doDestroy();
+    await manager._doStop();
+    await manager._doDestroy();
+  });
+
+  it('retires connection consumers only after removal succeeds', async () => {
+    const invalidate = jest.spyOn(manager, 'invalidate');
+    store.remove.mockRejectedValueOnce(new Error('database busy'));
+    await expect(runtime.remove(id, signal())).rejects.toThrow('database busy');
+    expect(invalidate).not.toHaveBeenCalled();
+    await runtime.remove(id, signal());
+    expect(invalidate).toHaveBeenCalledWith(id, 'removed');
   });
 
   it('claims the invitation, reports the verification code, then stores the approved grants', async () => {
@@ -175,9 +216,11 @@ describe('DesktopConnectionRuntime', () => {
     });
     connect.mockResolvedValue(session as never);
     const onClaim = jest.fn();
+    const invalidate = jest.spyOn(manager, 'invalidate');
 
     await expect(runtime.pair(pairing, signal(), onClaim)).resolves.toEqual(connection);
 
+    expect(invalidate).toHaveBeenCalledWith(id);
     expect(onClaim).toHaveBeenCalledWith({
       verificationCode: '123456',
       expiresAt: '2026-09-22T00:02:00.000Z',
@@ -192,8 +235,6 @@ describe('DesktopConnectionRuntime', () => {
         name: 'Desktop',
         deviceId: 'device-1',
         desktopIdentity: '12D3KooWDesktop',
-        addresses: ['192.168.1.2'],
-        port: 23333,
         grants,
       },
       true,
@@ -261,6 +302,7 @@ describe('DesktopConnectionRuntime', () => {
       id,
       { grants, status: 'paired' },
       expect.any(AbortSignal),
+      row,
     );
     expect(store.preview).toHaveBeenCalledWith({
       version: 1,
@@ -268,10 +310,11 @@ describe('DesktopConnectionRuntime', () => {
     });
     expect(store.updateStatus).toHaveBeenLastCalledWith(
       id,
-      { lastFetchedAt: expect.any(Number), status: 'paired' },
+      { lastFetchedAt: expect.any(Number) },
       expect.any(AbortSignal),
+      row,
     );
-    expect(session.close).toHaveBeenCalled();
+    expect(session.close).not.toHaveBeenCalled();
   });
 
   it('rejects an export whose bytes do not match the announced digest', async () => {
@@ -297,10 +340,25 @@ describe('DesktopConnectionRuntime', () => {
     expect(connect).not.toHaveBeenCalled();
   });
 
+  it('updates only location hints for the same identity, and rejects another desktop QR', async () => {
+    await runtime.updateLocation(id, pairing, signal());
+    expect(store.savePair).not.toHaveBeenCalled();
+    expect(store.updateStatus).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+    await expect(
+      runtime.updateLocation(id, { ...pairing, desktopIdentity: 'anotherPeer' }, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'identity-mismatch' } });
+    expect(store.savePair).not.toHaveBeenCalled();
+    expect(row.grants).toEqual(grants);
+  });
+
   it('marks a revoked device for repair before returning the authorization failure', async () => {
     const session = createSession({});
     session.authenticate.mockRejectedValueOnce(
-      new RemoteFailureError({ reason: 'GRANT_REVOKED', message: 'Device authorization changed' }),
+      new RemoteFailureError({
+        reason: 'UNAUTHENTICATED',
+        message: 'Device authorization changed',
+      }),
     );
     connect.mockResolvedValue(session as never);
 
@@ -311,6 +369,7 @@ describe('DesktopConnectionRuntime', () => {
       id,
       { status: 'needs-repair' },
       expect.any(AbortSignal),
+      row,
     );
     expect(session.close).toHaveBeenCalled();
     expect(store.preview).not.toHaveBeenCalled();

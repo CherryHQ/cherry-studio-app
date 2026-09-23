@@ -12,7 +12,14 @@ export class RemoteFailureError extends Error {
 }
 
 export class DesktopUnreachableError extends Error {
-  constructor(readonly attempts: string[]) {
+  constructor(
+    readonly attempts: string[],
+    readonly reason:
+      | 'unreachable'
+      | 'no-location'
+      | 'discovery-unavailable'
+      | 'unsupported-version' = 'unreachable',
+  ) {
     super(`Could not connect to the desktop (${attempts.join('; ') || 'no address'})`);
     this.name = 'DesktopUnreachableError';
   }

@@ -60,8 +60,7 @@ describe('DesktopConnectionService provider synchronization', () => {
         name: 'Desktop',
         deviceId: 'device-1',
         desktopIdentity: '12D3KooWDesktop',
-        addresses: ['192.168.1.2'],
-        port: 23333,
+
         grants: [{ domain: 'configuration', grantId: 'grant-1' }],
       },
       false,

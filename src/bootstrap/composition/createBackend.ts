@@ -21,7 +21,10 @@ import {
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
-import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import type {
+  DesktopConnectionManager,
+  DesktopConnectionRuntime,
+} from '@/backend/services/desktopConnections';
 import {
   createDocumentExportDependencies,
   type DocumentExportRuntime,
@@ -66,6 +69,7 @@ export function createBackend(
     dbService: DbService;
     documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
+    desktopConnectionManager: DesktopConnectionManager;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
   },
@@ -74,8 +78,12 @@ export function createBackend(
   // Capture this host's database; late work never resolves a replacement host.
   const exportFiles = new FileEntryService(dbService);
   infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
-  infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService), () =>
-    infrastructure.providerRegistryUpdater.ensureReady(),
+  const desktopStore = new DesktopConnectionService(dbService);
+  infrastructure.desktopConnectionManager.configure(desktopStore);
+  infrastructure.desktopConnections.configure(
+    desktopStore,
+    () => infrastructure.providerRegistryUpdater.ensureReady(),
+    infrastructure.desktopConnectionManager,
   );
   const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(
     infrastructure.languageServing,

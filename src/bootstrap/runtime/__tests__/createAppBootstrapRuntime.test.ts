@@ -15,6 +15,10 @@ const mockTraces = { kind: 'traces' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
 const mockDocumentExport = { kind: 'document-export' };
+const mockDesktopConnectionManager = {
+  kind: 'desktop-connection-manager',
+  refreshEndpoints: jest.fn(),
+};
 const mockDesktopConnections = { kind: 'desktop-connections' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
@@ -99,6 +103,7 @@ const createRuntime = () =>
     CacheService: mockCache,
     DbService: mockDb,
     DesktopConnectionRuntime: mockDesktopConnections,
+    DesktopConnectionManager: mockDesktopConnectionManager,
     DocumentExportRuntime: mockDocumentExport,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
@@ -149,6 +154,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
+      desktopConnectionManager: mockDesktopConnectionManager,
       documentExport: mockDocumentExport,
       languageServing: mockAgentRuntime,
       providerRegistryUpdater: mockProviderRegistryUpdater,

@@ -1,5 +1,6 @@
 import m0000 from '../../../../migrations/sqlite-drizzle/0000_initial.sql';
 import m0001 from '../../../../migrations/sqlite-drizzle/0001_hot_cammi.sql';
+import m0003 from '../../../../migrations/sqlite-drizzle/0003_ordinary_trish_tilby.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -12,5 +13,6 @@ export const migrations = {
   migrations: {
     m0000,
     m0001,
+    m0003,
   },
 };

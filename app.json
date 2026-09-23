@@ -83,7 +83,7 @@
         "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant.",
         "NSHealthUpdateUsageDescription": "Cherry Studio reads selected Apple Health data to answer your health and fitness questions. It does not save or modify data in Apple Health.",
         "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to the Cherry Studio desktop app, AI providers, and MCP servers on your local network.",
-        "NSBonjourServices": ["_cherrystudio-api._tcp"],
+        "NSBonjourServices": ["_cherry-remote._tcp"],
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },

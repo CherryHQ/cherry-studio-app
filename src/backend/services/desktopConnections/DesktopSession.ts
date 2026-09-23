@@ -8,17 +8,15 @@ import {
 } from '@cherrystudio/remote-protocol';
 import { configurationMethods } from '@cherrystudio/remote-protocol/configuration';
 import type { SecureChannel } from '@cherrystudio/remote-transport';
-import { loggerService } from '@logger';
+import type { MessageStream } from '@libp2p/interface';
 import { JSONRPCClient, JSONRPCErrorException } from 'json-rpc-2.0';
 import type * as z from 'zod';
 
 import { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
-import { openWebSocketStream, remoteUrl } from './remoteSocket';
 import { transportLogger } from './transportLogger';
 
 export { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
 
-const logger = loggerService.withContext('DesktopSession');
 const PROTOCOL_VERSIONS = [1];
 const REFRESH_MARGIN_MS = 60_000;
 
@@ -32,16 +30,13 @@ export type DesktopParams<M extends DesktopMethod> = z.input<(typeof desktopMeth
 export type DesktopResult<M extends DesktopMethod> = z.output<(typeof desktopMethods)[M]['result']>;
 export type DesktopNotification = { method: string; params?: unknown };
 
-export type DialChannel = (url: string, signal: AbortSignal) => Promise<SecureChannel>;
-
 export interface DesktopSessionOptions {
-  addresses: string[];
-  port: number;
+  stream: MessageStream;
+  secure?: typeof import('@cherrystudio/remote-transport').connectSecureChannel;
+  address: string;
   desktopIdentity: string;
   identity: Uint8Array;
   signal: AbortSignal;
-  /** Test seam; production dials the desktop's WebSocket upgrade. */
-  dial?: DialChannel;
 }
 
 function isNotification(value: unknown): value is DesktopNotification {
@@ -64,60 +59,43 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
   });
 }
 
-async function dialWebSocket(
-  identity: Uint8Array,
-  desktopIdentity: string,
-  url: string,
-  signal: AbortSignal,
-): Promise<SecureChannel> {
-  const { connectSecureChannel } = await import('@cherrystudio/remote-transport');
-  const stream = await openWebSocketStream(url, signal);
-  return connectSecureChannel(stream, {
-    identity,
-    logger: transportLogger,
-    protocolVersions: PROTOCOL_VERSIONS,
-    remoteIdentity: desktopIdentity,
-    signal,
-  });
-}
-
-/** One encrypted JSON-RPC connection to a desktop: request/response, notifications, heartbeat, token refresh. */
+/** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
-    const dial: DialChannel =
-      options.dial ??
-      ((url, signal) => dialWebSocket(options.identity, options.desktopIdentity, url, signal));
-    const failures: string[] = [];
-    for (const address of options.addresses) {
+    let session: DesktopSession | undefined;
+    try {
+      const connectSecureChannel =
+        options.secure ?? (await import('@cherrystudio/remote-transport')).connectSecureChannel;
+      const channel = await connectSecureChannel(options.stream, {
+        identity: options.identity,
+        remoteIdentity: options.desktopIdentity,
+        logger: transportLogger,
+        protocolVersions: PROTOCOL_VERSIONS,
+        signal: options.signal,
+      });
+      session = new DesktopSession(channel, options.address);
+      await session.request(
+        'connection.hello',
+        { protocolVersions: PROTOCOL_VERSIONS },
+        options.signal,
+      );
       options.signal.throwIfAborted();
-      let channel: SecureChannel | undefined;
-      try {
-        channel = await dial(remoteUrl(address, options.port), options.signal);
-        const session = new DesktopSession(channel, address);
-        await session.request(
-          'connection.hello',
-          { protocolVersions: PROTOCOL_VERSIONS },
-          options.signal,
-        );
-        return session;
-      } catch (error) {
-        options.signal.throwIfAborted();
-        channel?.abort(error instanceof Error ? error : new Error('Handshake failed'));
-        if (error instanceof RemoteFailureError) throw error;
-        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-        logger.warn('Desktop address failed', { address, channel: Boolean(channel), message });
-        failures.push(`${address}: ${message}`);
-      }
+      return session;
+    } catch (error) {
+      session?.close();
+      options.stream.abort(error instanceof Error ? error : new Error('Handshake failed'));
+      throw error;
     }
-    throw new DesktopUnreachableError(failures);
   }
 
   private readonly client: JSONRPCClient;
   private readonly listeners = new Set<(notification: DesktopNotification) => void>();
   private authorization: RemoteAuthorization | undefined;
+  private readonly authorizationListeners = new Set<(authorization: RemoteAuthorization) => void>();
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly heartbeat: ReturnType<typeof setInterval>;
   private closed = false;
+  private inFlight = 0;
   readonly done: Promise<void>;
 
   constructor(
@@ -126,7 +104,7 @@ export class DesktopSession {
   ) {
     this.client = new JSONRPCClient((request) => this.channel.write(request));
     this.heartbeat = setInterval(() => {
-      void this.request('connection.ping', { nonce: String(Date.now()) }).catch(() => undefined);
+      void this.request('connection.ping', { nonce: String(Date.now()) }).catch(() => this.close());
     }, remoteLimits.heartbeatMs);
     this.done = this.pump();
   }
@@ -145,7 +123,11 @@ export class DesktopSession {
     signal?: AbortSignal,
   ): Promise<DesktopResult<M>> {
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
+    signal?.throwIfAborted();
+    if (this.inFlight >= remoteLimits.inFlightRequests)
+      throw new RemoteFailureError({ reason: 'RESOURCE_EXHAUSTED', message: 'Too many requests' });
     const schema = desktopMethods[method];
+    this.inFlight++;
     try {
       const result = await withAbort(
         Promise.resolve(
@@ -162,6 +144,8 @@ export class DesktopSession {
         );
       }
       throw error;
+    } finally {
+      this.inFlight--;
     }
   }
 
@@ -177,9 +161,15 @@ export class DesktopSession {
     return () => this.listeners.delete(listener);
   }
 
+  onAuthorization(listener: (authorization: RemoteAuthorization) => void): () => void {
+    this.authorizationListeners.add(listener);
+    return () => this.authorizationListeners.delete(listener);
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.client.rejectAllPendingRequests('Connection closed');
     clearInterval(this.heartbeat);
     clearTimeout(this.refreshTimer);
     void this.channel.close().catch(() => undefined);
@@ -187,12 +177,13 @@ export class DesktopSession {
 
   private adopt(authorization: RemoteAuthorization, expiresAt: string): void {
     this.authorization = authorization;
+    for (const listener of this.authorizationListeners) listener(authorization);
     clearTimeout(this.refreshTimer);
     const delay = Math.max(1_000, Date.parse(expiresAt) - Date.now() - REFRESH_MARGIN_MS);
     this.refreshTimer = setTimeout(() => {
       void this.request('connection.refresh', {})
         .then((result) => this.adopt(result.authorization, result.expiresAt))
-        .catch(() => undefined);
+        .catch(() => this.close());
     }, delay);
   }
 
@@ -202,6 +193,7 @@ export class DesktopSession {
         const message = await this.channel.read();
         if (isNotification(message)) {
           for (const listener of this.listeners) listener(message);
+          if (message.method === 'connection.closed') this.close();
         } else {
           this.client.receive(message as never);
         }
@@ -212,6 +204,7 @@ export class DesktopSession {
       this.close();
       this.client.rejectAllPendingRequests('Connection closed');
       this.listeners.clear();
+      this.authorizationListeners.clear();
     }
   }
 }

@@ -23,8 +23,9 @@ import { useScannerPermissions } from './useScannerPermissions';
 export function DeviceConnectionScannerScreen({
   setupIntent,
 }: { setupIntent?: FirstUseSetupIntent } = {}) {
-  const params = useLocalSearchParams<{ connectionId?: string | string[] }>();
+  const params = useLocalSearchParams<{ connectionId?: string | string[]; purpose?: string }>();
   const connectionId = getSingleRouteParam(params.connectionId);
+  const updatingLocation = params.purpose === 'location' && Boolean(connectionId);
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
@@ -36,7 +37,7 @@ export function DeviceConnectionScannerScreen({
   const [claim, setClaim] = useState<DesktopPairingClaim>();
   const scanInFlight = useRef(false);
   const mounted = useRef(false);
-  const { isPairing, pair } = useDesktopConnectionActions();
+  const { isPairing, pair, updateLocation } = useDesktopConnectionActions();
   const isReady = isActive && !isPreparing;
   const showCamera = !isPreparing && !scanError && !claim && camera?.state === 'granted';
 
@@ -63,6 +64,15 @@ export function DeviceConnectionScannerScreen({
   const submit = useCallback(
     async (qr: DesktopPairingQr) => {
       try {
+        if (updatingLocation && connectionId) {
+          const updated = await updateLocation(connectionId, qr);
+          if (updated && mounted.current)
+            router.replace({
+              params: { connectionId },
+              pathname: '/settings/device-connections/[connectionId]',
+            });
+          return;
+        }
         // The desktop user decides which of the requested capabilities this device gets.
         const connection = await pair(
           {
@@ -105,7 +115,7 @@ export function DeviceConnectionScannerScreen({
         }
       }
     },
-    [connectionId, pair, router, setupIntent, t],
+    [connectionId, pair, router, setupIntent, t, updatingLocation, updateLocation],
   );
 
   const parseAndSubmit = useCallback(
@@ -130,10 +140,20 @@ export function DeviceConnectionScannerScreen({
 
   return (
     <View className="flex-1 bg-grouped-background">
-      <RouteHeader title={t('settings.deviceConnections.scan.title')} />
+      <RouteHeader
+        title={t(
+          updatingLocation
+            ? 'settings.deviceConnections.location.scan'
+            : 'settings.deviceConnections.scan.title',
+        )}
+      />
       <View className="px-4 pt-3 pb-4">
         <Text className="text-sm text-muted-foreground">
-          {t('settings.deviceConnections.scan.guidance')}
+          {t(
+            updatingLocation
+              ? 'settings.deviceConnections.location.scanHelp'
+              : 'settings.deviceConnections.scan.guidance',
+          )}
         </Text>
       </View>
       <View
@@ -232,7 +252,11 @@ export function DeviceConnectionScannerScreen({
           loading={isPairing}
           onPress={() => parseAndSubmit(manualValue.trim())}
         >
-          {t('settings.deviceConnections.scan.pair')}
+          {t(
+            updatingLocation
+              ? 'settings.deviceConnections.location.scan'
+              : 'settings.deviceConnections.scan.pair',
+          )}
         </Button>
       </View>
     </View>
