@@ -12,6 +12,13 @@ Mobile #997 keeps #1055 as its stacked base. The approved conversation design re
 controller boundary as well as its transport; pairing and provider synchronization retain their
 product interfaces.
 
+## Connection foundation ownership
+
+PR #1055 owns `DesktopConnectionManager`, domain leases, authorization invalidation notifications,
+foreground lifecycle, endpoint resolution, native discovery, pairing and provider sync.
+Agent subscriptions, read caches, commands and projection persistence remain in PR #997.
+See [Desktop location and stable pairing](./connectivity.md) for the discovery and address migration contract.
+
 ## What exists and what is replaced
 
 | Today | Replacement |
@@ -240,3 +247,11 @@ an omitted catalog field from an older host remains unknown. Message names come 
 immutable snapshot and fall back to the recorded model ID, never the Agent's current configuration
 or the phone's provider catalog. Terminal events and checkpoints retain the same identity. Only
 public model ID, provider ID, and display name cross the boundary.
+
+## Upgrading from the connection foundation
+
+The connection foundation (#1055) can apply location migration 0003 without installing Agent
+projection migration 0002. Drizzle selects upgrades by timestamp, so #997 includes the later
+idempotent `0004_remote_projection_upgrade` to create the missing projection table. Original
+migration timestamps and existing projection data remain unchanged. The upgrade regression tests
+exercise the real SQLite migration dialect for foundation-only and existing Agent databases.

@@ -46,7 +46,7 @@ Initial pairing seeds QR hints under the saved connection ID before provider syn
 
 Migration `0003_ordinary_trish_tilby` adds `configured_endpoints` with an empty-array default and drops
 the obsolete `addresses` and `port` columns. It does not rebuild or delete desktop rows, avoiding
-SQLite foreign-key cascades into `remote_session_projection`. No old automatic route is promoted to
+SQLite foreign-key cascades into dependent tables (including Agent projections in the upper layer). No old automatic route is promoted to
 user configuration. Existing identities, grants, scope and persisted recovery records remain intact.
 
 ## Native module and release boundary
@@ -69,3 +69,11 @@ explicit addresses and a fresh location QR remain usable. Discovery, migration, 
 connection management must ship together. Native compilation and unit tests do not establish
 real-device permission, VPN, Wi-Fi-change or suspend/resume acceptance. Keychain authorization on
 the desktop is independent; this change never regenerates identities to avoid a prompt.
+
+The foundation migration keeps its original timestamp and tag `0003_ordinary_trish_tilby`; the absent
+`0002_daffy_nemesis` belongs to the Agent layer. The upper layer must provide a later idempotent
+projection creation migration for databases upgraded from this foundation after the location migration.
+
+The foundation keeps journal index 3 and bundle key `m0003` as well as the original tag and timestamp.
+Index 2 is reserved for the dependent Agent layer; Expo resolves keys by journal index, not array position.
+This also prevents future Drizzle generation from reusing index 3.
