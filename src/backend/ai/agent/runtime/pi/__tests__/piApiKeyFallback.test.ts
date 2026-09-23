@@ -107,6 +107,51 @@ describe('Pi API key failover', () => {
     expect(fallback).not.toHaveBeenCalled();
   });
 
+  test.each([
+    { status: '429' },
+    { code: 'rate_limit_exceeded' },
+    { body: { code: 429 } },
+    { body: { type: 'authentication_error' } },
+    { body: { code: 'invalid_api_key' } },
+    { body: { code: 'insufficient_quota' } },
+    { body: { error: { code: 429, status: 'RESOURCE_EXHAUSTED' } } },
+    { body: JSON.stringify({ error: { type: 'rate_limit_error' } }) },
+  ])('recognizes structured credential failures: %p', async ({ status, code, body }) => {
+    const failure = message();
+    failure.stopReason = 'error';
+    failure.diagnostics = [
+      {
+        type: 'provider_response_failure',
+        timestamp: 1,
+        error: { message: 'Provider failure', code },
+        details: { status, body },
+      },
+    ];
+    const result = await collect(
+      withPiApiKeyFallback(() => source(failure), [async () => () => source(message())]),
+    );
+
+    expect(result.result.stopReason).toBe('stop');
+    expect(result.events.map((event) => event.type)).toEqual(['start', 'done']);
+  });
+
+  test.each([
+    { body: { message: 'The prompt mentions 429 and rate_limit_error.' } },
+    { body: '{invalid JSON: 429}' },
+    { body: { type: 'overloaded_error' } },
+    { status: 403, body: { code: 'rate_limit_exceeded' } },
+  ])('does not infer key failures from unrelated errors: %p', async (details) => {
+    const failure = message();
+    failure.stopReason = 'error';
+    failure.diagnostics = [{ type: 'provider_response_failure', timestamp: 1, details }];
+    const fallback = jest.fn(async () => () => source(message()));
+
+    expect((await collect(withPiApiKeyFallback(() => source(failure), [fallback]))).result).toBe(
+      failure,
+    );
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
   test('does not infer HTTP status from an error message', async () => {
     const failure = message();
     failure.stopReason = 'error';
@@ -123,6 +168,10 @@ describe('Pi API key failover', () => {
     'preserves a partial %s response instead of replaying it with another key',
     async (kind) => {
       const failure = message(429);
+      if (kind === 'text') failure.content = [{ type: 'text', text: 'already generated' }];
+      if (kind === 'thinking') {
+        failure.content = [{ type: 'thinking', thinking: 'already generated' }];
+      }
       const event: AssistantMessageEvent = {
         type: `${kind}_start`,
         contentIndex: 0,
@@ -137,6 +186,82 @@ describe('Pi API key failover', () => {
       expect(fallback).not.toHaveBeenCalled();
     },
   );
+
+  test.each(['text', 'thinking'] as const)(
+    'discards empty %s blocks before switching keys',
+    async (kind) => {
+      const failure = message(429);
+      failure.content =
+        kind === 'text' ? [{ type: 'text', text: '' }] : [{ type: 'thinking', thinking: '' }];
+      const events: AssistantMessageEvent[] = [
+        { type: `${kind}_start`, contentIndex: 0, partial: failure },
+        { type: `${kind}_delta`, contentIndex: 0, delta: '', partial: failure },
+        { type: `${kind}_end`, contentIndex: 0, content: '', partial: failure },
+      ];
+      const result = await collect(
+        withPiApiKeyFallback(() => source(failure, events), [async () => () => source(message())]),
+      );
+
+      expect(result.result.stopReason).toBe('stop');
+      expect(result.events.map((event) => event.type)).toEqual(['start', 'done']);
+    },
+  );
+
+  test('flushes buffered events in order when real content commits the response', async () => {
+    const empty = message();
+    empty.content = [{ type: 'text', text: '' }];
+    const failure = message(429);
+    failure.content = [{ type: 'text', text: 'Hello' }];
+    const events: AssistantMessageEvent[] = [
+      { type: 'text_start', contentIndex: 0, partial: empty },
+      { type: 'text_delta', contentIndex: 0, delta: 'Hello', partial: failure },
+    ];
+    const fallback = jest.fn(async () => () => source(message()));
+    const result = await collect(withPiApiKeyFallback(() => source(failure, events), [fallback]));
+
+    expect(result.events.map((event) => event.type)).toEqual([
+      'start',
+      'text_start',
+      'text_delta',
+      'error',
+    ]);
+    expect(result.result.content).toEqual(failure.content);
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  test.each(['stop', 'error', 'aborted'] as const)(
+    'flushes buffered empty events on terminal %s when no switch occurs',
+    async (stopReason) => {
+      const terminal = { ...message(stopReason === 'error' ? 400 : undefined), stopReason };
+      terminal.content = [{ type: 'text', text: '' }];
+      const fallback = jest.fn(async () => () => source(message()));
+      const result = await collect(
+        withPiApiKeyFallback(
+          () => source(terminal, [{ type: 'text_start', contentIndex: 0, partial: terminal }]),
+          [fallback],
+        ),
+      );
+
+      expect(result.events.map((event) => event.type)).toEqual([
+        'start',
+        'text_start',
+        stopReason === 'stop' ? 'done' : 'error',
+      ]);
+      expect(result.result).toBe(terminal);
+      expect(fallback).not.toHaveBeenCalled();
+    },
+  );
+
+  test('preserves signed reasoning even when its visible text is empty', async () => {
+    const failure = message(429);
+    failure.content = [{ type: 'thinking', thinking: '', thinkingSignature: 'signed' }];
+    const fallback = jest.fn(async () => () => source(message()));
+
+    expect((await collect(withPiApiKeyFallback(() => source(failure), [fallback]))).result).toBe(
+      failure,
+    );
+    expect(fallback).not.toHaveBeenCalled();
+  });
 
   test('preserves content included only in the terminal error', async () => {
     const failure = message(401);
@@ -190,6 +315,16 @@ describe('Pi API key failover', () => {
   test('handles a thrown HTTP error before the provider creates its stream', async () => {
     const stream = withPiApiKeyFallback(() => {
       throw Object.assign(new Error('Unauthorized'), { status: 401 });
+    }, [async () => () => source(message())]);
+
+    expect((await collect(stream)).result.stopReason).toBe('stop');
+  });
+
+  test('retains structured failures thrown before a stream exists', async () => {
+    const stream = withPiApiKeyFallback(() => {
+      throw Object.assign(new Error('Rate limited'), {
+        error: { type: 'rate_limit_error' },
+      });
     }, [async () => () => source(message())]);
 
     expect((await collect(stream)).result.stopReason).toBe('stop');

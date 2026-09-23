@@ -130,7 +130,7 @@ patchedDependencies:
   '@ai-sdk/openai-compatible@2.0.72': e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480
   '@ai-sdk/openai@3.0.53': 9d370fa143fdb495dc3e197872be775853e61aa51fc2d3b3e1afd8279883e55c
   '@earendil-works/pi-agent-core@0.84.2': 0873830cdd533048c572dea15187da22b5b5103349b6482d4d943ede82e0be6c
-  '@earendil-works/pi-ai@0.84.2': 3dea01e0b5b34e21a801eda30c6571f85fbcd2503d108884a6b7f6a5fd548d05
+  '@earendil-works/pi-ai@0.84.2': e3b0ac31cdd162b019b44ac2d8df1d2f3be62ef5d216d6ded3a384a7188fbefc
   '@magrinj/expo-quick-look@0.3.1': 35520d77ed4612922b6a4ec70813738d976812225a1f806b1a40329e8adf6277
   '@openrouter/ai-sdk-provider@2.10.0': fe61d9ff590828fc0fd3f8b3b8b88a4a1b736a99b595a276c8df9e12c9498009
   '@opeoginni/github-copilot-openai-compatible@1.0.0': 4bea0e526136ed32d0be4849ec5cbb41bd5de7b7418dd6920598357438cfef25
@@ -249,7 +249,7 @@ importers:
         version: 0.84.2(patch_hash=0873830cdd533048c572dea15187da22b5b5103349b6482d4d943ede82e0be6c)(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-ai':
         specifier: 0.84.2
-        version: 0.84.2(patch_hash=3dea01e0b5b34e21a801eda30c6571f85fbcd2503d108884a6b7f6a5fd548d05)(ws@8.21.1)(zod@4.4.3)
+        version: 0.84.2(patch_hash=e3b0ac31cdd162b019b44ac2d8df1d2f3be62ef5d216d6ded3a384a7188fbefc)(ws@8.21.1)(zod@4.4.3)
       '@expo/dom-webview':
         specifier: ^57.0.1
         version: 57.0.1(expo@57.0.21)(react-native@0.86.3(patch_hash=5cff80f1c85ad62edb2c5da0f36ee87f0c095775bc36bd2bc3dec211184a6de6)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -11094,7 +11094,7 @@ snapshots:
 
   '@earendil-works/pi-agent-core@0.84.2(patch_hash=0873830cdd533048c572dea15187da22b5b5103349b6482d4d943ede82e0be6c)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
-      '@earendil-works/pi-ai': 0.84.2(patch_hash=3dea01e0b5b34e21a801eda30c6571f85fbcd2503d108884a6b7f6a5fd548d05)(ws@8.21.1)(zod@4.4.3)
+      '@earendil-works/pi-ai': 0.84.2(patch_hash=e3b0ac31cdd162b019b44ac2d8df1d2f3be62ef5d216d6ded3a384a7188fbefc)(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-telemetry': 0.84.2
       diff: 8.0.4
       ignore: 7.0.5
@@ -11108,7 +11108,7 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@0.84.2(patch_hash=3dea01e0b5b34e21a801eda30c6571f85fbcd2503d108884a6b7f6a5fd548d05)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-ai@0.84.2(patch_hash=e3b0ac31cdd162b019b44ac2d8df1d2f3be62ef5d216d6ded3a384a7188fbefc)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.91.1(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1048.0

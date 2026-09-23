@@ -1,5 +1,5 @@
 diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
-index 591beb84b1be68d77c920fa65a25af1267ce97c2..81fbca4e9009d042859938abcc36bee4deafcda5 100644
+index 591beb84b1be68d77c920fa65a25af1267ce97c2..eaf407db9d93e5e40e5acd95cb0c7c13919ee689 100644
 --- a/dist/api/anthropic-messages.js
 +++ b/dist/api/anthropic-messages.js
 @@ -1,6 +1,8 @@
@@ -12,7 +12,23 @@ index 591beb84b1be68d77c920fa65a25af1267ce97c2..81fbca4e9009d042859938abcc36bee4
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
  import { parseJsonWithRepair, parseStreamingJson } from "../utils/json-parse.js";
-@@ -595,6 +597,12 @@ export const stream = (model, context, options) => {
+@@ -304,7 +306,14 @@ async function* iterateAnthropicEvents(response, signal) {
+     let sawMessageEnd = false;
+     for await (const sse of iterateSseMessages(response.body, signal)) {
+         if (sse.event === "error") {
+-            throw new Error(sse.data);
++            let body;
++            try {
++                body = JSON.parse(sse.data);
++            }
++            catch {
++                // Preserve malformed provider errors without guessing their type.
++            }
++            throw Object.assign(new Error(sse.data), { error: body, code: body?.error?.code, type: body?.error?.type ?? body?.type });
+         }
+         if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
+             continue;
+@@ -595,6 +604,12 @@ export const stream = (model, context, options) => {
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
              output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
@@ -80,7 +96,7 @@ index c5a9f5da3f822a601091bb2ee8d2a30db41dd422..4c15d7d4b42b361681820b0a9a253d4a
              // normalizeProviderError already stringifies the parsed body (error.error)
              // into errorMessage, so only append the raw metadata when it is not already
 diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
-index c35771dcc9b2173d0b459d13c6d86e622de45e9a..6bbebae94b80a80f1312337b53540f6651acf5de 100644
+index c35771dcc9b2173d0b459d13c6d86e622de45e9a..2af5f5445ce585ccd222f4562258b7824c8ab0b0 100644
 --- a/dist/api/openai-responses-shared.js
 +++ b/dist/api/openai-responses-shared.js
 @@ -1,4 +1,4 @@
@@ -89,6 +105,27 @@ index c35771dcc9b2173d0b459d13c6d86e622de45e9a..6bbebae94b80a80f1312337b53540f66
  import { shortHash } from "../utils/hash.js";
  import { parseStreamingJson } from "../utils/json-parse.js";
  import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+@@ -635,7 +635,10 @@ export async function processResponsesStream(openaiStream, output, stream, model
+             finalizeResponse(event.response);
+         }
+         else if (event.type === "error") {
+-            throw new Error(`Error Code ${event.code}: ${event.message}` || "Unknown error");
++            throw Object.assign(new Error(`Error Code ${event.code}: ${event.message}` || "Unknown error"), {
++                code: event.code,
++                error: event,
++            });
+         }
+         else if (event.type === "response.failed") {
+             sawTerminalResponseEvent = true;
+@@ -647,7 +650,7 @@ export async function processResponsesStream(openaiStream, output, stream, model
+                 : details?.reason
+                     ? `incomplete: ${details.reason}`
+                     : "Unknown error (no error details in response)";
+-            throw new Error(msg);
++            throw Object.assign(new Error(msg), { code: error?.code, error });
+         }
+     }
+     if (!sawTerminalResponseEvent) {
 diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
 index 1023156b9c97e07d355914a641e39091a84bf229..214ed8f710e5d43de67df5dab22478553af1377f 100644
 --- a/dist/api/openai-responses.js
@@ -116,6 +153,18 @@ index 1023156b9c97e07d355914a641e39091a84bf229..214ed8f710e5d43de67df5dab2247855
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
+diff --git a/dist/utils/diagnostics.js b/dist/utils/diagnostics.js
+--- a/dist/utils/diagnostics.js
++++ b/dist/utils/diagnostics.js
+@@ -8,7 +8,7 @@
+ export function extractDiagnosticError(error) {
+     if (!(error instanceof Error))
+         return { name: "ThrownValue", message: formatThrownValue(error) };
+-    const code = error.code;
++    const code = error.code ?? error.type;
+     return {
+         name: error.name || undefined,
+         message: error.message || error.name,
 diff --git a/dist/utils/error-body.js b/dist/utils/error-body.js
 index f44c3c47c2ec6178836f6c56aaba24e5a9d79a1d..410238237ec83f4e461f89b8937700788a977d38 100644
 --- a/dist/utils/error-body.js
