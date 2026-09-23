@@ -6,10 +6,7 @@ import { Text } from 'react-native';
 import { useDevicePermissionStatuses } from '@/frontend/hooks/useDevicePermissionStatuses';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
-import {
-  healthPermissionProvider,
-  visiblePermissionKinds,
-} from './components/PermissionListPresentation/PermissionListPresentation';
+import { visiblePermissionKinds } from './components/PermissionListPresentation/PermissionListPresentation';
 import { PermissionSettingsItem } from './components/PermissionSettingsItem';
 import { isPermissionSupported, type PermissionKind, permissionConfig } from './permissionConfig';
 
@@ -41,7 +38,7 @@ function PermissionDetails({ kind }: { kind: PermissionKind }) {
       <Text className="text-base text-muted-foreground">
         {t(
           isHealth
-            ? `settings.permissions.health.${healthPermissionProvider}Description`
+            ? 'settings.permissions.health.appleDescription'
             : `settings.permissions.purpose.${kind}`,
         )}
       </Text>

@@ -42,6 +42,29 @@ function subject() {
 }
 
 describe('explicit provider activation', () => {
+  it('marks only enabled providers as enabled in the catalog', async () => {
+    const { dependencies } = subject();
+    dependencies.catalog.list = () =>
+      [
+        { id: 'deepseek', name: 'DeepSeek' },
+        { id: 'openai', name: 'OpenAI' },
+        { id: 'gemini', name: 'Gemini' },
+      ] as ReturnType<ProvidersModuleDependencies['catalog']['list']>;
+    jest
+      .mocked(dependencies.providers.list)
+      .mockResolvedValue([
+        { id: 'deepseek', isEnabled: true } as Provider,
+        { id: 'openai', isEnabled: false } as Provider,
+      ]);
+    const backend = createProvidersModule(dependencies);
+
+    expect(await backend.listCatalog()).toEqual([
+      expect.objectContaining({ id: 'deepseek', isEnabled: true, isInstalled: true }),
+      expect.objectContaining({ id: 'openai', isEnabled: false, isInstalled: true }),
+      expect.objectContaining({ id: 'gemini', isEnabled: false, isInstalled: false }),
+    ]);
+  });
+
   it('filters unavailable presets from setup and rejects direct imports before creating records', async () => {
     const { dependencies } = subject();
     const loader = new MobileRegistryLoader();

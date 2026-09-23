@@ -312,6 +312,7 @@ describe('readFileTool', () => {
         input: { file_entry_id: FILE_ID },
         signal: controller.signal,
         toolCallId: 'call-1',
+        turnId: 'turn-1',
       }),
     ).rejects.toThrow('turn cancelled');
   });
@@ -418,7 +419,12 @@ function execute(
   tool: ReturnType<typeof createReadFileTool>,
   input: RuntimeJsonValue,
 ): Promise<RuntimeToolResult> {
-  return tool.execute({ input, signal: new AbortController().signal, toolCallId: 'call-1' });
+  return tool.execute({
+    input,
+    signal: new AbortController().signal,
+    toolCallId: 'call-1',
+    turnId: 'turn-1',
+  });
 }
 
 function expectError(output: RuntimeToolResult, message: string) {

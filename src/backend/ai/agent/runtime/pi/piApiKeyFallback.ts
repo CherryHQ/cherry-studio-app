@@ -4,6 +4,17 @@ import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-s
 
 type ErrorEvent = Extract<AssistantMessageEvent, { type: 'error' }>;
 
+const API_KEY_ERROR_CODES = new Set([
+  '401',
+  '429',
+  'authentication_error',
+  'invalid_api_key',
+  'rate_limit_error',
+  'rate_limit_exceeded',
+  'insufficient_quota',
+  'resource_exhausted',
+]);
+
 /** Keep the working credential across tool steps, and never replay emitted content. */
 export function withPiApiKeyFallback(
   primary: StreamFn,
@@ -19,6 +30,7 @@ export function withPiApiKeyFallback(
     const output = new AssistantMessageEventStream();
     let started = false;
     let committed = false;
+    const buffered: AssistantMessageEvent[] = [];
     let partial: AssistantMessage = {
       role: 'assistant',
       api: model.api,
@@ -41,6 +53,8 @@ export function withPiApiKeyFallback(
         output.push({ type: 'start', partial });
         started = true;
       }
+      for (const pending of buffered) output.push(pending);
+      buffered.length = 0;
       output.push(event);
     };
 
@@ -65,6 +79,10 @@ export function withPiApiKeyFallback(
                   failure = event;
                   break;
                 }
+                if (!committed && isEmptyContentEvent(event)) {
+                  buffered.push(event);
+                  continue;
+                }
                 committed = true;
                 emit(event);
                 if (event.type === 'done') return;
@@ -79,12 +97,13 @@ export function withPiApiKeyFallback(
             !committed &&
             !options?.signal?.aborted &&
             failure.reason === 'error' &&
-            failure.error.content.length === 0 &&
+            !hasResponseContent(failure.error) &&
             isApiKeyFailure(failure.error)
           ) {
             const resolve = fallbacks[nextFallback];
             if (resolve) {
               nextFallback += 1;
+              buffered.length = 0;
               active = await resolve();
               continue;
             }
@@ -104,24 +123,74 @@ export function withPiApiKeyFallback(
   };
 }
 
+function hasResponseContent(message: AssistantMessage): boolean {
+  return message.content.some((block) => {
+    if (block.type === 'text') return block.text.length > 0 || !!block.textSignature;
+    if (block.type === 'thinking') {
+      return block.thinking.length > 0 || !!block.thinkingSignature || !!block.redacted;
+    }
+    return true;
+  });
+}
+
+function isEmptyContentEvent(event: AssistantMessageEvent): boolean {
+  switch (event.type) {
+    case 'text_start':
+    case 'thinking_start':
+      return !hasResponseContent(event.partial);
+    case 'text_delta':
+    case 'thinking_delta':
+      return event.delta.length === 0 && !hasResponseContent(event.partial);
+    case 'text_end':
+    case 'thinking_end':
+      return event.content.length === 0 && !hasResponseContent(event.partial);
+    default:
+      return false;
+  }
+}
+
+function errorRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function isApiKeyErrorCode(value: unknown): boolean {
+  return (
+    (typeof value === 'string' || typeof value === 'number') &&
+    API_KEY_ERROR_CODES.has(String(value).toLowerCase())
+  );
+}
+
 function isApiKeyFailure(message: AssistantMessage): boolean {
   const diagnostic = message.diagnostics?.findLast(
     (entry) => entry.type === 'provider_response_failure',
   );
   const status = diagnostic?.details?.statusCode ?? diagnostic?.details?.status;
-  return status === 401 || status === 429;
+  // An explicit HTTP failure takes precedence over an embedded provider code.
+  if (typeof status === 'number' || (typeof status === 'string' && /^\d{3}$/.test(status))) {
+    if (Number(status) >= 400) return Number(status) === 401 || Number(status) === 429;
+  }
+  if (isApiKeyErrorCode(diagnostic?.error?.code)) return true;
+
+  let body = diagnostic?.details?.body;
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      return false;
+    }
+  }
+  const record = errorRecord(body);
+  const error = errorRecord(record?.error) ?? record;
+  return [error?.code, error?.type, error?.status, error?.statusCode].some(isApiKeyErrorCode);
 }
 
 function errorEvent(partial: AssistantMessage, error: unknown, aborted = false): ErrorEvent {
   const message = error instanceof Error ? error.message : String(error);
-  const status =
-    error && typeof error === 'object'
-      ? 'statusCode' in error
-        ? error.statusCode
-        : 'status' in error
-          ? error.status
-          : undefined
-      : undefined;
+  const record = errorRecord(error);
+  const status = record?.statusCode ?? record?.status;
+  const code = record?.code ?? record?.type;
   const reason = aborted ? 'aborted' : 'error';
   return {
     type: 'error',
@@ -134,8 +203,12 @@ function errorEvent(partial: AssistantMessage, error: unknown, aborted = false):
         {
           type: 'provider_response_failure',
           timestamp: Date.now(),
-          error: { message, name: error instanceof Error ? error.name : 'Error' },
-          details: { status },
+          error: {
+            message,
+            name: error instanceof Error ? error.name : 'Error',
+            ...(typeof code === 'string' || typeof code === 'number' ? { code } : {}),
+          },
+          details: { status, body: record?.error ?? record?.body },
         },
       ],
     },

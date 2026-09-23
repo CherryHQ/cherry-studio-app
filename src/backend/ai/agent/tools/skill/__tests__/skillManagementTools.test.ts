@@ -78,7 +78,7 @@ const checked: SkillTurnScope = {
 const signal = new AbortController().signal;
 const run = async (tools: RuntimeTool[], name: string, input: Record<string, string>) => {
   const tool = tools.find((item) => item.providerName === name)!;
-  return (await tool.execute({ input, signal, toolCallId: name })).value;
+  return (await tool.execute({ input, signal, toolCallId: name, turnId: 'turn-1' })).value;
 };
 
 function fixture(installIntent = true) {

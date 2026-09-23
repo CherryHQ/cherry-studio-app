@@ -33,9 +33,13 @@ target_sources(
   # Autolinking Setup
   ../nitrogen/generated/android/CherryStudioUIOnLoad.cpp
   # Shared Nitrogen C++ sources
+  ../nitrogen/generated/shared/c++/HybridCherryBackgroundPressViewSpec.cpp
+  ../nitrogen/generated/shared/c++/views/HybridCherryBackgroundPressViewComponent.cpp
   ../nitrogen/generated/shared/c++/HybridCherryMenuViewSpec.cpp
   ../nitrogen/generated/shared/c++/views/HybridCherryMenuViewComponent.cpp
   # Android-specific Nitrogen C++ sources
+  ../nitrogen/generated/android/c++/JHybridCherryBackgroundPressViewSpec.cpp
+  ../nitrogen/generated/android/c++/views/JHybridCherryBackgroundPressViewStateUpdater.cpp
   ../nitrogen/generated/android/c++/JHybridCherryMenuViewSpec.cpp
   ../nitrogen/generated/android/c++/views/JHybridCherryMenuViewStateUpdater.cpp
 )

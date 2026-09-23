@@ -8,6 +8,7 @@ import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 
+import { subscribeDataApiChanges } from '../../dataApiChanges';
 import type { PreferenceService } from '../../PreferenceService';
 import { agentService } from '../AgentService';
 import { applyMigrations } from './_testDb';
@@ -86,6 +87,59 @@ describe('AgentService persistence', () => {
       modelId: 'openai::gpt-4',
       name: 'Researcher',
       toolApprovalMode: 'auto',
+    });
+  });
+
+  it('rejects stale edits and only notifies caches after successful writes', async () => {
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      const created = await agentService.create({ name: 'Writer', instructions: 'Original' });
+      expect(changed).toHaveBeenLastCalledWith(['/agents', `/agents/${created.id}`]);
+      const updated = await agentService.update(
+        created.id,
+        { name: 'Renamed' },
+        { expectedUpdatedAt: created.updatedAt },
+      );
+      expect(updated.instructions).toBe('Original');
+      expect(updated.updatedAt).not.toBe(created.updatedAt);
+      changed.mockClear();
+      await expect(
+        agentService.update(
+          created.id,
+          { instructions: 'Stale overwrite' },
+          { expectedUpdatedAt: created.updatedAt },
+        ),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(changed).not.toHaveBeenCalled();
+      expect(await agentService.getById(created.id)).toMatchObject({
+        name: 'Renamed',
+        instructions: 'Original',
+      });
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('rejects an edit committed between the read and the guarded write transaction', async () => {
+    const created = await agentService.create({ name: 'Writer', instructions: 'Original' });
+    const write = dbService.withWriteTx.bind(dbService);
+    jest.spyOn(dbService, 'withWriteTx').mockImplementationOnce(async (callback) => {
+      sqlite
+        .prepare('UPDATE agent SET name = ?, updated_at = updated_at + 1 WHERE id = ?')
+        .run('Manual edit', created.id);
+      return write(callback);
+    });
+    await expect(
+      agentService.update(
+        created.id,
+        { instructions: 'Tool edit' },
+        { expectedUpdatedAt: created.updatedAt },
+      ),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await agentService.getById(created.id)).toMatchObject({
+      name: 'Manual edit',
+      instructions: 'Original',
     });
   });
 

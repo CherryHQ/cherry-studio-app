@@ -2,6 +2,7 @@ import { View } from 'react-native';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
+import { AgentManagementToolPart } from './AgentManagementToolPart';
 import { EditFileToolPart, isEditFileToolPart } from './EditFileToolPart';
 import { FileToolContent } from './FileToolContent';
 import { GenericToolPart } from './GenericToolPart';
@@ -11,10 +12,13 @@ import { isReadFileToolPart, ReadFileToolPart } from './ReadFileToolPart';
 import { SkillToolPart } from './SkillToolPart';
 import { getToolName } from './toolPartState';
 import {
+  isAgentMutationToolPart,
   isProviderWebSearchToolPart,
+  isUserQuestionToolPart,
   isWebSearchToolPart,
   type ToolMessagePart,
 } from './toolPartState';
+import { UserQuestionPart } from './UserQuestionPart';
 import { WebSearchToolPart } from './WebSearchToolPart';
 import { isWriteFileToolPart, WriteFileToolPart } from './WriteFileToolPart';
 
@@ -67,6 +71,14 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
 
   if (isReadFileToolPart(part)) {
     return <ReadFileToolPart part={part} />;
+  }
+
+  if (isUserQuestionToolPart(part)) {
+    return <UserQuestionPart part={part} />;
+  }
+
+  if (isAgentMutationToolPart(part)) {
+    return <AgentManagementToolPart part={part} />;
   }
 
   return <GenericToolPart part={part} />;

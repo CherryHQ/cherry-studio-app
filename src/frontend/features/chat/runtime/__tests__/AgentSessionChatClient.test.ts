@@ -23,6 +23,7 @@ function snapshot(): AgentSessionSnapshot {
     agent: { id: 'agent-1', name: 'Agent' },
     capabilities: { approvals: true, attachments: false, reasoning: true, tools: true },
     pendingApprovals: [],
+    pendingQuestion: null,
     hasHistoryBeforeActiveTurn: null,
     session: {
       agentId: 'agent-1',
@@ -93,12 +94,51 @@ function protocolWithObservation(
     observeSession: jest.fn(observeSession),
     renameSession: jest.fn(),
     respondApproval: jest.fn(),
+    respondQuestion: jest.fn(),
     startSession: jest.fn(),
     submitMessage: jest.fn(),
   };
 }
 
 describe('AgentSessionChatClient', () => {
+  test('restores a live question from observation and rejects responses after it resolves', async () => {
+    const question = {
+      turnId: 'turn-1',
+      toolCallId: 'question-1',
+      question: {
+        question: 'Choose a focus',
+        selection: 'single' as const,
+        options: [
+          { id: 'a', label: 'Writing', description: '' },
+          { id: 'b', label: 'Reading', description: '' },
+        ],
+      },
+    };
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: { ...snapshot(), pendingQuestion: question }, unsubscribe: jest.fn() };
+    });
+    protocol.respondQuestion.mockImplementation(async () => {
+      publish({ type: 'question.updated', question: null });
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    expect(client.getState('session-1').pendingQuestion).toEqual(question);
+    const answer = { selectedOptionIds: ['a'], text: '', skipped: false };
+    await client.respondQuestion('session-1', 'question-1', answer);
+    expect(protocol.respondQuestion).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolCallId: 'question-1',
+      answer,
+    });
+    expect(client.getState('session-1').pendingQuestion).toBeNull();
+    await expect(client.respondQuestion('session-1', 'question-1', answer)).rejects.toThrow();
+    expect(protocol.respondQuestion).toHaveBeenCalledTimes(1);
+    client.dispose();
+  });
+
   test('rejects a second retry or send during retry admission and releases the guard on failure', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),

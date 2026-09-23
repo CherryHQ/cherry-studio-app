@@ -405,7 +405,6 @@ function TextChatInput({
           pointerEvents={isApprovalPending ? 'none' : 'auto'}
         >
           <ChatInputEffortOverlay
-            modelLabel={selectedModelLabel}
             onChange={selectReasoningEffort}
             reasoningEffort={reasoningEffort}
             reasoningEfforts={reasoningEfforts}

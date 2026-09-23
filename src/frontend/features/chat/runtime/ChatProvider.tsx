@@ -74,6 +74,7 @@ const EMPTY_AGENT_SESSION_STATE: AgentSessionChatState = Object.freeze({
   activeTurn: null,
   liveMessages: Object.freeze([]),
   pendingApprovals: Object.freeze([]),
+  pendingQuestion: null,
   sessionId: '',
   status: 'idle',
 });
@@ -341,7 +342,8 @@ export function useAgentChatControls(input: {
       (pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready')))
         ? false
         : undefined,
-    isApprovalPending: activeTurnStatus === 'awaiting-approval',
+    isApprovalPending:
+      activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
     isBusy: isSessionBusy,
     sendMessage: send,
   };

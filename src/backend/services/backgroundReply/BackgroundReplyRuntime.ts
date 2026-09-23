@@ -252,7 +252,7 @@ export class BackgroundReplyRuntime
     this.ensureSession(record);
 
     return {
-      awaitApproval: (message) =>
+      awaitApproval: (message, reason) =>
         this.runTurnCallback(record.key, 'mark approval pending', () => {
           if (!this.isCurrent(record.key, generation)) return;
           const current = this.turns.get(record.key);
@@ -263,7 +263,11 @@ export class BackgroundReplyRuntime
             ? deriveBackgroundReplyContent(current.latestMessage, this.environment.translate)
             : current.content;
           current.content = {
-            detail: this.environment.translate('chat.backgroundReply.awaitingApproval'),
+            detail: this.environment.translate(
+              reason === 'question'
+                ? 'chat.question.waiting'
+                : 'chat.backgroundReply.awaitingApproval',
+            ),
             phase: 'awaiting-approval',
             ...(latest.preview ? { preview: latest.preview } : {}),
           };
@@ -545,7 +549,7 @@ export class BackgroundReplyRuntime
       ...(record.conversationTitle ? { attribution: record.actorName } : {}),
       compactIcon: 'bubble-ellipsis',
       ...(record.content.phase === 'awaiting-approval'
-        ? { compactLabel: this.environment.translate('backgroundActivity.awaitingApproval') }
+        ? { compactLabel: record.content.detail }
         : record.content.phase === 'completed'
           ? { compactLabel: this.environment.translate('backgroundActivity.completed') }
           : record.content.phase === 'cancelled'

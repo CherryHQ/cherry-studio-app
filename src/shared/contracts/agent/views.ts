@@ -183,6 +183,7 @@ export const AgentErrorViewSchema = z
       'ATTACHMENT_UNAVAILABLE',
       'ATTACHMENT_METADATA_MISMATCH',
       'APPROVAL_NOT_FOUND',
+      'QUESTION_NOT_FOUND',
       'EXECUTION_UNAVAILABLE',
       'EXECUTION_FAILED',
       'CANCELLED',
@@ -217,6 +218,7 @@ export const AgentTurnViewSchema = z.strictObject({
   status: z.enum([
     'running',
     'awaiting-approval',
+    'awaiting-input',
     'cancelling',
     'completed',
     'failed',

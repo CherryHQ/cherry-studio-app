@@ -2,7 +2,7 @@ import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
-import { ContextMenuScrollBoundary, ScrollShadow } from '@cherrystudio/ui/components';
+import { ScrollInteractionBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
@@ -51,7 +51,7 @@ export function SidebarBody() {
 
   return (
     <ScrollShadow className="flex-1" color={backgroundColor} size={headerInset} visibility="top">
-      <ContextMenuScrollBoundary>
+      <ScrollInteractionBoundary>
         {(scrollHandlers) => (
           <ScrollView
             {...scrollHandlers}
@@ -69,7 +69,7 @@ export function SidebarBody() {
             <SidebarBodyContent registerEndReachedHandler={registerEndReachedHandler} />
           </ScrollView>
         )}
-      </ContextMenuScrollBoundary>
+      </ScrollInteractionBoundary>
     </ScrollShadow>
   );
 }

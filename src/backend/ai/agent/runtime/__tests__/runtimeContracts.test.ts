@@ -39,6 +39,7 @@ describe('Agent Runtime settled contracts', () => {
       input: { query: 'Cherry Studio' },
       signal: new AbortController().signal,
       toolCallId: 'call-1',
+      turnId: 'turn-1',
     });
 
     expect(JSON.parse(JSON.stringify({ ref, result }))).toEqual({ ref, result: expected });

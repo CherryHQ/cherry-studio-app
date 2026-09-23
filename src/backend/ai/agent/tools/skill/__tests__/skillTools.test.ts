@@ -33,7 +33,7 @@ function createScope(entries: SkillTurnEntry[]): SkillTurnScope {
 const signal = new AbortController().signal;
 const run = (tool: RuntimeTool, input: unknown) =>
   tool
-    .execute({ input: input as never, signal, toolCallId: 'call' })
+    .execute({ input: input as never, signal, toolCallId: 'call', turnId: 'turn-1' })
     .then((r) => r.value as Record<string, unknown>);
 const toolNamed = (tools: RuntimeTool[], name: string) =>
   tools.find((t) => t.providerName === name)!;
