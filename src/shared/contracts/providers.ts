@@ -3,6 +3,7 @@ import type { Provider } from '@/shared/data/types/provider';
 export type ProviderCatalogEntry = {
   description?: string;
   id: string;
+  isEnabled: boolean;
   isInstalled: boolean;
   isRecommended: boolean;
   name: string;

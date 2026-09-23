@@ -57,6 +57,7 @@ function ProviderCatalogRow({
   onChoose,
 }: ProviderCatalogRowProps) {
   const { t } = useTranslation();
+  const onPress = onChoose ?? (entry.isInstalled ? onImport : undefined);
 
   return (
     <SettingsServiceRow
@@ -68,10 +69,10 @@ function ProviderCatalogRow({
         />
       }
       id={entry.id}
-      disabled={onChoose ? importPending : undefined}
+      disabled={onPress ? importPending : undefined}
       name={entry.name}
-      onPress={onChoose ? () => onChoose(entry) : undefined}
-      statusLabel={entry.isInstalled ? t('settings.provider.catalog.installed') : undefined}
+      onPress={onPress ? () => onPress(entry) : undefined}
+      statusLabel={entry.isEnabled ? t('settings.provider.status.enabled') : undefined}
       statusTone="success"
       subtitle={onChoose ? entry.description : entry.id}
       testID={`provider-catalog-entry-${entry.id}`}
@@ -146,7 +147,7 @@ export default function ProviderCatalogScreen({
   const catalogQuery = useQuery({
     queryFn: providers.listCatalog,
     queryKey: queryKeys.providers.catalog(),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   });
   const entries = catalogQuery.data ?? [];
   const {
@@ -204,13 +205,13 @@ export default function ProviderCatalogScreen({
         return;
       }
       if (entry.isInstalled) {
-        if (intent === 'chat') openProviderSetup(entry);
+        openProviderSetup(entry);
         return;
       }
 
       importProvider(entry.id);
     },
-    [importPending, importProvider, intent, openProviderSetup],
+    [importPending, importProvider, openProviderSetup],
   );
   const sections = useMemo<ProviderCatalogSection[]>(() => {
     const recommended: ProviderCatalogItem[] = [

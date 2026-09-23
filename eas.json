@@ -58,6 +58,13 @@
         "credentialsSource": "remote",
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
       }
+    },
+    "production-google-play": {
+      "extends": "production",
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease -PreactNativeArchitectures=arm64-v8a"
+      }
     }
   },
   "submit": {
