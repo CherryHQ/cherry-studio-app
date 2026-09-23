@@ -16,10 +16,11 @@ import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import {
-  getStorageBoot,
+  cleanupStorageAfterBoot,
   commitStorageBoot,
   failStorageBoot,
-  cleanupStorageAfterBoot,
+  getStorageBoot,
+  rejectStorageCandidate,
 } from '@/backend/data/storage/storagePaths';
 import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
@@ -194,12 +195,21 @@ export function createAppBootstrapRuntime(
     initialize: async () => {
       // Runs the Gate phase — cache, then database, then preferences — ordered
       // by the dependency graph rather than by the order written here.
-      const { restoring, resetCaches } = getStorageBoot();
+      const logger = loggerService.withContext('Backup');
+      let { restoring } = getStorageBoot();
       try {
         if (restoring) {
-          await validateRestoringStorage();
+          try {
+            await validateRestoringStorage();
+          } catch (error) {
+            // Validation only opens its own connections, so nothing holds the candidate yet
+            // and this process can continue on the current generation.
+            logger.warn('Rejected a restored storage generation', error as Error);
+            rejectStorageCandidate();
+            restoring = false;
+          }
         }
-        if (resetCaches) {
+        if (getStorageBoot().resetCaches) {
           cache.resetForRestore();
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
@@ -210,18 +220,14 @@ export function createAppBootstrapRuntime(
         try {
           cleanupStorageAfterBoot();
         } catch (error) {
-          loggerService
-            .withContext('Backup')
-            .warn('Could not clean previous backup staging files', error as Error);
+          logger.warn('Could not clean previous backup staging files', error as Error);
         }
       } catch (error) {
         if (restoring) {
           try {
             failStorageBoot();
           } catch (failure) {
-            loggerService
-              .withContext('Backup')
-              .error('Could not record restore rollback', failure as Error);
+            logger.error('Could not record restore rollback', failure as Error);
           }
         }
         if (restoring || (error instanceof BackupError && error.code === 'restart-required')) {

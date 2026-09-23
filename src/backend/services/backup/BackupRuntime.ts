@@ -19,8 +19,14 @@ import {
   getStorageBoot,
   stageStorage,
   storageDirectory,
+  takeStorageOutcome,
 } from '@/backend/data/storage/storagePaths';
-import { BackupError, type BackupModule, type BackupState } from '@/shared/contracts/backup';
+import {
+  BackupError,
+  type BackupModule,
+  type BackupState,
+  type RestoreOutcome,
+} from '@/shared/contracts/backup';
 
 import { getBackupStorage } from '../../../../modules/backup-storage';
 import { archiveFile, packBackup, unpackBackup } from './backupArchive';
@@ -35,7 +41,8 @@ import {
 @Injectable('BackupRuntime')
 @DependsOn(['DbService'])
 export class BackupRuntime extends BaseService implements BackupModule {
-  private state: BackupState = { phase: 'idle', completed: 0, total: 0 };
+  // `state` belongs to BaseService's lifecycle getter; shadowing it would drop every update.
+  private backupState: BackupState = { phase: 'idle', completed: 0, total: 0 };
   private readonly listeners = new Set<() => void>();
   private operation: AbortController | undefined;
   private pendingWork: Promise<unknown> | undefined;
@@ -54,14 +61,15 @@ export class BackupRuntime extends BaseService implements BackupModule {
     this.resumeWork = resumeWork;
   }
   isAvailable = (): boolean => getBackupStorage() !== null;
-  getState = (): BackupState => this.state;
+  getState = (): BackupState => this.backupState;
+  takeRestoreOutcome = (): RestoreOutcome | undefined => takeStorageOutcome();
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
 
   private publish(state: BackupState): void {
-    this.state = state;
+    this.backupState = state;
     for (const listener of this.listeners) {
       try {
         listener();
@@ -89,8 +97,6 @@ export class BackupRuntime extends BaseService implements BackupModule {
         } finally {
           release();
         }
-        // An incomplete package must not be presented as a complete first-release backup.
-        if (resources.missing.length) throw new BackupError('missing-files');
         await validateBackupDatabase(archiveFile(work, 'database/cherry.db'), version);
         const entries: BackupManifest['entries'] = [];
         for (const [index, path] of resources.paths.entries()) {
@@ -115,7 +121,6 @@ export class BackupRuntime extends BaseService implements BackupModule {
           ...version,
           entries,
           counts: resources.counts,
-          missing: resources.missing,
         });
         const json = JSON.stringify(manifest);
         const manifestBytes = new TextEncoder().encode(json).length;
@@ -149,18 +154,16 @@ export class BackupRuntime extends BaseService implements BackupModule {
       const work = this.workDirectory('import');
       let completed = false;
       try {
+        // Read the selected archive in place: every extracted byte is verified against the
+        // manifest, so a private copy would only double the disk and time cost.
         const source = new File(uri);
-        if (!source.exists || source.size > BACKUP_LIMITS.archiveBytes)
-          throw new BackupError('too-large');
-        requireDiskSpace(source.size);
-        const owned = new File(work, 'input.zip');
-        await source.copy(owned);
+        if (!source.exists) throw new BackupError('invalid');
+        if (source.size > BACKUP_LIMITS.archiveBytes) throw new BackupError('too-large');
         const extracted = new Directory(work, 'extracted');
         extracted.create();
-        const manifest = await unpackBackup(owned, extracted, signal, (done, total) =>
+        const manifest = await unpackBackup(source, extracted, signal, (done, total) =>
           this.publish({ phase: 'validating', completed: done, total }),
         );
-        owned.delete();
         signal.throwIfAborted();
         await validateBackupDatabase(archiveFile(extracted, 'database/cherry.db'), manifest);
         await validateResourceReferences(extracted, manifest);
@@ -178,7 +181,6 @@ export class BackupRuntime extends BaseService implements BackupModule {
             platform: manifest.platform,
             ...manifest.counts,
             bytes: manifest.entries.reduce((sum, entry) => sum + entry.size, 0),
-            missingFiles: manifest.missing.length,
           },
         });
       } finally {
@@ -192,47 +194,40 @@ export class BackupRuntime extends BaseService implements BackupModule {
       if (!candidate || candidate.manifest.id !== candidateId) throw new BackupError('invalid');
       const { manifest } = candidate;
       const extracted = new Directory(candidate.directory, 'extracted');
-      const size = manifest.entries.reduce((sum, entry) => sum + entry.size, 0);
-      requireDiskSpace(size + archiveFile(extracted, 'database/cherry.db').size);
+      // Payloads move into the new generation unchanged; only the database is rewritten.
+      requireDiskSpace(archiveFile(extracted, 'database/cherry.db').size);
       const target = storageDirectory(randomUUID());
       target.create({ intermediates: true });
       let staged = false;
       let release: (() => void) | undefined;
       try {
+        // Freeze before moving anything, so a busy app fails before the candidate is consumed.
+        release = this.freeze();
         for (const [index, entry] of manifest.entries.entries()) {
           signal.throwIfAborted();
-          const source = archiveFile(extracted, entry.path);
-          if (
-            source.size !== entry.size ||
-            (await backupStorageNative().hashFile(source.uri)) !== entry.sha256
-          )
-            throw new BackupError('invalid');
           const output = restoredFile(target, entry.path);
           output.parentDirectory.create({ intermediates: true, idempotent: true });
-          await source.copy(output);
+          await archiveFile(extracted, entry.path).move(output);
           this.publish({ phase: 'staging', completed: index + 1, total: manifest.entries.length });
         }
         signal.throwIfAborted();
-        release = this.freeze();
+        const database = new File(target, 'database', 'cherry.db');
         await prepareRestoredDatabase(
-          new File(target, 'database', 'cherry.db'),
+          database,
           await readDevicePreferences(this.dbService.getSqlite()),
         );
         signal.throwIfAborted();
+        // Moved payloads keep their verified hashes; startup re-verifies every entry.
+        const databaseHash = await backupStorageNative().hashFile(database.uri);
         const restoredManifest: BackupManifest = {
           ...manifest,
           ...(await bundledBackupVersion()),
-          entries: [],
+          entries: manifest.entries.map((entry) =>
+            entry.path === 'database/cherry.db'
+              ? { ...entry, size: database.size, sha256: databaseHash }
+              : entry,
+          ),
         };
-        for (const entry of manifest.entries) {
-          signal.throwIfAborted();
-          const file = restoredFile(target, entry.path);
-          restoredManifest.entries.push({
-            ...entry,
-            size: file.size,
-            sha256: await backupStorageNative().hashFile(file.uri),
-          });
-        }
         const manifestFile = new File(target, 'restore-manifest.json');
         manifestFile.create();
         manifestFile.write(JSON.stringify(validateManifest(restoredManifest)));
@@ -248,8 +243,9 @@ export class BackupRuntime extends BaseService implements BackupModule {
           throw new BackupError('restart-required');
         }
         this.publish({ phase: 'restart-required', completed: 0, total: 0 });
-        this.discardCandidate();
       } finally {
+        // Moving consumed the extracted payloads, so a failed attempt needs a new selection.
+        this.discardCandidate();
         if (!staged) {
           release?.();
           if (target.exists) target.delete();
@@ -258,7 +254,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
     });
 
   cancel = (): void => {
-    if (this.state.phase === 'restart-required') return;
+    if (this.backupState.phase === 'restart-required') return;
     if (this.operation) this.operation.abort();
     else {
       this.discardCandidate();
@@ -268,20 +264,11 @@ export class BackupRuntime extends BaseService implements BackupModule {
 
   private freeze(): () => void {
     if (this.hasActiveWork() || getStorageBoot().restartRequired) throw new BackupError('busy');
+    // The progress dialog blocks the user; this keeps new Agent turns and jobs from starting.
     const release = storageMutationGate.freeze();
-    try {
-      this.dbService.getSqlite().execSync('PRAGMA query_only = ON');
-    } catch (error) {
-      release();
-      throw error;
-    }
     return () => {
-      try {
-        this.dbService.getSqlite().execSync('PRAGMA query_only = OFF');
-      } finally {
-        release();
-        this.resumeWork();
-      }
+      release();
+      this.resumeWork();
     };
   }
 
@@ -290,14 +277,14 @@ export class BackupRuntime extends BaseService implements BackupModule {
     work: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
     if (!this.isAvailable()) return Promise.reject(new BackupError('unavailable'));
-    if (this.stopped || this.operation || this.state.phase === 'restart-required')
+    if (this.stopped || this.operation || this.backupState.phase === 'restart-required')
       return Promise.reject(new BackupError('busy'));
     const operation = new AbortController();
     this.operation = operation;
     this.publish({ phase, completed: 0, total: 0 });
     const promise = work(operation.signal)
       .catch((error: unknown) => {
-        if (this.state.phase !== 'restart-required')
+        if (this.backupState.phase !== 'restart-required')
           this.publish({ phase: 'idle', completed: 0, total: 0 });
         if (operation.signal.aborted) throw new BackupError('cancelled');
         if (error instanceof BackupError) throw error;

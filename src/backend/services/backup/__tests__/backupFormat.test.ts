@@ -15,10 +15,8 @@ function manifest(): BackupManifest {
     appVersion: '0.1.0',
     platform: 'ios',
     migrations: [{ when: 1789461429602, sha256 }],
-    customSqlHash: sha256,
     counts: { sessions: 1, messages: 2, files: 0, pluginConnections: 0 },
     entries: [{ path: 'database/cherry.db', size: 1024, sha256 }],
-    missing: [],
   };
 }
 
@@ -46,16 +44,14 @@ test('rejects another product or a future format instead of attempting replaceme
   expect(() => validateManifest({ ...manifest(), formatVersion: 2 })).toThrow('incompatible');
 });
 
-test('rejects case collisions, missing database, forged hashes and ambiguous missing resources', () => {
+test('rejects case collisions, missing database, forged hashes and undeclared fields', () => {
   const base = manifest();
   const file = { path: 'files/a.txt', size: 1, sha256 };
   for (const invalid of [
     { ...base, entries: [...base.entries, file, { ...file, path: 'files/A.txt' }] },
     { ...base, entries: [file] },
     { ...base, entries: [{ ...base.entries[0], sha256: 'bad' }] },
-    { ...base, entries: [...base.entries, file], missing: [file.path] },
-    { ...base, missing: ['database/cherry.db'] },
-    { ...base, missing: [file.path, file.path] },
+    { ...base, missing: [] },
   ])
     expect(() => validateManifest(invalid)).toThrow('invalid');
 });

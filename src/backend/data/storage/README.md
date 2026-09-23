@@ -14,15 +14,17 @@ metadata or a missing selected database fails closed instead of creating an empt
 3. On a different native process, selection records `activating` before opening the candidate.
    A JavaScript reload in the staging process cannot activate it.
 4. Bootstrap verifies hashes, schema, references and required service initialization. Only then
-   does it commit `current = candidate`, retaining the previous generation.
-5. Failure requires another native restart. An interrupted activation automatically selects the
-   previous generation on the following native process. It never falls through to an empty store.
+   does it commit `current = candidate`.
+5. A candidate rejected by validation has not been opened, so the same process continues on the
+   current generation. A failure after the candidate opens requires another native restart. An
+   interrupted activation automatically selects the current generation on the following native
+   process. It never falls through to an empty store.
 
-Cleanup runs after successful bootstrap, at most once per native process. It retains current and
-previous generations, removes abandoned generations and other processes' backup cache, and deletes
-only explicitly owned legacy paths when legacy is no longer retained. It never deletes Documents
-or the shared SQLite directory. The latest previous generation remains available on disk; this
-release has no user-facing undo action after a successful commit.
+Cleanup runs after successful bootstrap, at most once per native process. It retains only the
+current generation, removes replaced and abandoned generations and other processes' backup cache,
+and deletes only explicitly owned legacy paths once legacy is no longer current. It never deletes
+Documents or the shared SQLite directory. There is no undo after a successful commit, so a replaced
+generation is not kept on disk.
 
 Native-process restart is intentional: current Drizzle/FTS connections can retain native handles
 after JavaScript teardown. Reloading the JavaScript bundle does not make in-process database

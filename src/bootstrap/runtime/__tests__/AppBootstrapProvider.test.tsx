@@ -18,6 +18,8 @@ jest.mock('expo-splash-screen', () => ({
 }));
 
 jest.mock('@/frontend/appShell/observability', () => ({ recordSentryBreadcrumb: jest.fn() }));
+// The restart screen's startup reporter pulls in native animation modules.
+jest.mock('@/frontend/appShell/backup', () => ({ RestoreRestartScreen: () => null }));
 
 // The injected runtime keeps native SQLite and the concrete backend graph out
 // of this provider-level test.

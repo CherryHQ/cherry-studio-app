@@ -75,7 +75,6 @@ export async function captureResources(
   signal: AbortSignal,
 ): Promise<{
   paths: string[];
-  missing: string[];
   counts: BackupManifest['counts'];
 }> {
   const description = await describeDatabase(archiveFile(target, 'database/cherry.db'));
@@ -93,15 +92,12 @@ export async function captureResources(
   }
   if (paths.size + 1 > BACKUP_LIMITS.entries) throw new BackupError('too-large');
   const copied = ['database/cherry.db'];
-  const missing: string[] = [];
   let totalBytes = archiveFile(target, 'database/cherry.db').size;
   for (const path of [...paths].sort()) {
     signal.throwIfAborted();
     const input = restoredFile(source, path);
-    if (!input.exists) {
-      missing.push(path);
-      continue;
-    }
+    // A full backup never silently omits referenced content.
+    if (!input.exists) throw new BackupError('missing-files');
     totalBytes += input.size;
     if (totalBytes > BACKUP_LIMITS.expandedBytes) throw new BackupError('too-large');
     requireDiskSpace(input.size);
@@ -110,7 +106,7 @@ export async function captureResources(
     await input.copy(output);
     copied.push(path);
   }
-  return { paths: copied, missing, counts: description.counts };
+  return { paths: copied, counts: description.counts };
 }
 
 export async function validateResourceReferences(
@@ -125,14 +121,10 @@ export async function validateResourceReferences(
   )
     throw new BackupError('invalid');
   const available = new Set(manifest.entries.map((entry) => entry.path));
-  const missing = new Set(manifest.missing);
   const required = new Set(requiredPaths);
-  for (const path of required) {
-    if (!available.has(path) && !missing.has(path)) throw new BackupError('invalid');
-  }
+  for (const path of required) if (!available.has(path)) throw new BackupError('invalid');
   for (const entry of manifest.entries) {
     if (entry.path.startsWith('files/') && !required.has(entry.path))
       throw new BackupError('invalid');
   }
-  for (const path of missing) if (!required.has(path)) throw new BackupError('invalid');
 }

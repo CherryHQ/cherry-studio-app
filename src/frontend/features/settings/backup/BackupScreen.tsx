@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useBackupState } from '@/frontend/hooks/useBackupState';
-import { BackupError, type BackupErrorCode, type BackupState } from '@/shared/contracts/backup';
+import { BackupError, type BackupErrorCode } from '@/shared/contracts/backup';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
@@ -22,16 +22,6 @@ const ERROR_KEYS: Record<BackupErrorCode, string> = {
   storage: 'backup.error.storage',
   'restart-required': 'backup.restart.description',
 };
-const PHASE_KEYS: Record<BackupState['phase'], string> = {
-  idle: 'backup.title',
-  capturing: 'backup.progress.export',
-  packing: 'backup.progress.export',
-  validating: 'backup.progress.import',
-  ready: 'backup.preview',
-  staging: 'backup.progress.restore',
-  'restart-required': 'backup.restart.title',
-};
-
 export function BackupScreen() {
   const { t, i18n } = useTranslation();
   const { alert } = useAlert();
@@ -118,19 +108,6 @@ export function BackupScreen() {
       {!available && (
         <Text className="text-sm text-muted-foreground">{t('backup.unavailable')}</Text>
       )}
-      {busy && state.phase !== 'restart-required' && (
-        <View className="gap-3" accessibilityLiveRegion="polite">
-          <Text className="text-base text-foreground">{t(PHASE_KEYS[state.phase])}</Text>
-          {state.total > 0 && (
-            <Text className="text-sm text-muted-foreground">
-              {Math.floor((state.completed / state.total) * 100)}%
-            </Text>
-          )}
-          <Button variant="outline" onPress={backup.cancel}>
-            {t('common.cancel')}
-          </Button>
-        </View>
-      )}
       {state.phase === 'ready' && preview && (
         <View className="gap-4">
           <Text className="text-lg font-semibold text-foreground">{t('backup.preview')}</Text>
@@ -151,11 +128,6 @@ export function BackupScreen() {
               }),
             })}
           </Text>
-          {preview.missingFiles > 0 && (
-            <Text className="text-sm text-muted-foreground">
-              {t('backup.missing', { total: preview.missingFiles })}
-            </Text>
-          )}
           <Text className="text-sm text-muted-foreground">{t('backup.reconnect')}</Text>
           <Button variant="destructive" onPress={confirmRestore}>
             {t('backup.apply')}

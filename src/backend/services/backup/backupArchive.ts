@@ -185,7 +185,7 @@ function readZipDirectory(input: File) {
         (entry.name === 'manifest.json' && entry.size > BACKUP_LIMITS.manifestBytes)
       )
         throw new BackupError('too-large');
-      const nextOffset = (source.offset ?? 0) + entry.skip;
+      const nextOffset: number = (source.offset ?? 0) + entry.skip;
       if (nextOffset > end.start + end.size) throw new BackupError('invalid');
       source.offset = nextOffset;
     }

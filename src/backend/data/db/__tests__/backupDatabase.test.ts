@@ -33,7 +33,8 @@ function database() {
   const adapter = {
     execAsync: async (sql: string) => raw.exec(sql),
     runAsync: async (sql: string, ...params: SQLInputValue[]) => raw.prepare(sql).run(...params),
-    getAllAsync: async (sql: string) => raw.prepare(sql).all(),
+    getAllAsync: async (sql: string, ...params: (SQLInputValue | SQLInputValue[])[]) =>
+      raw.prepare(sql).all(...params.flat()),
   } as unknown as SQLiteDatabase;
   return { raw, adapter };
 }
@@ -49,6 +50,23 @@ test('schema comparison includes extra triggers whose names resemble SQLite inte
       expect(await readBackupSchema(adapter)).not.toBe(expected);
       raw.exec(`DROP TRIGGER ${name}`);
     }
+  } finally {
+    raw.close();
+  }
+});
+
+test('schema comparison ignores custom SQL triggers that the running bundle recreates', async () => {
+  const { raw, adapter } = database();
+  try {
+    raw.exec(
+      'CREATE TRIGGER agent_session_message_ad AFTER DELETE ON agent_session_message BEGIN SELECT 1; END',
+    );
+    const expected = await readBackupSchema(adapter);
+    raw.exec('DROP TRIGGER agent_session_message_ad');
+    raw.exec(
+      'CREATE TRIGGER agent_session_message_ad AFTER DELETE ON agent_session_message BEGIN SELECT 2; END',
+    );
+    expect(await readBackupSchema(adapter)).toBe(expected);
   } finally {
     raw.close();
   }

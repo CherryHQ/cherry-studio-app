@@ -23,7 +23,6 @@ export const BackupManifestSchema = z.strictObject({
     .array(z.strictObject({ when: CountSchema, sha256: HashSchema }))
     .min(1)
     .max(1000),
-  customSqlHash: HashSchema,
   counts: z.strictObject({
     sessions: CountSchema,
     messages: CountSchema,
@@ -34,7 +33,6 @@ export const BackupManifestSchema = z.strictObject({
     .array(z.strictObject({ path: z.string().max(512), size: CountSchema, sha256: HashSchema }))
     .min(1)
     .max(BACKUP_LIMITS.entries),
-  missing: z.array(z.string().max(512)).max(BACKUP_LIMITS.entries),
 });
 export type BackupManifest = z.infer<typeof BackupManifestSchema>;
 
@@ -71,11 +69,5 @@ export function validateManifest(value: unknown): BackupManifest {
   }
   if (size > BACKUP_LIMITS.expandedBytes) throw new BackupError('too-large');
   if (!paths.has('database/cherry.db')) throw new BackupError('invalid');
-  for (const path of manifest.missing) {
-    assertBackupPath(path);
-    if (path === 'manifest.json' || path === 'database/cherry.db' || paths.has(path.toLowerCase()))
-      throw new BackupError('invalid');
-    paths.add(path.toLowerCase());
-  }
   return manifest;
 }

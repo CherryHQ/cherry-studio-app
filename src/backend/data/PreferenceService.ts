@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 
 import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
-import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DEFAULT_PREFERENCE_SCOPE, preferenceTable } from '@/backend/data/db/schemas';
 import {
@@ -162,8 +161,7 @@ export class PreferenceService extends BaseService implements PreferenceClient {
   }
 
   private enqueueUpdate(updates: PreferenceUpdateMap, options: PreferenceUpdateOptions) {
-    const release = storageMutationGate.enter();
-    const run = this.updateTail.then(() => this.runUpdate(updates, options)).finally(release);
+    const run = this.updateTail.then(() => this.runUpdate(updates, options));
     this.updateTail = run.catch(() => {});
 
     return run;

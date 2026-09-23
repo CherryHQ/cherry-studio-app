@@ -15,7 +15,6 @@ import { loggerService } from '@logger';
 import { randomUUID } from 'expo-crypto';
 import { Directory, File } from 'expo-file-system';
 
-import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
 
 const logger = loggerService.withContext('ProviderAvatarStorage');
@@ -86,25 +85,19 @@ function deleteAvatarFiles(files: readonly File[]): void {
  * keep the old photo on screen until the app restarts.
  */
 export async function saveProviderAvatar(providerId: string, sourceUri: string): Promise<string> {
-  const releaseMutation = storageMutationGate.enter();
-  try {
-    ensureAvatarDirectory();
+  ensureAvatarDirectory();
 
-    const previousFiles = findAvatarFiles(providerId);
-    const destination = new File(avatarDirectory(), `${providerId}.${randomUUID()}`);
+  const previousFiles = findAvatarFiles(providerId);
+  const destination = new File(avatarDirectory(), `${providerId}.${randomUUID()}`);
 
-    await new File(sourceUri).copy(destination);
-    deleteAvatarFiles(previousFiles);
+  await new File(sourceUri).copy(destination);
+  deleteAvatarFiles(previousFiles);
 
-    return destination.uri;
-  } finally {
-    releaseMutation();
-  }
+  return destination.uri;
 }
 
 /** Drop this provider's custom avatar, falling back to its built-in logo. */
 export function deleteProviderAvatar(providerId: string): void {
-  storageMutationGate.assertWritable();
   deleteAvatarFiles(findAvatarFiles(providerId));
 }
 

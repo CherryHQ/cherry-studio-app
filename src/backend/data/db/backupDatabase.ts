@@ -3,20 +3,13 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { backupDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 import { BackupError } from '@/shared/contracts/backup';
+import { DEVICE_LOCAL_PREFERENCE_KEYS } from '@/shared/data/preference/preferenceSchema';
 
 import { customSqlStatements } from './customSql';
 import { migrations } from './migrations';
 
 export type BackupMigration = { when: number; sha256: string };
-export type BackupDatabaseVersion = { migrations: BackupMigration[]; customSqlHash: string };
-export const DEVICE_PREFERENCE_KEYS = [
-  'app.onboarding.status',
-  'app.privacy.data_collection.enabled',
-  'app.privacy.policy_version',
-  'app.user.id',
-  'chat.background_reply.enabled',
-  'chat.completion_notifications.enabled',
-] as const;
+export type BackupDatabaseVersion = { migrations: BackupMigration[] };
 
 const migrationSql = (index: number): string => {
   const key = `m${String(index).padStart(4, '0')}` as keyof typeof migrations.migrations;
@@ -26,6 +19,12 @@ const migrationSql = (index: number): string => {
 };
 const sha256 = (value: string) => digestStringAsync(CryptoDigestAlgorithm.SHA256, value);
 
+// Custom SQL triggers are dropped and recreated from the running bundle (by restore
+// normalization and by DbService at startup), so a backup's older bodies never survive.
+const REBUILT_TRIGGERS = customSqlStatements.flatMap(
+  (sql) => /^\s*CREATE TRIGGER\s+(\w+)/i.exec(sql)?.[1] ?? [],
+);
+
 export async function bundledBackupVersion(): Promise<BackupDatabaseVersion> {
   return {
     migrations: await Promise.all(
@@ -34,7 +33,6 @@ export async function bundledBackupVersion(): Promise<BackupDatabaseVersion> {
         sha256: await sha256(migrationSql(entry.idx)),
       })),
     ),
-    customSqlHash: await sha256(JSON.stringify(customSqlStatements)),
   };
 }
 
@@ -84,7 +82,9 @@ export async function readBackupSchema(db: SQLiteDatabase): Promise<string> {
     `SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL
      AND name NOT GLOB 'sqlite_*' AND NOT (type = 'table' AND name IN
        ('agent_session_message_fts_data','agent_session_message_fts_idx','agent_session_message_fts_docsize','agent_session_message_fts_config'))
+     AND NOT (type = 'trigger' AND name IN (${REBUILT_TRIGGERS.map(() => '?').join(',')}))
      ORDER BY type, name`,
+    REBUILT_TRIGGERS,
   );
   return JSON.stringify(rows.map((row) => ({ ...row, sql: row.sql.replace(/\s+/g, ' ').trim() })));
 }
@@ -123,7 +123,6 @@ export async function validateBackupDatabase(
   if (
     !version.migrations.length ||
     version.migrations.length > bundled.migrations.length ||
-    version.customSqlHash !== bundled.customSqlHash ||
     version.migrations.some(
       (entry, index) =>
         entry.when !== bundled.migrations[index].when ||
@@ -178,8 +177,8 @@ export async function validateBackupDatabase(
 export type DevicePreferenceRow = { key: string; value: string | null };
 export function readDevicePreferences(db: SQLiteDatabase): Promise<DevicePreferenceRow[]> {
   return db.getAllAsync<DevicePreferenceRow>(
-    `SELECT key, value FROM preference WHERE scope = 'default' AND key IN (${DEVICE_PREFERENCE_KEYS.map(() => '?').join(',')})`,
-    [...DEVICE_PREFERENCE_KEYS],
+    `SELECT key, value FROM preference WHERE scope = 'default' AND key IN (${DEVICE_LOCAL_PREFERENCE_KEYS.map(() => '?').join(',')})`,
+    [...DEVICE_LOCAL_PREFERENCE_KEYS],
   );
 }
 
@@ -221,7 +220,7 @@ export async function restoreDeviceState(
         grant.id,
       );
     }
-    for (const key of DEVICE_PREFERENCE_KEYS) {
+    for (const key of DEVICE_LOCAL_PREFERENCE_KEYS) {
       await db.runAsync("DELETE FROM preference WHERE scope = 'default' AND key = ?", key);
     }
     for (const entry of preferences) {

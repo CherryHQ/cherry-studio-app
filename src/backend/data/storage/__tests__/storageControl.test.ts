@@ -38,6 +38,8 @@ test('a process killed during candidate initialization rolls back before opening
   expect(recovered.control.pending).toBeUndefined();
   expect(recovered.control.lastResult).toBe('rolled-back');
   expect(recovered.resetCaches).toBe(true);
+  expect(recovered.outcome).toBe('rolled-back');
+  expect(selectBootStorage(recovered.control, followingProcess).outcome).toBeUndefined();
 });
 
 test('a failed candidate requires a native restart before reopening the previous generation', () => {
@@ -52,9 +54,11 @@ test('a failed candidate requires a native restart before reopening the previous
     storageId: 'legacy',
     restartRequired: false,
     resetCaches: true,
+    outcome: 'rolled-back',
   });
   const recovered = selectBootStorage(failed, followingProcess).control;
-  expect(selectBootStorage(recovered, followingProcess).resetCaches).toBe(false);
+  expect(selectBootStorage(recovered, followingProcess)).toMatchObject({ resetCaches: false });
+  expect(selectBootStorage(recovered, followingProcess).outcome).toBeUndefined();
 });
 
 test('the durable record rejects arbitrary paths, unsupported versions and unknown fields', () => {
@@ -62,6 +66,7 @@ test('the durable record rejects arbitrary paths, unsupported versions and unkno
     { ...staged, current: '../other' },
     { ...staged, version: 2 },
     { ...staged, fallback: 'legacy' },
+    { ...staged, previous: 'legacy' },
     { ...staged, pending: { ...staged.pending, id: 'legacy' } },
   ])
     expect(StorageControlSchema.safeParse(invalid).success).toBe(false);

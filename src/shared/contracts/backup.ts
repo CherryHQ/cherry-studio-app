@@ -29,9 +29,11 @@ export interface BackupPreview {
   messages: number;
   files: number;
   bytes: number;
-  missingFiles: number;
   pluginConnections: number;
 }
+
+/** How the latest restore attempt ended; reported once, on the first boot that settles it. */
+export type RestoreOutcome = 'restored' | 'rolled-back';
 
 export interface BackupState {
   phase: 'idle' | 'capturing' | 'packing' | 'validating' | 'ready' | 'staging' | 'restart-required';
@@ -43,6 +45,7 @@ export interface BackupState {
 export interface BackupModule {
   isAvailable(): boolean;
   getState(): BackupState;
+  takeRestoreOutcome(): RestoreOutcome | undefined;
   subscribe(listener: () => void): () => void;
   createBackup(): Promise<{ uri: string; filename: string }>;
   prepareRestore(uri: string): Promise<void>;

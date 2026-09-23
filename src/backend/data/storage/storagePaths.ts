@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { defaultDatabaseDirectory } from 'expo-sqlite';
 
-import { BackupError } from '@/shared/contracts/backup';
+import { BackupError, type RestoreOutcome } from '@/shared/contracts/backup';
 
 import { getBackupStorage } from '../../../../modules/backup-storage';
 import {
@@ -91,14 +91,37 @@ export function stageStorage(id: string): void {
 export function commitStorageBoot(): void {
   const state = getStorageBoot();
   if (!state.restoring) return;
-  const control: StorageControl = {
-    version: 1,
-    current: state.storageId,
-    previous: state.control.current,
-    lastResult: 'restored',
-  };
+  const control: StorageControl = { version: 1, current: state.storageId, lastResult: 'restored' };
   writeControl(control);
-  boot = { ...state, control, restoring: false };
+  boot = { ...state, control, restoring: false, outcome: 'restored' };
+}
+
+/**
+ * The candidate failed validation before anything opened it, so this process can keep
+ * using the current generation instead of asking for another native restart.
+ */
+export function rejectStorageCandidate(): void {
+  const state = getStorageBoot();
+  if (!state.restoring) return;
+  const { pending: _pending, ...settled } = state.control;
+  const control: StorageControl = { ...settled, lastResult: 'rolled-back' };
+  writeControl(control);
+  boot = {
+    control,
+    storageId: control.current,
+    restoring: false,
+    resetCaches: false,
+    restartRequired: false,
+    outcome: 'rolled-back',
+  };
+}
+
+/** Returns the restore outcome settled by this boot at most once. */
+export function takeStorageOutcome(): RestoreOutcome | undefined {
+  if (!boot?.outcome) return undefined;
+  const { outcome, ...rest } = boot;
+  boot = rest;
+  return outcome;
 }
 
 export function failStorageBoot(): void {
@@ -114,7 +137,7 @@ export function failStorageBoot(): void {
   boot = { ...state, control, restoring: false, restartRequired: true };
 }
 
-/** Run after a successful boot, at most once per native process. Keep one rollback generation. */
+/** Run after a successful boot, at most once per native process. Keeps only the current generation. */
 export function cleanupStorageAfterBoot(): void {
   const native = getBackupStorage();
   if (!native) return;
@@ -130,19 +153,18 @@ export function cleanupStorageAfterBoot(): void {
   const control = { ...state.control, cleanupProcessId: processId };
   writeControl(control);
   boot = { ...state, control };
-  const retained = new Set([control.current, control.previous]);
   const stores = new Directory(Paths.document, 'stores');
   if (stores.exists) {
     for (const entry of stores.list()) {
       if (
         entry instanceof Directory &&
         StorageIdSchema.safeParse(entry.name).success &&
-        !retained.has(entry.name)
+        entry.name !== control.current
       )
         entry.delete();
     }
   }
-  if (!retained.has('legacy')) {
+  if (control.current !== 'legacy') {
     // Never delete Documents or the shared SQLite directory themselves.
     for (const name of ['cherry.db', 'cherry.db-wal', 'cherry.db-shm']) {
       const file = new File(defaultDatabaseDirectory, name);

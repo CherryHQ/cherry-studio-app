@@ -1,7 +1,6 @@
 import { Directory, File } from 'expo-file-system';
 
 import { Emitter } from '@/backend/core/lifecycle/event';
-import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
@@ -190,29 +189,24 @@ export async function createInternalEntry(
   input: CreateInternalEntryInput,
   signal?: AbortSignal,
 ): Promise<FileEntry> {
-  const releaseMutation = storageMutationGate.enter();
+  signal?.throwIfAborted();
+  const written = await writeInternalFile(input);
   try {
     signal?.throwIfAborted();
-    const written = await writeInternalFile(input);
+    const entry = await entries.create(written, signal);
+    fileChanges.fire(entry.id);
+    return entry;
+  } catch (error) {
     try {
-      signal?.throwIfAborted();
-      const entry = await entries.create(written, signal);
-      fileChanges.fire(entry.id);
-      return entry;
-    } catch (error) {
-      try {
-        deleteInternalFile(written);
-      } catch (cleanupError) {
-        logger.warn(
-          'Failed to discard an internal file after FileEntry creation failed',
-          cleanupError as Error,
-          { id: written.id },
-        );
-      }
-      throw error;
+      deleteInternalFile(written);
+    } catch (cleanupError) {
+      logger.warn(
+        'Failed to discard an internal file after FileEntry creation failed',
+        cleanupError as Error,
+        { id: written.id },
+      );
     }
-  } finally {
-    releaseMutation();
+    throw error;
   }
 }
 
@@ -257,24 +251,19 @@ export async function discardInternalEntries(
   entries: Pick<FileEntryService, 'delete'>,
   createdEntries: readonly Pick<FileEntry, 'filename' | 'id'>[],
 ): Promise<void> {
-  const releaseMutation = storageMutationGate.enter();
-  try {
-    for (const entry of createdEntries) {
-      try {
-        await entries.delete(entry.id);
-      } catch (error) {
-        logger.warn('Failed to delete a discarded FileEntry', error as Error, { id: entry.id });
-        continue;
-      }
-      try {
-        deleteInternalFile(entry);
-      } catch (error) {
-        logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
-      }
-      fileChanges.fire(entry.id);
+  for (const entry of createdEntries) {
+    try {
+      await entries.delete(entry.id);
+    } catch (error) {
+      logger.warn('Failed to delete a discarded FileEntry', error as Error, { id: entry.id });
+      continue;
     }
-  } finally {
-    releaseMutation();
+    try {
+      deleteInternalFile(entry);
+    } catch (error) {
+      logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
+    }
+    fileChanges.fire(entry.id);
   }
 }
 
@@ -291,33 +280,26 @@ export async function rewriteInternalTextEntry(
   input: { data: string; id: FileEntryId },
   signal?: AbortSignal,
 ): Promise<FileEntry> {
-  const releaseMutation = storageMutationGate.enter();
-  try {
-    signal?.throwIfAborted();
-    const entry = await entries.findById(input.id);
-    signal?.throwIfAborted();
-    if (!entry) {
-      throw new Error(`Draft file entry does not exist: ${input.id}`);
-    }
-    const file = managedFileForEntry(entry);
-    if (!file.exists) {
-      throw new Error(`Draft file bytes are missing: ${input.id}`);
-    }
-    // Expo writes text synchronously. Once the bytes change, finish recording
-    // their size even if the turn is cancelled while its DB write is queued.
-    file.write(input.data);
-    const size = file.size;
-    if (!Number.isSafeInteger(size) || size < 0) {
-      throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
-    }
-    const updatedEntry = await entries.withWriteTx((tx) =>
-      entries.updateSizeTx(tx, entry.id, size),
-    );
-    fileChanges.fire(entry.id);
-    return updatedEntry;
-  } finally {
-    releaseMutation();
+  signal?.throwIfAborted();
+  const entry = await entries.findById(input.id);
+  signal?.throwIfAborted();
+  if (!entry) {
+    throw new Error(`Draft file entry does not exist: ${input.id}`);
   }
+  const file = managedFileForEntry(entry);
+  if (!file.exists) {
+    throw new Error(`Draft file bytes are missing: ${input.id}`);
+  }
+  // Expo writes text synchronously. Once the bytes change, finish recording
+  // their size even if the turn is cancelled while its DB write is queued.
+  file.write(input.data);
+  const size = file.size;
+  if (!Number.isSafeInteger(size) || size < 0) {
+    throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
+  }
+  const updatedEntry = await entries.withWriteTx((tx) => entries.updateSizeTx(tx, entry.id, size));
+  fileChanges.fire(entry.id);
+  return updatedEntry;
 }
 
 /**
@@ -329,31 +311,26 @@ export async function deleteInternalEntry(
   entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
   id: FileEntryId,
 ): Promise<boolean> {
-  const releaseMutation = storageMutationGate.enter();
-  try {
-    const deletedEntry = await entries.withWriteTx(async (tx) => {
-      const entry = await entries.findByIdTx(tx, id);
-      if (!entry) {
-        return null;
-      }
-      await entries.deleteTx(tx, id);
-      return entry;
-    });
-
-    if (!deletedEntry) {
-      return false;
+  const deletedEntry = await entries.withWriteTx(async (tx) => {
+    const entry = await entries.findByIdTx(tx, id);
+    if (!entry) {
+      return null;
     }
+    await entries.deleteTx(tx, id);
+    return entry;
+  });
 
-    try {
-      deleteInternalFile(deletedEntry);
-    } catch (error) {
-      logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
-    }
-    fileChanges.fire(id);
-    return true;
-  } finally {
-    releaseMutation();
+  if (!deletedEntry) {
+    return false;
   }
+
+  try {
+    deleteInternalFile(deletedEntry);
+  } catch (error) {
+    logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
+  }
+  fileChanges.fire(id);
+  return true;
 }
 
 export async function resolveFileEntry(
@@ -374,7 +351,6 @@ export async function getFileUri(
 }
 
 export function deleteInternalFile(entry: Pick<FileEntry, 'filename' | 'id'>): boolean {
-  storageMutationGate.assertWritable();
   const file = managedFileForEntry(entry);
   if (!file.exists) {
     return false;

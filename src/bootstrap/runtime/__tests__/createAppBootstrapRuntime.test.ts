@@ -18,6 +18,7 @@ const mockBackup = { configure: jest.fn() };
 const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
 const mockCommitStorageBoot = jest.fn();
 const mockFailStorageBoot = jest.fn();
+const mockRejectStorageCandidate = jest.fn();
 const mockValidateRestoringStorage = jest.fn(async () => {});
 const mockDocumentExport = { kind: 'document-export' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
@@ -55,6 +56,7 @@ jest.mock('@/backend/data/storage/storagePaths', () => ({
   getStorageBoot: () => mockStorageBoot(),
   commitStorageBoot: () => mockCommitStorageBoot(),
   failStorageBoot: () => mockFailStorageBoot(),
+  rejectStorageCandidate: () => mockRejectStorageCandidate(),
   cleanupStorageAfterBoot: jest.fn(),
 }));
 jest.mock('@/backend/services/backup/restoreStartup', () => ({
@@ -163,15 +165,30 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockFailStorageBoot).not.toHaveBeenCalled();
   });
 
-  test('failed validation cannot open the candidate host or commit it', async () => {
+  test('a candidate that fails validation is rejected and startup continues on the current store', async () => {
     mockStorageBoot.mockReturnValue({ restoring: true, resetCaches: true });
     mockValidateRestoringStorage.mockRejectedValueOnce(new Error('hash mismatch'));
+    mockRejectStorageCandidate.mockImplementationOnce(() =>
+      mockStorageBoot.mockReturnValue({ restoring: false, resetCaches: false }),
+    );
+    const runtime = createRuntime();
+    await runtime.initialize();
+    expect(mockRejectStorageCandidate).toHaveBeenCalledTimes(1);
+    // The current store's caches still describe it; only a restored store resets them.
+    expect(mockCache.resetForRestore).not.toHaveBeenCalled();
+    expect(mockInitializeAppRuntime).toHaveBeenCalledTimes(1);
+    expect(mockFailStorageBoot).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
+  test('a candidate that fails after opening requires a native restart', async () => {
+    mockStorageBoot.mockReturnValue({ restoring: true, resetCaches: true });
+    mockInitializeAppRuntime.mockRejectedValueOnce(new Error('seed failed'));
     const runtime = createRuntime();
     await expect(runtime.initialize()).rejects.toMatchObject({ code: 'restart-required' });
-    expect(application.hasHost).toBe(false);
     expect(mockCommitStorageBoot).not.toHaveBeenCalled();
     expect(mockFailStorageBoot).toHaveBeenCalledTimes(1);
-    expect(mockInitializeAppRuntime).not.toHaveBeenCalled();
+    expect(mockRejectStorageCandidate).not.toHaveBeenCalled();
     await runtime.dispose();
   });
 

@@ -1,8 +1,10 @@
 import { BackupError } from '@/shared/contracts/backup';
 
-/** A process-local barrier; restoration never retargets a live process's storage. */
+/**
+ * Set while a backup or restore holds the stores. The app-wide progress dialog already blocks
+ * the user; this keeps work that starts without the UI (new Agent turns, background jobs) out.
+ */
 export class StorageMutationGate {
-  private active = 0;
   private frozen = false;
 
   get isFrozen(): boolean {
@@ -13,29 +15,8 @@ export class StorageMutationGate {
     if (this.frozen) throw new BackupError('busy');
   }
 
-  enter(): () => void {
-    this.assertWritable();
-    this.active += 1;
-    let released = false;
-    return () => {
-      if (!released) {
-        released = true;
-        this.active -= 1;
-      }
-    };
-  }
-
-  async run<T>(operation: () => Promise<T>): Promise<T> {
-    const release = this.enter();
-    try {
-      return await operation();
-    } finally {
-      release();
-    }
-  }
-
   freeze(): () => void {
-    if (this.frozen || this.active !== 0) throw new BackupError('busy');
+    if (this.frozen) throw new BackupError('busy');
     this.frozen = true;
     let released = false;
     return () => {
