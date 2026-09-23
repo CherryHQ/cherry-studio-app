@@ -23,6 +23,7 @@ function snapshot(): AgentSessionSnapshot {
     agent: { id: 'agent-1', name: 'Agent' },
     capabilities: { approvals: true, attachments: false, reasoning: true, tools: true },
     pendingApprovals: [],
+    pendingQuestion: null,
     hasHistoryBeforeActiveTurn: null,
     session: {
       agentId: 'agent-1',

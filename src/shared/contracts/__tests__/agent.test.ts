@@ -252,6 +252,7 @@ describe('Agent tool and managed-file contracts', () => {
       capabilities: { approvals: true, attachments: true, reasoning: true, tools: true },
       hasHistoryBeforeActiveTurn: false,
       pendingApprovals: [],
+      pendingQuestion: null,
       session: {
         agentId: 'agent-1',
         createdAt: '2026-08-31T00:00:00.000Z',

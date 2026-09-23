@@ -33,6 +33,7 @@ let mockAgentChatSession: {
   hasHistoryBeforeActiveTurn?: boolean;
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
+  pendingQuestion: null;
   retryingMessageId?: string;
   sessionId: string;
   status: 'ready';
@@ -289,6 +290,7 @@ describe('ChatWorkspace message rendering integration', () => {
       activeTurn: null,
       liveMessages: [],
       pendingApprovals: [],
+      pendingQuestion: null,
       sessionId: 'session-1',
       status: 'ready',
     };

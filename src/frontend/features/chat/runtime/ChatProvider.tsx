@@ -74,6 +74,7 @@ const EMPTY_AGENT_SESSION_STATE: AgentSessionChatState = Object.freeze({
   activeTurn: null,
   liveMessages: Object.freeze([]),
   pendingApprovals: Object.freeze([]),
+  pendingQuestion: null,
   sessionId: '',
   status: 'idle',
 });

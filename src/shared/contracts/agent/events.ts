@@ -78,7 +78,7 @@ export const AgentSessionSnapshotSchema = z.strictObject({
   hasHistoryBeforeActiveTurn: z.boolean().nullable(),
   streamingMessage: AgentMessageViewSchema.nullable(),
   pendingApprovals: z.array(AgentApprovalViewSchema),
-  pendingQuestion: AgentPendingQuestionSchema.nullable().optional(),
+  pendingQuestion: AgentPendingQuestionSchema.nullable(),
 });
 export type AgentSessionSnapshot = z.infer<typeof AgentSessionSnapshotSchema>;
 

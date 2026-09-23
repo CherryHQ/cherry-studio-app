@@ -30,7 +30,7 @@ export type AgentSessionChatState = {
   hasHistoryBeforeActiveTurn?: boolean;
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
-  pendingQuestion?: AgentPendingQuestion | null;
+  pendingQuestion: AgentPendingQuestion | null;
   sessionId: string;
   snapshot?: AgentSessionSnapshot;
   status: AgentSessionChatStatus;
@@ -82,6 +82,7 @@ function createSessionState(sessionId: string): AgentSessionChatState {
     activeTurn: null,
     liveMessages: [],
     pendingApprovals: [],
+    pendingQuestion: null,
     sessionId,
     status: 'idle',
   };
@@ -457,7 +458,7 @@ export class AgentSessionChatClient {
       hasHistoryBeforeActiveTurn: snapshot.hasHistoryBeforeActiveTurn ?? undefined,
       liveMessages: [...entry.liveMessages.values()],
       pendingApprovals: snapshot.pendingApprovals,
-      pendingQuestion: snapshot.pendingQuestion ?? null,
+      pendingQuestion: snapshot.pendingQuestion,
       sessionId: snapshot.session.id,
       snapshot,
       status: 'ready',
@@ -564,7 +565,9 @@ export class AgentSessionChatClient {
         // transcript; keeping its view would report a turn nothing can show.
         const isActiveTurnDeleted = entry.state.activeTurn?.id === event.turnId;
         this.commitLiveMessages(entry, {
-          ...(isActiveTurnDeleted ? { activeTurn: null, pendingApprovals: [] } : {}),
+          ...(isActiveTurnDeleted
+            ? { activeTurn: null, pendingApprovals: [], pendingQuestion: null }
+            : {}),
           ...(entry.state.enteringUserMessageId &&
           event.messageIds.includes(entry.state.enteringUserMessageId)
             ? { enteringUserMessageId: undefined }
