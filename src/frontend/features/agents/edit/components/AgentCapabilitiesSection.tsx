@@ -15,13 +15,15 @@ import { type DevicePermissionScope, summarizeDevicePermissions } from '@/shared
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import { getAgentCapabilityAvailability } from '@/shared/data/types/builtInTool';
 
+import { setAgentCapabilityEnabled } from '../agentForm';
+
 type AgentCapabilitiesSectionProps = {
   disabledCapabilities: readonly AgentCapability[];
   onChange: (disabledCapabilities: AgentCapability[]) => void;
 };
 
 type CapabilityRow = {
-  capability: AgentCapability;
+  capability: SystemCapability;
   permissionScopes: readonly DevicePermissionScope[];
 };
 
@@ -33,6 +35,7 @@ const CAPABILITY_DISPLAY_ORDER = [
   'health',
   'location',
 ] as const satisfies readonly AgentCapability[];
+type SystemCapability = (typeof CAPABILITY_DISPLAY_ORDER)[number];
 
 const CAPABILITY_ICONS = {
   calendar: CalendarIcon,
@@ -41,7 +44,7 @@ const CAPABILITY_ICONS = {
   location: MapPinIcon,
   reminders: BellIcon,
   web: GlobeIcon,
-} satisfies Record<AgentCapability, LucideIconComponent>;
+} satisfies Record<SystemCapability, LucideIconComponent>;
 
 // Platform support is static; device support is checked from live statuses below.
 // Keep the observed scope array stable for the permission hook.
@@ -70,11 +73,7 @@ export function AgentCapabilitiesSection({
   );
 
   const handleToggle = (row: CapabilityRow, enabled: boolean) => {
-    onChange(
-      enabled
-        ? disabledCapabilities.filter((capability) => capability !== row.capability)
-        : [...new Set([...disabledCapabilities, row.capability])],
-    );
+    onChange(setAgentCapabilityEnabled(disabledCapabilities, row.capability, enabled));
     // This changes the Agent's intent only. System access is requested for the
     // actual operation, after the in-chat approval, or explicitly in Settings.
   };

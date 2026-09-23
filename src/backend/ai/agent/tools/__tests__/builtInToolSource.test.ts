@@ -38,7 +38,7 @@ describe('createSystemCapabilitySource', () => {
 
     // Every device tool needs a permission, web tools need a configured
     // provider, and generate_image needs a drawing model, so only the
-    // unconditional Agent management, question and file tools survive.
+    // permission-free Agent management, question and file tools survive.
     expect(capabilityIds(tools)).toEqual([
       'agent_create',
       'agent_get',
@@ -151,6 +151,15 @@ describe('createSystemCapabilitySource', () => {
 
     expect(capabilityIds(tools)).not.toContain('web_search');
     expect(capabilityIds(tools)).not.toContain('web_fetch');
+  });
+
+  test('omits Agent management tools when the Agent disables the group', async () => {
+    const tools = await resolve({ disabledCapabilities: ['agents'] });
+
+    expect(capabilityIds(tools)).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/^agent_/)]),
+    );
+    expect(capabilityIds(tools)).toContain('ask_user_question');
   });
 
   test('offers generate_image only with a drawing model and the group enabled', async () => {

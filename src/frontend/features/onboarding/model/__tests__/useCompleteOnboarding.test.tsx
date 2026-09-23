@@ -152,6 +152,13 @@ describe('useCompleteOnboarding', () => {
     await act(async () => onboarding.complete(selection));
     expect(mockCreateModels).toHaveBeenCalledTimes(1);
     expect(mockCreateAgent).toHaveBeenCalledTimes(1);
+    // The default Agent keeps Agent management; other create defaults still apply.
+    expect(mockCreateAgent.mock.calls[0][0].disabledCapabilities).toEqual([
+      'calendar',
+      'health',
+      'location',
+      'reminders',
+    ]);
     expect(mockCheckChat).toHaveBeenCalledTimes(2);
     expect(mockSavePreferences).toHaveBeenCalledTimes(2);
     expect(mockReplace).toHaveBeenCalledTimes(1);

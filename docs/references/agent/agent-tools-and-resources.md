@@ -3,11 +3,12 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, health, location, web search and fetch,
-image generation, `ask_user_question`, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
+image generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
 `{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location) are enabled per Agent in the editor; the three file tools belong to every turn. An
+health, location, agents) are enabled per Agent in the editor; `ask_user_question` and the three file tools belong to
+every turn. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -589,14 +590,16 @@ background execution or recovery after the operating system terminates the app.
 
 ## Agent Management
 
-The core catalog includes `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
-Reads use automatic approval; writes start at `ask` and follow the current Agent's approval
+The `agents` capability group contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
+The editor shows it as Agent management under Built-in tools. New Agents start with it disabled,
+whether created from the editor or by these tools; the seeded default Agent keeps it enabled so a
+fresh installation can create Agents from conversation. Reads use automatic approval; writes start at `ask` and follow the current Agent's approval
 preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
 or change MCP bindings.
 
 Creation accepts a name, instructions, and optional definition fields. Omitting `modelId` lets
 `AgentService` resolve the global default Agent model; omitted capability settings use the same
-disabled device groups as the manual create form. A saved Agent without a model remains editable
+disabled groups as the manual create form. A saved Agent without a model remains editable
 but cannot start chatting. The model derives instructions from the conversation and may use
 `ask_user_question` for material missing requirements.
 
