@@ -12,6 +12,7 @@ const mockDeleteMessageTurn = jest.fn();
 const mockShareMessage = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
   Button: (props: object) => jest.requireActual('react').createElement('Button', props),
   ContextMenu: (props: ContextMenuProps) => mockContextMenu(props),
   ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,

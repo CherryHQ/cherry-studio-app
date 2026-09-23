@@ -2,7 +2,7 @@ import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import {
   Button,
   ContextMenu,
-  ContextMenuScrollBoundary,
+  ScrollInteractionBoundary,
   type MenuItem,
 } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
@@ -156,7 +156,7 @@ export function ProviderModelListContent({
   );
 
   return (
-    <ContextMenuScrollBoundary>
+    <ScrollInteractionBoundary>
       {(scrollHandlers) => (
         <LegendList
           {...scrollHandlers}
@@ -178,7 +178,7 @@ export function ProviderModelListContent({
           style={styles.list}
         />
       )}
-    </ContextMenuScrollBoundary>
+    </ScrollInteractionBoundary>
   );
 }
 

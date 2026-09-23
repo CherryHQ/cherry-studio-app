@@ -5,6 +5,7 @@ import { KeyboardController, KeyboardEvents } from 'react-native-keyboard-contro
 /** Editing belongs to the whole composer, including its menus and pickers. */
 export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle | null>) {
   const [isEditing, setIsEditing] = useState(false);
+  const isEditingRef = useRef(false);
   const [isKeyboardTrackingEnabled, setIsKeyboardTrackingEnabled] = useState(false);
   const isDismissPendingRef = useRef(false);
 
@@ -22,12 +23,17 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
   }, []);
 
   const activateInput = useCallback(() => {
+    isEditingRef.current = true;
     isDismissPendingRef.current = false;
     setIsEditing(true);
     setIsKeyboardTrackingEnabled(true);
   }, []);
 
   const dismissInput = useCallback(() => {
+    // Native blur hides the Android IME even when the field has already lost focus.
+    // One editing session must issue it only once, including before React commits.
+    if (!isEditingRef.current) return;
+    isEditingRef.current = false;
     setIsEditing(false);
     isDismissPendingRef.current = KeyboardController.isVisible();
     if (!isDismissPendingRef.current) {

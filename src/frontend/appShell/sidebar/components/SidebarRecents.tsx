@@ -36,8 +36,7 @@ type SidebarRecentsProps = {
 };
 
 const SIDEBAR_LEADING_SIZE = 28;
-const SIDEBAR_ROW_CLASS_NAME =
-  'w-full flex-row items-center gap-3 rounded-xl px-3 py-2.5 active:bg-sidebar-accent';
+const SIDEBAR_ROW_CLASS_NAME = 'w-full flex-row items-center gap-3 rounded-xl px-3 py-2.5';
 
 function useSidebarChatTarget() {
   // The drawer sits outside the chat screen's local route context.
@@ -232,15 +231,20 @@ function SidebarRecentSessionList({
           accessibilityLabel={showMoreLabel}
           accessibilityRole="button"
           accessibilityState={{ disabled: isLoadingMoreSessions }}
-          className={SIDEBAR_ROW_CLASS_NAME}
           disabled={isLoadingMoreSessions}
           onPress={handleViewAllPress}
           testID="sidebar-sessions-view-all"
         >
-          {leading}
-          <SidebarRowContent>
-            <Text className="min-w-0 flex-1 text-muted-foreground text-sm">{showMoreLabel}</Text>
-          </SidebarRowContent>
+          {({ pressed }) => (
+            <View className={cn(SIDEBAR_ROW_CLASS_NAME, pressed && 'bg-sidebar-accent')}>
+              {leading}
+              <SidebarRowContent>
+                <Text className="min-w-0 flex-1 text-muted-foreground text-sm">
+                  {showMoreLabel}
+                </Text>
+              </SidebarRowContent>
+            </View>
+          )}
         </Pressable>
       ) : null}
       {isShowingAllSessions && isLoadingMoreSessions ? (
@@ -321,29 +325,35 @@ function SidebarAgentRow({
           accessibilityLabel={agent.name}
           accessibilityRole="button"
           accessibilityState={{ expanded: isExpanded }}
-          className={SIDEBAR_ROW_CLASS_NAME}
           onPress={() => setIsExpandedOverride((current) => !(current ?? isDefaultExpanded))}
           testID={`sidebar-agent-${agent.id}`}
         >
-          <SidebarAgentIconSlot>
-            <AgentAvatar
-              accessibilityLabel={agent.name}
-              avatar={agent.avatar}
-              name={agent.name}
-              size={SIDEBAR_LEADING_SIZE}
-              uri={agent.avatarUri}
-            />
-          </SidebarAgentIconSlot>
-          <SidebarRowContent>
-            <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-              {agent.name}
-            </Text>
-            {isExpanded ? (
-              <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
-            ) : (
-              <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
-            )}
-          </SidebarRowContent>
+          {({ pressed }) => (
+            <View className={cn(SIDEBAR_ROW_CLASS_NAME, pressed && 'bg-sidebar-accent')}>
+              <SidebarAgentIconSlot>
+                <AgentAvatar
+                  accessibilityLabel={agent.name}
+                  avatar={agent.avatar}
+                  name={agent.name}
+                  size={SIDEBAR_LEADING_SIZE}
+                  uri={agent.avatarUri}
+                />
+              </SidebarAgentIconSlot>
+              <SidebarRowContent>
+                <Text
+                  className="min-w-0 flex-1 text-base text-sidebar-foreground"
+                  numberOfLines={1}
+                >
+                  {agent.name}
+                </Text>
+                {isExpanded ? (
+                  <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+                )}
+              </SidebarRowContent>
+            </View>
+          )}
         </Pressable>
       </View>
       {isExpanded ? (
@@ -393,23 +403,32 @@ function SidebarSessionRow({
       <Pressable
         accessibilityRole="link"
         accessibilityState={{ selected: isSelected }}
-        className={cn(SIDEBAR_ROW_CLASS_NAME, isSelected && 'bg-secondary/70')}
         onPress={onCloseDrawer}
         testID={`sidebar-session-${session.id}`}
       >
-        {leading}
-        <SidebarRowContent>
-          <Text
+        {({ pressed }) => (
+          <View
             className={cn(
-              'min-w-0 flex-1 text-base text-sidebar-foreground',
-              isSelected && 'font-medium',
+              SIDEBAR_ROW_CLASS_NAME,
+              isSelected && 'bg-secondary/70',
+              pressed && 'bg-sidebar-accent',
             )}
-            numberOfLines={1}
           >
-            {session.title || t('session.list.untitled')}
-          </Text>
-          <SessionStatus sessionId={session.id} />
-        </SidebarRowContent>
+            {leading}
+            <SidebarRowContent>
+              <Text
+                className={cn(
+                  'min-w-0 flex-1 text-base text-sidebar-foreground',
+                  isSelected && 'font-medium',
+                )}
+                numberOfLines={1}
+              >
+                {session.title || t('session.list.untitled')}
+              </Text>
+              <SessionStatus sessionId={session.id} />
+            </SidebarRowContent>
+          </View>
+        )}
       </Pressable>
     </ContextMenuLink>
   );

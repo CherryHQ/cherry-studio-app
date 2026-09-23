@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 
+import { BackgroundPressExclusion } from '../../background-press/background-press';
 import { DotMatrixSquare20 } from '../../loading';
 import type { MessagePartPlaceholderProps } from '../message-part.types';
 
@@ -32,14 +33,16 @@ export function MessagePartPlaceholder({
 
   if (onPress) {
     return (
-      <Pressable
-        accessibilityLabel={label}
-        accessibilityRole="link"
-        className={`${containerClassName} active:opacity-70`}
-        onPress={onPress}
-      >
-        {content}
-      </Pressable>
+      <BackgroundPressExclusion>
+        <Pressable
+          accessibilityLabel={label}
+          accessibilityRole="link"
+          className={`${containerClassName} active:opacity-70`}
+          onPress={onPress}
+        >
+          {content}
+        </Pressable>
+      </BackgroundPressExclusion>
     );
   }
 

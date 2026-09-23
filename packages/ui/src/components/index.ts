@@ -1,5 +1,6 @@
 export * from './alert';
 export * from './avatar';
+export * from './background-press';
 export * from './bottom-sheet';
 export * from './button';
 export * from './chip';
@@ -17,6 +18,7 @@ export * from './option-picker-bottom-sheet';
 export * from './portal';
 export * from './surface';
 export * from './search-field';
+export * from './scroll-interaction';
 export * from './scroll-shadow';
 export * from './scroll-to-bottom-button';
 export * from './select-field';

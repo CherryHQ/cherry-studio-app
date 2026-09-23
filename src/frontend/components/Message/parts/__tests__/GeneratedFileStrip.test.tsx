@@ -5,6 +5,8 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { GeneratedFileStrip } from '../GeneratedFileStrip';
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  BackgroundPressExclusion: (props: object) =>
+    jest.requireActual('react').createElement('View', props),
   ContextMenuExclusion: (props: object) => jest.requireActual('react').createElement('View', props),
 }));
 
