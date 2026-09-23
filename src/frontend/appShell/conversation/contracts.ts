@@ -256,6 +256,7 @@ export type AgentSummary = {
   ref: AgentRef;
   name: string;
   configuration: 'available' | 'unavailable' | 'unknown';
+  modelName?: string | null;
   emoji?: string;
   avatar?: string | null;
   avatarUri?: string | null;

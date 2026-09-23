@@ -152,6 +152,7 @@ export function createLocalConversationSource(input: {
             ref: refs.issue<AgentRef>('agent', agent.id),
             name: agent.name,
             configuration: agent.modelId ? ('available' as const) : ('unavailable' as const),
+            modelName: agent.modelName,
             avatar: agent.avatar,
             avatarUri: agent.avatarUri,
           })),

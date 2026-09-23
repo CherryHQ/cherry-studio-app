@@ -16,3 +16,5 @@ export {
 } from './RouteHeader';
 
 export { MainHeaderView } from './MainHeader/MainHeaderView/MainHeaderView';
+
+export { MainHeaderAgentPickerSheet } from './MainHeader/MainHeaderAgentPickerSheet';

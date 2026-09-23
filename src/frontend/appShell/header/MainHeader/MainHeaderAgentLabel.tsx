@@ -42,7 +42,7 @@ export function MainHeaderAgentLabel({
   onPress,
 }: {
   onPress?: () => void;
-  agent: Pick<Agent, 'name'> & Partial<Pick<Agent, 'avatar' | 'avatarUri'>>;
+  agent: Pick<Agent, 'name'> & Partial<Pick<Agent, 'avatar' | 'avatarUri'>> & { emoji?: string };
 }) {
   const Container = onPress ? Pressable : View;
   return (
@@ -55,7 +55,13 @@ export function MainHeaderAgentLabel({
       className={`min-h-10 max-w-56 min-w-0 shrink flex-row items-center gap-2 rounded-full px-3 py-1${onPress ? ' active:opacity-60' : ''}`}
       testID="current-agent-label"
     >
-      <AgentAvatar avatar={agent.avatar} name={agent.name} size={24} uri={agent.avatarUri} />
+      <AgentAvatar
+        avatar={agent.avatar}
+        emoji={agent.emoji}
+        name={agent.name}
+        size={24}
+        uri={agent.avatarUri}
+      />
       <Text
         className="min-w-0 shrink font-medium text-base text-foreground"
         ellipsizeMode="tail"

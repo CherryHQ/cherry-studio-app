@@ -3,20 +3,11 @@ import {
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import {
-  type RefObject,
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { type RefObject, createContext, use, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { v7 as uuidv7 } from 'uuid';
 
 import {
   ConversationSourceBoundary,
@@ -27,13 +18,10 @@ import {
   useConversationSnapshot,
   useConversationSource,
   type AgentSummary,
-  type ConversationRef,
-  type DraftId,
 } from '@/frontend/appShell/conversation';
-import { MainHeaderView } from '@/frontend/appShell/header';
+import { MainHeaderView, MainHeaderAgentPickerSheet } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
-  conversationHref,
   parseRemoteChatRoute,
   type RemoteChatRouteParams,
   useChatSource,
@@ -49,6 +37,7 @@ import { usePersistCache } from '@/frontend/data/hooks';
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace } from '../components/ChatWorkspace';
 import { RemoteComposer } from './RemoteComposer';
+import { useRemoteChatNavigation } from './useRemoteChatNavigation';
 
 export function RemoteChatScreen() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
@@ -97,16 +86,34 @@ function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<View | n
   const { startRemoteChat } = useChatSource();
   return <MainHeaderView blurTarget={blurTarget} onNewChat={() => startRemoteChat()} />;
 }
-const HeaderContext = createContext<AgentSummary | undefined>(undefined);
+const HeaderContext = createContext<{
+  agent?: AgentSummary;
+  selectAgent(agentId: string): void;
+  startNewChat(agentId?: string): void;
+} | null>(null);
 function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
-  const agent = use(HeaderContext);
-  const { startRemoteChat } = useChatSource();
+  const header = use(HeaderContext)!;
+  const catalog = useConversationAgents();
+  const [pickerOpen, setPickerOpen] = useState(false);
   return (
-    <MainHeaderView
-      agent={agent}
-      blurTarget={blurTarget}
-      onNewChat={() => startRemoteChat(agent?.id)}
-    />
+    <>
+      <MainHeaderView
+        agent={header.agent}
+        blurTarget={blurTarget}
+        onNewChat={() => header.startNewChat(header.agent?.id)}
+        onAgentPress={() => {
+          Keyboard.dismiss();
+          setPickerOpen(true);
+        }}
+      />
+      <MainHeaderAgentPickerSheet
+        catalog={catalog}
+        currentAgentId={header.agent?.id}
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={header.selectAgent}
+      />
+    </>
   );
 }
 const ignorePending = () => {};
@@ -116,8 +123,8 @@ function RemoteChatSession() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
-  const [initialDraftId] = useState(() => uuidv7());
-  const draftId = (target.draftId ?? initialDraftId) as DraftId;
+  const { draftId, identity, selectAgent, startNewChat, onSessionCreated } =
+    useRemoteChatNavigation(target, source);
   const opened = useConversation(
     target.sessionId ? { source: source.ref, sessionId: target.sessionId } : undefined,
     source,
@@ -135,39 +142,18 @@ function RemoteChatSession() {
     if (agentId && !agent && agents.hasNextPage && !agents.isFetchingNextPage && !agents.isError)
       void agents.fetchNextPage();
   }, [agentId, agent, agents]);
-  const [handoff, setHandoff] = useState<{ sessionId: string; key: string }>();
-  const identity = target.sessionId
-    ? handoff?.sessionId === target.sessionId
-      ? handoff.key
-      : `session:${target.sessionId}`
-    : `draft:${draftId}:${agentId ?? ''}`;
   const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? `session:${target.sessionId}` : identity}`;
+  // Read pre-unification drafts once; new drafts are independent of Agent selection.
+  const legacyDraftKey = `${source.draftScope}:${target.connectionId}:draft:${draftId}:${agentId ?? ''}`;
   const [drafts] = usePersistCache('remote_agent.drafts');
-  const focused = useRef(false);
-  useFocusEffect(
-    useCallback(() => {
-      focused.current = true;
-      return () => {
-        focused.current = false;
-      };
-    }, []),
-  );
-  const origin = useRef(identity);
-  useEffect(() => {
-    origin.current = identity;
-  }, [identity]);
-  const onSessionCreated = (ref: ConversationRef) => {
-    if (!focused.current || origin.current !== identity) return false;
-    setHandoff({ sessionId: ref.sessionId, key: identity });
-    router.replace(conversationHref(ref));
-    return true;
-  };
   return (
-    <HeaderContext value={agent}>
+    <HeaderContext value={{ agent, selectAgent, startNewChat }}>
       <ChatScreenFrame header={RemoteHeader}>
         <ComposerSessionProvider
           key={`${source.scope}:${identity}`}
-          initialDraft={drafts[draftKey] ?? ''}
+          initialDraft={
+            drafts[draftKey] ?? (!target.sessionId ? drafts[legacyDraftKey] : undefined) ?? ''
+          }
         >
           <ComposerDismissArea disabled testID="chat-background">
             {opened.error ? (
@@ -207,7 +193,9 @@ function RemoteChatSession() {
               {!target.sessionId && agents.isSuccess && !agents.items.length ? (
                 <ContentState.Empty title={t('remoteAgent.noAgents')} />
               ) : null}
+              {/* Agent-scoped workspace controls reset; the user's composer above stays mounted. */}
               <RemoteComposer
+                key={agent?.ref}
                 agent={agent}
                 session={opened.session}
                 snapshot={snapshot}

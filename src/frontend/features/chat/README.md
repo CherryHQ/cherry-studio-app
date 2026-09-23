@@ -94,3 +94,11 @@ The plus-menu remains disabled and local model/attachment controls remain local.
 Both sources share selection preparation and export UI. Prepared local image bytes are not yet
 pinned. See [Service Dependencies And Ownership](../../../../docs/references/remote-access/service-ownership.md)
 for source ownership and remaining work. Local regression tests do not establish device acceptance.
+
+Remote header Agent selection preserves the current desktop and unsent draft identity. The composer
+and its persisted text belong to that draft, not to the selected Agent. Agent changes remount only
+the remote execution controls, so workspace references are acquired for the new Agent. Selecting
+from an existing session or an admitted start opens a distinct draft; admission is checked at click
+time and navigation invalidates the old handoff immediately. Pending/uncertain operations remain
+recoverable and cannot redirect the new draft when their replies arrive. Existing Agent-keyed draft
+text is read as a fallback; subsequent writes use the Agent-independent key.

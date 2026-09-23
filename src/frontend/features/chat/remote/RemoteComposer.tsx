@@ -88,8 +88,10 @@ export function RemoteComposer({
         operation.draftId === draftId && operation.state === 'applied' && operation.conversation,
     );
     if (!session && completed?.conversation && handedOff.current !== completed.id) {
-      handedOff.current = completed.id;
-      if (onSessionCreated(completed.conversation)) completed.dismiss?.();
+      if (onSessionCreated(completed.conversation)) {
+        handedOff.current = completed.id;
+        completed.dismiss?.();
+      }
     }
   }, [starts, draftId, session, onSessionCreated]);
 
