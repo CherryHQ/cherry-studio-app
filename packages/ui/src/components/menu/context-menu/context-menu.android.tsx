@@ -7,12 +7,12 @@ import {
 } from 'react-native-gesture-handler';
 import { callback } from 'react-native-nitro-modules';
 
+import { useScrollInteraction } from '../../scroll-interaction/scroll-interaction-context';
 import { MenuContent } from '../menu-content';
 import type { ContextMenuProps, MenuItem } from '../menu.types';
 import { useMenuState } from '../use-menu-state';
 import { type NativeCherryMenuRef, NativeCherryMenuView } from '../use-native-menu';
 import { ContextMenuExclusionContext, useContextMenuTouch } from './context-menu-exclusion';
-import { useContextMenuInteraction } from './context-menu-scroll-boundary.android';
 
 type AccessibilityInjectedProps = {
   accessibilityActions?: readonly AccessibilityActionInfo[];
@@ -40,7 +40,7 @@ const IGNORE_NATIVE_ACTION = callback(() => {});
 export function ContextMenu({ children, items }: ContextMenuProps) {
   const anchorRef = useRef<View>(null);
   const { anchor, close, finishClose, isOpen, open } = useMenuState(anchorRef);
-  const interaction = useContextMenuInteraction();
+  const interaction = useScrollInteraction();
   const touch = useContextMenuTouch();
   const touchInteraction = touch.interaction;
   const [menuBinding, setMenuBinding] = useState<NativeMenuBinding | null>(null);
@@ -55,7 +55,7 @@ export function ContextMenu({ children, items }: ContextMenuProps) {
   const hybridRef = useMemo(() => callback(handleMenuView), [handleMenuView]);
   const handleLongPress = useCallback(
     ({ absoluteX, absoluteY }: LongPressGestureHandlerEventPayload) => {
-      if (!interaction.isRecognitionBlocked() && !touchInteraction.isRecognitionBlocked()) {
+      if (!interaction?.isRecognitionBlocked() && !touchInteraction.isRecognitionBlocked()) {
         open({ height: 0, pageX: absoluteX, pageY: absoluteY, width: 0 });
       }
     },

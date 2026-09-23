@@ -1,4 +1,5 @@
 import {
+  BackgroundPressExclusion,
   Button,
   ContextMenu,
   ContextMenuExclusion,
@@ -60,12 +61,14 @@ function renderChatAssistantMessage(
       </View>
       <AssistantMessage message={message}>
         {message.status !== 'pending' ? (
-          <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
-            <AssistantMessageToolbar message={message} />
-            <View className="min-w-0 max-w-full flex-1 items-end">
-              <AssistantMessageUsage message={message} />
-            </View>
-          </ContextMenuExclusion>
+          <BackgroundPressExclusion>
+            <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
+              <AssistantMessageToolbar message={message} />
+              <View className="min-w-0 max-w-full flex-1 items-end">
+                <AssistantMessageUsage message={message} />
+              </View>
+            </ContextMenuExclusion>
+          </BackgroundPressExclusion>
         ) : null}
       </AssistantMessage>
     </View>
@@ -167,22 +170,24 @@ function ChatMessageContextMenu({
         {/* Keep attachment and text nodes independently reachable. Assistant rows already
             have a toolbar; user rows need explicit actions when long press is unavailable. */}
         {isScreenReaderEnabled && message.role === 'user' && items.length > 0 ? (
-          <ContextMenuExclusion className="flex-row justify-end gap-1">
-            {items
-              .filter((item) => !item.disabled)
-              .map((item) => (
-                <Button
-                  accessibilityLabel={item.label}
-                  key={item.id}
-                  onPress={item.onPress}
-                  size="xs"
-                  testID={`user-message-${item.id}`}
-                  variant="ghost"
-                >
-                  {item.label}
-                </Button>
-              ))}
-          </ContextMenuExclusion>
+          <BackgroundPressExclusion>
+            <ContextMenuExclusion className="flex-row justify-end gap-1">
+              {items
+                .filter((item) => !item.disabled)
+                .map((item) => (
+                  <Button
+                    accessibilityLabel={item.label}
+                    key={item.id}
+                    onPress={item.onPress}
+                    size="xs"
+                    testID={`user-message-${item.id}`}
+                    variant="ghost"
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+            </ContextMenuExclusion>
+          </BackgroundPressExclusion>
         ) : null}
       </View>
     </ContextMenu>

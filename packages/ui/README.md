@@ -96,7 +96,19 @@ native renderer. A part that has streamed keeps the streaming renderer for its f
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
 the same theme tokens, syntax palette, LaTeX flags, and typography scale. Native streaming mode ends
 with each part, releasing pending tail blocks and requesting a final layout even when the text
-itself is unchanged. Product code supplies the active font size step, decides how links open, and
+itself is unchanged. `normalizeLatexDelimiters` from `@cherrystudio/ui/markdown` rewrites TeX
+`\(...\)` and `\[...\]` delimiters to dollar math before either renderer parses them, and the
+document exporter runs the same function so previews and exports agree. An inline formula never
+crosses a blank line or a code region; a `\[` that owns its line opens a display block that may
+span blank lines until a `\]` ends a line. Nested delimiters of the same kind are balanced and
+the inner pair dropped. `\[...\]` only counts as math when its body carries a TeX signal such as
+a command, `^`, `_`, `=`, or braces, so escaped citations like `\[1\]` stay text. Physical
+formula newlines become spaces (after dropping TeX `%` comments and block-quote markers) so
+Markdown cannot interpret equation lines as headings or quotes. During streaming, output stays
+append-only: a formula whose meaning a later chunk could still change is withheld until its
+paragraph closes, and an incomplete final formula retains its source. This only changes
+presentation, not stored messages. Product code supplies the active font size step, decides how
+links open, and
 passes the native copy-menu labels already translated. The renderer presents those menus itself, on
 text selections and on Markdown tables, so omitting the labels leaves the library's English
 defaults:
@@ -150,6 +162,16 @@ When rendering selectable content inside a scroll surface, follow the selection 
 scroll-cancellation contract in
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md)
 and verify the native interaction boundary on each supported platform.
+
+`BackgroundPressArea` recognizes background taps without taking the list's JavaScript responder.
+Its native view is the only owner of the press decision: movement and long-press thresholds,
+scrolling, a touch that stops momentum, extra pointers and nested areas cancel it on the UI thread,
+and JavaScript receives only completed presses. Readable content remains a background target.
+Wrap controls with their own taps in `BackgroundPressExclusion`, keeping each exclusion bounded to
+the press target and carrying the target's outer margins instead of covering a full-screen
+overlay. CherryUI press targets that render inside background areas exclude themselves. The native
+implementation requires regenerating Nitro bindings and rebuilding the development client when
+changed.
 
 Typography utilities are exported from `@cherrystudio/ui/utils`: `normalizeFontSizeStep`,
 `resolveTypographyScale`, and `createTypographyCSSVariables` keep native style objects, runtime CSS
@@ -215,6 +237,14 @@ the at-bottom state and the one-shot scroll action:
   onPress={scrollToBottom}
 />;
 ```
+
+`Dialog` is the shared centered content dialog for decisions that need custom content, such as
+an external link. Pass `open`, `onOpenChange`, and `title`, then compose content and action buttons
+as children. Actions do not automatically dismiss it, so callers can wait for a successful save.
+Backdrop presses and swipe dismissal are disabled; `onOpenChange` handles system dismissal
+requests. Content scrolls when large text or a small viewport requires it.
+Mount it inside `Portal.AccessibilityBoundary` so an open dialog hides background content from
+screen readers; closing or unmounting the dialog releases that isolation.
 
 `Alert` is the shared native dialog primitive. Mount one provider at the application root and
 inject localized default action labels there; feature code can then enqueue informational,
@@ -481,7 +511,7 @@ component instead of configuring a trigger:
 import {
   ActionMenu,
   ContextMenu,
-  ContextMenuScrollBoundary,
+  ScrollInteractionBoundary,
   type MenuItem,
 } from '@cherrystudio/ui/components';
 
@@ -501,9 +531,9 @@ const items = [
 </ContextMenu>;
 
 // The scroll owner exposes drag and momentum state to every descendant context menu.
-<ContextMenuScrollBoundary>
+<ScrollInteractionBoundary>
   {(scrollHandlers) => <ScrollView {...scrollHandlers}>{rows}</ScrollView>}
-</ContextMenuScrollBoundary>;
+</ScrollInteractionBoundary>;
 ```
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
@@ -560,12 +590,13 @@ selection sheets, forms, and system media/share interfaces retain their own inte
 Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
 Wrap every scroll component containing a gesture-owned `ContextMenu` in one
-`ContextMenuScrollBoundary`. The boundary supplies drag, momentum, and touch handlers through its
+`ScrollInteractionBoundary`. The boundary supplies drag, momentum, and touch handlers through its
 render callback without rendering another native view. Pass an existing scroll handler to the
-boundary itself when it needs to be composed with menu arbitration. A touch that only stops
-momentum stays ineligible for a context menu until that touch ends. iOS forwards the caller's scroll
-handlers and relies on UIKit arbitration. A custom trigger for a gesture-owned menu component must
-forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
+boundary itself when it needs to be composed with interaction arbitration. Android menus read
+the nearest boundary's state. A touch that only stops momentum stays ineligible until a new touch
+begins. The boundary is shared across platforms, while iOS keeps its native context-menu
+recognition and UIKit arbitration.
+A custom trigger for a gesture-owned menu component must forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
 target.
 
 `ContextMenu` recognition follows

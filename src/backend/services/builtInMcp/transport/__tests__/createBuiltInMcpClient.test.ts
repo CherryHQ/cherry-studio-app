@@ -198,17 +198,25 @@ it('validates a calendar-only Feishu grant without requiring hosted document acc
     ...userCredential,
     tokens: { ...userCredential.tokens, scope: 'calendar:calendar:read' },
   };
-  await expect(validatePluginConnection('feishu', 'feishu_user', calendarCredential)).resolves.toBe(
-    'Feishu user',
-  );
+  await expect(
+    validatePluginConnection('feishu', 'feishu_user', calendarCredential),
+  ).resolves.toMatchObject({
+    accountLabel: 'Feishu user',
+    catalog: {
+      discoveryWarnings: [],
+      tools: expect.arrayContaining([expect.objectContaining({ name: 'calendar_get_primary' })]),
+    },
+  });
   expect(mockFetch).not.toHaveBeenCalled();
   expect(toolRequests()).toEqual([]);
 });
 
 it('connects Feishu as the user without storing credentials in MCP configuration or calling business tools', async () => {
-  await expect(validatePluginConnection('feishu', 'feishu_user', userCredential)).resolves.toBe(
-    'Feishu user',
-  );
+  await expect(
+    validatePluginConnection('feishu', 'feishu_user', userCredential),
+  ).resolves.toMatchObject({
+    accountLabel: 'Feishu user',
+  });
   expect(toolRequests()).toEqual([]);
   const config = jest.mocked(mcp.createMCPClient).mock.calls[0][0];
   expect(JSON.stringify(config)).not.toMatch(/private-app-secret|user-token-first|user-refresh/);
@@ -416,7 +424,7 @@ it.each([
           ? { version: 1, token: 'entered-key' }
           : { version: 1, key: 'entered-key' },
       ),
-    ).resolves.toBe(label);
+    ).resolves.toMatchObject({ accountLabel: label, catalog: { discoveryWarnings: [] } });
     expect(toolRequests().map((request) => request.params)).toEqual([{ name, arguments: args }]);
     expect(mockGetGrant).not.toHaveBeenCalled();
   },
@@ -450,7 +458,68 @@ it('follows tool-list pagination to find the validation tool', async () => {
   });
   await expect(
     validatePluginConnection('github', 'personal_token', { version: 1, token: 'entered-key' }),
-  ).resolves.toBe('cherry');
+  ).resolves.toMatchObject({ accountLabel: 'cherry' });
+});
+
+it('keeps collecting pages after finding the validation tool and returns the admitted catalog', async () => {
+  mockFetch.mockImplementation((url, init) => {
+    const request: RpcRequest | undefined = init?.body ? JSON.parse(init.body) : undefined;
+    if (request?.method === 'tools/list') {
+      return reply(
+        request,
+        request.params?.cursor
+          ? { tools: [definitions[1], definitions[2]] }
+          : { tools: [definitions[0]], nextCursor: 'next' },
+      );
+    }
+    return respond(url, init);
+  });
+  const result = await validatePluginConnection('github', 'personal_token', {
+    version: 1,
+    token: 'entered-key',
+  });
+  expect(result.accountLabel).toBe('cherry');
+  expect(result.catalog.tools.map((tool) => tool.name)).toEqual(['get_me', 'issue_write']);
+  expect(result.catalog.serverInfo).toMatchObject({ name: 'official-fixture', version: '1' });
+  expect(JSON.stringify(result)).not.toContain('entered-key');
+  expect(toolRequests()).toHaveLength(1);
+  expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+});
+
+it.each(['duplicate', 'repeated-cursor'])(
+  'rejects a %s catalog even when the first page already contains the validation tool',
+  async (kind) => {
+    mockFetch.mockImplementation((url, init) => {
+      const request: RpcRequest | undefined = init?.body ? JSON.parse(init.body) : undefined;
+      if (request?.method === 'tools/list') {
+        return reply(
+          request,
+          request.params?.cursor
+            ? kind === 'duplicate'
+              ? { tools: [definitions[0]] }
+              : { tools: [], nextCursor: 'next' }
+            : { tools: [definitions[0]], nextCursor: 'next' },
+        );
+      }
+      return respond(url, init);
+    });
+    await expect(
+      validatePluginConnection('github', 'personal_token', { version: 1, token: 'entered-key' }),
+    ).rejects.toMatchObject({ reason: 'request' });
+    expect(toolRequests()).toEqual([]);
+  },
+);
+
+it('preserves partial discovery warnings with the validated local Feishu tools', async () => {
+  mockFetch.mockRejectedValue(new Error('private upstream failure'));
+  const result = await validatePluginConnection('feishu', 'feishu_user', userCredential);
+  expect(result.catalog.tools).toEqual(
+    expect.arrayContaining([expect.objectContaining({ name: 'calendar_get_primary' })]),
+  );
+  expect(result.catalog.discoveryWarnings).toEqual([
+    expect.stringContaining('could not be loaded'),
+  ]);
+  expect(JSON.stringify(result)).not.toContain('private');
 });
 
 it.each([undefined, 'repeated'])(

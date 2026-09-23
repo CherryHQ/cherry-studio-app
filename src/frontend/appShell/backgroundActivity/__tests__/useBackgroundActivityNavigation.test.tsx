@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
 
 import { registerVisibleBackgroundTask } from '../foregroundActivityAttention';
-import { useBackgroundActivityNavigation } from '../useBackgroundActivityNavigation/useBackgroundActivityNavigation.android';
+import { useBackgroundActivityNavigation } from '../useBackgroundActivityNavigation/useBackgroundActivityNavigation';
 
 let mockResponse: NotificationResponse | null;
 let mockNavigationKey: string | undefined;

@@ -39,7 +39,11 @@ export type McpExecutableToolDescriptor = {
    * silently retarget the approved call to a new remote authority.
    */
   endpointUrl: string | null;
-  /** Monotonic identity of the live catalog that produced this descriptor. */
+  /**
+   * Monotonic identity of the catalog that produced this descriptor. It is
+   * replaced when the server is invalidated, never by a transport reconnect for
+   * the same configuration, so a frozen tool stays callable across a reconnect.
+   */
   generation: number;
 };
 

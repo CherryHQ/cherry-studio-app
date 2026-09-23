@@ -3,8 +3,7 @@ import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import * as SQLite from 'expo-sqlite';
 
-import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
-import type { CacheService } from '@/backend/data/CacheService';
+import { BaseService, Injectable } from '@/backend/core/lifecycle';
 
 import { customSqlStatements } from './customSql';
 import { migrations } from './migrations';
@@ -32,21 +31,10 @@ const logger = loggerService.withContext('DbService');
 export type Database = ExpoSQLiteDatabase<DatabaseSchema>;
 
 @Injectable('DbService')
-@DependsOn(['CacheService'])
 export class DbService extends BaseService {
   private connection: { db: Database; sqlite: SQLite.SQLiteDatabase } | null = null;
   private disposed = false;
   private writeTail: Promise<void> = Promise.resolve();
-
-  /**
-   * The cache is declared but never read here. Seeding reaches it through the
-   * data-service singletons (`ProviderService` resolves `CacheService` from
-   * `application`), and those run inside `onInit` — so the dependency edge is
-   * what orders cache initialization ahead of this service, nothing more.
-   */
-  constructor(_cache: CacheService) {
-    super();
-  }
 
   /**
    * The connection is opened here, not in the constructor.

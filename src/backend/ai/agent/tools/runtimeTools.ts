@@ -22,6 +22,7 @@ type McpRuntimeToolCapability = {
   listExecutableToolDescriptors(
     serverId: string,
     onUnavailable?: (warning: string) => void,
+    signal?: AbortSignal,
   ): Promise<McpExecutableToolDescriptor[]>;
 };
 
@@ -29,6 +30,7 @@ export type AgentRuntimeToolResolver = {
   resolve(
     agentId: string,
     onUnavailable?: (warning: string) => void,
+    signal?: AbortSignal,
   ): Promise<{
     tools: RuntimeTool[];
     pluginGuides: readonly PluginGuideSnapshot[];
@@ -46,7 +48,7 @@ export function createAgentRuntimeToolResolver(input: {
   getMcpRuntime(): McpRuntimeToolCapability;
 }): AgentRuntimeToolResolver {
   return {
-    async resolve(agentId, onUnavailable) {
+    async resolve(agentId, onUnavailable, signal) {
       const [{ items }, { items: connectedServers }] = await Promise.all([
         input.bindings.list(agentId),
         input.servers.list(),
@@ -70,11 +72,16 @@ export function createAgentRuntimeToolResolver(input: {
         servers.map(async ({ id: serverId, name }) => {
           let reported = false;
           try {
-            return await mcpRuntime.listExecutableToolDescriptors(serverId, (warning) => {
-              reported = true;
-              onUnavailable?.(warning);
-            });
+            return await mcpRuntime.listExecutableToolDescriptors(
+              serverId,
+              (warning) => {
+                reported = true;
+                onUnavailable?.(warning);
+              },
+              signal,
+            );
           } catch {
+            signal?.throwIfAborted();
             if (!reported) {
               onUnavailable?.(
                 `${name}: configured tools could not be loaded. Check the service connection and authorization.`,

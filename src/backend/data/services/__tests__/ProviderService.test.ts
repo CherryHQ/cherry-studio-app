@@ -1,11 +1,11 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
-import type { DbService } from '@/backend/data/db/DbService';
+import type { Database, DbService } from '@/backend/data/db/DbService';
 import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
 import type { ApiKeyEntry, ProviderSettings } from '@/shared/data/types/provider';
 
 import { providerRegistryService } from '../ProviderRegistryService';
-import { ProviderService } from '../ProviderService';
+import { batchUpsertProviders, ProviderService } from '../ProviderService';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
@@ -26,6 +26,27 @@ jest.mock('../ProviderRegistryService', () => ({
 afterEach(uninstallTestHost);
 
 describe('ProviderService', () => {
+  test('refreshes presets inside the given transaction without an installed application host', async () => {
+    const row = createProviderRow({}, { presetProviderId: 'openai', providerId: 'openai' });
+    let written: Partial<UserProviderRow> | undefined;
+    const tx = {
+      select: () => ({ from: () => ({ where: async () => [row] }) }),
+      update: () => ({
+        set: (values: Partial<UserProviderRow>) => ({
+          where: async () => {
+            written = values;
+          },
+        }),
+      }),
+    } as unknown as Database;
+
+    await batchUpsertProviders(tx, [
+      { apiFeatures: { reportsActualCost: true }, name: 'OpenAI', providerId: 'openai' },
+    ]);
+
+    expect(written?.apiFeatures).toEqual({ reportsActualCost: true });
+  });
+
   test('projects unsupported preset providers out while retaining custom providers', async () => {
     const rows = [
       createProviderRow(
@@ -343,9 +364,8 @@ describe('ProviderService', () => {
 /**
  * Service whose db serves `db` to the read paths; writes are not wired.
  *
- * `ProviderService` resolves `DbService` and `CacheService` per call, so this
- * helper and the ones below install the fakes as host overrides rather than
- * handing them to a constructor.
+ * These helpers exercise the ordinary per-call host resolution, including cache
+ * access, rather than the explicit database binding used during seeding.
  */
 async function createReadService(db: object): Promise<ProviderService> {
   await installTestHost({

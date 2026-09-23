@@ -20,6 +20,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   }
 
   return {
+    BackgroundPressExclusion: (props: object) => React.createElement(View, props),
     Button: Object.assign(MockButton, {
       Label: ({ children }: { children?: ReactNode }) =>
         React.createElement(MockText, null, children),

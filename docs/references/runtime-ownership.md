@@ -59,8 +59,8 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 
 - creates an `ApplicationHost` and configures its platform-facing activity environment;
 - creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
-- installs the host, whose dependency graph initializes cache before SQLite seeding and preferences,
-  then waits for the native splash handoff before applying boot theme and i18n;
+- installs the host, whose dependency graph initializes SQLite seeding before preferences, then
+  waits for the native splash handoff before applying boot theme and i18n;
 - starts best-effort post-ready tasks after the gate opens;
 - uninstalls the host on unmount; reverse dependency order drains consumers before their
   infrastructure.

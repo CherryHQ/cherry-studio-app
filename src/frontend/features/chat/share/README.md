@@ -32,18 +32,29 @@ by default, and included when the preview switch is enabled. Thinking covers the
 intermediate prose and readable tool names. Raw tool payloads and diagnostic metadata never enter
 the document. The export page receives only a source-owned label and documents; it has no chat reads.
 
-The adapter preserves plain user text and supplies bubble/message presentation hints. HTML uses
-the chat hierarchy: right-aligned questions and full-width answers. Framed PNG uses numbered
-message sections. Both follow the global Share watermark setting, enabled by default, and use the
-same white Cherry brand signature at the bottom when enabled. The conversation
-title remains the exported filename and document title without adding an article heading above the exchange.
-When enabled, Markdown ends with a separated brand-name and export-time row using the same signature data.
+The adapter preserves plain user text and supplies source-owned role hints. Managed images retain
+their transcript position relative to the answer. Sharing and the message list reuse the same
+standalone-image-reference filter: an invented preview URL ending in an image ID already owned by
+that message is omitted, while unrelated images and code examples stay intact. Non-image files
+collect after the answer. Images and HTML use
+the message-list hierarchy: attachments above right-aligned user bubbles and full-width answers
+under the assistant name. They omit article titles and message numbering. Markdown retains the
+conversation title and ordinary role headings. All preserve chronological order.
+The export renderers own code, resource, source-list and table presentation and their format-specific
+fallbacks. Images and HTML show the opening code inside fixed 192-point panels; HTML retains full
+code with internal scrolling, and Markdown keeps the complete authored source. Images and HTML show
+one compact source-count row with a single Globe icon and the same localized count as the chat,
+plus quiet superscript citations, without individual source cards.
+Inline code stays visible in every format. All formats follow the global Share watermark setting. Images and HTML share the white
+Cherry footer; Markdown uses the matching brand/time text row.
 
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
 `chat.process.duration` and `chat.reasoningStatus.thought` translations, and elapsed time uses the
-same approval-wait-aware calculation as the message list. Native previews reuse the CherryUI
-disclosures and HTML starts collapsed. Image capture expands included process/reasoning content
-because the resulting PNG has no disclosure interaction.
+same approval-wait-aware calculation as the message list. HTML starts collapsed; image capture
+expands included process/reasoning content. Markdown uses portable nested blockquotes and its
+preview renders the prepared file through the shared export HTML renderer. Local/generated pictures
+are embedded as Base64 PNG/JPEG data URLs and display without captions; remote image links become
+compact name/domain entries in the preview and remain intact in the Markdown file.
 
 Rendering, temporary files, permanent storage and system delivery remain in the application export
 capability. Opening the preview renders the selection's default format without thinking content;

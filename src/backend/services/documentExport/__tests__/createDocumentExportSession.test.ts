@@ -14,6 +14,7 @@ const mockCopy = jest.fn(async (source: string, destination: string) => {
 });
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => `export-${++mockNextId}` }));
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('expo-file-system', () => {
   const uri = (parts: (string | { uri: string })[]) =>
     parts.map((part) => (typeof part === 'string' ? part : part.uri)).join('/');
@@ -173,6 +174,54 @@ test('Markdown materialization preserves the signature and reuses only matching 
   expect(second.text).toContain('2026/09/15 12:01');
   expect(mockFiles.get(second.file.uri)).toBe(second.text);
   expect(mockFiles.has(first.file.uri)).toBe(false);
+  await session.dispose();
+});
+
+test('Markdown embeds managed images, retries missing bytes and shares the complete cached artifact', async () => {
+  const base64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=';
+  const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+  const readManagedImage = jest
+    .fn()
+    .mockRejectedValueOnce(new Error('Missing'))
+    .mockResolvedValue(bytes);
+  const session = createDocumentExportSession(
+    {
+      kind: 'document',
+      document: {
+        sections: [
+          {
+            id: 'answer',
+            blocks: [
+              { kind: 'image', assetId: 'photo', alt: 'Generated image' },
+              {
+                kind: 'markdown',
+                source:
+                  'Complete answer.\n\n```js\nconst value = 42;\n```\n\n![Remote](https://example.com/photo.png)',
+              },
+            ],
+          },
+        ],
+        assets: {
+          photo: { kind: 'managed-file', fileEntryId: '00000000-0000-4000-8000-000000000001' },
+        },
+      },
+    },
+    { readManagedImage, saveFile: jest.fn() },
+    () => {},
+    () => {},
+  );
+  const missing = await session.render({ format: 'markdown' });
+  expect(missing.issues).toEqual([{ code: 'image-unavailable', label: 'Image' }]);
+  const ready = await session.render({ format: 'markdown' });
+  if (ready.format !== 'markdown') throw new Error('Expected Markdown');
+  expect(ready.text).toContain(`![Generated image](<data:image/png;base64,${base64}>)`);
+  expect(ready.text).toContain('const value = 42;');
+  expect(ready.text).toContain('![Remote](https://example.com/photo.png)');
+  expect(mockFiles.get(ready.file.uri)).toBe(ready.text);
+  expect(ready.issues).toEqual([]);
+  await expect(session.render({ format: 'markdown' })).resolves.toBe(ready);
+  expect(readManagedImage).toHaveBeenCalledTimes(2);
   await session.dispose();
 });
 

@@ -4,6 +4,7 @@ import Animated, { type SharedValue, useAnimatedStyle, withTiming } from 'react-
 import { useResolveClassNames } from 'uniwind';
 
 import { duration, easing } from '../../../motion';
+import { BackgroundPressExclusion } from '../../background-press/background-press';
 import { SurfaceFrame } from '../../surface/surface-frame';
 
 export const scrollToBottomButtonSize = 40;
@@ -46,22 +47,24 @@ export function ScrollToBottomButton({
         pointerEvents={isAtBottom ? 'none' : 'auto'}
         style={[containerStyle, { opacity: isAtBottom ? 0 : 1 }]}
       >
-        <Pressable
-          accessibilityLabel={accessibilityLabel}
-          accessibilityRole="button"
-          className="rounded-full shadow-sm active:opacity-60"
-          hitSlop={8}
-          onPress={onPress}
-        >
-          <SurfaceFrame
-            className={SURFACE_CLASS_NAME}
-            cornerRadius={scrollToBottomButtonSize / 2}
-            interactive
-            style={surfaceStyle}
+        <BackgroundPressExclusion>
+          <Pressable
+            accessibilityLabel={accessibilityLabel}
+            accessibilityRole="button"
+            className="rounded-full shadow-sm active:opacity-60"
+            hitSlop={8}
+            onPress={onPress}
           >
-            <ArrowDownIcon className="size-5 text-foreground" />
-          </SurfaceFrame>
-        </Pressable>
+            <SurfaceFrame
+              className={SURFACE_CLASS_NAME}
+              cornerRadius={scrollToBottomButtonSize / 2}
+              interactive
+              style={surfaceStyle}
+            >
+              <ArrowDownIcon className="size-5 text-foreground" />
+            </SurfaceFrame>
+          </Pressable>
+        </BackgroundPressExclusion>
       </Animated.View>
     </Animated.View>
   );
