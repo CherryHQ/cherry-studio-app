@@ -44,10 +44,10 @@ action. A location scan must match the stored desktop identity and updates memor
 claim an invitation, request grants or re-pair; an expired invitation can still supply a location hint.
 Initial pairing seeds QR hints under the saved connection ID before provider sync can retain a lease.
 
-Migration `0003_ordinary_trish_tilby` adds `configured_endpoints` with an empty-array default and drops
-the obsolete `addresses` and `port` columns. It does not rebuild or delete desktop rows, avoiding
-SQLite foreign-key cascades into dependent tables (including Agent projections in the upper layer). No old automatic route is promoted to
-user configuration. Existing identities, grants, scope and persisted recovery records remain intact.
+Migration `0001_hot_cammi` replaces the legacy HTTP connection table with the final Noise pairing
+schema, including `configured_endpoints` with an empty-array default. Legacy HTTP connections require
+re-pairing; automatic discovery addresses are never persisted as user configuration. The unshipped
+intermediate address schema has no separate migration or development-database compatibility path.
 
 ## Native module and release boundary
 
@@ -69,11 +69,3 @@ explicit addresses and a fresh location QR remain usable. Discovery, migration, 
 connection management must ship together. Native compilation and unit tests do not establish
 real-device permission, VPN, Wi-Fi-change or suspend/resume acceptance. Keychain authorization on
 the desktop is independent; this change never regenerates identities to avoid a prompt.
-
-The foundation migration keeps its original timestamp and tag `0003_ordinary_trish_tilby`; the absent
-`0002_daffy_nemesis` belongs to the Agent layer. The upper layer must provide a later idempotent
-projection creation migration for databases upgraded from this foundation after the location migration.
-
-The foundation keeps journal index 3 and bundle key `m0003` as well as the original tag and timestamp.
-Index 2 is reserved for the dependent Agent layer; Expo resolves keys by journal index, not array position.
-This also prevents future Drizzle generation from reusing index 3.

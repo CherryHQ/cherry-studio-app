@@ -198,12 +198,12 @@ describe('bundled SQLite migrations', () => {
         'name',
         'device_id',
         'desktop_identity',
+        'configured_endpoints',
         'grants',
         'status',
         'last_fetched_at',
         'created_at',
         'updated_at',
-        'configured_endpoints',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'scope',

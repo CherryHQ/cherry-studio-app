@@ -1109,19 +1109,13 @@
           "notNull": true,
           "autoincrement": false
         },
-        "addresses": {
-          "name": "addresses",
+        "configured_endpoints": {
+          "name": "configured_endpoints",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "port": {
-          "name": "port",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "'[]'"
         },
         "grants": {
           "name": "grants",
