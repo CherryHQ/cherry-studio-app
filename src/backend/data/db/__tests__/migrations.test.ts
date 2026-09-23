@@ -46,7 +46,7 @@ describe('bundled SQLite migrations', () => {
     try {
       database.exec('PRAGMA foreign_keys = ON');
       applyMigrations(database);
-      database.exec(`INSERT INTO desktop_connection (id, name, device_id, desktop_identity, addresses, port, grants, created_at, updated_at) VALUES ('pc', 'PC', 'device', 'identity', '[]', 1, '[]', 1, 1);
+      database.exec(`INSERT INTO desktop_connection (id, name, device_id, desktop_identity, configured_endpoints, grants, created_at, updated_at) VALUES ('pc', 'PC', 'device', 'identity', '[]', '[]', 1, 1);
         INSERT INTO remote_session_projection VALUES ('pc', 'grant-1', 'session', 'epoch', '9007199254740993', '{}', 1), ('pc', 'grant-2', 'session', 'epoch-2', '0', '{}', 1);`);
       expect(
         database
@@ -232,13 +232,12 @@ describe('bundled SQLite migrations', () => {
         'name',
         'device_id',
         'desktop_identity',
-        'addresses',
-        'port',
         'grants',
         'status',
         'last_fetched_at',
         'created_at',
         'updated_at',
+        'configured_endpoints',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'scope',

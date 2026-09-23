@@ -1,6 +1,7 @@
 import type {
   DesktopImportPreview,
   DesktopPairingClaim,
+  DesktopPairingQr,
   DesktopImportResult,
   DesktopImportSelectionsDto,
   PairDesktopConnectionDto,
@@ -14,6 +15,7 @@ export interface DesktopConnectionsModule {
     signal: AbortSignal,
     onClaim?: (claim: DesktopPairingClaim) => void,
   ): Promise<DesktopConnection>;
+  updateLocation(id: string, input: DesktopPairingQr, signal: AbortSignal): Promise<void>;
   remove(id: string, signal: AbortSignal): Promise<void>;
   preview(id: string, signal: AbortSignal): Promise<DesktopImportPreview>;
   import(

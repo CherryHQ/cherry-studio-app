@@ -4,6 +4,7 @@ import type { ScrollViewProps } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
+import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
 import type { CherryMessagePart, MessageStats, MessageStatus } from '@/shared/data/types/message';
 import type { Model } from '@/shared/data/types/model';
 
@@ -29,6 +30,7 @@ export type MessageListItem = Readonly<{
   }>;
   /** Message-owned runtime timing and materialized provider statistics. */
   stats?: MessageStats;
+  usage?: MessageUsageSummary;
   status: MessageStatus;
   /**
    * Correlation id shared by a submission's rows. Row actions that operate on

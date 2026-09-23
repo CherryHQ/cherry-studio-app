@@ -4,9 +4,25 @@ import { AppState, type AppStateStatus } from 'react-native';
 import type { DesktopConnectionRow } from '@/backend/data/db/schemas';
 
 import { DesktopConnectionManager } from '../DesktopConnectionManager';
+import type { DiscoveryEvent } from '../DesktopEndpointResolver';
 import { DesktopSession } from '../DesktopSession';
+import { openWebSocketStream } from '../remoteSocket';
+
+let mockDiscoveryReceive: (event: DiscoveryEvent) => void;
 
 jest.mock('@cherrystudio/remote-transport', () => ({}));
+jest.mock('../remoteSocket', () => ({ openWebSocketStream: jest.fn() }));
+jest.mock('../desktopDiscovery', () => ({
+  DesktopDiscovery: class {
+    constructor(receive: (event: DiscoveryEvent) => void) {
+      mockDiscoveryReceive = receive;
+    }
+    setActive() {}
+    browse() {
+      return () => {};
+    }
+  },
+}));
 jest.mock('../deviceIdentity', () => ({
   loadDeviceIdentity: jest.fn(async () => new Uint8Array(32)),
 }));
@@ -24,8 +40,7 @@ const original: DesktopConnectionRow = {
   name: 'Desktop',
   deviceId: 'device-1',
   desktopIdentity: 'peer-1',
-  addresses: ['192.168.1.2'],
-  port: 23333,
+  configuredEndpoints: [{ host: '192.168.1.2', port: 23333, security: 'ws' as const }],
   grants,
   status: 'paired',
   lastFetchedAt: null,
@@ -72,13 +87,14 @@ describe('DesktopConnectionManager ownership', () => {
   let store: { getRow: jest.Mock; updateStatus: jest.Mock };
   beforeEach(async () => {
     jest.resetAllMocks();
+    jest.mocked(openWebSocketStream).mockImplementation(async () => ({ abort() {} }) as never);
     jest.useFakeTimers();
     AppState.currentState = 'active';
     jest.mocked(AppState.addEventListener).mockImplementation((_event, listener) => {
       appState = listener;
       return { remove: jest.fn() };
     });
-    row = { ...original };
+    row = { ...original, configuredEndpoints: [...original.configuredEndpoints] };
     store = {
       getRow: jest.fn(async () => row),
       updateStatus: jest.fn(async (_id, input, signal, expected) => {
@@ -101,6 +117,121 @@ describe('DesktopConnectionManager ownership', () => {
     await manager._doStop();
     await manager._doDestroy();
     jest.useRealTimers();
+  });
+
+  it('continues past a wrong Noise peer without changing grants or retiring the stable lease', async () => {
+    row.configuredEndpoints.push({ host: '192.168.1.3', port: 24444, security: 'ws' });
+    connect.mockRejectedValueOnce(
+      Object.assign(new Error('Wrong desktop'), { name: 'UnexpectedPeerError' }),
+    );
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    const scope = lease.scope;
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+    expect(lease.scope).toBe(scope);
+    expect(lease.signal.aborted).toBe(false);
+    expect(row.status).toBe('paired');
+    expect(row.grants).toEqual(grants);
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://192.168.1.2:23333/v1/remote/connect',
+      'ws://192.168.1.3:24444/v1/remote/connect',
+    ]);
+  });
+
+  it('closes a late socket after the final lease is released without waiting for idle grace', async () => {
+    const opening = deferred<Awaited<ReturnType<typeof openWebSocketStream>>>();
+    jest.mocked(openWebSocketStream).mockReturnValueOnce(opening.promise);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await jest.advanceTimersByTimeAsync(0);
+    const dialSignal = jest.mocked(openWebSocketStream).mock.calls[0][1];
+    lease.release();
+    expect(dialSignal.aborted).toBe(true);
+    let aborted = false;
+    opening.resolve({
+      abort() {
+        aborted = true;
+      },
+    } as never);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(aborted).toBe(true);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('uses a fresh QR location for the existing binding without another pairing handshake', async () => {
+    row.configuredEndpoints = [];
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    const scope = lease.scope;
+    await jest.advanceTimersByTimeAsync(0);
+    manager.seedLocation(row.id, row.desktopIdentity, [
+      { host: '10.2.0.4', port: 24444, security: 'ws' },
+    ]);
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+    expect(lease.scope).toBe(scope);
+    expect(row.deviceId).toBe('device-1');
+    expect(row.grants).toEqual(grants);
+  });
+
+  it('keeps a healthy channel and business scope through network changes', async () => {
+    const channel = session();
+    connect.mockResolvedValue(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await lease.ready(signal());
+    const scope = lease.scope;
+    mockDiscoveryReceive({ type: 'network' });
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+    expect(channel.isOpen).toBe(true);
+    expect(lease.scope).toBe(scope);
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a dial from the old network and reconnects without retiring the lease', async () => {
+    const channel = session();
+    connect.mockImplementationOnce(
+      ({ signal }) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    );
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    const scope = lease.scope;
+    await jest.advanceTimersByTimeAsync(0);
+    const firstSignal = connect.mock.calls[0][0].signal;
+    mockDiscoveryReceive({ type: 'network' });
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+    expect(firstSignal.aborted).toBe(true);
+    expect(lease.scope).toBe(scope);
+    expect(lease.signal.aborted).toBe(false);
+  });
+
+  it('publishes binding invalidation with no active lease and scopes authorization changes by domain', async () => {
+    const invalidated = jest.fn();
+    const unsubscribe = manager.subscribeInvalidation(invalidated);
+    manager.invalidate(row.id, 'removed');
+    expect(invalidated).toHaveBeenLastCalledWith({ connectionId: row.id });
+    await manager.revoke(row.id, 'configuration', 'config-1');
+    expect(invalidated).toHaveBeenLastCalledWith({
+      connectionId: row.id,
+      domain: 'configuration',
+      grantId: 'config-1',
+    });
+    const channel = session();
+    connect.mockResolvedValue(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await lease.ready(signal());
+    invalidated.mockClear();
+    channel.refresh({ grants: [grants[0]] });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(invalidated).toHaveBeenCalledWith({
+      connectionId: row.id,
+      domain: 'agent',
+      grantId: 'agent-1',
+    });
+    expect(lease.getSnapshot().status).toBe('retired');
+    unsubscribe();
   });
 
   it('does not dial at startup and shares a channel without cancelling another domain on release', async () => {
@@ -202,7 +333,10 @@ describe('DesktopConnectionManager ownership', () => {
     const channel = session();
     connect.mockReturnValueOnce(dial.promise);
     const caller = new AbortController();
-    const opening = manager.connectTemporary(original, caller.signal);
+    const opening = manager.connectTemporary(
+      { ...original, addresses: ['192.168.1.2'], port: 23333 },
+      caller.signal,
+    );
     const rejected = expect(opening).rejects.toMatchObject({ name: 'AbortError' });
     await jest.advanceTimersByTimeAsync(0);
     caller.abort();

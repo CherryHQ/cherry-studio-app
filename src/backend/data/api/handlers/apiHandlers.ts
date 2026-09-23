@@ -40,6 +40,7 @@ export type DataApiDependencies = {
   aiUsageRecords: AiUsageRecordService;
   contentSearch: ContentSearchService;
   desktopConnections: DesktopConnectionService;
+  desktopConnectionEndpointsChanged: (id: string) => Promise<void>;
   entitySearch: EntitySearchService;
   files: FileEntryService;
   jobs: JobService;
@@ -60,7 +61,10 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createAgentSessionHandlers(dependencies.agentSessions, dependencies.agentSessionMutations),
     ...createAgentSessionMessageHandlers(dependencies.agentSessionMessages),
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
-    ...createDesktopConnectionHandlers(dependencies.desktopConnections),
+    ...createDesktopConnectionHandlers(
+      dependencies.desktopConnections,
+      dependencies.desktopConnectionEndpointsChanged,
+    ),
     ...createFileHandlers(dependencies.files),
     ...createJobHandlers(dependencies.jobs),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),

@@ -75,6 +75,7 @@ export function createRemoteConversationSession(
   initial: RemoteSessionView,
   assertSource: () => void,
   onDispose: () => void,
+  bootstrapVerified = false,
 ): ConversationSession {
   const scope = source.scope as QueryScope;
   const refs = createConversationReferences(scope, ref.sessionId);
@@ -82,6 +83,9 @@ export function createRemoteConversationSession(
   let disposed = false;
   let latest: RemoteSessionSnapshot | undefined;
   let session = initial;
+  let bootstrap = bootstrapVerified ? initial : undefined;
+  let historyEpoch = source.peekSession(ref.sessionId)?.epoch;
+  let historyReset = 0;
   let observers = 0;
   let unobserve: (() => void) | undefined;
   const windows = new Set<() => void>();
@@ -224,7 +228,7 @@ export function createRemoteConversationSession(
           ? { state: 'retired' }
           : latest?.current && sourceState.status === 'ready'
             ? { state: 'current' }
-            : latest
+            : latest || source.peekSession(ref.sessionId)?.history
               ? {
                   state: 'cached',
                   reason:
@@ -233,7 +237,10 @@ export function createRemoteConversationSession(
                       : 'refreshing',
                 }
               : { state: 'loading' },
-      historyVersion: refs.issue<HistoryVersion>('history', session.historyVersion),
+      historyVersion: refs.issue<HistoryVersion>(
+        'history',
+        historyReset ? `${session.historyVersion}:${historyReset}` : session.historyVersion,
+      ),
       liveMessages: latest?.messages.map(project) ?? [],
       executions:
         latest?.executions.map((execution) => ({
@@ -333,6 +340,14 @@ export function createRemoteConversationSession(
       if (++observers === 1)
         unobserve = source.observe(ref.sessionId, (value) => {
           if (disposed) return;
+          if (value.historyEpoch !== undefined) {
+            if (historyEpoch !== undefined && historyEpoch !== value.historyEpoch) {
+              historyReset++;
+              bootstrap = undefined;
+            }
+            historyEpoch = value.historyEpoch;
+          }
+          if (value.session.historyVersion !== session.historyVersion) bootstrap = undefined;
           latest = value;
           session = value.session;
           publish();
@@ -352,8 +367,26 @@ export function createRemoteConversationSession(
       publish();
     },
     history: {
+      peekLatest: () => {
+        assertCurrent();
+        const preview = source.peekSession(ref.sessionId)?.history;
+        return preview
+          ? {
+              items: preview.items.toReversed().map(project),
+              version: refs.issue<HistoryVersion>('history', preview.version),
+              readAt: preview.readAt,
+              hasOlderMessages: preview.hasOlderMessages,
+              complete: preview.complete,
+            }
+          : undefined;
+      },
+      subscribePreview: (listener) => source.subscribeReads(ref.sessionId, listener),
       openLatest: async (signal) => {
-        const fixed = await read(signal, (signal) => source.readSession(ref.sessionId, signal));
+        const verified = bootstrap;
+        bootstrap = undefined;
+        const fixed =
+          verified ?? (await read(signal, (signal) => source.readSession(ref.sessionId, signal)));
+        assertCurrent(signal);
         const controller = new AbortController();
         const version = refs.issue<HistoryVersion>('history', fixed.historyVersion);
         const cursors = createConversationReferences(scope, `${ref.sessionId}:${version}`);

@@ -104,6 +104,17 @@ export function projectMessage(
         : message.status === 'paused'
           ? 'cancelled'
           : message.status,
+    ...(message.model ? { model: { ...message.model } } : {}),
+    ...(message.usage
+      ? {
+          usage: {
+            ...message.usage,
+            ...(message.usage.costs
+              ? { costs: message.usage.costs.map((cost) => ({ ...cost })) }
+              : {}),
+          },
+        }
+      : {}),
     ...(message.failure ? { failure: message.failure } : {}),
   };
 }
@@ -115,6 +126,7 @@ export function projectSnapshot(
 ): RemoteSessionSnapshot {
   const sessionId = value.session.sessionId;
   return {
+    historyEpoch: value.cursor.streamEpoch,
     session: projectSession(value.session),
     current,
     ...(current && value.session.idleRevision

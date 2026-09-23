@@ -6,8 +6,18 @@ import type { DesktopConnectionService } from '@/backend/data/services/DesktopCo
 import { DesktopConnectionManager } from '../DesktopConnectionManager';
 import { DesktopConnectionRuntime } from '../DesktopConnectionRuntime';
 import { DesktopSession, DesktopUnreachableError, RemoteFailureError } from '../DesktopSession';
+import { openWebSocketStream } from '../remoteSocket';
 
 jest.mock('@cherrystudio/remote-transport', () => ({}));
+jest.mock('../remoteSocket', () => ({ openWebSocketStream: jest.fn() }));
+jest.mock('../desktopDiscovery', () => ({
+  DesktopDiscovery: class {
+    setActive() {}
+    browse() {
+      return () => {};
+    }
+  },
+}));
 jest.mock('../deviceIdentity', () => ({
   loadDeviceIdentity: jest.fn(async () => new Uint8Array(32)),
 }));
@@ -23,6 +33,7 @@ const row = {
   name: 'Desktop',
   deviceId: 'device-1',
   desktopIdentity: '12D3KooWDesktop',
+  configuredEndpoints: [{ host: '192.168.1.2', port: 23333, security: 'ws' as const }],
   addresses: ['192.168.1.2'],
   port: 23333,
   grants,
@@ -32,6 +43,7 @@ const row = {
   updatedAt: 1,
 };
 const connection = {
+  configuredEndpoints: [],
   id,
   name: 'Desktop',
   status: 'paired' as const,
@@ -154,6 +166,7 @@ describe('DesktopConnectionRuntime', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    jest.mocked(openWebSocketStream).mockImplementation(async () => ({ abort() {} }) as never);
     AppState.currentState = 'active';
     jest.mocked(AppState.addEventListener).mockReturnValue({ remove: jest.fn() });
     store = createStore();
@@ -222,8 +235,6 @@ describe('DesktopConnectionRuntime', () => {
         name: 'Desktop',
         deviceId: 'device-1',
         desktopIdentity: '12D3KooWDesktop',
-        addresses: ['192.168.1.2'],
-        port: 23333,
         grants,
       },
       true,
@@ -327,6 +338,18 @@ describe('DesktopConnectionRuntime', () => {
       details: { reason: 'configuration-not-granted' },
     });
     expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('updates only location hints for the same identity, and rejects another desktop QR', async () => {
+    await runtime.updateLocation(id, pairing, signal());
+    expect(store.savePair).not.toHaveBeenCalled();
+    expect(store.updateStatus).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+    await expect(
+      runtime.updateLocation(id, { ...pairing, desktopIdentity: 'anotherPeer' }, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'identity-mismatch' } });
+    expect(store.savePair).not.toHaveBeenCalled();
+    expect(row.grants).toEqual(grants);
   });
 
   it('marks a revoked device for repair before returning the authorization failure', async () => {

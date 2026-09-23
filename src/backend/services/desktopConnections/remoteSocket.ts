@@ -29,10 +29,6 @@ function adapt(socket: WebSocket): RemoteSocket {
   };
 }
 
-export function remoteUrl(address: string, port: number): string {
-  return `ws://${address.includes(':') ? `[${address}]` : address}:${port}/v1/remote/connect`;
-}
-
 /** Opens the desktop's WebSocket upgrade and hands the raw byte stream to the Noise transport. */
 export async function openWebSocketStream(
   url: string,
@@ -40,9 +36,13 @@ export async function openWebSocketStream(
 ): Promise<MessageStream> {
   const { RemoteSocketStream } = await import('@cherrystudio/remote-transport');
   return new Promise((resolve, reject) => {
+    signal.throwIfAborted();
     const socket = new WebSocket(url);
+    let settled = false;
     socket.binaryType = 'arraybuffer';
     const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       signal.removeEventListener('abort', abort);
       socket.removeEventListener('open', opened);

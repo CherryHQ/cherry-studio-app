@@ -18,6 +18,8 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import {
   type DesktopImportSelectionsDto,
   type DesktopPairingClaim,
+  type DesktopPairingQr,
+  DesktopPairingQrSchema,
   DesktopProvidersSnapshotSchema,
   type PairDesktopConnectionDto,
   PairDesktopConnectionSchema,
@@ -115,18 +117,21 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           if (decision.status === 'approved') {
             const connection = await store.savePair(
               {
-                addresses: [session.address, ...qr.ips.filter((ip) => ip !== session.address)],
                 desktopIdentity: qr.desktopIdentity,
                 deviceId: decision.deviceId,
                 grants: decision.authorization.grants,
                 id,
                 name: qr.name,
-                port: qr.port,
               },
               Boolean(qr.connectionId),
               signal,
             );
             this.connections!.invalidate(id);
+            this.connections!.seedLocation(
+              id,
+              qr.desktopIdentity,
+              qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
+            );
             return connection;
           }
           if (decision.status === 'rejected') {
@@ -145,6 +150,21 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       } finally {
         session.close();
       }
+    });
+  }
+
+  updateLocation(id: string, input: DesktopPairingQr, signal: AbortSignal) {
+    return this.run('location', signal, async (store, signal) => {
+      const qr = DesktopPairingQrSchema.parse(input);
+      const row = await store.getRow(id);
+      signal.throwIfAborted();
+      if (row.desktopIdentity !== qr.desktopIdentity)
+        throw desktopError('identity-mismatch', 'This code belongs to a different desktop');
+      this.connections!.seedLocation(
+        id,
+        row.desktopIdentity,
+        qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
+      );
     });
   }
 
@@ -327,7 +347,7 @@ function deviceName(): string {
 function translate(error: unknown): unknown {
   if (error instanceof DesktopUnreachableError) {
     logger.warn('Desktop unreachable', { attempts: error.attempts });
-    return desktopError('unreachable', 'Could not connect to the desktop');
+    return desktopError(error.reason, 'Could not connect to the desktop');
   }
   if (!(error instanceof RemoteFailureError)) {
     if (error instanceof Error && error.name !== 'AbortError') {

@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { useMessageRenderWindow } from '@/frontend/hooks/chat/useMessageRenderWindow';
 import { getOlderLoadAction } from '@/frontend/hooks/chat/utils/messageHistoryWindowStrategy';
@@ -24,6 +24,7 @@ export type ConversationHistoryView = {
   installedVersion?: HistoryVersion;
   error?: Error;
   isLoadingInitial: boolean;
+  isRefreshing: boolean;
   isLoadingOlder: boolean;
   isLoadingNewer: boolean;
   hasNewerMessages: boolean;
@@ -48,6 +49,24 @@ export function useConversationHistory(
   const [retryGeneration, setRetryGeneration] = useState(0);
   const around = navigation && navigation.key !== latestKey ? navigation.messageId : undefined;
   const navigationKey = navigation?.key;
+  const previews = useMemo(() => {
+    const read = () => (!retired && !around ? session?.history.peekLatest?.() : undefined);
+    let snapshot = read();
+    return {
+      getSnapshot: () => snapshot,
+      subscribe: (listener: () => void) => {
+        const refresh = () => {
+          snapshot = read();
+          listener();
+        };
+        const unsubscribe = session?.history.subscribePreview?.(refresh);
+        // Close the render-to-subscribe gap, including Strict Mode's resubscription.
+        refresh();
+        return unsubscribe ?? (() => undefined);
+      },
+    };
+  }, [session, retired, around]);
+  const preview = useSyncExternalStore(previews.subscribe, previews.getSnapshot);
   const queryKey = useMemo(
     () =>
       [
@@ -112,8 +131,11 @@ export function useConversationHistory(
         : undefined,
   });
   const messages = useMemo(
-    () => flattenHistory(query.data?.pages.map((value) => value.page) ?? []),
-    [query.data],
+    () =>
+      query.data
+        ? flattenHistory(query.data.pages.map((value) => value.page))
+        : (preview?.items ?? []),
+    [query.data, preview],
   );
   const displays = useMemo(() => messages.map((message) => message.display), [messages]);
   const renderWindow = useMessageRenderWindow(displays);
@@ -134,7 +156,10 @@ export function useConversationHistory(
         : messages.slice(Math.max(0, messages.length - renderWindow.visibleMessages.length)),
     installedVersion: query.isPlaceholderData ? undefined : query.data?.pages[0]?.version,
     error: retired ? RETIRED : (query.error ?? undefined),
-    isLoadingInitial: Boolean(session && !retired && query.isPending),
+    isLoadingInitial: Boolean(
+      session && !retired && query.isPending && !messages.length && !preview?.complete,
+    ),
+    isRefreshing: Boolean(query.isFetching && (messages.length || preview?.complete)),
     isLoadingOlder: query.isFetchingNextPage,
     isLoadingNewer: query.isFetchingPreviousPage,
     hasOlderMessages: Boolean(query.hasNextPage || (!around && renderWindow.hasHiddenMessages)),

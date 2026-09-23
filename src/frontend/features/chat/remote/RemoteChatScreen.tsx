@@ -32,12 +32,17 @@ import {
   ComposerSessionProvider,
 } from '@/frontend/components/Composer';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
+import type { MessageListItem } from '@/frontend/components/Message';
 import { usePersistCache } from '@/frontend/data/hooks';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
-import { ChatWorkspace } from '../components/ChatWorkspace';
+import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
+
+const renderRemoteUsage = (message: MessageListItem) => (
+  <RemoteAssistantMessageUsage message={message} />
+);
 
 export function RemoteChatScreen() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
@@ -163,6 +168,7 @@ function RemoteChatSession() {
               />
             ) : (
               <ChatWorkspace
+                renderUsage={renderRemoteUsage}
                 conversation={opened.session}
                 snapshot={snapshot}
                 messageWindow={history}

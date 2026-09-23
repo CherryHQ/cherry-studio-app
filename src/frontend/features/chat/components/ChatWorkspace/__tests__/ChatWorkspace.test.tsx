@@ -310,6 +310,7 @@ function createWorkspaceElement(
       messageWindow={{
         hasNewerMessages: false,
         isLoadingInitial,
+        isRefreshing: false,
         isLoadingNewer: false,
         isLoadingOlder: true,
         loadNewer: mockLoadOlder,
@@ -380,6 +381,7 @@ describe('ChatWorkspace message rendering integration', () => {
       messageWindow: {
         hasNewerMessages: false,
         isLoadingInitial: true,
+        isRefreshing: false,
         isLoadingNewer: false,
         isLoadingOlder: false,
         loadNewer: mockLoadOlder,

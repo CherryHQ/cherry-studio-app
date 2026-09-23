@@ -1,12 +1,12 @@
 import { Button } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 
 import { getMessageDurationMs, getMessageTokenUsage } from '../utils/messageUsage';
-import { MessageUsageDetail } from './MessageUsageDetail';
+import { LocalMessageUsageDetail, MessageUsageDetail } from './MessageUsageDetail';
 
 // Keep the compact unit consistent across UI languages (27k instead of 2.7万).
 const TOKEN_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
@@ -15,14 +15,58 @@ const TOKEN_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
 });
 
 export function AssistantMessageUsage({ message }: { message: MessageListItem }) {
+  const { totalTokens } = getMessageTokenUsage(message.stats);
+  return (
+    <MessageUsageButton
+      message={message}
+      totalTokens={totalTokens}
+      durationMs={getMessageDurationMs(message.stats)}
+      renderDetail={(onClose) => <LocalMessageUsageDetail message={message} onClose={onClose} />}
+    />
+  );
+}
+
+export function RemoteAssistantMessageUsage({ message }: { message: MessageListItem }) {
+  const usage = message.usage ?? {};
+  const detail = {
+    ...usage,
+    endToEndTokensPerSecond:
+      usage.outputTokens !== undefined && usage.durationMs !== undefined && usage.durationMs > 0
+        ? usage.outputTokens / (usage.durationMs / 1000)
+        : undefined,
+  };
+  return (
+    <MessageUsageButton
+      message={message}
+      totalTokens={usage.totalTokens}
+      durationMs={usage.durationMs}
+      renderDetail={(onClose) => (
+        <MessageUsageDetail
+          message={message}
+          detail={detail}
+          providerName={message.model?.providerId}
+          onClose={onClose}
+        />
+      )}
+    />
+  );
+}
+
+function MessageUsageButton({
+  message,
+  totalTokens,
+  durationMs,
+  renderDetail,
+}: {
+  message: MessageListItem;
+  totalTokens?: number;
+  durationMs?: number;
+  renderDetail: (onClose: () => void) => ReactNode;
+}) {
   const { t, i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-
   if (message.status === 'pending') return null;
-
   const locale = i18n.resolvedLanguage ?? i18n.language;
-  const { totalTokens } = getMessageTokenUsage(message.stats);
-  const durationMs = getMessageDurationMs(message.stats);
   const tokens =
     totalTokens === undefined
       ? undefined
@@ -52,7 +96,7 @@ export function AssistantMessageUsage({ message }: { message: MessageListItem })
       >
         <Text className="min-w-0 shrink text-muted-foreground text-xs tabular-nums">{summary}</Text>
       </Button>
-      {isOpen ? <MessageUsageDetail message={message} onClose={() => setIsOpen(false)} /> : null}
+      {isOpen ? renderDetail(() => setIsOpen(false)) : null}
     </>
   );
 }

@@ -171,7 +171,13 @@ export function createRemoteConversationSource(
               ref: catalogRefs.issue<AgentRef>('agent', agent.id),
               name: agent.name,
               emoji: agent.emoji,
-              configuration: 'unknown' as const,
+              modelName: agent.model?.name,
+              configuration:
+                agent.model === undefined
+                  ? ('unknown' as const)
+                  : agent.model === null
+                    ? ('unavailable' as const)
+                    : ('available' as const),
             })),
             ...(page.next ? { next: catalogRefs.issue<CatalogCursor>('agents', page.next) } : {}),
           };
@@ -318,7 +324,8 @@ export function createRemoteConversationSource(
       read(signal, async () => {
         if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
           throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
-        const initial = await remote.readSession(address.sessionId, signal);
+        const cached = remote.peekSession(address.sessionId);
+        const initial = cached?.session ?? (await remote.readSession(address.sessionId, signal));
         assertSource();
         const session = createRemoteConversationSession(
           remote,
@@ -326,6 +333,7 @@ export function createRemoteConversationSource(
           initial,
           assertSource,
           () => sessions.delete(session),
+          !cached,
         );
         sessions.add(session);
         return session;

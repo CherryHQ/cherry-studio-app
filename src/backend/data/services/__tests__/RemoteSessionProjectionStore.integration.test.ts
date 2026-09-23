@@ -34,8 +34,7 @@ beforeEach(async () => {
       name: 'Desktop',
       deviceId: 'device',
       desktopIdentity: 'identity',
-      addresses: ['127.0.0.1'],
-      port: 23333,
+
       grants: [{ domain: 'agent', grantId: 'grant' }],
     },
     false,

@@ -13,6 +13,7 @@ import type { RemoteAgentModule, RemoteAgentSource } from '@/shared/contracts/re
 
 import { RemoteAgentError } from './RemoteAgentError';
 import { RemoteAgentScope } from './RemoteAgentScope';
+import { RemoteSessionReadCache } from './RemoteSessionReadCache';
 
 type Entry = { scope: RemoteAgentScope; users: number; unwatch: () => void };
 type Opening = { promise: Promise<Entry>; waiters: number };
@@ -27,12 +28,20 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
     journal: RemoteAgentCommandJournal;
     projections: SessionProjectionStore;
   };
+  private readonly readCache = new RemoteSessionReadCache();
+  private uninvalidate?: () => void;
   private readonly sources = new Map<string, Entry>();
   private readonly opening = new Map<string, Opening>();
   private readonly drains = new Set<Promise<void>>();
   private readonly lifetime = new AbortController();
   configure(dependencies: NonNullable<RemoteAgentRuntime['dependencies']>) {
+    this.uninvalidate?.();
+    this.readCache.clear();
     this.dependencies = dependencies;
+    this.uninvalidate = dependencies.connections.subscribeInvalidation((event) => {
+      if (!event.domain || event.domain === 'agent')
+        this.readCache.invalidate(event.connectionId, event.grantId);
+    });
   }
   async open(id: string, signal: AbortSignal): Promise<RemoteAgentSource> {
     signal.throwIfAborted();
@@ -60,6 +69,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
                   dependencies.connections,
                   dependencies.journal,
                   dependencies.projections,
+                  this.readCache,
                 );
                 const created: Entry = { scope, users: 0, unwatch: () => undefined };
                 // Route disposal does not interrupt admitted commands; release demand once they settle.
@@ -131,6 +141,14 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
       listSessions: (...args) => {
         assertActive();
         return scope.listSessions(...args);
+      },
+      peekSession: (id) => {
+        assertActive();
+        return scope.peekSession(id);
+      },
+      subscribeReads: (id, listener) => {
+        assertActive();
+        return subscribe(scope.subscribeReads(id, listener));
       },
       readSession: (...args) => {
         assertActive();
@@ -213,6 +231,8 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
   }
   protected async onStop() {
     this.lifetime.abort();
+    this.uninvalidate?.();
+    this.readCache.clear();
     await Promise.allSettled([...this.opening.values()].map((opening) => opening.promise));
     for (const [id, entry] of this.sources) this.close(id, entry);
     while (this.drains.size) await Promise.allSettled([...this.drains]);

@@ -65,7 +65,7 @@ beforeEach(async () => {
   retain = jest.fn(async () => lease);
   runtime = new RemoteAgentRuntime();
   runtime.configure({
-    connections: { retain, revoke: jest.fn() },
+    connections: { retain, revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
     journal: {} as never,
     projections: {} as never,
   });

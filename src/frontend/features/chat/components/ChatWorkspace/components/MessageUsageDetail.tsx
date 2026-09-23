@@ -1,9 +1,11 @@
 import { Button, ContentState, MessagePart, Spinner } from '@cherrystudio/ui/components';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import type { MessageListItem } from '@/frontend/components/Message';
+import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
 
 import { useMessageUsageRecords } from '../hooks/useMessageUsageRecords';
 import { formatMessageUsageCost, getMessageUsageDetails } from '../utils/messageUsage';
@@ -13,13 +15,17 @@ const DETAIL_SIZES = ['medium', 'large', 'full'] as const;
 export function MessageUsageDetail({
   message,
   onClose,
+  detail,
+  providerName,
+  children,
 }: {
   message: MessageListItem;
   onClose: () => void;
+  detail: MessageUsageSummary;
+  providerName?: string;
+  children?: ReactNode;
 }) {
   const { t, i18n } = useTranslation();
-  const { error, isLoading, records, refresh } = useMessageUsageRecords(message.id);
-  const detail = getMessageUsageDetails(message.stats, records, message.model);
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const createdAt = message.createdAt ? new Date(message.createdAt) : undefined;
   const formattedCreatedAt =
@@ -45,10 +51,6 @@ export function MessageUsageDetail({
       : t('chat.messageUsage.speedValue', { value: decimals.format(value) });
   const formatDuration = (value: number | undefined) =>
     value === undefined ? undefined : seconds.format(value / 1000);
-  const providerName = message.model
-    ? (records.find((record) => record.providerId === message.model?.providerId)?.providerName ??
-      message.model.providerId)
-    : undefined;
   const tokenSum =
     detail.inputTokens !== undefined && detail.outputTokens !== undefined
       ? detail.inputTokens + detail.outputTokens
@@ -191,7 +193,7 @@ export function MessageUsageDetail({
 
         <View className="gap-3">
           <MessagePart.SectionTitle title={t('chat.messageUsage.cost')} />
-          {detail.costs.map((cost) => {
+          {(detail.costs ?? []).map((cost) => {
             const sourceKey =
               cost.providerReportedRequestCount > 0
                 ? cost.computedRequestCount > 0
@@ -215,36 +217,17 @@ export function MessageUsageDetail({
               </View>
             );
           })}
-          {detail.costs.length === 0 ? (
+          {(detail.costs?.length ?? 0) === 0 ? (
             <Text className="text-muted-foreground text-sm">{unavailable}</Text>
           ) : null}
-          {detail.hasUnpricedRecords && detail.costs.length > 0 ? (
+          {detail.hasUnpricedRecords && (detail.costs?.length ?? 0) > 0 ? (
             <Text className="text-muted-foreground text-xs">
               {t('chat.messageUsage.partialCost')}
             </Text>
           ) : null}
         </View>
 
-        {error ? (
-          <ContentState.Error
-            primaryAction={{ children: t('common.retry'), onPress: () => void refresh() }}
-            title={t('chat.messageUsage.loadError')}
-          />
-        ) : isLoading ? (
-          <View className="flex-row items-center gap-2">
-            <Spinner accessibilityLabel={t('chat.messageUsage.loading')} size="sm" />
-            <Text className="text-muted-foreground text-xs">{t('chat.messageUsage.loading')}</Text>
-          </View>
-        ) : records.length === 0 ? (
-          <View className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <Text className="min-w-0 shrink text-muted-foreground text-xs">
-              {t('chat.messageUsage.noRecords')}
-            </Text>
-            <Button onPress={() => void refresh()} size="inline" variant="ghost">
-              <Text className="font-medium text-foreground text-xs">{t('common.retry')}</Text>
-            </Button>
-          </View>
-        ) : null}
+        {children}
         {formattedCreatedAt ? (
           <View className="gap-1">
             <Text className="text-muted-foreground text-xs">
@@ -268,5 +251,51 @@ function MessageUsageRow({ label, value }: { label: string; value: string }) {
         {value}
       </Text>
     </View>
+  );
+}
+
+/** Only the local owner reads the local accounting ledger. */
+export function LocalMessageUsageDetail({
+  message,
+  onClose,
+}: {
+  message: MessageListItem;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const { error, isLoading, records, refresh } = useMessageUsageRecords(message.id);
+  const detail = getMessageUsageDetails(message.stats, records, message.model);
+  const providerName = message.model
+    ? (records.find((record) => record.providerId === message.model?.providerId)?.providerName ??
+      message.model.providerId)
+    : undefined;
+  return (
+    <MessageUsageDetail
+      message={message}
+      detail={detail}
+      providerName={providerName}
+      onClose={onClose}
+    >
+      {error ? (
+        <ContentState.Error
+          primaryAction={{ children: t('common.retry'), onPress: () => void refresh() }}
+          title={t('chat.messageUsage.loadError')}
+        />
+      ) : isLoading ? (
+        <View className="flex-row items-center gap-2">
+          <Spinner accessibilityLabel={t('chat.messageUsage.loading')} size="sm" />
+          <Text className="text-muted-foreground text-xs">{t('chat.messageUsage.loading')}</Text>
+        </View>
+      ) : records.length === 0 ? (
+        <View className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <Text className="min-w-0 shrink text-muted-foreground text-xs">
+            {t('chat.messageUsage.noRecords')}
+          </Text>
+          <Button onPress={() => void refresh()} size="inline" variant="ghost">
+            <Text className="font-medium text-foreground text-xs">{t('common.retry')}</Text>
+          </Button>
+        </View>
+      ) : null}
+    </MessageUsageDetail>
   );
 }

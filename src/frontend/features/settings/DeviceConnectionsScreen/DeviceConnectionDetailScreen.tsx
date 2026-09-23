@@ -13,6 +13,7 @@ import {
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { describeCapabilities } from '../describeCapabilities';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
+import { DesktopEndpointsEditor } from './DesktopEndpointsEditor';
 
 export function DeviceConnectionDetailScreen() {
   const { connectionId } = useLocalSearchParams<{ connectionId?: string }>();
@@ -91,6 +92,19 @@ export function DeviceConnectionDetailScreen() {
           }
         />
       </Section>
+
+      <DesktopEndpointsEditor key={connection.id} connection={connection} />
+      <Button
+        variant="outline"
+        onPress={() =>
+          router.push({
+            params: { connectionId: connection.id, purpose: 'location' },
+            pathname: '/settings/device-connections/scan',
+          })
+        }
+      >
+        {t('settings.deviceConnections.location.scan')}
+      </Button>
 
       {connection.status === 'paired' && connection.capabilities.includes('configuration') ? (
         <Section>

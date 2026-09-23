@@ -23,6 +23,9 @@ product interfaces.
 The desktop removed the HTTP routes outright, so a mobile release without this work cannot pair
 with a current desktop. Configuration sync therefore ships in the first slice, before Agent access.
 
+See [desktop location and stable pairing](./connectivity.md) for DNS-SD, explicit addresses,
+native module ownership and the network-independent pairing migration.
+
 ## Desktop contract
 
 - **Invitation QR** (`v: 2`, `t: 'cherry-studio-pair'`): `name`, `port`, `ips`, `invitationId`,
@@ -61,6 +64,14 @@ with a current desktop. Configuration sync therefore ships in the first slice, b
   iOS interoperability and Agent execution remain unverified.
 - RN `WebSocket` is wrapped into the transport's `RemoteSocket` shape (`binaryType = 'arraybuffer'`,
   `bufferedAmount` reported as 0, `close(code)`).
+
+## Session read cache
+
+[Remote Session Read Cache](./session-read-cache.md) documents the cross-page read cache,
+consumer contract, binding invalidation, loading changes, implementation slices and acceptance
+criteria. The first in-memory implementation and basic Android return-navigation checks are complete. A React Native
+ShadowTree assertion observed during final verification blocks full device acceptance; quantitative
+performance acceptance also remains pending.
 
 ## Ownership
 
@@ -204,3 +215,28 @@ These additions require the matching desktop implementation. Device acceptance i
 Relay service, file bytes for `file` parts (desktop exposes metadata only), approval cards that the
 desktop persists after a turn (listed and answerable, not streamed), and any write to desktop
 Agents or registered workspaces. Creating a session-owned system workspace is supported.
+
+## Message usage
+
+The optional `AgentMessage.usage` is a bounded, host-owned materialized summary: input/output/total
+tokens, cache and reasoning breakdowns, request count, per-currency costs, unpriced-record status,
+and completed runtime/tool/approval durations. Missing fields mean unknown; measured zero remains
+zero. Historical scalar completion time is used only when the host has no runtime timing.
+
+History reads and terminal message events use the same projection. Message events and checkpoint
+pages retain it through replay/recovery, including an unsaved terminal answer. Older hosts may omit
+usage without blocking pairing or configuration synchronization. This does not expose the host's
+per-request accounting ledger or infer main-model latency/speed from multi-model totals.
+
+`RemoteMessageView` carries the summary to the shared message usage button/detail presentation.
+Only the local detail adapter loads `/ai-usage-records` from the mobile database; remote details use
+the host snapshot and never query a local message ID. Mobile still needs an updated desktop process
+to receive this additive field; local checks do not constitute device acceptance.
+
+Model identity has two owners: `agent.agents.list[].model` describes the Agent's current configured
+model; `AgentMessage.model` describes the actual model used by that historical message. The Agent
+catalog uses the existing shared picker `modelName` presentation. Explicit `null` means unconfigured;
+an omitted catalog field from an older host remains unknown. Message names come from the matching
+immutable snapshot and fall back to the recorded model ID, never the Agent's current configuration
+or the phone's provider catalog. Terminal events and checkpoints retain the same identity. Only
+public model ID, provider ID, and display name cross the boundary.

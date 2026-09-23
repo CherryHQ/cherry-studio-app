@@ -273,7 +273,7 @@ it('publishes a failure before deferred text finishes and keeps it visible if th
   await settle();
   expect(test.publish.mock.calls.at(-1)).toMatchObject([
     { executions: { e: { failure: executionFailure } } },
-    true,
+    false,
   ]);
   release();
   await started;

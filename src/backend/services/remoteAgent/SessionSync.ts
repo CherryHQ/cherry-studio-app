@@ -7,6 +7,7 @@ import {
   type AgentInteraction,
   type AgentPart,
   type AgentProjection,
+  type ContentRef,
 } from '@cherrystudio/remote-protocol/agent';
 
 import type { SessionProjectionStore } from '@/backend/data/services/RemoteSessionProjectionStore';
@@ -16,6 +17,7 @@ import { RemoteAgentError } from './RemoteAgentError';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
 
 type Connection = {
+  readContent?: (ref: ContentRef, signal: AbortSignal) => Promise<Uint8Array>;
   request: AgentRequest;
   onNotification(listener: (notification: DesktopNotification) => void): () => void;
 };
@@ -97,6 +99,12 @@ export class SessionSync {
     });
     return pending;
   }
+  private read(ref: ContentRef) {
+    return (
+      this.connection.readContent?.(ref, this.lifetime.signal) ??
+      readContent(this.connection.request, this.sessionId, ref, this.lifetime.signal)
+    );
+  }
   private async materialize(parts: AgentPart[]) {
     const content: Record<string, Uint8Array> = Object.create(null);
     for (const part of parts) {
@@ -108,13 +116,7 @@ export class SessionSync {
         continue;
       const ref = part.content.ref;
       const key = `${ref.contentId}:${ref.revision}`;
-      if (!content[key])
-        content[key] = await readContent(
-          this.connection.request,
-          this.sessionId,
-          ref,
-          this.lifetime.signal,
-        );
+      if (!content[key]) content[key] = await this.read(ref);
     }
     return content;
   }
@@ -216,12 +218,9 @@ export class SessionSync {
         if (text !== undefined) parts[part.partId] = { ...part, content: { text } };
       }
     }
-    if (
-      Object.values(projection.executions).some(
-        (execution) => execution.failure || execution.persistenceFailure,
-      )
-    )
-      this.publish(view(), current && caughtUp);
+    // Readable projection need not wait for content or persisted interactions.
+    // Only the final publication below grants current operation targets.
+    this.publish(view(), false);
     const retained = new Set<string>();
     for (const part of Object.values(projection.parts)) {
       if ((part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content) {
@@ -231,9 +230,7 @@ export class SessionSync {
         let text = this.textCache.get(key);
         if (text === undefined) {
           try {
-            text = decodeContent(
-              await readContent(this.connection.request, this.sessionId, ref, this.lifetime.signal),
-            );
+            text = decodeContent(await this.read(ref));
             this.textCache.set(key, text);
           } catch {
             this.lifetime.signal.throwIfAborted();
@@ -245,6 +242,7 @@ export class SessionSync {
     }
     this.lifetime.signal.throwIfAborted();
     for (const key of this.textCache.keys()) if (!retained.has(key)) this.textCache.delete(key);
+    this.publish(view(), false);
     if (current && this.interactionRevision !== projection.session.historyRevision) {
       const interactions: AgentInteraction[] = [];
       let cursor: string | undefined;

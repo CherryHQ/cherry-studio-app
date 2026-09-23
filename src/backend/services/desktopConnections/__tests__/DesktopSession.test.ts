@@ -1,8 +1,9 @@
-import type { SecureChannel } from '@cherrystudio/remote-transport';
+import { connectSecureChannel, type SecureChannel } from '@cherrystudio/remote-transport';
+import type { MessageStream } from '@libp2p/interface';
 
 import { DesktopSession, RemoteFailureError } from '../DesktopSession';
 
-jest.mock('@cherrystudio/remote-transport', () => ({}));
+jest.mock('@cherrystudio/remote-transport', () => ({ connectSecureChannel: jest.fn() }));
 jest.mock('../remoteSocket', () => ({
   ...jest.requireActual('../remoteSocket'),
   openWebSocketStream: jest.fn(),
@@ -69,19 +70,18 @@ const hello = {
     heartbeatMs: 20_000,
   }),
 };
-const options = (channels: Record<string, ReturnType<typeof fakeChannel>>) => ({
-  addresses: Object.keys(channels),
-  port: 24444,
-  desktopIdentity: '12D3KooWDesktop',
-  identity: new Uint8Array(32),
-  signal: new AbortController().signal,
-  dial: async (url: string) => {
-    const address = url.slice('ws://'.length, url.indexOf(':24444'));
-    const channel = channels[address];
-    if (!channel) throw new Error(`refused ${address}`);
-    return channel;
-  },
-});
+const options = (channels: Record<string, ReturnType<typeof fakeChannel>>) => {
+  const [address, channel] = Object.entries(channels)[0];
+  jest.mocked(connectSecureChannel).mockResolvedValueOnce(channel);
+  return {
+    address,
+    secure: connectSecureChannel,
+    stream: { abort: jest.fn() } as unknown as MessageStream,
+    desktopIdentity: '12D3KooWDesktop',
+    identity: new Uint8Array(32),
+    signal: new AbortController().signal,
+  };
+};
 
 describe('DesktopSession', () => {
   it('blocks unsupported Agent contracts without disconnecting configuration access', async () => {
@@ -121,14 +121,20 @@ describe('DesktopSession', () => {
     });
     session.close();
   });
-  it('falls through unreachable addresses and completes hello on the first that answers', async () => {
-    const good = fakeChannel(hello);
-    const session = await DesktopSession.connect(
-      options({ '10.0.0.9': undefined as never, '192.168.1.2': good }),
-    );
-    expect(session.address).toBe('192.168.1.2');
-    session.close();
-    expect(good.closed).toBe(true);
+  it('leaves a Noise identity mismatch as an address failure, without inventing an authorization rejection', async () => {
+    const mismatch = Object.assign(new Error('Wrong peer'), { name: 'UnexpectedPeerError' });
+    jest.mocked(connectSecureChannel).mockRejectedValueOnce(mismatch);
+    const stream = { abort: jest.fn() } as unknown as MessageStream;
+    await expect(
+      DesktopSession.connect({
+        secure: connectSecureChannel,
+        stream,
+        address: '192.168.1.2',
+        desktopIdentity: '12D3KooWDesktop',
+        identity: new Uint8Array(32),
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toBe(mismatch);
   });
 
   it('turns desktop failures into typed errors and validates results against the protocol schema', async () => {

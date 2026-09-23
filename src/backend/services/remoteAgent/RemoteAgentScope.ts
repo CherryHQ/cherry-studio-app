@@ -3,6 +3,8 @@ import {
   questionInputSchema,
   interactionResponseSchema,
   type AgentMethod,
+  type AgentMessage,
+  type ContentRef,
   type AgentPart,
   type AgentProjection,
 } from '@cherrystudio/remote-protocol/agent';
@@ -30,6 +32,8 @@ import {
   type RemoteResourceDescriptor,
 } from './remoteAgentViews';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
+import { RemoteReadCoordinator } from './RemoteReadCoordinator';
+import type { RemoteSessionReadCache } from './RemoteSessionReadCache';
 import { SessionSync } from './SessionSync';
 
 type Observation = {
@@ -50,6 +54,7 @@ const targetSchema = z.object({
 export class RemoteAgentScope implements RemoteAgentSource {
   readonly scope: string;
   readonly draftScope: string;
+  private readonly reads = new RemoteReadCoordinator();
   private state: RemoteSourceState;
   private readonly stateListeners = new Set<() => void>();
   private readonly observations = new Map<string, Observation>();
@@ -67,6 +72,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     private readonly connections: DesktopConnections,
     journal: RemoteAgentCommandJournal,
     private readonly projections: SessionProjectionStore,
+    private readonly readCache: RemoteSessionReadCache,
   ) {
     this.scope = `${lease.scope}:${randomUUID()}`;
     this.draftScope = lease.scope;
@@ -150,6 +156,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
       return value;
     } catch (error) {
       if (error instanceof RemoteFailureError) {
+        if (
+          error.reason === 'NOT_FOUND' &&
+          (method === 'agent.sessions.get' || method === 'agent.messages.list') &&
+          'sessionId' in params &&
+          typeof params.sessionId === 'string'
+        )
+          this.readCache.remove(this.cacheEntry(params.sessionId));
         if (error.reason === 'UPGRADE_REQUIRED') {
           this.state = { ...this.state, reason: 'upgrade-required' };
           for (const listener of this.stateListeners) listener();
@@ -168,7 +181,12 @@ export class RemoteAgentScope implements RemoteAgentSource {
   async listAgents(cursor: string | undefined, signal: AbortSignal) {
     const page = await this.request('agent.agents.list', { cursor }, signal);
     return {
-      items: page.items.map((item) => ({ id: item.agentId, name: item.name, emoji: item.emoji })),
+      items: page.items.map((item) => ({
+        id: item.agentId,
+        name: item.name,
+        emoji: item.emoji,
+        ...(item.model !== undefined ? { model: item.model } : {}),
+      })),
       next: page.nextCursor ?? undefined,
     };
   }
@@ -184,56 +202,169 @@ export class RemoteAgentScope implements RemoteAgentSource {
     const page = await this.request('agent.sessions.list', { agentId, cursor }, signal);
     return { items: page.items.map(projectSession), next: page.nextCursor ?? undefined };
   }
-  async readSession(sessionId: string, signal: AbortSignal) {
-    return projectSession(
-      (await this.request('agent.sessions.get', { sessionId }, signal)).session,
+  private cacheEntry(sessionId: string) {
+    return this.readCache.entry(
+      this.lease.connectionId,
+      this.lease.scope,
+      this.lease.grantId,
+      sessionId,
     );
   }
-  async history(
+  peekSession(sessionId: string) {
+    this.assertActive();
+    const entry = this.readCache.find(this.lease.scope, sessionId);
+    const preview = entry && this.readCache.preview(entry);
+    if (!preview) return;
+    return {
+      epoch: entry?.epoch,
+      session: projectSession(preview.session),
+      ...(preview.window
+        ? {
+            history: {
+              items: preview.window.rows.map(({ message, parts }) =>
+                projectMessage(sessionId, message, parts, this.issueResource),
+              ),
+              version: preview.window.version,
+              readAt: preview.window.readAt,
+              hasOlderMessages: preview.window.hasOlderMessages,
+              complete: preview.window.complete,
+            },
+          }
+        : {}),
+    };
+  }
+  subscribeReads(sessionId: string, listener: () => void) {
+    return this.readCache.subscribe(this.lease.scope, sessionId, listener);
+  }
+  async readSession(sessionId: string, signal: AbortSignal) {
+    return this.reads.share(JSON.stringify(['session', sessionId]), signal, async (signal) => {
+      const entry = this.cacheEntry(sessionId);
+      const generation = entry.generation;
+      const result = await this.request('agent.sessions.get', { sessionId }, signal);
+      this.readCache.put(entry, generation, 'session', result.session);
+      return projectSession(result.session);
+    });
+  }
+  private historyRequest: AgentRequest = (method, params, signal = this.lease.signal) =>
+    this.reads.run(signal, () => this.request(method, params, signal));
+  private content(sessionId: string, ref: ContentRef, signal: AbortSignal): Promise<Uint8Array> {
+    const entry = this.cacheEntry(sessionId);
+    const generation = entry.generation;
+    const key = JSON.stringify([
+      'content',
+      ref.contentId,
+      ref.revision,
+      ref.sha256,
+      ref.byteLength,
+    ]);
+    const cached = this.readCache.get<Uint8Array>(entry, key);
+    if (cached) return Promise.resolve(cached);
+    return this.reads.share(
+      JSON.stringify([sessionId, generation, key]),
+      signal,
+      async (signal) => {
+        const bytes = await readContent(this.historyRequest, sessionId, ref, signal);
+        this.readCache.put(entry, generation, key, bytes);
+        return bytes;
+      },
+    );
+  }
+  private messageParts(sessionId: string, message: AgentMessage, signal: AbortSignal) {
+    const entry = this.cacheEntry(sessionId);
+    const generation = entry.generation;
+    const key = this.readCache.partsKey(message);
+    const cached = this.readCache.get<AgentPart[]>(entry, key);
+    if (cached) return Promise.resolve(cached);
+    return this.reads.share(
+      JSON.stringify([sessionId, generation, key]),
+      signal,
+      async (signal) => {
+        const parts: AgentPart[] = [];
+        let next: string | undefined;
+        const visited = new Set<string>();
+        do {
+          const page = await this.historyRequest(
+            'agent.parts.list',
+            {
+              sessionId,
+              messageId: message.messageId,
+              messageRevision: message.revision,
+              cursor: next,
+            },
+            signal,
+          );
+          parts.push(
+            ...(await Promise.all(
+              page.items.map(
+                async (part): Promise<AgentPart> =>
+                  (part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content
+                    ? {
+                        ...part,
+                        content: {
+                          text: decodeContent(
+                            await this.content(sessionId, part.content.ref, signal),
+                          ),
+                        },
+                      }
+                    : part,
+              ),
+            )),
+          );
+          next = page.nextCursor ?? undefined;
+          if (next && visited.has(next)) throw new RemoteAgentError('PROTOCOL_ERROR');
+          if (next) visited.add(next);
+        } while (next);
+        this.readCache.put(entry, generation, key, parts);
+        return parts;
+      },
+    );
+  }
+  history(sessionId: string, version: string, cursor: string | undefined, signal: AbortSignal) {
+    return this.reads.share(
+      JSON.stringify(['history', sessionId, version, cursor]),
+      signal,
+      (signal) => this.readHistory(sessionId, version, cursor, signal),
+    );
+  }
+  private async readHistory(
     sessionId: string,
     version: string,
     cursor: string | undefined,
     signal: AbortSignal,
   ) {
-    const page = await this.request(
+    const entry = this.cacheEntry(sessionId);
+    if (!this.readCache.beginHistory(entry, version))
+      throw new RemoteAgentError('REVISION_EXPIRED');
+    const generation = entry.generation;
+    const page = await this.historyRequest(
       'agent.messages.list',
       { sessionId, historyRevision: version, cursor },
       signal,
     );
-    const items = [];
-    for (const message of page.items) {
-      const parts: AgentPart[] = [];
-      let next: string | undefined;
-      const visited = new Set<string>();
-      do {
-        const partPage = await this.request(
-          'agent.parts.list',
-          {
-            sessionId,
-            messageId: message.messageId,
-            messageRevision: message.revision,
-            cursor: next,
-          },
-          signal,
-        );
-        for (const part of partPage.items) {
-          if ((part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content)
-            parts.push({
-              ...part,
-              content: {
-                text: decodeContent(
-                  await readContent(this.request, sessionId, part.content.ref, signal),
-                ),
-              },
-            });
-          else parts.push(part);
-        }
-        next = partPage.nextCursor ?? undefined;
-        if (next && visited.has(next)) throw new RemoteAgentError('PROTOCOL_ERROR');
-        if (next) visited.add(next);
-      } while (next);
-      items.push(projectMessage(sessionId, message, parts, this.issueResource));
-    }
+    const window = {
+      messages: page.items,
+      version,
+      readAt: Date.now(),
+      hasOlderMessages: !!page.nextCursor,
+    };
+    // Cold history can reveal completed rows while slower bodies are still loading.
+    // A warm window remains intact until its replacement is fully validated.
+    if (!cursor && !this.readCache.get(entry, 'window'))
+      this.readCache.put(entry, generation, 'window', window);
+    const items = await Promise.all(
+      page.items.map(async (message) =>
+        projectMessage(
+          sessionId,
+          message,
+          await this.messageParts(sessionId, message, signal),
+          this.issueResource,
+        ),
+      ),
+    );
+    signal.throwIfAborted();
+    if (entry.invalidated || entry.generation !== generation)
+      throw new RemoteAgentError('REVISION_EXPIRED');
+    if (!cursor) this.readCache.put(entry, generation, 'window', window);
     return { items, next: page.nextCursor ?? undefined };
   }
   private issueResource = (sessionId: string, value: RemoteResourceDescriptor): string => {
@@ -263,9 +394,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       const text =
         'text' in interaction.input
           ? interaction.input.text
-          : decodeContent(
-              await readContent(this.request, sessionId, interaction.input.ref, signal),
-            );
+          : decodeContent(await this.content(sessionId, interaction.input.ref, signal));
       if (integrity.sha256(new TextEncoder().encode(text)) !== interaction.inputDigest)
         throw new RemoteAgentError('PROTOCOL_ERROR');
       if (interaction.kind === 'question') {
@@ -287,7 +416,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       const text =
         'text' in part.content
           ? part.content.text
-          : decodeContent(await readContent(this.request, sessionId, part.content.ref, signal));
+          : decodeContent(await this.content(sessionId, part.content.ref, signal));
       const metadata = z
         .object({ filename: z.string().nullable().optional(), mediaType: z.string().optional() })
         .parse(JSON.parse(text));
@@ -305,7 +434,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       text:
         'text' in part.content
           ? part.content.text
-          : decodeContent(await readContent(this.request, sessionId, part.content.ref, signal)),
+          : decodeContent(await this.content(sessionId, part.content.ref, signal)),
     };
   }
   observe(sessionId: string, listener: (value: RemoteSessionSnapshot) => void) {
@@ -316,10 +445,12 @@ export class RemoteAgentScope implements RemoteAgentSource {
       this.observations.set(sessionId, observation);
     }
     const retained = observation;
+    const releaseCache = this.readCache.retain(this.cacheEntry(sessionId));
     retained.listeners.add(listener);
     if (retained.snapshot) listener(retained.snapshot);
     this.startObservation(sessionId, retained);
     return () => {
+      releaseCache();
       retained.listeners.delete(listener);
       if (!retained.listeners.size) {
         this.stopObservation(retained);
@@ -346,11 +477,15 @@ export class RemoteAgentScope implements RemoteAgentSource {
             request: (method, params, signal) =>
               this.call(session, method, params, signal ?? this.lease.signal),
             onNotification: session.onNotification.bind(session),
+            readContent: (ref, signal) => this.content(sessionId, ref, signal),
           },
           this.projections,
           (projection, current) => {
             if (this.lease.signal.aborted || observation.sync !== sync) return;
             if (current) observation.retries = 0;
+            const entry = this.cacheEntry(sessionId);
+            this.readCache.setEpoch(entry, projection.cursor.streamEpoch);
+            this.readCache.put(entry, entry.generation, 'session', projection.session);
             observation.projection = projection;
             observation.snapshot = projectSnapshot(
               this.scope,

@@ -208,7 +208,16 @@ export interface HistoryWindow {
   read(cursor: HistoryCursor, signal: AbortSignal): Promise<HistoryPage>;
   dispose(): void;
 }
+export type HistoryPreview = {
+  items: readonly ConversationMessage[];
+  version: HistoryVersion;
+  readAt: number;
+  hasOlderMessages: boolean;
+  complete: boolean;
+};
 export interface ConversationHistory {
+  peekLatest?: () => HistoryPreview | undefined;
+  subscribePreview?: (listener: () => void) => () => void;
   openLatest(signal: AbortSignal): Promise<HistoryWindow>;
   openAround?: (message: MessageRef, signal: AbortSignal) => Promise<HistoryWindow>;
   prepareSelection(

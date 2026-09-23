@@ -1,6 +1,7 @@
 import type { InteractionResponse } from '../interaction';
 import type {
   RemoteCommand,
+  RemoteModelSummary,
   RemoteStartInput,
   RemoteMessageView,
   RemotePage,
@@ -8,6 +9,7 @@ import type {
   RemoteResourceValue,
   RemoteSessionSnapshot,
   RemoteSessionView,
+  RemoteSessionReadPreview,
   RemoteSourceState,
   RemoteStartOperation,
 } from './views';
@@ -21,7 +23,9 @@ export interface RemoteAgentSource {
   listAgents(
     cursor: string | undefined,
     signal: AbortSignal,
-  ): Promise<RemotePage<{ id: string; name: string; emoji?: string }>>;
+  ): Promise<
+    RemotePage<{ id: string; name: string; emoji?: string; model?: RemoteModelSummary | null }>
+  >;
   listWorkspaces(
     agentId: string,
     cursor: string | undefined,
@@ -32,6 +36,8 @@ export interface RemoteAgentSource {
     cursor: string | undefined,
     signal: AbortSignal,
   ): Promise<RemotePage<RemoteSessionView>>;
+  peekSession(sessionId: string): RemoteSessionReadPreview | undefined;
+  subscribeReads(sessionId: string, listener: () => void): () => void;
   readSession(sessionId: string, signal: AbortSignal): Promise<RemoteSessionView>;
   observe(sessionId: string, listener: (value: RemoteSessionSnapshot) => void): () => void;
   history(

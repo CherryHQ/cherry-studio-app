@@ -1,5 +1,6 @@
 import type { RemoteMessageView, RemoteSourceState } from '@/shared/contracts/remoteAgent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type {
   Availability,
@@ -162,6 +163,15 @@ export function remoteMessage(
       : 'complete',
     display: {
       id: message.id,
+      usage: message.usage,
+      ...(message.model
+        ? {
+            model: {
+              ...message.model,
+              id: createUniqueModelId(message.model.providerId, message.model.modelId),
+            },
+          }
+        : {}),
       role: message.role,
       status:
         message.state === 'streaming'

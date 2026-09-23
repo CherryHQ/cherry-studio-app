@@ -5,6 +5,7 @@ export type {
   RemoteStartInput,
   RemoteSourceState,
   RemoteSessionView,
+  RemoteSessionReadPreview,
   RemoteResource,
   RemoteMessagePart,
   RemoteMessageView,

@@ -9,17 +9,15 @@ import {
 import { agentMethods } from '@cherrystudio/remote-protocol/agent';
 import { configurationMethods } from '@cherrystudio/remote-protocol/configuration';
 import type { SecureChannel } from '@cherrystudio/remote-transport';
-import { loggerService } from '@logger';
+import type { MessageStream } from '@libp2p/interface';
 import { JSONRPCClient, JSONRPCErrorException } from 'json-rpc-2.0';
 import type * as z from 'zod';
 
 import { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
-import { openWebSocketStream, remoteUrl } from './remoteSocket';
 import { transportLogger } from './transportLogger';
 
 export { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
 
-const logger = loggerService.withContext('DesktopSession');
 const PROTOCOL_VERSIONS = [1];
 const REFRESH_MARGIN_MS = 60_000;
 
@@ -34,16 +32,13 @@ export type DesktopParams<M extends DesktopMethod> = z.input<(typeof desktopMeth
 export type DesktopResult<M extends DesktopMethod> = z.output<(typeof desktopMethods)[M]['result']>;
 export type DesktopNotification = { method: string; params?: unknown };
 
-export type DialChannel = (url: string, signal: AbortSignal) => Promise<SecureChannel>;
-
 export interface DesktopSessionOptions {
-  addresses: string[];
-  port: number;
+  stream: MessageStream;
+  secure?: typeof import('@cherrystudio/remote-transport').connectSecureChannel;
+  address: string;
   desktopIdentity: string;
   identity: Uint8Array;
   signal: AbortSignal;
-  /** Test seam; production dials the desktop's WebSocket upgrade. */
-  dial?: DialChannel;
 }
 
 function isNotification(value: unknown): value is DesktopNotification {
@@ -66,59 +61,35 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
   });
 }
 
-async function dialWebSocket(
-  identity: Uint8Array,
-  desktopIdentity: string,
-  url: string,
-  signal: AbortSignal,
-): Promise<SecureChannel> {
-  const { connectSecureChannel } = await import('@cherrystudio/remote-transport');
-  const stream = await openWebSocketStream(url, signal);
-  return connectSecureChannel(stream, {
-    identity,
-    logger: transportLogger,
-    protocolVersions: PROTOCOL_VERSIONS,
-    remoteIdentity: desktopIdentity,
-    signal,
-  });
-}
-
-/** One encrypted JSON-RPC connection to a desktop: request/response, notifications, heartbeat, token refresh. */
+/** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
   agentFailureVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
-    const dial: DialChannel =
-      options.dial ??
-      ((url, signal) => dialWebSocket(options.identity, options.desktopIdentity, url, signal));
-    const failures: string[] = [];
-    for (const address of options.addresses) {
+    let session: DesktopSession | undefined;
+    try {
+      const connectSecureChannel =
+        options.secure ?? (await import('@cherrystudio/remote-transport')).connectSecureChannel;
+      const channel = await connectSecureChannel(options.stream, {
+        identity: options.identity,
+        remoteIdentity: options.desktopIdentity,
+        logger: transportLogger,
+        protocolVersions: PROTOCOL_VERSIONS,
+        signal: options.signal,
+      });
+      session = new DesktopSession(channel, options.address);
+      const hello = await session.request(
+        'connection.hello',
+        { protocolVersions: PROTOCOL_VERSIONS },
+        options.signal,
+      );
+      session.agentFailureVersion = hello.agentFailureVersion;
       options.signal.throwIfAborted();
-      let channel: SecureChannel | undefined;
-      try {
-        channel = await dial(remoteUrl(address, options.port), options.signal);
-        const session = new DesktopSession(channel, address);
-        const hello = await session.request(
-          'connection.hello',
-          { protocolVersions: PROTOCOL_VERSIONS },
-          options.signal,
-        );
-        session.agentFailureVersion = hello.agentFailureVersion;
-        return session;
-      } catch (error) {
-        options.signal.throwIfAborted();
-        channel?.abort(error instanceof Error ? error : new Error('Handshake failed'));
-        if (error instanceof RemoteFailureError) throw error;
-        if (error instanceof Error && error.name === 'UnexpectedPeerError')
-          throw new RemoteFailureError({
-            reason: 'UNAUTHENTICATED',
-            message: 'Desktop identity did not match the paired identity',
-          });
-        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-        logger.warn('Desktop address failed', { address, channel: Boolean(channel), message });
-        failures.push(`${address}: ${message}`);
-      }
+      return session;
+    } catch (error) {
+      session?.close();
+      options.stream.abort(error instanceof Error ? error : new Error('Handshake failed'));
+      throw error;
     }
-    throw new DesktopUnreachableError(failures);
   }
 
   private readonly client: JSONRPCClient;

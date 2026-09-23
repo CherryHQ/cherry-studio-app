@@ -147,6 +147,7 @@ export function createAppBootstrapRuntime(
       aiUsageRecords: services.aiUsageRecord,
       contentSearch: services.contentSearch,
       desktopConnections: services.desktopConnection,
+      desktopConnectionEndpointsChanged: (id) => desktopConnectionManager.refreshEndpoints(id),
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,

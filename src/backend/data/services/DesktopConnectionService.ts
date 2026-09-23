@@ -1,4 +1,5 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
+import { configuredEndpointsSchema, type DirectEndpoint } from '@cherrystudio/remote-protocol';
 import { and, asc, eq } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
@@ -40,6 +41,7 @@ function desktopError(reason: string, message: string): DataApiError {
 
 function rowToConnection(row: DesktopConnectionRow): DesktopConnection {
   return {
+    configuredEndpoints: row.configuredEndpoints,
     capabilities: row.grants.map((grant) => grant.domain),
     id: row.id,
     lastFetchedAt: row.lastFetchedAt,
@@ -279,10 +281,7 @@ export class DesktopConnectionService {
   }
 
   async savePair(
-    input: Pick<
-      DesktopConnectionRow,
-      'id' | 'addresses' | 'desktopIdentity' | 'deviceId' | 'grants' | 'name' | 'port'
-    >,
+    input: Pick<DesktopConnectionRow, 'id' | 'desktopIdentity' | 'deviceId' | 'grants' | 'name'>,
     replace: boolean,
     signal: AbortSignal,
   ): Promise<DesktopConnection> {
@@ -302,6 +301,19 @@ export class DesktopConnectionService {
     });
   }
 
+  async updateEndpoints(id: string, input: DirectEndpoint[]): Promise<DesktopConnection> {
+    const configuredEndpoints = configuredEndpointsSchema.parse(input);
+    return this.dbService.withWriteTx(async (tx) => {
+      const [row] = await tx
+        .update(desktopConnectionTable)
+        .set({ configuredEndpoints })
+        .where(eq(desktopConnectionTable.id, id))
+        .returning();
+      if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
+      return rowToConnection(row);
+    });
+  }
+
   async remove(id: string): Promise<void> {
     await this.dbService.withWriteTx((tx) =>
       tx.delete(desktopConnectionTable).where(eq(desktopConnectionTable.id, id)),
@@ -310,9 +322,7 @@ export class DesktopConnectionService {
 
   async updateStatus(
     id: string,
-    values: Partial<
-      Pick<DesktopConnectionRow, 'status' | 'addresses' | 'grants' | 'lastFetchedAt'>
-    >,
+    values: Partial<Pick<DesktopConnectionRow, 'status' | 'grants' | 'lastFetchedAt'>>,
     signal: AbortSignal,
     expected?: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
   ): Promise<void> {

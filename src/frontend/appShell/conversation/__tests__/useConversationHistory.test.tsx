@@ -377,3 +377,41 @@ it.each([undefined, '4'])(
     expect(result.hasNewerMessages).toBe(false);
   },
 );
+
+it('shows a preview while history is pending without acknowledging it as installed', async () => {
+  const test = setup();
+  const cached = test.window('cached');
+  const listeners = new Set<() => void>();
+  let preview: import('../contracts').HistoryPreview | undefined = {
+    items: cached.initial.items,
+    version: version('1'),
+    readAt: 1,
+    hasOlderMessages: false,
+    complete: true,
+  };
+  test.session.history.peekLatest = () => preview;
+  test.session.history.subscribePreview = (listener) => {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  };
+  await render(test.session);
+  expect(result.messages.map((message) => message.key)).toEqual(['cached']);
+  expect(result.isLoadingInitial).toBe(false);
+  expect(result.isRefreshing).toBe(true);
+  expect(result.installedVersion).toBeUndefined();
+  await act(async () => {
+    preview = undefined;
+    for (const listener of listeners) listener();
+  });
+  expect(result.messages).toEqual([]);
+  expect(result.isLoadingInitial).toBe(true);
+  await act(async () => {
+    test.opens.at(-1)!.result.resolve(test.window('fresh'));
+    await settle();
+  });
+  await act(settle);
+  expect(result.messages.map((message) => message.key)).toEqual(['fresh']);
+  expect(result.installedVersion).toBe('1');
+});

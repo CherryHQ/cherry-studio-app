@@ -1,3 +1,5 @@
+import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
+
 import type { ExecutionFailure } from '../aiFailure';
 import type { InteractionQuestion } from '../interaction';
 
@@ -81,7 +83,10 @@ export type RemoteMessagePart =
       resource: RemoteResource;
     }
   | { id: string; kind: 'data'; name: string; resource: RemoteResource };
+export type RemoteModelSummary = { modelId: string; providerId: string; name: string };
 export type RemoteMessageView = {
+  model?: RemoteModelSummary;
+  usage?: MessageUsageSummary;
   id: string;
   version: string;
   role: 'user' | 'assistant' | 'system';
@@ -91,6 +96,7 @@ export type RemoteMessageView = {
   persistenceFailure?: ExecutionFailure;
 };
 export type RemoteSessionSnapshot = {
+  historyEpoch?: string;
   session: RemoteSessionView;
   current: boolean;
   sendTarget?: string;
@@ -127,3 +133,16 @@ export type RemoteResourceValue =
   | { kind: 'text'; text: string }
   | { kind: 'metadata'; name: string; mediaType?: string; byteLength?: string };
 export type RemotePage<T> = { items: readonly T[]; next?: string };
+
+/** Display values rebound to the current source; never an installed history window. */
+export type RemoteSessionReadPreview = {
+  epoch?: string;
+  session: RemoteSessionView;
+  history?: {
+    items: RemoteMessageView[];
+    version: string;
+    readAt: number;
+    hasOlderMessages: boolean;
+    complete: boolean;
+  };
+};

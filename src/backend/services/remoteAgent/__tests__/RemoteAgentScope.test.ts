@@ -2,13 +2,15 @@ import type { AgentProjection } from '@cherrystudio/remote-protocol/agent';
 
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopDomainLease, DesktopLeaseState } from '@/backend/services/desktopConnections';
+import { RemoteFailureError } from '@/backend/services/desktopConnections/remoteErrors';
 import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentScope } from '../RemoteAgentScope';
 import { integrity } from '../remoteContent';
+import { RemoteSessionReadCache } from '../RemoteSessionReadCache';
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
-function fixture() {
+function fixture(cache = new RemoteSessionReadCache()) {
   let state: DesktopLeaseState = { status: 'ready' };
   const controller = new AbortController();
   const listeners = new Set<() => void>();
@@ -32,7 +34,17 @@ function fixture() {
   const request = jest.fn(async (method: string, params: any) => {
     switch (method) {
       case 'agent.agents.list':
-        return { items: [{ agentId: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }], nextCursor: null };
+        return {
+          items: [
+            {
+              agentId: 'a',
+              name: 'Agent',
+              emoji: '🧑🏽‍💻',
+              model: { modelId: 'model', providerId: 'desktop', name: 'Current model' },
+            },
+          ],
+          nextCursor: null,
+        };
       case 'agent.sessions.subscribe':
         return {
           subscriptionId: 'sub',
@@ -87,9 +99,10 @@ function fixture() {
   const store = { read: jest.fn(async () => projection), write: jest.fn(async () => undefined) };
   const source = new RemoteAgentScope(
     lease,
-    { retain: jest.fn(), revoke: jest.fn() },
+    { retain: jest.fn(), revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
     journal,
     store,
+    cache,
   );
   return {
     source,
@@ -275,7 +288,14 @@ it('materializes a question only from its bound input revision and preserves the
 test('catalog preserves the desktop emoji without creating a session observation', async () => {
   const f = fixture();
   expect(await f.source.listAgents(undefined, new AbortController().signal)).toEqual({
-    items: [{ id: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }],
+    items: [
+      {
+        id: 'a',
+        name: 'Agent',
+        emoji: '🧑🏽‍💻',
+        model: { modelId: 'model', providerId: 'desktop', name: 'Current model' },
+      },
+    ],
     next: undefined,
   });
   expect(f.request.mock.calls.some(([method]) => method === 'agent.sessions.subscribe')).toBe(
@@ -283,4 +303,157 @@ test('catalog preserves the desktop emoji without creating a session observation
   );
   f.source.dispose();
   await f.source.drain();
+});
+
+it('returns cached history across scope disposal, rebinds resources and revalidates metadata without rereading parts', async () => {
+  const cache = new RemoteSessionReadCache();
+  const first = fixture(cache);
+  const install = (test: ReturnType<typeof fixture>, tokens: number) => {
+    const original = test.request.getMockImplementation()!;
+    test.request.mockImplementation(async (method, params) => {
+      if (method === 'agent.sessions.get') return { session: test.projection.session } as never;
+      if (method === 'agent.messages.list')
+        return {
+          items: [
+            {
+              messageId: 'm',
+              revision: '1',
+              role: 'assistant',
+              status: 'success',
+              partIds: ['p'],
+              usage: { totalTokens: tokens },
+            },
+          ],
+        } as never;
+      if (method === 'agent.parts.list')
+        return {
+          items: [
+            {
+              partId: 'p',
+              revision: '1',
+              kind: 'tool-input',
+              toolName: 'read',
+              toolCallId: 'call',
+              content: { text: '{"path":"src"}' },
+              state: 'completed',
+            },
+          ],
+        } as never;
+      return original(method, params);
+    });
+  };
+  const signal = new AbortController().signal;
+  install(first, 12);
+  await first.source.readSession('s', signal);
+  const old = await first.source.history('s', '1', undefined, signal);
+  first.source.dispose();
+  await first.source.drain();
+  const second = fixture(cache);
+  install(second, 25);
+  const preview = second.source.peekSession('s')!;
+  expect(second.request).not.toHaveBeenCalled();
+  expect(preview.history?.items[0].usage?.totalTokens).toBe(12);
+  const oldPart = old.items[0].parts[0];
+  const newPart = preview.history!.items[0].parts[0];
+  if (oldPart.kind !== 'tool' || newPart.kind !== 'tool') throw new Error('Expected tools');
+  expect(newPart.input).not.toBe(oldPart.input);
+  await expect(second.source.readResource(oldPart.input!, signal)).rejects.toMatchObject({
+    code: 'RESOURCE_UNAVAILABLE',
+  });
+  await expect(second.source.readResource(newPart.input!, signal)).resolves.toMatchObject({
+    text: '{"path":"src"}',
+  });
+  const fresh = await second.source.history('s', '1', undefined, signal);
+  expect(fresh.items[0].usage?.totalTokens).toBe(25);
+  expect(second.request.mock.calls.map(([method]) => method)).toEqual(['agent.messages.list']);
+  second.source.dispose();
+  await second.source.drain();
+});
+
+it('shares verified bodies across message revisions, publishes cold rows progressively, and replaces deleted membership', async () => {
+  const cache = new RemoteSessionReadCache();
+  const test = fixture(cache);
+  const signal = new AbortController().signal;
+  const text = 'body';
+  const ref = {
+    contentId: 'body',
+    revision: '1',
+    byteLength: '4',
+    sha256: integrity.sha256(new TextEncoder().encode(text)),
+    mediaType: 'text/plain',
+  };
+  let revision = '1';
+  let ids = ['new', 'slow'];
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.get') return { session: test.projection.session } as never;
+    if (method === 'agent.messages.list')
+      return {
+        items: ids.map((id) => ({
+          messageId: id,
+          revision,
+          role: 'assistant',
+          status: 'success',
+          partIds: [id],
+        })),
+      } as never;
+    if (method === 'agent.parts.list') {
+      if (params.messageId === 'slow' && revision === '1') await wait;
+      return {
+        items: [
+          {
+            partId: params.messageId,
+            revision,
+            kind: 'text',
+            state: 'completed',
+            content: { ref },
+          },
+        ],
+      } as never;
+    }
+    if (method === 'agent.content.read')
+      return { ...ref, offset: '0', nextOffset: '4', eof: true, dataBase64: 'Ym9keQ==' } as never;
+    throw new Error(method);
+  });
+  await test.source.readSession('s', signal);
+  const history = test.source.history('s', revision, undefined, signal);
+  await settle();
+  expect(test.source.peekSession('s')?.history).toMatchObject({
+    complete: false,
+    items: [{ id: 'new' }],
+  });
+  release();
+  await history;
+  expect(test.source.peekSession('s')?.history?.complete).toBe(true);
+  revision = '2';
+  ids = ['new'];
+  await test.source.history('s', revision, undefined, signal);
+  expect(test.source.peekSession('s')?.history?.items.map((item) => item.id)).toEqual(['new']);
+  expect(
+    test.request.mock.calls.filter(([method]) => method === 'agent.content.read'),
+  ).toHaveLength(1);
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('removes a missing session preview instead of retaining it as normal offline history', async () => {
+  const cache = new RemoteSessionReadCache();
+  const test = fixture(cache);
+  const entry = cache.entry('pc', test.lease.scope, test.lease.grantId, 's');
+  cache.put(entry, 0, 'session', test.projection.session);
+  expect(test.source.peekSession('s')).toBeDefined();
+  test.request.mockRejectedValue(
+    new RemoteFailureError({ reason: 'NOT_FOUND', message: 'Session deleted' }),
+  );
+  await expect(test.source.readSession('s', new AbortController().signal)).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+  });
+  expect(test.source.peekSession('s')).toBeUndefined();
+  cache.put(entry, 0, 'session', test.projection.session);
+  expect(test.source.peekSession('s')).toBeUndefined();
+  test.source.dispose();
+  await test.source.drain();
 });

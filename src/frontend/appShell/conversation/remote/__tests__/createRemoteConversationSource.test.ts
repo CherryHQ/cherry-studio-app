@@ -42,6 +42,8 @@ function fixture(scope = 'scope', binding = 'binding') {
     listAgents: jest.fn(async () => ({ items: [{ id: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }] })),
     listWorkspaces: jest.fn(async () => ({ items: [{ id: 'w', name: 'Workspace' }] })),
     listSessions: jest.fn(async () => ({ items: [session] })),
+    peekSession: jest.fn(() => undefined),
+    subscribeReads: jest.fn(() => () => undefined),
     readSession: jest.fn(async () => session),
     observe: jest.fn((_id, listener) => {
       observer = listener;
@@ -368,6 +370,73 @@ it('carries the rejected send explanation through both the action and its operat
       .actions.send!.execute({ parts: [{ type: 'text', text: 'hello' }] }),
   ).toMatchObject({ state: 'rejected', failure });
   expect(handle.operations.getSnapshot()[0]).toMatchObject({ state: 'rejected', failure });
+  handle.dispose();
+  test.source.dispose();
+});
+
+test('shows the current remote agent model and distinguishes missing configuration from older hosts', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.listAgents).mockResolvedValueOnce({
+    items: [
+      {
+        id: 'configured',
+        name: 'Agent',
+        model: { modelId: 'model', providerId: 'desktop', name: 'Current model' },
+      },
+      { id: 'empty', name: 'Agent', model: null },
+      { id: 'legacy', name: 'Agent' },
+    ],
+  });
+  const catalog = await test.source.catalog.listAgents(undefined, signal());
+  expect(catalog.items).toMatchObject([
+    { id: 'configured', modelName: 'Current model', configuration: 'available' },
+    { id: 'empty', configuration: 'unavailable' },
+    { id: 'legacy', configuration: 'unknown' },
+  ]);
+  test.source.dispose();
+});
+
+it('opens a cached session before any RPC and keeps cached history separate from current actions', async () => {
+  const test = fixture();
+  const preview = {
+    session,
+    history: {
+      items: [message('cached')],
+      version: '1',
+      readAt: 1,
+      hasOlderMessages: false,
+      complete: true,
+    },
+  };
+  jest.mocked(test.remote.peekSession).mockReturnValue(preview);
+  jest.mocked(test.remote.readSession).mockImplementation(() => new Promise(() => {}));
+  const handle = await test.source.openSession(
+    { source: { kind: 'desktop', connectionId: 'pc' }, sessionId: 's' },
+    signal(),
+  );
+  expect(test.remote.readSession).not.toHaveBeenCalled();
+  expect(handle.history.peekLatest?.()?.items[0].display.id).toBe('cached');
+  expect(handle.state.getSnapshot().freshness.state).toBe('cached');
+  expect(handle.state.getSnapshot().actions.send?.availability).toMatchObject({
+    state: 'disabled',
+    reason: 'synchronizing',
+  });
+  handle.dispose();
+  test.source.dispose();
+});
+
+it('revalidates history after an epoch reset even when its persisted revision is unchanged', async () => {
+  const test = fixture();
+  const handle = await test.source.openSession(address, signal());
+  const release = handle.activate();
+  test.publish({ ...test.snapshot, historyEpoch: 'first' });
+  const initial = handle.state.getSnapshot().historyVersion;
+  test.publish({ ...test.snapshot, historyEpoch: 'first', current: false });
+  expect(handle.state.getSnapshot().historyVersion).toBe(initial);
+  test.publish({ ...test.snapshot, historyEpoch: 'second', current: false });
+  expect(handle.state.getSnapshot().historyVersion).not.toBe(initial);
+  expect(handle.state.getSnapshot().actions.send?.availability.state).toBe('disabled');
+  release();
   handle.dispose();
   test.source.dispose();
 });

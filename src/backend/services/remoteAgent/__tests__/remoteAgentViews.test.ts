@@ -74,3 +74,15 @@ it('exposes desktop data-file parts as metadata without claiming downloadable by
   });
   expect(projected.parts[0]).not.toHaveProperty('url');
 });
+
+it('preserves usage and measured zero without issuing a content resource', () => {
+  const usage = { totalTokens: 25, outputTokens: 0, cacheReadTokens: 10, durationMs: 200 };
+  expect(projectMessage('s', { ...message, usage }, [], issueResource).usage).toEqual(usage);
+  expect(projectMessage('s', message, [], issueResource).usage).toBeUndefined();
+});
+
+it('keeps the remote message model snapshot without consulting the mobile model catalog', () => {
+  const model = { modelId: 'model', providerId: 'desktop-provider', name: 'Historical model' };
+  expect(projectMessage('s', { ...message, model }, [], issueResource).model).toEqual(model);
+  expect(projectMessage('s', message, [], issueResource).model).toBeUndefined();
+});

@@ -142,3 +142,39 @@ it('preserves known admission failure details instead of flattening them to inte
     retry: 'none',
   });
 });
+
+it('keeps remote usage in the display and leaves absent usage unknown', () => {
+  const message: RemoteMessageView = {
+    id: 'm',
+    version: '1',
+    role: 'assistant',
+    state: 'success',
+    parts: [],
+    usage: { totalTokens: 25, outputTokens: 0, cacheReadTokens: 10, durationMs: 200 },
+  };
+  expect(
+    remoteMessage(message, 'm' as MessageRef, (id) => id as ResourceRef).display.usage,
+  ).toEqual(message.usage);
+  expect(
+    remoteMessage({ ...message, usage: undefined }, 'm' as MessageRef, (id) => id as ResourceRef)
+      .display.usage,
+  ).toBeUndefined();
+});
+
+it('renders the historical remote model identity even when the phone has no matching model', () => {
+  const message: RemoteMessageView = {
+    id: 'm',
+    version: '1',
+    role: 'assistant',
+    state: 'success',
+    parts: [],
+    model: { modelId: 'model', providerId: 'desktop-provider', name: 'Historical model' },
+  };
+  expect(
+    remoteMessage(message, 'm' as MessageRef, (id) => id as ResourceRef).display.model,
+  ).toEqual({ id: 'desktop-provider::model', ...message.model });
+  expect(
+    remoteMessage({ ...message, model: undefined }, 'm' as MessageRef, (id) => id as ResourceRef)
+      .display.model,
+  ).toBeUndefined();
+});
