@@ -11,6 +11,7 @@ import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import { ProviderRegistryQueryBridge } from '@/frontend/data/ProviderRegistryQueryBridge';
+import { SkillQueryBridge } from '@/frontend/data/SkillQueryBridge';
 
 type AppBootstrapProviderProps = PropsWithChildren<{
   /** Test seam. Production owns one in-process backend runtime. */
@@ -57,6 +58,7 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
     <BackendProvider backend={runtime.backend}>
       <DataApiProvider dataApi={runtime.dataApi}>
         <FileQueryBridge />
+        <SkillQueryBridge />
         <ProviderRegistryQueryBridge />
         <PreferenceProvider preference={runtime.preference}>
           <AppBootstrapContext value={state}>{children}</AppBootstrapContext>

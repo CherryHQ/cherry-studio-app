@@ -1,3 +1,11 @@
+import {
+  AppStatePolicy,
+  BaseService,
+  DependsOn,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
 /**
  * Mobile Agent Host: the only adapter between the Agent Protocol
  * (`@/shared/contracts/agent`) and the Agent Runtime contract
@@ -37,15 +45,6 @@
  * 14. a Draft Session becomes durable in the same transaction as its first
  *     user/assistant message reservation.
  */
-
-import {
-  AppStatePolicy,
-  BaseService,
-  DependsOn,
-  Injectable,
-  Phase,
-  ServicePhase,
-} from '@/backend/core/lifecycle';
 import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
@@ -86,6 +85,7 @@ import {
 } from '@/shared/contracts/agent';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
+import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
 
@@ -111,7 +111,7 @@ import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions'
 import type { AgentImageGenerationPort } from './agentImageGeneration';
 import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
-import { buildAgentSystemPrompt } from './agentSystemPrompt';
+import { buildActiveSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
 import { validateRuntimeContextCheckpoint } from './contextCheckpoints';
 import type { AgentInferenceModelResolver } from './inferenceSnapshot';
 import { MessageRuntimeTimingCollector } from './MessageRuntimeTimingCollector';
@@ -122,6 +122,8 @@ import {
   toAgentUsageView,
   toCompactionAnchorPart,
 } from './runtimeProjection';
+import { stripSkillHistoryParts } from './skillHistory';
+import type { SkillScopeSource } from './skillScope';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
   prepareInitialTurn,
@@ -181,6 +183,7 @@ export type MobileAgentHostPorts = {
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;
+  skills?: SkillScopeSource;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
   tools: SystemCapabilitySource;
   traces?: TraceRecorder;
@@ -311,6 +314,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return this.ports.files;
   }
 
+  private skillWorkflow: SkillsModule | undefined;
+
+  /** Bootstrap supplies the same workflow used by the library UI before accepting turns. */
+  configureSkills(workflow: SkillsModule): void {
+    this.skillWorkflow = workflow;
+  }
+
   private get usage(): MobileAgentHostPorts['usage'] {
     return this.ports.usage;
   }
@@ -327,6 +337,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
       systemCapabilities: this.ports.tools,
+      ...(this.ports.skills ? { skills: this.ports.skills } : {}),
+      ...(this.skillWorkflow ? { skillWorkflow: this.skillWorkflow } : {}),
     };
   }
 
@@ -971,9 +983,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       // artifact is never replayed to the model, so a retained prefix can be
       // model-visible or empty regardless of how many parts it kept.
       const resume = plan.retry
-        ? toRuntimeHistory([{ ...state.assistantMessage, parts: plan.retry.resumeParts }]).flatMap(
-            (turn) => turn.messages.flatMap((message) => message.parts),
-          )
+        ? toRuntimeHistory([
+            { ...state.assistantMessage, parts: stripSkillHistoryParts(plan.retry.resumeParts) },
+          ]).flatMap((turn) => turn.messages.flatMap((message) => message.parts))
         : [];
       const events = state.runtimeSession.execute({
         turnId: state.turn.id,
@@ -983,9 +995,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           appLanguage: this.ports.appLanguage(),
           tools: plan.tools,
           pluginGuides: plan.pluginGuides,
+          skills: plan.skills,
           toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
           ...(plan.retry ? { retry: resume.length ? 'resumed' : 'restarted' } : {}),
         }),
+        resolveAdditionalInstructions: () => buildActiveSkillInstructions(plan.skills),
         model: plan.agent.model,
         history: toRuntimeHistory(plan.history, runtimeAttachments),
         contextCheckpoint: plan.runtimeContextCheckpoint,

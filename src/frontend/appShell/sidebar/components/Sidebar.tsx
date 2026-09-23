@@ -1,9 +1,13 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
-import { useStartNewChat } from '@/frontend/appShell/navigation/chat';
+import {
+  useStartNewChat,
+  parseChatRoute,
+  type ChatRouteParamsInput,
+} from '@/frontend/appShell/navigation/chat';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import { useSessionSearch } from '../hooks/useSessionSearch';
@@ -18,6 +22,15 @@ type SidebarProps = {
 /** Drawer sidebar whose root owns the drawer-scoped actions. */
 export function Sidebar({ navigation }: SidebarProps) {
   const router = useRouter();
+  const chatRoute = parseChatRoute(useLocalSearchParams<ChatRouteParamsInput>());
+  const pluginAgentId =
+    chatRoute.status === 'ready' && chatRoute.target.kind === 'draft'
+      ? chatRoute.target.agentId
+      : undefined;
+  const pluginSessionId =
+    chatRoute.status === 'ready' && chatRoute.target.kind === 'session'
+      ? chatRoute.target.sessionId
+      : undefined;
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
 
@@ -42,7 +55,10 @@ export function Sidebar({ navigation }: SidebarProps) {
       },
       openPlugins: () => {
         navigation.closeDrawer();
-        router.push('/plugins');
+        router.push({
+          pathname: '/plugins',
+          params: { agentId: pluginAgentId, sessionId: pluginSessionId },
+        });
       },
       openSettings: () => {
         navigation.closeDrawer();
@@ -53,7 +69,7 @@ export function Sidebar({ navigation }: SidebarProps) {
         void startNewChat();
       },
     }),
-    [navigation, openSessionSearch, router, startNewChat],
+    [pluginAgentId, pluginSessionId, navigation, openSessionSearch, router, startNewChat],
   );
 
   return (

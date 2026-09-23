@@ -53,6 +53,19 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 - The composer menu offers media and connected plugins. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available
   to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
+- Sidebar → Plugins → Skills → Add Skill opens a fresh draft with a removable built-in action chip,
+  seeded through the shared chat composer handoff. The user supplies a task or supported source URL
+  and sends explicitly. The structured
+  `find-and-install` intent travels with that message and its retries; it supplies installation
+  intent to the conversation workflow. Rejected sends retain it, successful sends clear the
+  submitted selection, and switching Agents clears it. The Host owns discovery, preparation,
+  admission, installation and enabling for the current Agent.
+- The plus menu does not add or discover Skills; it only selects installed Skills for use.
+- The menu's Skills row opens a searchable picker of globally enabled, ready bindings for the
+  current Agent. Up to eight explicit selections are submitted as Skill IDs; the Host revalidates
+  them and records name/revision receipts on the user message. Rejected sends retain selections,
+  successful sends clear the submitted selection, and Agent switches clear it. Manual-only Skills
+  remain selectable when user invocation is allowed. Selection never creates an Agent binding.
 - The menu's File row opens the full-height library picker. Its Recent list shares cursor pages
   and batched previews with the library screen. Selection stays local until Add is pressed; the
   action appears only for newly selected, available attachments. Already attached files are marked

@@ -118,18 +118,22 @@ export function createAppBootstrapRuntime(
     preference,
     webSearch,
   });
-  const { backend, dataApiDependencies, disposeSystemEntry } = createBackend(services, {
-    dbService,
-    documentExport,
-    desktopConnections,
-    languageServing,
-    providerRegistryUpdater,
-  });
+  const { backend, dataApiDependencies, disposeSystemEntry, initializeSkills } = createBackend(
+    services,
+    {
+      dbService,
+      documentExport,
+      desktopConnections,
+      languageServing,
+      providerRegistryUpdater,
+    },
+  );
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
       agentAvatars: dataApiDependencies.agentAvatars,
       agents: services.agentData,
+      agentGlobalSkills: services.agentGlobalSkill,
       agentToolBindings: services.agentToolBinding,
       agentSessionMessages: services.agentSessionMessage,
       agentSessionMutations: services.agent,
@@ -149,6 +153,7 @@ export function createAppBootstrapRuntime(
         listConnections: () => services.mcpRuntime.pluginAuthorizations.listConnections(),
       },
       providers: services.provider,
+      skillAdmissions: dataApiDependencies.skillAdmissions,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),
   );
@@ -177,6 +182,7 @@ export function createAppBootstrapRuntime(
       // by the dependency graph rather than by the order written here.
       await application.install(host);
       await initializeAppRuntime(services);
+      await initializeSkills();
     },
     runPostReadyTasks: async () => {
       // Starts the best-effort PostReady phase off the first-paint path.

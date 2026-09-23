@@ -1,15 +1,20 @@
+import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { getLocales } from 'expo-localization';
+
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime } from '@/backend/ai/agent/runtime';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
 } from '@/backend/ai/provider/systemModelSupport';
+import { createSkillAi } from '@/backend/ai/skill';
 import {
   createMcpServerMutations,
   type McpServerMutations,
 } from '@/backend/data/api/handlers/mcpServers';
 import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/models';
 import type { PluginCatalogReader } from '@/backend/data/api/handlers/pluginCatalog';
+import type { SkillAdmissionReader } from '@/backend/data/api/handlers/skills';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
@@ -43,19 +48,32 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
+import {
+  createBundledSkillSource,
+  createClawhubSkillSource,
+  createSkillMarketplace,
+  createGithubSkillClients,
+  createGithubSkillSource,
+  createSkillEnvironmentReader,
+  createSkillsModule,
+  skillStorage,
+} from '@/backend/services/skill';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import { resolveAppLanguage } from '@/shared/utils/languages';
 
 export type BackendComposition = {
   backend: Backend;
+  initializeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
     pluginCatalog: PluginCatalogReader;
+    skillAdmissions: SkillAdmissionReader;
     systemModelSupport: SystemModelSupportFilter;
   };
 };
@@ -196,9 +214,59 @@ export function createBackend(
   const systemEntry = createSystemEntryModule({
     importFiles: createSystemShareImporter(exportFiles),
   });
+  const githubSkills = createGithubSkillSource(createGithubSkillClients());
+  const clawhubSkills = createClawhubSkillSource();
+  const skills = createSkillsModule({
+    marketplace: createSkillMarketplace(githubSkills, clawhubSkills),
+    ai: createSkillAi({
+      ai: services.ai,
+      models: services.model,
+      preference: services.preference,
+      language: async () =>
+        resolveAppLanguage(
+          await services.preference.get('app.language'),
+          getLocales().map((locale) => locale.languageTag),
+        ),
+    }),
+    search: (keywords, signal) => services.webSearch.searchKeywords({ keywords }, { signal }),
+    db: { withWriteTx: (fn) => dbService.withWriteTx(fn) },
+    skills: services.agentGlobalSkill,
+    storage: skillStorage,
+    environment: createSkillEnvironmentReader({
+      permissions: services.devicePermissions,
+      preference: services.preference,
+      models: services.model,
+      plugins: services.mcpRuntime.pluginAuthorizations,
+    }),
+    sources: {
+      bundled: createBundledSkillSource(),
+      github: githubSkills,
+      clawhub: clawhubSkills,
+    },
+    agentFacts: async (agentId) => {
+      const agent = await services.agentData.getById(agentId).catch(() => null);
+      if (!agent) return null;
+      const model = agent.modelId ? await services.model.getById(agent.modelId) : null;
+      return {
+        disabledCapabilities: agent.disabledCapabilities,
+        supportsToolCalling: model?.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL) ?? false,
+      };
+    },
+  });
+
+  services.agent.configureSkills(skills);
 
   return {
     disposeSystemEntry: systemEntry.dispose,
+    initializeSkills: async () => {
+      try {
+        await skills.reconcileStorage();
+      } catch (error) {
+        loggerService
+          .withContext('SkillsModule')
+          .warn('Skill storage reconciliation failed', { error });
+      }
+    },
     backend: {
       systemEntry: systemEntry.module,
       agent: services.agent,
@@ -220,12 +288,14 @@ export function createBackend(
       plugins: createPluginsModule(services.mcpRuntime, services.mcpRuntime.pluginAuthorizations),
       profile,
       providers,
+      skills,
       webSearch: services.webSearch,
     },
     dataApiDependencies: {
       agentAvatars,
       mcpServerMutations,
       pluginCatalog: getBuiltInPluginCatalog,
+      skillAdmissions: skills.admissions,
       systemModelSupport,
     },
   };

@@ -13,6 +13,7 @@ import type { PluginCatalogSchemas } from './pluginCatalog';
 import type { PluginConnectionSchemas } from './pluginConnections';
 import type { ProviderSchemas } from './providers';
 import type { SearchSchemas } from './search';
+import type { SkillSchemas } from './skills';
 
 export type ApiSchemas = AgentSchemas &
   AgentToolBindingSchemas &
@@ -28,4 +29,5 @@ export type ApiSchemas = AgentSchemas &
   PluginCatalogSchemas &
   PluginConnectionSchemas &
   ProviderSchemas &
-  SearchSchemas;
+  SearchSchemas &
+  SkillSchemas;

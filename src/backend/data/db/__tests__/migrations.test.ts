@@ -155,8 +155,10 @@ describe('bundled SQLite migrations', () => {
         ).map((table) => table.name),
       ).toEqual([
         'agent',
+        'agent_global_skill',
         'agent_session',
         'agent_session_message',
+        'agent_skill',
         'agent_tool_binding',
         'ai_usage_record',
         'app_state',
@@ -361,6 +363,22 @@ describe('bundled SQLite migrations', () => {
       const agentToolBindingTableSql = getSchemaSql(database, 'table', 'agent_tool_binding');
       expect(agentToolBindingTableSql).toContain('agent_tool_binding_identity_check');
       expect(agentToolBindingTableSql).toContain('agent_tool_binding_approval_check');
+      // One installation is shared by every bound Agent: the join cascades from
+      // both sides and never copies the package (agent-skills.md).
+      expect(getForeignKeys(database, 'agent_skill')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ from: 'agent_id', on_delete: 'CASCADE', table: 'agent' }),
+          expect.objectContaining({
+            from: 'skill_id',
+            on_delete: 'CASCADE',
+            table: 'agent_global_skill',
+          }),
+        ]),
+      );
+      expect(getForeignKeys(database, 'agent_global_skill')).toEqual([]);
+      expect(getSchemaSql(database, 'index', 'agent_global_skill_source_locator_uniq')).toContain(
+        'deleted_at" IS NULL',
+      );
       // Invariant 1 (agent-protocol.md) is a database constraint: at most one
       // unsettled assistant message per session.
       expect(indexList(database, 'agent_session_message')).toEqual(
@@ -609,3 +627,55 @@ function readMigrationJournal(): MigrationJournal {
     readFileSync(`${migrationDirectory}/meta/_journal.json`, 'utf8'),
   ) as MigrationJournal;
 }
+
+describe('Skill tables', () => {
+  test('keep one live installation per source and drop bindings with either side', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      applyMigrations(database);
+      const insertSkill = (id: string, folder: string, locator: string, deletedAt: string) =>
+        database.exec(`
+          INSERT INTO agent_global_skill (
+            id, name, description, folder_name, source_registry, source_locator, source_revision,
+            entry_digest, package_digest, manifest, profile, created_at, updated_at, deleted_at
+          ) VALUES ('${id}', 'brief', 'Write a brief', '${folder}', 'github', '${locator}', 'abc',
+            'e', 'p', '[]', '{}', 1, 1, ${deletedAt});
+        `);
+      insertSkill('skill-a', 'brief', 'github:a/b/brief', 'NULL');
+      // A tombstoned installation releases both its alias and its locator.
+      insertSkill('skill-old', 'brief-2', 'github:c/d/brief', '5');
+      insertSkill('skill-new', 'brief-2', 'github:c/d/brief', 'NULL');
+      expect(() => insertSkill('skill-dup', 'brief-3', 'github:a/b/brief', 'NULL')).toThrow(
+        /UNIQUE/,
+      );
+      expect(() => insertSkill('skill-dup', 'brief', 'github:x/y/brief', 'NULL')).toThrow(/UNIQUE/);
+
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_skill (agent_id, skill_id, created_at, updated_at)
+        VALUES ('agent', 'skill-a', 1, 1), ('agent', 'skill-new', 1, 1);
+      `);
+      expect(database.prepare('SELECT is_enabled FROM agent_skill').all()).toEqual([
+        { is_enabled: 1 },
+        { is_enabled: 1 },
+      ]);
+      expect(() =>
+        database.exec(
+          "INSERT INTO agent_skill (agent_id, skill_id, created_at, updated_at) VALUES ('agent', 'missing', 1, 1)",
+        ),
+      ).toThrow(/FOREIGN KEY/);
+      database.exec("DELETE FROM agent_global_skill WHERE id = 'skill-a'");
+      expect(database.prepare('SELECT skill_id FROM agent_skill').all()).toEqual([
+        { skill_id: 'skill-new' },
+      ]);
+      database.exec("DELETE FROM agent WHERE id = 'agent'");
+      expect(database.prepare('SELECT count(*) AS count FROM agent_skill').get()).toEqual({
+        count: 0,
+      });
+    } finally {
+      database.close();
+    }
+  });
+});

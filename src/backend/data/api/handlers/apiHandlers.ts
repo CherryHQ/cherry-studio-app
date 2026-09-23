@@ -1,5 +1,6 @@
 import type { ApiImplementation } from '@/shared/data/api/types';
 
+import type { AgentGlobalSkillService } from '../../services/AgentGlobalSkillService';
 import type { AgentService } from '../../services/AgentService';
 import type { AgentSessionMessageService } from '../../services/AgentSessionMessageService';
 import type { AgentSessionService } from '../../services/AgentSessionService';
@@ -29,10 +30,13 @@ import { createPluginCatalogHandlers, type PluginCatalogReader } from './pluginC
 import { createPluginConnectionHandlers } from './pluginConnections';
 import { createProviderHandlers } from './providers';
 import { createSearchHandlers } from './search';
+import { createSkillHandlers, type SkillAdmissionReader } from './skills';
 
 export type DataApiDependencies = {
   agentAvatars: AgentAvatars;
   agents: AgentService;
+  agentGlobalSkills: AgentGlobalSkillService;
+  skillAdmissions: SkillAdmissionReader;
   agentToolBindings: AgentToolBindingService;
   agentSessionMessages: AgentSessionMessageService;
   agentSessionMutations: AgentSessionMutations;
@@ -70,5 +74,6 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createPluginConnectionHandlers(dependencies.pluginConnections),
     ...createProviderHandlers(dependencies.providers),
     ...createSearchHandlers(dependencies.contentSearch, dependencies.entitySearch),
+    ...createSkillHandlers(dependencies.agentGlobalSkills, dependencies.skillAdmissions),
   };
 }

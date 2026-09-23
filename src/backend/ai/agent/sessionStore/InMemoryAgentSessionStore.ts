@@ -27,6 +27,7 @@ import {
   interruptNonTerminalToolParts,
   settleInterruptedAssistantParts,
 } from './messageSettlement';
+import { collectSkillActivations } from './skillActivations';
 
 const UNSETTLED_MESSAGE_STATUSES = new Set<AgentMessageView['status']>(['pending', 'streaming']);
 
@@ -473,6 +474,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       history,
       referencedFileEntryIds,
       sessionTurnIds,
+      skillActivations: collectSkillActivations(transcript.map(({ view }) => view)),
     });
   }
 

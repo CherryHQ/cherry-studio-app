@@ -16,6 +16,7 @@ import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { agentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
@@ -23,6 +24,8 @@ import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { discardInternalEntries } from '@/backend/services/file/fileStorage';
+import { devicePermissions } from '@/backend/services/permissions';
+import { createSkillEnvironmentReader, skillStorage } from '@/backend/services/skill';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
@@ -41,6 +44,7 @@ import { AgentSessionNaming } from './AgentSessionNaming';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { createAgentInferenceModelResolver } from './inferenceSnapshot';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentHost';
+import { createSkillScopeSource } from './skillScope';
 
 @Injectable('AgentHostDependencies')
 @ServicePhase(Phase.PostReady)
@@ -56,6 +60,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly files = managedFileResolver;
   readonly inferenceModel = createAgentInferenceModelResolver(modelService);
   readonly runtimeTools;
+  readonly skills;
   readonly imageGeneration;
   readonly usage = new AgentSessionUsageRecorder();
 
@@ -81,6 +86,17 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       bindings: agentToolBindingService,
       servers: mcpServerService,
       getMcpRuntime: () => mcpRuntime,
+    });
+    this.skills = createSkillScopeSource({
+      skills: agentGlobalSkillService,
+      storage: skillStorage,
+      environment: createSkillEnvironmentReader({
+        permissions: devicePermissions,
+        preference: preferenceService,
+        models: modelService,
+        plugins: mcpRuntime.pluginAuthorizations,
+      }),
+      models: modelService,
     });
   }
 

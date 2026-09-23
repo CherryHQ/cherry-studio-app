@@ -34,6 +34,7 @@ import {
   type AgentMessageView,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
+import { SkillActivationSchema } from '@/shared/data/types/skill';
 
 import type {
   AgentSessionStore,
@@ -551,7 +552,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           )
         : eq(agentSessionMessageTable.sessionId, sessionId);
 
-    const [historyRows, messageRows, turnRows, fileRows] = await Promise.all([
+    const [historyRows, messageRows, turnRows, fileRows, skillRows] = await Promise.all([
       db
         .select()
         .from(agentSessionMessageTable)
@@ -579,6 +580,26 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         WHERE message.session_id = ${sessionId}
           AND json_extract(part.value, '$.type') = 'file'
       `),
+      db.all<{ messageId: string; activation: string }>(sql`
+        SELECT messageId, activation FROM (
+        SELECT message.id AS "messageId", message.created_at AS createdAt, part.key AS partIndex,
+               0 AS receiptIndex, json_extract(part.value, '$.output.value.activation') AS activation
+        FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part
+        WHERE message.session_id = ${sessionId} AND message.role = 'assistant'
+          AND json_extract(part.value, '$.type') = 'tool'
+          AND json_extract(part.value, '$.toolRef.source') = 'builtin'
+          AND json_extract(part.value, '$.toolRef.capabilityId') = 'load_skill'
+          AND json_extract(part.value, '$.state') = 'output-available'
+          AND json_extract(part.value, '$.output.value.status') = 'ok'
+        UNION ALL
+        SELECT message.id AS "messageId", message.created_at AS createdAt, part.key AS partIndex,
+               receipt.key AS receiptIndex, receipt.value AS activation
+        FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part,
+             json_each(json_extract(part.value, '$.skillSelections')) AS receipt
+        WHERE message.session_id = ${sessionId} AND message.role = 'user'
+          AND json_extract(part.value, '$.type') = 'text'
+        ) ORDER BY createdAt, messageId, partIndex, receiptIndex
+      `),
     ]);
 
     return {
@@ -589,6 +610,14 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .flatMap(({ fileEntryId }) => (typeof fileEntryId === 'string' ? [fileEntryId] : []))
         .sort(),
       sessionTurnIds: turnRows.flatMap(({ turnId }) => (turnId === null ? [] : [turnId])).sort(),
+      skillActivations: skillRows.flatMap(({ messageId, activation }) => {
+        try {
+          const parsed = SkillActivationSchema.safeParse(JSON.parse(activation));
+          return parsed.success ? [{ messageId, activation: parsed.data }] : [];
+        } catch {
+          return [];
+        }
+      }),
     };
   }
 

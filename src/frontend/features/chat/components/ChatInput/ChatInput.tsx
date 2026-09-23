@@ -1,4 +1,4 @@
-import { Composer } from '@cherrystudio/ui/components';
+import { Button, Composer } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,7 @@ import {
   type ComposerSendPayload,
   ComposerSurface,
   useComposerPresentationState,
+  useComposerPresentationActions,
   useComposerState,
 } from '@/frontend/components/Composer';
 import {
@@ -46,6 +47,7 @@ import { type useAgentChatControls, useAgentChatImageResult } from '../../runtim
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
+import { ChatInputSkillPicker, type ComposerSkill } from './components/ChatInputSkillPicker';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
@@ -61,9 +63,11 @@ type ChatInputProps = {
   dismissKeyboardOnSend?: boolean;
   imageResult?: AgentMessageView;
   sessionId?: string;
+  initialSkillAction?: 'find-and-install';
 };
 
 const logger = loggerService.withContext('ChatInput');
+const EMPTY_SKILL_SELECTION: readonly ComposerSkill[] = Object.freeze([]);
 const restingInputHeight = 32;
 const FIELD_CONTENT_STYLE = { minHeight: restingInputHeight };
 const restingActionSlotWidth = restingInputHeight + 8;
@@ -81,7 +85,16 @@ export function ChatInput({
   dismissKeyboardOnSend,
   imageResult,
   sessionId,
+  initialSkillAction,
 }: ChatInputProps) {
+  const [findSkillAction, setFindSkillAction] = useState({
+    agentId,
+    active: initialSkillAction === 'find-and-install',
+  });
+  if (findSkillAction.agentId !== agentId) {
+    setFindSkillAction({ agentId, active: false });
+  }
+  const findSkills = findSkillAction.agentId === agentId && findSkillAction.active;
   const { cancel, canSend, isBusy, sendMessage } = controls;
   const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
   const paintingResult = latestImageResult
@@ -152,7 +165,7 @@ export function ChatInput({
 
   return (
     <PaintingInputProvider result={paintingResult}>
-      {selectedModelItem && isImageGenerationModel(selectedModelItem.model) ? (
+      {selectedModelItem && isImageGenerationModel(selectedModelItem.model) && !findSkills ? (
         <PaintingInput
           canSend={canSend}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -164,6 +177,8 @@ export function ChatInput({
       ) : (
         <TextChatInput
           agentId={agentId}
+          findSkills={findSkills}
+          onClearFindSkills={() => setFindSkillAction({ agentId, active: false })}
           controls={controls}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
           providerSetupReturnTo={providerSetupReturnTo}
@@ -178,13 +193,17 @@ export function ChatInput({
 
 function TextChatInput({
   agentId,
+  findSkills,
+  onClearFindSkills,
   controls,
   dismissKeyboardOnSend,
   providerSetupReturnTo,
   selectedModelId,
   selectedModelItem,
   selectModel,
-}: Omit<ChatInputProps, 'sessionId'> & {
+}: Omit<ChatInputProps, 'sessionId' | 'initialSkillAction'> & {
+  findSkills: boolean;
+  onClearFindSkills: () => void;
   providerSetupReturnTo: string;
   selectedModelId: UniqueModelId | null;
   selectedModelItem?: ModelPickerModelItem;
@@ -199,6 +218,20 @@ function TextChatInput({
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
     useChatInputReasoningEffortSelection(reasoningEfforts, agentId);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const { runInputReplacement } = useComposerPresentationActions();
+  const [isSkillPickerOpen, setIsSkillPickerOpen] = useState(false);
+  const [skillSelection, setSkillSelection] = useState<{
+    agentId?: string;
+    items: readonly ComposerSkill[];
+  }>({ agentId, items: [] });
+  if (skillSelection.agentId !== agentId) {
+    setSkillSelection({ agentId, items: [] });
+    setIsSkillPickerOpen(false);
+  }
+  const selectedSkills =
+    skillSelection.agentId === agentId ? skillSelection.items : EMPTY_SKILL_SELECTION;
+  const setSelectedSkills = (items: readonly ComposerSkill[]) =>
+    setSkillSelection((current) => ({ ...current, agentId, items }));
   const [isPluginPickerOpen, setIsPluginPickerOpen] = useState(false);
   const pluginCatalog = usePluginCatalog();
   const pluginConnections = usePluginConnections();
@@ -313,12 +346,14 @@ function TextChatInput({
     openProviderSetup();
   }, [openProviderSetup]);
   const handleSendPress = useCallback(
-    ({ attachments, text }: ComposerSendPayload) => {
+    async ({ attachments, text }: ComposerSendPayload) => {
       setIsPluginPickerOpen(false);
       const { pluginReferences, text: prompt } = readPluginMentions(text);
       const parts = toAgentInputParts({ attachments, text: prompt }, pluginReferences);
-      return sendMessage({
+      await sendMessage({
         parts,
+        ...(findSkills ? { skillAction: 'find-and-install' as const } : {}),
+        ...(selectedSkills.length ? { skillIds: selectedSkills.map((skill) => skill.id) } : {}),
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
         ...(reasoningEfforts.length > 0
           ? {
@@ -330,8 +365,23 @@ function TextChatInput({
             }
           : {}),
       });
+      setSkillSelection((current) =>
+        current === skillSelection ? { agentId, items: [] } : current,
+      );
+      if (findSkills) onClearFindSkills();
     },
-    [isReasoningEffortSelected, reasoningEffort, reasoningEfforts, selectedModelId, sendMessage],
+    [
+      agentId,
+      findSkills,
+      onClearFindSkills,
+      skillSelection,
+      selectedSkills,
+      isReasoningEffortSelected,
+      reasoningEffort,
+      reasoningEfforts,
+      selectedModelId,
+      sendMessage,
+    ],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
@@ -378,6 +428,35 @@ function TextChatInput({
                 >
                   <ComposerAttachments />
                 </View>
+                {selectedSkills.length > 0 || findSkills ? (
+                  <View className="flex-row flex-wrap gap-2">
+                    {findSkills ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        accessibilityLabel={t('skills.composer.remove', {
+                          name: t('skills.find.name'),
+                        })}
+                        onPress={onClearFindSkills}
+                      >
+                        {t('skills.find.name')} ×
+                      </Button>
+                    ) : null}
+                    {selectedSkills.map((skill) => (
+                      <Button
+                        key={skill.id}
+                        size="sm"
+                        variant="secondary"
+                        accessibilityLabel={t('skills.composer.remove', { name: skill.name })}
+                        onPress={() =>
+                          setSelectedSkills(selectedSkills.filter((item) => item.id !== skill.id))
+                        }
+                      >
+                        {skill.name} ×
+                      </Button>
+                    ))}
+                  </View>
+                ) : null}
                 <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
                   <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
                     {/* Center a short field in the action row; longer drafts grow naturally. */}
@@ -387,6 +466,7 @@ function TextChatInput({
                       style={FIELD_CONTENT_STYLE}
                     >
                       <ComposerField
+                        placeholder={findSkills ? t('skills.find.hint') : undefined}
                         style={isPluginPickerVisible ? compactInputStyle : undefined}
                         testID="chat-composer-input"
                       />
@@ -399,6 +479,13 @@ function TextChatInput({
                   >
                     {/* The primary actions stay reachable while the field is empty and unfocused. */}
                     <ChatInputMenu
+                      onPickSkills={
+                        agentId
+                          ? () => {
+                              void runInputReplacement(() => setIsSkillPickerOpen(true));
+                            }
+                          : undefined
+                      }
                       onPickPlugins={
                         hasConnectedPlugins ? () => setIsPluginPickerOpen(true) : undefined
                       }
@@ -447,6 +534,14 @@ function TextChatInput({
           </ChatInputEffortOverlay>
         </View>
       </ChatInputPluginPopover>
+      {isSkillPickerOpen && agentId && !isApprovalPending ? (
+        <ChatInputSkillPicker
+          agentId={agentId}
+          selected={selectedSkills}
+          onChange={setSelectedSkills}
+          onClose={() => setIsSkillPickerOpen(false)}
+        />
+      ) : null}
       {isModelPickerOpen ? (
         <ModelPickerDrawer
           modelType="all"
