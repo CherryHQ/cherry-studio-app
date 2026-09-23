@@ -17,7 +17,7 @@ profiles retain the current ARM64-only device support.
 | --- | --- | --- |
 | GitHub Actions secret | `EXPO_TOKEN` | Access to this EAS project's builds and submissions |
 | GitHub Actions | Built-in `GITHUB_TOKEN` | `contents: write` for generating release notes and publishing the GitHub release |
-| EAS credentials | Android production keystore | Sign APKs and AAB uploads with the existing production identity |
+| EAS credentials | Android production keystore | Sign GitHub APKs, and sign AABs as the Google Play upload key |
 | EAS credentials | iOS production signing and App Store Connect API key | Sign and upload iOS builds without prompts |
 | EAS production environment | Build and app environment variables | Includes the production Sentry upload token and configured app services |
 
@@ -87,10 +87,10 @@ APK; the AAB is only saved with the workflow run.
 1. Create the app in Google Play Console for `com.cherryai.cherrystudio_app`, complete the store
    listing and required app-content declarations, and obtain production access if the account
    requires testing first. Select the appropriate testing or production track in Play Console.
-2. Configure Play App Signing. To support updates between existing GitHub APK installations and
-   Google Play installations, use the existing production APK signing key as the Play app signing
-   key. Matching application IDs or upload keys alone is not sufficient: Google signs the delivered
-   APKs with its configured app signing key. See [Android app signing](https://developer.android.com/studio/publish/app-signing).
+2. Keep the Google-generated Play app signing key. Google Play and GitHub APKs are independent
+   channels with different signing certificates, so one channel cannot update an installation from
+   the other; switching channels requires uninstalling the app first. The production keystore
+   signs AABs only as the Play upload key. See [Android app signing](https://developer.android.com/studio/publish/app-signing).
 
 ### Manual Upload For Each Release
 
