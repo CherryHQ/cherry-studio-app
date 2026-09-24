@@ -230,11 +230,6 @@ export type RuntimeTool = {
   /** Opt-in text fields to preview while input is incomplete; never executable input. */
   inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';
-  /**
-   * The tool blocks on a human response. Like an approval wait, that time
-   * does not consume the turn's execution deadline.
-   */
-  interaction?: 'user-input';
   /** Tools in the same group stop together after a tool-scoped failure. */
   failureGroup?: string;
   /**

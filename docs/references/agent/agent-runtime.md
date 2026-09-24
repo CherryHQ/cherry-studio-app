@@ -500,12 +500,13 @@ reaching either limit disables tool selection and allows one final model respons
 results, with instructions to disclose uncertainty and unfinished work. A successful final response
 completes the turn; further tool requests fail with the budget error. Tool definitions remain in the
 request to keep tool history valid; the final provider payload forces tool choice to `none` (Google:
-`NONE`). Context exhaustion still stops before another provider request, and the final response shares
-the whole turn's ten-minute execution deadline. Human response time is not execution: the deadline
-pauses while an approval or a tool marked `interaction: 'user-input'` waits, and resumes with the
-remaining budget afterward. Cancellation and timeout abort the model, approval waiters, and
-the callback signal before terminalizing live tool parts. Streamable HTTP MCP callbacks add their own
-60-second invocation bound.
+`NONE`). Context exhaustion still stops before another provider request.
+
+A turn has no wall-clock deadline. Long generations, such as writing a large file through a tool, are
+legitimate progress, and the step and call budgets already bound runaway tool loops. A turn ends only
+by completing, failing, or being cancelled; cancellation aborts the model, approval waiters, and the
+callback signal before terminalizing live tool parts. Bounded waits belong to the operations that can
+stall: Streamable HTTP MCP callbacks add their own 60-second invocation bound.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -768,7 +769,7 @@ Every Runtime implementation passes the same suite:
 16. Image preflight happens before reservation, and Runtime image payloads contain only bounded,
     request-local managed content accepted by the model and endpoint.
 17. Tool-step and tool-call budgets stop new tool execution and allow one response with tools disabled;
-    context, callback, and whole-turn limits retain classified failure outcomes.
+    context and callback limits retain classified failure outcomes.
 18. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
     previous complete-history model input.
 19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded

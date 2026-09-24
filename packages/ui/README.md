@@ -455,6 +455,13 @@ import { Text } from 'react-native';
 
 The variant respects Reduce Motion and `enabled={false}`. Its `className` styles the clipping
 container; `textClassName` styles the phrases.
+`direction` sets which way each change travels: `up` (the default) brings the next phrase in from
+below, and `down` brings it in from above. A string value uses the direction supplied with that
+change, so it can follow the direction of a value change such as a level going up or down.
+Each change moves a short distance on a critically damped spring while the outgoing phrase fades out
+before the incoming one fades in. A phrase called back mid-exit continues from its current position,
+and every outgoing phrase stays mounted until it has faded, so rapid or reversed changes stay
+continuous. The initial phrase appears settled; only later changes animate.
 
 `TextField` is the provider-neutral field group for labels, descriptions, validation errors, and
 shared disabled/invalid/required state. Use its compound members instead of importing loose field

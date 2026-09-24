@@ -378,19 +378,15 @@ retry; cancellation still propagates without becoming a cached failure.
 
 ### System Health
 
-- Health is currently exposed only on iOS. Android omits health permission settings, the Agent
-  capability switch, and runtime tools, including their permission-status lookups. Native Android
-  integration and historical health tool results are retained.
+- Health is exposed only on iOS. Android does not package Nitro HealthKit, the Health Access
+  module, or Health Connect permissions; its health permission lookups report `unsupported`.
+  Historical health tool results are retained.
 - [Health Access](../../../modules/health-access/README.md) owns native read authorization;
   `src/backend/services/permissions` maps its results to the shared permission contract. Data
   queries remain in `src/backend/services/device/health.ts` using Nitro HealthKit.
-- The Nitro HealthKit Android patch propagates record-read failures after quota retries and native
-  aggregate failures. Failed queries must not resolve as empty data or a measured zero; the caller
-  marks the affected metric as `error` while retaining successful metrics. This patch and the iOS
-  calendar requester patch require a new native build.
-- The retained Android implementation awaits the runtime permission callback on Android 14+ and
-  the Health Connect activity result on earlier versions, then reads grants per data type. Its
-  settings handler opens Health Connect management even when all permissions are already granted.
+- The Nitro HealthKit iOS patch narrows authorization to the read types used by the built-in
+  tools and removes per-query logging. This patch and the iOS calendar requester patch require a
+  new native build.
 - Apple Health never discloses whether a read permission was granted. `requested` means the system
   no longer needs to ask, and settings explain how to review access in Apple Health.
 - Summaries request only selected metrics, skip known denied metrics, and preserve successful
@@ -521,7 +517,7 @@ work must discard late results after the turn is terminal.
 
 Pi caps each turn at twenty tool-loop steps and sixty-four tool calls. Reaching either budget allows
 one final response with all tools disabled, using the current results and disclosing remaining gaps.
-This response remains subject to the context limit and the same ten-minute turn deadline. The MCP
+This response remains subject to the context limit; the turn itself has no wall-clock deadline. The MCP
 adapter separately caps each remote call at 60 seconds and projects at most 256 KiB of JSON. These
 limits are application constants rather than user settings in Version 1.
 
@@ -583,8 +579,7 @@ a read-only question/answer record. Pending callbacks and waiting state are memo
 approvals: leaving a route does not cancel the turn, but cancellation, host disposal, and process
 restart invalidate the question. Persisted unanswered questions are not resumable controls.
 
-Pi pauses its execution deadline while a `RuntimeTool` with `interaction: 'user-input'` waits,
-exactly as it does for an approval wait, then restores the remaining budget. Background activity uses the existing approval attention phase
+A question waits for its answer like an approval wait; the turn has no deadline to expire meanwhile. Background activity uses the existing approval attention phase
 with a question-specific label and releases its keep-alive lease. This does not promise indefinite
 background execution or recovery after the operating system terminates the app.
 
