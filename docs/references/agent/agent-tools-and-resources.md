@@ -517,7 +517,7 @@ work must discard late results after the turn is terminal.
 
 Pi caps each turn at twenty tool-loop steps and sixty-four tool calls. Reaching either budget allows
 one final response with all tools disabled, using the current results and disclosing remaining gaps.
-This response remains subject to the context limit and the same ten-minute turn deadline. The MCP
+This response remains subject to the context limit; the turn itself has no wall-clock deadline. The MCP
 adapter separately caps each remote call at 60 seconds and projects at most 256 KiB of JSON. These
 limits are application constants rather than user settings in Version 1.
 
@@ -579,8 +579,7 @@ a read-only question/answer record. Pending callbacks and waiting state are memo
 approvals: leaving a route does not cancel the turn, but cancellation, host disposal, and process
 restart invalidate the question. Persisted unanswered questions are not resumable controls.
 
-Pi pauses its execution deadline while a `RuntimeTool` with `interaction: 'user-input'` waits,
-exactly as it does for an approval wait, then restores the remaining budget. Background activity uses the existing approval attention phase
+A question waits for its answer like an approval wait; the turn has no deadline to expire meanwhile. Background activity uses the existing approval attention phase
 with a question-specific label and releases its keep-alive lease. This does not promise indefinite
 background execution or recovery after the operating system terminates the app.
 
