@@ -95,19 +95,19 @@ must also be considered when reviewing shutdown safety.
 | `RemoteAgentRuntime` | Shared Agent scopes, concurrent acquisitions, pending command demand | Each caller releases its handle independently. Pending commands retain demand after route exit; stop drains openings and scopes. Process restart recovers journal state when that source is opened again. |
 | `RemoteAgentScope` | One Agent-domain lease, session observations, resource registry, read projection and operation recovery | Reacts to lease state; no separate physical reconnect owner. Sync retries and command-receipt recovery are logical work within a usable connection. |
 | `RemoteSessionReadCache` | Runtime-owned bounded protocol values, latest history membership, verified bodies | Survives route disposal without retaining network demand. Binding invalidation clears idle data too; current Scope reissues resource references. See [read cache](./session-read-cache.md). |
-| `SessionSync` | One observed desktop session's replay/checkpoint and local projection cursor | Atomically persists projection + cursor before ACK. Background/disconnect stops observation; resume uses the durable cursor. It never cancels desktop execution. |
+| `SessionSync` | One observed desktop session's checkpoint and in-memory projection/cursor | Installs a fresh desktop checkpoint on every subscription and applies events in memory before ACK. Background/disconnect stops observation; reconnect never resumes a stored cursor. It never cancels desktop execution. |
 | `RemoteAgentActions` | Exact command parameters, fixed IDs, create/send workflow and receipt interpretation | Journal before send. A lost response queries the receipt and may retry identical IDs; interrupted outcomes do not become blind retries. |
 | `DesktopConnectionRuntime` | Pair/remove and configuration export/preview/import tasks | Uses temporary pairing channels or configuration leases; aborts and drains workflow tasks at stop. Provider import is this workflow's responsibility. |
 | `DesktopConnectionManager` | Physical connection pool, identity/grant bindings, temporary channels and pending dials | Demand-driven; last lease has a short grace period. Owns physical AppState, reconnect and domain retirement. Background closes transport, not PC execution. |
 | `DesktopSession` | One Noise channel, typed JSON-RPC requests/notifications, heartbeat and auth refresh | Channel lifetime only; no reconnect, provider import, Agent execution or UI policy. |
-| Projection store / command journal | Local replay cache in SQLite / command evidence in MMKV | Injected into the originating runtime generation. The desktop remains authoritative for execution, transcript and receipts. |
+| Command journal | Pending commands and unconsumed outcomes in MMKV | Injected into the originating runtime generation. Uncertain commands survive restarts; dismissed terminal records are removed, including empty bindings. The desktop remains authoritative for execution, transcript and receipts. |
 | `McpRuntimeService` | Local MCP clients, catalogs and plugin authorization state | Host-owned capability used by local Agent tools and settings. Its MCP connection pool is independent of desktop pairing. |
 | `DocumentExportRuntime` | Export sessions, rendering/conversion and output files | Host-owned, foreground-only capability; receives prepared documents and injected file access. It does not read Agent history or choose a desktop. |
 
 The main declared lifecycle edges are:
 
 ```text
-RemoteAgentRuntime       → DesktopConnectionManager + DbService
+RemoteAgentRuntime       → DesktopConnectionManager
 DesktopConnectionRuntime → DesktopConnectionManager + DbService
 DesktopConnectionManager → DbService
 DocumentExportRuntime    → DbService
@@ -118,7 +118,7 @@ AgentHostDependencies    → AgentSessionStore + AiService + PreferenceService
 McpRuntimeService        → TraceStorageService
 ```
 
-`createBackend` additionally injects the projection store, MMKV journal, file resolver and
+`createBackend` additionally injects the MMKV journal, file resolver and
 configuration import's model-registry readiness callback. It should remain assembly code; moving
 connection decisions there would not make those decisions appropriate for MCP or export.
 
@@ -164,8 +164,8 @@ These findings come from source inspection, not a reproduction of device failure
    closed in `finally`; the manager owns its cleanup, but adoption into the authenticated pool is
    not implemented. Adoption should transfer ownership once, including cancellation and re-pair
    races; pairing/configuration product behavior must stay intact.
-5. **Keep dependency claims scoped.** New remote persistence and document-export file resolution
-   capture the originating host. Existing local capability assembly still uses singleton data
+5. **Keep dependency claims scoped.** The command journal and document-export file resolution
+   capture their originating storage. Existing local capability assembly still uses singleton data
    services, some of which resolve `application.get` on demand. The new graph does not establish
    generation isolation for all older local services; review late work before extending that claim.
 

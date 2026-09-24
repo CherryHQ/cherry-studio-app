@@ -124,7 +124,9 @@ export class RemoteAgentActions {
   };
   private commit(records: RecordEntry[], starts = this.starts) {
     if (this.stopped) return;
-    this.journal.write(this.binding, JSON.stringify({ version: 2, records, starts }));
+    if (records.length || starts.length)
+      this.journal.write(this.binding, JSON.stringify({ version: 2, records, starts }));
+    else this.journal.remove(this.binding);
     this.records = records;
     this.starts = starts;
     this.startSnapshot = starts.map((entry) => projectStart(entry, records));

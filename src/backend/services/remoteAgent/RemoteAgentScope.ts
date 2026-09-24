@@ -12,7 +12,6 @@ import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
-import type { SessionProjectionStore } from '@/backend/data/services/RemoteSessionProjectionStore';
 import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/desktopConnections';
 import type { DesktopSession } from '@/backend/services/desktopConnections/DesktopSession';
 import { RemoteFailureError } from '@/backend/services/desktopConnections/remoteErrors';
@@ -71,7 +70,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
     private readonly lease: DesktopDomainLease,
     private readonly connections: DesktopConnections,
     journal: RemoteAgentCommandJournal,
-    private readonly projections: SessionProjectionStore,
     private readonly readCache: RemoteSessionReadCache,
   ) {
     this.scope = `${lease.scope}:${randomUUID()}`;
@@ -470,8 +468,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
         )
           return;
         const sync = new SessionSync(
-          this.lease.connectionId,
-          this.lease.scope,
           sessionId,
           {
             request: (method, params, signal) =>
@@ -479,7 +475,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
             onNotification: session.onNotification.bind(session),
             readContent: (ref, signal) => this.content(sessionId, ref, signal),
           },
-          this.projections,
           (projection, current) => {
             if (this.lease.signal.aborted || observation.sync !== sync) return;
             if (current) observation.retries = 0;

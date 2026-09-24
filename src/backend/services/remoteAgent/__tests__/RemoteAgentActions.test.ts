@@ -10,6 +10,9 @@ function journal() {
     write: jest.fn((key: string, value: string) => {
       values.set(key, value);
     }),
+    remove: jest.fn((key: string) => {
+      values.delete(key);
+    }),
   };
   return { storage, port: storage as unknown as RemoteAgentCommandJournal };
 }
@@ -61,6 +64,29 @@ it('polls admitted commands until the owner outcome is known, without repeating 
   await actions.retry(action.id);
   await actions.retry(action.id);
   expect(request.mock.calls.map(([name]) => name)).toEqual([method, 'agent.commands.get']);
+});
+
+it('clears dismissed outcomes and removes the empty binding without losing uncertain commands', async () => {
+  const { storage, port } = journal();
+  const request = jest.fn(async (name: string, body: any) =>
+    receipt(body.commandId, 'applied', {
+      method: name === 'agent.commands.get' ? method : name,
+    }),
+  );
+  request.mockRejectedValueOnce(new RemoteAgentError('CONNECTION_LOST', true));
+  const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  const pending = await actions.create('send', method, params);
+  const applied = await actions.create('cancel', 'agent.executions.cancel', { sessionId: 's' });
+  actions.dismiss(applied.id);
+  actions.dismiss(pending.id);
+  expect(
+    JSON.parse(storage.read('pc:grant')!).records.map((entry: any) => entry.action.id),
+  ).toEqual([pending.id]);
+  expect(storage.remove).not.toHaveBeenCalled();
+  await actions.retry(pending.id);
+  actions.dismiss(pending.id);
+  expect(storage.read('pc:grant')).toBeUndefined();
+  expect(new RemoteAgentActions('pc:grant', port, request, () => {}).get()).toEqual([]);
 });
 
 it.each(['interrupted', 'rejected'])('does not retry terminal %s receipts', async (status) => {
@@ -256,7 +282,7 @@ it('retains uncertain workflows and dismisses both records only after a terminal
   const completed = await actions.start(startInput);
   actions.dismiss(completed.id);
   expect(actions.getStarts()).toEqual([]);
-  expect(JSON.parse(storage.read('pc:grant')!).records).toEqual([]);
+  expect(storage.read('pc:grant')).toBeUndefined();
   request.mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
   const pending = await actions.start({ ...startInput, draftId: 'another' });
   actions.dismiss(pending.id);

@@ -7,7 +7,6 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
-import type { SessionProjectionStore } from '@/backend/data/services/RemoteSessionProjectionStore';
 import type { DesktopConnections } from '@/backend/services/desktopConnections';
 import type { RemoteAgentModule, RemoteAgentSource } from '@/shared/contracts/remoteAgent';
 
@@ -19,14 +18,13 @@ type Entry = { scope: RemoteAgentScope; users: number; unwatch: () => void };
 type Opening = { promise: Promise<Entry>; waiters: number };
 
 @Injectable('RemoteAgentRuntime')
-@DependsOn(['DesktopConnectionManager', 'DbService'])
+@DependsOn(['DesktopConnectionManager'])
 @ServicePhase(Phase.Gate)
 @AppStatePolicy('continue')
 export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule {
   private dependencies?: {
     connections: DesktopConnections;
     journal: RemoteAgentCommandJournal;
-    projections: SessionProjectionStore;
   };
   private readonly readCache = new RemoteSessionReadCache();
   private uninvalidate?: () => void;
@@ -68,7 +66,6 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
                   lease,
                   dependencies.connections,
                   dependencies.journal,
-                  dependencies.projections,
                   this.readCache,
                 );
                 const created: Entry = { scope, users: 0, unwatch: () => undefined };

@@ -42,7 +42,8 @@
 
 首版解决同一次 App 运行中的跨页面返回：有上限的内存缓存、资源释放与数据保留分离、
 减少历史读取的串行网络往返。进程重启后的完整离线历史、全库同步、附件离线下载和新的
-批量协议不属于首版；现有 SQLite 协议投影与命令回执仍按各自契约恢复。
+批量协议不属于首版。远程会话状态与同步游标不写入 SQLite；每次重新订阅都从 PC 获取
+新快照。待确认命令与尚未消费的结果保留在独立 MMKV 中，按命令回执确认和清理。
 
 ## 2. 已确认的现状
 
@@ -51,7 +52,7 @@
 | `useConversationHistory` 的 key 含组件 consumer，cleanup 删除 Query | 已加载历史不能作为跨页面缓存复用；`staleTime: Infinity` 无法改变这一点 |
 | `useConversation` cleanup 释放并销毁 Session | 读取窗口和运行期引用失效 |
 | `RemoteAgentScope` 最后一个观察者离开即删除 Observation | `SessionSync` 及其 textCache 不跨页面存活 |
-| `RemoteSessionProjectionStore` 保存协议投影和 cursor | 主要解决事件恢复；已落盘消息从 live projection 移除，不提供完整历史缓存 |
+| `SessionSync` 在内存中保存协议投影和 cursor | 仅用于当前订阅；重连重新获取 PC 快照，不提供持久化历史缓存 |
 | `openSession` 先远程读 session；`history.openLatest` 又读一次 | 命中本地数据的路径仍被远程读取挡在前面 |
 | `history` 按消息串行读 parts，再串行读取引用正文 | 一页全部完成才发布；消息和长文本增加等待 |
 | 物理连接由 Manager 独立管理，有 3 秒无需求宽限期 | 快速切换未必重连；即使不重连，上述重复读取也存在 |
@@ -60,8 +61,7 @@
 [history hook](../../../src/frontend/appShell/conversation/useConversationHistory.ts)、
 [remote session](../../../src/frontend/appShell/conversation/remote/createRemoteConversationSession.ts)、
 [scope](../../../src/backend/services/remoteAgent/RemoteAgentScope.ts)、
-[sync](../../../src/backend/services/remoteAgent/SessionSync.ts)、
-[projection store](../../../src/backend/data/services/RemoteSessionProjectionStore.ts)。
+[sync](../../../src/backend/services/remoteAgent/SessionSync.ts)。
 
 同一个消费契约不意味着使用同一种底层读取策略。本地已有 SQLite transcript，远程每次
 重新读取需要网络往返；共享 UI 不应承担这个成本差异。
@@ -79,8 +79,8 @@ flowchart TB
   Runtime[RemoteAgentRuntime: 应用生命周期] --> Cache[RemoteSessionReadCache: 有界读取数据]
   Runtime --> Scope
   Scope --> Cache
-  Scope --> Sync[SessionSync: cursor / replay / current]
-  Sync --> Projection[RemoteSessionProjectionStore: SQLite]
+  Scope --> Sync[SessionSync: 内存投影 / cursor / current]
+  Sync --> Host
   Scope --> Pool[DesktopConnectionManager: 连接与授权绑定]
   Pool --> Host[Desktop: 原始历史与执行权威]
 ```
@@ -90,7 +90,7 @@ flowchart TB
 | 页面 / history hook | 可视窗口、滚动锚点、Query observer | 释放读取与订阅 |
 | Conversation Session | 当次 scope 的 refs、HistoryWindow、操作闭包 | dispose，不进入长期缓存 |
 | RemoteSessionReadCache | session 摘要、历史页成员与顺序、消息版本、parts、已验证正文 | 保留至 TTL／容量淘汰／绑定失效 |
-| SessionSync + projection store | 同步游标、live 状态、恢复基线 | 停止订阅；保留原有持久化恢复语义 |
+| SessionSync | 当前订阅的内存同步游标和 live 状态 | 停止订阅；下一次订阅重新获取 PC 快照 |
 | DesktopConnectionManager | 连接、domain lease、前后台与重连 | 保留现有策略 |
 
 React Query 继续管理当前读操作的 loading/error/取消/分页，不引入第二套前端状态库。
@@ -184,7 +184,7 @@ sequenceDiagram
     Scope->>PC: 仅补齐缺失或变化的内容
     Scope-->>UI: 安装受校验的历史窗口
   and 恢复执行状态
-    Scope->>PC: subscribe + replay / checkpoint
+    Scope->>PC: subscribe 不带 cursor + 新 checkpoint
     Scope-->>UI: 当前执行与操作状态
   end
 ```
@@ -215,7 +215,7 @@ sequenceDiagram
 | late response 属于旧激活代次 | 不覆盖新窗口；只有 binding 仍有效、完整验证且符合当前写入代次的实体才能提交 |
 | historyRevision 改变 | 丢弃当前窗口的分页资格，重新校验可见窗口成员；旧显示值作为 cached 暂留 |
 | 编辑、删除、重新生成 | 匹配新成员／新版本后原子安装窗口；删除数据不得被晚到请求复活 |
-| subscribe replay 不足或 streamEpoch 改变 | 按原协议恢复 checkpoint；重校验历史索引；强摘要正文可以复用 |
+| 事件缺口、订阅重置或 streamEpoch 改变 | 重新获取 PC checkpoint；重校验历史索引；强摘要正文可以复用 |
 | NOT_FOUND | 清除该 session 的 preview 与读缓存，显示不存在，不能继续当作正常历史 |
 | GRANT_REVOKED／FORBIDDEN／替换配对／移除设备 | 立即清除相关 binding，并让旧任务不能重新写入 |
 | configuration grant 改变，Agent binding 未变 | 不误删 Agent 缓存；保持 domain 隔离 |
@@ -223,8 +223,8 @@ sequenceDiagram
 
 `history.committed.messages` 不是全量成员清单，也不是完备删除日志。可作为哪些实体需要
 刷新的提示，不能据其缺席删除其他消息；删除与窗口成员关系以重新读取的完整窗口为准。
-持久化 ACK 仍只取决于协议投影提交，不能等待显示缓存写入才 ACK，也不能用缓存命中替代
-cursor 与 projection 的原子提交。
+ACK（向 PC 确认已处理的事件位置）在事件成功应用到当前内存投影后发送，不再依赖数据库
+事务。缓存命中不能代替协议事件校验；断线后不复用旧 ACK 位置，重新获取 PC 快照。
 
 失效不能依赖“当前有页面”：缓存所在的 Runtime 需要接收设备绑定变化，包括空闲期间的
 删除、重新配对和撤权。现有活跃 lease 回调不覆盖所有空闲缓存。实现时给 DesktopConnections
@@ -243,8 +243,8 @@ invalidate 即使没有活动 entry 也要发布。配对／移除沿用现有�
 - 淘汰顺序：非活跃 LRU、窗口外正文、较早窗口；活跃视图持有的引用不等于缓存无限 pin。
   32 MiB 指 owner 的保留预算，不宣称是 Hermes 总堆上限。
 - 每次 lookup 校验过期，在写入／读取时清理；无需为了缓存维持连接或每会话常驻计时器。
-- 不保存到现有 `remote_session_projection`。若实测需要进程重启后的读取恢复，再设计独立
-  可淘汰的数据存储、迁移和删除策略；不能扩张可靠投影表为无限 transcript 镜像。
+- 远程协议投影与读取缓存均不写入 SQLite；重启后以 PC 新快照为准。待确认命令使用
+  独立 MMKV，不能按读取缓存的过期或容量规则淘汰；终态结果消费后清理，空条目直接删除。
 
 ## 9. 文件组织与实现切片
 

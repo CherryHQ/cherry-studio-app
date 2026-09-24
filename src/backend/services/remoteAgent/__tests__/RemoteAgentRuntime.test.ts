@@ -67,7 +67,6 @@ beforeEach(async () => {
   runtime.configure({
     connections: { retain, revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
     journal: {} as never,
-    projections: {} as never,
   });
   await runtime._doInit();
 });

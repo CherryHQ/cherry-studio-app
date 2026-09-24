@@ -3,14 +3,12 @@ import {
   applyAgentEvents,
   installAgentCheckpoint,
   type AgentCheckpointPage,
-  type AgentCursor,
   type AgentInteraction,
   type AgentPart,
   type AgentProjection,
   type ContentRef,
 } from '@cherrystudio/remote-protocol/agent';
 
-import type { SessionProjectionStore } from '@/backend/data/services/RemoteSessionProjectionStore';
 import type { DesktopNotification } from '@/backend/services/desktopConnections/DesktopSession';
 
 import { RemoteAgentError } from './RemoteAgentError';
@@ -22,7 +20,7 @@ type Connection = {
   onNotification(listener: (notification: DesktopNotification) => void): () => void;
 };
 
-/** Serializes checkpoint installation, notification reduction, durable cursor writes, and ACKs. */
+/** Rebuilds from a desktop checkpoint; projection and cursor live only for this subscription. */
 export class SessionSync {
   private readonly lifetime = new AbortController();
   private tail: Promise<void> = Promise.resolve();
@@ -30,16 +28,12 @@ export class SessionSync {
   private subscriptionId?: string;
   private projection?: AgentProjection;
   private started?: Promise<void>;
-  private highWatermark?: AgentCursor;
   private readonly textCache = new Map<string, string>();
   private interactionRevision?: string;
   private persistedInteractions: AgentInteraction[] = [];
   constructor(
-    private readonly connectionId: string,
-    private readonly scopeId: string,
     readonly sessionId: string,
     private readonly connection: Connection,
-    private readonly store: SessionProjectionStore,
     private readonly publish: (projection: AgentProjection, current: boolean) => void,
     private readonly failed: (error: unknown) => void,
   ) {}
@@ -60,7 +54,7 @@ export class SessionSync {
       void this.enqueue(async () => {
         if (event.params.subscriptionId !== this.subscriptionId) return;
         if (event.method === 'agent.subscriptions.resetRequired') {
-          await this.prepare(false);
+          await this.prepare();
           return;
         }
         if (!this.projection) throw new RemoteAgentError('PROTOCOL_ERROR');
@@ -70,10 +64,10 @@ export class SessionSync {
         const content = await this.materialize(parts);
         const result = applyAgentEvents(this.projection, event.params, content, integrity);
         if (!result.ok) {
-          await this.prepare(false);
+          await this.prepare();
           return;
         }
-        await this.commit(result.projection);
+        await this.updateProjection(result.projection);
         await this.connection.request(
           'agent.subscriptions.ack',
           { subscriptionId: event.params.subscriptionId, cursor: result.cursor },
@@ -81,12 +75,7 @@ export class SessionSync {
         );
       }).catch(() => undefined);
     });
-    this.started = this.enqueue(async () => {
-      this.projection = await this.store.read(this.connectionId, this.scopeId, this.sessionId);
-      this.lifetime.signal.throwIfAborted();
-      if (this.projection) this.publish(this.projection, false);
-      await this.prepare(true);
-    });
+    this.started = this.enqueue(() => this.prepare());
     return this.started;
   }
   private enqueue(work: () => Promise<void>): Promise<void> {
@@ -120,7 +109,7 @@ export class SessionSync {
     }
     return content;
   }
-  private async prepare(resume: boolean): Promise<void> {
+  private async prepare(): Promise<void> {
     if (this.projection) this.publish(this.projection, false);
     if (this.subscriptionId) {
       const subscriptionId = this.subscriptionId;
@@ -133,74 +122,52 @@ export class SessionSync {
     }
     const prepared = await this.connection.request(
       'agent.sessions.subscribe',
-      {
-        sessionId: this.sessionId,
-        ...(resume && this.projection ? { cursor: this.projection.cursor } : {}),
-      },
+      { sessionId: this.sessionId },
       this.lifetime.signal,
     );
     this.subscriptionId = prepared.subscriptionId;
-    this.highWatermark =
-      prepared.mode === 'replay' ? prepared.highWatermark : prepared.checkpoint.cursor;
+    // There is no retained baseline to replay after a reconnect or reset.
+    if (prepared.mode !== 'checkpoint') throw new RemoteAgentError('PROTOCOL_ERROR');
     this.interactionRevision = undefined;
-    if (prepared.mode === 'checkpoint') {
-      const pages: AgentCheckpointPage[] = [];
-      let pageCursor: string | undefined;
-      for (let index = 0; index < prepared.checkpoint.pageCount; index++) {
-        const page = await this.connection.request(
-          'agent.checkpoints.read',
-          {
-            subscriptionId: prepared.subscriptionId,
-            checkpointId: prepared.checkpoint.checkpointId,
-            ...(pageCursor ? { pageCursor } : {}),
-          },
-          this.lifetime.signal,
-        );
-        pages.push(page);
-        pageCursor = page.nextCursor ?? undefined;
-      }
-      const content = await this.materialize(
-        pages.flatMap((page) =>
-          page.items.flatMap((item) => (item.kind === 'part' ? [item.value] : [])),
-        ),
+    const pages: AgentCheckpointPage[] = [];
+    let pageCursor: string | undefined;
+    for (let index = 0; index < prepared.checkpoint.pageCount; index++) {
+      const page = await this.connection.request(
+        'agent.checkpoints.read',
+        {
+          subscriptionId: prepared.subscriptionId,
+          checkpointId: prepared.checkpoint.checkpointId,
+          ...(pageCursor ? { pageCursor } : {}),
+        },
+        this.lifetime.signal,
       );
-      const installed = installAgentCheckpoint(prepared.checkpoint, pages, content, integrity);
-      if (!installed.ok || installed.cursor.sessionId !== this.sessionId)
-        throw new RemoteAgentError('PROTOCOL_ERROR');
-      await this.commit(installed.projection, false);
-    } else if (
-      !this.projection ||
-      prepared.fromCursor.sessionId !== this.projection.cursor.sessionId ||
-      prepared.fromCursor.streamEpoch !== this.projection.cursor.streamEpoch ||
-      prepared.fromCursor.seq !== this.projection.cursor.seq ||
-      prepared.highWatermark.sessionId !== this.sessionId ||
-      prepared.highWatermark.streamEpoch !== this.projection.cursor.streamEpoch ||
-      BigInt(prepared.highWatermark.seq) < BigInt(this.projection.cursor.seq)
-    ) {
-      throw new RemoteAgentError('PROTOCOL_ERROR');
+      pages.push(page);
+      pageCursor = page.nextCursor ?? undefined;
     }
-    if (!this.projection) throw new RemoteAgentError('PROTOCOL_ERROR');
+    const content = await this.materialize(
+      pages.flatMap((page) =>
+        page.items.flatMap((item) => (item.kind === 'part' ? [item.value] : [])),
+      ),
+    );
+    const installed = installAgentCheckpoint(prepared.checkpoint, pages, content, integrity);
+    if (!installed.ok || installed.cursor.sessionId !== this.sessionId)
+      throw new RemoteAgentError('PROTOCOL_ERROR');
+    await this.updateProjection(installed.projection, false);
     await this.connection.request(
       'agent.subscriptions.activate',
-      { subscriptionId: prepared.subscriptionId, appliedCursor: this.projection.cursor },
+      { subscriptionId: prepared.subscriptionId, appliedCursor: installed.cursor },
       this.lifetime.signal,
     );
     this.lifetime.signal.throwIfAborted();
-    await this.present(this.projection, true);
+    await this.present(installed.projection, true);
   }
-  private async commit(projection: AgentProjection, current = true) {
-    // Completed referenced text also has to be readable by the consumer; preserve refs in storage.
-    await this.store.write(this.connectionId, this.scopeId, projection, this.lifetime.signal);
+  private async updateProjection(projection: AgentProjection, current = true) {
     this.lifetime.signal.throwIfAborted();
     this.projection = projection;
     await this.present(projection, current);
   }
   private async present(projection: AgentProjection, current: boolean) {
     this.lifetime.signal.throwIfAborted();
-    const caughtUp =
-      !this.highWatermark ||
-      (projection.cursor.streamEpoch === this.highWatermark.streamEpoch &&
-        BigInt(projection.cursor.seq) >= BigInt(this.highWatermark.seq));
     const parts = { ...projection.parts };
     const view = () => ({
       ...projection,
@@ -259,7 +226,7 @@ export class SessionSync {
       this.interactionRevision = projection.session.historyRevision;
     }
     this.lifetime.signal.throwIfAborted();
-    this.publish(view(), current && caughtUp);
+    this.publish(view(), current);
   }
   stop() {
     this.lifetime.abort();

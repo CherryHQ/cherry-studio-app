@@ -18,7 +18,6 @@ import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
-import { RemoteSessionProjectionStore } from '@/backend/data/services/RemoteSessionProjectionStore';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
 import {
   type AgentAvatars,
@@ -86,7 +85,6 @@ export function createBackend(
   infrastructure.remoteAgent.configure({
     connections: infrastructure.desktopConnectionManager,
     journal: new RemoteAgentCommandJournal(createMMKV({ id: 'cherry-remote-agent-commands' })),
-    projections: new RemoteSessionProjectionStore(dbService),
   });
   infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
   const desktopStore = new DesktopConnectionService(dbService);

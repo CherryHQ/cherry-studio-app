@@ -1,8 +1,8 @@
 # Remote Access
 
 Status: slices 1–3 (packages, pairing, configuration sync) are implemented. The slices 4–6
-migration now includes the shared Agent protocol, domain leases, durable projection/command
-recovery, and frontend conversation adapters. Local chat history, message actions, approvals and
+migration now includes the shared Agent protocol, domain leases, desktop snapshot sync, durable
+command recovery, and frontend conversation adapters. Local chat history, message actions, approvals and
 both share routes consume the common contract. The remote chat/sidebar screens now use
 the same source/catalog/session boundary; the old Controller entry and `agent-version` gate have been removed after
 switching consumers and focused regression checks. This is not device acceptance of the new implementation.
@@ -16,7 +16,7 @@ product interfaces.
 
 PR #1055 owns `DesktopConnectionManager`, domain leases, authorization invalidation notifications,
 foreground lifecycle, endpoint resolution, native discovery, pairing and provider sync.
-Agent subscriptions, read caches, commands and projection persistence remain in PR #997.
+Agent subscriptions, in-memory read state and the MMKV command journal remain in PR #997.
 See [Desktop location and stable pairing](./connectivity.md) for the discovery and address migration contract.
 
 ## What exists and what is replaced
@@ -91,7 +91,7 @@ Settings / onboarding → Backend.desktopConnections → DesktopConnectionRuntim
 Frontend conversation adapters → Backend.remoteAgent → RemoteAgentRuntime (Agent scopes)
 Both runtimes → DesktopConnectionManager (one channel, domain leases, AppState, reconnect)
 DesktopConnectionManager → DesktopSession (Noise, JSON-RPC, heartbeat and authorization refresh)
-RemoteAgentRuntime → SessionSync / RemoteAgentActions → injected projection store / command journal
+RemoteAgentRuntime → SessionSync (in-memory desktop state) / RemoteAgentActions (MMKV command journal)
 ```
 
 - `DesktopConnectionRuntime` owns pairing/configuration tasks and drains them before the manager.
@@ -114,8 +114,9 @@ RemoteAgentRuntime → SessionSync / RemoteAgentActions → injected projection 
   history, actions, resource readers and operation recovery views. Prepared managed asset leases
   remain pending. Retired catalogs/windows/resources are cancelled and evicted from Query. Unsent
   drafts use a stable identity/grant binding independent of the ephemeral Query scope.
-- Projection storage captures the current host's database. The journal receives its storage from
-  composition. Neither resolves a replacement host through `application.get` during late work.
+- Remote session state is never written to SQLite. Every new subscription installs a desktop
+  checkpoint. The command journal receives its MMKV storage from composition and never resolves
+  a replacement host through `application.get` during late work.
 - Local Agent/MCP execution and `DocumentExportRuntime` have no desktop connection dependency.
 
 ## Persistence
@@ -124,11 +125,11 @@ RemoteAgentRuntime → SessionSync / RemoteAgentActions → injected projection 
 | --- | --- |
 | `desktop_connection` (migrated) | `id` is the mobile connection ID; `deviceId` is desktop-assigned, `name`, `addresses[]`, `port`, `desktopIdentity`, `grants` (`{ domain, grantId }[]`), `status`, `lastFetchedAt`; drops `baseUrls`, `activeBaseUrl`, `desktopVersion`. The migration recreates the table and drops HTTP-era rows, which can no longer connect. |
 | SecureStore | `remote-device-identity` (private key protobuf, hex). HTTP-era `desktop-connection-token.*` entries are simply no longer read. |
-| `remote_session_projection` (new) | `connectionId`, `scopeId` (identity + domain grant), `sessionId`, `streamEpoch`, `seq`, `projection` JSON, `updatedAt`. Written in one transaction with each applied batch, before the ACK. |
 | MMKV `cherry-remote-agent-commands` | Version 2 stores fixed command IDs, exact parameters and receipts plus the two-step start workflow. Version 1 records remain readable; old pairing bindings are not silently erased or replayed into a different identity. |
 
-Access tokens are never persisted. History pages, parts and content live in TanStack Query with
-opaque source/session/version keys. A new identity or grant retires that source; grants and protocol types do not enter frontend components.
+Access tokens and remote session projections/cursors are never persisted. History pages, parts
+and content live in the bounded runtime read cache and TanStack Query with opaque
+source/session/version keys. A new identity or grant retires that source; grants and protocol types do not enter frontend components.
 
 ## Flows
 
@@ -144,12 +145,13 @@ pages until `eof` → verify `byteLength` and `sha256` → parse with the existi
 `DesktopProvidersSnapshotSchema` (payload `version: 1` is unchanged) → existing
 `DesktopConnectionService.preview/import`. The export is pinned five minutes on the desktop.
 
-**Agent session.** `agent.sessions.subscribe` with the stored cursor when one exists. `replay`:
-activate at that cursor and apply events. `checkpoint`: read every page, `installAgentCheckpoint`,
-persist projection + cursor, then `agent.subscriptions.activate`. Each `agent.events` batch goes
-through `applyAgentEvents`; on success the projection and cursor are committed together and
-acknowledged; on `gap`/`epoch`/`revision`/`content` the subscription is closed and re-prepared
-without a cursor. `agent.subscriptions.resetRequired` does the same. Live parts that arrive as
+**Agent session.** Every `agent.sessions.subscribe` omits the cursor, including reconnects and
+process restarts. Read every checkpoint page, validate with `installAgentCheckpoint`, install the
+projection and cursor in memory, then call `agent.subscriptions.activate` to receive subsequent
+changes. Each `agent.events` batch goes through `applyAgentEvents`; on success the in-memory
+projection and cursor are updated before acknowledgement. On `gap`/`epoch`/`revision`/`content`,
+the subscription is closed and re-prepared without a cursor. `agent.subscriptions.resetRequired`
+does the same. Live parts that arrive as
 content refs are fetched with `agent.content.read` at the given revision before the batch is
 applied; the checkpoint lease covers those reads. History is read at the projection's
 `historyRevision` (`messages.list`, `parts.list`); `REVISION_EXPIRED` restarts that traversal at
@@ -163,6 +165,9 @@ restores the draft. `executions.cancel` carries the active execution id. `intera
 carries `expectedRevision`, `expectedExecutionId` and `inputDigest` from the interaction it shows.
 A lost response is recovered with `agent.commands.get` and, when absent, by resending the same
 `commandId`; `IDEMPOTENCY_CONFLICT` and `interrupted` stop recovery and surface to the user.
+Uncertain commands cannot be dismissed. After a terminal result is consumed, dismissal removes
+the record (and both records of a completed start workflow); an empty binding is removed from MMKV.
+The journal is not subject to the read cache's TTL or capacity eviction.
 
 **Revocation and repair.** Domain `GRANT_REVOKED`/`FORBIDDEN` retires only that domain's leases.
 `UNAUTHENTICATED` during authentication or an identity-pin failure requires repairing the device
@@ -173,9 +178,9 @@ Identity/grant comparisons protect credential writes against a concurrent re-pai
 
 - No session is opened by lifecycle phases. Sessions open when a screen needs one (sync preview,
   remote chat source) and close after the last consumer releases them plus a short grace.
-- Background: the session is suspended and subscriptions closed; the persisted cursor is the resume
-  point. Foreground: reconnect, re-authenticate, `subscribe` with the cursor. Neither path cancels
-  desktop execution.
+- Background: the session is suspended and subscriptions closed. Foreground: reconnect,
+  re-authenticate and subscribe without a cursor to install the current desktop checkpoint.
+  Read previews may remain in memory but cannot authorize actions. Neither path cancels desktop execution.
 - One session per desktop; the Agent adapter and the configuration importer share it.
 
 ## Slices
@@ -185,7 +190,7 @@ Identity/grant comparisons protect credential writes against a concurrent re-pai
 | 1. Transport spike | protocol + transport packages mirrored, RN socket adapter, `deviceIdentity` | Development client on a device completes the Noise handshake and `connection.ping` against a desktop dev build; package tests pass under the mobile toolchain |
 | 2. Pairing | v2 QR, capability choice, claim/poll UI, `desktop_connection` migration, identity in SecureStore | Pair, reject, expire and re-pair against the desktop; old rows show `needs-repair` |
 | 3. Configuration sync | export.prepare/read, existing preview/import | Import matches the HTTP-era result on the same desktop; `FORBIDDEN` without the grant |
-| 4. Agent read path | `SessionSync`, projection table, history/parts/content reads | Checkpoint install, live text/tool events, reconnect replay and forced reset, all reduced by the package reducer; desktop test fixtures replayed in Jest |
+| 4. Agent read path | `SessionSync`, in-memory projection, history/parts/content reads | Checkpoint install, live text/tool events, fresh checkpoints on reconnect and forced reset, all reduced by the package reducer; desktop fixtures covered by Jest |
 | 5. Agent commands | send/cancel/respond over the journal, `commands.get` recovery | Duplicate `commandId` returns the receipt; changed body conflicts; idle-revision conflict restores the draft |
 | 6. Lifecycle and acceptance | background/foreground, revocation, multiple desktops, device acceptance per `docs/guides/parallel-device-testing.md` | iOS and Android acceptance with a paired desktop; screenshots on the PR |
 
@@ -251,8 +256,12 @@ public model ID, provider ID, and display name cross the boundary.
 ## Upgrading from the connection foundation
 
 The connection foundation (#1055) applies `0001_hot_cammi` directly to the final Noise pairing
-schema, including configured endpoints. The Agent layer (#997) adds `0002_daffy_nemesis` to create
-`remote_session_projection`. Journal entries and snapshots follow this same linear order.
+schema, including configured endpoints. The Agent layer (#997) adds no SQLite schema or migration:
+remote session state is rebuilt from the desktop, read caches are in memory, and command records
+use their dedicated MMKV store. The unshipped `0002_daffy_nemesis` projection migration and its
+snapshot/journal entry have been withdrawn.
+
 Unreleased development schemas are not supported upgrade sources; there is no compatibility
-backfill migration. Regression tests exercise Drizzle's real SQLite migration dialect when adding
-Agent persistence to the foundation, preserving pairing data and enforcing projection foreign keys.
+backfill migration. A development database that already applied the withdrawn migration must be
+recreated before continuing migration testing. The app does not automatically delete that database
+or its obsolete table. Local chat data and paired-device persistence keep their existing owners.

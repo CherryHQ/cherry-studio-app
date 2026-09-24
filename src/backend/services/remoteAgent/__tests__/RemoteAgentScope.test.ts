@@ -8,6 +8,7 @@ import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
 import { RemoteAgentScope } from '../RemoteAgentScope';
 import { integrity } from '../remoteContent';
 import { RemoteSessionReadCache } from '../RemoteSessionReadCache';
+import { createCheckpointFixture } from './_checkpointFixture';
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 function fixture(cache = new RemoteSessionReadCache()) {
@@ -31,6 +32,7 @@ function fixture(cache = new RemoteSessionReadCache()) {
     executions: {},
     tombstones: [],
   };
+  let checkpoint: ReturnType<typeof createCheckpointFixture>;
   const request = jest.fn(async (method: string, params: any) => {
     switch (method) {
       case 'agent.agents.list':
@@ -46,13 +48,15 @@ function fixture(cache = new RemoteSessionReadCache()) {
           nextCursor: null,
         };
       case 'agent.sessions.subscribe':
+        checkpoint = createCheckpointFixture(projection);
         return {
           subscriptionId: 'sub',
-          mode: 'replay',
-          fromCursor: projection.cursor,
-          highWatermark: projection.cursor,
-          leaseExpiresAt: '2026-09-22T00:10:00.000Z',
+          mode: 'checkpoint',
+          reason: 'initial',
+          checkpoint: checkpoint.descriptor,
         };
+      case 'agent.checkpoints.read':
+        return checkpoint.page;
       case 'agent.subscriptions.activate':
         return { subscriptionId: 'sub', status: 'active' };
       case 'agent.interactions.list':
@@ -96,12 +100,10 @@ function fixture(cache = new RemoteSessionReadCache()) {
     getAllKeys: () => [...values.keys()],
     remove: (key) => values.delete(key),
   });
-  const store = { read: jest.fn(async () => projection), write: jest.fn(async () => undefined) };
   const source = new RemoteAgentScope(
     lease,
     { retain: jest.fn(), revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
     journal,
-    store,
     cache,
   );
   return {
@@ -109,7 +111,6 @@ function fixture(cache = new RemoteSessionReadCache()) {
     request,
     projection,
     lease,
-    store,
     setState(next: DesktopLeaseState) {
       state = next;
       for (const listener of listeners) listener();
@@ -140,6 +141,49 @@ it('observes through its lease, suppresses stale command targets, and never owns
   expect(test.lease.release).toHaveBeenCalledTimes(1);
 });
 
+it('replaces disconnected state with a fresh desktop checkpoint before re-enabling actions', async () => {
+  const test = fixture();
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  const previousTarget = snapshot!.sendTarget!;
+  test.setState({ status: 'offline' });
+  expect(snapshot?.current).toBe(false);
+  test.projection.session = {
+    ...test.projection.session,
+    title: 'Changed on PC',
+    idleRevision: '2',
+  };
+  test.projection.cursor = { ...test.projection.cursor, seq: '7' };
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.checkpoints.read') await wait;
+    return request(method, params);
+  });
+  test.setState({ status: 'ready' });
+  await settle();
+  expect(snapshot?.current).toBe(false);
+  expect(() => test.source.send(previousTarget, 'hello')).toThrow('CONFLICT');
+  release();
+  await settle();
+  expect(snapshot).toMatchObject({ current: true, session: { title: 'Changed on PC' } });
+  expect(snapshot!.sendTarget).not.toBe(previousTarget);
+  expect(() => test.source.send(previousTarget, 'hello')).toThrow('CONFLICT');
+  expect(
+    test.request.mock.calls
+      .filter(([method]) => method === 'agent.sessions.subscribe')
+      .map(([, params]) => params),
+  ).toEqual([{ sessionId: 's' }, { sessionId: 's' }]);
+  test.source.dispose();
+  await test.source.drain();
+});
+
 it('does not admit another send while the original command receipt is still uncertain', async () => {
   const test = fixture();
   let snapshot: RemoteSessionSnapshot | undefined;
@@ -167,7 +211,7 @@ it('retires an old scope without committing a late observation or reusing its ex
   first.setState({ status: 'retired', reason: 'replaced' });
   await settle();
   expect(published.every((value) => !value.current)).toBe(true);
-  expect(first.store.write).not.toHaveBeenCalled();
+  expect(first.request).not.toHaveBeenCalled();
   first.source.dispose();
   second.source.dispose();
   await Promise.all([first.source.drain(), second.source.drain()]);

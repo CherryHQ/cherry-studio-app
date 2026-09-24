@@ -1,14 +1,10 @@
-import {
-  encodeAgentCheckpointPage,
-  type AgentCheckpointPage,
-  type AgentProjection,
-} from '@cherrystudio/remote-protocol/agent';
+import type { AgentProjection } from '@cherrystudio/remote-protocol/agent';
 
-import type { SessionProjectionStore } from '@/backend/data/services/RemoteSessionProjectionStore';
 import type { DesktopNotification } from '@/backend/services/desktopConnections/DesktopSession';
 
-import { integrity, type AgentRequest } from '../remoteContent';
+import type { AgentRequest } from '../remoteContent';
 import { SessionSync } from '../SessionSync';
+import { createCheckpointFixture } from './_checkpointFixture';
 
 const projection = (): AgentProjection => ({
   cursor: { sessionId: 's', streamEpoch: 'epoch', seq: '0' },
@@ -27,30 +23,6 @@ const projection = (): AgentProjection => ({
   interactions: {},
   tombstones: [],
 });
-function fixture() {
-  const state = projection();
-  const page: AgentCheckpointPage = {
-    checkpointId: 'checkpoint',
-    pageIndex: 0,
-    items: [{ kind: 'session', value: state.session }],
-    nextCursor: null,
-    pageDigest: '0'.repeat(64),
-  };
-  page.pageDigest = integrity.sha256(encodeAgentCheckpointPage(page));
-  const bytes = encodeAgentCheckpointPage(page);
-  return {
-    page,
-    descriptor: {
-      checkpointId: 'checkpoint',
-      cursor: state.cursor,
-      historyRevision: '1',
-      pageCount: 1,
-      byteLength: String(bytes.length),
-      sha256: integrity.sha256(bytes),
-      expiresAt: '2026-09-22T00:10:00.000Z',
-    },
-  };
-}
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 const executionFailure = {
   message: 'Subscription required',
@@ -61,37 +33,21 @@ const executionFailure = {
     source: { layer: 'provider' as const },
   },
 };
-function setup(initial?: AgentProjection) {
-  const { page, descriptor } = fixture();
-  let stored = initial;
+function setup(state = projection()) {
+  const { page, descriptor } = createCheckpointFixture(state);
   let subscription = 0;
   let notify: (notification: DesktopNotification) => void = () => {};
   const order: string[] = [];
-  const store: SessionProjectionStore = {
-    read: jest.fn(async () => stored),
-    write: jest.fn(async (_connectionId, _grantId, value) => {
-      stored = value;
-      order.push(`write:${value.cursor.seq}`);
-    }),
-  };
   const request = jest.fn(async (method: string, params: any) => {
     order.push(method);
     switch (method) {
       case 'agent.sessions.subscribe':
-        return params.cursor
-          ? {
-              subscriptionId: `sub-${++subscription}`,
-              mode: 'replay',
-              fromCursor: params.cursor,
-              highWatermark: params.cursor,
-              leaseExpiresAt: descriptor.expiresAt,
-            }
-          : {
-              subscriptionId: `sub-${++subscription}`,
-              mode: 'checkpoint',
-              reason: 'initial',
-              checkpoint: descriptor,
-            };
+        return {
+          subscriptionId: `sub-${++subscription}`,
+          mode: 'checkpoint',
+          reason: 'initial',
+          checkpoint: descriptor,
+        };
       case 'agent.checkpoints.read':
         return page;
       case 'agent.subscriptions.activate':
@@ -106,11 +62,11 @@ function setup(initial?: AgentProjection) {
         throw new Error(method);
     }
   });
-  const publish = jest.fn();
+  const publish = jest.fn((value: AgentProjection, current: boolean) => {
+    order.push(`publish:${value.cursor.seq}:${current}`);
+  });
   const failed = jest.fn();
   const sync = new SessionSync(
-    'pc',
-    'grant',
     's',
     {
       request: request as AgentRequest,
@@ -121,20 +77,18 @@ function setup(initial?: AgentProjection) {
         };
       },
     },
-    store,
     publish,
     failed,
   );
   return {
     sync,
     request,
-    store,
     publish,
     failed,
     order,
     page,
     notify: (value: DesktopNotification) => notify(value),
-    stored: () => stored,
+    descriptor,
   };
 }
 function batch(seq = '1', subscriptionId = 'sub-1', streamEpoch = 'epoch') {
@@ -161,64 +115,103 @@ function batch(seq = '1', subscriptionId = 'sub-1', streamEpoch = 'epoch') {
   };
 }
 
-it('installs the shared checkpoint fixture durably before activating, then writes events before ACK', async () => {
+it('installs a desktop checkpoint before activating and applies events before ACK', async () => {
   const test = setup();
   await test.sync.start();
-  expect(test.order.indexOf('write:0')).toBeLessThan(
+  expect(test.request).toHaveBeenCalledWith(
+    'agent.sessions.subscribe',
+    { sessionId: 's' },
+    expect.anything(),
+  );
+  expect(test.order.indexOf('publish:0:false')).toBeLessThan(
     test.order.indexOf('agent.subscriptions.activate'),
+  );
+  expect(test.order.indexOf('agent.subscriptions.activate')).toBeLessThan(
+    test.order.indexOf('publish:0:true'),
   );
   test.notify(batch());
   await settle();
-  expect(test.stored()?.cursor.seq).toBe('1');
-  expect(test.order.indexOf('write:1')).toBeLessThan(test.order.indexOf('agent.subscriptions.ack'));
-  expect(test.publish.mock.calls.at(-1)[0].messages.m).toMatchObject({ messageId: 'm' });
+  expect(test.sync.current?.cursor.seq).toBe('1');
+  expect(test.order.indexOf('publish:1:true')).toBeLessThan(
+    test.order.indexOf('agent.subscriptions.ack'),
+  );
+  expect(test.publish.mock.calls.at(-1)![0].messages.m).toMatchObject({ messageId: 'm' });
   expect(test.failed).not.toHaveBeenCalled();
   test.sync.stop();
   await test.sync.drain();
 });
 
-it('persists a failed execution before ACK and recovers it without a live message after restart and replay', async () => {
+it('applies events arriving during activation after installing the checkpoint', async () => {
   const test = setup();
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.subscriptions.activate') test.notify(batch());
+    return request(method, params);
+  });
   await test.sync.start();
-  const notification = {
-    method: 'agent.events',
-    params: {
-      subscriptionId: 'sub-1',
-      sessionId: 's',
-      streamEpoch: 'epoch',
-      events: [
-        {
-          seq: '1',
-          kind: 'execution.updated',
-          payload: {
-            executionId: 'e',
-            status: 'failed',
-            messageId: 'm',
-            durable: true,
-            failure: executionFailure,
-            history: { historyRevision: '1', messageRevision: '1' },
-          },
-        },
-      ],
-    },
-  };
-  test.notify(notification);
   await settle();
-  expect(test.order.indexOf('write:1')).toBeLessThan(test.order.indexOf('agent.subscriptions.ack'));
-  expect(test.stored()?.executions.e.failure).toEqual(executionFailure);
-  expect(test.stored()?.messages).toEqual({});
+  expect(test.sync.current?.cursor.seq).toBe('1');
+  expect(test.publish.mock.calls.at(-1)).toMatchObject([
+    { messages: { m: { messageId: 'm' } } },
+    true,
+  ]);
+  expect(test.request).toHaveBeenCalledWith(
+    'agent.subscriptions.ack',
+    { subscriptionId: 'sub-1', cursor: { sessionId: 's', streamEpoch: 'epoch', seq: '1' } },
+    expect.anything(),
+  );
   test.sync.stop();
   await test.sync.drain();
-  const restarted = setup(JSON.parse(JSON.stringify(test.stored())));
-  await restarted.sync.start();
-  restarted.notify(notification);
+});
+
+it('rebuilds after restart from the latest desktop checkpoint including terminal failures', async () => {
+  const first = setup();
+  await first.sync.start();
+  first.notify(batch());
   await settle();
-  expect(restarted.stored()?.cursor.seq).toBe('1');
-  expect(Object.values(restarted.stored()!.executions)).toHaveLength(1);
-  expect(restarted.publish.mock.calls.at(-1)[0].executions.e).toMatchObject({
+  expect(first.sync.current?.messages.m).toBeDefined();
+  first.sync.stop();
+  await first.sync.drain();
+
+  // The desktop changed while the phone was away: its latest snapshot replaces all old state.
+  const state = projection();
+  state.cursor = { ...state.cursor, streamEpoch: 'new-epoch', seq: '8' };
+  state.session.title = 'Changed on PC';
+  state.executions.e = {
+    executionId: 'e',
     status: 'failed',
+    messageId: 'm',
+    durable: true,
     failure: executionFailure,
+    history: { historyRevision: '1', messageRevision: '1' },
+  };
+  const restarted = setup(state);
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
   });
+  const request = restarted.request.getMockImplementation()!;
+  restarted.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.checkpoints.read') await wait;
+    return request(method, params);
+  });
+  const starting = restarted.sync.start();
+  await settle();
+  expect(restarted.publish).not.toHaveBeenCalled();
+  release();
+  await starting;
+  expect(restarted.request).toHaveBeenCalledWith(
+    'agent.sessions.subscribe',
+    { sessionId: 's' },
+    expect.anything(),
+  );
+  expect(restarted.sync.current).toMatchObject({
+    cursor: state.cursor,
+    session: { title: 'Changed on PC' },
+    messages: {},
+    executions: { e: { status: 'failed', failure: executionFailure } },
+  });
+  expect(restarted.publish.mock.calls.at(-1)![1]).toBe(true);
   restarted.sync.stop();
   await restarted.sync.drain();
 });
@@ -278,7 +271,7 @@ it('publishes a failure before deferred text finishes and keeps it visible if th
   release();
   await started;
   expect(test.failed).not.toHaveBeenCalled();
-  expect(test.publish.mock.calls.at(-1)[0].messages.m).toMatchObject({
+  expect(test.publish.mock.calls.at(-1)![0].messages.m).toMatchObject({
     status: 'error',
     failure: executionFailure,
   });
@@ -286,21 +279,21 @@ it('publishes a failure before deferred text finishes and keeps it visible if th
   await test.sync.drain();
 });
 
-it('resumes from the persisted cursor and ignores duplicate and retired-subscription events', async () => {
+it('uses the desktop checkpoint cursor and ignores duplicate and retired-subscription events', async () => {
   const state = projection();
   state.cursor.seq = '1';
   const test = setup(state);
   await test.sync.start();
   expect(test.request).toHaveBeenCalledWith(
     'agent.sessions.subscribe',
-    { sessionId: 's', cursor: state.cursor },
+    { sessionId: 's' },
     expect.anything(),
   );
   test.notify(batch('1'));
   test.notify(batch('2', 'old-subscription'));
   await settle();
-  expect(test.stored()?.cursor.seq).toBe('1');
-  expect(test.stored()?.messages).toEqual({});
+  expect(test.sync.current?.cursor.seq).toBe('1');
+  expect(test.sync.current?.messages).toEqual({});
   test.sync.stop();
   await test.sync.drain();
 });
@@ -325,31 +318,27 @@ it.each(['gap', 'epoch', 'reset'])('re-prepares without a cursor after %s', asyn
     { subscriptionId: 'sub-1' },
     expect.anything(),
   );
-  expect(test.stored()?.cursor.seq).toBe('0');
+  expect(test.sync.current?.cursor.seq).toBe('0');
   test.sync.stop();
   await test.sync.drain();
 });
 
-it('does not ACK a batch whose durable transaction failed', async () => {
-  const test = setup(projection());
-  await test.sync.start();
-  jest.mocked(test.store.write).mockRejectedValueOnce(new Error('disk full'));
-  test.notify(batch());
-  await settle();
-  expect(test.request.mock.calls.some(([method]) => method === 'agent.subscriptions.ack')).toBe(
-    false,
-  );
-  expect(test.stored()?.cursor.seq).toBe('0');
-  expect(test.failed).toHaveBeenCalled();
-  test.sync.stop();
-  await test.sync.drain();
-});
-
-it('does not activate or persist a corrupted checkpoint', async () => {
+it('rejects replay without a local baseline instead of granting current actions', async () => {
   const test = setup();
-  test.page.pageDigest = 'f'.repeat(64);
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.subscribe')
+      return {
+        subscriptionId: 'sub-1',
+        mode: 'replay',
+        fromCursor: projection().cursor,
+        highWatermark: projection().cursor,
+        leaseExpiresAt: test.descriptor.expiresAt,
+      } as never;
+    return request(method, params);
+  });
   await expect(test.sync.start()).rejects.toThrow('PROTOCOL_ERROR');
-  expect(test.store.write).not.toHaveBeenCalled();
+  expect(test.publish).not.toHaveBeenCalled();
   expect(
     test.request.mock.calls.some(([method]) => method === 'agent.subscriptions.activate'),
   ).toBe(false);
@@ -357,16 +346,52 @@ it('does not activate or persist a corrupted checkpoint', async () => {
   await test.sync.drain();
 });
 
-it('suspension suppresses late persistence and ACK without cancelling desktop execution', async () => {
+it('does not activate or install a corrupted checkpoint', async () => {
+  const test = setup();
+  test.page.pageDigest = 'f'.repeat(64);
+  await expect(test.sync.start()).rejects.toThrow('PROTOCOL_ERROR');
+  expect(test.sync.current).toBeUndefined();
+  expect(
+    test.request.mock.calls.some(([method]) => method === 'agent.subscriptions.activate'),
+  ).toBe(false);
+  test.sync.stop();
+  await test.sync.drain();
+});
+
+it('suspension suppresses late events and ACK without cancelling desktop execution', async () => {
   const test = setup(projection());
   await test.sync.start();
   test.notify(batch());
   test.sync.stop();
   await test.sync.drain();
-  expect(test.store.write).not.toHaveBeenCalled();
+  expect(test.sync.current?.cursor.seq).toBe('0');
   expect(
     test.request.mock.calls.some(
       ([method]) => method === 'agent.executions.cancel' || method === 'agent.subscriptions.ack',
     ),
+  ).toBe(false);
+});
+
+it('does not install or activate a checkpoint that finishes after suspension', async () => {
+  const test = setup();
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.checkpoints.read') await wait;
+    return request(method, params);
+  });
+  const started = test.sync.start();
+  await settle();
+  test.sync.stop();
+  release();
+  await expect(started).rejects.toMatchObject({ name: 'AbortError' });
+  await test.sync.drain();
+  expect(test.sync.current).toBeUndefined();
+  expect(test.publish).not.toHaveBeenCalled();
+  expect(
+    test.request.mock.calls.some(([method]) => method === 'agent.subscriptions.activate'),
   ).toBe(false);
 });
