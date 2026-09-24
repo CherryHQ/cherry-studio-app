@@ -22,6 +22,11 @@ const pendingThumbnails = new Map<string, Promise<string>>();
 const generationQueue: (() => void)[] = [];
 let activeGenerations = 0;
 
+/** Called only behind the cold-start gate, before any preview readers or generators exist. */
+export function resetFilePreviewsForRestore(): void {
+  if (thumbnailDirectory.exists) thumbnailDirectory.delete();
+}
+
 export async function createInternalEntryWithPreview(
   entries: Pick<FileEntryService, 'create'>,
   input: CreateInternalEntryInput,

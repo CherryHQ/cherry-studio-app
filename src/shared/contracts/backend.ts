@@ -1,4 +1,5 @@
 import type { AgentProtocol } from './agent';
+import type { BackupModule } from './backup';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DocumentExportModule } from './documentExport';
 import type { FileModule } from './file';
@@ -13,6 +14,7 @@ import type { SystemEntryModule } from './systemEntry';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly backup: BackupModule;
   readonly systemEntry: SystemEntryModule;
   readonly agent: AgentProtocol;
   readonly desktopConnections: DesktopConnectionsModule;

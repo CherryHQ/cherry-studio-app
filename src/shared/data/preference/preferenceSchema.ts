@@ -115,3 +115,16 @@ export const PreferenceDefaults = {
 } satisfies PreferenceSchema;
 
 export type PreferenceKeyType = keyof PreferenceSchema;
+
+/**
+ * Preferences that describe this device or its consent rather than the user's content.
+ * Restoring a backup keeps the target device's values for these keys.
+ */
+export const DEVICE_LOCAL_PREFERENCE_KEYS = [
+  'app.onboarding.status',
+  'app.privacy.data_collection.enabled',
+  'app.privacy.policy_version',
+  'app.user.id',
+  'chat.background_reply.enabled',
+  'chat.completion_notifications.enabled',
+] as const satisfies readonly PreferenceKeyType[];

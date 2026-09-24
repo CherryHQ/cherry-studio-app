@@ -602,9 +602,14 @@ export class CacheService {
     }
   }
 
-  /**
-   * Cleanup service resources (tests / hot-reload helper)
-   */
+  /** Clear derived state before a restored or rolled-back store initializes. */
+  resetForRestore(): void {
+    for (const key of this.storage.getAllKeys()) this.storage.delete(key);
+    this.memoryCache.clear();
+    this.persistCache.clear();
+  }
+
+  /** Cleanup service resources (tests / hot-reload helper). */
   cleanup(): void {
     this.memoryCache.clear();
     this.persistCache.clear();
