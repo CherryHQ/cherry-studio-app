@@ -36,6 +36,7 @@ export function parseZipEntry(header: Uint8Array, nameBytes: Uint8Array) {
   const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
   const flags = view.getUint16(8, true);
   const compression = view.getUint16(10, true);
+  const compressedSize = view.getUint32(20, true);
   const size = view.getUint32(24, true);
   const unixType = view.getUint32(38, true) >>> 28;
   if (
@@ -45,7 +46,7 @@ export function parseZipEntry(header: Uint8Array, nameBytes: Uint8Array) {
     view.getUint16(34, true) !== 0 ||
     view.getUint16(28, true) !== nameBytes.length ||
     size === 0xffffffff ||
-    view.getUint32(20, true) === 0xffffffff ||
+    compressedSize === 0xffffffff ||
     (unixType !== 0 && unixType !== 8)
   )
     throw new BackupError('invalid');
@@ -54,7 +55,10 @@ export function parseZipEntry(header: Uint8Array, nameBytes: Uint8Array) {
   return {
     name,
     size,
+    compressedSize,
     compression,
+    flags,
+    crc32: view.getUint32(16, true),
     offset: view.getUint32(42, true),
     skip: view.getUint16(30, true) + view.getUint16(32, true),
   };
