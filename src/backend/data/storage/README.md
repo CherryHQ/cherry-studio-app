@@ -10,7 +10,8 @@ metadata or a missing selected database fails closed instead of creating an empt
 
 1. Import validates in cache, then copies and normalizes a separate candidate store.
 2. After files are synchronized, an atomic control write records `pending: staged` and the native
-   process id. The current process becomes read-only and displays restart instructions.
+   process id. The current process becomes read-only. Android starts a fresh native process
+   automatically; iOS and Android restart failures display restart instructions.
 3. On a different native process, selection records `activating` before opening the candidate.
    A JavaScript reload in the staging process cannot activate it.
 4. Bootstrap verifies hashes, schema, references and required service initialization. Only then

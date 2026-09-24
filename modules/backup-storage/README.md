@@ -10,8 +10,10 @@ clients without it can open the original store but cannot create or restore back
 - `hashFile` computes SHA-256 in bounded chunks off the JavaScript thread.
 - `sealDirectory` synchronizes candidate files and directories before they may be referenced by
   the control record. All paths must remain inside private app storage.
+- On Android, `restartAfterRestore` starts a temporary Activity in a separate process, terminates
+  the current process, and opens the app in a fresh process. iOS does not expose this method.
 
-The module never closes SQLite handles or terminates the application. JavaScript owns the
+The module never closes SQLite handles. JavaScript owns the
 [restore state machine](../../src/backend/data/storage/README.md). An error after rename can be
 ambiguous; callers must retain staged files and require a real process restart.
 

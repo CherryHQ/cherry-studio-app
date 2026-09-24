@@ -1,6 +1,8 @@
 package expo.modules.backupstorage
 
+import android.content.Intent
 import android.net.Uri
+import android.os.Process
 import android.system.Os
 import android.system.OsConstants
 import expo.modules.kotlin.modules.Module
@@ -17,6 +19,17 @@ class BackupStorageModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("BackupStorage")
     Function("processId") { backupProcessId }
+    AsyncFunction("restartAfterRestore") {
+      val context = requireNotNull(appContext.reactContext).applicationContext
+      check(context.packageManager.getLaunchIntentForPackage(context.packageName) != null) {
+        "Could not find the app launch activity"
+      }
+      context.startActivity(
+        Intent(context, BackupRestartActivity::class.java)
+          .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          .putExtra(EXTRA_ORIGINAL_PROCESS_ID, Process.myPid())
+      )
+    }
     Function("readControl") { documentUri: String ->
       synchronized(controlLock) {
         val file = controlFile(documentUri)

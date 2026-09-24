@@ -47,7 +47,8 @@ without copying their secret values, and retains the target device's identity/pr
 background-notification preferences. Other settings and content come from the backup. Plugin rows
 and their tool bindings remain so users can reconnect them.
 
-After durable staging, the user must completely close and reopen the application. The
+After durable staging, Android restarts the native process automatically. iOS and Android clients
+without a working restart helper ask the user to completely close and reopen the application. The
 [storage generation controller](../../data/storage/README.md) commits only after required bootstrap
 succeeds and rolls back interrupted activation. The first boot that settles a restore reports once
 whether it was applied or rolled back. Import does not merge records or replay prior tasks.

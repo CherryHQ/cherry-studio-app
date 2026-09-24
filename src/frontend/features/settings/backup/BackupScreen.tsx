@@ -32,7 +32,11 @@ export function BackupScreen() {
   const preview = state.preview;
 
   const report = (error: unknown) => {
-    if (error instanceof BackupError && error.code === 'cancelled') return;
+    if (
+      error instanceof BackupError &&
+      (error.code === 'cancelled' || error.code === 'restart-required')
+    )
+      return;
     const key = error instanceof BackupError ? ERROR_KEYS[error.code] : 'backup.error.storage';
     toast.show({ label: t(key), variant: 'danger' });
   };
