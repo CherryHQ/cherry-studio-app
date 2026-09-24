@@ -96,6 +96,8 @@ calls the client directly for the same operation.
 
 - Streaming deltas are ephemeral; a fresh observer receives the accumulated streaming message in
   its snapshot.
+- The mobile UI releases Session observations while backgrounded. On foreground it restores each
+  visible Session from a fresh Host snapshot before consuming new events.
 - Terminal messages, parts, errors, and usage are durable transcript facts.
 - Route unmount removes the observation but does not cancel a Host-owned turn.
 - On process start, unfinished local turns reconcile to `interrupted`; Version 1 does not resume
@@ -105,6 +107,9 @@ calls the client directly for the same operation.
 ## Rendering
 
 - Text and reasoning remain Markdown-capable shared message parts.
+- Expanded reasoning longer than 8,192 UTF-16 code units uses bounded, selectable plain-text pages
+  so a growing thought cannot send its entire content through native Markdown layout. The full
+  reasoning remains in the Session; the page controls can reach every portion of it.
 - Each text or reasoning part leaves native streaming mode when its own state reaches `done`,
   even if the turn continues with tools or another part. Turn completion, cancellation, and failure
   also end streaming mode. This releases pending Markdown tail blocks and finalizes layout without

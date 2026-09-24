@@ -131,6 +131,7 @@ function isTerminalMessage(message: AgentMessageView): boolean {
 export class AgentSessionChatClient {
   readonly toolInputPreviews = new ToolInputPreviewStore();
   private readonly sessions = new Map<string, SessionEntry>();
+  private isObservationPaused = false;
 
   constructor(
     private readonly protocol: AgentProtocol,
@@ -158,6 +159,9 @@ export class AgentSessionChatClient {
   }
 
   async observe(sessionId: string, force = false): Promise<void> {
+    if (this.isObservationPaused) {
+      return;
+    }
     const entry = this.getEntry(sessionId);
     if (entry.observationPromise) {
       return entry.observationPromise;
@@ -232,7 +236,18 @@ export class AgentSessionChatClient {
     await this.observe(sessionId, true);
   }
 
-  async refreshObservedSessions(): Promise<void> {
+  pauseObservedSessions(): void {
+    if (this.isObservationPaused) {
+      return;
+    }
+    this.isObservationPaused = true;
+    for (const entry of this.sessions.values()) {
+      this.stopObservation(entry);
+    }
+  }
+
+  async resumeObservedSessions(): Promise<void> {
+    this.isObservationPaused = false;
     await Promise.allSettled(
       [...this.sessions.entries()]
         .filter(([, entry]) => entry.listeners.size > 0)
