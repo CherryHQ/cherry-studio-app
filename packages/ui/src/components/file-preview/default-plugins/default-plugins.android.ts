@@ -6,6 +6,8 @@ import type { FilePreviewComponent, FilePreviewPlugin } from '../file-preview.ty
  * Android has no system thumbnail service to call, so the extension card is the
  * default for every unregistered kind.
  */
+export const defaultFileCardThumbnail: FilePreviewComponent | undefined = undefined;
+
 export const defaultFilePreviewFallback: FilePreviewComponent = FallbackPreview;
 
 export const defaultFilePreviewPlugins: readonly FilePreviewPlugin[] = [

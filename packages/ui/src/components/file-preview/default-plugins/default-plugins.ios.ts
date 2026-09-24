@@ -6,6 +6,8 @@ import type { FilePreviewComponent, FilePreviewPlugin } from '../file-preview.ty
  * Quick Look produces a system thumbnail for anything iOS can open, so it is a
  * better default than a generic extension card for every unregistered kind.
  */
+export const defaultFileCardThumbnail: FilePreviewComponent | undefined = QuickLookPreview;
+
 export const defaultFilePreviewFallback: FilePreviewComponent = QuickLookPreview;
 
 export const defaultFilePreviewPlugins: readonly FilePreviewPlugin[] = [

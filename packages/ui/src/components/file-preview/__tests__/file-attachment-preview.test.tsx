@@ -3,6 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { FileAttachmentPreview } from '../components/file-attachment-preview';
 import type { FilePreviewFile } from '../file-preview.types';
 
+// The Android fallback path: no system thumbnail provider, so the type icon renders.
+jest.mock('../default-plugins/default-plugins', () => ({ defaultFileCardThumbnail: undefined }));
+
 const onPress = jest.fn();
 
 const file: FilePreviewFile = {

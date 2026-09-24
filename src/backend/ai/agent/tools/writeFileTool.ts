@@ -40,6 +40,7 @@ const MEDIA_TYPES_BY_EXTENSION: Record<string, string> = {
   json: 'application/json',
   markdown: 'text/markdown',
   md: 'text/markdown',
+  svg: 'image/svg+xml',
   tsv: 'text/tab-separated-values',
   xml: 'application/xml',
   yaml: 'application/yaml',

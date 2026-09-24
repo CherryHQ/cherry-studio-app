@@ -14,10 +14,14 @@ import {
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { type FileEntryId, FileEntryIdSchema } from '@/shared/data/types/file';
+import { isSvgMediaType } from '@/shared/utils/imageFileTypes';
 
 import { FileImageViewer } from './components/FileImageViewer';
+import { FilePdfViewer } from './components/FilePdfViewer';
+import { FileSvgViewer } from './components/FileSvgViewer';
 import { FileTextViewer } from './components/FileTextViewer';
 import { FileViewerHeader } from './components/FileViewerHeader';
+import { FileOfficeViewer } from './office/FileOfficeViewer';
 
 export function FileViewerScreen() {
   const { t } = useTranslation();
@@ -49,7 +53,8 @@ function FileViewerRoute({ entryId }: { entryId: FileEntryId }) {
   ]);
   const file = query.data;
   const kind = file ? fileEntryPreviewKind(file.entry) : 'document';
-  const isImage = kind === 'image';
+  const isSvg = file ? isSvgMediaType(file.entry.mediaType) : false;
+  const isImage = kind === 'image' && !isSvg;
 
   return (
     <View className={isImage ? 'flex-1 bg-constant-black' : 'flex-1 bg-background'}>
@@ -78,6 +83,12 @@ function FileViewerRoute({ entryId }: { entryId: FileEntryId }) {
             )}
           </View>
         </>
+      ) : isSvg ? (
+        <FileSvgViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} />
+      ) : kind === 'pdf' ? (
+        <FilePdfViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} />
+      ) : kind === 'office' ? (
+        <FileOfficeViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} />
       ) : kind === 'image' ? (
         <FileImageViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} />
       ) : kind === 'document' ? (

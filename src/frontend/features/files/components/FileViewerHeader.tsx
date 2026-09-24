@@ -6,6 +6,7 @@ import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExpo
 import { HeaderChrome, useRouteHeaderLeadingAction } from '@/frontend/appShell/header';
 import { fileEntryPreviewKind, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import { isSvgMediaType } from '@/shared/utils/imageFileTypes';
 
 const EMPTY_ITEMS: readonly MenuItem[] = [];
 
@@ -24,7 +25,8 @@ export function FileViewerHeader({
     provenance: file.entry.provenance,
   });
   const { isSharing, share } = useShareFile(file);
-  const isImage = fileEntryPreviewKind(file.entry) === 'image';
+  const isImage =
+    fileEntryPreviewKind(file.entry) === 'image' && !isSvgMediaType(file.entry.mediaType);
 
   const menuItems: MenuItem[] = [
     ...items,

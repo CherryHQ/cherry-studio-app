@@ -224,14 +224,14 @@ function FilePickerRow({
         pointerEvents="none"
       >
         {item.uri && isComposerImageMediaType(item.entry.mediaType) && !item.previewUri ? (
-          <FileEntrySkeleton size={PREVIEW_SIZE} variant="icon" />
+          <FileEntrySkeleton size={PREVIEW_SIZE} variant="thumbnail" />
         ) : (
           <LoadedFileEntryPreview
             entry={item.entry}
             previewUri={item.previewUri}
             size={PREVIEW_SIZE}
             uri={item.uri}
-            variant="icon"
+            variant="thumbnail"
           />
         )}
       </View>

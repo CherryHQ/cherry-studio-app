@@ -206,6 +206,7 @@ test.each(['image/svg+xml', 'IMAGE/SVG+XML', 'image/svg+xml;charset=utf-8'])(
     expect(exported).toMatchObject({ uri, filename: entry.filename, mediaType });
     exported.release();
     expect(mockFiles.get(uri)).toBe(original);
+    expect(mockFiles.size).toBe(1);
     expect(mockResources).toHaveLength(0);
   },
 );

@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { View } from 'react-native';
 
+import { defaultFileCardThumbnail } from '../default-plugins/default-plugins';
 import type { FilePreviewProps } from '../file-preview.types';
 import { useFilePreviewPlugins } from '../hooks/use-file-preview-plugins';
 import { FilePreviewUnavailable } from './fallback-preview';
@@ -38,7 +39,16 @@ export function FilePreview({
     >
       {file && Preview ? (
         variant !== 'thumbnail' && file.kind !== 'image' ? (
-          <FileCardPreview badge={badge} file={file} variant={variant} />
+          <FileCardPreview
+            badge={badge}
+            file={file}
+            variant={variant}
+            thumbnail={
+              variant !== 'icon' && defaultFileCardThumbnail
+                ? createElement(defaultFileCardThumbnail, { file, onError, size: 48 })
+                : undefined
+            }
+          />
         ) : (
           <>
             {createElement(Preview, { file, onError, size: resolvedSize })}
