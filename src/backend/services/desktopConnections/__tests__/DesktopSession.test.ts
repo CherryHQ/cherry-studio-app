@@ -1,7 +1,7 @@
 import { connectSecureChannel, type SecureChannel } from '@cherrystudio/remote-transport';
 import type { MessageStream } from '@libp2p/interface';
 
-import { DesktopSession, RemoteFailureError } from '../DesktopSession';
+import { DesktopSession, RemoteFailureError, RemoteTransportError } from '../DesktopSession';
 
 jest.mock('@cherrystudio/remote-transport', () => ({ connectSecureChannel: jest.fn() }));
 jest.mock('../remoteSocket', () => ({
@@ -169,9 +169,62 @@ describe('DesktopSession', () => {
     expect(received).toEqual([{ jsonrpc: '2.0', method: 'agent.events', params: { seq: '1' } }]);
 
     await channel.close();
-    await expect(pending).rejects.toThrow('Connection closed');
+    const error = await pending.catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(RemoteTransportError);
+    expect(error).toMatchObject({ kind: 'closed', message: 'Connection closed' });
+    expect(error).not.toBeInstanceOf(RemoteFailureError);
     expect(session.isOpen).toBe(false);
     await expect(session.request('connection.ping', { nonce: 'n' })).rejects.toThrow();
+  });
+
+  it('keeps a timed-out Agent command uncertain instead of inventing a desktop rejection', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    try {
+      const channel = fakeChannel({
+        'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),
+        'connection.ping': () => NO_REPLY,
+        'agent.commands.get': () => NO_REPLY,
+      });
+      const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+      const settled = session.request('agent.commands.get', { commandId: 'c1' }).then(
+        () => 'resolved',
+        (error: unknown) => error,
+      );
+      await jest.advanceTimersByTimeAsync(60_001);
+      const error = await settled;
+      expect(error).toBeInstanceOf(RemoteTransportError);
+      expect(error).toMatchObject({ kind: 'timeout' });
+      session.close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('reports a failed record write as transport loss, and a desktop verdict as a failure', async () => {
+    const channel = fakeChannel({
+      'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),
+      'agent.commands.get': () => {
+        throw Object.assign(new Error('Unknown command'), {
+          data: { reason: 'NOT_FOUND', message: 'Unknown command' },
+        });
+      },
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    await expect(session.request('agent.commands.get', { commandId: 'c1' })).rejects.toMatchObject({
+      name: 'RemoteFailureError',
+      reason: 'NOT_FOUND',
+    });
+    const write = channel.write;
+    channel.write = async () => {
+      throw new Error('socket write failed');
+    };
+    const error = await session
+      .request('agent.commands.get', { commandId: 'c2' })
+      .catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(RemoteTransportError);
+    expect(error).toMatchObject({ kind: 'send-failed', message: 'socket write failed' });
+    channel.write = write;
+    session.close();
   });
 
   it('authenticates with the device id only and remembers the desktop grants', async () => {

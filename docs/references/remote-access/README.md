@@ -172,6 +172,9 @@ restores the draft. `executions.cancel` carries the active execution id. `intera
 carries `expectedRevision`, `expectedExecutionId` and `inputDigest` from the interaction it shows.
 A lost response is recovered with `agent.commands.get` and, when absent, by resending the same
 `commandId`; `IDEMPOTENCY_CONFLICT` and `interrupted` stop recovery and surface to the user.
+Only a JSON-RPC error carrying protocol `data` is a desktop verdict. A local idle timeout, a
+failed record write or a channel closed mid-request is `RemoteTransportError`, which the Agent
+scope maps to retryable `CONNECTION_LOST` so the command stays uncertain.
 Uncertain commands cannot be dismissed. After a terminal result is consumed, dismissal removes
 the record (and both records of a completed start workflow); an empty binding is removed from MMKV.
 The journal is not subject to the read cache's TTL or capacity eviction.

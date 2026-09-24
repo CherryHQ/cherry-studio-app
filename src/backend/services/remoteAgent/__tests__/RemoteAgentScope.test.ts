@@ -2,7 +2,10 @@ import type { AgentProjection } from '@cherrystudio/remote-protocol/agent';
 
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopDomainLease, DesktopLeaseState } from '@/backend/services/desktopConnections';
-import { RemoteFailureError } from '@/backend/services/desktopConnections/remoteErrors';
+import {
+  RemoteFailureError,
+  RemoteTransportError,
+} from '@/backend/services/desktopConnections/remoteErrors';
 import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentScope } from '../RemoteAgentScope';
@@ -498,6 +501,30 @@ it('removes a missing session preview instead of retaining it as normal offline 
   expect(test.source.peekSession('s')).toBeUndefined();
   cache.put(entry, 0, 'session', test.projection.session);
   expect(test.source.peekSession('s')).toBeUndefined();
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('keeps a command whose reply was lost in transit uncertain rather than failed', async () => {
+  const test = fixture();
+  let snapshot: RemoteSessionSnapshot | undefined;
+  const unobserve = test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  const target = snapshot!.sendTarget!;
+  test.request.mockImplementationOnce(async () => {
+    throw new RemoteTransportError('timeout', 'Request timeout');
+  });
+  const sent = await test.source.send(target, 'hello');
+  expect(sent.status).toBe('confirming');
+  expect(sent.error).toBeUndefined();
+  test.request.mockRejectedValueOnce(new RemoteTransportError('closed', 'Connection closed'));
+  await expect(test.source.readSession('s', new AbortController().signal)).rejects.toMatchObject({
+    code: 'CONNECTION_LOST',
+    retryable: true,
+  });
+  unobserve();
   test.source.dispose();
   await test.source.drain();
 });

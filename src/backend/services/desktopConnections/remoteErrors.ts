@@ -11,6 +11,20 @@ export class RemoteFailureError extends Error {
   }
 }
 
+/**
+ * The request never produced a desktop verdict: the reply timed out, the record could not be
+ * written, or the channel closed while it was in flight. The desktop may still have acted on it.
+ */
+export class RemoteTransportError extends Error {
+  constructor(
+    readonly kind: 'timeout' | 'send-failed' | 'closed',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RemoteTransportError';
+  }
+}
+
 export class DesktopUnreachableError extends Error {
   constructor(
     readonly attempts: string[],
