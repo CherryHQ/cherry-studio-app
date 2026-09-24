@@ -81,7 +81,7 @@ describe('ChatMessage', () => {
           isMessageActionsEnabled
           shouldShowTimestamp
           message={createMessage('success')}
-          usage="42 Tokens"
+          renderUsage={() => '42 Tokens'}
         />,
       );
     });

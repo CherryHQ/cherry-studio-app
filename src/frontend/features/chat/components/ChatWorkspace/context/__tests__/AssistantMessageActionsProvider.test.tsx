@@ -37,17 +37,23 @@ jest.mock('expo-clipboard', () => ({
 }));
 
 // Interpolating stub: the fork title is composed here, so a key-only `t` would
-// hide whether the source name actually reaches it.
+// hide whether the source name actually reaches it. These stubs stay stable
+// across renders like the real hooks, so identity assertions measure the provider.
+const mockTranslation = {
+  t: (key: string, values?: Record<string, string>) =>
+    values ? `${key}:${Object.values(values).join(',')}` : key,
+};
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, values?: Record<string, string>) =>
-      values ? `${key}:${Object.values(values).join(',')}` : key,
-  }),
+  useTranslation: () => mockTranslation,
 }));
 
+const mockAlert = {
+  alert: { confirm: (input: { onConfirm: () => void }) => mockAlertConfirm(input) },
+};
+const mockToast = { toast: { show: (input: unknown) => mockToastShow(input) } };
 jest.mock('@cherrystudio/ui/components', () => ({
-  useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
-  useToast: () => ({ toast: { show: mockToastShow } }),
+  useAlert: () => mockAlert,
+  useToast: () => mockToast,
 }));
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -223,6 +229,27 @@ describe('AssistantMessageActionsProvider', () => {
       expect(JSON.stringify(mockToastShow.mock.calls)).not.toContain('private diagnostic');
     },
   );
+
+  test('keeps row actions stable across transcript updates and runs them on the latest data', async () => {
+    renderProvider();
+    const actions = probeRef.current?.actions;
+    const state = probeRef.current?.state;
+
+    // Every streamed chunk delivers a new transcript and snapshot. Rows read
+    // these actions through context, so their identity must not follow it.
+    mockSourceTitle = 'Renamed while streaming';
+    act(() => renderer?.update(<ProviderHarness probeRef={probeRef} />));
+    expect(probeRef.current?.actions).toBe(actions);
+    expect(probeRef.current?.state).toBe(state);
+
+    await act(async () => {
+      probeRef.current?.actions.forkFromAssistantMessage?.({ messageId: 'assistant-1' });
+      await Promise.resolve();
+    });
+    expect(mockForkSession).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'chat.fork.sessionTitle:Renamed while streaming' }),
+    );
+  });
 
   test('opens selection at the clicked answer without changing the transcript', () => {
     renderProvider();

@@ -3,8 +3,12 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { MessageListLiveTailProvider } from '../../list/MessageListLiveTailContext';
 import { PartMarkdown } from '../PartMarkdown';
 
+const mockMarkdownRenders: string[] = [];
 jest.mock('@/frontend/components/MarkdownText', () => ({
-  MarkdownText: (props: object) => jest.requireActual('react').createElement('MarkdownText', props),
+  MarkdownText: (props: { markdown: string }) => {
+    mockMarkdownRenders.push(props.markdown);
+    return jest.requireActual('react').createElement('MarkdownText', props);
+  },
 }));
 
 describe('PartMarkdown', () => {
@@ -49,6 +53,32 @@ describe('PartMarkdown', () => {
 
     render('abc', false, false);
     expect(shown()).toBe('abc');
+  });
+
+  test('reaches only streaming parts when the list end scrolls in or out of view', () => {
+    // One children element across updates, as mounted list rows keep theirs.
+    const parts = (
+      <>
+        <PartMarkdown isStreaming={false} markdown="settled" />
+        <PartMarkdown isStreaming markdown="streaming" />
+      </>
+    );
+    const setVisible = (isVisible: boolean) => {
+      const element = (
+        <MessageListLiveTailProvider isVisible={isVisible}>{parts}</MessageListLiveTailProvider>
+      );
+      act(() => {
+        if (renderer) renderer.update(element);
+        else renderer = create(element);
+      });
+    };
+
+    setVisible(true);
+    mockMarkdownRenders.length = 0;
+    setVisible(false);
+    setVisible(true);
+
+    expect(mockMarkdownRenders).toEqual(['streaming', 'streaming']);
   });
 
   test('always shows current text outside a message list', () => {

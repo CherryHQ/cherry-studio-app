@@ -7,6 +7,7 @@ import {
   use,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -75,54 +76,18 @@ export function AssistantMessageActionsProvider({
   const { alert } = useAlert();
   const mounted = useRef(true);
   const inFlight = useRef(new Set<string>());
+  const sharing = useRef(false);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
     };
   }, []);
-  const sharing = useRef(false);
   useFocusEffect(
     useCallback(() => {
       sharing.current = false;
     }, []),
   );
-  const share = ({ messageId }: { messageId: string }) => {
-    if (!onShare || sharing.current) return;
-    sharing.current = true;
-    Keyboard.dismiss();
-    onShare(messageId);
-  };
-  async function run<Input, Output>(
-    key: string,
-    action: ConversationAction<Input, Output> | undefined,
-    value: Input,
-    errorLabel: 'retryFailed' | 'forkFailed' | 'deleteFailed',
-    applied?: (result: Output) => void,
-  ) {
-    if (!action || action.availability.state !== 'enabled' || inFlight.current.has(key)) return;
-    inFlight.current.add(key);
-    try {
-      const outcome = await action.execute(value);
-      if (!mounted.current) return;
-      if (outcome.state === 'applied') applied?.(outcome.value);
-      else if (outcome.state === 'rejected' || outcome.state === 'interrupted')
-        toast.show({
-          label: t(
-            (outcome.state === 'rejected' &&
-              getSendErrorCodeLabelKey(outcome.failure.detail?.code)) ||
-              `chat.messageActions.${errorLabel}`,
-          ),
-          variant: 'danger',
-        });
-    } catch (error) {
-      logger.error('Conversation message action failed', error as Error);
-      if (mounted.current)
-        toast.show({ label: t(`chat.messageActions.${errorLabel}`), variant: 'danger' });
-    } finally {
-      inFlight.current.delete(key);
-    }
-  }
   const retryMessage = messages.find((message) => message.key === retryableMessageId);
   const isBusy = snapshot.executions.some(
     (execution) =>
@@ -131,38 +96,114 @@ export function AssistantMessageActionsProvider({
       execution.state === 'awaiting-input' ||
       execution.state === 'finalizing',
   );
-  const retry = ({ messageId }: { messageId: string }) => {
-    if (messageId !== retryableMessageId || isBusy) return;
-    void run(`retry:${messageId}`, retryMessage?.actions.retry, undefined, 'retryFailed');
-  };
-  const fork = ({ messageId }: { messageId: string }) => {
-    const sourceTitle = snapshot.title.trim();
-    const title = sourceTitle
-      ? t('chat.fork.sessionTitle', { title: sourceTitle }).slice(0, SESSION_TITLE_MAX_LENGTH)
-      : undefined;
-    void run(
-      `fork:${messageId}`,
-      messages.find((message) => message.key === messageId)?.actions.fork,
-      { title },
-      'forkFailed',
-      (ref) => router.replace(conversationHref(ref)),
-    );
-  };
-  const remove = ({ turnId }: { turnId: string }) => {
-    const message = messages.find(
-      (message) => message.display.turnId === turnId && message.actions.remove,
-    );
-    if (!message || isBusy) return;
-    alert.confirm({
-      confirmLabel: t('common.delete'),
-      description: t('chat.messageActions.deleteMessage'),
-      role: 'destructive',
-      title: t('chat.messageActions.deleteTitle'),
-      onConfirm: () => {
-        void run(`delete:${turnId}`, message.actions.remove, undefined, 'deleteFailed');
-      },
-    });
-  };
+  // Rows receive these handlers through context. The transcript and snapshot
+  // change on every streamed update, so the handlers read them when invoked;
+  // only whether an action exists or is enabled reaches rows as rendered state.
+  const latest = useRef({
+    alert,
+    isBusy,
+    messages,
+    onShare,
+    retryableMessageId,
+    snapshot,
+    t,
+    toast,
+  });
+  useLayoutEffect(() => {
+    latest.current = { alert, isBusy, messages, onShare, retryableMessageId, snapshot, t, toast };
+  });
+
+  const run = useCallback(
+    async <Input, Output>(
+      key: string,
+      action: ConversationAction<Input, Output> | undefined,
+      value: Input,
+      errorLabel: 'retryFailed' | 'forkFailed' | 'deleteFailed',
+      applied?: (result: Output) => void,
+    ) => {
+      if (!action || action.availability.state !== 'enabled' || inFlight.current.has(key)) return;
+      inFlight.current.add(key);
+      try {
+        const outcome = await action.execute(value);
+        if (!mounted.current) return;
+        const { t: translate, toast: currentToast } = latest.current;
+        if (outcome.state === 'applied') applied?.(outcome.value);
+        else if (outcome.state === 'rejected' || outcome.state === 'interrupted')
+          currentToast.show({
+            label: translate(
+              (outcome.state === 'rejected' &&
+                getSendErrorCodeLabelKey(outcome.failure.detail?.code)) ||
+                `chat.messageActions.${errorLabel}`,
+            ),
+            variant: 'danger',
+          });
+      } catch (error) {
+        logger.error('Conversation message action failed', error as Error);
+        if (mounted.current)
+          latest.current.toast.show({
+            label: latest.current.t(`chat.messageActions.${errorLabel}`),
+            variant: 'danger',
+          });
+      } finally {
+        inFlight.current.delete(key);
+      }
+    },
+    [],
+  );
+  const share = useCallback(({ messageId }: { messageId: string }) => {
+    const { onShare: openShare } = latest.current;
+    if (!openShare || sharing.current) return;
+    sharing.current = true;
+    Keyboard.dismiss();
+    openShare(messageId);
+  }, []);
+  const retry = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      const current = latest.current;
+      if (messageId !== current.retryableMessageId || current.isBusy) return;
+      const action = current.messages.find((message) => message.key === messageId)?.actions.retry;
+      void run(`retry:${messageId}`, action, undefined, 'retryFailed');
+    },
+    [run],
+  );
+  const fork = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      const current = latest.current;
+      const sourceTitle = current.snapshot.title.trim();
+      const title = sourceTitle
+        ? current
+            .t('chat.fork.sessionTitle', { title: sourceTitle })
+            .slice(0, SESSION_TITLE_MAX_LENGTH)
+        : undefined;
+      void run(
+        `fork:${messageId}`,
+        current.messages.find((message) => message.key === messageId)?.actions.fork,
+        { title },
+        'forkFailed',
+        (ref) => router.replace(conversationHref(ref)),
+      );
+    },
+    [run],
+  );
+  const remove = useCallback(
+    ({ turnId }: { turnId: string }) => {
+      const current = latest.current;
+      const message = current.messages.find(
+        (message) => message.display.turnId === turnId && message.actions.remove,
+      );
+      if (!message || current.isBusy) return;
+      current.alert.confirm({
+        confirmLabel: current.t('common.delete'),
+        description: current.t('chat.messageActions.deleteMessage'),
+        role: 'destructive',
+        title: current.t('chat.messageActions.deleteTitle'),
+        onConfirm: () => {
+          void run(`delete:${turnId}`, message.actions.remove, undefined, 'deleteFailed');
+        },
+      });
+    },
+    [run],
+  );
   return (
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled}

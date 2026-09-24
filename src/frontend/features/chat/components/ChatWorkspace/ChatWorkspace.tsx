@@ -13,12 +13,12 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { type PendingChatSend } from '../../runtime';
 import { ConversationApprovals } from '../ConversationApprovals';
-import { ConversationMessageContent, ConversationAttachments } from '../ConversationMessageContent';
 import { ChatTranscript } from './ChatTranscript';
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
-import { ChatMessage } from './components/ChatMessage';
+import { ChatMessageRow } from './components/ChatMessageRow';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
+import { ChatMessageRowProvider } from './context/ChatMessageRowContext';
 import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
 import { shouldWaitForInitialHistoryLayout } from './hooks/useMessageListInitialRenderGate';
 import { getTimestampMessageIds } from './messageTimestamps';
@@ -160,6 +160,9 @@ export function ChatWorkspace({
     }),
     [assistantAvatar, assistantAvatarUri, assistantName, t],
   );
+  // Row-specific conversation state (tools, attachments, timestamps) reaches
+  // each row through its keyed subscription, so this renderer and `extraData`
+  // change only with list-wide presentation.
   const renderChatMessage = useCallback(
     (message: MessageListItem) => {
       if (message.role === 'system') {
@@ -168,43 +171,26 @@ export function ChatWorkspace({
         ) : null;
       }
 
-      const value = mergedMessages.find((item) => item.key === message.id);
-      const content = (
-        <ChatMessage
+      return (
+        <ChatMessageRow
           assistantPresentation={assistantPresentation}
           isMessageActionsEnabled={isAssistantToolbarEnabled}
           isScreenReaderEnabled={isScreenReaderEnabled}
           message={message}
-          usage={renderUsage?.(message)}
-          attachments={
-            value?.attachments?.length ? <ConversationAttachments message={value} /> : undefined
-          }
-          shouldShowTimestamp={timestampMessageIds.has(message.id)}
+          renderUsage={renderUsage}
         />
       );
-      return value ? (
-        <ConversationMessageContent message={value}>{content}</ConversationMessageContent>
-      ) : (
-        content
-      );
     },
-    [
-      assistantPresentation,
-      isAssistantToolbarEnabled,
-      isScreenReaderEnabled,
-      timestampMessageIds,
-      mergedMessages,
-      renderUsage,
-    ],
+    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
   );
   const messageListExtraData = useMemo(
     () => ({
       assistantPresentation,
       isAssistantToolbarEnabled,
       isScreenReaderEnabled,
-      timestampMessageIds,
+      renderUsage,
     }),
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, timestampMessageIds],
+    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
   );
   const requiresInitialHistoryLayout =
     typeof initialScrollTarget === 'object' ||
@@ -262,28 +248,30 @@ export function ChatWorkspace({
         snapshot={live}
         messages={mergedMessages}
       >
-        <ChatTranscript
-          requiresInitialLayout={requiresInitialHistoryLayout}
-          isLoadingMore={isLoadingOlder || isLoadingNewer}
-          contentBottomInset={contentBottomInset}
-          // A draft window has no Session yet and reports an empty key. Keying the
-          // first send by its pending Session keeps the list on one dataset across
-          // the draft-to-Session handoff instead of starting as a keyless list.
-          dataKey={dataKey || listKey}
-          enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
-          extraData={messageListExtraData}
-          initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
-          initialScrollTarget={initialScrollTarget}
-          hasNewerMessages={hasNewerMessages}
-          keyboardOffset={keyboardOffset}
-          // ChatScreen owns background presses so blur also ends composer editing.
-          keyboardShouldPersistTaps="always"
-          messages={listMessages}
-          onLoadOlder={loadOlder}
-          onLoadNewer={loadNewer}
-          onReturnToLatest={returnToLatest}
-          renderMessage={renderChatMessage}
-        />
+        <ChatMessageRowProvider messages={mergedMessages} timestampMessageIds={timestampMessageIds}>
+          <ChatTranscript
+            requiresInitialLayout={requiresInitialHistoryLayout}
+            isLoadingMore={isLoadingOlder || isLoadingNewer}
+            contentBottomInset={contentBottomInset}
+            // A draft window has no Session yet and reports an empty key. Keying the
+            // first send by its pending Session keeps the list on one dataset across
+            // the draft-to-Session handoff instead of starting as a keyless list.
+            dataKey={dataKey || listKey}
+            enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
+            extraData={messageListExtraData}
+            initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
+            initialScrollTarget={initialScrollTarget}
+            hasNewerMessages={hasNewerMessages}
+            keyboardOffset={keyboardOffset}
+            // ChatScreen owns background presses so blur also ends composer editing.
+            keyboardShouldPersistTaps="always"
+            messages={listMessages}
+            onLoadOlder={loadOlder}
+            onLoadNewer={loadNewer}
+            onReturnToLatest={returnToLatest}
+            renderMessage={renderChatMessage}
+          />
+        </ChatMessageRowProvider>
       </AssistantMessageActionsProvider>
       {sessionId ? <ConversationApprovals snapshot={live} /> : null}
     </View>

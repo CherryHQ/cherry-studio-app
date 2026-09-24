@@ -30,7 +30,8 @@ type ChatMessageProps = {
   shouldShowTimestamp: boolean;
   attachments?: ReactNode;
   accessories?: ReactNode;
-  usage?: ReactNode;
+  /** A stable renderer, called here so the row's memo boundary still holds. */
+  renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
 function renderChatAssistantMessage(
@@ -38,7 +39,7 @@ function renderChatAssistantMessage(
   presentation: AssistantMessagePresentation,
   attachments: ReactNode,
   accessories: ReactNode,
-  usage: ReactNode,
+  renderUsage: ((message: MessageListItem) => ReactNode) | undefined,
 ) {
   return (
     <View className="w-full gap-2.5">
@@ -71,7 +72,7 @@ function renderChatAssistantMessage(
           <BackgroundPressExclusion>
             <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
               <AssistantMessageToolbar message={message} />
-              <View className="min-w-0 max-w-full flex-1 items-end">{usage}</View>
+              <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
             </ContextMenuExclusion>
           </BackgroundPressExclusion>
         ) : null}
@@ -106,7 +107,7 @@ export const ChatMessage = memo(function ChatMessage({
   shouldShowTimestamp,
   attachments,
   accessories,
-  usage,
+  renderUsage,
 }: ChatMessageProps) {
   const createdAt = shouldShowTimestamp ? formatMessageCreatedAt(message.createdAt) : undefined;
   const content =
@@ -116,7 +117,13 @@ export const ChatMessage = memo(function ChatMessage({
         {accessories}
       </View>
     ) : (
-      renderChatAssistantMessage(message, assistantPresentation, attachments, accessories, usage)
+      renderChatAssistantMessage(
+        message,
+        assistantPresentation,
+        attachments,
+        accessories,
+        renderUsage,
+      )
     );
 
   return (

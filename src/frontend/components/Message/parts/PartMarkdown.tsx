@@ -18,7 +18,7 @@ type PartMarkdownProps = {
  * comes back into view or the part finishes.
  */
 export function PartMarkdown({ isStreaming, markdown }: PartMarkdownProps) {
-  const isLiveTailVisible = useMessageListLiveTailVisible();
+  const isLiveTailVisible = useMessageListLiveTailVisible(isStreaming);
   const [shownMarkdown, setShownMarkdown] = useState(markdown);
   const isHeld = isStreaming && !isLiveTailVisible;
   if (!isHeld && shownMarkdown !== markdown) {
