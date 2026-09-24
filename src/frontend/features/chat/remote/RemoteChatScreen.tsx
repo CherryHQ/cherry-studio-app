@@ -175,17 +175,13 @@ function RemoteChatSession() {
       void agents.fetchNextPage();
   }, [agentId, agent, agents]);
   const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? `session:${target.sessionId}` : identity}`;
-  // Read pre-unification drafts once; new drafts are independent of Agent selection.
-  const legacyDraftKey = `${source.draftScope}:${target.connectionId}:draft:${draftId}:${agentId ?? ''}`;
   const [drafts] = usePersistCache('remote_agent.drafts');
   return (
     <HeaderContext value={{ agent, selectAgent, startNewChat }}>
       <ChatScreenFrame header={RemoteHeader}>
         <ComposerSessionProvider
           key={`${source.scope}:${identity}`}
-          initialDraft={
-            drafts[draftKey] ?? (!target.sessionId ? drafts[legacyDraftKey] : undefined) ?? ''
-          }
+          initialDraft={drafts[draftKey] ?? ''}
         >
           <ComposerDismissArea disabled testID="chat-background">
             {opened.error ? (

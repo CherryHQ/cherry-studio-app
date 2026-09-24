@@ -244,7 +244,7 @@ it('deduplicates a start draft and preserves its created session and input after
   });
 });
 
-it('reads version 1 pending commands and retains them when admitting a version 2 workflow', async () => {
+it('drops a journal this build cannot read instead of replaying or preserving it', async () => {
   const { storage, port } = journal();
   storage.write(
     'pc:grant',
@@ -252,13 +252,7 @@ it('reads version 1 pending commands and retains them when admitting a version 2
       version: 1,
       records: [
         {
-          action: {
-            id: 'old',
-            kind: 'send',
-            status: 'confirming',
-            sessionId: 's',
-            text: 'old draft',
-          },
+          action: { id: 'old', kind: 'send', status: 'confirming', sessionId: 's', text: 'old' },
           method,
           params: { ...params, commandId: 'old' },
         },
@@ -267,9 +261,13 @@ it('reads version 1 pending commands and retains them when admitting a version 2
   );
   const request = jest.fn().mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
   const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  expect(actions.get()).toEqual([]);
+  expect(storage.read('pc:grant')).toBeUndefined();
   await actions.start(startInput);
-  expect(JSON.parse(storage.read('pc:grant')!).records[0].action.id).toBe('old');
-  expect(actions.get()[0].text).toBe('old draft');
+  expect(JSON.parse(storage.read('pc:grant')!)).toMatchObject({ version: 2 });
+  expect(JSON.parse(storage.read('pc:grant')!).records.map((r: any) => r.action.id)).not.toContain(
+    'old',
+  );
 });
 
 it('retains uncertain workflows and dismisses both records only after a terminal result', async () => {

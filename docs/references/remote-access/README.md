@@ -126,7 +126,7 @@ RemoteAgentRuntime → SessionSync (in-memory desktop state) / RemoteAgentAction
 | --- | --- |
 | `desktop_connection` (migrated) | `id` is the mobile connection ID; `deviceId` is desktop-assigned, `name`, `addresses[]`, `port`, `desktopIdentity`, `grants` (`{ domain, grantId }[]`), `status`, `lastFetchedAt`; drops `baseUrls`, `activeBaseUrl`, `desktopVersion`. The migration recreates the table and drops HTTP-era rows, which can no longer connect. |
 | SecureStore | `remote-device-identity` (private key protobuf, hex). HTTP-era `desktop-connection-token.*` entries are simply no longer read. |
-| MMKV `cherry-remote-agent-commands` | Version 2 stores fixed command IDs, exact parameters and receipts plus the two-step start workflow. Version 1 records remain readable; old pairing bindings are not silently erased or replayed into a different identity. This is a record of commands the phone sent without a receipt, not a cache. |
+| MMKV `cherry-remote-agent-commands` | Version 2 stores fixed command IDs, exact parameters and receipts plus the two-step start workflow. A record this build cannot read is dropped, never replayed; old pairing bindings are not replayed into a different identity. This is a record of commands the phone sent without a receipt, not a cache. |
 | Memory only: `RemoteSessionReadCache` | Remote history pages, parts and content. Bounded (32 MiB total, 1 MiB per value, 10 inactive sessions, 5-minute idle), cleared when a grant or pairing is invalidated, empty after every process start. |
 
 The desktop is the only source of truth for a remote conversation; the phone-side copy is never

@@ -60,10 +60,11 @@ const StartSchema = z
     errorMessage: z.string().max(512).optional(),
   })
   .refine((entry) => (entry.workspaceId !== undefined) !== (entry.workspace !== undefined));
-const JournalSchema = z.union([
-  z.object({ version: z.literal(1), records: z.array(RecordSchema) }),
-  z.object({ version: z.literal(2), records: z.array(RecordSchema), starts: z.array(StartSchema) }),
-]);
+const JournalSchema = z.object({
+  version: z.literal(2),
+  records: z.array(RecordSchema),
+  starts: z.array(StartSchema),
+});
 type StartEntry = z.infer<typeof StartSchema>;
 type RecordEntry = z.infer<typeof RecordSchema>;
 
@@ -88,6 +89,22 @@ function projectStart(
   return { ...view, ...(errorMessage ? { errorMessage } : {}) };
 }
 
+/** The journal is unreleased state; a record this build cannot read is evidence of nothing. */
+function readJournal(journal: RemoteAgentCommandJournal, binding: string) {
+  const stored = journal.read(binding);
+  if (stored === undefined) return undefined;
+  let value: unknown;
+  try {
+    value = JSON.parse(stored);
+  } catch {
+    value = undefined;
+  }
+  const parsed = JournalSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  journal.remove(binding);
+  return undefined;
+}
+
 export class RemoteAgentActions {
   private stopped = false;
   private records: RecordEntry[];
@@ -103,10 +120,9 @@ export class RemoteAgentActions {
     private readonly request: Request,
     private readonly changed: () => void,
   ) {
-    const stored = journal.read(binding);
-    const parsed = stored === undefined ? undefined : JournalSchema.parse(JSON.parse(stored));
+    const parsed = readJournal(journal, binding);
     this.records = parsed?.records ?? [];
-    this.starts = parsed?.version === 2 ? parsed.starts : [];
+    this.starts = parsed?.starts ?? [];
     this.startSnapshot = this.starts.map((entry) => projectStart(entry, this.records));
     this.snapshot = this.records.map(projectAction);
   }

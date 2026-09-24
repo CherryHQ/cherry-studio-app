@@ -108,5 +108,4 @@ and its persisted text belong to that draft, not to the selected Agent. Agent ch
 the remote execution controls, so workspace references are acquired for the new Agent. Selecting
 from an existing session or an admitted start opens a distinct draft; admission is checked at click
 time and navigation invalidates the old handoff immediately. Pending/uncertain operations remain
-recoverable and cannot redirect the new draft when their replies arrive. Existing Agent-keyed draft
-text is read as a fallback; subsequent writes use the Agent-independent key.
+recoverable and cannot redirect the new draft when their replies arrive.
