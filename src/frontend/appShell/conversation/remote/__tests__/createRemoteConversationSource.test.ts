@@ -422,6 +422,53 @@ it('opens a cached session before any RPC and keeps cached history separate from
   test.source.dispose();
 });
 
+it.each(['offline', 'suspended'] as const)(
+  'reopens cached history after %s recovery with the same epoch and revision',
+  async (status) => {
+    const test = fixture();
+    test.setState({ status });
+    jest.mocked(test.remote.peekSession).mockReturnValue({
+      epoch: 'first',
+      session,
+      history: {
+        items: [message('cached')],
+        version: '1',
+        readAt: 1,
+        hasOlderMessages: true,
+        complete: true,
+      },
+    });
+    jest
+      .mocked(test.remote.readSession)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('unreachable'), { name: 'DesktopUnreachableError' }),
+      );
+    const handle = await test.source.openSession(address, signal());
+    const release = handle.activate();
+    const initial = handle.state.getSnapshot().historyVersion;
+    await expect(handle.history.openLatest(signal())).rejects.toMatchObject({
+      failure: { code: 'offline' },
+    });
+
+    test.setState({ status: 'ready' });
+    test.publish({ ...test.snapshot, historyEpoch: 'first' });
+    const recovered = handle.state.getSnapshot().historyVersion;
+    expect(recovered).not.toBe(initial);
+    const window = await handle.history.openLatest(signal());
+    expect(window.initial.items.map((item) => item.key)).toEqual(['m2', 'm3']);
+    const older = await window.read(window.initial.older!, signal());
+    expect(older.items.map((item) => item.key)).toEqual(['m1']);
+
+    test.setState({ status: 'ready' });
+    test.publish({ ...test.snapshot, historyEpoch: 'first' });
+    expect(handle.state.getSnapshot().historyVersion).toBe(recovered);
+    window.dispose();
+    release();
+    handle.dispose();
+    test.source.dispose();
+  },
+);
+
 it('revalidates history after an epoch reset even when its persisted revision is unchanged', async () => {
   const test = fixture();
   const handle = await test.source.openSession(address, signal());

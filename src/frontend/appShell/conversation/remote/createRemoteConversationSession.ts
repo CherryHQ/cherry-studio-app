@@ -85,6 +85,7 @@ export function createRemoteConversationSession(
   let bootstrap = bootstrapVerified ? initial : undefined;
   let historyEpoch = source.peekSession(ref.sessionId)?.epoch;
   let historyReset = 0;
+  let sourceStatus = source.getState().status;
   let observers = 0;
   let unobserve: (() => void) | undefined;
   const windows = new Set<() => void>();
@@ -324,7 +325,14 @@ export function createRemoteConversationSession(
     state.set(snapshot());
   }
   const unstate = source.subscribeState(() => {
-    if (source.getState().status === 'retired') lifetime.abort();
+    const status = source.getState().status;
+    if (status === 'ready' && sourceStatus !== 'ready') {
+      // Reopen failed or interrupted history reads even when the desktop epoch/revision is unchanged.
+      historyReset++;
+      bootstrap = undefined;
+    }
+    sourceStatus = status;
+    if (status === 'retired') lifetime.abort();
     publish();
     updateOperations();
   });
