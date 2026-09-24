@@ -458,6 +458,7 @@
   "chat.tool.unfinished": "未完成",
   "chat.tool.unfinishedDetail": "這次調用沒有跑完，結果未知。",
   "chat.toolGroup.activities": "{{first}}與{{second}}",
+  "chat.toolGroup.activity": "工具操作",
   "chat.toolGroup.approvalCount_other": "{{count}} 項待確認",
   "chat.toolGroup.deniedCount": "{{count}} 個被拒絕",
   "chat.toolGroup.failedCount": "{{count}} 個失敗",

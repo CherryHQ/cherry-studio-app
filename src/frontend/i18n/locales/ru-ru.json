@@ -473,6 +473,7 @@
   "chat.tool.unfinished": "Незаконченный",
   "chat.tool.unfinishedDetail": "Этот вызов так и не завершился, поэтому его результат неизвестен.",
   "chat.toolGroup.activities": "{{first}} / {{second}}",
+  "chat.toolGroup.activity": "Работа с инструментами",
   "chat.toolGroup.approvalCount_few": "Ожидают подтверждения: {{count}}",
   "chat.toolGroup.approvalCount_many": "Ожидают подтверждения: {{count}}",
   "chat.toolGroup.approvalCount_one": "Ожидают подтверждения: {{count}}",

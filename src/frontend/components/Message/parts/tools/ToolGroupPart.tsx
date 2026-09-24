@@ -3,12 +3,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMessageListDisclosureToggle } from '../../list/MessageListDisclosureContext';
-import {
-  deriveToolGroupSummary,
-  getToolDisplayState,
-  getToolGroupStatusText,
-  type ToolMessagePart,
-} from './toolPartState';
+import { deriveToolGroupSummary, getToolDisplayState, type ToolMessagePart } from './toolPartState';
 import { useToolTitle } from './ToolRendererContext';
 import { useToolGroupActivity } from './useToolGroupActivity';
 
@@ -57,9 +52,7 @@ export function ToolGroupPart({
     activity,
     isRunning && summary.approvalCount === 0 && summary.dangerCount === 0,
   );
-  const title = stableActivity
-    ? t('chat.toolGroup.summary', { activity: stableActivity, count: tools.length })
-    : t('chat.toolGroup.title', { count: tools.length });
+  const title = stableActivity ?? t('chat.toolGroup.activity');
 
   return (
     <MessagePart.ToolGroup
@@ -67,8 +60,12 @@ export function ToolGroupPart({
       onDisclosureToggle={handleDisclosureToggle}
       onExpandedChange={onExpandedChange}
       state={isRunning ? 'running' : 'complete'}
-      statusText={getToolGroupStatusText(summary, t)}
-      statusTone={summary.tone}
+      statusText={
+        summary.approvalCount
+          ? t('chat.toolGroup.approvalCount', { count: summary.approvalCount })
+          : undefined
+      }
+      statusTone={summary.approvalCount ? 'warning' : 'default'}
       title={title}
     >
       {children}

@@ -468,6 +468,7 @@
   "chat.tool.unfinished": "Inacabado",
   "chat.tool.unfinishedDetail": "Esta chamada nunca terminou, pelo que o seu resultado é desconhecido.",
   "chat.toolGroup.activities": "{{first}} / {{second}}",
+  "chat.toolGroup.activity": "Atividade das ferramentas",
   "chat.toolGroup.approvalCount_many": "{{count}} a aguardar aprovação",
   "chat.toolGroup.approvalCount_one": "{{count}} a aguardar aprovação",
   "chat.toolGroup.approvalCount_other": "{{count}} a aguardar aprovação",

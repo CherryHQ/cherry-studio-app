@@ -463,6 +463,7 @@
   "chat.tool.unfinished": "Ημιτελές",
   "chat.tool.unfinishedDetail": "Αυτή η κλήση δεν ολοκληρώθηκε ποτέ, επομένως το αποτέλεσμά της είναι άγνωστο.",
   "chat.toolGroup.activities": "{{first}} / {{second}}",
+  "chat.toolGroup.activity": "Ενέργειες εργαλείων",
   "chat.toolGroup.approvalCount_one": "{{count}} σε αναμονή έγκρισης",
   "chat.toolGroup.approvalCount_other": "{{count}} σε αναμονή έγκρισης",
   "chat.toolGroup.deniedCount": "{{count}} αρνήθηκε",

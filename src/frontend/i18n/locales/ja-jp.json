@@ -458,6 +458,7 @@
   "chat.tool.unfinished": "未完成",
   "chat.tool.unfinishedDetail": "この呼び出しは終了しないため、結果は不明です。",
   "chat.toolGroup.activities": "{{first}}・{{second}}",
+  "chat.toolGroup.activity": "ツールの操作",
   "chat.toolGroup.approvalCount_other": "{{count}} 件の承認待ち",
   "chat.toolGroup.deniedCount": "{{count}} が拒否されました",
   "chat.toolGroup.failedCount": "{{count}} が失敗しました",

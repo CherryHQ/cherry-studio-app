@@ -458,6 +458,7 @@
   "chat.tool.unfinished": "Chưa hoàn thành",
   "chat.tool.unfinishedDetail": "Cuộc gọi này chưa bao giờ kết thúc nên không xác định được kết quả.",
   "chat.toolGroup.activities": "{{first}} / {{second}}",
+  "chat.toolGroup.activity": "Hoạt động công cụ",
   "chat.toolGroup.approvalCount_other": "{{count}} thao tác chờ phê duyệt",
   "chat.toolGroup.deniedCount": "{{count}} bị từ chối",
   "chat.toolGroup.failedCount": "{{count}} không thành công",

@@ -17,7 +17,7 @@ function text(value: string): CherryMessagePart {
 }
 
 describe('groupMessageProcessItems', () => {
-  test('compresses repeated calls and intervening reasoning without crossing narration', () => {
+  test('folds narration, reasoning, and tool calls together while preserving their order', () => {
     const parts = [
       text('First phase'),
       reasoning('plan'),
@@ -31,12 +31,20 @@ describe('groupMessageProcessItems', () => {
     const items = parts.map((part, index) => ({ part, index, key: `source-${index}` }));
     const groups = groupMessageProcessItems(items);
 
-    expect(groups.map((group) => group.kind)).toEqual(['part', 'tools', 'part', 'tools']);
+    expect(groups.map((group) => group.kind)).toEqual(['tools']);
     const runs = groups.filter((group) => group.kind === 'tools');
-    expect(runs.map((group) => group.tools.length)).toEqual([2, 1]);
+    expect(runs.map((group) => group.tools.length)).toEqual([3]);
     expect(runs.map((group) => group.items.map((item) => item.key))).toEqual([
-      ['source-1', 'source-2', 'source-3', 'source-4'],
-      ['source-6', 'source-7'],
+      [
+        'source-0',
+        'source-1',
+        'source-2',
+        'source-3',
+        'source-4',
+        'source-5',
+        'source-6',
+        'source-7',
+      ],
     ]);
     expect(groups.flatMap((group) => (group.kind === 'part' ? [group.item] : group.items))).toEqual(
       items,
@@ -53,6 +61,29 @@ describe('groupMessageProcessItems', () => {
     ]);
     expect(groups).toHaveLength(1);
     expect(groups[0].kind === 'tools' && groups[0].items[0]).toBe(first);
+  });
+
+  test('keeps in-loop compaction inside a tool run but leaves unrelated process parts separate', () => {
+    const parts: CherryMessagePart[] = [
+      tool('read'),
+      {
+        type: 'data-compaction-anchor',
+        data: { phase: 'in-loop', status: 'done' },
+      },
+      text('Continuing'),
+      tool('write'),
+      { type: 'data-compact', data: { content: 'Summary', compactedContent: 'Earlier text' } },
+    ];
+    const groups = groupMessageProcessItems(
+      parts.map((part, index) => ({ part, index, key: `part-${index}` })),
+    );
+    expect(groups.map((group) => group.kind)).toEqual(['tools', 'part']);
+    expect(groups[0].kind === 'tools' && groups[0].items.map((item) => item.key)).toEqual([
+      'part-0',
+      'part-1',
+      'part-2',
+      'part-3',
+    ]);
   });
 });
 

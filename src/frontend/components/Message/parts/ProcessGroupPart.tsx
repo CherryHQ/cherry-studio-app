@@ -14,11 +14,7 @@ import { MessagePartRenderer } from './MessagePartRenderer';
 import type { MessagePartRenderMode } from './MessageParts';
 import { groupMessageProcessItems, type MessageProcessItem } from './partitionMessageParts';
 import { ToolGroupPart } from './tools/ToolGroupPart';
-import {
-  deriveToolGroupSummary,
-  getToolGroupStatusText,
-  isToolMessagePart,
-} from './tools/toolPartState';
+import { isToolMessagePart } from './tools/toolPartState';
 
 type ProcessGroupItem = MessageProcessItem & { key: string };
 
@@ -42,8 +38,6 @@ export function ProcessGroupPart({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const isStreaming = message.status === 'pending';
   const groups = groupMessageProcessItems(items);
-  const tools = items.map(({ part }) => part).filter(isToolMessagePart);
-  const summary = deriveToolGroupSummary(tools);
   const latestActivityPart = messageParts.findLast(
     (part) => part.type === 'text' || part.type === 'reasoning' || isToolMessagePart(part),
   );
@@ -101,8 +95,6 @@ export function ProcessGroupPart({
       defaultExpanded={Object.values(expandedGroups).some(Boolean)}
       onDisclosureToggle={handleDisclosureToggle}
       state="complete"
-      statusText={getToolGroupStatusText(summary, t)}
-      statusTone={summary.tone}
       title={title}
     >
       {content}

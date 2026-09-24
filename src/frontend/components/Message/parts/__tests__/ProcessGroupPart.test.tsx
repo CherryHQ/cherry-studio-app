@@ -1,5 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { CherryMessagePart } from '@/shared/data/types/message';
+
 import type { MessageListItem } from '../../types';
 import { ProcessGroupPart } from '../ProcessGroupPart';
 import type { ToolMessagePart } from '../tools/toolPartState';
@@ -82,7 +84,49 @@ describe('ProcessGroupPart', () => {
     expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(0);
   });
 
-  test('surfaces approval, failures and denial without opening tool content', () => {
+  test('keeps remote-style narration between calls inside one genuinely collapsed group', () => {
+    const parts: CherryMessagePart[] = [
+      { type: 'text', text: 'Checking the project', state: 'done' },
+      {
+        type: 'dynamic-tool',
+        toolName: 'read_file',
+        toolCallId: 'read',
+        input: {},
+        output: 'file',
+        state: 'output-available',
+      },
+      { type: 'text', text: 'Found the relevant file', state: 'done' },
+      {
+        type: 'dynamic-tool',
+        toolName: 'write_file',
+        toolCallId: 'write',
+        input: {},
+        output: 'saved',
+        state: 'output-available',
+      },
+    ];
+    act(() => {
+      renderer = create(
+        <ProcessGroupPart
+          citationText={new Map()}
+          items={parts.map((part, index) => ({ part, index, key: `part-${index}` }))}
+          message={{ id: 'remote-reply', role: 'assistant', status: 'pending', data: { parts } }}
+          messageParts={parts}
+          renderMode="markdown"
+        />,
+      );
+    });
+    expect(renderer!.root.findAllByType('MessagePartToolGroup')).toHaveLength(1);
+    expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(0);
+
+    act(() => renderer!.root.findByType('MessagePartToolGroup').props.onExpandedChange(true));
+    expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(4);
+
+    act(() => renderer!.root.findByType('MessagePartToolGroup').props.onExpandedChange(false));
+    expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(0);
+  });
+
+  test('keeps process and tool summaries neutral while preserving pending approvals', () => {
     const base = { type: 'dynamic-tool' as const, toolName: 'read_file', input: {} };
     const parts: ToolMessagePart[] = [
       {
@@ -112,10 +156,63 @@ describe('ProcessGroupPart', () => {
       );
     });
     expect(renderer!.root.findAllByType('MessagePartRenderer')).toHaveLength(0);
-    const statusText =
-      'chat.toolGroup.approvalCount:1 · chat.toolGroup.failedCount:2 · chat.toolGroup.deniedCount:1';
-    expect(renderer!.root.findByType('MessagePartProcess').props.statusText).toBe(statusText);
-    expect(renderer!.root.findByType('MessagePartToolGroup').props.statusText).toBe(statusText);
+    const process = renderer!.root.findByType('MessagePartProcess');
+    const group = renderer!.root.findByType('MessagePartToolGroup');
+    expect(process.props.statusText).toBeUndefined();
+    expect(process.props.statusTone).toBeUndefined();
+    expect(group.props.title).toBe('chat.builtinTool.file.read');
+    expect(group.props.statusText).toBe('chat.toolGroup.approvalCount:1');
+    expect(group.props.statusTone).toBe('warning');
+
+    const failedParts = parts.slice(1, 2);
+    act(() => {
+      renderer!.update(
+        <ProcessGroupPart
+          citationText={new Map()}
+          items={failedParts.map((part, index) => ({ part, index, key: part.toolCallId }))}
+          message={{
+            id: 'reply',
+            role: 'assistant',
+            status: 'success',
+            data: { parts: failedParts },
+          }}
+          messageParts={failedParts}
+          renderMode="markdown"
+        />,
+      );
+    });
+    expect(renderer!.root.findByType('MessagePartToolGroup').props).toMatchObject({
+      statusTone: 'default',
+      title: 'chat.builtinTool.file.read',
+    });
+    expect(renderer!.root.findByType('MessagePartToolGroup').props.statusText).toBeUndefined();
+  });
+
+  test('uses a neutral activity title for a run with several different tools', () => {
+    const parts: ToolMessagePart[] = ['read_file', 'write_file', 'web_search'].map(
+      (toolName, index) => ({
+        type: 'dynamic-tool',
+        toolCallId: `call-${index}`,
+        toolName,
+        input: {},
+        output: 'done',
+        state: 'output-available',
+      }),
+    );
+    act(() => {
+      renderer = create(
+        <ProcessGroupPart
+          citationText={new Map()}
+          items={parts.map((part, index) => ({ part, index, key: part.toolCallId }))}
+          message={{ id: 'reply', role: 'assistant', status: 'success', data: { parts } }}
+          messageParts={parts}
+          renderMode="markdown"
+        />,
+      );
+    });
+    expect(renderer!.root.findByType('MessagePartToolGroup').props.title).toBe(
+      'chat.toolGroup.activity',
+    );
   });
 
   test('does not keep an earlier remote reasoning run active once narration follows it', () => {

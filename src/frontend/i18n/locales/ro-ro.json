@@ -468,6 +468,7 @@
   "chat.tool.unfinished": "Neterminat",
   "chat.tool.unfinishedDetail": "Acest apel nu s-a terminat niciodată, deci rezultatul său este necunoscut.",
   "chat.toolGroup.activities": "{{first}} / {{second}}",
+  "chat.toolGroup.activity": "Activitatea instrumentelor",
   "chat.toolGroup.approvalCount_few": "{{count}} în așteptarea aprobării",
   "chat.toolGroup.approvalCount_one": "{{count}} în așteptarea aprobării",
   "chat.toolGroup.approvalCount_other": "{{count}} în așteptarea aprobării",
