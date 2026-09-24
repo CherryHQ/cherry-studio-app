@@ -442,6 +442,52 @@ describe('ChatWorkspace message rendering integration', () => {
     expect(mockPendingSendDisplayed).toHaveBeenCalledWith('user-1');
   });
 
+  test('keys a draft first send by its pending Session while the draft window has no key', () => {
+    const pendingSend: PendingChatSend = {
+      sessionId: 'session-1',
+      isNewSession: true,
+      isSubmitting: true,
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'pending',
+          data: { parts: [{ type: 'text', text: 'Hello' }] },
+        },
+        { id: 'assistant-1', role: 'assistant', status: 'pending', data: { parts: [] } },
+      ],
+    };
+    act(() => {
+      renderer = create(
+        <ChatWorkspace
+          pendingSend={pendingSend}
+          enteringUserMessageId="user-1"
+          onPendingSendDisplayed={mockPendingSendDisplayed}
+          contentBottomInset={96}
+          isAssistantToolbarEnabled={false}
+          keyboardOffset={26}
+          messageWindow={{
+            // A draft history window has no Session and reports an empty key.
+            dataKey: '',
+            hasNewerMessages: false,
+            isLoadingInitial: false,
+            isRefreshing: false,
+            isLoadingNewer: false,
+            isLoadingOlder: false,
+            loadNewer: mockLoadOlder,
+            loadOlder: mockLoadOlder,
+            messages: [],
+            retry: mockRetry,
+          }}
+        />,
+      );
+    });
+
+    // A keyless list would bootstrap LegendList's initial end target from the
+    // empty draft and later retarget the viewport to that stale target.
+    expect(mockMessageListProps?.dataKey).toBe('session-1');
+  });
+
   test('merges live rows with displayable history and passes list layout', () => {
     const pendingUserMessage = createMessage('user-pending', 'user', 'pending');
     const messages = [

@@ -266,7 +266,10 @@ export function ChatWorkspace({
           requiresInitialLayout={requiresInitialHistoryLayout}
           isLoadingMore={isLoadingOlder || isLoadingNewer}
           contentBottomInset={contentBottomInset}
-          dataKey={dataKey ?? listKey}
+          // A draft window has no Session yet and reports an empty key. Keying the
+          // first send by its pending Session keeps the list on one dataset across
+          // the draft-to-Session handoff instead of starting as a keyless list.
+          dataKey={dataKey || listKey}
           enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
           extraData={messageListExtraData}
           initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
