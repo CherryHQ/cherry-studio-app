@@ -107,9 +107,10 @@ calls the client directly for the same operation.
 ## Rendering
 
 - Text and reasoning remain Markdown-capable shared message parts.
-- Expanded reasoning longer than 8,192 UTF-16 code units uses bounded, selectable plain-text pages
-  so a growing thought cannot send its entire content through native Markdown layout. The full
-  reasoning remains in the Session; the page controls can reach every portion of it.
+- Expanded reasoning renders one continuous, selectable Markdown document. It is not truncated or
+  split by character count: code fences, formulas, links, and other Markdown constructs retain
+  their complete source. Like answer text, streaming reasoning holds its last rendered content
+  while the list end is off screen, then catches up when the end is visible or the part finishes.
 - Each text or reasoning part leaves native streaming mode when its own state reaches `done`,
   even if the turn continues with tools or another part. Turn completion, cancellation, and failure
   also end streaming mode. This releases pending Markdown tail blocks and finalizes layout without

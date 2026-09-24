@@ -1,66 +1,101 @@
-import { Text } from 'react-native';
+import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
+import { MessageListLiveTailProvider } from '../../list/MessageListLiveTailContext';
 import { ReasoningPart } from '../ReasoningPart';
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   return {
-    Button: (props: object) => React.createElement('Button', props),
     MessagePart: {
-      Reasoning: (props: object) => React.createElement('Reasoning', props),
+      Reasoning: function MockReasoning({ children }: { children: ReactNode }) {
+        const [isOpen, setIsOpen] = React.useState(false);
+        return React.createElement(
+          'Reasoning',
+          { onPress: () => setIsOpen((open: boolean) => !open) },
+          isOpen ? children : null,
+        );
+      },
     },
   };
 });
 
-jest.mock('../PartMarkdown', () => ({
-  PartMarkdown: (props: object) => jest.requireActual('react').createElement('PartMarkdown', props),
+jest.mock('@/frontend/components/MarkdownText', () => ({
+  MarkdownText: (props: object) => jest.requireActual('react').createElement('MarkdownText', props),
 }));
 
 type ReasoningMessagePart = Extract<CherryMessagePart, { type: 'reasoning' }>;
 
+const longReasoning =
+  '# Reasoning\n\n```ts\n' +
+  'const thought = "Keep the complete code block 😀";\n'.repeat(200) +
+  '```\n\n$$\\sum_{i=1}^{n} i$$\n\n[Reference](https://example.com)\n';
+
 describe('ReasoningPart', () => {
   let renderer: ReactTestRenderer | undefined;
+  const render = (text: string, isStreaming = false, isVisible = true) => {
+    const part: ReasoningMessagePart = {
+      state: isStreaming ? 'streaming' : 'done',
+      text,
+      type: 'reasoning',
+    };
+    const element = (
+      <MessageListLiveTailProvider isVisible={isVisible}>
+        <ReasoningPart isStreaming={isStreaming} part={part} />
+      </MessageListLiveTailProvider>
+    );
+    act(() => {
+      if (renderer) renderer.update(element);
+      else renderer = create(element);
+    });
+  };
+  const toggle = () => act(() => renderer!.root.findByType('Reasoning' as never).props.onPress());
+  const shown = () => renderer!.root.findByType('MarkdownText' as never).props.markdown as string;
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
   });
 
-  test('keeps short reasoning in Markdown', () => {
-    const part: ReasoningMessagePart = { state: 'done', text: 'Short thought', type: 'reasoning' };
-    act(() => {
-      renderer = create(<ReasoningPart isStreaming={false} part={part} />);
-    });
-    expect(renderer?.root.findByType('PartMarkdown' as never).props.markdown).toBe('Short thought');
+  test('keeps the complete Markdown document as reasoning grows beyond the former page limit', () => {
+    render(longReasoning.slice(0, 8000), true);
+    toggle();
+    const markdown = renderer!.root.findByType('MarkdownText' as never);
+
+    render(longReasoning, true);
+    expect(shown()).toBe(longReasoning);
+    expect(renderer!.root.findByType('MarkdownText' as never)).toBe(markdown);
+    expect(markdown.props.isStreaming).toBe(true);
+
+    render(longReasoning, false);
+    expect(shown()).toBe(longReasoning);
+    expect(renderer!.root.findByType('MarkdownText' as never)).toBe(markdown);
+    expect(markdown.props.isStreaming).toBe(false);
   });
 
-  test('renders every long-reasoning page without sending the full text to Markdown', () => {
-    const text = 'A'.repeat(8201) + '😀' + 'B'.repeat(8191);
-    const part: ReasoningMessagePart = { state: 'streaming', text, type: 'reasoning' };
-    act(() => {
-      renderer = create(<ReasoningPart isStreaming part={part} />);
-    });
+  test('holds long reasoning off screen and catches up without discarding earlier content', () => {
+    render(longReasoning, true);
+    toggle();
+    render(longReasoning + '\nMore thought', true, false);
+    expect(shown()).toBe(longReasoning);
 
-    const visibleText = () =>
-      renderer!.root.findAllByType(Text).find((node) => node.props.selectable)?.props
-        .children as string;
-    const buttons = () => renderer!.root.findAllByType('Button' as never);
-    const pages = [visibleText()];
-    for (let index = 0; index < 3 && !buttons()[0].props.disabled; index++) {
-      act(() => buttons()[0].props.onPress());
-      pages.unshift(visibleText());
-    }
+    render(longReasoning + '\nMore thought', true, true);
+    expect(shown()).toBe(longReasoning + '\nMore thought');
 
-    expect(pages.join('')).toBe(text);
-    expect(pages.every((page) => page.length <= 8192)).toBe(true);
-    expect(renderer?.root.findAllByType('PartMarkdown' as never)).toHaveLength(0);
+    render(longReasoning + '\nFinal thought', false, false);
+    expect(shown()).toBe(longReasoning + '\nFinal thought');
+  });
 
-    for (let index = 0; index < 3 && !buttons()[1].props.disabled; index++) {
-      act(() => buttons()[1].props.onPress());
-    }
-    expect(visibleText()).toBe(pages[pages.length - 1]);
+  test('reopens the complete document after reasoning grows while collapsed', () => {
+    render(longReasoning, true);
+    toggle();
+    toggle();
+    expect(renderer!.root.findAllByType('MarkdownText' as never)).toHaveLength(0);
+
+    render(longReasoning + '\nConclusion');
+    toggle();
+    expect(shown()).toBe(longReasoning + '\nConclusion');
   });
 });
