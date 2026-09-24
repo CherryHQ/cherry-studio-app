@@ -10,6 +10,8 @@
  * user-visible configuration; the cache tiers hold recoverable runtime state.
  */
 
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
+
 // ============================================================================
 // Template Key Type Utilities
 // ============================================================================
@@ -81,6 +83,8 @@ export type BackendCacheSchema = {
  */
 export type PersistCacheSchema = {
   'remote_agent.drafts': Record<string, string>;
+  // Last composer effort per Agent; clearing the cache restores model defaults.
+  'chat.reasoning_efforts': Record<string, ReasoningEffortOption>;
   // Persist-layer self-test key: exercises the typed persist API and round-trip
   // tests for the generic mechanism, independent of any real consumer.
   'internal.persist_probe': number;
@@ -88,6 +92,7 @@ export type PersistCacheSchema = {
 
 export const DefaultPersistCache: PersistCacheSchema = {
   'remote_agent.drafts': {},
+  'chat.reasoning_efforts': {},
   'internal.persist_probe': 0,
 };
 

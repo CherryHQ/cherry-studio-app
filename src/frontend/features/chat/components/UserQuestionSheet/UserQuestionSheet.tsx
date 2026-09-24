@@ -3,7 +3,6 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AgentPendingQuestion, AgentUserAnswer } from '@/shared/contracts/agent';
 
@@ -68,7 +67,6 @@ function QuestionForm({
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const submitting = useRef(false);
-  const { bottom } = useSafeAreaInsets();
   const { question, toolCallId } = request;
   const isMultiple = question.selection === 'multiple';
 
@@ -92,16 +90,20 @@ function QuestionForm({
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.page}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        className="min-h-0 flex-1"
+        contentContainerClassName="gap-4 px-6 pt-2 pb-4"
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Text accessibilityRole="header" className="font-semibold text-foreground text-lg">
-          {question.question}
-        </Text>
-        <Text className="text-muted-foreground text-sm">
-          {t(isMultiple ? 'chat.question.multiple' : 'chat.question.single')}
-        </Text>
+        <View className="gap-1">
+          <Text className="text-foreground-tertiary text-sm">
+            {t(isMultiple ? 'chat.question.multiple' : 'chat.question.single')}
+          </Text>
+          <Text accessibilityRole="header" className="font-semibold text-base text-foreground">
+            {question.question}
+          </Text>
+        </View>
         <View className="gap-2">
           {question.options.map((option) => (
             <QuestionOption
@@ -140,38 +142,43 @@ function QuestionForm({
           value={text}
         />
       </ScrollView>
-      <View style={[styles.actions, { paddingBottom: Math.max(16, bottom) }]}>
-        {isMultiple || text.trim() || busy ? (
-          <Button
-            disabled={disabled || busy || (!selected.length && !text.trim())}
-            loading={busy}
-            onPress={() =>
-              void submit({
-                selectedOptionIds: isMultiple ? selected : [],
-                text: text.trim(),
-                skipped: false,
-              })
-            }
-          >
-            {t('chat.question.continue')}
-          </Button>
-        ) : null}
+      {/* Match the approval footer inside keyboard avoidance; BottomSheet owns the safe area. */}
+      <View className="gap-4 border-t border-border px-4 pt-3 pb-4">
         {failed ? (
           <Text accessibilityRole="alert" className="text-error text-sm">
             {t('chat.question.failed')}
           </Text>
         ) : null}
-        <View className="gap-2">
-          <Button
-            disabled={disabled || busy}
-            onPress={() => void submit({ selectedOptionIds: [], text: '', skipped: true })}
-            variant="secondary"
-          >
-            {t('chat.question.skip')}
-          </Button>
-          <Button disabled={disabled || busy} onPress={() => void submit('stop')} variant="ghost">
-            {t('chat.input.action.stopGenerating')}
-          </Button>
+        <Button disabled={disabled || busy} onPress={() => void submit('stop')} variant="secondary">
+          {t('chat.input.action.stopGenerating')}
+        </Button>
+        <View className="flex-row gap-3">
+          <View className="flex-1">
+            <Button
+              disabled={disabled || busy}
+              onPress={() => void submit({ selectedOptionIds: [], text: '', skipped: true })}
+              variant="secondary"
+            >
+              {t('chat.question.skip')}
+            </Button>
+          </View>
+          {isMultiple || text.trim() || busy ? (
+            <View className="flex-1">
+              <Button
+                disabled={disabled || busy || (!selected.length && !text.trim())}
+                loading={busy}
+                onPress={() =>
+                  void submit({
+                    selectedOptionIds: isMultiple ? selected : [],
+                    text: text.trim(),
+                    skipped: false,
+                  })
+                }
+              >
+                {t('chat.question.continue')}
+              </Button>
+            </View>
+          ) : null}
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -197,23 +204,21 @@ function QuestionOption({
       accessibilityHint={option.description}
       accessibilityRole={isMultiple ? 'checkbox' : 'radio'}
       accessibilityState={{ checked: isSelected, disabled }}
-      className={`min-h-14 flex-row items-center gap-3 rounded-xl border p-3 ${isSelected ? 'border-primary bg-primary/10' : 'border-border bg-background'} active:opacity-70`}
+      className={`min-h-14 flex-row items-center gap-3 rounded-xl border p-3 active:opacity-80 ${isSelected ? 'border-border-selected bg-secondary' : 'border-border bg-field'} ${disabled && !isSelected ? 'opacity-40' : ''}`}
       disabled={disabled}
       onPress={onPress}
     >
+      <SelectionIndicator selected={isSelected} />
       <View className="min-w-0 flex-1 gap-1">
         <Text className="font-medium text-foreground text-base">{option.label}</Text>
         {option.description ? (
           <Text className="text-muted-foreground text-sm">{option.description}</Text>
         ) : null}
       </View>
-      <SelectionIndicator selected={isSelected} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1 },
-  content: { gap: 12, paddingHorizontal: 24, paddingTop: 8, paddingBottom: 16 },
-  actions: { gap: 12, paddingHorizontal: 24, paddingTop: 12 },
+  page: { flex: 1, minHeight: 0 },
 });

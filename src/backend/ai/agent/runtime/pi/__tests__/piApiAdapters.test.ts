@@ -99,7 +99,6 @@ describe('Pi API adapters', () => {
       maxRetries: 0,
       maxTokens: 2048,
       temperature: 0.2,
-      timeoutMs: 60_000,
     });
     const model = { api: testCase.api } as PiModel<SupportedPiApi>;
     const signal = new AbortController().signal;
@@ -124,7 +123,6 @@ describe('Pi API adapters', () => {
         reasoning: 'high',
         signal,
         temperature: 0.2,
-        timeoutMs: 60_000,
       }),
     );
   });
@@ -145,7 +143,6 @@ describe('Pi API adapters', () => {
       headers: {},
       maxRetries: 0,
       maxTokens: 2048,
-      timeoutMs: 60_000,
     });
     const model = { api: 'azure-openai-responses' } as PiModel<SupportedPiApi>;
     expect(streamFn(model, context)).toBe(mockStreamResult);
@@ -168,7 +165,6 @@ describe('Pi API adapters', () => {
       headers: {},
       maxRetries: 0,
       maxTokens: 8192,
-      timeoutMs: 60_000,
       requestParameters: {
         model: {
           reasoning: { selectableEfforts: ['high'], thinkingTokenLimits: { min: 1024, max: 8192 } },

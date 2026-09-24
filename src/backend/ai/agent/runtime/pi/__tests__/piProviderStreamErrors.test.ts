@@ -125,7 +125,7 @@ describe('Pi provider stream errors', () => {
     const primary: StreamFn = (model, context, options) =>
       testCase.stream(model, context, { ...options, apiKey: 'failed-key', maxRetries: 0, fetch });
     const fallback = jest.fn(async () => success);
-    const stream = await withPiApiKeyFallback(primary, [fallback])(
+    const stream = await withPiApiKeyFallback([async () => primary, fallback])(
       model(testCase.api),
       { messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] },
       {},

@@ -6,7 +6,7 @@ import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { type Href, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { AppState, Platform, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
@@ -36,6 +36,7 @@ import { DocumentExportImagePreview } from './components/DocumentExportImagePrev
 import { useDocumentExportHtmlCapture } from './hooks/useDocumentExportHtmlCapture';
 import { useDocumentExportPreview } from './hooks/useDocumentExportPreview';
 import { IMAGE_LAYOUT_WIDTH } from './utils/imagePagePlan';
+import { createShareReturnGate } from './utils/shareReturnGate';
 
 export function DocumentExportScreen() {
   const params = useLocalSearchParams<{ requestId?: string | string[] }>();
@@ -229,6 +230,24 @@ function DocumentExportBody({
   const [isSharing, setIsSharing] = useState(false);
   const sharing = useRef<AbortController | undefined>(undefined);
   useEffect(() => () => sharing.current?.abort(), []);
+  const returnGate = useRef<ReturnType<typeof createShareReturnGate> | null>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !returnTo) return;
+    const gate = createShareReturnGate(AppState.currentState === 'active', () =>
+      router.dismissTo(returnTo),
+    );
+    returnGate.current = gate;
+    const appState = AppState.addEventListener('change', gate.onAppStateChange);
+    const focus = AppState.addEventListener('focus', gate.onFocus);
+    const blur = AppState.addEventListener('blur', gate.onBlur);
+    return () => {
+      gate.dispose();
+      if (returnGate.current === gate) returnGate.current = null;
+      appState.remove();
+      focus.remove();
+      blur.remove();
+    };
+  }, [returnTo]);
   const isReady = state.status === 'markdown' || state.status === 'ready';
   const artifact = state.status === 'ready' ? state.artifact : undefined;
   const markdownText =
@@ -269,6 +288,7 @@ function DocumentExportBody({
     setIsSharing(true);
     let sheetClosed = false;
     try {
+      returnGate.current?.suspend();
       await shareFiles(
         async () => {
           const selected = await getArtifact(controller.signal);
@@ -294,9 +314,12 @@ function DocumentExportBody({
         setDeliveryPresentation(undefined);
       }
     }
-    // Both platforms resolve the sheet on dismissal without saying whether the user
-    // delivered or cancelled, so either outcome returns to the source.
-    if (sheetClosed && returnTo && !controller.signal.aborted) router.dismissTo(returnTo);
+    // Android resolves the chooser between resume and window focus, so the gate (Android only)
+    // returns once Cherry regains focus; cancellation returns as soon as it does.
+    if (sheetClosed && returnTo && !controller.signal.aborted) {
+      if (returnGate.current) returnGate.current.request();
+      else router.dismissTo(returnTo);
+    }
   };
 
   return (
