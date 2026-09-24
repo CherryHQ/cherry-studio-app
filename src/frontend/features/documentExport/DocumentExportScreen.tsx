@@ -288,7 +288,7 @@ function DocumentExportBody({
     setIsSharing(true);
     let sheetClosed = false;
     try {
-      if (Platform.OS === 'android') returnGate.current?.suspend();
+      returnGate.current?.suspend();
       await shareFiles(
         async () => {
           const selected = await getArtifact(controller.signal);
@@ -314,10 +314,10 @@ function DocumentExportBody({
         setDeliveryPresentation(undefined);
       }
     }
-    // Android can resolve the chooser while another app still owns the foreground.
-    // Return after Cherry regains focus; cancellation returns as soon as it does.
+    // Android resolves the chooser between resume and window focus, so the gate (Android only)
+    // returns once Cherry regains focus; cancellation returns as soon as it does.
     if (sheetClosed && returnTo && !controller.signal.aborted) {
-      if (Platform.OS === 'android') returnGate.current?.request();
+      if (returnGate.current) returnGate.current.request();
       else router.dismissTo(returnTo);
     }
   };
