@@ -507,8 +507,8 @@ legitimate progress, and the step and call budgets already bound runaway tool lo
 by completing, failing, or being cancelled; cancellation aborts the model, approval waiters, and the
 callback signal before terminalizing live tool parts. Bounded waits belong to the operations that can
 stall: each model request shares a 120-second waiting budget across all API-key attempts. Switching
-keys or receiving a stream-start event does not reset it; content events reset the idle timer, so
-ongoing generation can continue. Expiry fails the request and aborts its active transport. Every
+keys or receiving stream-start or empty text/thinking events does not reset it; content events
+reset the idle timer, so ongoing generation can continue. Expiry fails the request and aborts its active transport. Every
 request settles on cancellation, source failure, or premature stream closure, even when the source
 ignores abort. Tool execution is outside this timer, and the next model request starts a fresh
 budget. Streamable HTTP MCP callbacks add their own 60-second invocation bound.

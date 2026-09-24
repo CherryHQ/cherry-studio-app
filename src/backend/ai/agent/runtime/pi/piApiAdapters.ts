@@ -98,7 +98,6 @@ type PiStreamBinding = {
   maxTokens: number;
   requestParameters?: PiRequestParameters;
   temperature?: number;
-  timeoutMs: number;
   azureApiVersion?: string;
 };
 
@@ -136,7 +135,6 @@ export async function bindPiStream(
       },
       signal: options?.signal,
       temperature,
-      timeoutMs: binding.timeoutMs,
     } as Parameters<PiStreamFn>[2];
     return streamSimple(model, context, streamOptions);
   };

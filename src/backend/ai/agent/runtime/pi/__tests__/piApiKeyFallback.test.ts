@@ -134,6 +134,42 @@ describe('Pi API key failover', () => {
     expect(calls).toEqual(['a', 'b', 'c']);
   });
 
+  test('treats a credential that cannot be resolved as a failed attempt', async () => {
+    const calls: string[] = [];
+    const stream = withPiApiKeyFallback([
+      async () => () => {
+        calls.push('a');
+        return source(message(429));
+      },
+      async () => {
+        calls.push('b');
+        throw new Error('Key was removed');
+      },
+      async () => () => {
+        calls.push('c');
+        return source(message());
+      },
+    ]);
+
+    expect((await collect(stream)).result.stopReason).toBe('stop');
+    expect((await collect(stream)).result.stopReason).toBe('stop');
+    expect(calls).toEqual(['a', 'b', 'c', 'c']);
+  });
+
+  test('reports a credential resolution failure when it is the last attempt', async () => {
+    const stream = withPiApiKeyFallback([
+      async () => () => source(message(503)),
+      async () => {
+        throw Object.assign(new Error('Key was removed'), { code: 'key_missing' });
+      },
+    ]);
+
+    const { events, result } = await collect(stream);
+    expect(events.map((event) => event.type)).toEqual(['start', 'error']);
+    expect(result).toMatchObject({ stopReason: 'error', errorMessage: 'Key was removed' });
+    expect(result.diagnostics?.at(-1)?.error?.code).toBe('key_missing');
+  });
+
   test.each([401, 402, 403, 404, 408, 429, 500, 502, 503, 529])(
     'changes keys for HTTP %s',
     async (status) => {

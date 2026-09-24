@@ -148,6 +148,43 @@ describe('Pi stream idle timeout', () => {
     expect((await stream.result()).diagnostics?.at(-1)?.error?.code).toBe('stream_idle_timeout');
   });
 
+  test.each(['text', 'thinking'] as const)(
+    'does not restart the timer for an empty %s block, with or without failover',
+    async (kind) => {
+      const empty = message();
+      empty.content =
+        kind === 'text' ? [{ type: 'text', text: '' }] : [{ type: 'thinking', thinking: '' }];
+      const event: AssistantMessageEvent = {
+        type: `${kind}_start`,
+        contentIndex: 0,
+        partial: empty,
+      };
+      const single = controlledSource();
+      const ringSource = controlledSource();
+      const streams = [
+        await withPiStreamIdleTimeout(single.streamFn)(MODEL, { messages: [] }),
+        await withPiStreamIdleTimeout(
+          withPiApiKeyFallback([
+            async () => ringSource.streamFn,
+            async () => controlledSource().streamFn,
+          ]),
+        )(MODEL, { messages: [] }),
+      ];
+
+      await jest.advanceTimersByTimeAsync(IDLE_MS - 1);
+      single.stream.push(event);
+      ringSource.stream.push(event);
+      await jest.advanceTimersByTimeAsync(1);
+
+      for (const stream of streams) {
+        expect((await stream.result()).diagnostics?.at(-1)?.error?.code).toBe(
+          'stream_idle_timeout',
+        );
+      }
+      expect(jest.getTimerCount()).toBe(0);
+    },
+  );
+
   test('keeps a long response alive while data keeps arriving', async () => {
     const source = controlledSource();
     const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(MODEL, {

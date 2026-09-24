@@ -413,7 +413,6 @@ describe('Pi model resolver', () => {
         maxRetries: 0,
         maxTokens: 1024,
         temperature: 0.25,
-        timeoutMs: 120_000,
       }),
     );
   });

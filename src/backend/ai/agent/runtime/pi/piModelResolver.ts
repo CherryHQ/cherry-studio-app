@@ -25,7 +25,7 @@ import { withPiApiKeyFallback } from './piApiKeyFallback';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
-import { PI_STREAM_IDLE_TIMEOUT_MS, withPiStreamIdleTimeout } from './piStreamIdleTimeout';
+import { withPiStreamIdleTimeout } from './piStreamIdleTimeout';
 
 class PiModelResolutionError extends Error {
   readonly retryable = false;
@@ -141,7 +141,6 @@ export function createPiModelResolver(): PiRuntimeDependencies {
               : undefined,
         },
         temperature: runtimeOptions.temperature,
-        timeoutMs: PI_STREAM_IDLE_TIMEOUT_MS,
         azureApiVersion,
       };
       const primaryStream = await bindPiStream(adapter, streamBinding);

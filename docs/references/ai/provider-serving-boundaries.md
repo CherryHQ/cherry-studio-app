@@ -100,7 +100,8 @@ request fails before substantive content or a tool-call event is emitted, Pi tri
 enabled key at most once within the request's shared 120-second waiting budget, in cyclic order
 starting after the key that failed, and reports the last failure if none succeeds. Network failures,
 provider timeouts, streams that end without a terminal event, and every HTTP or provider error switch
-keys, including errors reported inside an HTTP 200 stream. Only HTTP 400, or a
+keys, including errors reported inside an HTTP 200 stream and failures to resolve a key's
+credential. Only HTTP 400, or a
 structured status or code of 400 when the response has no explicit error status, keeps the key,
 because the request itself was rejected and would fail on every key; error text is never parsed.
 Empty text/thinking events are buffered until content, a tool-call event, or successful completion
@@ -112,14 +113,16 @@ errors after substantive content or tool-call events do not advance keys.
 The binding updates usage attribution to the serving key and redacts every candidate credential.
 This policy belongs to Pi; non-conversation AI SDK and image calls retain their existing behavior.
 
-The idle timer wraps the complete key-failover sequence. Credential switching and stream-start
-events do not reset it: a request that keeps failing or produces no content events ends after
-120 seconds total, rather than waiting 120 seconds per key. Once content events reach the caller,
-each event resets the idle timer so ongoing generation can continue. Expiry ends the request and
-aborts the active transport without trying another key. Cancellation, source creation/iteration
-failures, and streams closed without a terminal event all settle the final result, including when
-source creation is still pending or the source ignores cancellation. Tool execution is outside
-this timer; each subsequent model request starts a fresh budget.
+The idle timer wraps the complete key-failover sequence and is the only request bound; the
+provider SDK's own connection timeout is not configured. Credential switching, stream-start events,
+and empty text/thinking events do not reset it, so the budget is identical for single-key and
+multi-key providers: a request that keeps failing or produces no content ends after 120 seconds
+total, rather than waiting 120 seconds per key. Once content events reach the caller, each event
+resets the idle timer so ongoing generation can continue. Expiry ends the request and aborts the
+active transport without trying another key. Cancellation, source creation/iteration failures, and
+streams closed without a terminal event all settle the final result, including when source creation
+is still pending or the source ignores cancellation. Tool execution is outside this timer; each
+subsequent model request starts a fresh budget.
 
 Provider-configured authentication headers disable Pi key failover and leave credential attribution
 unknown, because the selected API key may not be the credential serving the request. Each Pi adapter
