@@ -769,7 +769,7 @@ Every Runtime implementation passes the same suite:
 16. Image preflight happens before reservation, and Runtime image payloads contain only bounded,
     request-local managed content accepted by the model and endpoint.
 17. Tool-step and tool-call budgets stop new tool execution and allow one response with tools disabled;
-    context, callback, and whole-turn limits retain classified failure outcomes.
+    context and callback limits retain classified failure outcomes.
 18. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
     previous complete-history model input.
 19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded
