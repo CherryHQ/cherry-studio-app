@@ -1,35 +1,47 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
-import type {
-  ConversationRef,
-  ConversationSession,
-  ConversationSnapshot,
-  ConversationSource,
-} from './contracts';
-import { useConversationSources } from './ConversationProvider';
+import type { ConversationRef } from '../contracts';
+import { useConversationSources } from '../ConversationProvider';
+import { ConversationReadError } from '../conversationState';
+import {
+  isRemoteConversationSource,
+  type RemoteConversationSession,
+  type RemoteConversationSnapshot,
+  type RemoteConversationSource,
+} from './remoteContracts';
 
 /** A route owns observation only. Its cleanup cannot cancel an admitted operation. */
-export function useConversation(ref: ConversationRef | undefined, source?: ConversationSource) {
+export function useConversation(
+  ref: ConversationRef | undefined,
+  source?: RemoteConversationSource,
+) {
   const sources = useConversationSources();
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
   const key = JSON.stringify([ref ?? null, source?.scope, attempt]);
   const [resolved, setResolved] = useState<{
     key: string;
-    session?: ConversationSession;
+    session?: RemoteConversationSession;
     error?: Error;
   }>();
   useEffect(() => {
     if (!ref) return;
     const lifetime = new AbortController();
     let releaseSource: (() => void) | undefined;
-    let session: ConversationSession | undefined;
+    let session: RemoteConversationSession | undefined;
     let unobserve: (() => void) | undefined;
     let unsubscribe: (() => void) | undefined;
     let opening = false;
     let retryRequested = false;
     void (
-      source ? Promise.resolve({ source, release() {} }) : sources.open(ref.source, lifetime.signal)
+      source
+        ? Promise.resolve({ source, release() {} })
+        : sources.open(ref.source, lifetime.signal).then((retained) => {
+            if (isRemoteConversationSource(retained.source))
+              return { source: retained.source, release: retained.release };
+            retained.release();
+            throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+          })
     )
       .then((retained) => {
         releaseSource = retained.release;
@@ -103,9 +115,10 @@ export function useConversation(ref: ConversationRef | undefined, source?: Conve
     isLoading: Boolean(ref && !current),
   };
 }
-const EMPTY_SNAPSHOT: ConversationSnapshot = {
+const EMPTY_SNAPSHOT: RemoteConversationSnapshot = {
   title: '',
   freshness: { state: 'loading' },
+  historyVersion: '' as RemoteConversationSnapshot['historyVersion'],
   liveMessages: [],
   executions: [],
   interactions: [],
@@ -113,7 +126,7 @@ const EMPTY_SNAPSHOT: ConversationSnapshot = {
 };
 const emptySnapshot = () => EMPTY_SNAPSHOT;
 const noSubscription = () => () => undefined;
-export function useConversationSnapshot(session: ConversationSession | undefined) {
+export function useConversationSnapshot(session: RemoteConversationSession | undefined) {
   return useSyncExternalStore(
     session?.state.subscribe ?? noSubscription,
     session?.state.getSnapshot ?? emptySnapshot,

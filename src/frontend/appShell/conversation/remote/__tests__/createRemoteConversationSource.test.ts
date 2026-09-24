@@ -4,8 +4,8 @@ import type {
   RemoteSourceState,
 } from '@/shared/contracts/remoteAgent';
 
-import type { DraftId } from '../../contracts';
 import { createRemoteConversationSource } from '../createRemoteConversationSource';
+import type { DraftId } from '../remoteContracts';
 
 const signal = () => new AbortController().signal;
 const session = {
@@ -159,7 +159,7 @@ it('pins a history window and prepares a complete chronological selection before
   expect(window.initial.items.map((item) => item.key)).toEqual(['m2', 'm3']);
   const older = await window.read(window.initial.older!, signal());
   const prepared = await session.history.prepareSelection(
-    [window.initial.items[1].ref, older.items[0].ref],
+    [window.initial.items[1].key, older.items[0].key],
     signal(),
   );
   expect(prepared.messages.map((item) => item.id)).toEqual(['m1', 'm3']);
@@ -173,16 +173,13 @@ it('pins a history window and prepares a complete chronological selection before
   test.source.dispose();
 });
 
-it('rejects cursors and message references from a different scope', async () => {
+it('rejects cursors from a different scope', async () => {
   const left = fixture('left');
   const right = fixture('right');
   const a = await left.source.openSession(address, signal());
   const b = await right.source.openSession(address, signal());
   const windowA = await a.history.openLatest(signal());
   const windowB = await b.history.openLatest(signal());
-  await expect(
-    b.history.prepareSelection([windowA.initial.items[0].ref], signal()),
-  ).rejects.toMatchObject({ failure: { code: 'invalid-input' } });
   expect(() => windowB.read(windowA.initial.older!, signal())).toThrow('invalid-input');
   left.source.dispose();
   right.source.dispose();

@@ -11,20 +11,13 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { AppState } from 'react-native';
 import { v7 as uuidv7 } from 'uuid';
 
-import {
-  createPendingChatMessages,
-  localImageResult,
-  type ConversationImageResult,
-  type AgentSessionChatClient,
-  useLocalConversation,
-  isAgentSessionBusy,
-  type AgentSessionChatState,
-} from '@/frontend/appShell/conversation';
+import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { ToolInputPreviewProvider } from '@/frontend/components/Message';
-import { queryKeys } from '@/frontend/data';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
 import {
@@ -32,6 +25,13 @@ import {
   createAgentChatDraftHandoffState,
 } from './agentChatDraftHandoff';
 import { latestAgentImageResult, latestConversationImageResult } from './agentImageResult';
+import { createPendingChatMessages } from './agentMessageProjection';
+import {
+  AgentSessionChatClient,
+  isAgentSessionBusy,
+  type AgentSessionChatState,
+} from './AgentSessionChatClient';
+import { localImageResult } from './localImageResult';
 
 type AgentChatSendInput = AgentSubmitMessageInput & {
   agentId?: string;
@@ -50,6 +50,8 @@ type AgentChatContextValue = {
   client: AgentSessionChatClient;
   completeDraftHandoff: (sessionId: string) => void;
   getDraftHandoff: (sessionId: string | undefined) => AgentChatDraftHandoff | undefined;
+  /** Session metadata changed outside an observed event, such as a fork creating a new Session. */
+  onSessionChanged: (sessionId: string) => void;
   sendMessage: (input: AgentChatSendInput) => Promise<void>;
 };
 
@@ -64,17 +66,48 @@ const EMPTY_AGENT_SESSION_STATE: AgentSessionChatState = Object.freeze({
 
 const AgentChatContext = createContext<AgentChatContextValue | null>(null);
 
+/** Owns the local Session observation client together with composer navigation. */
 export function ChatProvider({ children }: PropsWithChildren) {
-  const { client } = useLocalConversation();
+  const agent = useBackendModule('agent');
   const queryClient = useQueryClient();
   const pathname = usePathname();
   const router = useRouter();
   const [navigation] = useState(() => createChatNavigation({ pathname, router }));
   const [draftHandoff] = useState(createAgentChatDraftHandoffState);
+  const onSessionChanged = useCallback(
+    (sessionId: string) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.detail(sessionId) }),
+      ]);
+    },
+    [queryClient],
+  );
+  const [client] = useState(
+    () =>
+      new AgentSessionChatClient(agent, {
+        onSessionChanged,
+        onTranscriptChanged: (sessionId) => {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.agentSessions.messages(sessionId),
+          });
+        },
+      }),
+  );
 
   useEffect(() => {
     navigation.update({ pathname, router });
   }, [navigation, pathname, router]);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void client.refreshObservedSessions();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [client]);
+  useEffect(() => () => client.dispose(), [client]);
 
   const sendMessage = useCallback(
     async ({ agentId, isCurrent, isNewSession, ...submission }: AgentChatSendInput) => {
@@ -102,9 +135,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
       client,
       completeDraftHandoff: draftHandoff.complete,
       getDraftHandoff: draftHandoff.get,
+      onSessionChanged,
       sendMessage,
     }),
-    [client, draftHandoff, sendMessage],
+    [client, draftHandoff, onSessionChanged, sendMessage],
   );
 
   return (
@@ -141,6 +175,17 @@ function useAgentChatContext() {
     throw new Error('Agent chat hooks must be used within ChatProvider');
   }
   return context;
+}
+
+/** The observation client and its metadata invalidation, for the local read model. */
+export function useAgentChatClient() {
+  const { client, onSessionChanged } = useAgentChatContext();
+  return { client, onSessionChanged };
+}
+
+/** The complete observed state of one Session; selectors below narrow it for the composer. */
+export function useAgentSessionState(sessionId: string | undefined) {
+  return useAgentSessionSelection(useAgentChatContext().client, sessionId, selectSessionState);
 }
 
 /** Retain the result as live messages settle into (or leave) the visible history window. */
@@ -306,7 +351,9 @@ const selectSessionBusy = isAgentSessionBusy;
 function selectImageResult(state: AgentSessionChatState) {
   return latestAgentImageResult(state.liveMessages);
 }
-
+function selectSessionState(state: AgentSessionChatState) {
+  return state;
+}
 function selectObservationStatus(state: AgentSessionChatState) {
   return state.status;
 }

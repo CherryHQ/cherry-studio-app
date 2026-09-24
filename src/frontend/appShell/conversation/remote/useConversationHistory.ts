@@ -4,44 +4,31 @@ import { useCallback, useEffect, useId, useMemo, useState, useSyncExternalStore 
 import { useMessageRenderWindow } from '@/frontend/hooks/chat/useMessageRenderWindow';
 import { getOlderLoadAction } from '@/frontend/hooks/chat/utils/messageHistoryWindowStrategy';
 
+import type { ConversationHistoryView, ConversationMessage } from '../contracts';
+import { createConversationReferences, ConversationReadError } from '../conversationState';
 import type {
-  ConversationMessage,
-  ConversationSession,
   HistoryCursor,
   HistoryPage,
   HistoryVersion,
   HistoryWindow,
   MessageRef,
-} from './contracts';
-import { createConversationReferences, ConversationReadError } from './conversationState';
+  RemoteConversationSession,
+} from './remoteContracts';
 import { useConversationSnapshot } from './useConversation';
 
 const RETIRED = new ConversationReadError({ code: 'retired', retry: 'none' });
 
-export type ConversationHistoryView = {
-  dataKey: string;
-  messages: readonly ConversationMessage[];
+/** The shared window view plus the installed revision the presenter reconciles against. */
+export type RemoteConversationHistoryView = ConversationHistoryView & {
   installedVersion?: HistoryVersion;
-  error?: Error;
-  isLoadingInitial: boolean;
-  isRefreshing: boolean;
-  isLoadingOlder: boolean;
-  isLoadingNewer: boolean;
-  hasNewerMessages: boolean;
-  hasOlderMessages: boolean;
-  initialScrollTarget?: 'end' | { messageId: string };
-  loadOlder(): Promise<void>;
-  loadNewer(): Promise<void>;
-  retry(): Promise<void>;
-  returnToLatest?: () => void;
 };
 
 /** Query owns one fixed window and its reads; a key change keeps display values while replacing that window. */
 export function useConversationHistory(
-  session: ConversationSession | undefined,
+  session: RemoteConversationSession | undefined,
   version: HistoryVersion | undefined,
   navigation?: { messageId: string; key: string },
-): ConversationHistoryView {
+): RemoteConversationHistoryView {
   const queryClient = useQueryClient();
   const consumer = useId();
   const retired = useConversationSnapshot(session).freshness.state === 'retired';
@@ -194,7 +181,7 @@ export function flattenHistory(pages: readonly HistoryPage[]): ConversationMessa
 
 /** Query requests start read lifetimes lazily; construction during render never acquires resources. */
 function createHistoryReader(
-  session: ConversationSession | undefined,
+  session: RemoteConversationSession | undefined,
   around: string | undefined,
   version: HistoryVersion | undefined,
   extent: { older: number; newer: number },

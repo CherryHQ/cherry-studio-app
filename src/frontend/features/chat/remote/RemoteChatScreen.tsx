@@ -4,7 +4,7 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router, useLocalSearchParams } from 'expo-router';
-import { type RefObject, createContext, use, useEffect, useState } from 'react';
+import { type RefObject, createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,16 +12,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ConversationSourceBoundary,
   useConversationSourceState,
-  useConversation,
   useConversationAgents,
-  useConversationHistory,
-  useConversationSnapshot,
-  useConversationSource,
   type AgentSummary,
 } from '@/frontend/appShell/conversation';
+import {
+  useConversation,
+  useConversationHistory,
+  useConversationSnapshot,
+  useRemoteConversationSource,
+} from '@/frontend/appShell/conversation/remote';
 import { MainHeaderView, MainHeaderAgentPickerSheet } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
+  conversationShareHref,
   parseRemoteChatRoute,
   type RemoteChatRouteParams,
   useChatSource,
@@ -37,6 +40,7 @@ import { usePersistCache } from '@/frontend/data/hooks';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
+import { ConversationPresenter } from './ConversationPresenter';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
 
@@ -123,7 +127,7 @@ function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
 }
 const ignorePending = () => {};
 function RemoteChatSession() {
-  const source = useConversationSource();
+  const source = useRemoteConversationSource();
   const { availability } = useConversationSourceState();
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
@@ -136,6 +140,29 @@ function RemoteChatSession() {
   );
   const snapshot = useConversationSnapshot(opened.session);
   const history = useConversationHistory(opened.session, snapshot.historyVersion);
+  // The presenter retains live rows until the desktop's history revision installs them.
+  const [presentation, setPresentation] = useState(() => ({
+    session: opened.session,
+    presenter: new ConversationPresenter(),
+  }));
+  let presenter = presentation.presenter;
+  if (presentation.session !== opened.session) {
+    presenter = new ConversationPresenter();
+    setPresentation({ session: opened.session, presenter });
+  }
+  const messages = presenter.update(
+    snapshot,
+    history.messages,
+    history.installedVersion,
+    history.hasNewerMessages,
+  );
+  const session = opened.session;
+  const shareMessage = useCallback(
+    (messageId: string) => {
+      if (session) router.push(conversationShareHref(session.ref, messageId, session.scope));
+    },
+    [session],
+  );
   const agents = useConversationAgents();
   const agentId = snapshot.agentId ?? target.agentId;
   const agent = agentId
@@ -169,7 +196,8 @@ function RemoteChatSession() {
             ) : (
               <ChatWorkspace
                 renderUsage={renderRemoteUsage}
-                conversation={opened.session}
+                messages={messages}
+                onShare={opened.session ? shareMessage : undefined}
                 snapshot={snapshot}
                 messageWindow={history}
                 sessionId={target.sessionId}

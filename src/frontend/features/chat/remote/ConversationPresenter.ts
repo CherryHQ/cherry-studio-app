@@ -1,8 +1,8 @@
+import type { ConversationMessage } from '@/frontend/appShell/conversation';
 import type {
-  ConversationMessage,
-  ConversationSnapshot,
   HistoryVersion,
-} from '@/frontend/appShell/conversation';
+  RemoteConversationSnapshot,
+} from '@/frontend/appShell/conversation/remote';
 
 /** Retains live rows until history has successfully installed the revision that removed them. */
 export class ConversationPresenter {
@@ -15,7 +15,7 @@ export class ConversationPresenter {
   private readonly settled = new Set<string>();
   private result: readonly ConversationMessage[] = [];
   update(
-    snapshot: ConversationSnapshot,
+    snapshot: RemoteConversationSnapshot,
     history: readonly ConversationMessage[],
     installedVersion: HistoryVersion | undefined,
     hasNewerMessages = false,
@@ -34,7 +34,7 @@ export class ConversationPresenter {
     const persistedKeys = new Set(history.map((message) => message.key));
     const terminalKeys = new Set(
       snapshot.executions.flatMap((execution) =>
-        execution.terminal && !this.settled.has(execution.ref)
+        execution.terminal && !this.settled.has(execution.id)
           ? [execution.terminal.message.key]
           : [],
       ),
@@ -56,11 +56,11 @@ export class ConversationPresenter {
     for (const { message } of this.retained.values())
       if (!merged.has(message.key)) merged.set(message.key, message);
     for (const message of snapshot.liveMessages) merged.set(message.key, message);
-    const executions = new Set<string>(snapshot.executions.map((execution) => execution.ref));
+    const executions = new Set<string>(snapshot.executions.map((execution) => execution.id));
     for (const ref of this.settled) if (!executions.has(ref)) this.settled.delete(ref);
     for (const execution of snapshot.executions) {
       const terminal = execution.terminal;
-      if (!terminal || this.settled.has(execution.ref)) continue;
+      if (!terminal || this.settled.has(execution.id)) continue;
       const row = terminal.message;
       const persisted = history.find((message) => message.key === row.key);
       if (
@@ -69,7 +69,7 @@ export class ConversationPresenter {
         installedVersion === snapshot.historyVersion &&
         persisted?.state === row.state
       ) {
-        this.settled.add(execution.ref);
+        this.settled.add(execution.id);
         this.retained.delete(row.key);
         merged.set(row.key, persisted);
         continue;

@@ -27,7 +27,6 @@ test('shared catalog readers release connection demand only after the last consu
       },
     } as RemoteAgentModule,
     onSessionChanged() {},
-    onTranscriptChanged() {},
   });
   const ref = { kind: 'desktop' as const, connectionId: 'pc' };
   const signal = new AbortController().signal;

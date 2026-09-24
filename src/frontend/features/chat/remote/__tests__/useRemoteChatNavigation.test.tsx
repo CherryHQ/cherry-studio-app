@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ConversationOperation, ConversationSource } from '@/frontend/appShell/conversation';
+import type {
+  ConversationOperation,
+  RemoteConversationSource,
+} from '@/frontend/appShell/conversation/remote';
 import type { RemoteChatTarget } from '@/frontend/appShell/navigation/chat';
 
 import { useRemoteChatNavigation } from '../useRemoteChatNavigation';
@@ -18,7 +21,10 @@ jest.mock('@/frontend/appShell/navigation/chat', () => ({
   conversationHref: (ref: unknown) => ref,
 }));
 let operations: readonly ConversationOperation[];
-const source = { operations: { getSnapshot: () => operations } } as ConversationSource;
+const source = { operations: { getSnapshot: () => operations } } as Pick<
+  RemoteConversationSource,
+  'operations'
+>;
 let navigation: ReturnType<typeof useRemoteChatNavigation>;
 let renderer: ReactTestRenderer;
 function Probe({ target }: { target: RemoteChatTarget }) {

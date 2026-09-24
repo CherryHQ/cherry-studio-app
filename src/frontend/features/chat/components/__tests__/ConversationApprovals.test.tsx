@@ -1,11 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type {
-  ConversationSession,
-  ConversationSnapshot,
-  ResourceRef,
-} from '@/frontend/appShell/conversation';
+import type { ConversationSnapshot, ResourceValue } from '@/frontend/appShell/conversation';
 import type { AgentPendingQuestion, AgentUserAnswer } from '@/shared/contracts/agent';
 
 import { ConversationApprovals } from '../ConversationApprovals';
@@ -52,10 +48,7 @@ function fixture() {
   }));
   const cancel = jest.fn(async () => ({ state: 'applied' as const, value: undefined }));
   const read = jest.fn(
-    async (
-      _ref: ResourceRef,
-      _signal: AbortSignal,
-    ): Promise<import('@/frontend/appShell/conversation/contracts').ResourceValue> => ({
+    async (_signal: AbortSignal): Promise<ResourceValue> => ({
       kind: 'json' as const,
       complete: true as const,
       value: { path: '/approved' },
@@ -65,42 +58,25 @@ function fixture() {
     title: '',
     freshness: { state: 'current' },
     liveMessages: [],
-    actions: {
-      inputPolicy: { attachments: false, modelSelection: false, pluginReferences: false },
-    },
     interactions: [
       {
-        ref: 'decision' as never,
+        id: 'decision',
         kind: 'decision',
         title: 'Write file',
         state: 'pending',
-        input: 'input' as ResourceRef,
+        input: { kind: 'deferred', key: 'input', read },
         respond: { availability: { state: 'enabled' }, execute: respond },
       },
     ],
     executions: [
       {
-        ref: 'execution' as never,
+        id: 'execution',
         state: 'awaiting-approval',
         cancel: { availability: { state: 'enabled' }, execute: cancel },
       },
     ],
   };
-  const listeners = new Set<() => void>();
-  const session = {
-    scope: 'scope',
-    ref: { source: { kind: 'desktop', connectionId: 'desktop' }, sessionId: 'session' },
-    state: {
-      getSnapshot: () => snapshot,
-      subscribe: (listener: () => void) => {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-    },
-    resources: { read },
-  } as unknown as ConversationSession;
   return {
-    session,
     respond,
     cancel,
     read,
@@ -109,7 +85,6 @@ function fixture() {
     },
     update(next: ConversationSnapshot) {
       snapshot = next;
-      for (const listener of listeners) listener();
     },
   };
 }
@@ -117,7 +92,7 @@ async function render(test: ReturnType<typeof fixture>) {
   await act(async () => {
     const tree = (
       <QueryClientProvider client={queryClient}>
-        <ConversationApprovals session={test.session} snapshot={test.snapshot} />
+        <ConversationApprovals snapshot={test.snapshot} />
       </QueryClientProvider>
     );
     if (renderer) renderer.update(tree);
@@ -184,7 +159,7 @@ it('cannot approve before the full input is read and aborts that read on release
   expect(sheet.canRespond).toBe(false);
   await act(async () => sheet.onRespond({ approvalId: 'decision', approved: false }));
   expect(test.respond).not.toHaveBeenCalled();
-  const signal = test.read.mock.calls[0][1];
+  const signal = test.read.mock.calls[0][0];
   await act(async () => renderer.unmount());
   renderer = undefined!;
   expect(signal.aborted).toBe(true);
@@ -197,12 +172,12 @@ it('cancels only the execution bound to the displayed approval', async () => {
     ...test.snapshot,
     interactions: test.snapshot.interactions.map((item) => ({
       ...item,
-      execution: 'execution' as never,
+      execution: 'execution',
     })),
     executions: [
       ...test.snapshot.executions,
       {
-        ref: 'other' as never,
+        id: 'other',
         state: 'running',
         cancel: { availability: { state: 'enabled' }, execute: otherCancel },
       },

@@ -16,11 +16,10 @@ import { Keyboard } from 'react-native';
 
 import type {
   ConversationMessage,
-  ConversationSession,
   ConversationSnapshot,
   ConversationAction,
 } from '@/frontend/appShell/conversation';
-import { conversationHref, conversationShareHref } from '@/frontend/appShell/navigation/chat';
+import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
@@ -57,7 +56,8 @@ const AssistantMessageActionsContext = createContext<AssistantMessageActions | n
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
   retryableMessageId?: string;
-  session?: ConversationSession;
+  /** Opens the source-owned share selector; absent while no Session exists. */
+  onShare?: (messageId: string) => void;
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
 }>;
@@ -66,21 +66,21 @@ export function AssistantMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
   retryableMessageId,
-  session,
+  onShare,
   snapshot,
   messages,
 }: AssistantMessageActionsProviderProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { alert } = useAlert();
-  const current = useRef(session);
+  const mounted = useRef(true);
   const inFlight = useRef(new Set<string>());
   useEffect(() => {
-    current.current = session;
+    mounted.current = true;
     return () => {
-      current.current = undefined;
+      mounted.current = false;
     };
-  }, [session]);
+  }, []);
   const sharing = useRef(false);
   useFocusEffect(
     useCallback(() => {
@@ -88,10 +88,10 @@ export function AssistantMessageActionsProvider({
     }, []),
   );
   const share = ({ messageId }: { messageId: string }) => {
-    if (!session || sharing.current) return;
+    if (!onShare || sharing.current) return;
     sharing.current = true;
     Keyboard.dismiss();
-    router.push(conversationShareHref(session.ref, messageId, session.scope));
+    onShare(messageId);
   };
   async function run<Input, Output>(
     key: string,
@@ -100,12 +100,11 @@ export function AssistantMessageActionsProvider({
     errorLabel: 'retryFailed' | 'forkFailed' | 'deleteFailed',
     applied?: (result: Output) => void,
   ) {
-    if (!session || !action || action.availability.state !== 'enabled' || inFlight.current.has(key))
-      return;
+    if (!action || action.availability.state !== 'enabled' || inFlight.current.has(key)) return;
     inFlight.current.add(key);
     try {
       const outcome = await action.execute(value);
-      if (current.current !== session) return;
+      if (!mounted.current) return;
       if (outcome.state === 'applied') applied?.(outcome.value);
       else if (outcome.state === 'rejected' || outcome.state === 'interrupted')
         toast.show({
@@ -118,7 +117,7 @@ export function AssistantMessageActionsProvider({
         });
     } catch (error) {
       logger.error('Conversation message action failed', error as Error);
-      if (current.current === session)
+      if (mounted.current)
         toast.show({ label: t(`chat.messageActions.${errorLabel}`), variant: 'danger' });
     } finally {
       inFlight.current.delete(key);
@@ -171,10 +170,8 @@ export function AssistantMessageActionsProvider({
       onFork={messages.some((message) => message.actions.fork) ? fork : undefined}
       onDelete={messages.some((message) => message.actions.remove) ? remove : undefined}
       onRetry={retryMessage?.actions.retry ? retry : undefined}
-      isDeleteDisabled={isBusy || !session}
-      isRetryDisabled={
-        isBusy || !session || retryMessage?.actions.retry?.availability.state !== 'enabled'
-      }
+      isDeleteDisabled={isBusy}
+      isRetryDisabled={isBusy || retryMessage?.actions.retry?.availability.state !== 'enabled'}
       retryableMessageId={retryableMessageId}
     >
       {children}

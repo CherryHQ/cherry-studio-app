@@ -13,17 +13,19 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import {
-  useConversationDraft,
-  useConversationOperations,
-  useConversationSource,
   useConversationWorkspaces,
   type AgentSummary,
   type ConversationRef,
-  type ConversationSession,
-  type ConversationSnapshot,
-  type DraftId,
   type WorkspaceSummary,
 } from '@/frontend/appShell/conversation';
+import {
+  useConversationDraft,
+  useConversationOperations,
+  useRemoteConversationSource,
+  type DraftId,
+  type RemoteConversationSession,
+  type RemoteConversationSnapshot,
+} from '@/frontend/appShell/conversation/remote';
 import {
   ComposerSurface,
   useComposerPresentationActions,
@@ -45,15 +47,15 @@ export function RemoteComposer({
   onSessionCreated,
 }: {
   agent?: AgentSummary;
-  session?: ConversationSession;
-  snapshot: ConversationSnapshot;
+  session?: RemoteConversationSession;
+  snapshot: RemoteConversationSnapshot;
   draftId?: DraftId;
   draftKey: string;
   onSessionCreated(ref: ConversationRef): boolean;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const source = useConversationSource();
+  const source = useRemoteConversationSource();
   const existing = draftId === undefined;
   const { draft: text } = useComposerState();
   const { setDraft } = useComposerActions();
@@ -249,7 +251,7 @@ export function RemoteComposer({
           <Section>
             {cancellations.map((execution, index) => (
               <Section.Item
-                key={execution.ref}
+                key={execution.id}
                 label={t('remoteAgent.stopExecution', { index: index + 1 })}
                 disabled={execution.cancel?.availability.state !== 'enabled'}
                 onPress={() => void stop(index)}

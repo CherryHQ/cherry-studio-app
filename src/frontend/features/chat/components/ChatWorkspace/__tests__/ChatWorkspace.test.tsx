@@ -1,17 +1,15 @@
-import type { ComponentProps, ReactNode } from 'react';
+import { type ComponentProps, type ReactNode, useMemo } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { toAgentMessageListItem } from '@/frontend/appShell/conversation';
-import type {
-  ConversationMessage,
-  ConversationSnapshot,
-  ConversationSession,
-  MessageRef,
-} from '@/frontend/appShell/conversation';
+import type { ConversationMessage, ConversationSnapshot } from '@/frontend/appShell/conversation';
 import type { MessageListItem, MessageListProps } from '@/frontend/components/Message';
 import type { AgentApprovalView, AgentMessageView } from '@/shared/contracts/agent';
 
-import type { PendingChatSend } from '../../../runtime';
+import {
+  mergeAgentMessageViews,
+  toAgentMessageListItem,
+} from '../../../runtime/agentMessageProjection';
+import type { PendingChatSend } from '../../../runtime/ChatProvider';
 import { ChatWorkspace as Workspace } from '../ChatWorkspace';
 
 const mockPendingSendDisplayed = jest.fn();
@@ -134,59 +132,45 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   },
 }));
 
-jest.mock('../../../runtime', () => ({
-  useAgentChatDeleteTurn: () => jest.fn(),
-  useAgentChatFork: () => mockForkSession,
-  useAgentChatRetry: () => mockRetryMessage,
-  useAgentChatBusy: () => mockIsSessionBusy,
-}));
 jest.mock('../../ConversationApprovals', () => ({ ConversationApprovals: () => null }));
 
-const testSession = {
-  ref: { source: { kind: 'local' }, sessionId: 'session-1' },
-} as ConversationSession;
 const projected = new WeakMap<AgentMessageView, ConversationMessage>();
 function project(message: AgentMessageView): ConversationMessage {
-  let value = projected.get(message);
-  if (!value) {
-    value = {
-      key: message.id,
-      ref: message.id as MessageRef,
-      state: message.status,
-      completeness: 'complete',
-      actions: {
-        retry: {
-          availability: { state: 'enabled' },
-          execute: async () => {
-            await mockRetryMessage({ sessionId: 'session-1', messageId: message.id });
-            return {
-              state: 'applied',
-              value: { conversation: { source: { kind: 'local' }, sessionId: 'session-1' } },
-            };
-          },
-        },
-        fork: {
-          availability: { state: 'enabled' },
-          execute: async () => {
-            await mockForkSession();
-            return { state: 'applied', value: { source: { kind: 'local' }, sessionId: 'fork' } };
-          },
+  const existing = projected.get(message);
+  if (existing) return existing;
+  const value: ConversationMessage = {
+    key: message.id,
+    state: message.status,
+    completeness: 'complete',
+    actions: {
+      retry: {
+        availability: { state: 'enabled' },
+        execute: async () => {
+          await mockRetryMessage({ sessionId: 'session-1', messageId: message.id });
+          return { state: 'applied', value: undefined };
         },
       },
-      display: toAgentMessageListItem(message) ?? {
-        id: message.id,
-        role: message.role,
-        status: 'success',
-        data: {},
+      fork: {
+        availability: { state: 'enabled' },
+        execute: async () => {
+          await mockForkSession();
+          return { state: 'applied', value: { source: { kind: 'local' }, sessionId: 'fork' } };
+        },
       },
-    };
-    projected.set(message, value);
-  }
+    },
+    display: toAgentMessageListItem(message) ?? {
+      id: message.id,
+      role: message.role,
+      status: 'success',
+      data: {},
+    },
+  };
+  projected.set(message, value);
   return value;
 }
 // Feed the same scenarios through the public consumption views, preserving the existing assertions.
 function ChatWorkspace(
-  props: Omit<ComponentProps<typeof Workspace>, 'snapshot' | 'messageWindow'> & {
+  props: Omit<ComponentProps<typeof Workspace>, 'snapshot' | 'messageWindow' | 'messages'> & {
     messageWindow: Omit<
       ComponentProps<typeof Workspace>['messageWindow'],
       'messages' | 'dataKey' | 'hasOlderMessages'
@@ -200,25 +184,32 @@ function ChatWorkspace(
   const snapshot: ConversationSnapshot = {
     title: '',
     freshness: { state: 'current' },
-    executions: mockIsSessionBusy ? [{ ref: 'turn' as never, state: 'running' }] : [],
+    executions: mockIsSessionBusy ? [{ id: 'turn', state: 'running' }] : [],
     interactions: [],
-    actions: { inputPolicy: { attachments: true, pluginReferences: true, modelSelection: true } },
     liveMessages: mockAgentChatSession.liveMessages.map(project),
     enteringMessageKey: mockAgentChatSession.enteringUserMessageId,
     retryingMessageKey: mockAgentChatSession.retryingMessageId,
     hasHistoryBeforeExecution: mockAgentChatSession.hasHistoryBeforeActiveTurn,
   };
+  const history = props.messageWindow.messages;
+  const live = mockAgentChatSession.liveMessages;
+  const { hasNewerMessages } = props.messageWindow;
+  // The production hook memoizes merged rows, so unchanged inputs keep the same array identity.
+  const merged = useMemo(
+    () => (hasNewerMessages ? history : mergeAgentMessageViews(history, live)).map(project),
+    [hasNewerMessages, history, live],
+  );
   return (
     <Workspace
       {...props}
-      conversation={testSession}
       snapshot={snapshot}
+      messages={merged}
       messageWindow={{
         ...props.messageWindow,
         hasOlderMessages: true,
         dataKey:
           props.messageWindow.dataKey ?? props.sessionId ?? props.pendingSend?.sessionId ?? '',
-        messages: props.messageWindow.messages.map(project),
+        messages: history.map(project),
       }}
     />
   );

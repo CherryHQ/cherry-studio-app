@@ -3,22 +3,17 @@ import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import {
-  useConversationResource,
-  type ConversationMessage,
-  type ConversationSession,
-  type ResourceRef,
-} from '@/frontend/appShell/conversation';
+import type { ConversationMessage, ResourceRead } from '@/frontend/appShell/conversation';
 import { ToolRendererProvider } from '@/frontend/components/Message';
 import { filenameExtension } from '@/shared/data/types/file';
 
+import { useConversationResourceValue } from '../hooks/useConversationResourceValue';
 import { getConversationToolTitle } from './conversationToolTitle';
 
 export function ConversationMessageContent({
   message,
-  session,
   children,
-}: PropsWithChildren<{ message: ConversationMessage; session: ConversationSession }>) {
+}: PropsWithChildren<{ message: ConversationMessage }>) {
   const { t } = useTranslation();
   if (!message.tools?.length) return children;
   return (
@@ -38,18 +33,10 @@ export function ConversationMessageContent({
             statusTone={tool.state === 'failed' ? 'danger' : 'default'}
           >
             {tool.output ? (
-              <ConversationResourceSection
-                session={session}
-                resource={tool.output}
-                title={t('chat.tool.output')}
-              />
+              <ConversationResourceSection resource={tool.output} title={t('chat.tool.output')} />
             ) : null}
             {tool.input ? (
-              <ConversationResourceSection
-                session={session}
-                resource={tool.input}
-                title={t('chat.tool.arguments')}
-              />
+              <ConversationResourceSection resource={tool.input} title={t('chat.tool.arguments')} />
             ) : null}
             {!tool.input && !tool.output ? (
               <Text className="text-sm text-muted-foreground">{t('chat.tool.noOutput')}</Text>
@@ -63,21 +50,19 @@ export function ConversationMessageContent({
   );
 }
 function ConversationResourceSection({
-  session,
   resource,
   title,
 }: {
-  session: ConversationSession;
-  resource: ResourceRef;
+  resource: ResourceRead;
   title: string;
 }) {
   const { t } = useTranslation();
-  const result = useConversationResource(session, resource);
+  const result = useConversationResourceValue(resource);
   if (result.isError)
     return (
       <ContentState.Error
         title={t('remoteAgent.loadFailed')}
-        primaryAction={{ children: t('common.retry'), onPress: () => void result.refetch() }}
+        primaryAction={{ children: t('common.retry'), onPress: result.refetch }}
       />
     );
   if (!result.data) return <ContentState.Loading title={t('remoteAgent.loading')} />;

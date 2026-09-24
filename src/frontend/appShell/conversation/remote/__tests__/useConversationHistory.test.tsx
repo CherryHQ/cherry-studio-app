@@ -2,16 +2,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode, useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { QueryScope } from '../../contracts';
+import { createConversationReferences } from '../../conversationState';
 import type {
-  ConversationSession,
-  HistoryVersion,
-  HistoryWindow,
   HistoryCursor,
   HistoryPage,
-  QueryScope,
-} from '../contracts';
-import { createConversationReferences } from '../conversationState';
-import { useConversationHistory, type ConversationHistoryView } from '../useConversationHistory';
+  HistoryVersion,
+  HistoryWindow,
+  RemoteConversationSession,
+} from '../remoteContracts';
+import {
+  useConversationHistory,
+  type RemoteConversationHistoryView,
+} from '../useConversationHistory';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -42,9 +45,8 @@ function setup(scope = 'scope', sessionId = 'session') {
     scope: scope as QueryScope,
     ref: { source: { kind: 'local' }, sessionId },
     history: { openLatest: open, openAround: around },
-  } as unknown as ConversationSession;
+  } as unknown as RemoteConversationSession;
   function window(id: string): HistoryWindow {
-    const refs = createConversationReferences(session.scope, sessionId);
     return {
       scope: session.scope,
       version: version(id),
@@ -52,7 +54,6 @@ function setup(scope = 'scope', sessionId = 'session') {
         items: [
           {
             key: id,
-            ref: refs.issue('message', id),
             state: 'success',
             completeness: 'complete',
             actions: {},
@@ -77,7 +78,7 @@ function setup(scope = 'scope', sessionId = 'session') {
   };
 }
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-let result: ConversationHistoryView;
+let result: RemoteConversationHistoryView;
 let renderer: ReactTestRenderer;
 let queryClient: QueryClient;
 function Probe({
@@ -86,7 +87,7 @@ function Probe({
   messageId,
   visit,
 }: {
-  session: ConversationSession;
+  session: RemoteConversationSession;
   revision: string;
   messageId?: string;
   visit?: string;
@@ -102,7 +103,7 @@ function Probe({
   return null;
 }
 async function render(
-  session: ConversationSession,
+  session: RemoteConversationSession,
   revision = '1',
   messageId?: string,
   visit?: string,
@@ -382,7 +383,7 @@ it('shows a preview while history is pending without acknowledging it as install
   const test = setup();
   const cached = test.window('cached');
   const listeners = new Set<() => void>();
-  let preview: import('../contracts').HistoryPreview | undefined = {
+  let preview: import('../remoteContracts').HistoryPreview | undefined = {
     items: cached.initial.items,
     version: version('1'),
     readAt: 1,

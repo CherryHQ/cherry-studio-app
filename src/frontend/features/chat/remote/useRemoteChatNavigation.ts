@@ -2,11 +2,8 @@ import { useIsFocused, useRouter } from 'expo-router';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { v7 as uuidv7 } from 'uuid';
 
-import type {
-  ConversationRef,
-  ConversationSource,
-  DraftId,
-} from '@/frontend/appShell/conversation';
+import type { ConversationRef } from '@/frontend/appShell/conversation';
+import type { DraftId, RemoteConversationSource } from '@/frontend/appShell/conversation/remote';
 import {
   conversationHref,
   useChatSource,
@@ -14,7 +11,10 @@ import {
 } from '@/frontend/appShell/navigation/chat';
 
 /** Draft identity owns input; Agent selection only changes the destination until submission. */
-export function useRemoteChatNavigation(target: RemoteChatTarget, source: ConversationSource) {
+export function useRemoteChatNavigation(
+  target: RemoteChatTarget,
+  source: Pick<RemoteConversationSource, 'operations'>,
+) {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { openRemote } = useChatSource();

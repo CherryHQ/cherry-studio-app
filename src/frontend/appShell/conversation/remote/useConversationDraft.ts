@@ -1,21 +1,15 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
-import type {
-  AgentRef,
-  ConversationDraft,
-  ConversationOperation,
-  DraftId,
-  Readable,
-  WorkspaceRef,
-} from './contracts';
-import { useConversationSource } from './ConversationSourceBoundary';
+import type { AgentRef, Readable, WorkspaceRef } from '../contracts';
+import type { ConversationDraft, ConversationOperation, DraftId } from './remoteContracts';
+import { useRemoteConversationSource } from './useRemoteConversationSource';
 
 export function useConversationDraft(
   agent: AgentRef | undefined,
   workspace: WorkspaceRef | undefined,
   draftId: DraftId | undefined,
 ) {
-  const source = useConversationSource();
+  const source = useRemoteConversationSource();
   const key = JSON.stringify([source.scope, agent, workspace, draftId]);
   const [resolved, setResolved] = useState<{
     key: string;

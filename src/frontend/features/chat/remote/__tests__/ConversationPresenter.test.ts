@@ -1,14 +1,12 @@
+import type { ConversationMessage } from '@/frontend/appShell/conversation';
 import type {
-  ConversationMessage,
-  ConversationSnapshot,
   HistoryVersion,
-  MessageRef,
-} from '@/frontend/appShell/conversation';
+  RemoteConversationSnapshot,
+} from '@/frontend/appShell/conversation/remote';
 
 import { ConversationPresenter } from '../ConversationPresenter';
 
 const message = (key: string): ConversationMessage => ({
-  ref: key as MessageRef,
   key,
   state: 'success',
   completeness: 'complete',
@@ -16,7 +14,10 @@ const message = (key: string): ConversationMessage => ({
   display: { id: key, role: 'assistant', status: 'success', data: {} },
 });
 const version = (value: string) => value as HistoryVersion;
-const snapshot = (liveMessages: ConversationMessage[], revision: string): ConversationSnapshot => ({
+const snapshot = (
+  liveMessages: ConversationMessage[],
+  revision: string,
+): RemoteConversationSnapshot => ({
   liveMessages,
   historyVersion: version(revision),
   title: '',
@@ -79,11 +80,14 @@ const failed = (): ConversationMessage => ({
     },
   },
 });
-const terminal = (live: ConversationMessage[] = [], durable = true): ConversationSnapshot => ({
+const terminal = (
+  live: ConversationMessage[] = [],
+  durable = true,
+): RemoteConversationSnapshot => ({
   ...snapshot(live, '2'),
   executions: [
     {
-      ref: 'execution' as ConversationSnapshot['executions'][number]['ref'],
+      id: 'execution',
       state: 'failed',
       terminal: { message: failed(), durable, historyReady: true },
     },

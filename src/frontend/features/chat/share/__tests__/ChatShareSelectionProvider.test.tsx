@@ -1,7 +1,6 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ConversationSession } from '@/frontend/appShell/conversation';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
 import {
@@ -12,7 +11,10 @@ import {
   useIsChatMessageSelected,
 } from '../ChatShareSelectionProvider';
 
-const session = { ref: { source: { kind: 'local' }, sessionId: 'session' } } as ConversationSession;
+const target = {
+  ref: { source: { kind: 'local' as const }, sessionId: 'session' },
+  prepareSelection: jest.fn(),
+};
 const mockShareChat = jest.fn();
 const mockCancelShare = jest.fn();
 const mockToastShow = jest.fn();
@@ -69,7 +71,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   act(() => {
     renderer = create(
-      <ChatShareSelectionProvider session={session} initialMessageId="answer">
+      <ChatShareSelectionProvider target={target} initialMessageId="answer">
         <SelectionProbe ref={selection} />
         <MessageSelectionProbe messageId="answer" />
         <MessageSelectionProbe messageId="question" />
@@ -138,7 +140,7 @@ test('a recycled row subscribes to its current message identity', () => {
   for (const messageId of ['question', 'answer']) {
     act(() => {
       renderer.update(
-        <ChatShareSelectionProvider session={session} initialMessageId="answer">
+        <ChatShareSelectionProvider target={target} initialMessageId="answer">
           <SelectionProbe ref={selection} />
           <MessageSelectionProbe messageId={messageId} />
         </ChatShareSelectionProvider>,

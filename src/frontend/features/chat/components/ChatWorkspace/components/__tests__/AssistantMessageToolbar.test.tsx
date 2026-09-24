@@ -1,6 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ConversationSession, MessageRef } from '@/frontend/appShell/conversation';
 import type { MessageListItem } from '@/frontend/components/Message';
 
 import { AssistantMessageActionsProvider } from '../../context/AssistantMessageActionsProvider';
@@ -215,23 +214,17 @@ describe('AssistantMessageToolbar', () => {
         <AssistantMessageActionsProvider
           isAssistantToolbarEnabled
           retryableMessageId={retryableMessageId}
-          session={
-            { ref: { source: { kind: 'local' }, sessionId: 'session-1' } } as ConversationSession
-          }
+          onShare={jest.fn()}
           snapshot={{
             title: 'Arithmetic drills',
             freshness: { state: 'current' },
             liveMessages: [],
             interactions: [],
-            executions: mockIsSessionBusy ? [{ ref: 'turn' as never, state: 'running' }] : [],
-            actions: {
-              inputPolicy: { attachments: true, modelSelection: true, pluginReferences: true },
-            },
+            executions: mockIsSessionBusy ? [{ id: 'turn', state: 'running' }] : [],
           }}
           messages={[
             {
               key: message.id,
-              ref: message.id as MessageRef,
               state: 'success',
               completeness: 'complete',
               display: message,
@@ -240,12 +233,7 @@ describe('AssistantMessageToolbar', () => {
                   availability: { state: 'enabled' },
                   execute: async () => {
                     await mockRetryMessage({ sessionId: 'session-1', messageId: message.id });
-                    return {
-                      state: 'applied',
-                      value: {
-                        conversation: { source: { kind: 'local' }, sessionId: 'session-1' },
-                      },
-                    };
+                    return { state: 'applied', value: undefined };
                   },
                 },
                 fork: {

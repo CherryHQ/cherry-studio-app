@@ -3,7 +3,10 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import type { ConversationInput, ConversationOperation } from '@/frontend/appShell/conversation';
+import type {
+  ConversationInput,
+  ConversationOperation,
+} from '@/frontend/appShell/conversation/remote';
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
 
 import { conversationFailureKey } from '../runtime/conversationFailure';

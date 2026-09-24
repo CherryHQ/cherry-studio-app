@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ConversationRef, ConversationSession, ConversationSource } from '../contracts';
-import { createConversationState } from '../conversationState';
+import type { ConversationRef, ConversationSource } from '../../contracts';
+import { createConversationState } from '../../conversationState';
+import type { RemoteConversationSession } from '../remoteContracts';
 import { useConversation } from '../useConversation';
 const mockSources = { open: jest.fn() };
-jest.mock('../ConversationProvider', () => ({ useConversationSources: () => mockSources }));
-const ref: ConversationRef = { source: { kind: 'desktop', connectionId: 'pc' }, sessionId: 's' };
+jest.mock('../../ConversationProvider', () => ({ useConversationSources: () => mockSources }));
+const desktop = { kind: 'desktop', connectionId: 'pc' } as const;
+const ref: ConversationRef = { source: desktop, sessionId: 's' };
 let result: ReturnType<typeof useConversation>;
 function Harness() {
   const value = useConversation(ref);
@@ -30,13 +32,13 @@ describe('conversation route observation', () => {
     const session = {
       activate: jest.fn(() => unobserve),
       dispose: jest.fn(),
-    } as unknown as ConversationSession;
+    } as unknown as RemoteConversationSession;
     const openSession = jest
       .fn()
       .mockRejectedValueOnce(new Error('Offline'))
       .mockResolvedValueOnce(session);
     const release = jest.fn();
-    mockSources.open.mockResolvedValue({ source: { state, openSession }, release });
+    mockSources.open.mockResolvedValue({ source: { ref: desktop, state, openSession }, release });
     await act(async () => {
       tree = create(<Harness />);
     });
@@ -58,7 +60,7 @@ describe('conversation route observation', () => {
     const session = {
       activate: jest.fn(() => () => {}),
       dispose: jest.fn(),
-    } as unknown as ConversationSession;
+    } as unknown as RemoteConversationSession;
     const openSession = jest
       .fn()
       .mockImplementationOnce(
@@ -68,7 +70,10 @@ describe('conversation route observation', () => {
           }),
       )
       .mockResolvedValueOnce(session);
-    mockSources.open.mockResolvedValue({ source: { state, openSession }, release: jest.fn() });
+    mockSources.open.mockResolvedValue({
+      source: { ref: desktop, state, openSession },
+      release: jest.fn(),
+    });
     await act(async () => {
       tree = create(<Harness />);
     });
@@ -78,11 +83,12 @@ describe('conversation route observation', () => {
     expect(result.session).toBe(session);
   });
   it('disposes a late session without installing observation after the route exits', async () => {
-    let resolve!: (session: ConversationSession) => void;
+    let resolve!: (session: RemoteConversationSession) => void;
     let signal: AbortSignal | undefined;
     const release = jest.fn();
     mockSources.open.mockResolvedValue({
       source: {
+        ref: desktop,
         state: { subscribe: () => () => {} },
         openSession: (_ref: ConversationRef, value: AbortSignal) => {
           signal = value;
@@ -97,7 +103,10 @@ describe('conversation route observation', () => {
       tree = create(<Harness />);
     });
     await act(async () => tree.unmount());
-    const session = { activate: jest.fn(), dispose: jest.fn() } as unknown as ConversationSession;
+    const session = {
+      activate: jest.fn(),
+      dispose: jest.fn(),
+    } as unknown as RemoteConversationSession;
     await act(async () => resolve(session));
     expect(signal?.aborted).toBe(true);
     expect(session.activate).not.toHaveBeenCalled();

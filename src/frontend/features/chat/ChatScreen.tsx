@@ -3,21 +3,18 @@ import {
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
-import { useIsPreview, useLocalSearchParams } from 'expo-router';
+import { router, useIsPreview, useLocalSearchParams } from 'expo-router';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  useConversation,
-  useConversationSnapshot,
-  useConversationHistory,
-} from '@/frontend/appShell/conversation';
 import { MainHeader } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   type ChatRouteParamsInput,
   type ChatTarget,
+  conversationShareHref,
   parseChatRoute,
 } from '@/frontend/appShell/navigation/chat';
 import { getShareComposerHandoff } from '@/frontend/appShell/systemEntry';
@@ -41,6 +38,7 @@ import {
   latestConversationImageResult,
   useAgentChatControls,
   useAgentChatDraftHandoff,
+  useLocalConversation,
 } from './runtime';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
@@ -80,26 +78,18 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     composerKey: composerSession.key,
   });
   const agent = useAgentApiById(resolvedAgentId);
-  const conversation = useConversation(
-    sessionId ? { source: { kind: 'local' }, sessionId } : undefined,
+  const { snapshot, messages, messageWindow } = useLocalConversation({
+    sessionId,
+    title: session.data?.title,
+    navigation: target.kind === 'session' ? target : undefined,
+  });
+  const shareMessage = useCallback(
+    (messageId: string) => {
+      if (sessionId)
+        router.push(conversationShareHref({ source: { kind: 'local' }, sessionId }, messageId));
+    },
+    [sessionId],
   );
-  const snapshot = useConversationSnapshot(conversation.session);
-  const history = useConversationHistory(
-    conversation.session,
-    snapshot.historyVersion,
-    target.kind === 'session' && target.messageId
-      ? {
-          messageId: target.messageId,
-          key: JSON.stringify([target.messageId, target.messageRequestId]),
-        }
-      : undefined,
-  );
-  const messageWindow = {
-    ...history,
-    isLoadingInitial: conversation.isLoading || history.isLoadingInitial,
-    error: conversation.error ?? history.error,
-    retry: conversation.error ? async () => conversation.retry() : history.retry,
-  };
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));
   const isNewAgentAvailable =
@@ -151,7 +141,8 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             <ChatWorkspace
               renderUsage={renderLocalUsage}
               snapshot={snapshot}
-              conversation={conversation.session}
+              messages={messages}
+              onShare={sessionId ? shareMessage : undefined}
               pendingSend={controls.pendingSend}
               enteringUserMessageId={controls.enteringUserMessageId}
               onPendingSendDisplayed={controls.completePendingSend}

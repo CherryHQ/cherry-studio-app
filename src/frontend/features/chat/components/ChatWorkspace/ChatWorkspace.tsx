@@ -1,18 +1,17 @@
 import { BackgroundPressExclusion, ContentState } from '@cherrystudio/ui/components';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import type {
   ConversationHistoryView,
-  ConversationSession,
+  ConversationMessage,
   ConversationSnapshot,
 } from '@/frontend/appShell/conversation';
 import { type MessageListItem } from '@/frontend/components/Message';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { type PendingChatSend } from '../../runtime';
-import { ConversationPresenter } from '../../runtime/ConversationPresenter';
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationMessageContent, ConversationAttachments } from '../ConversationMessageContent';
 import { ChatTranscript } from './ChatTranscript';
@@ -39,15 +38,18 @@ type ChatWorkspaceProps = {
   forkedFromSessionId?: string;
   keyboardOffset: number;
   messageWindow: ConversationHistoryView;
+  /** History and live rows already reconciled by the source; the workspace only presents them. */
+  messages: readonly ConversationMessage[];
   snapshot: ConversationSnapshot;
-  conversation?: ConversationSession;
+  onShare?: (messageId: string) => void;
   sessionId?: string;
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
 export function ChatWorkspace({
   snapshot: live,
-  conversation,
+  messages: mergedMessages,
+  onShare,
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
@@ -80,22 +82,6 @@ export function ChatWorkspace({
   const listKey = sessionId ?? pendingSend?.sessionId;
   const { t } = useTranslation();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
-  const [presentation, setPresentation] = useState(() => ({
-    scope: conversation?.scope,
-    sessionId,
-    presenter: new ConversationPresenter(),
-  }));
-  let presenter = presentation.presenter;
-  if (presentation.scope !== conversation?.scope || presentation.sessionId !== sessionId) {
-    presenter = new ConversationPresenter();
-    setPresentation({ scope: conversation?.scope, sessionId, presenter });
-  }
-  const mergedMessages = presenter.update(
-    live,
-    messages,
-    messageWindow.installedVersion,
-    hasNewerMessages,
-  );
   // Only the Session's latest answer is replaceable, and an older window does
   // not hold it (agent-protocol.md "Manual answer retry").
   const retryableMessageId = useMemo(() => {
@@ -196,10 +182,8 @@ export function ChatWorkspace({
           shouldShowTimestamp={timestampMessageIds.has(message.id)}
         />
       );
-      return value && conversation ? (
-        <ConversationMessageContent message={value} session={conversation}>
-          {content}
-        </ConversationMessageContent>
+      return value ? (
+        <ConversationMessageContent message={value}>{content}</ConversationMessageContent>
       ) : (
         content
       );
@@ -210,7 +194,6 @@ export function ChatWorkspace({
       isScreenReaderEnabled,
       timestampMessageIds,
       mergedMessages,
-      conversation,
       renderUsage,
     ],
   );
@@ -275,7 +258,7 @@ export function ChatWorkspace({
         key={`assistant-actions-${listKey}`}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
         retryableMessageId={retryableMessageId}
-        session={conversation}
+        onShare={onShare}
         snapshot={live}
         messages={mergedMessages}
       >
@@ -299,7 +282,7 @@ export function ChatWorkspace({
           renderMessage={renderChatMessage}
         />
       </AssistantMessageActionsProvider>
-      {conversation ? <ConversationApprovals session={conversation} snapshot={live} /> : null}
+      {sessionId ? <ConversationApprovals snapshot={live} /> : null}
     </View>
   );
 }

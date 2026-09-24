@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ConversationSession, ConversationMessage } from '@/frontend/appShell/conversation';
+import type { ConversationMessage, ResourceValue } from '@/frontend/appShell/conversation';
 
 import { ConversationMessageContent } from '../ConversationMessageContent';
 
@@ -10,9 +10,6 @@ const mockModule = { open: jest.fn() };
 let mockSheetContent: ReactNode;
 
 jest.mock('@/frontend/data', () => ({ useBackendModule: () => mockModule }));
-jest.mock('@/frontend/appShell/conversation', () => ({
-  ...jest.requireActual('@/frontend/appShell/conversation/useConversationResource'),
-}));
 jest.mock('@/frontend/components/Message', () => ({
   getBuiltInToolDisplay: () => undefined,
   ToolRendererProvider: ({ renderTool }: { renderTool(part: { toolCallId: string }): ReactNode }) =>
@@ -36,29 +33,28 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
+const readDetail = jest.fn<Promise<ResourceValue>, [AbortSignal]>();
 const message = {
-  tools: [{ key: 'call', title: 'read_file', state: 'completed', output: 'output-ref' }],
+  tools: [
+    {
+      key: 'call',
+      title: 'read_file',
+      state: 'completed',
+      output: { kind: 'deferred', key: 'output-ref', read: readDetail },
+    },
+  ],
 } as unknown as ConversationMessage;
-let session: ConversationSession;
 
 describe('remote tool sheet content', () => {
   let row: ReactTestRenderer | undefined;
   let sheet: ReactTestRenderer | undefined;
   let queryClient: QueryClient;
-  const readDetail = jest.fn();
 
   beforeEach(() => {
     readDetail.mockReset();
     mockModule.open.mockReset();
     mockSheetContent = undefined;
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const snapshot = { freshness: { state: 'current' } };
-    session = {
-      scope: 'scope',
-      ref: { sessionId: 's', source: { kind: 'desktop', connectionId: 'pc' } },
-      state: { getSnapshot: () => snapshot, subscribe: () => () => {} },
-      resources: { read: readDetail },
-    } as unknown as ConversationSession;
   });
 
   afterEach(async () => {
@@ -75,7 +71,7 @@ describe('remote tool sheet content', () => {
     await act(async () => {
       row = create(
         <QueryClientProvider client={queryClient}>
-          <ConversationMessageContent message={message} session={session}>
+          <ConversationMessageContent message={message}>
             <></>
           </ConversationMessageContent>
         </QueryClientProvider>,
@@ -106,14 +102,14 @@ describe('remote tool sheet content', () => {
       'File contents',
     );
     expect(readDetail).toHaveBeenCalledTimes(1);
-    expect(readDetail).toHaveBeenCalledWith('output-ref', expect.any(AbortSignal));
+    expect(readDetail).toHaveBeenCalledWith(expect.any(AbortSignal));
   });
 
   it('cancels an unfinished detail read when the sheet closes', async () => {
     let signal: AbortSignal | undefined;
-    readDetail.mockImplementation((_resource: string, requestSignal: AbortSignal) => {
+    readDetail.mockImplementation((requestSignal: AbortSignal) => {
       signal = requestSignal;
-      return new Promise<string>(() => {});
+      return new Promise<ResourceValue>(() => {});
     });
     await mountRow();
     await openSheet();

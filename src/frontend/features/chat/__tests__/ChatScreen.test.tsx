@@ -16,9 +16,6 @@ let mockSessionData: { agentId: string; id: string } | undefined;
 let mockSessionError: Error | undefined;
 let mockSessionIsLoading: boolean;
 const mockSessionRefetch = jest.fn();
-let mockConversationError: Error | undefined;
-const mockConversationRetry = jest.fn();
-const mockHistoryRetry = jest.fn();
 const mockDismissInput = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -69,21 +66,6 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/frontend/appShell/header', () => ({ MainHeader: () => null }));
 
-jest.mock('@/frontend/appShell/conversation', () => ({
-  useConversation: () => ({
-    session: undefined,
-    isLoading: false,
-    error: mockConversationError,
-    retry: mockConversationRetry,
-  }),
-  useConversationSnapshot: () => ({ historyVersion: undefined }),
-  useConversationHistory: () => ({
-    isLoadingInitial: false,
-    messages: [],
-    retry: mockHistoryRetry,
-  }),
-}));
-
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: (agentId: string | undefined) => ({
     agent: agentId === 'agent-1' ? { id: 'agent-1' } : undefined,
@@ -116,6 +98,29 @@ jest.mock('../runtime', () => ({
     return mockChatControls;
   },
   useAgentChatDraftHandoff: () => undefined,
+  useLocalConversation: () => ({
+    snapshot: {
+      title: '',
+      freshness: { state: 'current' },
+      liveMessages: [],
+      executions: [],
+      interactions: [],
+    },
+    messages: [],
+    messageWindow: {
+      dataKey: 'session-1',
+      isLoadingInitial: false,
+      isRefreshing: false,
+      isLoadingOlder: false,
+      isLoadingNewer: false,
+      hasNewerMessages: false,
+      hasOlderMessages: false,
+      messages: [],
+      loadOlder: jest.fn(),
+      loadNewer: jest.fn(),
+      retry: jest.fn(),
+    },
+  }),
 }));
 
 jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
@@ -149,7 +154,6 @@ describe('ChatScreen composer dock wiring', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockConversationError = undefined;
     chatControlsInput = undefined;
     chatInputProps = undefined;
     chatWorkspaceProps = undefined;
@@ -166,26 +170,6 @@ describe('ChatScreen composer dock wiring', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
-  });
-
-  it('reopens a failed conversation before retrying its message history', async () => {
-    mockConversationError = new Error('Session read failed');
-    act(() => {
-      renderer = create(<ChatScreen />);
-    });
-    await act(async () => {
-      await (chatWorkspaceProps!.messageWindow as { retry: () => Promise<void> }).retry();
-    });
-    expect(mockConversationRetry).toHaveBeenCalledTimes(1);
-    expect(mockHistoryRetry).not.toHaveBeenCalled();
-
-    mockConversationError = undefined;
-    act(() => renderer!.update(<ChatScreen />));
-    await act(async () => {
-      await (chatWorkspaceProps!.messageWindow as { retry: () => Promise<void> }).retry();
-    });
-    expect(mockHistoryRetry).toHaveBeenCalledTimes(1);
-    expect(mockConversationRetry).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the composer in normal flow and shares only keyboard geometry', () => {

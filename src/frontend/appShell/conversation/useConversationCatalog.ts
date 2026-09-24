@@ -9,6 +9,7 @@ import type {
   ConversationListStatus,
 } from './contracts';
 import { useConversationSource, useConversationSourceState } from './ConversationSourceBoundary';
+import { isRemoteConversationSource } from './remote/remoteContracts';
 
 function useCatalog<T>(
   key: readonly string[],
@@ -57,22 +58,25 @@ function useCatalog<T>(
     // Query observers cancel only when the last reader exits; settled metadata stays cached.
     return shared ? undefined : release;
   }, [queryClient, serializedKey, retired, shared]);
+  // A desktop source publishes applied starts as operations; the local catalog has none.
   useEffect(
     () =>
-      source.operations.subscribe(() => {
-        if (
-          kind === 'sessions' &&
-          source.operations.getSnapshot().some((operation) => operation.state === 'applied')
-        ) {
-          void queryClient.invalidateQueries(
-            {
-              queryKey: JSON.parse(serializedKey),
-              exact: true,
-            },
-            { cancelRefetch: false },
-          );
-        }
-      }),
+      isRemoteConversationSource(source)
+        ? source.operations.subscribe(() => {
+            if (
+              kind === 'sessions' &&
+              source.operations.getSnapshot().some((operation) => operation.state === 'applied')
+            ) {
+              void queryClient.invalidateQueries(
+                {
+                  queryKey: JSON.parse(serializedKey),
+                  exact: true,
+                },
+                { cancelRefetch: false },
+              );
+            }
+          })
+        : undefined,
     [source, queryClient, kind, serializedKey],
   );
   useEffect(() => {

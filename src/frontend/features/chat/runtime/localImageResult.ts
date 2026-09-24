@@ -1,6 +1,5 @@
+import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import type { AgentMessageView } from '@/shared/contracts/agent';
-
-import type { ConversationImageResult } from '../contracts';
 
 export function localImageResult(message: AgentMessageView): ConversationImageResult | undefined {
   if (

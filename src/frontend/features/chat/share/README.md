@@ -18,9 +18,9 @@ closing the export preview retains the existing selection, while a closed system
 dismisses both pages to the chat. At most 128 messages can be selected; an empty selection cannot
 be confirmed. Leaving the page cancels pending export reads.
 
-Confirmation calls the opened ConversationSession history.prepareSelection. Local selection reads
-messages, session title and assistant name in one SQLite snapshot; remote selection reads and
-revalidates a fixed history revision. Both return chronological order, regardless of click order. It does not implicitly include questions
+Confirmation calls the share target's `prepareSelection`. The local route reads messages, session
+title and assistant name in one SQLite snapshot through the Data API; the desktop route calls the
+opened remote Session, which reads and revalidates a fixed history revision. Both return chronological order, regardless of click order. It does not implicitly include questions
 or unselected messages. The conversation may exceed 128 messages. Missing or unfinished content
 and failed reads reject the export instead of silently sharing a partial selection.
 
@@ -63,13 +63,12 @@ changing the format or switch renders the selected snapshot as needed. Image out
 3x density and sequential page capture, without source-image byte, pixel or count caps. Device resources determine practical
 capacity. Image conversion failures prepare HTML; HTML failures retain the complete Markdown preview.
 
-Local and desktop routes use the same Conversation history, selection controls and export preparation.
-The route binds the selection to its source scope. A replaced pairing cannot reuse the previous
-selection. The preparation validates the entire selected set and keeps the prepared snapshot alive
-until the export request closes, including its thinking-content variant. Cancellation and failures
-release the snapshot. Remote resources never become local file IDs; file metadata exports as named
-attachments. Partial messages cannot be selected as complete export content.
+Local and desktop routes share the selection controls, the history window shape and export
+preparation; the local route uses the Session-keyed local history window and the desktop route the
+remote revisioned window. The desktop route binds the selection to its source scope, so a replaced
+pairing cannot reuse the previous selection. The preparation validates the entire selected set.
+Remote resources never become local file IDs; file metadata exports as named attachments. Partial
+messages cannot be selected as complete export content.
 
-Prepared local managed-file asset leases remain part of the ongoing protocol migration. Currently
-local documents keep their existing managed-file references and the document renderer resolves them;
-the common selection lifetime is implemented, but this does not yet pin those underlying bytes.
+Local documents keep their existing managed-file references and the document renderer resolves
+them; the underlying bytes are not pinned for the duration of the export.

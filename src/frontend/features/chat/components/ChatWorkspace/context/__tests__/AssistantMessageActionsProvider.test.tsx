@@ -1,12 +1,7 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type {
-  OperationOutcome,
-  Submission,
-  ConversationSession,
-  MessageRef,
-} from '@/frontend/appShell/conversation';
+import type { OperationOutcome } from '@/frontend/appShell/conversation';
 import { localConversationFailure } from '@/frontend/appShell/conversation/local/localConversationFailure';
 import { AgentProtocolError, type AgentErrorView } from '@/shared/contracts/agent';
 
@@ -17,7 +12,7 @@ import {
   useAssistantMessageActionsState,
 } from '../AssistantMessageActionsProvider';
 
-let mockRetryOutcome: OperationOutcome<Submission>;
+let mockRetryOutcome: OperationOutcome<void>;
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
@@ -25,10 +20,10 @@ const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefin
 /** Captures the confirm request so a test can accept it the way a user would. */
 const mockAlertConfirm = jest.fn<void, [{ onConfirm: () => void }]>();
 const mockToastShow = jest.fn();
-const mockPush = jest.fn();
+const mockShare = jest.fn();
 let mockFocusEffect: (() => void) | undefined;
 jest.mock('expo-router', () => ({
-  router: { push: (route: unknown) => mockPush(route), replace: jest.fn() },
+  router: { push: jest.fn(), replace: jest.fn() },
   useFocusEffect: (effect: () => void) => {
     mockFocusEffect = effect;
     effect();
@@ -83,30 +78,24 @@ function ContextProbe({ ref }: { ref: Ref<ContextProbeHandle> }) {
   return null;
 }
 
-const session = {
-  ref: { source: { kind: 'local' }, sessionId: 'session-1' },
-} as ConversationSession;
+const sessionRef = { source: { kind: 'local' as const }, sessionId: 'session-1' };
 
 function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
   return (
     <AssistantMessageActionsProvider
       isAssistantToolbarEnabled
       retryableMessageId="assistant-1"
-      session={session}
+      onShare={mockShare}
       snapshot={{
         title: mockSourceTitle ?? '',
         freshness: { state: 'current' },
         liveMessages: [],
         interactions: [],
         executions: [],
-        actions: {
-          inputPolicy: { attachments: true, modelSelection: true, pluginReferences: true },
-        },
       }}
       messages={[
         {
           key: 'assistant-1',
-          ref: 'assistant-1' as MessageRef,
           state: 'success',
           completeness: 'complete',
           display: {
@@ -133,7 +122,7 @@ function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
                   sessionId: 'session-1',
                   title,
                 });
-                return { state: 'applied', value: session.ref };
+                return { state: 'applied', value: sessionRef };
               },
             },
           },
@@ -153,10 +142,7 @@ describe('AssistantMessageActionsProvider', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
-    mockRetryOutcome = {
-      state: 'applied',
-      value: { conversation: session.ref, userMessage: 'user-1' as MessageRef },
-    };
+    mockRetryOutcome = { state: 'applied', value: undefined };
     probeRef = createRef<ContextProbeHandle>();
   });
 
@@ -241,10 +227,8 @@ describe('AssistantMessageActionsProvider', () => {
   test('opens selection at the clicked answer without changing the transcript', () => {
     renderProvider();
     act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer' }));
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/chat-share',
-      params: { sessionId: 'session-1', messageId: 'answer' },
-    });
+    expect(mockShare).toHaveBeenCalledWith('answer');
+    expect(mockRetryMessage).not.toHaveBeenCalled();
   });
 
   test('ignores repeated share taps until the chat regains focus', () => {
@@ -254,15 +238,12 @@ describe('AssistantMessageActionsProvider', () => {
       probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-2' });
     });
 
-    expect(mockPush).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/chat-share',
-      params: { sessionId: 'session-1', messageId: 'answer-1' },
-    });
+    expect(mockShare).toHaveBeenCalledTimes(1);
+    expect(mockShare).toHaveBeenCalledWith('answer-1');
 
     act(() => mockFocusEffect?.());
     act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-3' }));
-    expect(mockPush).toHaveBeenCalledTimes(2);
+    expect(mockShare).toHaveBeenCalledTimes(2);
   });
 
   test('shows copied feedback until it expires', async () => {

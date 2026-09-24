@@ -53,14 +53,3 @@ export function createConversationReferences(scope: QueryScope, sessionId?: stri
     },
   };
 }
-
-/** Rebind a route's message identity to the currently opened session, never to another source. */
-export function conversationMessageRef(
-  session: Pick<import('./contracts').ConversationSession, 'scope' | 'ref'>,
-  messageId: string,
-): import('./contracts').MessageRef {
-  return createConversationReferences(session.scope, session.ref.sessionId).issue(
-    'message',
-    messageId,
-  );
-}

@@ -3,15 +3,8 @@ import type { RemoteAgentSource, RemoteStartOperation } from '@/shared/contracts
 import type {
   AgentRef,
   CatalogCursor,
-  ConversationDraft,
-  ConversationInput,
-  ConversationOperation,
-  ConversationSource,
-  DraftId,
-  OperationId,
   OperationOutcome,
   QueryScope,
-  Submission,
   WorkspaceRef,
 } from '../contracts';
 import {
@@ -24,12 +17,21 @@ import {
   REMOTE_INPUT_POLICY,
   remoteInput,
 } from './createRemoteConversationSession';
+import type {
+  ConversationDraft,
+  ConversationInput,
+  ConversationOperation,
+  DraftId,
+  OperationId,
+  RemoteConversationSource,
+  Submission,
+} from './remoteContracts';
 import { remoteAvailability, remoteConversationFailure } from './remoteConversationViews';
 
 export function createRemoteConversationSource(
   connectionId: string,
   remote: RemoteAgentSource,
-): ConversationSource {
+): RemoteConversationSource {
   const ref = { kind: 'desktop' as const, connectionId };
   const scope = remote.scope as QueryScope;
   const refs = createConversationReferences(scope);

@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { localImageResult } from '@/frontend/appShell/conversation';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
 import {
@@ -10,8 +9,11 @@ import {
   useAgentChatDraftHandoff,
   useAgentChatImageResult,
 } from '../ChatProvider';
+import { localImageResult } from '../localImageResult';
 
+const mockDispose = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockRefreshObservedSessions = jest.fn();
 const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockStartSession = jest.fn();
@@ -43,21 +45,21 @@ jest.mock('@/frontend/components/Message', () => ({
   ToolInputPreviewProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-jest.mock('@/frontend/appShell/conversation', () => ({
-  ...jest.requireActual('@/frontend/appShell/conversation'),
+jest.mock('../AgentSessionChatClient', () => ({
   // The busy predicate is the client's own rule, not a test double.
-  isAgentSessionBusy: jest.requireActual<typeof import('@/frontend/appShell/conversation')>(
-    '@/frontend/appShell/conversation',
+  isAgentSessionBusy: jest.requireActual<typeof import('../AgentSessionChatClient')>(
+    '../AgentSessionChatClient',
   ).isAgentSessionBusy,
-  useLocalConversation: () => ({ client: mockClient }),
+  AgentSessionChatClient: jest.fn().mockImplementation(() => ({
+    dispose: mockDispose,
+    refreshObservedSessions: mockRefreshObservedSessions,
+    startSession: mockStartSession,
+    submitMessage: mockSubmitMessage,
+    getState: () => mockChatState,
+    subscribe: mockSubscribe,
+    toolInputPreviews: {},
+  })),
 }));
-
-const mockClient = {
-  startSession: mockStartSession,
-  submitMessage: mockSubmitMessage,
-  getState: () => mockChatState,
-  subscribe: mockSubscribe,
-};
 
 type AgentChatControls = ReturnType<typeof useAgentChatControls>;
 

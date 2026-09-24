@@ -7,17 +7,23 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type {
+  ConversationMessage,
+  ConversationHistoryView,
+} from '@/frontend/appShell/conversation';
 import {
   useConversation,
   useConversationSnapshot,
   useConversationHistory,
-  type ConversationSession,
-  type ConversationMessage,
-  type ConversationHistoryView,
-} from '@/frontend/appShell/conversation';
+  type RemoteConversationSession,
+} from '@/frontend/appShell/conversation/remote';
 import { conversationRefFromRoute } from '@/frontend/appShell/navigation/chat';
+import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
+import { createAgentMessageListProjectionCache } from '../runtime/agentMessageProjection';
+import { projectLocalTranscriptMessage } from '../runtime/localConversationView';
+import { useAgentMessageHistoryWindow } from '../runtime/useAgentMessageHistoryWindow';
 import { chatShareMessagePreview } from './chatShareMessagePreview';
 import {
   ChatShareSelectionProvider,
@@ -26,6 +32,7 @@ import {
   useChatShareSelectionState,
   useIsChatMessageSelected,
 } from './ChatShareSelectionProvider';
+import type { ChatShareTarget } from './chatShareTarget';
 
 const LIST_STYLE = { flex: 1 };
 const LIST_CONTENT_STYLE = { paddingHorizontal: 20, paddingBottom: 12, gap: 8 };
@@ -65,28 +72,63 @@ export function ChatShareScreen() {
         </Text>
         <View className="size-11" />
       </View>
-      {sessionId ? (
-        <ConversationShareContent
+      {!sessionId ? (
+        <ContentState.Error title={t('chat.share.loadFailed')} />
+      ) : connectionId ? (
+        <RemoteShareContent
           sessionId={sessionId}
           connectionId={connectionId}
           expectedScope={scope}
           messageId={messageId}
         />
       ) : (
-        <ContentState.Error title={t('chat.share.loadFailed')} />
+        <LocalShareContent key={sessionId} sessionId={sessionId} messageId={messageId} />
       )}
     </View>
   );
 }
 
-function ConversationShareContent({
+/** Local selection reads the Session-keyed history window and one SQLite selection snapshot. */
+function LocalShareContent({ sessionId, messageId }: { sessionId: string; messageId?: string }) {
+  const api = useApiClient();
+  const window = useAgentMessageHistoryWindow(sessionId, { messageId });
+  const cache = useMemo(() => createAgentMessageListProjectionCache(), []);
+  const messages = useMemo(
+    () => window.messages.map((message) => projectLocalTranscriptMessage(message, cache)),
+    [window.messages, cache],
+  );
+  const history = useMemo<ConversationHistoryView>(
+    () => ({ ...window, messages }),
+    [window, messages],
+  );
+  const target = useMemo<ChatShareTarget>(
+    () => ({
+      ref: { source: { kind: 'local' }, sessionId },
+      prepareSelection: async (ids, signal) => {
+        const snapshot = await api.get(`/agent-sessions/${sessionId}/messages/selection`, {
+          query: { ids: [...ids] },
+          signal,
+        });
+        return {
+          title: snapshot.session.title,
+          assistantName: snapshot.assistantName,
+          messages: snapshot.messages,
+        };
+      },
+    }),
+    [api, sessionId],
+  );
+  return <ConversationShareSelection target={target} history={history} messageId={messageId} />;
+}
+
+function RemoteShareContent({
   sessionId,
   connectionId,
   expectedScope,
   messageId,
 }: {
   sessionId: string;
-  connectionId?: string;
+  connectionId: string;
   expectedScope?: string;
   messageId?: string;
 }) {
@@ -98,29 +140,47 @@ function ConversationShareContent({
     return <ContentState.Error title={t('chat.share.loadFailed')} />;
   if (isLoading || !session) return <ContentState.Loading />;
   return (
-    <ConversationShareSelection
+    <RemoteShareSelection
       key={JSON.stringify([session.scope, sessionId, messageId])}
       session={session}
       messageId={messageId}
     />
   );
 }
-function ConversationShareSelection({
+function RemoteShareSelection({
   session,
   messageId,
 }: {
-  session: ConversationSession;
+  session: RemoteConversationSession;
   messageId?: string;
 }) {
-  const { t } = useTranslation();
   const snapshot = useConversationSnapshot(session);
   const history = useConversationHistory(
     session,
     snapshot.historyVersion,
     messageId ? { messageId, key: messageId } : undefined,
   );
-  const target = history.messages.find((message) => message.key === messageId);
-  const locating = Boolean(messageId && !target && history.hasOlderMessages && !history.error);
+  const target = useMemo<ChatShareTarget>(
+    () => ({
+      ref: session.ref,
+      prepareSelection: (ids, signal) => session.history.prepareSelection(ids, signal),
+    }),
+    [session],
+  );
+  return <ConversationShareSelection target={target} history={history} messageId={messageId} />;
+}
+function ConversationShareSelection({
+  target,
+  history,
+  messageId,
+}: {
+  target: ChatShareTarget;
+  history: ConversationHistoryView;
+  messageId?: string;
+}) {
+  const { t } = useTranslation();
+  const located = history.messages.find((message) => message.key === messageId);
+  const locating = Boolean(messageId && !located && history.hasOlderMessages && !history.error);
   const { isLoadingInitial, isLoadingOlder, loadOlder } = history;
   useEffect(() => {
     if (locating && !isLoadingInitial && !isLoadingOlder) void loadOlder();
@@ -128,8 +188,8 @@ function ConversationShareSelection({
   if (history.isLoadingInitial || locating) return <ContentState.Loading />;
   return (
     <ChatShareSelectionProvider
-      session={session}
-      initialMessageId={target && isExportable(target) ? messageId : undefined}
+      target={target}
+      initialMessageId={located && isExportable(located) ? messageId : undefined}
     >
       <Text className="px-5 pb-3 text-muted-foreground text-sm">
         {t('chat.share.selectionHint')}

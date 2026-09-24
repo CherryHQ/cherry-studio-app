@@ -15,18 +15,16 @@ export function createConversationSources(input: {
   api: ApiClient;
   readMarks?: ConversationReadMarks;
   onSessionChanged(sessionId: string): void;
-  onTranscriptChanged(sessionId: string): void;
 }) {
   const local = createLocalConversationSource(input);
   const remoteSources = new Map<string, { source: ConversationSource; users: number }>();
   const lifetime = new AbortController();
   return {
-    local,
     async open(ref: ConversationSourceRef, signal: AbortSignal) {
       signal.throwIfAborted();
       if (lifetime.signal.aborted)
         throw new ConversationReadError({ code: 'retired', retry: 'none' });
-      if (ref.kind === 'local') return { source: local.source, release() {} };
+      if (ref.kind === 'local') return { source: local, release() {} };
       const remote = await input.remoteAgent.open(
         ref.connectionId,
         AbortSignal.any([signal, lifetime.signal]),
@@ -58,7 +56,7 @@ export function createConversationSources(input: {
     },
     dispose() {
       lifetime.abort();
-      local.source.dispose();
+      local.dispose();
       for (const { source } of remoteSources.values()) source.dispose();
       remoteSources.clear();
     },

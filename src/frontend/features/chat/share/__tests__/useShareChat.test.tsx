@@ -1,22 +1,21 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ConversationSession, TranscriptSnapshot } from '@/frontend/appShell/conversation';
+import type { TranscriptSnapshot } from '@/frontend/appShell/conversation';
 import type { useDocumentExport } from '@/frontend/appShell/documentExport';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
+import type { ChatShareTarget } from '../chatShareTarget';
 import { useShareChat } from '../useShareChat';
 
 const mockOpen = jest.fn(
   async (_input: Parameters<ReturnType<typeof useDocumentExport>['open']>[0]) => 'closed' as const,
 );
-const mockRelease = jest.fn();
 const mockPrepare = jest.fn<Promise<TranscriptSnapshot>, [readonly string[], AbortSignal]>();
-const session = {
-  scope: 'scope',
+const target: ChatShareTarget = {
   ref: { source: { kind: 'local' }, sessionId: 'session' },
-  history: { prepareSelection: mockPrepare },
-} as unknown as ConversationSession;
+  prepareSelection: mockPrepare,
+};
 
 jest.mock('@/frontend/appShell/documentExport', () => ({
   useDocumentExport: () => ({ open: mockOpen }),
@@ -28,7 +27,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 
 type ShareChat = ReturnType<typeof useShareChat>;
 function Probe({ ref }: { ref: Ref<ShareChat> }) {
-  const share = useShareChat(session);
+  const share = useShareChat(target);
   useImperativeHandle(ref, () => share, [share]);
   return null;
 }
@@ -53,15 +52,12 @@ function message(id: string, role: 'user' | 'assistant'): AgentMessageView {
 let renderer: ReactTestRenderer | undefined;
 beforeEach(() => {
   mockOpen.mockClear();
-  mockRelease.mockClear();
-  mockPrepare.mockReset().mockImplementation(async (refs) => ({
+  mockPrepare.mockReset().mockImplementation(async (ids) => ({
     title: 'Conversation',
     assistantName: 'Assistant',
     messages: [message('question', 'user'), message('answer', 'assistant')].filter((message) =>
-      refs.some((ref) => ref.includes(`"${message.id}"`)),
+      ids.includes(message.id),
     ),
-    assets: [],
-    release: mockRelease,
   }));
 });
 afterEach(() => {
@@ -111,25 +107,7 @@ test.each([{ ids: ['answer'] }, { ids: ['answer', 'answer'] }])(
   },
 );
 
-test('holds prepared assets until the export closes and releases them exactly once', async () => {
-  let close!: (value: 'closed') => void;
-  mockOpen.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        close = resolve;
-      }),
-  );
-  const ref = createRef<ShareChat>();
-  await act(async () => {
-    renderer = create(<Probe ref={ref} />);
-  });
-  await act(async () => ref.current!.shareChat(['answer']));
-  expect(mockRelease).not.toHaveBeenCalled();
-  await act(async () => close('closed'));
-  expect(mockRelease).toHaveBeenCalledTimes(1);
-});
-
-test('releases a late prepared snapshot after preparation was cancelled without opening export', async () => {
+test('does not open the export after preparation was cancelled', async () => {
   let finish!: (value: TranscriptSnapshot) => void;
   mockPrepare.mockImplementationOnce(
     () =>
@@ -143,9 +121,7 @@ test('releases a late prepared snapshot after preparation was cancelled without 
   });
   await act(async () => ref.current!.shareChat(['answer']));
   act(() => ref.current!.cancelShare());
-  await act(async () =>
-    finish({ messages: [message('answer', 'assistant')], assets: [], release: mockRelease }),
-  );
+  await act(async () => finish({ messages: [message('answer', 'assistant')] }));
   expect(mockOpen).not.toHaveBeenCalled();
-  expect(mockRelease).toHaveBeenCalledTimes(1);
+  expect(ref.current!.isSharing).toBe(false);
 });

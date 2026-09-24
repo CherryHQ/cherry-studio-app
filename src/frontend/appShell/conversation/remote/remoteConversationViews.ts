@@ -6,8 +6,7 @@ import type {
   Availability,
   ConversationFailure,
   ConversationMessage,
-  MessageRef,
-  ResourceRef,
+  ResourceRead,
   TranscriptMessage,
 } from '../contracts';
 
@@ -80,8 +79,7 @@ export function remoteAvailability(source: RemoteSourceState, disposed: boolean)
 }
 export function remoteMessage(
   message: RemoteMessageView,
-  ref: MessageRef,
-  resource: (value: string) => ResourceRef,
+  resource: (value: string) => ResourceRead,
 ): ConversationMessage {
   const parts: CherryMessagePart[] = [];
   const keys: string[] = [];
@@ -121,12 +119,7 @@ export function remoteMessage(
         ...(part.output ? { output: resource(part.output) } : {}),
       });
     } else if (part.kind === 'file')
-      attachments.push({
-        key: part.id,
-        name: part.name,
-        mediaType: part.mediaType,
-        resource: resource(part.resource),
-      });
+      attachments.push({ key: part.id, name: part.name, mediaType: part.mediaType });
   }
   if (message.failure) {
     parts.push({
@@ -153,7 +146,6 @@ export function remoteMessage(
     keys.push(`${message.id}:persistence-failure`);
   }
   return {
-    ref,
     key: message.id,
     state: message.state,
     completeness: message.parts.some(

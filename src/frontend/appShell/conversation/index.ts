@@ -1,65 +1,43 @@
-export {
-  AgentSessionChatClient,
-  isAgentSessionBusy,
-  type AgentSessionChatState,
-} from './local/AgentSessionChatClient';
 export type {
+  AgentRef,
+  AgentSummary,
+  Availability,
+  CatalogCursor,
+  ConversationAction,
+  ConversationCatalog,
+  ConversationExecution,
   ConversationFailure,
-  ConversationSource,
-  ConversationSourceRef,
-  ConversationSession,
+  ConversationFreshness,
+  ConversationHistoryView,
+  ConversationImageResult,
+  ConversationInteraction,
+  ConversationInteractionResponse,
+  ConversationListStatus,
+  ConversationMessage,
+  ConversationPreview,
   ConversationRef,
   ConversationSnapshot,
-  ConversationMessage,
-  ConversationImageResult,
-  ConversationInput,
-  ConversationAction,
-  ConversationDraft,
-  ConversationCatalog,
-  ConversationListStatus,
-  ConversationPreview,
-  ConversationOperation,
+  ConversationSource,
+  ConversationSourceRef,
+  ConversationSummary,
   OperationOutcome,
   QueryScope,
-  MessageRef,
-  ResourceRef,
-  AgentRef,
-  DraftId,
-  HistoryWindow,
-  HistoryPage,
-  HistoryCursor,
-  HistoryVersion,
-  TranscriptSnapshot,
+  Readable,
+  ResourceRead,
+  ResourceValue,
   TranscriptMessage,
-  InputPolicy,
+  TranscriptSnapshot,
+  WorkspaceRef,
+  WorkspaceSummary,
 } from './contracts';
-export { localImageResult } from './local/localImageResult';
-export { ConversationReadError, conversationMessageRef } from './conversationState';
-
-export {
-  createAgentMessageListProjectionCache,
-  createPendingChatMessages,
-  mergeAgentMessageViews,
-  projectRetryingMessage,
-  toAgentMessageListItem,
-  toAgentMessageListItems,
-} from './local/agentMessageProjection';
-export { createLocalConversationSource } from './local/createLocalConversationSource';
-export { createRemoteConversationSource } from './remote/createRemoteConversationSource';
-export {
-  ConversationProvider,
-  useConversationSources,
-  useLocalConversation,
-} from './ConversationProvider';
-export { useConversationHistory, type ConversationHistoryView } from './useConversationHistory';
-export { useConversation, useConversationSnapshot } from './useConversation';
+export { ConversationReadError } from './conversationState';
+export { localConversationFailure } from './local/localConversationFailure';
+export { ConversationProvider, useConversationSources } from './ConversationProvider';
 export {
   ConversationSourceBoundary,
   useConversationSource,
   useConversationSourceState,
 } from './ConversationSourceBoundary';
-
-export { useConversationResource } from './useConversationResource';
 export {
   useConversationAgents,
   useConversationSessions,
@@ -67,12 +45,3 @@ export {
   useConversationSummary,
   useConversationWorkspaces,
 } from './useConversationCatalog';
-export { useConversationDraft, useConversationOperations } from './useConversationDraft';
-export type {
-  AgentSummary,
-  WorkspaceSummary,
-  WorkspaceRef,
-  ConversationSummary,
-  Availability,
-  Submission,
-} from './contracts';

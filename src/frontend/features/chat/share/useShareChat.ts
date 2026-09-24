@@ -3,19 +3,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
 
-import {
-  ConversationReadError,
-  type ConversationSession,
-  type TranscriptSnapshot,
-} from '@/frontend/appShell/conversation';
+import { ConversationReadError } from '@/frontend/appShell/conversation';
 import { useDocumentExport } from '@/frontend/appShell/documentExport';
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { DocumentExportError } from '@/shared/contracts/documentExport';
 
+import type { ChatShareTarget } from './chatShareTarget';
 import { ChatExportError, prepareChatExport } from './prepareChatExport';
 import { toChatExportDocument, type ChatExportOptions } from './toChatExportDocument';
 
-export function useShareChat(session: ConversationSession) {
+export function useShareChat(target: ChatShareTarget) {
   const { open } = useDocumentExport();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -33,7 +30,7 @@ export function useShareChat(session: ConversationSession) {
       loading.current?.abort();
       subscription.remove();
     };
-  }, [session]);
+  }, [target]);
 
   const shareChat = useCallback(
     (messageIds: readonly string[]) => {
@@ -43,10 +40,8 @@ export function useShareChat(session: ConversationSession) {
       loading.current = controller;
       setIsSharing(true);
       void (async () => {
-        let prepared: TranscriptSnapshot | undefined;
         try {
-          prepared = await prepareChatExport(session, messageIds, controller.signal);
-          const data = prepared;
+          const data = await prepareChatExport(target, messageIds, controller.signal);
           controller.signal.throwIfAborted();
           const { messages } = data;
           const options: ChatExportOptions = {
@@ -89,7 +84,7 @@ export function useShareChat(session: ConversationSession) {
                   },
                 }
               : undefined,
-            returnTo: conversationHref(session.ref),
+            returnTo: conversationHref(target.ref),
           });
           if (outcome === 'busy' && mounted.current)
             toast.show({ label: t('documentExport.errors.busy'), variant: 'danger' });
@@ -107,14 +102,13 @@ export function useShareChat(session: ConversationSession) {
           }
           controller.abort();
         } finally {
-          prepared?.release();
           if (loading.current === controller) loading.current = undefined;
           busy.current = false;
           if (mounted.current) setIsSharing(false);
         }
       })();
     },
-    [open, session, t, toast],
+    [open, target, t, toast],
   );
   const cancelShare = useCallback(() => loading.current?.abort(), []);
   return { shareChat, isSharing, cancelShare };

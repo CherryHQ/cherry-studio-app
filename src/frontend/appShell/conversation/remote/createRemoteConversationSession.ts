@@ -7,28 +7,27 @@ import type {
 
 import type {
   ConversationAction,
-  ConversationInput,
   ConversationInteractionResponse,
-  ConversationOperation,
   ConversationRef,
-  ConversationSession,
-  ConversationSnapshot,
-  ExecutionRef,
-  HistoryCursor,
-  HistoryVersion,
-  InteractionRef,
-  MessageRef,
-  OperationId,
   OperationOutcome,
   QueryScope,
-  ResourceRef,
-  Submission,
+  ResourceRead,
 } from '../contracts';
 import {
   createConversationReferences,
   createConversationState,
   ConversationReadError,
 } from '../conversationState';
+import type {
+  ConversationInput,
+  ConversationOperation,
+  HistoryCursor,
+  HistoryVersion,
+  OperationId,
+  RemoteConversationSession,
+  RemoteConversationSnapshot,
+  Submission,
+} from './remoteContracts';
 import {
   remoteAvailability,
   remoteConversationFailure,
@@ -76,7 +75,7 @@ export function createRemoteConversationSession(
   assertSource: () => void,
   onDispose: () => void,
   bootstrapVerified = false,
-): ConversationSession {
+): RemoteConversationSession {
   const scope = source.scope as QueryScope;
   const refs = createConversationReferences(scope, ref.sessionId);
   const lifetime = new AbortController();
@@ -111,13 +110,16 @@ export function createRemoteConversationSession(
         : new ConversationReadError(remoteConversationFailure(error));
     }
   };
-  const resource = (value: string) => refs.issue<ResourceRef>('resource', value);
+  const resource = (value: string): ResourceRead => ({
+    kind: 'deferred',
+    key: refs.issue('resource', value),
+    read: async (signal) => {
+      const result = await read(signal, (signal) => source.readResource(value, signal));
+      return result.kind === 'text' ? { ...result, complete: true } : result;
+    },
+  });
   const project = (message: Parameters<typeof remoteMessage>[0]) =>
-    remoteMessage(
-      message,
-      refs.issue<MessageRef>('message', message.id, message.version),
-      resource,
-    );
+    remoteMessage(message, resource);
   const operationId = (id: string) => refs.issue<OperationId>('operation', id);
   const operations = createConversationState<readonly ConversationOperation[]>([]);
   function updateOperations() {
@@ -216,7 +218,7 @@ export function createRemoteConversationSession(
       },
     };
   }
-  function snapshot(): ConversationSnapshot {
+  function snapshot(): RemoteConversationSnapshot {
     const sourceState = source.getState();
     return {
       title: session.title,
@@ -244,7 +246,7 @@ export function createRemoteConversationSession(
       liveMessages: latest?.messages.map(project) ?? [],
       executions:
         latest?.executions.map((execution) => ({
-          ref: refs.issue<ExecutionRef>('execution', execution.id),
+          id: execution.id,
           state: execution.state,
           failure: execution.failure,
           persistenceFailure: execution.persistenceFailure,
@@ -285,10 +287,8 @@ export function createRemoteConversationSession(
         })) ?? [],
       interactions:
         latest?.interactions.map((interaction) => ({
-          ref: refs.issue<InteractionRef>('interaction', interaction.id),
-          ...(interaction.executionId
-            ? { execution: refs.issue<ExecutionRef>('execution', interaction.executionId) }
-            : {}),
+          id: interaction.id,
+          ...(interaction.executionId ? { execution: interaction.executionId } : {}),
           kind: interaction.kind ?? 'decision',
           title: interaction.title,
           state: interaction.state,
@@ -330,7 +330,7 @@ export function createRemoteConversationSession(
   });
   const unoperations = source.subscribeOperations(updateOperations);
   updateOperations();
-  const handle: ConversationSession = {
+  const handle: RemoteConversationSession = {
     ref,
     scope,
     state,
@@ -417,9 +417,9 @@ export function createRemoteConversationSession(
           throw error;
         }
       },
-      prepareSelection: async (messages, signal) => {
-        const ids = new Set(messages.map((message) => refs.resolve(message, 'message').id));
-        if (!ids.size || ids.size !== messages.length || ids.size > 128)
+      prepareSelection: async (messageIds, signal) => {
+        const ids = new Set(messageIds);
+        if (!ids.size || ids.size !== messageIds.length || ids.size > 128)
           throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
         const fixed = await read(signal, (signal) => source.readSession(ref.sessionId, signal));
         const selected = [];
@@ -447,19 +447,8 @@ export function createRemoteConversationSession(
         return {
           title: fixed.title,
           messages: selected.toReversed().map(remoteTranscriptMessage),
-          assets: [],
-          release() {},
         };
       },
-    },
-    resources: {
-      read: async (value, signal) => {
-        const result = await read(signal, (signal) =>
-          source.readResource(refs.resolve(value, 'resource').id, signal),
-        );
-        return result.kind === 'text' ? { ...result, complete: true } : result;
-      },
-      materializer: () => undefined,
     },
     dispose: () => {
       if (disposed) return;

@@ -1,11 +1,17 @@
 import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';
 
-import type { MessageRef, ResourceRef } from '../../contracts';
+import type { ResourceRead } from '../../contracts';
 import {
   remoteConversationFailure,
   remoteMessage,
   remoteTranscriptMessage,
 } from '../remoteConversationViews';
+
+const resource = (id: string): ResourceRead => ({
+  kind: 'deferred',
+  key: id,
+  read: async () => ({ kind: 'text', text: id, complete: true }),
+});
 
 it('keeps the same provider failure in message presentation and exported history without duplicating data parts', () => {
   const failure = {
@@ -26,7 +32,7 @@ it('keeps the same provider failure in message presentation and exported history
     failure,
     parts: [{ id: 'legacy-error', kind: 'data', name: 'data-error', resource: 'resource' }],
   };
-  const view = remoteMessage(message, 'failed' as MessageRef, (id) => id as ResourceRef);
+  const view = remoteMessage(message, resource);
   expect(view.display).toMatchObject({
     status: 'error',
     data: {
@@ -79,7 +85,7 @@ it('keeps tools in process order without putting deferred input/output values in
       { id: 'last', kind: 'text', text: 'Final answer', complete: true },
     ],
   };
-  const projected = remoteMessage(message, 'message' as MessageRef, (id) => id as ResourceRef);
+  const projected = remoteMessage(message, resource);
   expect(projected.display.data.partKeys).toEqual(['r', 'call1', 't', 'call2', 'last']);
   expect(projected.display.data.parts?.map((part) => part.type)).toEqual([
     'reasoning',
@@ -95,7 +101,7 @@ it('keeps tools in process order without putting deferred input/output values in
   });
   expect(projected.display.data.parts?.[3]).toMatchObject({ state: 'output-error' });
   expect(JSON.stringify(projected.display)).not.toMatch(/input-ref|output-ref|error-ref/);
-  expect(projected.tools?.[0].output).toBe('output-ref');
+  expect(projected.tools?.[0].output).toMatchObject({ kind: 'deferred', key: 'output-ref' });
 });
 
 it('preserves trailing live prose and keeps metadata-only files out of local file identifiers', () => {
@@ -117,12 +123,15 @@ it('preserves trailing live prose and keeps metadata-only files out of local fil
         },
       ],
     },
-    'message' as MessageRef,
-    (id) => id as ResourceRef,
+    resource,
   );
   expect(projected.display.data.partKeys).toEqual(['call', 'text']);
   expect(projected.display.data.parts?.[0]).toMatchObject({ state: 'input-streaming' });
-  expect(projected.attachments?.[0]).toMatchObject({ name: 'result.png', resource: 'pc-file' });
+  expect(projected.attachments?.[0]).toEqual({
+    key: 'file',
+    name: 'result.png',
+    mediaType: 'image/png',
+  });
   expect(JSON.stringify(projected.display)).not.toContain('pc-file');
 });
 
@@ -152,13 +161,8 @@ it('keeps remote usage in the display and leaves absent usage unknown', () => {
     parts: [],
     usage: { totalTokens: 25, outputTokens: 0, cacheReadTokens: 10, durationMs: 200 },
   };
-  expect(
-    remoteMessage(message, 'm' as MessageRef, (id) => id as ResourceRef).display.usage,
-  ).toEqual(message.usage);
-  expect(
-    remoteMessage({ ...message, usage: undefined }, 'm' as MessageRef, (id) => id as ResourceRef)
-      .display.usage,
-  ).toBeUndefined();
+  expect(remoteMessage(message, resource).display.usage).toEqual(message.usage);
+  expect(remoteMessage({ ...message, usage: undefined }, resource).display.usage).toBeUndefined();
 });
 
 it('renders the historical remote model identity even when the phone has no matching model', () => {
@@ -170,11 +174,9 @@ it('renders the historical remote model identity even when the phone has no matc
     parts: [],
     model: { modelId: 'model', providerId: 'desktop-provider', name: 'Historical model' },
   };
-  expect(
-    remoteMessage(message, 'm' as MessageRef, (id) => id as ResourceRef).display.model,
-  ).toEqual({ id: 'desktop-provider::model', ...message.model });
-  expect(
-    remoteMessage({ ...message, model: undefined }, 'm' as MessageRef, (id) => id as ResourceRef)
-      .display.model,
-  ).toBeUndefined();
+  expect(remoteMessage(message, resource).display.model).toEqual({
+    id: 'desktop-provider::model',
+    ...message.model,
+  });
+  expect(remoteMessage({ ...message, model: undefined }, resource).display.model).toBeUndefined();
 });
