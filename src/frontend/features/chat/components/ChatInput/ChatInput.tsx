@@ -129,6 +129,11 @@ export function ChatInput({
     handleModelPersistenceError,
   );
   const selectedModelItem = modelPickerData.getModelItem(selectedModelId);
+  const reasoningEfforts = useChatInputReasoningEfforts(selectedModelItem?.model);
+  const reasoningSelection = useChatInputReasoningEffortSelection(
+    selectedModelItem ? reasoningEfforts : undefined,
+    agentId,
+  );
   const modelSelection = useMemo(
     () => ({
       modelId: selectedModelId,
@@ -167,6 +172,8 @@ export function ChatInput({
           controls={controls}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
           providerSetupReturnTo={providerSetupReturnTo}
+          reasoningEfforts={reasoningEfforts}
+          reasoningSelection={reasoningSelection}
           selectedModelId={selectedModelId}
           selectedModelItem={selectedModelItem}
           selectModel={selectModel}
@@ -181,11 +188,15 @@ function TextChatInput({
   controls,
   dismissKeyboardOnSend,
   providerSetupReturnTo,
+  reasoningEfforts,
+  reasoningSelection,
   selectedModelId,
   selectedModelItem,
   selectModel,
 }: Omit<ChatInputProps, 'sessionId'> & {
   providerSetupReturnTo: string;
+  reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
+  reasoningSelection: ReturnType<typeof useChatInputReasoningEffortSelection>;
   selectedModelId: UniqueModelId | null;
   selectedModelItem?: ModelPickerModelItem;
   selectModel: (modelId: UniqueModelId) => void;
@@ -195,9 +206,7 @@ function TextChatInput({
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const selectedModel = selectedModelItem?.model;
   const selectedModelLabel = selectedModel?.name;
-  const reasoningEfforts = useChatInputReasoningEfforts(selectedModel);
-  const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
-    useChatInputReasoningEffortSelection(reasoningEfforts, agentId);
+  const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isPluginPickerOpen, setIsPluginPickerOpen] = useState(false);
   const pluginCatalog = usePluginCatalog();

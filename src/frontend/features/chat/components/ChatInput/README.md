@@ -46,10 +46,14 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
   persisted serially and coalesced to the latest visible selection.
 - The reasoning gauge derives its stops from the selected model's `selectableEfforts`, retaining
-  `xhigh` and `max` as distinct values. It starts at the provider default. A pick is local to the
-  current Agent composer and is snapshotted into each submission; it never updates Agent
-  configuration. Switching models projects that pick to the closest supported stop. `default`
-  bypasses the Agent effort for that turn; `auto` remains a separate provider-controlled mode.
+  `xhigh` and `max` as distinct values. The frontend's persistent `chat.reasoning_efforts` cache
+  remembers the last selection per Agent across new conversations and app restarts. It is
+  recoverable UI state: clearing the cache restores model defaults. Agent database configuration
+  is unchanged, and each submission snapshots the visible effort. Once model metadata is available,
+  switching models also caches the nearest supported stop, preferring the higher stop on a tie.
+  Models without selectable reasoning, including image models, reset it to `default`; loading model
+  metadata does not clear it. `auto` retains its existing provider-controlled meaning and shared
+  fallback ordering.
 - The composer menu offers media and connected plugins. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available
   to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
