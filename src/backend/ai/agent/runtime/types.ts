@@ -264,6 +264,8 @@ export type RuntimeExecutionRequest = {
   sessionId: string;
   /** Host-prepared application prompt: Runtime rules, language, selected guides and Agent instructions. */
   instructions: string;
+  /** Host-owned bounded instructions refreshed after tool results and before context budgeting. */
+  resolveAdditionalInstructions?: () => string;
   model: RuntimeModel;
   history: RuntimeHistoryTurn[];
   contextCheckpoint: RuntimeContextCheckpoint | null;

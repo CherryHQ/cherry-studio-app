@@ -10,6 +10,7 @@ import type {
 import type { MessageRuntimeStatsInput, MessageRuntimeTiming } from '@/shared/data/types/message';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
+import type { StoredSkillActivation } from './skillActivations';
 
 export type StoredRuntimeContextCheckpoint = {
   assistantMessageId: string;
@@ -27,6 +28,8 @@ export type StoredRuntimeTurnContext = {
   referencedFileEntryIds: string[];
   /** Lightweight checkpoint-anchor projection across the complete transcript. */
   sessionTurnIds: string[];
+  /** Lightweight receipts across the complete transcript, including compacted turns. */
+  skillActivations?: StoredSkillActivation[];
 };
 
 export type ReserveSubmissionResult = {

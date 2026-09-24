@@ -1,4 +1,5 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
+import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
 import { Composer, useToast } from '@cherrystudio/ui/components';
 import { type RefObject, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,9 +15,11 @@ const logger = loggerService.withContext('ChatInputMenu');
 /** Chat owns the library destination; the shared menu still owns media handoffs. */
 export function ChatInputMenu({
   onPickPlugins,
+  onPickSkills,
   triggerRef,
 }: {
   onPickPlugins?: () => void;
+  onPickSkills?: () => void;
   triggerRef: RefObject<View | null>;
 }) {
   const { t } = useTranslation();
@@ -37,6 +40,14 @@ export function ChatInputMenu({
   return (
     <>
       <ComposerMenu onPickFiles={() => setIsFilePickerOpen(true)} triggerRef={triggerRef}>
+        {onPickSkills ? (
+          <Composer.Menu.Item
+            icon={<SparklesIcon className="size-5 text-foreground" />}
+            label={t('skills.title')}
+            onPress={onPickSkills}
+            testID="chat-composer-skills"
+          />
+        ) : null}
         {onPickPlugins && (
           <Composer.Menu.Item
             icon={<BoxesIcon className="size-5 text-foreground" />}

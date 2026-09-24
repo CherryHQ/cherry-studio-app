@@ -1,13 +1,3 @@
-/**
- * Turn preparation for the Mobile Agent Host: everything between admission
- * and the first durable write. `prepareTurn` is a standalone planning stage
- * over explicit ports — it loads the Session, Agent definition, checkpoint,
- * and history, admits attachments, freezes the tool snapshot, preflights the
- * model, and returns one immutable `TurnPlan`. It performs no writes and
- * publishes no events, so every gate can fail here with zero side effects
- * and the stage is testable without a Host instance.
- */
-
 import type { AiUsageAttribution, AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import {
@@ -22,8 +12,19 @@ import {
   type AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
+/**
+ * Turn preparation for the Mobile Agent Host: everything between admission
+ * and the first durable write. `prepareTurn` is a standalone planning stage
+ * over explicit ports — it loads the Session, Agent definition, checkpoint,
+ * and history, admits attachments, freezes the tool snapshot, preflights the
+ * model, and returns one immutable `TurnPlan`. It performs no writes and
+ * publishes no events, so every gate can fail here with zero side effects
+ * and the stage is testable without a Host instance.
+ */
+import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { parseUniqueModelId } from '@/shared/data/types/model';
+import { SKILL_ACTIVE_MAX_CHARACTERS, type SkillActivation } from '@/shared/data/types/skill';
 import { applyToolApprovalMode } from '@/shared/utils/agentToolApproval';
 
 import {
@@ -42,9 +43,11 @@ import type {
   AgentSessionStore,
   StoredRuntimeTurnContext,
 } from '../sessionStore/AgentSessionStore';
+import { collectSkillActivations } from '../sessionStore/skillActivations';
 import type { AskUserQuestion } from '../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
+import { createSkillTools, createSkillManagementTools } from '../tools/skill';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPlan, AgentImageGenerationPort } from './agentImageGeneration';
 import { validateRuntimeContextCheckpointCandidate } from './contextCheckpoints';
@@ -52,6 +55,18 @@ import {
   createAgentInferenceSnapshot,
   type AgentInferenceModelResolver,
 } from './inferenceSnapshot';
+import {
+  latestSkillActivations,
+  isSkillActivationCurrent,
+  stripSkillHistory,
+} from './skillHistory';
+import {
+  EMPTY_SKILL_SCOPE,
+  createExpandingSkillScope,
+  type SkillScopeSource,
+  type SkillTurnEntry,
+  type SkillTurnScope,
+} from './skillScope';
 import {
   assertAttachmentRequestSupported,
   resolveManagedInput,
@@ -76,6 +91,9 @@ export type TurnPreparationDependencies = {
   /** The Host keeps the engine binding; preparation only consumes the routed Runtime. */
   routeExecutionTarget(target: AgentExecutionTarget): AgentRuntime;
   runtimeTools: AgentRuntimeToolResolver;
+  /** Optional so tests and hosts without a Skill library prepare turns unchanged. */
+  skills?: SkillScopeSource;
+  skillWorkflow?: SkillsModule;
   store: Pick<
     AgentSessionStore,
     'getLatestContextCheckpoint' | 'getSession' | 'loadRuntimeTurnContext'
@@ -109,12 +127,29 @@ export type TurnPlan = {
   sessionTurnIds: readonly string[];
   tools: readonly RuntimeTool[];
   pluginGuides: readonly PluginGuideSnapshot[];
+  /** The Skills usable in this turn, with their pinned revisions. */
+  skills: TurnSkillPlan;
   toolDiscoveryWarnings: readonly string[];
   /** The user message parts to reserve, projected from the canonical input. */
   userParts: AgentMessagePart[];
   /** Source captured at admission; the Host binds the reserved message before execution. */
   usageAttribution: TurnUsageAttribution;
 };
+
+export type TurnSkillPlan = {
+  scope: SkillTurnScope;
+  findAndInstall?: boolean;
+  /** Explicitly selected Skills with their instructions already loaded. */
+  selected: readonly { entry: SkillTurnEntry; instructions: string }[];
+  /** Host-owned active instructions, updated by successful read-only loading tools. */
+  active?: Map<string, { entry: SkillTurnEntry; instructions: string }>;
+  hasStaleActivations?: boolean;
+};
+
+export const EMPTY_TURN_SKILL_PLAN: TurnSkillPlan = Object.freeze({
+  scope: EMPTY_SKILL_SCOPE,
+  selected: Object.freeze([]),
+});
 
 /**
  * Attribution for provider calls that turn tools make on the Host's behalf.
@@ -268,6 +303,7 @@ export async function prepareResolvedTurn(
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
   documentParserMode: DocumentParserMode,
   signal: AbortSignal,
+  expectedSelections: readonly SkillActivation[] = [],
 ): Promise<TurnPlan> {
   const agent = applyTurnOverrides(configuredAgent, parsed);
   const usageAttribution = createTurnUsageAttribution({
@@ -312,6 +348,8 @@ export async function prepareResolvedTurn(
     signal,
   });
   if (imageGeneration) {
+    if (parsed.skillIds?.length || parsed.skillAction)
+      fail('CAPABILITY_UNSUPPORTED', 'Skills cannot be used with image generation.');
     return {
       agent,
       documentParserMode,
@@ -334,6 +372,7 @@ export async function prepareResolvedTurn(
       sessionTurnIds: storedTurnContext.sessionTurnIds,
       tools: [],
       pluginGuides: [],
+      skills: EMPTY_TURN_SKILL_PLAN,
       toolDiscoveryWarnings: [],
       userParts: parts.map(
         (part, index): AgentMessagePart =>
@@ -356,6 +395,12 @@ export async function prepareResolvedTurn(
   if (parsed.imageGeneration) {
     fail('CAPABILITY_UNSUPPORTED', 'Image generation is unavailable for this Agent.');
   }
+  if ((parsed.skillIds?.length || parsed.skillAction) && !runtime.descriptor.capabilities.tools) {
+    fail('CAPABILITY_UNSUPPORTED', 'Skills are not supported for this Agent.');
+  }
+
+  if (parsed.skillAction && (!dependencies.skillWorkflow || !dependencies.skills?.check))
+    fail('CAPABILITY_UNSUPPORTED', 'Skill discovery is unavailable in this environment.');
 
   // Freeze system capabilities, configured MCP tools, and connected plugins so
   // mid-turn changes cannot alter the active catalog. The catalog closes over
@@ -363,8 +408,16 @@ export async function prepareResolvedTurn(
   // resolution remains optional; configured MCP binding resolution fails closed.
   let systemTools: readonly RuntimeTool[] = [];
   let configuredTools: readonly RuntimeTool[] = [];
+  let skillTools: readonly RuntimeTool[] = [];
   let pluginGuides: TurnPlan['pluginGuides'] = [];
+  let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
   const toolDiscoveryWarnings: string[] = [];
+  const recordedActivations =
+    storedTurnContext.skillActivations ?? collectSkillActivations(storedTurnContext.history);
+  const receipts = latestSkillActivations(recordedActivations);
+  if (!runtime.descriptor.capabilities.tools && receipts.length > 0) {
+    skills = { ...EMPTY_TURN_SKILL_PLAN, hasStaleActivations: true };
+  }
   if (runtime.descriptor.capabilities.tools) {
     try {
       systemTools = await raceAbort(
@@ -402,9 +455,91 @@ export async function prepareResolvedTurn(
       signal.throwIfAborted();
       fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
     }
+    skills = await resolveTurnSkills(
+      dependencies,
+      agent,
+      parsed.skillIds ?? [],
+      [...systemTools, ...configuredTools],
+      receipts,
+      expectedSelections,
+      signal,
+    );
+    skills.hasStaleActivations ||= recordedActivations.some(
+      ({ activation }) => !isSkillActivationCurrent(activation, skills.scope),
+    );
+    const expanding = createExpandingSkillScope(skills.scope);
+    skills = {
+      ...skills,
+      scope: expanding.scope,
+      active: skills.active ?? new Map(),
+      findAndInstall: parsed.skillAction === 'find-and-install',
+    };
+    if (skills.scope.entries.length > 0 || dependencies.skillWorkflow) {
+      const loaded = [...skills.selected, ...(skills.active?.values() ?? [])];
+      skillTools = createSkillTools(skills.scope, {
+        loadedSkillIds: loaded.map(({ entry }) => entry.id),
+        explicitSkillIds: [
+          ...skills.selected.map(({ entry }) => entry.id),
+          ...receipts
+            .filter(
+              (receipt) =>
+                receipt.origin === 'explicit' && isSkillActivationCurrent(receipt, skills.scope),
+            )
+            .map((receipt) => receipt.skillId),
+        ],
+        instructionCharacters: loaded.reduce(
+          (sum, { instructions }) => sum + [...instructions].length,
+          0,
+        ),
+        onLoad: (entry, instructions) => skills.active?.set(entry.id, { entry, instructions }),
+      });
+    }
+    if (dependencies.skillWorkflow && dependencies.skills?.check) {
+      skillTools = [
+        ...skillTools,
+        ...createSkillManagementTools({
+          workflow: dependencies.skillWorkflow,
+          source: dependencies.skills,
+          context: {
+            agentId: agent.id,
+            disabledCapabilities: agent.disabledCapabilities,
+            model: agent.model,
+            tools: [...systemTools, ...configuredTools],
+          },
+          installIntent: skills.findAndInstall === true,
+          include: expanding.include,
+        }),
+      ];
+    }
+  }
+  if (runtimeContextCheckpoint && skills.hasStaleActivations) {
+    // A compacted summary can contain instructions from a now-disabled or
+    // superseded Skill. Rebuild from the transcript, with Skill payloads stripped.
+    const full = await raceAbort(
+      dependencies.store.loadRuntimeTurnContext(parsed.sessionId, null),
+      signal,
+    );
+    const retryIndex = full.history.findIndex((message) => message.id === parsed.userMessageId);
+    return prepareResolvedTurn(
+      dependencies,
+      parsed,
+      session,
+      configuredAgent,
+      {
+        ...full,
+        history: retryIndex < 0 ? full.history : full.history.slice(0, retryIndex),
+        // Retry has already removed receipts from the answer it replaces.
+        skillActivations:
+          storedTurnContext.skillActivations ?? collectSkillActivations(storedTurnContext.history),
+      },
+      null,
+      documentParserMode,
+      signal,
+      expectedSelections,
+    );
   }
   const tools = applyAgentToolApprovalMode(
-    [...systemTools, ...configuredTools],
+    [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
   const inferenceModel = await resolveInferenceModel();
@@ -461,11 +596,36 @@ export async function prepareResolvedTurn(
     };
   });
 
+  if (skills.selected.length > 0 || parsed.skillAction) {
+    const skillSelections: SkillActivation[] = skills.selected.map(({ entry }) => ({
+      skillId: entry.id,
+      name: entry.name,
+      packageDigest: entry.packageDigest,
+      origin: 'explicit',
+    }));
+    const textIndex = userParts.findIndex((part) => part.type === 'text');
+    if (textIndex < 0)
+      userParts.unshift({
+        id: 'skill-selection',
+        type: 'text',
+        text: '',
+        state: 'done',
+        skillSelections,
+        ...(parsed.skillAction ? { skillAction: parsed.skillAction } : {}),
+      });
+    else
+      userParts[textIndex] = {
+        ...(userParts[textIndex] as Extract<AgentMessagePart, { type: 'text' | 'reasoning' }>),
+        skillSelections,
+        ...(parsed.skillAction ? { skillAction: parsed.skillAction } : {}),
+      };
+  }
+
   return {
     agent,
     documentParserMode,
     hasMessages: storedTurnContext.hasMessages,
-    history: storedTurnContext.history,
+    history: stripSkillHistory(storedTurnContext.history),
     inferenceSnapshot,
     inputParts: parts,
     modelPreflight,
@@ -479,8 +639,102 @@ export async function prepareResolvedTurn(
     toolDiscoveryWarnings,
     userParts,
     pluginGuides,
+    skills,
     usageAttribution,
   };
+}
+
+/**
+ * Resolve the Skill scope and load explicit selections. A missing Skill
+ * library is not a failure; an explicit selection outside the scope is, since
+ * the user asked for something this Agent cannot use.
+ */
+async function resolveTurnSkills(
+  dependencies: Pick<TurnPreparationDependencies, 'skills'>,
+  agent: AgentDefinition,
+  skillIds: readonly string[],
+  tools: readonly RuntimeTool[],
+  activations: readonly SkillActivation[],
+  expectedSelections: readonly SkillActivation[],
+  signal: AbortSignal,
+): Promise<TurnSkillPlan> {
+  if (!dependencies.skills) {
+    if (skillIds.length > 0) {
+      fail('CAPABILITY_UNSUPPORTED', 'Skills are not available in this environment.');
+    }
+    return { ...EMPTY_TURN_SKILL_PLAN, hasStaleActivations: activations.length > 0 };
+  }
+  let scope: SkillTurnScope;
+  try {
+    scope = await raceAbort(
+      dependencies.skills.resolve({
+        agentId: agent.id,
+        disabledCapabilities: agent.disabledCapabilities,
+        model: agent.model,
+        tools,
+        signal,
+      }),
+      signal,
+    );
+  } catch (error) {
+    signal.throwIfAborted();
+    if (skillIds.length > 0) {
+      fail('EXECUTION_UNAVAILABLE', 'The selected Skills are unavailable.');
+    }
+    logger.warn('Failed to resolve Agent Skills; continuing without them', error as Error);
+    return { ...EMPTY_TURN_SKILL_PLAN, hasStaleActivations: activations.length > 0 };
+  }
+  const selected: { entry: SkillTurnEntry; instructions: string }[] = [];
+  let instructionCharacters = 0;
+  for (const activation of expectedSelections) {
+    if (!isSkillActivationCurrent(activation, scope))
+      fail(
+        'CAPABILITY_UNSUPPORTED',
+        'A previously selected Skill has changed or is no longer available.',
+      );
+  }
+  for (const skillId of new Set(skillIds)) {
+    const entry = scope.entries.find((candidate) => candidate.id === skillId);
+    if (!entry || !entry.invocation.userInvocable) {
+      fail('CAPABILITY_UNSUPPORTED', `The selected Skill is not usable by this Agent: ${skillId}`);
+    }
+    const instructions = await raceAbort(scope.readInstructions(entry.id), signal);
+    if (instructions === null) {
+      fail('EXECUTION_UNAVAILABLE', `The selected Skill package could not be read: ${skillId}`);
+    }
+    instructionCharacters += [...instructions].length;
+    if (instructionCharacters > SKILL_ACTIVE_MAX_CHARACTERS)
+      fail(
+        'CAPABILITY_UNSUPPORTED',
+        'The selected Skills exceed the instruction budget. Select fewer Skills.',
+      );
+    selected.push({ entry, instructions });
+  }
+  const active = new Map<string, { entry: SkillTurnEntry; instructions: string }>();
+  let hasStaleActivations = activations.some(
+    (activation) => !isSkillActivationCurrent(activation, scope),
+  );
+  for (const activation of activations.toReversed()) {
+    if (
+      !isSkillActivationCurrent(activation, scope) ||
+      selected.some(({ entry }) => entry.id === activation.skillId)
+    )
+      continue;
+    const entry = scope.entries.find((candidate) => candidate.id === activation.skillId)!;
+    const instructions = await raceAbort(scope.readInstructions(entry.id), signal);
+    if (instructions === null) {
+      hasStaleActivations = true;
+      continue;
+    }
+    const length = [...instructions].length;
+    if (instructionCharacters + length > SKILL_ACTIVE_MAX_CHARACTERS) {
+      hasStaleActivations = true;
+      continue;
+    }
+    instructionCharacters += length;
+    active.set(entry.id, { entry, instructions });
+  }
+  return { scope, selected, active, hasStaleActivations };
 }
 
 function applyTurnOverrides(

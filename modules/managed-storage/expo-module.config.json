@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "ios/ManagedStorage.podspec",
+    "modules": ["ManagedStorageModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.managedstorage.ManagedStorageModule"]
+  }
+}

@@ -524,6 +524,53 @@ const harness: RuntimeConformanceHarness = {
 };
 
 describe('Pi invocation capture', () => {
+  test('refreshes Host instructions after a tool before budgeting the next model context', async () => {
+    const runtime = createTestRuntime();
+    let instructions = 'Initial active instructions.';
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'activate_instructions' },
+      providerName: 'activate_instructions',
+      displayName: 'Activate instructions',
+      description: 'Activate bounded Host context.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => {
+        instructions = 'New active instructions.';
+        return { value: 'loaded', artifacts: [] };
+      },
+    };
+    arrange(runtime, async (context) => {
+      expect(context.options.initialState?.systemPrompt).toContain('Initial active instructions.');
+      const piTool = context.options.initialState!.tools![0]!;
+      const result = await piTool.execute('activate', {}, context.signal);
+      const next = await prepareTestNextTurn(context, assistantMessage(), [
+        {
+          role: 'toolResult',
+          toolCallId: 'activate',
+          toolName: piTool.name,
+          content: result.content,
+          details: result.details,
+          isError: false,
+          timestamp: 1,
+        },
+      ]);
+      expect(next.context.systemPrompt).toContain('New active instructions.');
+      expect(next.context.systemPrompt).not.toContain('Initial active instructions.');
+      await emitText(context, 'Done.');
+    });
+    const session = await runtime.open();
+    const events = await collect(
+      session.execute(
+        baseRequest('dynamic-instructions', {
+          tools: [tool],
+          resolveAdditionalInstructions: () => instructions,
+        }),
+      ),
+    );
+    expect(events.at(-1)?.type).toBe('completed');
+    await session.close();
+  });
+
   test('clamps the provider output cap using multilingual input estimates', async () => {
     const runtime = createTestRuntime();
     let outputCap: number | undefined;

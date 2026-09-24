@@ -9,6 +9,8 @@ import { GenericToolPart } from './GenericToolPart';
 import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import { isMetaToolPart, MetaToolPartRenderer } from './metaTool/MetaToolPartRenderer';
 import { isReadFileToolPart, ReadFileToolPart } from './ReadFileToolPart';
+import { SkillToolPart } from './SkillToolPart';
+import { getToolName } from './toolPartState';
 import {
   isAgentMutationToolPart,
   isProviderWebSearchToolPart,
@@ -27,6 +29,12 @@ type ToolPartRendererProps = {
 };
 
 export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRendererProps) {
+  if (
+    ['load_skill', 'find_skills', 'prepare_skill', 'install_skill'].includes(
+      getToolName(part) ?? '',
+    )
+  )
+    return <SkillToolPart part={part} />;
   if (isProviderWebSearchToolPart(part)) {
     return null;
   }

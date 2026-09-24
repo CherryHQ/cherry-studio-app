@@ -1,5 +1,6 @@
 import { ContextMenuExclusion } from '@cherrystudio/ui/components';
-import { Image, Text, useWindowDimensions } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Image, Text, View, useWindowDimensions } from 'react-native';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -7,6 +8,7 @@ import { getPluginInlineIcon } from '@/frontend/utils/pluginIcons';
 import { splitPluginReferences } from '@/frontend/utils/pluginReferences';
 import { type MentionSegment, splitToolMentions } from '@/frontend/utils/toolMentions';
 import type { CherryMessagePart } from '@/shared/data/types/message';
+import { SkillActivationSchema } from '@/shared/data/types/skill';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import type { ResolvedCitationText } from './citations';
@@ -87,18 +89,41 @@ export function TextPart({
   renderMode = 'markdown',
   resolvedText,
 }: TextPartProps) {
+  const { t } = useTranslation();
+  const findSkills = (readCherryMeta(part)?.references ?? []).some(
+    (value) =>
+      value && typeof value === 'object' && 'type' in value && value.type === 'skill-action',
+  );
+  const skillSelections = (readCherryMeta(part)?.references ?? []).flatMap((value) => {
+    if (!value || typeof value !== 'object' || !('type' in value) || value.type !== 'skill')
+      return [];
+    const { type: _type, ...receipt } = value;
+    const parsed = SkillActivationSchema.safeParse(receipt);
+    return parsed.success ? [parsed.data] : [];
+  });
   // Native selection, links and block menus own touches inside the text region.
   // Keep the boundary mounted while streaming so completion preserves the native text.
   return (
     <ContextMenuExclusion>
-      {renderMode === 'plainText' ? (
-        <PlainTextWithMentions
-          text={resolvedText?.plainText ?? part.text}
-          references={readCherryMeta(part)?.references}
-        />
-      ) : (
-        <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />
-      )}
+      <View className="gap-2">
+        {renderMode === 'plainText' ? (
+          <PlainTextWithMentions
+            text={resolvedText?.plainText ?? part.text}
+            references={readCherryMeta(part)?.references}
+          />
+        ) : (
+          <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />
+        )}
+        {findSkills ? (
+          <Text className="text-xs text-muted-foreground">{t('skills.find.name')}</Text>
+        ) : null}
+        {skillSelections.map((selection) => (
+          <Text key={selection.skillId} className="text-xs text-muted-foreground">
+            {t('skills.activity.selected', { name: selection.name })} ·{' '}
+            {selection.packageDigest.slice(0, 12)}
+          </Text>
+        ))}
+      </View>
     </ContextMenuExclusion>
   );
 }

@@ -1,5 +1,6 @@
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { agentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
 import { agentService } from '@/backend/data/services/AgentService';
 import { agentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
 import { agentSessionService } from '@/backend/data/services/AgentSessionService';
@@ -37,6 +38,7 @@ export function createDataServices({
     // `agent` names the MobileAgentHost in the merged services object; the
     // CRUD data service gets the suffixed key.
     agentData: agentService,
+    agentGlobalSkill: agentGlobalSkillService,
     agentToolBinding: agentToolBindingService,
     agentSession: agentSessionService,
     agentSessionMessage: agentSessionMessageService,

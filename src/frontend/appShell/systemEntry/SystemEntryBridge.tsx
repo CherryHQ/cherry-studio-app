@@ -8,6 +8,7 @@ import {
   type ChatRouteParamsInput,
   chatHref,
   chatRouteParams,
+  createChatComposerHandoff,
   parseChatRoute,
 } from '@/frontend/appShell/navigation/chat';
 import {
@@ -17,8 +18,6 @@ import {
 import { useBackendModule } from '@/frontend/data';
 import { useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
 import type { SystemSharedFile } from '@/shared/contracts';
-
-import { createShareComposerHandoff } from './shareComposerHandoff';
 
 /** Hands an incoming system share to the chat composer, for the user to edit, retarget, and send. */
 export function SystemEntryBridge() {
@@ -50,7 +49,7 @@ export function SystemEntryBridge() {
       try {
         const action = await module.claimNext();
         if (!action || stopped) return;
-        const composerHandoff = createShareComposerHandoff({
+        const composerHandoff = createChatComposerHandoff({
           attachments: action.files.map(toShareAttachment),
           draft: action.text,
         });

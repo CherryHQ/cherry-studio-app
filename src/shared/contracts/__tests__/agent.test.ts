@@ -82,6 +82,44 @@ describe('Agent Session status contract', () => {
 });
 
 describe('Agent tool and managed-file contracts', () => {
+  test('preserves find-and-install intent through sends and history without accepting client assessment claims', () => {
+    const input = {
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ type: 'text', text: 'Find a note-taking Skill' }],
+      skillAction: 'find-and-install',
+    };
+    expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+    const initial = { ...input, agentId: 'agent-1', executionTarget: { kind: 'local' } };
+    expect(AgentStartSessionInputSchema.parse(roundTrip(initial))).toEqual(initial);
+    const part = {
+      id: 'user-text',
+      type: 'text',
+      text: input.parts[0]!.text,
+      state: 'done',
+      skillAction: input.skillAction,
+    };
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({
+        ...input,
+        skillAction: 'install-without-assessment',
+      }).success,
+    ).toBe(false);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({ ...input, preparedCandidates: ['model-generated'] })
+        .success,
+    ).toBe(false);
+    expect(
+      AgentInputPartSchema.safeParse({
+        type: 'text',
+        text: 'notes',
+        skillAction: 'find-and-install',
+      }).success,
+    ).toBe(false);
+  });
+
   test('round-trips image settings through initial sends, follow-ups, and inference snapshots', () => {
     const imageGeneration = { mode: 'edit', paramValues: { size: '1024x1024', numImages: 2 } };
     const input = {

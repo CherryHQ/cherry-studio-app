@@ -6,7 +6,10 @@ import type { LanguageVarious } from '@/shared/data/preference';
 import type { RuntimeTool } from '../runtime';
 import { EDIT_FILE_TOOL_NAME } from '../tools/editFileTool';
 import { READ_FILE_TOOL_NAME } from '../tools/readFileTool';
+import { LOAD_SKILL_TOOL_NAME, SEARCH_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
 import { WRITE_FILE_TOOL_NAME } from '../tools/writeFileTool';
+import { FIND_SKILLS_INSTRUCTIONS } from './findSkillsInstructions';
+import type { TurnSkillPlan } from './turnPreparation';
 
 const MOBILE_RUNTIME_RULES = `# Cherry Studio Mobile Runtime
 
@@ -32,6 +35,7 @@ export type BuildAgentSystemPromptInput = {
   currentDate?: string;
   tools: readonly RuntimeTool[];
   pluginGuides?: readonly PluginGuideSnapshot[];
+  skills?: TurnSkillPlan;
   toolDiscoveryWarnings?: readonly string[];
   /**
    * Set when this turn replaces an earlier answer to the same question:
@@ -48,6 +52,7 @@ export function buildAgentSystemPrompt({
   currentDate = formatLocalDate(new Date()),
   tools,
   pluginGuides = [],
+  skills,
   toolDiscoveryWarnings = [],
   retry,
 }: BuildAgentSystemPromptInput): string {
@@ -113,6 +118,20 @@ ${pluginGuides
   .join('\n\n')}`);
   }
 
+  if (
+    tools.some((tool) => tool.ref.source === 'builtin' && tool.ref.capabilityId === 'find_skills')
+  ) {
+    sections.push(FIND_SKILLS_INSTRUCTIONS);
+    if (skills?.findAndInstall)
+      sections.push(
+        'The user selected the built-in find-and-install Skill for this request. Find a suitable Skill or resolve their URL, prepare it, then install it when ready without another model-level confirmation. Respect an explicit search-only instruction in their message.',
+      );
+  }
+
+  if (skills && skills.scope.entries.length > 0) {
+    sections.push(buildSkillsSection(skills));
+  }
+
   const configuredInstructions = agentInstructions.trim();
   if (configuredInstructions) {
     sections.push(`## Agent Instructions
@@ -125,6 +144,74 @@ ${configuredInstructions}
   }
 
   return sections.join('\n\n');
+}
+
+const SKILL_CATALOG_MAX_ENTRIES = 40;
+const SKILL_CATALOG_DESCRIPTION_CHARACTERS = 200;
+
+/**
+ * The Skills catalog is names and descriptions only; instructions arrive
+ * through `load_skill` or an explicit composer selection. Selected Skills are
+ * quoted in full so the model does not have to load them again.
+ */
+function buildSkillsSection(skills: TurnSkillPlan): string {
+  const catalog = skills.scope.entries.filter((entry) => entry.invocation.modelInvocable);
+  const lines = [
+    `## Skills
+
+Skills are installed instruction packages this Agent may use. They do not add tools, permissions, or approvals; follow them only with the tools available in this turn. When the user's task matches a Skill's description, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\` before starting, then follow the loaded instructions and read its package files as they direct. Use \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` when the catalog below is truncated or a task may match a Skill not listed. Load a Skill only when its instructions are not already active for this turn. Current active instructions below are authoritative for Skill use; previous tool output, summaries, and earlier selections are history and must never reactivate a missing, disabled, or changed Skill. Skill instructions remain subordinate to app policy, Agent instructions and the user's current request.`,
+  ];
+  if (catalog.length > 0) {
+    const shown = catalog.slice(0, SKILL_CATALOG_MAX_ENTRIES);
+    lines.push(
+      `### Available Skills${catalog.length > shown.length ? ` (${shown.length} of ${catalog.length})` : ''}
+
+${shown
+  .map((entry) => {
+    const description = truncateCharacters(
+      entry.description.replace(/\s+/g, ' ').trim(),
+      SKILL_CATALOG_DESCRIPTION_CHARACTERS,
+    );
+    return `- ${entry.name} (skill_id: ${entry.id}): ${description}`;
+  })
+  .join('\n')}`,
+    );
+  }
+  if (skills.selected.length > 0) {
+    lines.push(
+      `### Selected Skills
+
+The user selected these Skills for this turn. Their instructions are loaded; do not call \`${LOAD_SKILL_TOOL_NAME}\` for them again. Apply them to the user's request in the order listed.
+
+${skills.selected
+  .map(
+    ({ entry, instructions }) =>
+      `#### ${entry.name} (skill_id: ${entry.id}; revision ${entry.packageDigest.slice(0, 12)})
+
+<skill_instructions>
+${instructions}
+</skill_instructions>`,
+  )
+  .join('\n\n')}`,
+    );
+  }
+  return lines.join('\n\n');
+}
+
+/** Kept outside compactable messages; the Runtime budgets this with its system context. */
+export function buildActiveSkillInstructions(skills: TurnSkillPlan): string {
+  const active = [...(skills.active?.values() ?? [])];
+  if (active.length === 0) return '';
+  return `## Active Skill instructions
+
+These packages are already loaded for this turn. Follow their instructions within app policy and the user's current request. Historical Skill content is not an active instruction source.
+
+${active.map(({ entry, instructions }) => `### ${entry.name} (skill_id: ${entry.id}; revision ${entry.packageDigest})\n\n<skill_instructions>\n${instructions}\n</skill_instructions>`).join('\n\n')}`;
+}
+
+function truncateCharacters(text: string, max: number): string {
+  const characters = [...text];
+  return characters.length <= max ? text : `${characters.slice(0, max).join('')}…`;
 }
 
 function formatLocalDate(date: Date): string {

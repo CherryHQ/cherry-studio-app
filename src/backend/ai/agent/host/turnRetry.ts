@@ -11,6 +11,7 @@ import { parseUniqueModelId } from '@/shared/data/types/model';
 
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
+import { collectSkillActivations } from '../sessionStore/skillActivations';
 import {
   loadTurnContext,
   prepareResolvedTurn,
@@ -161,6 +162,9 @@ export async function prepareRetryTurn(
       retryable: false,
     });
   }
+  const skillSelections = source.user.parts.flatMap((part) =>
+    part.type === 'text' ? (part.skillSelections ?? []) : [],
+  );
   const plan = await prepareResolvedTurn(
     dependencies,
     {
@@ -168,6 +172,12 @@ export async function prepareRetryTurn(
       userMessageId: source.user.id,
       assistantMessageId: source.assistant.id,
       parts,
+      skillIds: skillSelections.map((selection) => selection.skillId),
+      ...(source.user.parts.some(
+        (part) => part.type === 'text' && part.skillAction === 'find-and-install',
+      )
+        ? { skillAction: 'find-and-install' as const }
+        : {}),
       ...(modelId ? { modelId } : {}),
       ...(snapshot?.imageGeneration ? { imageGeneration: snapshot.imageGeneration } : {}),
     },
@@ -175,10 +185,17 @@ export async function prepareRetryTurn(
     agent,
     // The session-wide file ledger and turn ids stay as the store computed
     // them; only the history narrows to what precedes the replaced pair.
-    { ...storedTurnContext, history: source.history },
+    {
+      ...storedTurnContext,
+      history: source.history,
+      skillActivations: (
+        storedTurnContext.skillActivations ?? collectSkillActivations(storedTurnContext.history)
+      ).filter(({ messageId }) => messageId !== source.assistant.id || assistantParts.length > 0),
+    },
     runtimeContextCheckpoint,
     documentParserMode,
     signal,
+    skillSelections,
   );
   return { plan, source, assistantParts };
 }

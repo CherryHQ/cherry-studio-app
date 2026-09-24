@@ -1,16 +1,67 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { ContentState } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import { ContentState, Tabs } from '@cherrystudio/ui/components';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { PluginIcon } from '@/frontend/components/PluginIcon';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 import { PluginPage } from './components/PluginPage';
+import { SkillsPanel } from './skills';
 
 export function PluginListScreen() {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string | string[] }>();
+  const tab = getSingleRouteParam(params.tab) === 'skills' ? 'skills' : 'plugins';
+
+  return (
+    <>
+      <RouteHeader
+        title={t('plugins.title')}
+        rightActions={
+          tab === 'skills'
+            ? [
+                {
+                  accessibilityLabel: t('common.more'),
+                  icon: EllipsisIcon,
+                  key: 'skill-catalog',
+                  type: 'menu',
+                  items: [
+                    {
+                      id: 'skill-discover',
+                      label: t('skills.tabs.discover'),
+                      onPress: () => router.push('/plugins/skills/discover'),
+                    },
+                  ],
+                },
+              ]
+            : undefined
+        }
+      />
+      <View className="px-6 py-3">
+        <Tabs
+          accessibilityLabel={t('plugins.title')}
+          items={[
+            { label: t('plugins.title'), value: 'plugins' },
+            { label: t('skills.title'), value: 'skills' },
+          ]}
+          value={tab}
+          onValueChange={(value) => router.setParams({ tab: value })}
+        />
+      </View>
+      <PluginPage testID={tab === 'skills' ? 'skills-list' : 'plugins-list'}>
+        {tab === 'skills' ? <SkillsPanel /> : <PluginCatalog />}
+      </PluginPage>
+    </>
+  );
+}
+
+function PluginCatalog() {
   const { t } = useTranslation();
   const router = useRouter();
   const catalog = usePluginCatalog();
@@ -25,65 +76,62 @@ export function PluginListScreen() {
 
   return (
     <>
-      <RouteHeader title={t('plugins.title')} />
-      <PluginPage testID="plugins-list">
-        <Text className="text-sm text-muted-foreground">{t('plugins.listDescription')}</Text>
-        {!entries.length && (catalog.isLoading || connections.isLoading) ? (
-          <ContentState.Loading title={t('plugins.loading')} />
-        ) : null}
-        {catalog.isError || connections.isError ? (
-          <ContentState.Error
-            title={t('plugins.loadFailed')}
-            primaryAction={{
-              children: t('common.retry'),
-              onPress: () => void Promise.all([catalog.refetch(), connections.refetch()]),
-            }}
-          />
-        ) : null}
-        <View>
-          {ids.map((id) => {
-            const entry = entries.find((item) => item.id === id);
-            const connection = connections.data?.find((item) => item.pluginId === id);
-            const name = entry ? t(`plugins.catalog.${id}.name`) : id;
-            return (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={name}
-                key={id}
-                className="flex-row items-center gap-3 rounded-xl py-5 active:bg-secondary"
-                onPress={() =>
-                  router.push({ pathname: '/plugins/[pluginId]', params: { pluginId: id } })
-                }
-                testID={`plugin-${id}`}
-              >
-                <PluginIcon icon={entry?.icon} />
-                <View className="min-w-0 flex-1 gap-2">
-                  <View className="flex-row flex-wrap items-center gap-2">
-                    <Text className="text-base font-semibold text-foreground">{name}</Text>
-                    {connection ? (
-                      <Text
-                        className={
-                          (connection.authorization?.status ?? 'connected') === 'connected'
-                            ? 'text-xs text-success'
-                            : 'text-xs text-error'
-                        }
-                      >
-                        {t(
-                          `plugins.connectionStatus.${connection.authorization?.status ?? 'connected'}`,
-                        )}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text className="text-sm text-muted-foreground">
-                    {entry ? t(`plugins.catalog.${id}.summary`) : t('plugins.unavailable')}
-                  </Text>
+      <Text className="text-sm text-muted-foreground">{t('plugins.listDescription')}</Text>
+      {!entries.length && (catalog.isLoading || connections.isLoading) ? (
+        <ContentState.Loading title={t('plugins.loading')} />
+      ) : null}
+      {catalog.isError || connections.isError ? (
+        <ContentState.Error
+          title={t('plugins.loadFailed')}
+          primaryAction={{
+            children: t('common.retry'),
+            onPress: () => void Promise.all([catalog.refetch(), connections.refetch()]),
+          }}
+        />
+      ) : null}
+      <View>
+        {ids.map((id) => {
+          const entry = entries.find((item) => item.id === id);
+          const connection = connections.data?.find((item) => item.pluginId === id);
+          const name = entry ? t(`plugins.catalog.${id}.name`) : id;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={name}
+              key={id}
+              className="flex-row items-center gap-3 rounded-xl py-5 active:bg-secondary"
+              onPress={() =>
+                router.push({ pathname: '/plugins/[pluginId]', params: { pluginId: id } })
+              }
+              testID={`plugin-${id}`}
+            >
+              <PluginIcon icon={entry?.icon} />
+              <View className="min-w-0 flex-1 gap-2">
+                <View className="flex-row flex-wrap items-center gap-2">
+                  <Text className="text-base font-semibold text-foreground">{name}</Text>
+                  {connection ? (
+                    <Text
+                      className={
+                        (connection.authorization?.status ?? 'connected') === 'connected'
+                          ? 'text-xs text-success'
+                          : 'text-xs text-error'
+                      }
+                    >
+                      {t(
+                        `plugins.connectionStatus.${connection.authorization?.status ?? 'connected'}`,
+                      )}
+                    </Text>
+                  ) : null}
                 </View>
-                <ChevronRightIcon className="size-5 text-muted-foreground" />
-              </Pressable>
-            );
-          })}
-        </View>
-      </PluginPage>
+                <Text className="text-sm text-muted-foreground">
+                  {entry ? t(`plugins.catalog.${id}.summary`) : t('plugins.unavailable')}
+                </Text>
+              </View>
+              <ChevronRightIcon className="size-5 text-muted-foreground" />
+            </Pressable>
+          );
+        })}
+      </View>
     </>
   );
 }

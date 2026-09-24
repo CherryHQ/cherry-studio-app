@@ -9,6 +9,7 @@ import type { PermissionsModule } from './permissions';
 import type { PluginsModule } from './plugins';
 import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
+import type { SkillsModule } from './skills';
 import type { SystemEntryModule } from './systemEntry';
 import type { WebSearchModule } from './webSearch';
 
@@ -25,6 +26,7 @@ export interface Backend {
   readonly plugins: PluginsModule;
   readonly profile: ProfileModule;
   readonly providers: ProvidersModule;
+  readonly skills: SkillsModule;
   readonly webSearch: WebSearchModule;
 }
 

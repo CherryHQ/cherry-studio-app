@@ -18,6 +18,7 @@ import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';
 import type { AgentInferenceModelSnapshot } from '../inferenceSnapshot';
+import type { SkillTurnScope } from '../skillScope';
 import {
   prepareInitialTurn,
   prepareTurn,
@@ -465,6 +466,95 @@ describe('turn preparation', () => {
     expect(plan.hasMessages).toBe(true);
     expect(plan.sessionTurnIds).toEqual(['turn-later']);
   });
+});
+
+describe('Skill turn preparation', () => {
+  const skillId = '00000000-0000-4000-8000-000000000123';
+  const activation = {
+    skillId,
+    name: 'notes',
+    packageDigest: 'accepted',
+    origin: 'automatic' as const,
+  };
+  const scope: SkillTurnScope = {
+    entries: [
+      {
+        id: skillId,
+        name: 'notes',
+        description: 'Take notes',
+        packageDigest: 'accepted',
+        folderName: 'notes',
+        files: ['SKILL.md'],
+        invocation: { modelInvocable: true, userInvocable: true },
+        admission: { status: 'ready', reasons: [] },
+      },
+    ],
+    readInstructions: async () => 'Use a concise outline.',
+    readFile: async () => null,
+  };
+
+  test('persists explicit selection receipts and rejects out-of-scope selection', async () => {
+    const harness = createHarness();
+    harness.dependencies.skills = { resolve: async () => scope };
+    const plan = await prepareTurn(
+      harness.dependencies,
+      { ...textInput(), skillIds: [skillId] },
+      new AbortController().signal,
+    );
+    expect(plan.userParts[0]).toMatchObject({
+      skillSelections: [{ ...activation, origin: 'explicit' }],
+    });
+    expect(plan.skills.selected[0]?.instructions).toBe('Use a concise outline.');
+    await expect(
+      prepareTurn(
+        harness.dependencies,
+        { ...textInput(), skillIds: ['00000000-0000-4000-8000-000000000124'] },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('The selected Skill is not usable by this Agent');
+  });
+
+  test.each([
+    { isCurrent: true, origin: 'automatic' as const },
+    { isCurrent: true, origin: 'explicit' as const },
+    { isCurrent: false, origin: 'automatic' as const },
+  ])(
+    'restores compacted activations only while their scope is valid: %j',
+    async ({ isCurrent, origin }) => {
+      const harness = createHarness();
+      const checkpoint = {
+        version: 1 as const,
+        anchorTurnId: 'old-turn',
+        payload: { summary: 'Prior summary.' },
+      };
+      harness.getLatestContextCheckpoint.mockResolvedValue({
+        assistantMessageId: 'old-answer',
+        checkpoint,
+      });
+      harness.dependencies.skills = {
+        resolve: async () => (isCurrent ? scope : { ...scope, entries: [] }),
+      };
+      harness.loadRuntimeTurnContext.mockResolvedValue({
+        ...EMPTY_CONTEXT,
+        hasMessages: true,
+        sessionTurnIds: ['old-turn'],
+        skillActivations: [{ messageId: 'old-answer', activation: { ...activation, origin } }],
+      });
+      const plan = await prepareTurn(
+        harness.dependencies,
+        textInput(),
+        new AbortController().signal,
+      );
+      if (isCurrent) {
+        expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
+        expect(plan.runtimeContextCheckpoint).toEqual(checkpoint);
+      } else {
+        expect(plan.skills.active?.size).toBe(0);
+        expect(plan.runtimeContextCheckpoint).toBeNull();
+        expect(harness.loadRuntimeTurnContext).toHaveBeenCalledWith(SESSION_ID, null);
+      }
+    },
+  );
 });
 
 function createHarness() {

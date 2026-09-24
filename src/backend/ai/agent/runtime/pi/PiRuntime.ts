@@ -720,13 +720,15 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return;
       }
       const baseConversation = toPiConversation(request, resolution.model);
-      const conversation =
-        deferredToolDiscoveryTools.length > 0
-          ? {
-              ...baseConversation,
-              systemPrompt: `${baseConversation.systemPrompt}\n\n${PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT}`,
-            }
-          : baseConversation;
+      const resolveSystemPrompt = () =>
+        [
+          baseConversation.systemPrompt,
+          request.resolveAdditionalInstructions?.(),
+          deferredToolDiscoveryTools.length > 0 ? PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n');
+      const conversation = { ...baseConversation, systemPrompt: resolveSystemPrompt() };
       const hasAvailableTools = () => piTools.some((tool) => !turn.unavailableTools.has(tool.name));
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
@@ -911,11 +913,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
           } else if (turn.toolStepCount >= this.limits.maxToolSteps) {
             turn.toolBudgetError ??= TOOL_STEP_LIMIT_ERROR;
           }
+          const systemPrompt = resolveSystemPrompt();
           const nextContext: PiAgentContext = {
             ...context,
             systemPrompt: turn.toolBudgetError
-              ? `${context.systemPrompt}\n\n${TOOL_BUDGET_FINAL_RESPONSE_INSTRUCTIONS}`
-              : context.systemPrompt,
+              ? `${systemPrompt}\n\n${TOOL_BUDGET_FINAL_RESPONSE_INSTRUCTIONS}`
+              : systemPrompt,
             // A tool-free answer still needs definitions for its tool history.
             // streamFn disables selection; runtime guards reject further calls.
             tools:
@@ -968,6 +971,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           if (turn.toolBudgetError) responsePhase = 'final-response';
           if (
             nextContext.messages !== context.messages ||
+            nextContext.systemPrompt !== context.systemPrompt ||
             turn.toolBudgetError ||
             turn.unavailableTools.size > 0
           ) {

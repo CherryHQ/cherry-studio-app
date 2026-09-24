@@ -7,3 +7,8 @@ export {
   parseChatRoute,
 } from './chatRoute';
 export { useStartNewChat } from './useStartNewChat';
+export {
+  createChatComposerHandoff,
+  getChatComposerHandoff,
+  type ChatComposerHandoff,
+} from './chatComposerHandoff';
