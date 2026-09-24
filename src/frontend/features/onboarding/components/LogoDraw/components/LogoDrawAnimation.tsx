@@ -36,6 +36,8 @@ export type LogoDrawAnimationRef = {
   play: () => void;
   /** Alias of play; reads better at call sites restarting a finished run. */
   replay: () => void;
+  /** Jump to the finished logo. */
+  finish: () => void;
 };
 
 export type LogoDrawAnimationProps = {
@@ -83,7 +85,7 @@ export function LogoDrawAnimation({
     onFinish?.();
   }, [controlled, onFinish]);
 
-  const play = useLogoDrawProgress({
+  const { play, finish } = useLogoDrawProgress({
     progress: master,
     controlled,
     autoPlay,
@@ -95,7 +97,7 @@ export function LogoDrawAnimation({
     play();
   }, [play]);
 
-  useImperativeHandle(ref, () => ({ play: replay, replay }), [replay]);
+  useImperativeHandle(ref, () => ({ play: replay, replay, finish }), [finish, replay]);
 
   const leftTrim = useDerivedValue(
     () =>

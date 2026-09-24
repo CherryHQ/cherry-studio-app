@@ -2,8 +2,10 @@ import {
   getStartupExitDurationMs,
   isStartupReadyToExit,
   normalizeStartupColorScheme,
-  STARTUP_ATTRIBUTION_ENTER_DURATION_MS,
-  STARTUP_EXIT_DURATION_MS,
+  STARTUP_EXIT_FADE_DELAY_MS,
+  STARTUP_EXIT_FADE_DURATION_MS,
+  STARTUP_EXIT_LOGO_DURATION_MS,
+  STARTUP_EXIT_LOGO_SCALE,
   STARTUP_MINIMUM_VISIBLE_MS,
 } from '../startupState';
 
@@ -17,10 +19,18 @@ const readyState = {
 describe('startup state', () => {
   test('uses the calibrated startup motion timeline', () => {
     expect({
-      attributionEnter: STARTUP_ATTRIBUTION_ENTER_DURATION_MS,
-      coverExit: STARTUP_EXIT_DURATION_MS,
+      exitFadeDelay: STARTUP_EXIT_FADE_DELAY_MS,
+      exitFadeDuration: STARTUP_EXIT_FADE_DURATION_MS,
+      exitLogoDuration: STARTUP_EXIT_LOGO_DURATION_MS,
+      exitLogoScale: STARTUP_EXIT_LOGO_SCALE,
       minimumVisible: STARTUP_MINIMUM_VISIBLE_MS,
-    }).toEqual({ attributionEnter: 260, coverExit: 220, minimumVisible: 800 });
+    }).toEqual({
+      exitFadeDelay: 60,
+      exitFadeDuration: 280,
+      exitLogoDuration: 320,
+      exitLogoScale: 1.15,
+      minimumVisible: 800,
+    });
   });
 
   test.each([
@@ -49,7 +59,9 @@ describe('startup state', () => {
 
   test('removes the exit animation when Reduce Motion is enabled', () => {
     expect(getStartupExitDurationMs(true)).toBe(0);
-    expect(getStartupExitDurationMs(false)).toBe(STARTUP_EXIT_DURATION_MS);
+    expect(getStartupExitDurationMs(false)).toBe(
+      STARTUP_EXIT_FADE_DELAY_MS + STARTUP_EXIT_FADE_DURATION_MS,
+    );
   });
 
   test('uses dark only for an explicit system dark appearance', () => {

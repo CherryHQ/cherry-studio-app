@@ -13,7 +13,6 @@ const logger = loggerService.withContext('StartupCoordinator');
 
 export function useStartupLifecycle(bootstrapReady: boolean, onCoverPresented?: () => void) {
   const [contentReady, setContentReady] = useState(false);
-  const [coverPresented, setCoverPresented] = useState(false);
   const [coverVisible, setCoverVisible] = useState(true);
   const [minimumElapsed, setMinimumElapsed] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
@@ -91,7 +90,6 @@ export function useStartupLifecycle(bootstrapReady: boolean, onCoverPresented?: 
               minimumTimerRef.current = undefined;
               setMinimumElapsed(true);
             }, STARTUP_MINIMUM_VISIBLE_MS);
-            setCoverPresented(true);
             onCoverPresented?.();
           });
         });
@@ -106,7 +104,6 @@ export function useStartupLifecycle(bootstrapReady: boolean, onCoverPresented?: 
   });
 
   return {
-    coverPresented,
     coverVisible,
     exitRequested,
     handleCoverExitComplete,

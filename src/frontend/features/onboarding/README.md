@@ -4,8 +4,19 @@ First-use setup lives in the `/onboarding` native stack. The welcome page offers
 setup, synchronization from a computer, and setup later. Manual setup continues through provider →
 connection → chat model. Computer setup continues through device preparation → scan → sync guide →
 provider selection/import → chat model. The welcome page is headerless; subsequent pages retain
-native back navigation. Buttons are available while the existing logo reveal runs, and the complete
-welcome content scrolls when larger text or a smaller window needs more room.
+native back navigation. The complete welcome content scrolls when larger text or a smaller window
+needs more room.
+
+The welcome page opens with a logo-led intro owned by `hooks/useWelcomeIntro.ts`. The logo draws
+alone at 1.35× near the vertical center of the screen. As the check lands, it glides back to its
+layout position and scale over 550 ms. The heading, description, primary actions, and setup-later
+action then rise and fade in with small offsets, and the page is complete about 2.3 seconds after
+the intro starts. While the intro runs, a tap anywhere on the page skips to the final state instead
+of reaching a control that is still hidden. The intro waits until neither the startup cover nor the
+privacy consent dialog hides the page, so a relaunch into a pending setup does not spend it behind
+the cover. It does not replay while the page stays mounted. Reduce Motion and an active screen
+reader both start from the final state, because controls that are still fading in remain
+focusable.
 
 ## Setup Ownership
 
@@ -51,7 +62,9 @@ welcome content scrolls when larger text or a smaller window needs more room.
 
 `components/LogoDraw/` is the paint-on reveal of the brand logo: the two orange swirls
 draw first as one continuous gesture, then the green check lands with a
-spring. Its page-local surface is `LogoDrawAnimation` (see `components/LogoDraw/index.ts`).
+spring. Its page-local surface (see `components/LogoDraw/index.ts`) is `LogoDrawAnimation`, whose
+ref can play, replay, or `finish` the draw, plus the `LOGO_ASPECT_RATIO` and `logoDrawTiming`
+constants the welcome intro lays out and times against.
 
 ### How it works
 

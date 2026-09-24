@@ -1,7 +1,9 @@
 export const STARTUP_MINIMUM_VISIBLE_MS = 800;
 export const STARTUP_CONTENT_TIMEOUT_MS = 3_000;
-export const STARTUP_ATTRIBUTION_ENTER_DURATION_MS = 260;
-export const STARTUP_EXIT_DURATION_MS = 220;
+export const STARTUP_EXIT_LOGO_SCALE = 1.15;
+export const STARTUP_EXIT_LOGO_DURATION_MS = 320;
+export const STARTUP_EXIT_FADE_DELAY_MS = 60;
+export const STARTUP_EXIT_FADE_DURATION_MS = 280;
 
 type StartupExitState = {
   bootstrapReady: boolean;
@@ -20,7 +22,7 @@ export function isStartupReadyToExit({
 }
 
 export function getStartupExitDurationMs(reducedMotion: boolean) {
-  return reducedMotion ? 0 : STARTUP_EXIT_DURATION_MS;
+  return reducedMotion ? 0 : STARTUP_EXIT_FADE_DELAY_MS + STARTUP_EXIT_FADE_DURATION_MS;
 }
 
 export function normalizeStartupColorScheme(
