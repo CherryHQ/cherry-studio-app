@@ -22,6 +22,10 @@ export function FileEntrySkeleton({
   );
 }
 
-export function FileEntryAttachmentSkeleton() {
-  return <Skeleton className="h-16 w-full rounded-xl" />;
+export function FileEntryAttachmentSkeleton({ aspectRatio }: { aspectRatio?: number }) {
+  return aspectRatio ? (
+    <Skeleton className="w-full rounded-xl" style={{ aspectRatio }} />
+  ) : (
+    <Skeleton className="h-16 w-full rounded-xl" />
+  );
 }

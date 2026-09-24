@@ -102,6 +102,19 @@ describe('MessageParts', () => {
     expect(renderer.root.findAllByType('ProcessGroupPart')).toHaveLength(0);
   });
 
+  test('keeps a direct image result at its generation placeholder ratio', () => {
+    const message: MessageListItem = {
+      ...makeMessage('success'),
+      data: { parts: [makeFilePart('file-1', 'result.png', 'image/png')] },
+      imageGeneration: { paramValues: { aspectRatio: '16:9' } },
+    };
+    const renderer = render(<MessageParts message={message} />);
+
+    expect(renderer.root.findByType('GeneratedFileStrip').props.initialImageAspectRatio).toBe(
+      16 / 9,
+    );
+  });
+
   test.each([
     ['pending', false],
     ['success', true],

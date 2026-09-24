@@ -2,6 +2,8 @@ import { ContextMenuExclusion } from '@cherrystudio/ui/components';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
+import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
+
 import type { MessageListItem } from '../types';
 import { resolveMessageCitations } from './citations';
 import { GeneratedFileStrip } from './GeneratedFileStrip';
@@ -43,6 +45,9 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
   const isSettled = message.status !== 'pending';
   const isStreaming = !isSettled;
   const showSources = isSettled && parts.some((part) => part.type === 'source-url');
+  const initialImageAspectRatio = message.imageGeneration
+    ? imageParamsAspectRatio(message.imageGeneration.paramValues)
+    : undefined;
 
   return (
     <View className="gap-4">
@@ -72,6 +77,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
       {body.map((item) =>
         item.part.type === 'file' ? (
           <GeneratedFileStrip
+            initialImageAspectRatio={initialImageAspectRatio}
             key={getMessagePartKey(message, item.part, item.index)}
             parts={[item.part]}
           />

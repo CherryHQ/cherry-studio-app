@@ -46,15 +46,28 @@ export function FileEntryPreview({
 }
 
 /** Assistant artifacts render images directly; other files retain their result row. */
-export function FileEntryAttachment({ entryId }: { entryId: FileEntryId }) {
+export function FileEntryAttachment({
+  initialAspectRatio,
+  entryId,
+}: {
+  initialAspectRatio?: number;
+  entryId: FileEntryId;
+}) {
   const { data, isLoading } = useResolvedFile(entryId);
 
   if (isLoading) {
-    return <FileEntryAttachmentSkeleton />;
+    return <FileEntryAttachmentSkeleton aspectRatio={initialAspectRatio} />;
   }
 
   if (data && fileEntryPreviewKind(data.entry) === 'image') {
-    return <FileEntryImage entry={data.entry} key={data.entry.id} uri={data.uri} />;
+    return (
+      <FileEntryImage
+        entry={data.entry}
+        initialAspectRatio={initialAspectRatio}
+        key={data.entry.id}
+        uri={data.uri}
+      />
+    );
   }
 
   return <EntryAttachment entry={data?.entry} entryId={entryId} uri={data?.uri} />;

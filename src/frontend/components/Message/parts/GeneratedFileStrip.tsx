@@ -8,13 +8,25 @@ import { readCherryMeta } from '@/shared/data/types/uiParts';
 type MessageFilePart = Extract<CherryMessagePart, { type: 'file' }>;
 
 /** Assistant deliverables: images themselves, and file rows for other kinds. */
-export function GeneratedFileStrip({ parts }: { parts: readonly MessageFilePart[] }) {
+export function GeneratedFileStrip({
+  initialImageAspectRatio,
+  parts,
+}: {
+  initialImageAspectRatio?: number;
+  parts: readonly MessageFilePart[];
+}) {
   return (
     <BackgroundPressExclusion>
       <ContextMenuExclusion className="w-full gap-2">
         {parts.map((part) => {
           const entryId = readCherryMeta(part)?.fileEntryId as FileEntryId | undefined;
-          return entryId ? <FileEntryAttachment entryId={entryId} key={part.url} /> : null;
+          return entryId ? (
+            <FileEntryAttachment
+              entryId={entryId}
+              initialAspectRatio={initialImageAspectRatio}
+              key={part.url}
+            />
+          ) : null;
         })}
       </ContextMenuExclusion>
     </BackgroundPressExclusion>
