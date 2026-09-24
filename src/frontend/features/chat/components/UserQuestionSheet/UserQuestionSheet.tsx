@@ -1,5 +1,4 @@
 import { BottomSheet, Button, Input, SelectionIndicator } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -205,11 +204,7 @@ function QuestionOption({
       accessibilityHint={option.description}
       accessibilityRole={isMultiple ? 'checkbox' : 'radio'}
       accessibilityState={{ checked: isSelected, disabled }}
-      className={cn(
-        'min-h-14 flex-row items-center gap-3 rounded-xl border p-3 active:opacity-80',
-        isSelected ? 'border-border-selected bg-secondary' : 'border-border bg-field',
-        disabled && !isSelected && 'opacity-40',
-      )}
+      className={`min-h-14 flex-row items-center gap-3 rounded-xl border p-3 active:opacity-80 ${isSelected ? 'border-border-selected bg-secondary' : 'border-border bg-field'} ${disabled && !isSelected ? 'opacity-40' : ''}`}
       disabled={disabled}
       onPress={onPress}
     >
