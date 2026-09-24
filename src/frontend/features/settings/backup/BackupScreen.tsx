@@ -91,7 +91,6 @@ export function BackupScreen() {
 
   return (
     <SettingsScrollPage headerProps={{ title: t('backup.title') }} contentClassName="gap-6">
-      <Text className="text-base text-muted-foreground">{t('backup.description')}</Text>
       <Section footer={t('backup.sensitive')}>
         <Section.Item
           label={t('backup.create')}
@@ -104,7 +103,6 @@ export function BackupScreen() {
           disabled={!available || busy}
         />
       </Section>
-      <Text className="text-sm text-muted-foreground">{t('backup.limits')}</Text>
       {!available && (
         <Text className="text-sm text-muted-foreground">{t('backup.unavailable')}</Text>
       )}
