@@ -1,3 +1,4 @@
+import { ContextMenuExclusion, MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -25,25 +26,54 @@ export function UserQuestionPart({ part }: { part: ToolMessagePart }) {
     : undefined;
   const answer = result?.success ? result.data : undefined;
   const waiting = part.state === 'input-available';
+  const statusText = t(
+    answer
+      ? answer.skipped
+        ? 'chat.question.skipped'
+        : 'common.done'
+      : waiting
+        ? 'chat.question.waiting'
+        : 'chat.question.closed',
+  );
+  const answerText =
+    answer && !answer.skipped
+      ? [
+          ...question.options
+            .filter((option) => answer.selectedOptionIds.includes(option.id))
+            .map((option) => option.label),
+          answer.text,
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+      : undefined;
+
   return (
-    <View className="w-full gap-3 rounded-2xl bg-card p-4">
-      <Text accessibilityRole="header" className="font-semibold text-foreground text-lg">
-        {question.question}
-      </Text>
-      <Text className="text-muted-foreground text-base" selectable>
-        {answer
-          ? answer.skipped
-            ? t('chat.question.skipped')
-            : [
-                ...question.options
-                  .filter((option) => answer.selectedOptionIds.includes(option.id))
-                  .map((option) => option.label),
-                answer.text,
-              ]
-                .filter(Boolean)
-                .join(' · ')
-          : t(waiting ? 'chat.question.waiting' : 'chat.question.closed')}
-      </Text>
-    </View>
+    <ContextMenuExclusion>
+      <MessagePart.Tool
+        detailTitle={t('chat.question.title')}
+        state={waiting ? 'running' : 'complete'}
+        statusText={statusText}
+        testID="user-question-part"
+        title={question.question}
+        titleAnimation="none"
+      >
+        <View className="gap-4">
+          <Text
+            accessibilityRole="header"
+            className="font-semibold text-base text-foreground"
+            selectable
+          >
+            {question.question}
+          </Text>
+          {answerText ? (
+            <MessagePart.TextSection title={t('chat.tool.response')} value={answerText} />
+          ) : (
+            <Text className="text-foreground-tertiary text-sm" selectable>
+              {statusText}
+            </Text>
+          )}
+        </View>
+      </MessagePart.Tool>
+    </ContextMenuExclusion>
   );
 }

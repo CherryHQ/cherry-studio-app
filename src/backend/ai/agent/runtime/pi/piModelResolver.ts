@@ -25,8 +25,7 @@ import { withPiApiKeyFallback } from './piApiKeyFallback';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
-
-const DEFAULT_PI_TIMEOUT_MS = 10 * 60_000;
+import { withPiStreamIdleTimeout } from './piStreamIdleTimeout';
 
 class PiModelResolutionError extends Error {
   readonly retryable = false;
@@ -142,7 +141,6 @@ export function createPiModelResolver(): PiRuntimeDependencies {
               : undefined,
         },
         temperature: runtimeOptions.temperature,
-        timeoutMs: DEFAULT_PI_TIMEOUT_MS,
         azureApiVersion,
       };
       const primaryStream = await bindPiStream(adapter, streamBinding);
@@ -187,16 +185,27 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         selectedIndex < 0
           ? []
           : [...enabledKeys.slice(selectedIndex + 1), ...enabledKeys.slice(0, selectedIndex)];
-      const streamFn = withPiApiKeyFallback(
-        primaryStream,
-        fallbackKeys.map((key) => async () => {
-          const selected = await providerService.resolveApiKey(provider.id, key.key);
-          const stream = await bindPiStream(adapter, { ...streamBinding, apiKey: selected.value });
-          usageContext.credentialReceipt = selected.apiKeySelection;
-          return stream;
-        }),
-      );
+      const primaryReceipt = usageContext.credentialReceipt;
+      const streamFn =
+        fallbackKeys.length === 0
+          ? primaryStream
+          : withPiApiKeyFallback([
+              async () => {
+                usageContext.credentialReceipt = primaryReceipt;
+                return primaryStream;
+              },
+              ...fallbackKeys.map((key) => async () => {
+                const selected = await providerService.resolveApiKey(provider.id, key.key);
+                const stream = await bindPiStream(adapter, {
+                  ...streamBinding,
+                  apiKey: selected.value,
+                });
+                usageContext.credentialReceipt = selected.apiKeySelection;
+                return stream;
+              }),
+            ]);
 
+      const timedStream = withPiStreamIdleTimeout(streamFn);
       return {
         defaultThinkingLevel: resolveDefaultThinkingLevel(invocationModel),
         maxInputTokens: model.maxInputTokens,
@@ -205,7 +214,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
           ...collectRedactionValues(selectedApiKey.value, headers),
           ...fallbackKeys.map((key) => key.key),
         ],
-        streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(streamFn) : streamFn,
+        streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(timedStream) : timedStream,
         supportsTools: preflight.supportsTools,
         usageContext,
       };

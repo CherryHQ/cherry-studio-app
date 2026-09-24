@@ -3854,180 +3854,59 @@ describe('PiRuntime mapping', () => {
     },
   );
 
-  test.each(['timeout', 'cancel'] as const)(
-    'keeps the final response subject to %s',
-    async (ending) => {
-      jest.useFakeTimers();
-      try {
-        const runtime = createTestRuntime({
-          ...DEFAULT_PI_RUNTIME_LIMITS,
-          maxToolSteps: 1,
-          turnTimeoutMs: 100,
-        });
-        let agentSignal: AbortSignal | undefined;
-        let finalResponseReady!: () => void;
-        const ready = new Promise<void>((resolve) => {
-          finalResponseReady = resolve;
-        });
-        arrange(runtime, async (context) => {
-          agentSignal = context.signal;
-          // Most of the original deadline has elapsed before tool execution ends.
-          await jest.advanceTimersByTimeAsync(90);
-          const message = assistantMessage({ content: [], stopReason: 'toolUse' });
-          const result: ToolResultMessage = {
-            role: 'toolResult',
-            toolCallId: 'last-call',
-            toolName: TOOL_PROVIDER_NAME,
-            content: [{ type: 'text', text: '{}' }],
-            isError: false,
-            timestamp: Date.now(),
-          };
-          await context.emit({ type: 'turn_end', message, toolResults: [result] });
-          const next = await prepareTestNextTurn(context, message, [result]);
-          expect(next.shouldStop).toBe(false);
-          expect(next.context.tools).toEqual([]);
-          const aborted = new Promise<void>((resolve) => {
-            context.signal.addEventListener('abort', () => resolve(), { once: true });
-          });
-          finalResponseReady();
-          await aborted;
-        });
-        const session = await runtime.open();
-        const eventsPromise = collect(session.execute(baseRequest('turn-final-ending')));
-        await ready;
-        if (ending === 'timeout') await jest.advanceTimersByTimeAsync(10);
-        else await session.cancel('turn-final-ending');
-        const events = await eventsPromise;
-
-        expect(agentSignal?.aborted).toBe(true);
-        expect(events.at(-1)).toMatchObject(
-          ending === 'timeout'
-            ? { type: 'failed', error: { code: 'turn_timeout' } }
-            : { type: 'cancelled' },
-        );
-        await session.close();
-      } finally {
-        jest.useRealTimers();
-      }
-    },
-  );
-
-  test('does not time out while waiting for user input and continues after the answer', async () => {
-    jest.useFakeTimers();
-    try {
-      const runtime = createTestRuntime({ ...DEFAULT_PI_RUNTIME_LIMITS, turnTimeoutMs: 100 });
-      let answer!: (value: RuntimeToolResult) => void;
-      let entered!: () => void;
-      const waiting = new Promise<void>((resolve) => {
-        entered = resolve;
-      });
-      const tool: RuntimeTool = {
-        ...askTool(() => undefined),
-        approval: 'auto',
-        interaction: 'user-input',
-        execute: () =>
-          new Promise<RuntimeToolResult>((resolve) => {
-            answer = resolve;
-            entered();
-          }),
-      };
-      arrange(runtime, approvalProgram('question'));
-      const session = await runtime.open();
-      const events = collect(session.execute(baseRequest('waiting-turn', { tools: [tool] })));
-      await waiting;
-      await jest.advanceTimersByTimeAsync(10_000);
-      answer({ value: { answer: 'Writing' }, artifacts: [] });
-      expect((await events).at(-1)).toEqual({ type: 'completed' });
-      await session.close();
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
-  test('does not time out while waiting for approval and resumes the remaining budget', async () => {
-    jest.useFakeTimers();
-    try {
-      const runtime = createTestRuntime({ ...DEFAULT_PI_RUNTIME_LIMITS, turnTimeoutMs: 100 });
-      const executed = jest.fn();
-      arrange(runtime, approvalProgram('approval-wait'));
-      const session = await runtime.open();
-      const events: RuntimeEvent[] = [];
-      let requested!: () => void;
-      const approvalRequested = new Promise<void>((resolve) => {
-        requested = resolve;
-      });
-      const collecting = (async () => {
-        for await (const event of session.execute(
-          baseRequest('approval-wait-turn', { tools: [askTool(executed)] }),
-        )) {
-          events.push(event);
-          if (event.type === 'approval.requested') requested();
-        }
-      })();
-      await approvalRequested;
-      // Ten seconds of deliberation on a 100 ms budget must not fail the turn.
-      await jest.advanceTimersByTimeAsync(10_000);
-      expect(events.some((event) => event.type === 'failed')).toBe(false);
-
-      await session.respondApproval({
-        approvalId: 'approval-approval-wait',
-        decision: 'approve',
-        turnId: 'approval-wait-turn',
-      });
-      await collecting;
-
-      expect(executed).toHaveBeenCalledTimes(1);
-      expect(events.at(-1)).toEqual({ type: 'completed' });
-      await session.close();
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
-  test('aborts the model and reports a classified whole-turn timeout', async () => {
-    const runtime = createTestRuntime({
-      maxToolCalls: 16,
-      maxToolSteps: 8,
-      turnTimeoutMs: 5,
-    });
+  test('keeps the final response subject to cancel', async () => {
+    const runtime = createTestRuntime({ ...DEFAULT_PI_RUNTIME_LIMITS, maxToolSteps: 1 });
     let agentSignal: AbortSignal | undefined;
-    arrange(runtime, (context) => {
+    let finalResponseReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      finalResponseReady = resolve;
+    });
+    arrange(runtime, async (context) => {
       agentSignal = context.signal;
-      return new Promise<void>(() => undefined);
+      const message = assistantMessage({ content: [], stopReason: 'toolUse' });
+      const result: ToolResultMessage = {
+        role: 'toolResult',
+        toolCallId: 'last-call',
+        toolName: TOOL_PROVIDER_NAME,
+        content: [{ type: 'text', text: '{}' }],
+        isError: false,
+        timestamp: Date.now(),
+      };
+      await context.emit({ type: 'turn_end', message, toolResults: [result] });
+      const next = await prepareTestNextTurn(context, message, [result]);
+      expect(next.shouldStop).toBe(false);
+      expect(next.context.tools).toEqual([]);
+      const aborted = new Promise<void>((resolve) => {
+        context.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+      finalResponseReady();
+      await aborted;
     });
     const session = await runtime.open();
+    const eventsPromise = collect(session.execute(baseRequest('turn-final-ending')));
+    await ready;
+    await session.cancel('turn-final-ending');
+    const events = await eventsPromise;
 
-    const events = await collect(session.execute(baseRequest('turn-timeout')));
-
-    expect(events).toEqual([
-      {
-        type: 'failed',
-        error: {
-          code: 'turn_timeout',
-          message: 'The Agent turn timed out.',
-          retryable: true,
-          origin: 'runtime',
-        },
-      },
-    ]);
     expect(agentSignal?.aborted).toBe(true);
+    expect(events.at(-1)).toMatchObject({ type: 'cancelled' });
     await session.close();
   });
 
-  test('interrupts a tool call arriving after the turn timeout without requesting approval', async () => {
-    const runtime = createTestRuntime({
-      maxToolCalls: 16,
-      maxToolSteps: 8,
-      turnTimeoutMs: 5,
-    });
+  test('interrupts a tool call arriving after cancellation without requesting approval', async () => {
+    const runtime = createTestRuntime(DEFAULT_PI_RUNTIME_LIMITS);
     const executed = jest.fn();
     let lateCall: Promise<unknown> | undefined;
+    let programStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      programStarted = resolve;
+    });
     arrange(runtime, (context) => {
       const piTool = context.options.initialState?.tools?.[0];
-      if (!piTool) throw new Error('Timeout program requires one tool.');
+      if (!piTool) throw new Error('Cancellation program requires one tool.');
       return new Promise((resolve) => {
         // The synchronous abort listener reaches the Runtime while the phase
-        // is `timing-out`, before the run loop publishes the timeout failure.
+        // is `cancelling`, before the turn publishes its terminal event.
         context.signal.addEventListener(
           'abort',
           () => {
@@ -4036,13 +3915,17 @@ describe('PiRuntime mapping', () => {
           },
           { once: true },
         );
+        programStarted();
       });
     });
     const session = await runtime.open();
 
-    const events = await collect(
-      session.execute(baseRequest('turn-timeout-late-tool', { tools: [askTool(executed)] })),
+    const eventsPromise = collect(
+      session.execute(baseRequest('turn-cancel-late-tool', { tools: [askTool(executed)] })),
     );
+    await started;
+    await session.cancel('turn-cancel-late-tool');
+    const events = await eventsPromise;
 
     expect(executed).not.toHaveBeenCalled();
     expect(events.some((event) => event.type === 'approval.requested')).toBe(false);
@@ -4054,7 +3937,7 @@ describe('PiRuntime mapping', () => {
           event.part.toolCallId === 'late-call',
       ),
     ).toMatchObject({ part: { state: 'interrupted' } });
-    expect(events.at(-1)).toMatchObject({ type: 'failed', error: { code: 'turn_timeout' } });
+    expect(events.at(-1)).toEqual({ type: 'cancelled' });
     await expect(lateCall).resolves.toMatchObject({
       details: { value: { status: 'interrupted' } },
     });

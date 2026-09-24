@@ -342,9 +342,11 @@ File-input generation uses a static title while its adjacent content updates; th
 the normal running animation during tool execution.
 
 
-`ask_user_question` tool parts stay visible in the message body as read-only question/answer
-records. They never submit responses from history. The chat feature owns the active response
-sheet, including input, cancellation, and Protocol correlation.
+`ask_user_question` tool parts stay in the message body as compact `MessagePart.Tool` status rows,
+matching tool approval presentation. Opening a row shows the complete read-only question and answer;
+history never submits responses. The chat feature owns the active response sheet, including input,
+cancellation, and Protocol correlation. Its neutral options and action layout follow the approval
+sheet, while its footer stays inside keyboard avoidance and the sheet owns the bottom safe area.
 
 
 Successful `agent_create` and `agent_update` parts render saved-Agent result cards in the body,

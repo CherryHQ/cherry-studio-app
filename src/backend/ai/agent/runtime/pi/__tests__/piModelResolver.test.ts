@@ -130,11 +130,10 @@ describe('Pi model resolver', () => {
     );
     expect(resolution.redactionValues).toContain('probe-key');
     expect(resolution.usageContext.credentialReceipt).toEqual(CREDENTIAL_RECEIPT);
-    expect(resolution.streamFn).toBe(mockBoundStreamFn);
     expect(mockListApiKeys).not.toHaveBeenCalled();
   });
 
-  test('uses remaining enabled keys in order and attributes successful calls to the serving key', async () => {
+  test('walks enabled keys as a ring and attributes each call to the serving key', async () => {
     const testCase = CASES[0];
     const keys = ['a', 'b', 'c'].map((id) => ({
       id,
@@ -164,10 +163,14 @@ describe('Pi model resolver', () => {
       };
     });
     const usedKeys: string[] = [];
+    const statuses: Record<string, number[]> = {
+      'secret-a': [200, 200, 503],
+      'secret-b': [401, 200],
+      'secret-c': [429],
+    };
     mockBindPiStream.mockImplementation(async (_adapter, binding) => () => {
       usedKeys.push(binding.apiKey);
-      const status =
-        binding.apiKey === 'secret-b' ? 401 : binding.apiKey === 'secret-c' ? 429 : 200;
+      const status = statuses[binding.apiKey].shift()!;
       const response: AssistantMessage = {
         role: 'assistant',
         api: testCase.api,
@@ -200,16 +203,84 @@ describe('Pi model resolver', () => {
     expect(resolution.redactionValues).toEqual(
       expect.arrayContaining(['secret-a', 'secret-b', 'secret-c']),
     );
-    for (let step = 0; step < 2; step += 1) {
+    for (const [servingKey, attribution] of [
+      ['a', 'matched'],
+      ['a', 'matched'],
+      ['b', 'explicit'],
+    ]) {
       const stream = await resolution.streamFn(resolution.model, { messages: [] });
       expect((await stream.result()).content).toEqual([{ type: 'text', text: 'ok' }]);
       expect(resolution.usageContext.credentialReceipt).toMatchObject({
-        id: 'a',
-        label: 'Account a',
+        attribution,
+        id: servingKey,
+        label: `Account ${servingKey}`,
       });
     }
-    expect(usedKeys).toEqual(['secret-b', 'secret-c', 'secret-a', 'secret-a']);
+    expect(usedKeys).toEqual([
+      'secret-b',
+      'secret-c',
+      'secret-a',
+      'secret-a',
+      'secret-a',
+      'secret-b',
+    ]);
     expect(mockListApiKeys).toHaveBeenCalledWith(provider.id, { enabled: true });
+  });
+
+  test('bounds all credential attempts to two minutes before output', async () => {
+    jest.useFakeTimers();
+    try {
+      const testCase = CASES[0];
+      const keys = ['key-1', 'key-2', 'key-3'].map((id) => ({
+        id,
+        isEnabled: true,
+        key: `secret-${id}`,
+      }));
+      const provider = makeProvider(
+        testCase.endpointType,
+        testCase.baseUrl,
+        testCase.adapterFamily,
+      );
+      provider.apiKeys = keys;
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+      mockListApiKeys.mockResolvedValue({ keys });
+      mockResolveApiKey.mockImplementation(async (_providerId, override) => ({
+        value: override ?? keys[0].key,
+        apiKeySelection: {
+          ...CREDENTIAL_RECEIPT,
+          id: keys.find((key) => key.key === (override ?? keys[0].key))!.id,
+        },
+      }));
+      const usedKeys: string[] = [];
+      let signal: AbortSignal | undefined;
+      mockBindPiStream.mockImplementation(
+        async (_adapter, binding) => (_model, _context, options) => {
+          usedKeys.push(binding.apiKey);
+          signal = options?.signal;
+          if (binding.apiKey === keys[0].key) {
+            return new Promise<AssistantMessageEventStream>((_resolve, reject) => {
+              setTimeout(() => reject(new Error('Temporary failure')), 60_000);
+            });
+          }
+          return new AssistantMessageEventStream();
+        },
+      );
+
+      const resolution = await resolve(resolver);
+      const stream = await resolution.streamFn(resolution.model, { messages: [] });
+      await jest.advanceTimersByTimeAsync(120_000);
+
+      expect(await stream.result()).toMatchObject({
+        stopReason: 'error',
+        errorMessage: 'The model response timed out after 120 seconds without data.',
+      });
+      expect(usedKeys).toEqual([keys[0].key, keys[1].key]);
+      expect(signal?.aborted).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test.each([
@@ -323,7 +394,6 @@ describe('Pi model resolver', () => {
           : undefined,
     );
     expect(resolution.model.headers).not.toHaveProperty('x-opencode-session');
-    expect(resolution.streamFn).toBe(mockBoundStreamFn);
     expect(resolution.supportsTools).toBe(true);
     expect(resolution.defaultThinkingLevel).toBe('high');
     expect(resolution.redactionValues).toEqual(['secret-key']);
@@ -343,7 +413,6 @@ describe('Pi model resolver', () => {
         maxRetries: 0,
         maxTokens: 1024,
         temperature: 0.25,
-        timeoutMs: 600_000,
       }),
     );
   });
