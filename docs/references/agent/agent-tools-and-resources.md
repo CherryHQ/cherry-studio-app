@@ -7,8 +7,8 @@ image generation, Agent management, `ask_user_question`, `write_file`, `edit_fil
 `{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location, agents) are enabled per Agent in the editor; `ask_user_question` and the three file tools belong to
-every turn. An
+health, location, agents) are enabled per Agent in the editor; the three file tools belong to every
+turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -561,7 +561,10 @@ desktop event labels or persistence shapes.
 
 ## User Questions
 
-`ask_user_question` is a core system tool, available when the model supports tool calls. It asks
+`ask_user_question` is a core system tool, available when the model supports tool calls and the
+Agent does not use automatic approval. Choosing automatic approval means the user does not want the
+turn to stop for them, so that mode withholds the tool and the model asks for missing decisions in
+its reply. It asks
 one bounded question with two to four options and single or multiple selection. The tool waits
 for a user response; it is not a tool-approval request and never auto-selects an answer. A custom
 text answer and skipping are always available. Skipping does not authorize an action.

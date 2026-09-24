@@ -46,6 +46,7 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
@@ -1501,7 +1502,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   // ── Helpers ──
 
+  hasPendingStorageWork(): boolean {
+    return (
+      this.activeTurns.size > 0 ||
+      this.admittingSessions.size > 0 ||
+      this.initialAdmissions.size > 0 ||
+      this.runningTurns.size > 0
+    );
+  }
+
   private assertAcceptingSubmissions(): void {
+    storageMutationGate.assertWritable();
     if (!this.acceptingSubmissions) {
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is stopping.');
     }

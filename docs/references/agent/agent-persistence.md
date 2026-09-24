@@ -182,7 +182,7 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
 | `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
-| `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` |
+| `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` and withholds `ask_user_question` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |
 | `createdAt` / `updatedAt` / `deletedAt` | integer | helper defaults | Soft delete via `deletedAt` |
 

@@ -4,6 +4,10 @@ import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import * as SQLite from 'expo-sqlite';
 
 import { BaseService, Injectable } from '@/backend/core/lifecycle';
+import {
+  assertStorageDatabaseExists,
+  databaseDirectory,
+} from '@/backend/data/storage/storagePaths';
 
 import { customSqlStatements } from './customSql';
 import { migrations } from './migrations';
@@ -48,7 +52,8 @@ export class DbService extends BaseService {
   protected async onInit(): Promise<void> {
     this.assertOpen();
 
-    const sqlite = SQLite.openDatabaseSync(databaseName, openDatabaseOptions);
+    assertStorageDatabaseExists();
+    const sqlite = SQLite.openDatabaseSync(databaseName, openDatabaseOptions, databaseDirectory());
     this.connection = { db: createDrizzleDatabase(sqlite), sqlite };
 
     await this.configurePragmas();

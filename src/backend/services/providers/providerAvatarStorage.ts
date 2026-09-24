@@ -13,14 +13,16 @@
  */
 import { loggerService } from '@logger';
 import { randomUUID } from 'expo-crypto';
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File } from 'expo-file-system';
+
+import { storageDirectory } from '@/backend/data/storage/storagePaths';
 
 const logger = loggerService.withContext('ProviderAvatarStorage');
 const AVATAR_DIRECTORY_NAME = 'provider-avatars';
 let cachedAvatarFiles: File[] | undefined;
 
 function avatarDirectory(): Directory {
-  return new Directory(Paths.document, AVATAR_DIRECTORY_NAME);
+  return new Directory(storageDirectory(), AVATAR_DIRECTORY_NAME);
 }
 
 function ensureAvatarDirectory(): Directory {

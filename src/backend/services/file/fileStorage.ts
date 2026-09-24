@@ -1,8 +1,9 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File } from 'expo-file-system';
 
 import { Emitter } from '@/backend/core/lifecycle/event';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
@@ -68,7 +69,7 @@ type WrittenInternalFile = {
 };
 
 function fileDirectory(): Directory {
-  return new Directory(Paths.document, DATA_DIRECTORY_NAME, FILE_DIRECTORY_NAME);
+  return new Directory(storageDirectory(), DATA_DIRECTORY_NAME, FILE_DIRECTORY_NAME);
 }
 
 function ensureFileDirectory(): Directory {

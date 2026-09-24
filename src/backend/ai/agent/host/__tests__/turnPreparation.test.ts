@@ -355,6 +355,29 @@ describe('turn preparation', () => {
     expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
   });
 
+  test('withholds ask_user_question only under the auto approval mode', async () => {
+    const question = tool('ask_user_question', 'auto');
+    const prepare = async (toolApprovalMode: AgentDefinition['toolApprovalMode']) => {
+      const harness = createHarness();
+      harness.getSystemTools.mockResolvedValueOnce([question, harness.systemTool]);
+      harness.getAgent.mockResolvedValueOnce({ ...AGENT, toolApprovalMode });
+      const plan = await prepareTurn(
+        harness.dependencies,
+        textInput(),
+        new AbortController().signal,
+      );
+      return plan.tools.map((entry) => entry.providerName);
+    };
+
+    // Auto mode never blocks on the user, so missing decisions go into the reply.
+    expect(await prepare('auto')).toEqual(['system_tool', 'configured_tool']);
+    expect(await prepare('default')).toEqual([
+      'ask_user_question',
+      'system_tool',
+      'configured_tool',
+    ]);
+  });
+
   test.each(['existing', 'initial'] as const)(
     '%s messages preserve explicit plugin intent without restricting the tool snapshot',
     async (kind) => {

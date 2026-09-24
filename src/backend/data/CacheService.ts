@@ -251,6 +251,12 @@ export class CacheService extends BaseService {
     }
   }
 
+  resetForRestore(): void {
+    for (const key of this.storage.getAllKeys()) this.storage.delete(key);
+    this.memory.clear();
+    this.persist.clear();
+  }
+
   private loadPersist(): void {
     this.persist.clear();
     const schemaKeys = Object.keys(DefaultBackendPersistCache) as BackendPersistCacheKey[];
