@@ -4,27 +4,14 @@ import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-s
 
 type ErrorEvent = Extract<AssistantMessageEvent, { type: 'error' }>;
 
-const API_KEY_ERROR_CODES = new Set([
-  '401',
-  '429',
-  'authentication_error',
-  'invalid_api_key',
-  'rate_limit_error',
-  'rate_limit_exceeded',
-  'insufficient_quota',
-  'resource_exhausted',
-]);
-
-/** Keep the working credential across tool steps, and never replay emitted content. */
-export function withPiApiKeyFallback(
-  primary: StreamFn,
-  fallbacks: readonly (() => Promise<StreamFn>)[],
-): StreamFn {
-  if (fallbacks.length === 0) return primary;
-
-  let active = primary;
-  let nextFallback = 0;
-  let exhausted: ErrorEvent | undefined;
+/**
+ * Serve from `credentials[0]`. When a request fails before any content, try every other
+ * credential once in ring order; the one that succeeds serves later tool steps. Only
+ * cancellation and HTTP 400, which rejects the request itself, keep the failing credential.
+ */
+export function withPiApiKeyFallback(credentials: readonly (() => Promise<StreamFn>)[]): StreamFn {
+  let activeIndex = 0;
+  let active: StreamFn | undefined;
 
   return (model, context, options) => {
     const output = new AssistantMessageEventStream();
@@ -60,54 +47,53 @@ export function withPiApiKeyFallback(
 
     void (async () => {
       try {
+        let failedCredentials = 0;
         while (true) {
           options?.signal?.throwIfAborted();
-          let failure = exhausted;
-          if (!failure) {
-            try {
-              const source = await active(model, context, options);
-              for await (const event of source) {
-                options?.signal?.throwIfAborted();
-                partial =
-                  event.type === 'done'
-                    ? event.message
-                    : event.type === 'error'
-                      ? event.error
-                      : event.partial;
-                if (event.type === 'start') continue;
-                if (event.type === 'error') {
-                  failure = event;
-                  break;
-                }
-                if (!committed && isEmptyContentEvent(event)) {
-                  buffered.push(event);
-                  continue;
-                }
-                committed = true;
-                emit(event);
-                if (event.type === 'done') return;
+          active ??= await credentials[activeIndex]();
+          options?.signal?.throwIfAborted();
+          let failure: ErrorEvent | undefined;
+          try {
+            const source = await active(model, context, options);
+            for await (const event of source) {
+              options?.signal?.throwIfAborted();
+              partial =
+                event.type === 'done'
+                  ? event.message
+                  : event.type === 'error'
+                    ? event.error
+                    : event.partial;
+              if (event.type === 'start') continue;
+              if (event.type === 'error') {
+                failure = event;
+                break;
               }
-              if (!failure) throw new Error('The model response ended without a terminal event.');
-            } catch (error) {
-              failure = errorEvent(partial, error, options?.signal?.aborted);
+              if (!committed && isEmptyContentEvent(event)) {
+                buffered.push(event);
+                continue;
+              }
+              committed = true;
+              emit(event);
+              if (event.type === 'done') return;
             }
+            if (!failure) throw new Error('The model response ended without a terminal event.');
+          } catch (error) {
+            failure = errorEvent(partial, error, options?.signal?.aborted);
           }
 
+          failedCredentials += 1;
           if (
+            failedCredentials < credentials.length &&
             !committed &&
             !options?.signal?.aborted &&
             failure.reason === 'error' &&
             !hasResponseContent(failure.error) &&
-            isApiKeyFailure(failure.error)
+            !isBadRequest(failure.error)
           ) {
-            const resolve = fallbacks[nextFallback];
-            if (resolve) {
-              nextFallback += 1;
-              buffered.length = 0;
-              active = await resolve();
-              continue;
-            }
-            exhausted = failure;
+            activeIndex = (activeIndex + 1) % credentials.length;
+            active = undefined;
+            buffered.length = 0;
+            continue;
           }
           emit(failure);
           return;
@@ -155,23 +141,20 @@ function errorRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function isApiKeyErrorCode(value: unknown): boolean {
-  return (
-    (typeof value === 'string' || typeof value === 'number') &&
-    API_KEY_ERROR_CODES.has(String(value).toLowerCase())
-  );
+function isBadRequestCode(value: unknown): boolean {
+  return (typeof value === 'string' || typeof value === 'number') && String(value) === '400';
 }
 
-function isApiKeyFailure(message: AssistantMessage): boolean {
+function isBadRequest(message: AssistantMessage): boolean {
   const diagnostic = message.diagnostics?.findLast(
     (entry) => entry.type === 'provider_response_failure',
   );
   const status = diagnostic?.details?.statusCode ?? diagnostic?.details?.status;
   // An explicit HTTP failure takes precedence over an embedded provider code.
   if (typeof status === 'number' || (typeof status === 'string' && /^\d{3}$/.test(status))) {
-    if (Number(status) >= 400) return Number(status) === 401 || Number(status) === 429;
+    if (Number(status) >= 400) return Number(status) === 400;
   }
-  if (isApiKeyErrorCode(diagnostic?.error?.code)) return true;
+  if (isBadRequestCode(diagnostic?.error?.code)) return true;
 
   let body = diagnostic?.details?.body;
   if (typeof body === 'string') {
@@ -183,7 +166,7 @@ function isApiKeyFailure(message: AssistantMessage): boolean {
   }
   const record = errorRecord(body);
   const error = errorRecord(record?.error) ?? record;
-  return [error?.code, error?.type, error?.status, error?.statusCode].some(isApiKeyErrorCode);
+  return [error?.code, error?.status, error?.statusCode].some(isBadRequestCode);
 }
 
 function errorEvent(partial: AssistantMessage, error: unknown, aborted = false): ErrorEvent {
