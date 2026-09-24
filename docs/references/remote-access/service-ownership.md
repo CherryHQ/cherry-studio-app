@@ -19,20 +19,20 @@ flowchart TB
   subgraph Frontend[Mobile frontend]
     Local[Local ChatScreen]
     Share[ChatShareScreen: local and desktop routes]
-    UI[ChatWorkspace / ConversationApprovals]
-    Consumer[appShell/conversation: sources and session handles]
-    LocalAdapter[Local adapter: client and Data API history]
-    RemoteAdapter[Remote adapter: consumption values]
+    UI[ChatWorkspace / ConversationApprovals: shared read model]
+    LocalRuntime[features/chat/runtime: client, local history, projection]
+    Catalog[appShell/conversation: shared contract and catalog sources]
+    RemoteAdapter[appShell/conversation/remote: sessions, windows, drafts]
     Remote[RemoteChatScreen]
     Sidebar[Shared local and remote sidebar]
     Settings[Pairing and configuration UI]
     Export[Share preparation / export preview]
-    Local --> UI --> Consumer
-    Share --> Consumer
-    Consumer --> LocalAdapter
-    Consumer --> RemoteAdapter
-    Remote --> Consumer
-    Sidebar --> Consumer
+    Local --> LocalRuntime --> UI
+    Remote --> RemoteAdapter --> UI
+    Share --> LocalRuntime
+    Share --> RemoteAdapter
+    Sidebar --> Catalog
+    RemoteAdapter --> Catalog
     Share --> Export
   end
   subgraph Backend[Mobile backend]
@@ -63,12 +63,13 @@ MCP here means the mobile MCP capability; desktop tool execution belongs to the 
 
 | Owner | Owns | Current integration / boundary |
 | --- | --- | --- |
-| `ConversationProvider` | Source factory lifetime, shared local observation client, local foreground refresh and Query invalidation | Installed in root layout. Does not dial desktops at construction or own reconnect. |
-| `createConversationSources` | Local/desktop implementation selection, retained remote source wrappers | The dispatch point for the new consumption path. Route encoding can still inspect source kind. |
-| `useConversation` | One route's source/session acquisition, activation and cleanup | Used by local/remote chat and both share routes. Offline opening failures retain demand and retry after backend reconnection. Cleanup aborts reads and releases observation, not admitted execution. |
-| `ConversationSourceBoundary` | Source acquisition and replacement after retirement for catalog consumers | Used by remote sidebar/chat. Both retain their own consumer handles. |
-| Local/remote adapters | Capabilities, freshness, bound actions, history windows and resource references | Local wraps existing AgentProtocol + Data API; remote wraps the credential-free remote module. Neither starts another execution engine. |
-| `useConversationHistory` / `useConversationResource` | Scoped Query keys, read cancellation, window lifetime and retirement eviction | Active common consumers. Fixed history versions cannot silently mix; retired bindings cannot reuse old resources. |
+| `ConversationProvider` | Catalog source factory lifetime and desktop catalog eviction | Installed in root layout. Does not dial desktops at construction or own reconnect. |
+| `createConversationSources` | Local catalog and retained desktop source wrappers | The only source-kind dispatch. Route encoding can still inspect source kind. |
+| `features/chat/runtime` (`ChatProvider`, `useLocalConversation`) | Local observation client, foreground refresh, Query invalidation, Session-keyed history and projection into the shared read model | Local chat and the local share route. Local execution settles in-process; no session lifecycle, revisioned window or operation journal exists on this side. |
+| `remote/useConversation` | One remote route's source/session acquisition, activation and cleanup | Used by remote chat and the desktop share route. Offline opening failures retain demand and retry after backend reconnection. Cleanup aborts reads and releases observation, not admitted execution. |
+| `ConversationSourceBoundary` | Source acquisition and replacement after retirement for catalog consumers | Used by both sidebars, the Agent picker and remote chat. Each retains its own consumer handle. |
+| Remote adapter | Capabilities, freshness, bound actions, revisioned history windows and deferred resource reads | Wraps the credential-free remote module. Does not start another execution engine. |
+| `remote/useConversationHistory` and deferred `ResourceRead` values | Scoped Query keys, read cancellation, window lifetime and retirement eviction | Remote chat and the desktop share route. Fixed history versions cannot silently mix; retired bindings cannot reuse old resources. |
 | `ChatWorkspace` / `ConversationPresenter` | History/live display reconciliation, stable message rows and presentation | Local and remote chat are connected. Presenter retains live rows through history installation; it does not persist or recover commands. |
 | `ConversationApprovals` / message action provider | UI for bound response/retry/fork/remove operations | Local and remote chat are connected. The adapter checks authoritative target/freshness again at invocation. |
 | `ChatProvider` / `ChatInput` | Local rich composer, pending first-send rows and navigation handoff | Transitional client extension remains for local admission/model/attachment behavior. They borrow the app-shell client. |
@@ -180,8 +181,10 @@ coverage against the assigned desktop/mobile instances.
   [service registry](../../../src/backend/core/application/serviceRegistry.ts),
   [Backend contract](../../../src/shared/contracts/backend.ts).
 - Consumption: [Conversation module](../../../src/frontend/appShell/conversation/README.md),
-  [contracts](../../../src/frontend/appShell/conversation/contracts.ts),
-  [source dispatch](../../../src/frontend/appShell/conversation/createConversationSources.ts).
+  [shared contract](../../../src/frontend/appShell/conversation/contracts.ts),
+  [remote contract](../../../src/frontend/appShell/conversation/remote/remoteContracts.ts),
+  [source dispatch](../../../src/frontend/appShell/conversation/createConversationSources.ts),
+  [local runtime](../../../src/frontend/features/chat/runtime/useLocalConversation.ts).
 - Remote owners: [Runtime](../../../src/backend/services/remoteAgent/RemoteAgentRuntime.ts),
   [Scope](../../../src/backend/services/remoteAgent/RemoteAgentScope.ts),
   [sync](../../../src/backend/services/remoteAgent/SessionSync.ts),

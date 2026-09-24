@@ -107,13 +107,14 @@ RemoteAgentRuntime → SessionSync (in-memory desktop state) / RemoteAgentAction
   cannot release the scope another route is acquiring. `RemoteAgentScope` translates Agent reads/observations/actions. It reacts to lease state instead
   of registering another physical AppState/reconnect owner. The old `RemoteAgentAdapter`,
   `RemoteAgentClient`, private protocol and private secure-channel implementation are removed.
-- The frontend `appShell/conversation` module owns local/remote consumption. Its local client now
-  belongs to `ConversationProvider`; the existing local ChatProvider still supplies navigation and
-  composer extensions. Local chat uses the common history hook, presenter, actions and approvals;
-  both share routes use immutable selection preparation. Remote chat/sidebar use the common catalog,
-  history, actions, resource readers and operation recovery views. Prepared managed asset leases
-  remain pending. Retired catalogs/windows/resources are cancelled and evicted from Query. Unsent
-  drafts use a stable identity/grant binding independent of the ephemeral Query scope.
+- The frontend `appShell/conversation` module owns the shared read model and the catalog sources;
+  its `remote/` sub-module owns the desktop session contract, revisioned history windows, drafts and
+  operation recovery views. Local chat keeps its own client, Session-keyed history and projection in
+  `features/chat/runtime`; it implements no session lifecycle. Both chat pages feed the same
+  workspace, approvals and message actions, both sidebars use the same catalog, and both share
+  routes use the same selection controls and export preparation. Retired catalogs/windows/deferred
+  reads are cancelled and evicted from Query. Unsent drafts use a stable identity/grant binding
+  independent of the ephemeral Query scope.
 - Remote session state is never written to SQLite. Every new subscription installs a desktop
   checkpoint. The command journal receives its MMKV storage from composition and never resolves
   a replacement host through `application.get` during late work.
@@ -125,11 +126,17 @@ RemoteAgentRuntime → SessionSync (in-memory desktop state) / RemoteAgentAction
 | --- | --- |
 | `desktop_connection` (migrated) | `id` is the mobile connection ID; `deviceId` is desktop-assigned, `name`, `addresses[]`, `port`, `desktopIdentity`, `grants` (`{ domain, grantId }[]`), `status`, `lastFetchedAt`; drops `baseUrls`, `activeBaseUrl`, `desktopVersion`. The migration recreates the table and drops HTTP-era rows, which can no longer connect. |
 | SecureStore | `remote-device-identity` (private key protobuf, hex). HTTP-era `desktop-connection-token.*` entries are simply no longer read. |
-| MMKV `cherry-remote-agent-commands` | Version 2 stores fixed command IDs, exact parameters and receipts plus the two-step start workflow. Version 1 records remain readable; old pairing bindings are not silently erased or replayed into a different identity. |
+| MMKV `cherry-remote-agent-commands` | Version 2 stores fixed command IDs, exact parameters and receipts plus the two-step start workflow. Version 1 records remain readable; old pairing bindings are not silently erased or replayed into a different identity. This is a record of commands the phone sent without a receipt, not a cache. |
+| Memory only: `RemoteSessionReadCache` | Remote history pages, parts and content. Bounded (32 MiB total, 1 MiB per value, 10 inactive sessions, 5-minute idle), cleared when a grant or pairing is invalidated, empty after every process start. |
 
-Access tokens and remote session projections/cursors are never persisted. History pages, parts
-and content live in the bounded runtime read cache and TanStack Query with opaque
-source/session/version keys. A new identity or grant retires that source; grants and protocol types do not enter frontend components.
+The desktop is the only source of truth for a remote conversation; the phone-side copy is never
+trusted for correctness. Every subscription installs a desktop checkpoint and every history window
+carries the desktop's `historyVersion`, so a stale copy is rejected and re-read rather than shown as
+current. The read cache therefore exists only for display continuity inside one process and is
+deliberately not persisted: a cold start shows no remote history until the desktop answers.
+Access tokens and remote session projections/cursors are never persisted either. Frontend Query
+entries use opaque source/session/version keys; a new identity or grant retires that source, and
+grants and protocol types do not enter frontend components.
 
 ## Flows
 

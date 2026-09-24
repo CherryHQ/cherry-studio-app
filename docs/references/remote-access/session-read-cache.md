@@ -58,7 +58,7 @@
 | 物理连接由 Manager 独立管理，有 3 秒无需求宽限期 | 快速切换未必重连；即使不重连，上述重复读取也存在 |
 
 实现依据：
-[history hook](../../../src/frontend/appShell/conversation/useConversationHistory.ts)、
+[history hook](../../../src/frontend/appShell/conversation/remote/useConversationHistory.ts)、
 [remote session](../../../src/frontend/appShell/conversation/remote/createRemoteConversationSession.ts)、
 [scope](../../../src/backend/services/remoteAgent/RemoteAgentScope.ts)、
 [sync](../../../src/backend/services/remoteAgent/SessionSync.ts)。
@@ -260,9 +260,9 @@ invalidate 即使没有活动 entry 也要发布。配对／移除沿用现有�
 | `src/backend/services/remoteAgent/SessionSync.ts` | 发布恢复进度／历史变更提示；复用完整正文的受限读缓存；不移交 cursor ownership |
 | `src/backend/services/desktopConnections/connectionPorts.ts` / `DesktopConnectionManager.ts` | 增加不依赖 Agent 的 binding invalidation 通知 |
 | `src/shared/contracts/remoteAgent/views.ts` / `module.ts` | 无凭据的 preview DTO 与 peekSession 契约 |
-| `src/frontend/appShell/conversation/contracts.ts` | 可选 HistoryPreview 消费能力 |
+| `src/frontend/appShell/conversation/remote/remoteContracts.ts` | 可选 HistoryPreview 消费能力 |
 | `src/frontend/appShell/conversation/remote/*` | cached bootstrap、preview 投影、有效引用重建、历史校验周期合并 |
-| `src/frontend/appShell/conversation/useConversationHistory.ts` | preview 与已安装窗口分开；刷新不清屏 |
+| `src/frontend/appShell/conversation/remote/useConversationHistory.ts` | preview 与已安装窗口分开；刷新不清屏 |
 | `src/frontend/features/chat/components/ChatWorkspace/*` | 有可读缓存时不显示首次加载遮罩，保留滚动锚点 |
 
 Slice 1：完成纯值缓存、稳定 binding、peekSession/peekLatest、缓存首屏和失效机制；保留现有

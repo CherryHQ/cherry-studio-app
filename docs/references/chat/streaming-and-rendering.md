@@ -41,10 +41,10 @@ transport is a global replacement for the other.
 
 ## Frontend Observation Boundary
 
-`ConversationProvider` owns the local source and its shared `AgentSessionChatClient` in
-`frontend/appShell/conversation/local`. The feature `ChatProvider` borrows the client for local
-composer extensions. `useConversation` opens a route-owned Session observation; consumers read its
-snapshot through `useSyncExternalStore`. The client:
+The chat page's `ChatProvider` (`frontend/features/chat/runtime`) owns the local
+`AgentSessionChatClient`. `useLocalConversation` subscribes to the client for the route's Session
+and projects that state into the shared Conversation snapshot through `useSyncExternalStore`; the
+app-shell `ConversationProvider` owns only the catalog sources. The client:
 
 - installs the atomic `observeSession` snapshot before applying events queued during observation;
 - applies `part.add`, `text.append`, and `part.replace` deltas to the live message projection;
@@ -69,24 +69,28 @@ The message list receives a chronological presentation sequence from two sources
 2. The live Agent snapshot/events, which contain the active user/assistant rows, deltas, and
    approvals needed before the next persisted read settles.
 
-The local adapter maps protocol parts and statuses into `ConversationMessage` values using
-`agentMessageProjection`. `useConversationHistory` owns the fixed-version window, older/newer
-pagination, cancellation and Query cache lifetime. `ConversationPresenter` combines that history
-with live rows by message id and retains disappearing live rows until the matching history version
-is installed successfully. Older search windows exclude live rows until their newer edge reaches
-the current transcript. The renderer receives presentation values rather than protocol DTOs.
+`localConversationView` maps protocol parts and statuses into `ConversationMessage` values using
+`agentMessageProjection`. `useAgentMessageHistoryWindow` owns the Session-keyed infinite query,
+older/newer pagination and its Query cache lifetime, so leaving and re-entering the chat shows the
+loaded pages again. `useLocalConversation` merges that history with live rows by message id and
+hands each persisted page back to the client, which drops live copies once they are persisted.
+Older search windows exclude live rows until their newer edge reaches the current transcript. The
+renderer receives presentation values rather than protocol DTOs.
 
-When a message is created or finalized, the frontend invalidates the transcript query. When a turn
-reaches a terminal status, it also invalidates Session list/detail queries. Stable message ids keep
-query refreshes from creating duplicate rows.
+When a message is created or finalized, the frontend invalidates the transcript query in place.
+When a turn reaches a terminal status, it also invalidates Session list/detail queries. Stable
+message ids keep query refreshes from creating duplicate rows. The desktop route has a different
+problem, a history revision that lags the live stream, and keeps its own revisioned window and
+presenter under `frontend/appShell/conversation/remote` and `features/chat/remote`.
 
 ## Approval And Cancellation
 
-Pending approvals come from the local adapter's live Session snapshot/events.
-`ConversationApprovals` loads the bound input resource and invokes the interaction response action;
-that action revalidates the approval, turn and input identity before calling the local protocol.
-A terminal turn clears pending approvals. Explicit stop reaches the selected Session's cancellation
-action; the local composer still has a client extension for stop during migration.
+Pending approvals come from the client's live Session snapshot/events. The local projection
+exposes each one as an interaction with an inline input and a bound response action; that action
+revalidates the approval, turn and input identity before calling the local protocol.
+`ConversationApprovals` renders the same interaction shape for both sources. A terminal turn clears
+pending approvals. Explicit stop reaches the Session's cancellation action; the local composer
+calls the client directly for the same operation.
 
 ## Persistence And Recovery
 
