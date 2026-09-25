@@ -2,7 +2,7 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 158
+ * Total icons: 159
  */
 
 import { resolveGeneralIcon } from '../general';
@@ -498,6 +498,10 @@ export const PROVIDER_ICONS = {
   relace: {
     light: require('./light/relace.webp'),
     dark: require('./dark/relace.webp'),
+  },
+  requesty: {
+    light: require('./light/requesty.webp'),
+    dark: require('./light/requesty.webp'),
   },
   riverflow: {
     light: require('./light/riverflow.webp'),
