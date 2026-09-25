@@ -66,6 +66,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         if (plugin === 'expo-localization') {
           return [plugin, { supportedLocales: APP_LANGUAGES.map(({ value }) => value) }];
         }
+        if (Array.isArray(plugin) && plugin[0] === 'expo-build-properties') {
+          return [
+            plugin[0],
+            {
+              ...plugin[1],
+              android: { ...plugin[1].android, useLegacyPackaging: profile !== 'development' },
+            },
+          ];
+        }
         if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
           return [
             plugin[0],
