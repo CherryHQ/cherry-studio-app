@@ -375,9 +375,12 @@ history. Pi owns all later selection, formatting, and compaction policy.
 
 Pi estimates reconstructed history with `pi-agent-core`'s content estimator. Persisted assistant
 usage aggregates multiple requests for analytics and is never a context-size measurement. The adapter
-adds system instructions, current input, tool schemas, image reserves, and a fixed safety margin
-before calling Pi's `shouldCompact`. Historical image reserves follow the checkpoint-projected
-history; they are removable history costs, not part of the current input's fixed cost. A current
+adds system instructions, current input, tool schemas, per-image dialect estimates (replacing Pi's
+flat image charge), and a fixed safety margin before calling Pi's `shouldCompact`. Because replayed
+history carries no provider usage, Chat Completions endpoints, which also serve non-OpenAI vision
+models, take the larger of the OpenAI and Anthropic image estimates. Historical image estimates
+follow the checkpoint-projected history; they are removable history costs, not part of the current
+input's fixed cost. A current
 input whose fixed costs exceed the hard budget fails before the first model call. Crossing the
 compaction trigger alone never proves that a request cannot be sent.
 

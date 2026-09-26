@@ -12,10 +12,13 @@ import { convertBase64ToUint8Array } from '@ai-sdk/provider-utils';
 import type { ImageContent, Api as PiApi } from '@earendil-works/pi-ai';
 
 type ImageDimensions = { width: number; height: number };
-type ImageTokenDialect = 'anthropic' | 'google' | 'openai';
 
-/** Enough encoded bytes to reach a JPEG frame header behind a large EXIF block. */
-const HEADER_BASE64_CHARACTERS = 256 * 1024;
+/**
+ * Encoded prefixes to try, smallest first. PNG, GIF, and WebP report their size
+ * in the first bytes; a JPEG frame header can sit behind a large EXIF block.
+ * Decoding is linear in the prefix, so most images never pay for the long one.
+ */
+const HEADER_BASE64_PREFIXES = [64, 4 * 1024, 64 * 1024, 256 * 1024];
 
 const dimensionsByImage = new WeakMap<ImageContent, ImageDimensions | null>();
 
@@ -25,16 +28,16 @@ export function estimatePiImageTokens(api: PiApi, image: ImageContent): number {
     dimensions = readImageDimensions(image.data) ?? null;
     dimensionsByImage.set(image, dimensions);
   }
-  const dialect = imageTokenDialect(api);
-  if (dialect === 'anthropic') return anthropicImageTokens(dimensions);
-  if (dialect === 'google') return geminiImageTokens(dimensions);
-  return openaiImageTokens(dimensions);
-}
-
-function imageTokenDialect(api: PiApi): ImageTokenDialect {
-  if (api === 'anthropic-messages') return 'anthropic';
-  if (api === 'google-generative-ai' || api === 'google-vertex') return 'google';
-  return 'openai';
+  if (api === 'anthropic-messages') return anthropicImageTokens(dimensions);
+  if (api === 'google-generative-ai' || api === 'google-vertex') {
+    return geminiImageTokens(dimensions);
+  }
+  const openai = openaiImageTokens(dimensions);
+  // Chat Completions is the generic OpenAI-compatible protocol: Qwen-VL, GLM-4V,
+  // and gateway-hosted Claude bill an image above OpenAI's tiles. Replayed
+  // history carries no provider usage to correct an estimate between turns, so
+  // take the larger formula rather than let image-heavy history outgrow the window.
+  return api === 'openai-completions' ? Math.max(openai, anthropicImageTokens(dimensions)) : openai;
 }
 
 /** Anthropic: `ceil(w·h / 750)` after clamping the longest edge to 1568px and 1.15 MP. */
@@ -96,20 +99,26 @@ function fitOpenAi(dimensions: ImageDimensions): ImageDimensions {
 
 /** PNG, JPEG, GIF, and WebP header dimensions; undefined when unreadable. */
 export function readImageDimensions(base64: string): ImageDimensions | undefined {
-  let bytes: Uint8Array;
-  try {
-    const length =
-      base64.length > HEADER_BASE64_CHARACTERS ? HEADER_BASE64_CHARACTERS : base64.length;
-    bytes = convertBase64ToUint8Array(base64.slice(0, length - (length % 4)));
-  } catch {
-    return undefined;
+  for (const prefix of HEADER_BASE64_PREFIXES) {
+    const length = Math.min(prefix, base64.length);
+    let bytes: Uint8Array;
+    try {
+      bytes = convertBase64ToUint8Array(base64.slice(0, length - (length % 4)));
+    } catch {
+      return undefined;
+    }
+    const dimensions =
+      readPngDimensions(bytes) ??
+      readJpegDimensions(bytes) ??
+      readGifDimensions(bytes) ??
+      readWebpDimensions(bytes);
+    if (dimensions) {
+      return dimensions.width > 0 && dimensions.height > 0 ? dimensions : undefined;
+    }
+    // Only a JPEG can need more bytes; anything else is settled by the first prefix.
+    if (length >= base64.length || bytes[0] !== 0xff || bytes[1] !== 0xd8) return undefined;
   }
-  const dimensions =
-    readPngDimensions(bytes) ??
-    readJpegDimensions(bytes) ??
-    readGifDimensions(bytes) ??
-    readWebpDimensions(bytes);
-  return dimensions && dimensions.width > 0 && dimensions.height > 0 ? dimensions : undefined;
+  return undefined;
 }
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];

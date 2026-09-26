@@ -6,6 +6,7 @@ describe('Pi image token estimate', () => {
   test.each([
     ['PNG', png(1000, 750)],
     ['JPEG behind an EXIF block', jpeg(1000, 750, 4096)],
+    ['JPEG behind a 60 KB EXIF block', jpeg(1000, 750, 60 * 1024)],
     ['GIF', gif(1000, 750)],
     ['lossy WebP', webpVp8(1000, 750)],
     ['lossless WebP', webpVp8l(1000, 750)],
@@ -27,10 +28,21 @@ describe('Pi image token estimate', () => {
     expect(estimatePiImageTokens('anthropic-messages', square)).toBe(1334);
     // Short side to 768 → 2×2 tiles → 85 + 170·4
     expect(estimatePiImageTokens('openai-responses', square)).toBe(765);
-    expect(estimatePiImageTokens('openai-completions', square)).toBe(765);
     // Crop unit floor(1000 / 1.5) = 666 → 2×2 crops
     expect(estimatePiImageTokens('google-generative-ai', square)).toBe(1032);
     expect(estimatePiImageTokens('google-generative-ai', image(png(300, 300)))).toBe(258);
+  });
+
+  test('prices generic OpenAI-compatible endpoints by the larger formula', () => {
+    // Qwen-VL, GLM-4V, and gateway Claude bill above OpenAI tiles on Chat Completions.
+    expect(estimatePiImageTokens('openai-completions', image(png(1000, 1000)))).toBe(1334);
+    expect(
+      estimatePiImageTokens('openai-completions', {
+        type: 'image',
+        mimeType: 'image/png',
+        data: 'AAAA',
+      }),
+    ).toBe(1590);
   });
 
   test('clamps a large photo to the provider budget before pricing it', () => {
