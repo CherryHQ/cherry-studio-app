@@ -11,7 +11,6 @@ export const FileAttachmentIssueSchema = z.strictObject({
     'runtime-unsupported',
     'count',
     'file-bytes',
-    'total-bytes',
     'context',
     'binary-content',
     'invalid-utf8',

@@ -22,10 +22,6 @@ import UIKit
  * as part of the user's explicit drag, never through `PHAsset` APIs.
  */
 public final class ImageDropTargetView: ExpoView {
-  /// Mirrors the shared per-message image ceiling (`AI_IMAGE_INPUT_MAX_COUNT`),
-  /// enforced before any provider I/O so an oversized drop does not start work
-  /// whose results would only be discarded.
-  private static let selectionLimit = 9
   /// What the send pipeline consumes; anything else is transcoded to JPEG.
   private static let supportedImageMIMETypes: Set<String> = [
     "image/gif", "image/jpeg", "image/png", "image/webp",
@@ -304,11 +300,8 @@ extension ImageDropTargetView: UIDropInteractionDelegate {
     let imageItems = session.items.filter {
       $0.itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier)
     }
-    // The per-message quota is applied before any provider I/O: an oversized
-    // drop neither starts loads nor writes staging files for discarded items.
-    let acceptedItems = Array(imageItems.prefix(Self.selectionLimit))
-    guard !acceptedItems.isEmpty else {
-      onDropImages(["failedCount": 0, "images": [], "totalDropped": imageItems.count])
+    guard !imageItems.isEmpty else {
+      onDropImages(["failedCount": 0, "images": []])
       return
     }
 
@@ -319,7 +312,7 @@ extension ImageDropTargetView: UIDropInteractionDelegate {
     // Every load must start before performDrop returns: once the session ends,
     // a load requested later never calls back. The provider delivers results
     // on its own callback queue, so no extra dispatching is needed here.
-    for (index, item) in acceptedItems.enumerated() {
+    for (index, item) in imageItems.enumerated() {
       group.enter()
       loadImagePayload(from: item.itemProvider) { payload in
         if let payload {
@@ -337,11 +330,10 @@ extension ImageDropTargetView: UIDropInteractionDelegate {
       }
       // Results are compacted by original item index: attachment order follows
       // the drop order, not provider I/O timing.
-      let payloads = acceptedItems.indices.compactMap { indexedPayloads[$0] }
+      let payloads = imageItems.indices.compactMap { indexedPayloads[$0] }
       self.onDropImages([
-        "failedCount": acceptedItems.count - payloads.count,
+        "failedCount": imageItems.count - payloads.count,
         "images": payloads,
-        "totalDropped": imageItems.count,
       ])
     }
   }

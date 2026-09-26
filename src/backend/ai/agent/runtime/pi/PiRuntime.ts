@@ -733,6 +733,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // signal — which is absent in the pre-agent window and third-party after.
       const providerStream: PiModelResolution['streamFn'] = async (model, context, options) => {
         const contextUsage = measurePiContext({
+          api: model.api,
           contextWindow: model.contextWindow,
           maxInputTokens: resolution.maxInputTokens,
           messages: context.messages,
@@ -783,6 +784,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         completeSimple: async (model, context, options) => {
           if (
             estimatePiLoopContextHeadroomTokens({
+              api: model.api,
               contextWindow: model.contextWindow,
               maxInputTokens: resolution.maxInputTokens,
               messages: context.messages,
@@ -871,6 +873,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       let responsePhase: 'tools' | 'final-response' | 'done' = 'tools';
       const updateModelContextHeadroom = (messages: PiAgentMessage[]) => {
         const usage = measurePiContext({
+          api: resolution.model.api,
           contextWindow: resolution.model.contextWindow,
           maxInputTokens: resolution.maxInputTokens,
           messages,

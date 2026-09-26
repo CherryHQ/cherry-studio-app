@@ -19,10 +19,10 @@ here. Terms follow [Domain Language](../domain-language.md).
    bytes are copied into `Data/Files`. No entry references a path outside the sandbox.
 4. **Import happens when the file enters the app.** Painting imports at generation time; the Agent
    Composer imports when an attachment enters its managed draft. Import is also the only place an
-   image is resized: a user-imported JPEG, PNG, or WebP above the per-image share of the request
-   image budget (total bytes divided by the image count limit, about 2.2 MB) is re-encoded once to a
-   2048-pixel long edge (an oversized PNG becomes a JPEG and is renamed to match), so the managed
-   blob is already what a model request can carry and no request path compresses, caches a
+   image is resized: a user-imported JPEG, PNG, or WebP above about 2.2 MB, far below the strictest
+   provider per-image limit because every request replays the conversation's images, is re-encoded
+   once to a 2048-pixel long edge (an oversized PNG becomes a JPEG and is renamed to match), so the
+   managed blob is already what a model request can carry and no request path compresses, caches a
    derivative, or retries on a provider size error. GIFs, generated images, and images that cannot
    be re-encoded are stored untouched; send-time attachment limits remain their guard.
 5. **Business-object deletion never deletes files.** Deleting an Agent Session or painting leaves
@@ -124,11 +124,12 @@ cause; it never triggers a second parser. Native module failure is separately cl
 `parser-unavailable`. No parsed document or derived asset gets a database table or library entry.
 
 Prepared content is text or a document with complete/deferred delivery. Complete documents retain
-the original JSON object. Oversized documents carry continuation metadata instead of a JSON
-prefix. Embedded images share count, byte, and context reserves with directly attached images,
-including repeated historical occurrences. Unsupported image formats are not converted. Asset
-delivery descriptors state whether pixels were sent, unsupported by the model/type, or omitted
-for budget. Reports persist only delivery facts and omission reasons, never IR or image bytes.
+the original JSON object. Oversized documents carry continuation metadata instead of a JSON prefix.
+Embedded images fill a bounded budget (a 4,096-token context reserve each and 20 MiB) after the
+directly attached images, including repeated historical occurrences, have been charged. Unsupported
+image formats are not converted. Asset delivery descriptors state whether pixels were sent,
+unsupported by the model/type, or omitted for budget. Reports persist only delivery facts and
+omission reasons, never IR or image bytes.
 
 AnyDoc uses published native libraries with Nitro/Nitrogen 0.36.4. A new development client is
 required; installing JavaScript dependencies alone does not register the native module. The

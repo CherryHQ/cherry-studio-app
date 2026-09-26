@@ -21,7 +21,6 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import {
-  COMPOSER_PHOTO_SELECTION_LIMIT,
   type ComposerInitialAttachment,
   createPhotoAttachmentDraft,
 } from '@/frontend/components/Composer/utils/composerAttachments';
@@ -169,7 +168,6 @@ export function DrawingList() {
         preferredAssetRepresentationMode:
           ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
         quality: 1,
-        selectionLimit: COMPOSER_PHOTO_SELECTION_LIMIT,
       });
       if (result.canceled || result.assets.length === 0) {
         return;

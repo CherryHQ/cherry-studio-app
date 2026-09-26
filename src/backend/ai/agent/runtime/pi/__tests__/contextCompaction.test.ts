@@ -8,7 +8,6 @@ import {
   estimatePiMessagesTokens,
   measurePiContext,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
-  PI_IMAGE_CONTEXT_TOKEN_RESERVE,
   PI_MIN_OUTPUT_RESERVE_TOKENS,
   planPiContext,
   planPiLoopContext,
@@ -204,7 +203,8 @@ describe('Pi context admission and compaction', () => {
 
   test('allows Pi to compact removable history images instead of treating them as fixed input', async () => {
     const current = conversation();
-    current.historyTurns = Array.from({ length: 9 }, (_, index) => ({
+    // Unreadable images cost the OpenAI typical 765 tokens each: together they outgrow the window.
+    current.historyTurns = Array.from({ length: 30 }, (_, index) => ({
       turnId: `image-${index}`,
       messages: [
         {
@@ -303,6 +303,7 @@ describe('Pi live context accounting', () => {
     usage: { ...response().usage, input: 49_000, output: 1_000, totalTokens: 50_000 },
   });
   const context = {
+    api: model.api,
     contextWindow: 128_000,
     outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
     systemPrompt: 'x'.repeat(40_000),
@@ -337,7 +338,8 @@ describe('Pi live context accounting', () => {
     const before = estimatePiLoopContextHeadroomTokens({ ...context, messages: [measured] });
     const after = estimatePiLoopContextHeadroomTokens({ ...context, messages: [measured, image] });
 
-    expect(before - after).toBe(PI_IMAGE_CONTEXT_TOKEN_RESERVE);
+    // An unreadable image costs the OpenAI high-detail typical estimate.
+    expect(before - after).toBe(765);
   });
 
   test('still counts tool definitions introduced after the last measured request', () => {

@@ -18,8 +18,6 @@ export type ImageDropEvent = {
   /** Items the native side could not stage; their bytes never reached JS. */
   failedCount: number;
   images: DroppedImage[];
-  /** Every image item in the drop, including ones over the per-drop cap. */
-  totalDropped: number;
 };
 
 export type ImageDropTargetProps = PropsWithChildren<{
