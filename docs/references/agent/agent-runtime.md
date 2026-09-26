@@ -268,10 +268,13 @@ file storage first, `AgentInputPart` carries the resulting `fileEntryId`, and th
 live entry and managed blob before message reservation. The Host authorizes tools from managed ids
 referenced by the current input and complete Session transcript, while it resolves attachment
 content only for the current input and checkpoint-visible history. A Runtime never reads the device
-filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist plus
-at most 9 images, 10 MiB per file, 20 MiB total, and a conservative context reserve of 4,096 input
-tokens per image plus 1,024 tokens for text. This remains the Host's current-input admission ceiling;
-S2b separately includes image costs in Pi compression-trigger estimates. The Host then reads a
+filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist and
+10 MiB per file. There is no request-level image count or byte ceiling: every request replays the
+checkpoint-visible history with its images, and Pi prices each image into the context window by the
+endpoint's documented formula (Anthropic, OpenAI, or Gemini) over the dimensions read from the
+image header, falling back to that dialect's typical cost. Compaction folds old images away like any
+other history; a current input that alone exceeds the window fails as a context error before the
+provider call. The Host then reads a
 temporary Data URL after reservation. Cancellation aborts that read boundary and late content is
 discarded. Current image read failure settles the reserved turn; missing historical content is
 omitted while its persisted reference remains.

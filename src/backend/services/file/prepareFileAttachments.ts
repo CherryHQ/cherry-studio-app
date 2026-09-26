@@ -8,11 +8,9 @@ import {
 } from '@/shared/contracts/fileAttachment';
 import {
   fileAttachmentMode,
-  IMAGE_CONTEXT_TOKEN_RESERVE,
+  documentImageCountLimit,
+  MAX_DOCUMENT_IMAGE_TOTAL_BYTES,
   MAX_IMAGE_ATTACHMENT_BYTES,
-  MAX_IMAGE_ATTACHMENT_COUNT,
-  MAX_IMAGE_ATTACHMENT_TOTAL_BYTES,
-  MIN_TEXT_CONTEXT_TOKEN_RESERVE,
   MAX_TEXT_ATTACHMENT_BYTES,
   MAX_TEXT_ATTACHMENT_CHARACTERS,
   MAX_TEXT_ATTACHMENT_TOTAL_CHARACTERS,
@@ -65,7 +63,8 @@ export async function prepareFileAttachments(
     const mode = file && fileAttachmentMode(file);
     return mode && (mode !== 'image' || input.target.acceptsImages);
   });
-  // Historical image occurrences share the request ceiling. Text files have their own budget below.
+  // Attached images, current and historical, are charged first; embedded document images get
+  // what remains of their budget. Text files have their own budget below.
   const historicalImages = historicalIds.flatMap((id) => {
     const file = input.availableFiles.get(id)!;
     return fileAttachmentMode(file) === 'image' ? [file] : [];
@@ -123,16 +122,8 @@ export async function prepareFileAttachments(
           else if (!isAiSupportedImageMediaType(asset.contentType)) status = 'unsupported-type';
           else if (
             size > MAX_IMAGE_ATTACHMENT_BYTES ||
-            nextImageCount + count >
-              Math.min(
-                MAX_IMAGE_ATTACHMENT_COUNT,
-                input.target.maxImages ?? MAX_IMAGE_ATTACHMENT_COUNT,
-              ) ||
-            nextImageBytes + size * count > MAX_IMAGE_ATTACHMENT_TOTAL_BYTES ||
-            (input.target.maxInputTokens !== undefined &&
-              MIN_TEXT_CONTEXT_TOKEN_RESERVE +
-                (nextImageCount + count) * IMAGE_CONTEXT_TOKEN_RESERVE >
-                input.target.maxInputTokens)
+            nextImageCount + count > documentImageCountLimit(input.target) ||
+            nextImageBytes + size * count > MAX_DOCUMENT_IMAGE_TOTAL_BYTES
           )
             status = 'budget';
           else {

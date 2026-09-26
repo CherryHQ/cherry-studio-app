@@ -73,7 +73,6 @@ describe('ImageDropTargetView', () => {
     const event: ImageDropEvent = {
       failedCount: 1,
       images: [dropImage('kept.jpg')],
-      totalDropped: 2,
     };
     await act(async () => mockNativeProps?.onDropImages?.({ nativeEvent: event }));
 

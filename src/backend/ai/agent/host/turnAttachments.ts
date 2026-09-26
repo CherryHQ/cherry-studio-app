@@ -193,9 +193,7 @@ function failAttachment(error: FileAttachmentError): never {
       ? 'ATTACHMENT_UNAVAILABLE'
       : code === 'document-empty'
         ? 'ATTACHMENT_NO_TEXT'
-        : ['model-unsupported', 'runtime-unsupported', 'count', 'total-bytes', 'context'].includes(
-              code,
-            )
+        : ['model-unsupported', 'runtime-unsupported', 'count', 'context'].includes(code)
           ? 'CAPABILITY_UNSUPPORTED'
           : 'ATTACHMENT_INVALID',
     error.message,

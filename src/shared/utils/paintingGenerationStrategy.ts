@@ -3,7 +3,7 @@ import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-re
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import type { Model } from '@/shared/data/types/model';
 
-import { MAX_IMAGE_ATTACHMENT_COUNT, validateFileAttachments } from './fileAttachmentPolicy';
+import { validateFileAttachments } from './fileAttachmentPolicy';
 import { prepareImageParamRequest, resolveImageGenerationMode } from './imageGenerationParams';
 import { resolvePaintingGenerationMode } from './paintingModelSupport';
 
@@ -45,12 +45,8 @@ export function createPaintingGenerationStrategy(model: Model | undefined) {
       : withImages
         ? 'image-required'
         : 'unavailable';
-  const maxInputImages = withImages
-    ? Math.min(
-        MAX_IMAGE_ATTACHMENT_COUNT,
-        model?.imageGeneration?.modes[withImages]?.maxInputImages ?? MAX_IMAGE_ATTACHMENT_COUNT,
-      )
-    : 0;
+  // Only the model's declared reference limit applies; undeclared means unbounded.
+  const maxInputImages = withImages ? model?.imageGeneration?.modes[withImages]?.maxInputImages : 0;
   const resolveMode = (imageCount: number): PaintingMode | undefined =>
     imageCount > 0 ? withImages : withoutImages;
   const resolveParameters = (imageCount: number) =>
@@ -59,7 +55,8 @@ export function createPaintingGenerationStrategy(model: Model | undefined) {
     if (kind === 'unavailable') return { code: 'model-unavailable' };
     if (imageCount === 0 && !withoutImages) return { code: 'image-required' };
     if (imageCount > 0 && !withImages) return { code: 'images-unsupported' };
-    if (imageCount > maxInputImages) return { code: 'too-many-images', limit: maxInputImages };
+    if (maxInputImages !== undefined && imageCount > maxInputImages)
+      return { code: 'too-many-images', limit: maxInputImages };
     return undefined;
   };
   return {

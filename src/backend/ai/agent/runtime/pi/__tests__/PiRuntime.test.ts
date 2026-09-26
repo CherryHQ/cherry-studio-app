@@ -35,7 +35,6 @@ import {
   estimatePiContextFixedCosts,
   estimatePiLoopContextHeadroomTokens,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
-  PI_IMAGE_CONTEXT_TOKEN_RESERVE,
 } from '../contextCompaction';
 import {
   PI_DOCUMENT_ATTACHMENT_ENVELOPE_PREFIX,
@@ -48,6 +47,7 @@ import {
   PI_TOOL_DESCRIBE_TOOL_NAME,
   PI_TOOL_SEARCH_TOOL_NAME,
 } from '../piDeferredToolDiscovery';
+import { estimatePiImageTokens } from '../piImageTokens';
 import {
   DEFAULT_PI_RUNTIME_LIMITS,
   PI_TURN_SETTLE_GRACE_MS,
@@ -776,11 +776,13 @@ describe('PiRuntime mapping', () => {
     );
     expect(events.some((event) => event.type === 'approval.requested')).toBe(false);
     const withResume = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(request, holder.resolution.model),
       outputReserveTokens: 1024,
       tools: [],
     });
     const withoutResume = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(baseRequest('fresh'), holder.resolution.model),
       outputReserveTokens: 1024,
       tools: [],
@@ -1089,16 +1091,20 @@ describe('PiRuntime mapping', () => {
     model.input = ['text', 'image'];
     const conversation = toPiConversation(baseRequest('document-costs', { input: [part] }), model);
     const costs = estimatePiContextFixedCosts({
+      api: model.api,
       conversation,
       outputReserveTokens: 512,
       tools: [],
     });
     const empty = estimatePiContextFixedCosts({
+      api: model.api,
       conversation: toPiConversation(baseRequest('empty', { input: [] }), model),
       outputReserveTokens: 512,
       tools: [],
     });
-    expect(costs.totalTokens - empty.totalTokens).toBeGreaterThan(PI_IMAGE_CONTEXT_TOKEN_RESERVE);
+    expect(costs.totalTokens - empty.totalTokens).toBeGreaterThan(
+      estimatePiImageTokens(model.api, { type: 'image', mimeType: 'image/png', data: 'AQID' }),
+    );
     const repeated = toPiConversation(
       baseRequest('history-costs', {
         input: [part],
@@ -1315,11 +1321,13 @@ describe('PiRuntime mapping', () => {
       parameters: tool.inputSchema as never,
     }));
     const costs = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(request, holder.resolution.model),
       outputReserveTokens: 512,
       tools: piTools,
     });
     const costsWithoutTextAttachment = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(
         { ...request, input: request.input.filter((_, index) => index !== 1) },
         holder.resolution.model,
@@ -1332,7 +1340,13 @@ describe('PiRuntime mapping', () => {
       systemInstructionsTokens: expect.any(Number),
       currentInputTokens: expect.any(Number),
       toolSchemaTokens: expect.any(Number),
-      attachmentTokens: PI_IMAGE_CONTEXT_TOKEN_RESERVE - 1_200,
+      // Pi's flat 1,200-token image charge is replaced by the dialect estimate.
+      attachmentTokens:
+        estimatePiImageTokens(holder.resolution.model.api, {
+          type: 'image',
+          mimeType: 'image/png',
+          data: 'AAAA',
+        }) - 1_200,
       outputReserveTokens: 512,
       safetyMarginTokens: PI_CONTEXT_SAFETY_MARGIN_TOKENS,
     });
@@ -1411,7 +1425,12 @@ describe('PiRuntime mapping', () => {
   );
 
   test('reserves output once while respecting independent input and total context limits', () => {
-    const context = { messages: [], systemPrompt: 'x'.repeat(400), tools: [] };
+    const context = {
+      api: 'openai-responses',
+      messages: [],
+      systemPrompt: 'x'.repeat(400),
+      tools: [],
+    };
     const inputCosts = 100 + PI_CONTEXT_SAFETY_MARGIN_TOKENS;
     for (const outputReserveTokens of [512, 32_768]) {
       expect(
