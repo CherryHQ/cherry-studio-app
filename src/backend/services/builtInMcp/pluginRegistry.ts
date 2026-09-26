@@ -14,6 +14,7 @@ import { dingtalkPlugin } from './plugins/dingtalk';
 import { feishuPlugin } from './plugins/feishu';
 import { githubPlugin } from './plugins/github';
 import { notionPlugin } from './plugins/notion';
+import { slackPlugin } from './plugins/slack';
 import { wecomPlugin } from './plugins/wecom';
 
 /** Registration is a bundled-code decision; there is no runtime installation or code loading. */
@@ -154,6 +155,7 @@ const registry = createPluginRegistry([
   feishuPlugin,
   dingtalkPlugin,
   notionPlugin,
+  slackPlugin,
   wecomPlugin,
 ]);
 
