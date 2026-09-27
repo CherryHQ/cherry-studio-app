@@ -54,8 +54,11 @@ export function toRuntimeInputParts(
 export function toRuntimeHistory(
   messages: AgentMessageView[],
   attachments: RuntimeAttachmentContents = new Map(),
+  /** The turn's model: a context anchor measured by another model's tokenizer is not used. */
+  anchorModelId?: string,
 ): RuntimeHistoryTurn[] {
   const history: RuntimeHistoryTurn[] = [];
+  const anchor = contextAnchor(messages, anchorModelId);
   for (const message of messages) {
     const parts: RuntimeMessagePart[] = [];
     for (const part of message.parts) {
@@ -123,12 +126,31 @@ export function toRuntimeHistory(
       const runtimeMessage: RuntimeMessage = {
         role: message.role,
         parts,
-        ...(message.role === 'assistant' && message.usage ? { usage: message.usage } : {}),
+        ...(message === anchor.message ? { contextTokens: anchor.contextTokens } : {}),
       };
       runtimeTurn.messages.push(runtimeMessage);
     }
   }
   return history;
+}
+
+/**
+ * Only the newest assistant message may anchor the estimate: it follows any
+ * context checkpoint, and its measurement already covers everything before it.
+ * A failed, cancelled, or retried answer carries no measurement, so the next
+ * turn falls back to estimating by content.
+ */
+function contextAnchor(
+  messages: readonly AgentMessageView[],
+  modelId: string | undefined,
+): { message?: AgentMessageView; contextTokens?: number } {
+  const newest = messages.findLast((message) => message.role === 'assistant');
+  const contextTokens = newest?.stats?.contextTokens;
+  if (!newest || modelId === undefined || newest.modelId !== modelId) return {};
+  if (typeof contextTokens !== 'number' || !Number.isFinite(contextTokens) || contextTokens <= 0) {
+    return {};
+  }
+  return { message: newest, contextTokens };
 }
 
 /** Preserve message-scoped plugin intent as user content, without changing the stored text. */

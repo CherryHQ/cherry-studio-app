@@ -1054,7 +1054,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           ...(plan.retry ? { retry: resume.length ? 'resumed' : 'restarted' } : {}),
         }),
         model: plan.agent.model,
-        history: toRuntimeHistory(plan.history, runtimeAttachments),
+        history: toRuntimeHistory(
+          plan.history,
+          runtimeAttachments,
+          plan.inferenceSnapshot.model.uniqueModelId,
+        ),
         contextCheckpoint: plan.runtimeContextCheckpoint,
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
         ...(resume.length ? { resume } : {}),
@@ -1305,7 +1309,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'completed':
-        await this.finalize(sessionId, state, 'completed', null);
+        await this.finalize(sessionId, state, 'completed', null, event.contextTokens);
         return true;
       case 'failed':
         state.trace?.setAttributes(traceErrorAttributes(event.error));
@@ -1324,6 +1328,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     state: ActiveTurnState,
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
+    /** The next turn's context-estimate anchor; kept only on a completed answer. */
+    contextTokens?: number,
   ): Promise<void> {
     const interruption: unknown = state.abortController.signal.reason;
     if (interruption instanceof KeepAliveInterruptionError) {
@@ -1363,7 +1369,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       usage: state.usage ? toAgentUsageView(state.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
-      runtimeStats: { runtimeTiming },
+      runtimeStats: {
+        runtimeTiming,
+        ...(outcome === 'completed' && contextTokens !== undefined ? { contextTokens } : {}),
+      },
     });
     const turn: AgentTurnView = {
       ...state.turn,

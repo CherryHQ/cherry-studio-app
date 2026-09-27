@@ -373,16 +373,19 @@ checkpoint, the request carries complete Turn groups after the anchor. With no c
 invalid, incompatible, oversized, or orphaned candidate—the Host supplies the entire grouped
 history. Pi owns all later selection, formatting, and compaction policy.
 
-Pi estimates reconstructed history with `pi-agent-core`'s content estimator. Persisted assistant
-usage aggregates multiple requests for analytics and is never a context-size measurement. The adapter
-adds system instructions, current input, tool schemas, per-image dialect estimates (replacing Pi's
-flat image charge), and a fixed safety margin before calling Pi's `shouldCompact`. Because replayed
-history carries no provider usage, Chat Completions endpoints, which also serve non-OpenAI vision
-models, take the larger of the OpenAI and Anthropic image estimates. Historical image estimates
-follow the checkpoint-projected history; they are removable history costs, not part of the current
-input's fixed cost. A current
-input whose fixed costs exceed the hard budget fails before the first model call. Crossing the
-compaction trigger alone never proves that a request cannot be sent.
+Pi estimates reconstructed history from a measured anchor. When a completed answer's final request
+reported its input, the Host stores that request's total as the message's `stats.contextTokens`:
+everything sent plus the answer. The newest replayed assistant message carries it when the turn uses
+the same model, and `pi-agent-core`'s estimator counts only the content replayed after it. A failed,
+cancelled, or retried answer, a model switch, or a provider that omits input counts leaves no
+anchor, and the whole history is estimated by content. Persisted assistant `usage` sums every
+request of a turn for analytics and is never a context-size measurement. The adapter adds system
+instructions, current input, tool schemas, per-image dialect estimates (replacing Pi's flat image
+charge), and a fixed safety margin before calling Pi's `shouldCompact`; content already covered by
+the anchor is not added again. Historical image estimates follow the checkpoint-projected history;
+they are removable history costs, not part of the current input's fixed cost. A current input whose
+fixed costs exceed the hard budget fails before the first model call. Crossing the compaction
+trigger alone never proves that a request cannot be sent.
 
 On compaction, Pi owns the cut point, `previousSummary` merge, retained tail, and split-turn prefix
 summary. Checkpoint payloads store the redacted summary and an optional structural resume cursor;

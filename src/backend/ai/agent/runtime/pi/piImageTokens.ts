@@ -32,12 +32,10 @@ export function estimatePiImageTokens(api: PiApi, image: ImageContent): number {
   if (api === 'google-generative-ai' || api === 'google-vertex') {
     return geminiImageTokens(dimensions);
   }
-  const openai = openaiImageTokens(dimensions);
-  // Chat Completions is the generic OpenAI-compatible protocol: Qwen-VL, GLM-4V,
-  // and gateway-hosted Claude bill an image above OpenAI's tiles. Replayed
-  // history carries no provider usage to correct an estimate between turns, so
-  // take the larger formula rather than let image-heavy history outgrow the window.
-  return api === 'openai-completions' ? Math.max(openai, anthropicImageTokens(dimensions)) : openai;
+  // Every other protocol is OpenAI-compatible. A model that bills images above
+  // OpenAI's tiles is corrected by the previous answer's measured context,
+  // which leaves only this turn's new images to the estimate.
+  return openaiImageTokens(dimensions);
 }
 
 /** Anthropic: `ceil(w·h / 750)` after clamping the longest edge to 1568px and 1.15 MP. */
