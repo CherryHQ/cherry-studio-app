@@ -1,7 +1,7 @@
 import {
-  type AgentUserResponse,
-  type AgentUserQuestionRequest,
-  validateUserResponse,
+  type AgentUserAnswers,
+  type AgentUserQuestions,
+  validateUserAnswers,
 } from '@/shared/contracts/agent';
 
 import type { RuntimeToolCall } from '../runtime';
@@ -10,13 +10,13 @@ import type { RuntimeToolCall } from '../runtime';
 export class TurnUserQuestions {
   private pending = new Map<
     string,
-    { question: AgentUserQuestionRequest; resolve: (answer: AgentUserResponse) => void }
+    { question: AgentUserQuestions; resolve: (answer: AgentUserAnswers) => void }
   >();
 
   ask(
-    question: AgentUserQuestionRequest,
+    question: AgentUserQuestions,
     { toolCallId, signal }: RuntimeToolCall,
-  ): Promise<AgentUserResponse> {
+  ): Promise<AgentUserAnswers> {
     signal.throwIfAborted();
     if (this.pending.size) throw new Error('Wait for the current question before asking another.');
     return new Promise((resolve, reject) => {
@@ -36,10 +36,10 @@ export class TurnUserQuestions {
     });
   }
 
-  respond(toolCallId: string, answer: AgentUserResponse): void {
+  respond(toolCallId: string, answer: AgentUserAnswers): void {
     const pending = this.pending.get(toolCallId);
     if (!pending) throw new Error('This question is no longer waiting for an answer.');
-    validateUserResponse(pending.question, answer);
+    validateUserAnswers(pending.question, answer);
     pending.resolve(answer);
   }
 }

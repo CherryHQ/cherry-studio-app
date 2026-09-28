@@ -360,7 +360,7 @@ the normal running animation during tool execution.
 
 `ask_user_question` tool parts stay in the message body as compact `MessagePart.Tool` status rows,
 matching tool approval presentation. Opening a row shows every read-only question and its answer or
-skip state, including legacy single-question records; history never submits responses. The chat
+skip state; history never submits responses. The chat
 feature owns the active question composer and Protocol correlation. It replaces the ordinary input,
 retains per-question drafts while navigating, and submits the complete answer set explicitly.
 

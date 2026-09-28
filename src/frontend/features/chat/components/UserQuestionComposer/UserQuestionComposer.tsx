@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import { useResolveClassNames } from 'uniwind';
 
 import { useComposerPresentationActions } from '@/frontend/components/Composer';
@@ -29,6 +30,8 @@ export function UserQuestionComposer(props: UserQuestionComposerProps) {
   );
   useEffect(() => {
     dismissInput();
+    // ChatInput unmounts before this form, so its blur can no longer hide the Android IME.
+    void KeyboardController.dismiss();
     return dismissInput;
   }, [dismissInput]);
   const isLast = form.index === form.questions.length - 1;
@@ -60,10 +63,10 @@ export function UserQuestionComposer(props: UserQuestionComposerProps) {
         <View className="flex-row items-center">
           <Button
             accessibilityLabel={t('chat.question.previous')}
-            className="h-11 w-11 min-w-11 p-0"
             disabled={form.locked || form.index === 0}
-            icon={<ChevronLeftIcon className="size-4 text-foreground" />}
+            icon={<ChevronLeftIcon />}
             onPress={() => form.navigate(form.index - 1)}
+            size="xs"
             testID="user-question-previous"
             variant="ghost"
           />
@@ -79,26 +82,25 @@ export function UserQuestionComposer(props: UserQuestionComposerProps) {
           </Text>
           {isLast ? (
             <Button
-              accessibilityLabel={t('remoteAgent.submitAnswers')}
-              className="min-h-11 min-w-11 px-2"
               disabled={form.locked || !form.isComplete}
               loading={form.busy}
               onPress={() => {
                 dismissInput();
                 void form.submit();
               }}
+              size="xs"
               testID="user-question-submit"
               variant="ghost"
             >
-              <Button.Label className="text-sm">{t('chat.question.submit')}</Button.Label>
+              {t('chat.question.submit')}
             </Button>
           ) : (
             <Button
               accessibilityLabel={t('chat.question.next')}
-              className="h-11 w-11 min-w-11 p-0"
               disabled={form.locked}
-              icon={<ChevronRightIcon className="size-4 text-foreground" />}
+              icon={<ChevronRightIcon />}
               onPress={() => form.navigate(form.index + 1)}
+              size="xs"
               testID="user-question-next"
               variant="ghost"
             />
@@ -152,13 +154,13 @@ export function UserQuestionComposer(props: UserQuestionComposerProps) {
           />
         </View>
         <Button
-          className="min-h-11 min-w-11 px-2"
           disabled={form.locked}
           onPress={form.skip}
+          size="xs"
           testID="user-question-skip"
           variant="ghost"
         >
-          <Button.Label className="text-sm">{t('chat.question.skip')}</Button.Label>
+          {t('chat.question.skip')}
         </Button>
       </View>
       {form.answer.skipped ? (

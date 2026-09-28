@@ -581,9 +581,8 @@ presentation priority if tools were called concurrently, without discarding the 
 A second simultaneous question call is rejected.
 
 Question arguments and successful answers use ordinary persisted tool parts. The transcript shows
-a read-only record of every question and answer. New results associate each answer by `questionId`;
-legacy single-question input and output remain supported. Missing, duplicate, unknown, or invalid
-answers reject the whole response without settling the wait. Pending callbacks and waiting state are memory-only, like
+a read-only record of every question and answer, associated by `questionId`. Missing, duplicate,
+unknown, or invalid answers reject the whole response without settling the wait. Pending callbacks and waiting state are memory-only, like
 approvals: leaving a route does not cancel the turn, but cancellation, host disposal, and process
 restart invalidate the question. Persisted unanswered questions are not resumable controls.
 

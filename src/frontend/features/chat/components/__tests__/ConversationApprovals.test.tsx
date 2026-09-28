@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ConversationSnapshot, ResourceValue } from '@/frontend/appShell/conversation';
-import type { AgentPendingQuestion, AgentUserResponse } from '@/shared/contracts/agent';
+import type { AgentPendingQuestion, AgentUserAnswers } from '@/shared/contracts/agent';
 
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionComposer } from '../ConversationQuestionComposer';
@@ -11,7 +11,7 @@ import type { ToolApprovalRespondInput } from '../ToolApprovalSheet';
 let questionComposer: {
   request: AgentPendingQuestion;
   disabled: boolean;
-  onRespond(id: string, answer: AgentUserResponse): Promise<void>;
+  onRespond(id: string, answer: AgentUserAnswers): Promise<void>;
 };
 jest.mock('../UserQuestionComposer', () => ({
   UserQuestionComposer: (props: typeof questionComposer) => {
@@ -211,11 +211,16 @@ it('preserves option IDs and skipping, and allows retry when a user answer is re
   const input: ResourceValue = {
     kind: 'user-question',
     question: {
-      question: 'Choose',
-      selection: 'single',
-      options: [
-        { id: 'a', label: 'Same label', description: '' },
-        { id: 'b', label: 'Same label', description: '' },
+      questions: [
+        {
+          id: 'choice',
+          question: 'Choose',
+          selection: 'single',
+          options: [
+            { id: 'a', label: 'Same label' },
+            { id: 'b', label: 'Same label' },
+          ],
+        },
       ],
     },
   };
@@ -228,21 +233,17 @@ it('preserves option IDs and skipping, and allows retry when a user answer is re
     })),
   });
   await render(test);
-  const answer = { selectedOptionIds: [], text: '', skipped: true };
+  const answer = {
+    answers: [{ questionId: 'choice', selectedOptionIds: [], text: '', skipped: true }],
+  };
+  const edited = {
+    answers: [{ questionId: 'choice', selectedOptionIds: ['b'], text: 'extra', skipped: false }],
+  };
   await act(async () => questionComposer.onRespond('decision', answer));
   expect(test.respond).toHaveBeenCalledWith({ kind: 'user-answer', answer });
   test.respond.mockResolvedValueOnce({ state: 'rejected', failure: { code: 'conflict' } } as never);
-  await expect(
-    questionComposer.onRespond('decision', {
-      selectedOptionIds: ['b'],
-      text: 'extra',
-      skipped: false,
-    }),
-  ).rejects.toThrow();
-  expect(test.respond).toHaveBeenLastCalledWith({
-    kind: 'user-answer',
-    answer: { selectedOptionIds: ['b'], text: 'extra', skipped: false },
-  });
+  await expect(questionComposer.onRespond('decision', edited)).rejects.toThrow();
+  expect(test.respond).toHaveBeenLastCalledWith({ kind: 'user-answer', answer: edited });
   await expect(questionComposer.onRespond('stale-question', answer)).rejects.toThrow();
   expect(test.respond).toHaveBeenCalledTimes(2);
 });

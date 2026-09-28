@@ -2117,11 +2117,16 @@ describe('MobileAgentHost', () => {
   test('answers ask_user_question through the catalog-bound channel of the calling turn', async () => {
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
     const question = {
-      question: 'Which focus?',
-      selection: 'single' as const,
-      options: [
-        { id: 'a', label: 'Writing', description: '' },
-        { id: 'b', label: 'Reading', description: '' },
+      questions: [
+        {
+          id: 'focus',
+          question: 'Which focus?',
+          selection: 'single' as const,
+          options: [
+            { id: 'a', label: 'Writing' },
+            { id: 'b', label: 'Reading' },
+          ],
+        },
       ],
     };
     let answered: unknown;
@@ -2161,7 +2166,9 @@ describe('MobileAgentHost', () => {
         (event) => event.type === 'turn.updated' && event.turn.status === 'awaiting-input',
       ),
     ).toBe(true);
-    const answer = { selectedOptionIds: ['a'], text: '', skipped: false };
+    const answer = {
+      answers: [{ questionId: 'focus', selectedOptionIds: ['a'], text: '', skipped: false }],
+    };
     // A response for another turn never reaches the waiter.
     await expect(
       host.respondQuestion({
@@ -2181,8 +2188,8 @@ describe('MobileAgentHost', () => {
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(answered).toMatchObject({
-      selectedOptionIds: ['a'],
-      selectedOptions: [{ id: 'a', label: 'Writing', description: '' }],
+      answers: answer.answers,
+      selectedOptions: [{ questionId: 'focus', options: [{ id: 'a', label: 'Writing' }] }],
     });
     expect(
       events.some((event) => event.type === 'question.updated' && event.question === null),

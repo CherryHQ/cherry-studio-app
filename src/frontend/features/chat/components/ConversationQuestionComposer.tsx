@@ -29,7 +29,7 @@ export function ConversationQuestionComposer({
     interaction.respond?.availability.state === 'enabled';
   return (
     <UserQuestionComposer
-      key={JSON.stringify(request)}
+      key={`${request.turnId}:${request.toolCallId}`}
       request={request}
       disabled={!canRespond}
       onRespond={async (id, answer) => {

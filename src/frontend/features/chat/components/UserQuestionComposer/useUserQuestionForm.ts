@@ -1,25 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 
-import {
-  getUserQuestions,
-  type AgentPendingQuestion,
-  type AgentUserAnswer,
-  type AgentUserResponse,
+import type {
+  AgentPendingQuestion,
+  AgentUserAnswer,
+  AgentUserAnswers,
 } from '@/shared/contracts/agent';
 
 export type UserQuestionComposerProps = {
   request: AgentPendingQuestion;
   disabled: boolean;
-  onRespond(toolCallId: string, answer: AgentUserResponse): Promise<void>;
+  onRespond(toolCallId: string, answer: AgentUserAnswers): Promise<void>;
 };
 
-const emptyAnswer: AgentUserAnswer = { selectedOptionIds: [], text: '', skipped: false };
+type AnswerDraft = Omit<AgentUserAnswer, 'questionId'>;
+
+const emptyAnswer: AnswerDraft = { selectedOptionIds: [], text: '', skipped: false };
 
 /** The caller keys this form by the complete request so replaced calls cannot share drafts. */
 export function useUserQuestionForm({ request, disabled, onRespond }: UserQuestionComposerProps) {
-  const questions = getUserQuestions(request.question);
+  const { questions } = request.question;
   const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState(() => new Map<string, AgentUserAnswer>());
+  const [answers, setAnswers] = useState(() => new Map<string, AnswerDraft>());
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const submitting = useRef(false);
@@ -40,7 +41,7 @@ export function useUserQuestionForm({ request, disabled, onRespond }: UserQuesti
     );
   });
 
-  function change(update: (answer: AgentUserAnswer) => AgentUserAnswer) {
+  function change(update: (answer: AnswerDraft) => AnswerDraft) {
     if (disabled || submitting.current || !active.current) return;
     setFailed(false);
     setAnswers((current) =>
@@ -76,18 +77,12 @@ export function useUserQuestionForm({ request, disabled, onRespond }: UserQuesti
     submitting.current = true;
     setBusy(true);
     setFailed(false);
-    const completedAnswers = questions.map(({ id }) => {
-      const answer = answers.get(id)!;
-      return { ...answer, text: answer.text.trim(), questionId: id };
-    });
-    const response: AgentUserResponse =
-      'questions' in request.question
-        ? { answers: completedAnswers }
-        : {
-            selectedOptionIds: completedAnswers[0].selectedOptionIds,
-            text: completedAnswers[0].text,
-            skipped: completedAnswers[0].skipped,
-          };
+    const response: AgentUserAnswers = {
+      answers: questions.map(({ id }) => {
+        const answer = answers.get(id)!;
+        return { ...answer, text: answer.text.trim(), questionId: id };
+      }),
+    };
     try {
       await onRespond(request.toolCallId, response);
       // Keep the accepted request locked until its owner removes it.

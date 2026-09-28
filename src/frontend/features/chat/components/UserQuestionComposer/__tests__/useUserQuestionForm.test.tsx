@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { AgentPendingQuestion, AgentUserResponse } from '@/shared/contracts/agent';
+import type { AgentPendingQuestion, AgentUserAnswers } from '@/shared/contracts/agent';
 
 import { useUserQuestionForm } from '../useUserQuestionForm';
 
@@ -34,7 +34,7 @@ const request: AgentPendingQuestion = {
 };
 let form: ReturnType<typeof useUserQuestionForm>;
 let renderer: ReactTestRenderer;
-let respond: jest.Mock<Promise<void>, [string, AgentUserResponse]>;
+let respond: jest.Mock<Promise<void>, [string, AgentUserAnswers]>;
 
 function Harness({
   value = request,
@@ -51,7 +51,7 @@ function Harness({
 }
 
 beforeEach(() => {
-  respond = jest.fn(async () => undefined);
+  respond = jest.fn<Promise<void>, [string, AgentUserAnswers]>(async () => {});
   act(() => {
     renderer = create(<Harness />);
   });
@@ -158,32 +158,6 @@ test('replacing a request resets its draft and invalidates its retained submit c
   expect(form.isComplete).toBe(false);
   await act(async () => staleSubmit());
   expect(respond).not.toHaveBeenCalled();
-});
-
-test('accepts legacy one-question input and submits its original answer shape', async () => {
-  const legacy: AgentPendingQuestion = {
-    toolCallId: 'legacy',
-    turnId: 'turn',
-    question: {
-      question: 'Where?',
-      selection: 'single',
-      options: [
-        { id: 'a', label: 'Hangzhou', description: '' },
-        { id: 'b', label: 'Suzhou', description: '' },
-      ],
-    },
-  };
-  act(() => {
-    renderer.update(<Harness key="legacy" value={legacy} />);
-  });
-  act(() => form.select('b'));
-  expect(respond).not.toHaveBeenCalled();
-  await act(async () => form.submit());
-  expect(respond).toHaveBeenCalledWith('legacy', {
-    selectedOptionIds: ['b'],
-    text: '',
-    skipped: false,
-  });
 });
 
 test('does not edit or submit while the bound response is unavailable', async () => {

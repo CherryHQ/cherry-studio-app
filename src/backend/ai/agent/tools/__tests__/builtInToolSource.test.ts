@@ -167,18 +167,24 @@ describe('createSystemCapabilitySource', () => {
   });
 
   test('binds the Host response channel into ask_user_question with the calling turn', async () => {
-    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(async () => ({
-      selectedOptionIds: ['a'],
-      text: '',
-      skipped: false,
-    }));
+    const answer = {
+      answers: [{ questionId: 'pick', selectedOptionIds: ['a'], text: '', skipped: false }],
+    };
+    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(
+      async () => answer,
+    );
     const tools = await resolve({}, { askUser });
     const question = {
-      question: 'Which?',
-      selection: 'single',
-      options: [
-        { id: 'a', label: 'A', description: '' },
-        { id: 'b', label: 'B', description: '' },
+      questions: [
+        {
+          id: 'pick',
+          question: 'Which?',
+          selection: 'single',
+          options: [
+            { id: 'a', label: 'A' },
+            { id: 'b', label: 'B' },
+          ],
+        },
       ],
     };
     const ask = tools.find((tool) => tool.providerName === 'ask_user_question');
@@ -196,8 +202,8 @@ describe('createSystemCapabilitySource', () => {
       expect.objectContaining({ toolCallId: 'question-1', turnId: 'turn-7' }),
     );
     expect(result.value).toMatchObject({
-      selectedOptionIds: ['a'],
-      selectedOptions: [{ id: 'a', label: 'A', description: '' }],
+      ...answer,
+      selectedOptions: [{ questionId: 'pick', options: [{ id: 'a', label: 'A' }] }],
     });
   });
 

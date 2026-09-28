@@ -18,9 +18,7 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
     isOpen &&
     interaction?.respond?.availability.state === 'enabled' &&
     input.isSuccess &&
-    (interaction.kind !== 'question' ||
-      input.data?.kind === 'question' ||
-      input.data?.kind === 'user-question');
+    (interaction.kind !== 'question' || input.data?.kind === 'question');
   const cancellations = snapshot.executions.flatMap((execution) =>
     execution.cancel?.availability.state === 'enabled' &&
     (interaction?.execution

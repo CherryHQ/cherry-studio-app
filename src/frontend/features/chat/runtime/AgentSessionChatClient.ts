@@ -1,7 +1,7 @@
 import type {
   AgentApprovalView,
   AgentPendingQuestion,
-  AgentUserResponse,
+  AgentUserAnswers,
   AgentEvent,
   AgentMessageDelta,
   AgentMessageView,
@@ -373,7 +373,7 @@ export class AgentSessionChatClient {
   async respondQuestion(
     sessionId: string,
     toolCallId: string,
-    answer: AgentUserResponse,
+    answer: AgentUserAnswers,
   ): Promise<void> {
     const question = this.getEntry(sessionId).state.pendingQuestion;
     if (!question || question.toolCallId !== toolCallId) {

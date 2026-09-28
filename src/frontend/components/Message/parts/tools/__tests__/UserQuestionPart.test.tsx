@@ -80,17 +80,25 @@ test('shows all questions with the answers bound by ID, including a skipped ques
     expect(text).toContain(expected);
 });
 
-test('reads legacy results and ignores auxiliary selected-option metadata', () => {
+test('ignores auxiliary selected-option metadata in the persisted result', () => {
   const root = render(
     {
-      question: 'Where?',
-      selection: 'single',
-      options: [
-        { id: 'a', label: 'Hangzhou', description: 'Old description' },
-        { id: 'b', label: 'Suzhou', description: '' },
+      questions: [
+        {
+          id: 'first',
+          question: 'Where?',
+          selection: 'single',
+          options: [
+            { id: 'a', label: 'Hangzhou' },
+            { id: 'b', label: 'Suzhou' },
+          ],
+        },
       ],
     },
-    { selectedOptionIds: ['b'], text: 'No car', skipped: false, selectedOptions: [] },
+    {
+      answers: [{ questionId: 'first', selectedOptionIds: ['b'], text: 'No car', skipped: false }],
+      selectedOptions: [{ questionId: 'first', options: [{ id: 'b', label: 'Suzhou' }] }],
+    },
   );
   expect(root.findByType('TextSection').props.value).toBe('Suzhou\n\nNo car');
 });
