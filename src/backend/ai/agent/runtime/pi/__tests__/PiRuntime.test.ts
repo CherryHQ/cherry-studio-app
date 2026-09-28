@@ -58,6 +58,7 @@ import {
   type PiRuntimeContextOptions,
   type PiRuntimeLimits,
 } from '../PiRuntime';
+import { readPiTurnReplay } from '../piTurnReplay';
 
 const ERROR_SECRET = 'test-key';
 const TOOL_REF = { source: 'builtin', capabilityId: 'delete_file' } as const;
@@ -553,7 +554,7 @@ describe('Pi invocation capture', () => {
         }),
       ),
     );
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     expect(outputCap).toBeLessThanOrEqual(128_000 - 100_000 - 4_096);
     expect(outputCap).toBeGreaterThanOrEqual(1_024);
     await session.close();
@@ -741,6 +742,64 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
+  test('captures complete native batches before projecting them to display parts', async () => {
+    const runtime = createTestRuntime();
+    const batch = assistantMessage({
+      stopReason: 'toolUse',
+      content: [
+        { type: 'thinking', thinking: 'Discover tools.', thinkingSignature: 'signature' },
+        {
+          type: 'toolCall',
+          id: 'a',
+          name: PI_TOOL_SEARCH_TOOL_NAME,
+          arguments: { query: 'files' },
+        },
+        {
+          type: 'toolCall',
+          id: 'b',
+          name: PI_TOOL_DESCRIBE_TOOL_NAME,
+          arguments: { name: 'read' },
+        },
+      ],
+    });
+    const toolResults: ToolResultMessage[] = [
+      {
+        role: 'toolResult',
+        toolCallId: 'b',
+        toolName: PI_TOOL_DESCRIBE_TOOL_NAME,
+        content: [{ type: 'text', text: 'Full declaration for the model' }],
+        isError: false,
+        timestamp: 1,
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'a',
+        toolName: PI_TOOL_SEARCH_TOOL_NAME,
+        content: [{ type: 'text', text: 'Full search result for the model' }],
+        isError: false,
+        timestamp: 2,
+      },
+    ];
+    arrange(runtime, async (context) => {
+      await context.emit({ type: 'turn_end', message: batch, toolResults });
+      await emitText(context, 'Done');
+    });
+    const session = await runtime.open();
+    const events = await collect(session.execute(baseRequest('native-replay')));
+    const terminal = events.at(-1);
+    if (terminal?.type !== 'completed') throw new Error('Expected a completed turn');
+    const replay = readPiTurnReplay(JSON.parse(JSON.stringify(terminal.replay)));
+    expect(replay?.map((message) => message.role)).toEqual([
+      'assistant',
+      'toolResult',
+      'toolResult',
+      'assistant',
+    ]);
+    expect(replay?.[0]).toMatchObject({ content: batch.content });
+    expect(replay?.slice(1, 3)).toEqual(toolResults);
+    await session.close();
+  });
+
   test('continues from retained tool results without repeating the user prompt or replaying tool execution', async () => {
     const runtime = createTestRuntime();
     const tool = askTool(() => {
@@ -772,7 +831,12 @@ describe('PiRuntime mapping', () => {
     const events = await collect(session.execute(request));
     const messages = holder.lastOptions?.initialState?.messages ?? [];
     expect(messages.map((message) => message.role)).toEqual(['user', 'assistant', 'toolResult']);
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
+    const completed = events.at(-1);
+    expect(
+      completed?.type === 'completed' &&
+        readPiTurnReplay(completed.replay)?.map((message) => message.role),
+    ).toEqual(['assistant', 'toolResult', 'assistant']);
     expect(events.some((event) => event.type === 'part.add' && event.part.type === 'tool')).toBe(
       false,
     );
@@ -1416,7 +1480,7 @@ describe('PiRuntime mapping', () => {
       );
 
       expect(events.some((event) => event.type === 'failed')).toBe(false);
-      expect(events.at(-1)).toEqual(COMPLETED);
+      expect(events.at(-1)).toMatchObject(COMPLETED);
       expect(holder.lastOptions?.initialState?.model?.maxTokens).toBe(contextWindow);
       await session.close();
     },
@@ -1667,7 +1731,7 @@ describe('PiRuntime mapping', () => {
           ? [{ type: 'toolCall', id: `lookup-${requests.length}`, name: 'lookup', arguments: {} }]
           : [{ type: 'text', text: 'The answer is ready.' }],
         stopReason: toolCall ? 'toolUse' : 'stop',
-        usage: usage(0, 0),
+        usage: toolCall ? usage(0, 0) : usage(1000, 10),
       });
       const stream = new AssistantMessageEventStream();
       stream.push({ type: 'start', partial: message });
@@ -1705,8 +1769,16 @@ describe('PiRuntime mapping', () => {
         }),
       ),
     );
-    // The provider reported no input tokens, so no context size is carried forward.
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    // The measured final request omits the compacted prefix, but durable replay retains it.
+    expect(events.at(-1)).toMatchObject({ type: 'completed' });
+    expect(events.at(-1)).not.toHaveProperty('contextTokens');
+    const terminal = events.at(-1);
+    expect(
+      terminal?.type === 'completed' &&
+        readPiTurnReplay(terminal.replay)
+          ?.filter((message) => message.role === 'toolResult')
+          .map((message) => message.toolCallId),
+    ).toEqual(['lookup-1', 'lookup-2']);
     expect(execute).toHaveBeenCalledTimes(2);
     expect(requests).toHaveLength(3);
     // Providers reject a request that opens with an assistant message.
@@ -2105,7 +2177,7 @@ describe('PiRuntime mapping', () => {
       ),
     );
 
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     expect(arranged.lastOptions?.initialState?.messages).toEqual([
       { role: 'user', content: omitted, timestamp: expect.any(Number) },
     ]);
@@ -2754,7 +2826,7 @@ describe('PiRuntime mapping', () => {
         output: { value: { total: 1 }, artifacts: [] },
       },
     });
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -2824,7 +2896,7 @@ describe('PiRuntime mapping', () => {
         output: errorDetails,
       },
     });
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -2905,7 +2977,7 @@ describe('PiRuntime mapping', () => {
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({ input: { query: 'cherry' }, toolCallId: 'corrected-call' }),
     );
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -2986,7 +3058,7 @@ describe('PiRuntime mapping', () => {
         error: { code: 'tool_execution_error' },
       },
     });
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -3051,7 +3123,7 @@ describe('PiRuntime mapping', () => {
           event.part.state === 'error',
       ),
     ).toMatchObject({ part: { input, error: { code: 'tool_execution_error' } } });
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -3148,7 +3220,7 @@ describe('PiRuntime mapping', () => {
           event.part.providerName === PI_TOOL_CALL_TOOL_NAME,
       ),
     ).toBe(false);
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -3253,7 +3325,7 @@ describe('PiRuntime mapping', () => {
         expect.objectContaining({ toolCallId: 'parallel-call-2', state: 'output-available' }),
       ]),
     );
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -3402,7 +3474,7 @@ describe('PiRuntime mapping', () => {
       session.execute(baseRequest('real-loop', { tools: createWebTools({ webSearch }) })),
     );
 
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     expect(seenTools).toEqual([
       ['web_search', 'web_fetch'],
       ['web_search', 'web_fetch'],
@@ -3469,7 +3541,7 @@ describe('PiRuntime mapping', () => {
     });
     const session = await runtime.open();
     const first = await collect(session.execute(baseRequest('group-first', { tools })));
-    expect(first.at(-1)).toEqual(COMPLETED);
+    expect(first.at(-1)).toMatchObject(COMPLETED);
     expect(read).toHaveBeenCalledTimes(1);
     expect(other).toHaveBeenCalledTimes(1);
 
@@ -3481,7 +3553,7 @@ describe('PiRuntime mapping', () => {
       await emitText(context, 'Fresh answer.');
     });
     const later = await collect(session.execute(baseRequest('group-later', { tools })));
-    expect(later.at(-1)).toEqual(COMPLETED);
+    expect(later.at(-1)).toMatchObject(COMPLETED);
     expect(read).toHaveBeenCalledTimes(2);
     await session.close();
   });
@@ -3778,7 +3850,7 @@ describe('PiRuntime mapping', () => {
       );
 
       expect(executionCount).toBe(allowedCalls);
-      expect(events.at(-1)).toEqual(COMPLETED);
+      expect(events.at(-1)).toMatchObject(COMPLETED);
       const reports = events.filter((event) => event.type === 'usage');
       expect(reports).toMatchObject([
         { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
@@ -3842,7 +3914,7 @@ describe('PiRuntime mapping', () => {
     );
 
     expect(executed).toHaveBeenCalledTimes(20);
-    expect(events.at(-1)).toEqual(COMPLETED);
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 

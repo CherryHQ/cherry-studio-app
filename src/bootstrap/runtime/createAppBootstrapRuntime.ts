@@ -222,6 +222,7 @@ export function createAppBootstrapRuntime(
         }
         if (getStorageBoot().resetCaches) {
           cache.resetForRestore();
+          agent.resetReplayCacheForRestore();
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
         }

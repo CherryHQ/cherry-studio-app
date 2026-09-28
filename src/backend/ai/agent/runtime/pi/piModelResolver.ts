@@ -70,6 +70,10 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       }
 
       const modelId = connection.wireModelId;
+      const isOpenRouter =
+        provider.id === 'openrouter' ||
+        provider.presetProviderId === 'openrouter' ||
+        isOpenRouterUrl(connection.baseUrl);
       const headers = { ...connection.headers };
       if (
         (provider.id === 'opencode' || provider.presetProviderId === 'opencode') &&
@@ -100,6 +104,15 @@ export function createPiModelResolver(): PiRuntimeDependencies {
                 supportsDeveloperRole: false,
                 ...(adapter.api === 'openai-completions'
                   ? {
+                      ...(isOpenRouter
+                        ? {
+                            ...(modelId.startsWith('anthropic/')
+                              ? { cacheControlFormat: 'anthropic' as const }
+                              : {}),
+                            sendSessionAffinityHeaders: true,
+                            sessionAffinityFormat: 'openrouter' as const,
+                          }
+                        : {}),
                       maxTokensField:
                         connection.adapterFamily === 'openai'
                           ? 'max_completion_tokens'
@@ -127,6 +140,8 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       };
       const streamBinding: Parameters<typeof bindPiStream>[1] = {
         apiKey: selectedApiKey.value,
+        cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
+        sessionId,
         fetch: expoFetch as unknown as FetchFunction,
         headers,
         maxRetries: 0,
@@ -270,6 +285,14 @@ function collectRedactionValues(apiKey: string, headers: Record<string, string>)
       /authorization|api[-_]key|token|secret/i.test(name) ? [value] : [],
     ),
   ];
+}
+
+function isOpenRouterUrl(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl).hostname === 'openrouter.ai';
+  } catch {
+    return false;
+  }
 }
 
 function resolveDefaultThinkingLevel(model: Model): ModelThinkingLevel {

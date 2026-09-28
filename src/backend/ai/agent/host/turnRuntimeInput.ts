@@ -19,6 +19,7 @@ import type {
   RuntimeInputPart,
   RuntimeMessage,
   RuntimeMessagePart,
+  RuntimeTurnReplay,
 } from '../runtime';
 
 export type RuntimeAttachmentContents = ReadonlyMap<string, RuntimeInputPart>;
@@ -56,6 +57,7 @@ export function toRuntimeHistory(
   attachments: RuntimeAttachmentContents = new Map(),
   /** The turn's model: a context anchor measured by another model's tokenizer is not used. */
   anchorModelId?: string,
+  runtimeReplays: Readonly<Record<string, RuntimeTurnReplay>> = {},
 ): RuntimeHistoryTurn[] {
   const history: RuntimeHistoryTurn[] = [];
   const anchor = contextAnchor(messages, anchorModelId);
@@ -115,12 +117,16 @@ export function toRuntimeHistory(
       }
     }
     const currentTurn = history.at(-1);
-    const runtimeTurn =
+    const runtimeTurn: RuntimeHistoryTurn =
       message.turnId !== null && currentTurn?.turnId === message.turnId
         ? currentTurn
         : { turnId: message.turnId, messages: [] };
     if (runtimeTurn !== currentTurn) {
       history.push(runtimeTurn);
+    }
+    if (message.role === 'assistant' && message.status === 'success') {
+      const replay = runtimeReplays[message.id];
+      if (replay) runtimeTurn.replay = replay;
     }
     if (parts.length > 0) {
       const runtimeMessage: RuntimeMessage = {

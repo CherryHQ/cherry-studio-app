@@ -109,6 +109,33 @@ function plan(
 }
 
 describe('Pi context admission and compaction', () => {
+  test('keeps the summary but replays the whole retained turn when native offsets no longer apply', async () => {
+    const current = conversation(100);
+    const result = await plan({
+      conversation: current,
+      checkpoint: {
+        version: 1,
+        anchorTurnId: 'summarized-turn',
+        payload: {
+          kind: 'pi-context-compaction',
+          summary: 'Earlier history',
+          tokensBefore: 500,
+          resume: {
+            turnId: current.historyTurns[0].turnId!,
+            messageOffset: 1,
+            replayKind: 'pi-turn-replay-v1',
+          },
+        },
+      },
+    });
+    if (!result.ok) throw new Error('Expected a replayable context');
+    expect(result.messages[0]).toMatchObject({
+      role: 'compactionSummary',
+      summary: 'Earlier history',
+    });
+    expect(result.messages.slice(1)).toEqual(current.history);
+  });
+
   test('charges a retry prefix to the current turn instead of compactible history', async () => {
     const withPrefix = conversation(100_000);
     const retainedResult: ToolResultMessage = {

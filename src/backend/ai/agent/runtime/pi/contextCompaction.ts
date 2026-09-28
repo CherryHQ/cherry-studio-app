@@ -105,6 +105,7 @@ type PiCheckpointPayload = {
   resume?: {
     turnId: string;
     messageOffset: number;
+    replayKind?: string;
   };
 };
 
@@ -608,7 +609,9 @@ function projectContext(
     if (!resumeApplied) {
       if (turn.turnId !== payload?.resume?.turnId) continue;
       sourceOffset = payload.resume.messageOffset;
-      if (sourceOffset > turnMessages.length) {
+      if (sourceOffset > turnMessages.length || payload.resume.replayKind !== turn.replayKind) {
+        // The Host already trimmed the summarized prefix. Keep that summary, but never
+        // apply native-message offsets to a fallback display projection (or vice versa).
         sourceOffset = 0;
       }
       turnMessages = turnMessages.slice(sourceOffset);
@@ -668,7 +671,12 @@ function createCheckpoint(
     const previousTurn = findPreviousDurableTurn(historyTurns, splitTurn.turnIndex);
     anchorTurnId = previousTurn?.turnId ?? previous?.anchorTurnId ?? null;
     if (!anchorTurnId) return null;
-    resume = { turnId: splitTurn.turnId, messageOffset: splitTurn.messageOffset };
+    const replayKind = historyTurns[splitTurn.turnIndex]?.replayKind;
+    resume = {
+      turnId: splitTurn.turnId,
+      messageOffset: splitTurn.messageOffset,
+      ...(replayKind ? { replayKind } : {}),
+    };
   } else if (lastSummarized?.turnId === null) {
     return null;
   }
@@ -716,7 +724,15 @@ function parseCheckpointPayload(value: unknown): PiCheckpointPayload | null {
     ) {
       return null;
     }
-    resume = { turnId: value.resume.turnId, messageOffset: value.resume.messageOffset };
+    if (value.resume.replayKind !== undefined && typeof value.resume.replayKind !== 'string')
+      return null;
+    resume = {
+      turnId: value.resume.turnId,
+      messageOffset: value.resume.messageOffset,
+      ...(typeof value.resume.replayKind === 'string'
+        ? { replayKind: value.resume.replayKind }
+        : {}),
+    };
   }
   return {
     kind: PI_CONTEXT_CHECKPOINT_KIND,
