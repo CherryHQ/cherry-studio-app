@@ -19,7 +19,7 @@ const ReleaseSchema = z.object({
 
 export function createAppUpdateModule(): AppUpdateModule {
   const isEnabled =
-    Platform.OS === 'android' && Constants.expoConfig?.extra?.apkUpdateSource === 'gitcode';
+    Platform.OS === 'android' && Constants.expoConfig?.extra?.isApkUpdatesEnabled === true;
   const gitcode = createHttpClient({
     baseUrl: 'https://api.gitcode.com/api/v5',
     headers: { Accept: 'application/json' },

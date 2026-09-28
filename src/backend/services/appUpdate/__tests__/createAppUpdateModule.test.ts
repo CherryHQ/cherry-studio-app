@@ -7,7 +7,7 @@ import { createAppUpdateModule } from '../createAppUpdateModule';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
-  default: { expoConfig: { version: '1.9.0', extra: { apkUpdateSource: 'gitcode' } } },
+  default: { expoConfig: { version: '1.9.0', extra: { isApkUpdatesEnabled: true } } },
 }));
 jest.mock('react-native', () => ({
   Platform: { OS: 'android' },
@@ -150,14 +150,16 @@ test('invalid app version fails before requesting release metadata', async () =>
 });
 
 test.each([
-  ['android', 'disabled'],
+  ['android', false],
   ['android', undefined],
-  ['android', 'unknown'],
-  ['ios', 'gitcode'],
-  ['web', 'gitcode'],
-] as const)('%s with source %s cannot check or open an APK download', async (platform, source) => {
+  ['android', 'true'],
+  ['android', 'false'],
+  ['android', 1],
+  ['ios', true],
+  ['web', true],
+] as const)('%s with flag %s cannot check or open an APK download', async (platform, flag) => {
   jest.replaceProperty(Platform, 'OS', platform);
-  jest.replaceProperty(Constants.expoConfig!, 'extra', { apkUpdateSource: source });
+  jest.replaceProperty(Constants.expoConfig!, 'extra', { isApkUpdatesEnabled: flag });
   const updates = createAppUpdateModule();
   expect(updates.isEnabled).toBe(false);
   await expect(updates.check()).resolves.toEqual({ status: 'unavailable', reason: 'unsupported' });

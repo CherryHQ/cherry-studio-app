@@ -13,10 +13,11 @@ the browser. Other results appear as toasts after a tap, without adding text ben
 
 ## Distribution Gate
 
-`app.config.ts` embeds `APK_UPDATE_SOURCE` as `extra.apkUpdateSource`. Only `gitcode` on Android
-enables the feature. An absent setting defaults to `disabled`; an unknown build setting fails
-configuration. The module rejects unknown or absent runtime values, hides the UI, skips network
-requests, and rejects download actions when disabled. There is no user or remote toggle.
+`app.config.ts` parses `APK_UPDATES_ENABLED=true|false` into the boolean
+`extra.isApkUpdatesEnabled`. Only `true` on Android enables the feature. An absent setting defaults
+to `false`; any other build setting fails configuration. The module requires the runtime boolean
+`true`, hides the UI, skips network requests, and rejects download actions when disabled. GitCode
+is the fixed update source. There is no user or remote toggle.
 
 | EAS profile | APK update behavior |
 | --- | --- |

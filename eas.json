@@ -51,7 +51,7 @@
       "pnpm": "12.2.1",
       "env": {
         "PROFILE": "production",
-        "APK_UPDATE_SOURCE": "gitcode"
+        "APK_UPDATES_ENABLED": "true"
       },
       "android": {
         "buildType": "apk",
@@ -63,7 +63,7 @@
     "production-google-play": {
       "extends": "production",
       "env": {
-        "APK_UPDATE_SOURCE": "disabled"
+        "APK_UPDATES_ENABLED": "false"
       },
       "android": {
         "buildType": "app-bundle",

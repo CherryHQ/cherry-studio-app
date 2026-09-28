@@ -9,9 +9,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   if (!['development', 'preview', 'production'].includes(profile)) {
     throw new Error(`Unknown PROFILE: ${profile}. Expected development, preview, or production.`);
   }
-  const apkUpdateSource = process.env.APK_UPDATE_SOURCE ?? 'disabled';
-  if (!['disabled', 'gitcode'].includes(apkUpdateSource)) {
-    throw new Error(`Unknown APK_UPDATE_SOURCE: ${apkUpdateSource}. Expected disabled or gitcode.`);
+  const apkUpdatesSetting = process.env.APK_UPDATES_ENABLED ?? 'false';
+  if (!['true', 'false'].includes(apkUpdatesSetting)) {
+    throw new Error(`Invalid APK_UPDATES_ENABLED: ${apkUpdatesSetting}. Expected true or false.`);
   }
 
   const suffix = profile === 'development' ? '.dev' : profile === 'preview' ? '.preview' : '';
@@ -80,7 +80,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       }),
     extra: {
       ...config.extra,
-      apkUpdateSource,
+      isApkUpdatesEnabled: apkUpdatesSetting === 'true',
       sentryEnvironment: profile,
       reporting,
       eas: {
