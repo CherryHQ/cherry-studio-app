@@ -1,24 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type {
-  AgentPendingQuestion,
-  AgentUserAnswer,
-  AgentUserAnswers,
-} from '@/shared/contracts/agent';
-
-export type UserQuestionComposerProps = {
-  request: AgentPendingQuestion;
-  disabled: boolean;
-  onRespond(toolCallId: string, answer: AgentUserAnswers): Promise<void>;
+/** Presentation model shared by local `ask_user_question` and desktop question forms. */
+export type QuestionFormOption = { id: string; label: string; description?: string };
+export type QuestionFormQuestion = {
+  id: string;
+  header?: string;
+  question: string;
+  selection: 'single' | 'multiple';
+  options: readonly QuestionFormOption[];
+};
+export type QuestionFormAnswer = {
+  questionId: string;
+  selectedOptionIds: string[];
+  text: string;
+  skipped: boolean;
 };
 
-type AnswerDraft = Omit<AgentUserAnswer, 'questionId'>;
+export type UserQuestionComposerProps = {
+  questions: readonly QuestionFormQuestion[];
+  /** Desktop question forms require every answer; only the local tool accepts a skip. */
+  allowSkip: boolean;
+  disabled: boolean;
+  onRespond(answers: QuestionFormAnswer[]): Promise<void>;
+};
+
+type AnswerDraft = Omit<QuestionFormAnswer, 'questionId'>;
 
 const emptyAnswer: AnswerDraft = { selectedOptionIds: [], text: '', skipped: false };
 
 /** The caller keys this form by the complete request so replaced calls cannot share drafts. */
-export function useUserQuestionForm({ request, disabled, onRespond }: UserQuestionComposerProps) {
-  const { questions } = request.question;
+export function useUserQuestionForm({
+  questions,
+  allowSkip,
+  disabled,
+  onRespond,
+}: UserQuestionComposerProps) {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState(() => new Map<string, AnswerDraft>());
   const [busy, setBusy] = useState(false);
@@ -68,6 +84,7 @@ export function useUserQuestionForm({ request, disabled, onRespond }: UserQuesti
   }
 
   function skip() {
+    if (!allowSkip) return;
     change(() => ({ ...emptyAnswer, skipped: true }));
     navigate(index + 1);
   }
@@ -77,14 +94,12 @@ export function useUserQuestionForm({ request, disabled, onRespond }: UserQuesti
     submitting.current = true;
     setBusy(true);
     setFailed(false);
-    const response: AgentUserAnswers = {
-      answers: questions.map(({ id }) => {
-        const answer = answers.get(id)!;
-        return { ...answer, text: answer.text.trim(), questionId: id };
-      }),
-    };
+    const response = questions.map(({ id }) => {
+      const answer = answers.get(id)!;
+      return { ...answer, text: answer.text.trim(), questionId: id };
+    });
     try {
-      await onRespond(request.toolCallId, response);
+      await onRespond(response);
       // Keep the accepted request locked until its owner removes it.
     } catch {
       if (!active.current) return;
@@ -95,6 +110,7 @@ export function useUserQuestionForm({ request, disabled, onRespond }: UserQuesti
   }
 
   return {
+    allowSkip,
     answer,
     busy,
     failed,

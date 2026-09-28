@@ -6,19 +6,20 @@ import type { ConversationSnapshot } from '@/frontend/appShell/conversation';
 import { useConversationResourceValue } from '../hooks/useConversationResourceValue';
 import { ToolApprovalSheet, type ToolApprovalRespondInput } from './ToolApprovalSheet';
 
-/** The sheet consumes a bound decision and its input, never a connection or protocol method. */
+/**
+ * The sheet consumes a bound decision and its input, never a connection or protocol method.
+ * Questions belong to the composer; a leading question also holds back later approvals.
+ */
 export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnapshot }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const interaction = snapshot.interactions.find((item) => item.state === 'pending');
+  const pending = snapshot.interactions.find((item) => item.state === 'pending');
+  const interaction = pending?.kind === 'question' ? undefined : pending;
   const retired = snapshot.freshness.state === 'retired';
   const input = useConversationResourceValue(interaction?.input, retired);
   const isOpen = Boolean(interaction) && !retired;
   const canRespond =
-    isOpen &&
-    interaction?.respond?.availability.state === 'enabled' &&
-    input.isSuccess &&
-    (interaction.kind !== 'question' || input.data?.kind === 'question');
+    isOpen && interaction?.respond?.availability.state === 'enabled' && input.isSuccess;
   const cancellations = snapshot.executions.flatMap((execution) =>
     execution.cancel?.availability.state === 'enabled' &&
     (interaction?.execution
@@ -27,14 +28,10 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
       ? [execution.cancel]
       : [],
   );
-  const respond = async ({ approvalId, approved, answers }: ToolApprovalRespondInput) => {
+  const respond = async ({ approvalId, approved }: ToolApprovalRespondInput) => {
     if (!canRespond || interaction?.id !== approvalId) return;
     const result = await interaction.respond!.execute(
-      !approved
-        ? { kind: 'deny' }
-        : interaction.kind === 'question'
-          ? { kind: 'answer', answers: answers ?? {} }
-          : { kind: 'approve' },
+      approved ? { kind: 'approve' } : { kind: 'deny' },
     );
     if (result.state === 'rejected' || result.state === 'interrupted')
       toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
@@ -48,7 +45,6 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
       }
     }
   };
-  if (input.data?.kind === 'user-question') return null;
 
   return (
     <ToolApprovalSheet
@@ -58,7 +54,6 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
               {
                 approvalId: interaction.id,
                 displayName: interaction.title,
-                questions: input.data?.kind === 'question' ? input.data.questions : undefined,
                 input: input.data?.kind === 'json' ? input.data.value : undefined,
               },
             ]

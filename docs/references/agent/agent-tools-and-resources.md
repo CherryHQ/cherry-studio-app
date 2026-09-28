@@ -573,7 +573,8 @@ The Host supplies the response channel to the catalog through turn preparation; 
 its turn id, so the Host correlates the question to the live turn and tool-call ID. The Protocol
 publishes `question.updated` and includes `pendingQuestion` in observation snapshots. While a
 question is pending, the turn reports `awaiting-input`. A compact question composer replaces the
-ordinary input while preserving its draft. Question navigation sits at the top right; choices and
+ordinary input while preserving its draft; desktop question forms in remote chat reuse the same
+composer through the shared interaction contract. Question navigation sits at the top right; choices and
 free text remain editable until the user explicitly submits the complete set. Skip clears only the
 current answer and marks it skipped; it never submits or cancels the turn. There is no close control.
 Turn cancellation discards the pending request without submitting answers. Approval requests take

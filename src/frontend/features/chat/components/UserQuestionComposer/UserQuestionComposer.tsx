@@ -30,7 +30,7 @@ export function UserQuestionComposer(props: UserQuestionComposerProps) {
   );
   useEffect(() => {
     dismissInput();
-    // ChatInput unmounts before this form, so its blur can no longer hide the Android IME.
+    // The ordinary composer unmounts before this form, so its blur can no longer hide the Android IME.
     void KeyboardController.dismiss();
     return dismissInput;
   }, [dismissInput]);
@@ -51,13 +51,23 @@ export function UserQuestionComposer(props: UserQuestionComposerProps) {
           style={{ maxHeight: Math.min(96, height * 0.15) }}
           keyboardShouldPersistTaps="always"
         >
-          <View className="min-h-11 flex-row flex-wrap items-center gap-x-2 px-2 py-2">
-            <Text accessibilityRole="header" className="shrink font-medium text-sm text-foreground">
-              {form.question.question}
-            </Text>
-            {form.question.selection === 'multiple' && form.question.options.length > 0 ? (
-              <Text className="text-xs text-muted-foreground">{t('chat.question.multiple')}</Text>
+          <View className="min-h-11 justify-center gap-0.5 px-2 py-2">
+            {form.question.header ? (
+              <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                {form.question.header}
+              </Text>
             ) : null}
+            <View className="flex-row flex-wrap items-center gap-x-2">
+              <Text
+                accessibilityRole="header"
+                className="shrink font-medium text-sm text-foreground"
+              >
+                {form.question.question}
+              </Text>
+              {form.question.selection === 'multiple' && form.question.options.length > 0 ? (
+                <Text className="text-xs text-muted-foreground">{t('chat.question.multiple')}</Text>
+              ) : null}
+            </View>
           </View>
         </ScrollView>
         <View className="flex-row items-center">
@@ -121,13 +131,19 @@ export function UserQuestionComposer(props: UserQuestionComposerProps) {
               <Pressable
                 key={option.id}
                 accessibilityLabel={option.label}
+                accessibilityHint={option.description}
                 accessibilityRole={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
                 accessibilityState={{ checked: selected, disabled: form.locked }}
                 className={`min-h-11 flex-row items-center gap-2 rounded-lg px-3 py-2 active:opacity-70 ${selected ? 'bg-secondary' : ''}`}
                 disabled={form.locked}
                 onPress={() => form.select(option.id)}
               >
-                <Text className="min-w-0 flex-1 text-sm text-foreground">{option.label}</Text>
+                <View className="min-w-0 flex-1 gap-0.5">
+                  <Text className="text-sm text-foreground">{option.label}</Text>
+                  {option.description ? (
+                    <Text className="text-xs text-muted-foreground">{option.description}</Text>
+                  ) : null}
+                </View>
                 {selected ? (
                   <CheckIcon className="size-4 text-foreground" />
                 ) : (
@@ -153,15 +169,17 @@ export function UserQuestionComposer(props: UserQuestionComposerProps) {
             value={form.answer.text}
           />
         </View>
-        <Button
-          disabled={form.locked}
-          onPress={form.skip}
-          size="xs"
-          testID="user-question-skip"
-          variant="ghost"
-        >
-          {t('chat.question.skip')}
-        </Button>
+        {form.allowSkip ? (
+          <Button
+            disabled={form.locked}
+            onPress={form.skip}
+            size="xs"
+            testID="user-question-skip"
+            variant="ghost"
+          >
+            {t('chat.question.skip')}
+          </Button>
+        ) : null}
       </View>
       {form.answer.skipped ? (
         <Text className="px-2 text-xs text-muted-foreground">{t('chat.question.skipped')}</Text>

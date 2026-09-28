@@ -2,17 +2,23 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ConversationSnapshot, ResourceValue } from '@/frontend/appShell/conversation';
-import type { AgentPendingQuestion, AgentUserAnswers } from '@/shared/contracts/agent';
 
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionComposer } from '../ConversationQuestionComposer';
 import type { ToolApprovalRespondInput } from '../ToolApprovalSheet';
+import type {
+  QuestionFormAnswer,
+  QuestionFormQuestion,
+} from '../UserQuestionComposer/useUserQuestionForm';
 
-let questionComposer: {
-  request: AgentPendingQuestion;
-  disabled: boolean;
-  onRespond(id: string, answer: AgentUserAnswers): Promise<void>;
-};
+let questionComposer:
+  | {
+      questions: readonly QuestionFormQuestion[];
+      allowSkip: boolean;
+      disabled: boolean;
+      onRespond(answers: QuestionFormAnswer[]): Promise<void>;
+    }
+  | undefined;
 jest.mock('../UserQuestionComposer', () => ({
   UserQuestionComposer: (props: typeof questionComposer) => {
     questionComposer = props;
@@ -104,6 +110,8 @@ async function render(test: ReturnType<typeof fixture>) {
 }
 beforeEach(() => {
   jest.clearAllMocks();
+  questionComposer = undefined;
+  sheet = undefined!;
   queryClient = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
 });
 afterEach(async () => {
@@ -190,20 +198,64 @@ it('cancels only the execution bound to the displayed approval', async () => {
   expect(otherCancel).not.toHaveBeenCalled();
 });
 
-it('submits complete question answers through the bound response without reducing them to approval', async () => {
+it('presents a desktop question form in the composer and returns text-keyed answers', async () => {
   const test = fixture();
-  const questions = [{ question: '目录？', multiple: false, options: [{ label: 'src' }] }];
+  const questions = [
+    {
+      question: '目录？',
+      header: 'Workspace',
+      multiple: true,
+      options: [{ label: 'src', description: 'Sources' }, { label: 'docs' }],
+    },
+  ];
   test.read.mockResolvedValue({ kind: 'question', questions });
   test.update({
     ...test.snapshot,
     interactions: test.snapshot.interactions.map((item) => ({ ...item, kind: 'question' })),
   });
   await render(test);
-  expect(sheet.canRespond).toBe(true);
+  expect(sheet.approvals).toEqual([]);
+  expect(questionComposer?.allowSkip).toBe(false);
+  expect(questionComposer?.disabled).toBe(false);
+  expect(questionComposer?.questions).toEqual([
+    {
+      id: '目录？',
+      header: 'Workspace',
+      question: '目录？',
+      selection: 'multiple',
+      options: [
+        { id: 'src', label: 'src', description: 'Sources' },
+        { id: 'docs', label: 'docs', description: undefined },
+      ],
+    },
+  ]);
   await act(async () =>
-    sheet.onRespond({ approvalId: 'decision', approved: true, answers: { '目录？': 'src' } }),
+    questionComposer!.onRespond([
+      {
+        questionId: '目录？',
+        selectedOptionIds: ['src', 'docs'],
+        text: 'and tests',
+        skipped: false,
+      },
+    ]),
   );
-  expect(test.respond).toHaveBeenCalledWith({ kind: 'answer', answers: { '目录？': 'src' } });
+  expect(test.respond).toHaveBeenCalledWith({
+    kind: 'answer',
+    answers: { '目录？': 'src, docs, and tests' },
+  });
+});
+
+it('shows a retryable state while a deferred question form cannot be read', async () => {
+  const test = fixture();
+  test.read.mockRejectedValueOnce(new Error('offline'));
+  test.update({
+    ...test.snapshot,
+    interactions: test.snapshot.interactions.map((item) => ({ ...item, kind: 'question' })),
+  });
+  await render(test);
+  expect(questionComposer).toBeUndefined();
+  expect(sheet.approvals).toEqual([]);
+  expect(test.read).toHaveBeenCalledTimes(1);
 });
 
 it('preserves option IDs and skipping, and allows retry when a user answer is rejected', async () => {
@@ -233,18 +285,21 @@ it('preserves option IDs and skipping, and allows retry when a user answer is re
     })),
   });
   await render(test);
-  const answer = {
-    answers: [{ questionId: 'choice', selectedOptionIds: [], text: '', skipped: true }],
-  };
-  const edited = {
-    answers: [{ questionId: 'choice', selectedOptionIds: ['b'], text: 'extra', skipped: false }],
-  };
-  await act(async () => questionComposer.onRespond('decision', answer));
-  expect(test.respond).toHaveBeenCalledWith({ kind: 'user-answer', answer });
+  expect(test.read).not.toHaveBeenCalled();
+  expect(questionComposer?.allowSkip).toBe(true);
+  expect(questionComposer?.questions).toBe(input.question.questions);
+  const answer = [{ questionId: 'choice', selectedOptionIds: [], text: '', skipped: true }];
+  const edited = [
+    { questionId: 'choice', selectedOptionIds: ['b'], text: 'extra', skipped: false },
+  ];
+  await act(async () => questionComposer!.onRespond(answer));
+  expect(test.respond).toHaveBeenCalledWith({ kind: 'user-answer', answer: { answers: answer } });
   test.respond.mockResolvedValueOnce({ state: 'rejected', failure: { code: 'conflict' } } as never);
-  await expect(questionComposer.onRespond('decision', edited)).rejects.toThrow();
-  expect(test.respond).toHaveBeenLastCalledWith({ kind: 'user-answer', answer: edited });
-  await expect(questionComposer.onRespond('stale-question', answer)).rejects.toThrow();
+  await expect(questionComposer!.onRespond(edited)).rejects.toThrow();
+  expect(test.respond).toHaveBeenLastCalledWith({
+    kind: 'user-answer',
+    answer: { answers: edited },
+  });
   expect(test.respond).toHaveBeenCalledTimes(2);
 });
 
@@ -268,8 +323,9 @@ it('keeps the question visible but blocks responses while an approval takes prio
   };
   test.update({ ...test.snapshot, interactions: [question] });
   await render(test);
-  const request = questionComposer.request;
-  expect(questionComposer.disabled).toBe(false);
+  const questions = questionComposer!.questions;
+  expect(questionComposer?.disabled).toBe(false);
+  expect(sheet.approvals).toEqual([]);
   const approval = {
     ...question,
     id: 'approval',
@@ -278,15 +334,16 @@ it('keeps the question visible but blocks responses while an approval takes prio
   };
   test.update({ ...test.snapshot, interactions: [approval, question] });
   await render(test);
-  expect(questionComposer.request).toEqual(request);
-  expect(questionComposer.disabled).toBe(true);
+  expect(sheet.approvals.map((item) => item.approvalId)).toEqual(['approval']);
+  expect(questionComposer?.questions).toBe(questions);
+  expect(questionComposer?.disabled).toBe(true);
   await expect(
-    questionComposer.onRespond('question', {
-      answers: [{ questionId: 'notes', selectedOptionIds: [], text: 'Answer', skipped: false }],
-    }),
+    questionComposer!.onRespond([
+      { questionId: 'notes', selectedOptionIds: [], text: 'Answer', skipped: false },
+    ]),
   ).rejects.toThrow();
   expect(test.respond).not.toHaveBeenCalled();
   test.update({ ...test.snapshot, interactions: [question] });
   await render(test);
-  expect(questionComposer.disabled).toBe(false);
+  expect(questionComposer?.disabled).toBe(false);
 });

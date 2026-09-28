@@ -3,26 +3,17 @@ import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import {
-  formatToolApprovalAnswer,
-  type ToolApprovalAnswer,
-  type ToolApprovalQuestion,
-  ToolApprovalQuestions,
-} from './ToolApprovalQuestions';
-
 const ignoreClose = () => undefined;
 
 export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
   displayName: string;
-  questions?: readonly ToolApprovalQuestion[];
 };
 
 export type ToolApprovalRespondInput = {
   approvalId: string;
   approved: boolean;
-  answers?: Record<string, string>;
 };
 
 type ToolApprovalSheetProps = {
@@ -34,7 +25,7 @@ type ToolApprovalSheetProps = {
   onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
 };
 
-/** Shows one tool approval or question form at a time, regardless of its source. */
+/** Shows one tool approval at a time, regardless of its source. */
 export function ToolApprovalSheet({
   approvals,
   isOpen,
@@ -48,7 +39,6 @@ export function ToolApprovalSheet({
   const [lastApproval, setLastApproval] = useState<PendingToolApproval | undefined>(approvals[0]);
   const [response, setResponse] = useState({
     approvalId: approvals[0]?.approvalId,
-    answers: {} as Record<string, ToolApprovalAnswer>,
     isSubmitting: false,
   });
   const submitting = useRef(new Set<string>());
@@ -56,7 +46,7 @@ export function ToolApprovalSheet({
     setLastApproval(approvals[0]);
   }
   if (approvals[0] && approvals[0].approvalId !== response.approvalId) {
-    setResponse({ approvalId: approvals[0].approvalId, answers: {}, isSubmitting: false });
+    setResponse({ approvalId: approvals[0].approvalId, isSubmitting: false });
   }
   const approval = approvals[0] ?? lastApproval;
 
@@ -66,16 +56,12 @@ export function ToolApprovalSheet({
 
   const isCurrent = isOpen && approvals[0]?.approvalId === approval.approvalId;
   const canDecide = isCurrent && canRespond && !response.isSubmitting;
-  const allAnswered =
-    approval.questions?.every((question) =>
-      formatToolApprovalAnswer(response.answers[question.question]).trim(),
-    ) ?? true;
   const submit = async (action: 'allow' | 'deny' | 'stop') => {
     const { approvalId } = approval;
     if (
       !isCurrent ||
       submitting.current.has(approvalId) ||
-      (action === 'stop' ? !onCancel : !canDecide || (action === 'allow' && !allAnswered))
+      (action === 'stop' ? !onCancel : !canDecide)
     ) {
       return;
     }
@@ -85,20 +71,7 @@ export function ToolApprovalSheet({
       if (action === 'stop') {
         await onCancel?.();
       } else {
-        await onRespond({
-          approvalId,
-          approved: action === 'allow',
-          ...(action === 'allow' && approval.questions
-            ? {
-                answers: Object.fromEntries(
-                  approval.questions.map((question) => [
-                    question.question,
-                    formatToolApprovalAnswer(response.answers[question.question]),
-                  ]),
-                ),
-              }
-            : {}),
-        });
+        await onRespond({ approvalId, approved: action === 'allow' });
       }
     } finally {
       submitting.current.delete(approvalId);
@@ -114,18 +87,14 @@ export function ToolApprovalSheet({
       footer={
         <ToolApprovalSheetActions
           canRespond={canDecide}
-          canSubmit={allAnswered}
           isSubmitting={response.isSubmitting}
           onCancel={onCancel && isCurrent ? () => void submit('stop') : undefined}
           onRespond={(approved) => void submit(approved ? 'allow' : 'deny')}
-          submitLabel={t(
-            approval.questions ? 'remoteAgent.submitAnswers' : 'chat.tool.approval.allow',
-          )}
         />
       }
       onClose={ignoreClose}
       open={isOpen}
-      size={approval.questions ? 'large' : 'medium'}
+      size="medium"
       title={t('chat.tool.approval.title')}
     >
       <ScrollView
@@ -148,21 +117,7 @@ export function ToolApprovalSheet({
             </Text>
           ) : null}
         </View>
-        {approval.questions ? (
-          <ToolApprovalQuestions
-            disabled={!canDecide}
-            questions={approval.questions}
-            answers={response.answers}
-            onAnswer={(question, answer) =>
-              setResponse((current) => ({
-                ...current,
-                answers: { ...current.answers, [question]: answer },
-              }))
-            }
-          />
-        ) : (
-          <ApprovalArgumentsPreview input={approval.input} />
-        )}
+        <ApprovalArgumentsPreview input={approval.input} />
         {children}
       </ScrollView>
     </BottomSheet>
@@ -171,18 +126,14 @@ export function ToolApprovalSheet({
 
 function ToolApprovalSheetActions({
   canRespond,
-  canSubmit,
   isSubmitting,
   onCancel,
   onRespond,
-  submitLabel,
 }: {
   canRespond: boolean;
-  canSubmit: boolean;
   isSubmitting: boolean;
   onCancel?: () => void;
   onRespond: (approved: boolean) => void;
-  submitLabel: string;
 }) {
   const { t } = useTranslation();
 
@@ -201,12 +152,12 @@ function ToolApprovalSheetActions({
         </View>
         <View className="flex-1">
           <Button
-            disabled={!canRespond || !canSubmit}
+            disabled={!canRespond}
             loading={isSubmitting}
             onPress={() => onRespond(true)}
             variant="default"
           >
-            <Button.Label>{submitLabel}</Button.Label>
+            <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
           </Button>
         </View>
       </View>

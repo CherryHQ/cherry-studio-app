@@ -1,49 +1,47 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { AgentPendingQuestion, AgentUserAnswers } from '@/shared/contracts/agent';
+import {
+  type QuestionFormAnswer,
+  type QuestionFormQuestion,
+  useUserQuestionForm,
+} from '../useUserQuestionForm';
 
-import { useUserQuestionForm } from '../useUserQuestionForm';
-
-const request: AgentPendingQuestion = {
-  toolCallId: 'call',
-  turnId: 'turn',
-  question: {
-    questions: [
-      {
-        id: 'city',
-        question: 'Where?',
-        selection: 'single',
-        options: [
-          { id: 'a', label: 'Hangzhou' },
-          { id: 'b', label: 'Suzhou' },
-        ],
-      },
-      {
-        id: 'activities',
-        question: 'What?',
-        selection: 'multiple',
-        options: [
-          { id: 'a', label: 'Food' },
-          { id: 'b', label: 'Nature' },
-        ],
-      },
-      { id: 'notes', question: 'Anything else?', selection: 'single', options: [] },
+const questions: readonly QuestionFormQuestion[] = [
+  {
+    id: 'city',
+    question: 'Where?',
+    selection: 'single',
+    options: [
+      { id: 'a', label: 'Hangzhou' },
+      { id: 'b', label: 'Suzhou' },
     ],
   },
-};
+  {
+    id: 'activities',
+    question: 'What?',
+    selection: 'multiple',
+    options: [
+      { id: 'a', label: 'Food' },
+      { id: 'b', label: 'Nature' },
+    ],
+  },
+  { id: 'notes', question: 'Anything else?', selection: 'single', options: [] },
+];
 let form: ReturnType<typeof useUserQuestionForm>;
 let renderer: ReactTestRenderer;
-let respond: jest.Mock<Promise<void>, [string, AgentUserAnswers]>;
+let respond: jest.Mock<Promise<void>, [QuestionFormAnswer[]]>;
 
 function Harness({
-  value = request,
+  value = questions,
+  allowSkip = true,
   disabled = false,
 }: {
-  value?: AgentPendingQuestion;
+  value?: readonly QuestionFormQuestion[];
+  allowSkip?: boolean;
   disabled?: boolean;
 }) {
-  const state = useUserQuestionForm({ request: value, disabled, onRespond: respond });
+  const state = useUserQuestionForm({ questions: value, allowSkip, disabled, onRespond: respond });
   useEffect(() => {
     form = state;
   }, [state]);
@@ -51,7 +49,7 @@ function Harness({
 }
 
 beforeEach(() => {
-  respond = jest.fn<Promise<void>, [string, AgentUserAnswers]>(async () => {});
+  respond = jest.fn<Promise<void>, [QuestionFormAnswer[]]>(async () => {});
   act(() => {
     renderer = create(<Harness />);
   });
@@ -80,13 +78,11 @@ test('keeps single-choice, multi-choice and text drafts editable until explicit 
   expect(form.isComplete).toBe(true);
   expect(respond).not.toHaveBeenCalled();
   await act(async () => form.submit());
-  expect(respond).toHaveBeenCalledWith('call', {
-    answers: [
-      { questionId: 'city', selectedOptionIds: ['b'], text: '', skipped: false },
-      { questionId: 'activities', selectedOptionIds: ['a', 'b'], text: '', skipped: false },
-      { questionId: 'notes', selectedOptionIds: [], text: 'No car', skipped: false },
-    ],
-  });
+  expect(respond).toHaveBeenCalledWith([
+    { questionId: 'city', selectedOptionIds: ['b'], text: '', skipped: false },
+    { questionId: 'activities', selectedOptionIds: ['a', 'b'], text: '', skipped: false },
+    { questionId: 'notes', selectedOptionIds: [], text: 'No car', skipped: false },
+  ]);
 });
 
 test('skips only the current question, never auto-submits, and clears skip when editing again', async () => {
@@ -104,13 +100,24 @@ test('skips only the current question, never auto-submits, and clears skip when 
   act(() => form.select('b'));
   expect(form.answer.skipped).toBe(false);
   await act(async () => form.submit());
-  expect(respond.mock.calls[0][1]).toMatchObject({
-    answers: [
-      { questionId: 'city', skipped: false },
-      { questionId: 'activities', skipped: true },
-      { questionId: 'notes', skipped: true },
-    ],
+  expect(respond.mock.calls[0][0]).toMatchObject([
+    { questionId: 'city', skipped: false },
+    { questionId: 'activities', skipped: true },
+    { questionId: 'notes', skipped: true },
+  ]);
+});
+
+test('ignores skip when the request requires every answer', async () => {
+  act(() => {
+    renderer.update(<Harness key="required" allowSkip={false} />);
   });
+  expect(form.allowSkip).toBe(false);
+  act(() => form.skip());
+  expect(form.index).toBe(0);
+  expect(form.answer.skipped).toBe(false);
+  expect(form.isComplete).toBe(false);
+  await act(async () => form.submit());
+  expect(respond).not.toHaveBeenCalled();
 });
 
 test('locks a pending submission, preserves answers on failure, and allows exactly one retry', async () => {
@@ -152,7 +159,7 @@ test('replacing a request resets its draft and invalidates its retained submit c
   act(() => form.skip());
   const staleSubmit = form.submit;
   act(() => {
-    renderer.update(<Harness key="replacement" value={{ ...request, turnId: 'replacement' }} />);
+    renderer.update(<Harness key="replacement" />);
   });
   expect(form.index).toBe(0);
   expect(form.isComplete).toBe(false);
@@ -177,17 +184,12 @@ test('does not edit or submit while the bound response is unavailable', async ()
 });
 
 test('treats arbitrary question IDs as independent drafts', async () => {
-  const value: AgentPendingQuestion = {
-    ...request,
-    question: {
-      questions: ['__proto__', 'constructor'].map((id) => ({
-        id,
-        question: 'Notes?',
-        selection: 'single',
-        options: [],
-      })),
-    },
-  };
+  const value: QuestionFormQuestion[] = ['__proto__', 'constructor'].map((id) => ({
+    id,
+    question: 'Notes?',
+    selection: 'single',
+    options: [],
+  }));
   act(() => {
     renderer.update(<Harness key="ids" value={value} />);
   });
@@ -196,10 +198,8 @@ test('treats arbitrary question IDs as independent drafts', async () => {
   expect(form.answer.text).toBe('');
   act(() => form.setText('Second'));
   await act(async () => form.submit());
-  expect(respond).toHaveBeenCalledWith('call', {
-    answers: [
-      { questionId: '__proto__', selectedOptionIds: [], text: 'First', skipped: false },
-      { questionId: 'constructor', selectedOptionIds: [], text: 'Second', skipped: false },
-    ],
-  });
+  expect(respond).toHaveBeenCalledWith([
+    { questionId: '__proto__', selectedOptionIds: [], text: 'First', skipped: false },
+    { questionId: 'constructor', selectedOptionIds: [], text: 'Second', skipped: false },
+  ]);
 });

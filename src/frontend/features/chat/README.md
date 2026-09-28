@@ -23,11 +23,15 @@ message list keeps its geometry and selection does not subscribe into the chat r
 - `components/ChatInput/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
   edited on the Agent screen; image attachment admission failures restore the managed draft and
   surface a user-facing reason.
-- `components/ConversationQuestionComposer.tsx` replaces local chat input for a bound question call.
-  `UserQuestionComposer/` owns its compact options, top-right navigation, per-question drafts, skip,
-  and explicit batch submission. Request identity resets the form; failed submissions preserve
-  answers for retry. Concurrent approvals disable it without unmounting it. The ordinary composer
-  session retains its separate text and attachments throughout.
+- `components/ConversationQuestionComposer.tsx` replaces the chat input for a pending question
+  interaction from either source. It reads the bound input (inline for local `ask_user_question`,
+  deferred for desktop question forms), maps both into one presentation model, and returns the
+  matching response: local answers keep option and question IDs and may skip; desktop answers are
+  keyed by question text, joined from selected labels and free text, and require every question.
+  `UserQuestionComposer/` owns its compact options, optional header and option descriptions,
+  top-right navigation, per-question drafts, and explicit batch submission. Request identity resets
+  the form; failed submissions preserve answers for retry. A leading approval disables the form
+  without unmounting it. The ordinary composer session retains its separate text and attachments.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,
   initial-render gating and pending first-send rows. Message actions and approvals use the bound
@@ -95,8 +99,11 @@ source identity/grant binding, separately from the ephemeral Query scope.
 `ConversationMessageContent` renders tool summaries in the shared process layout; a deferred
 resource read bound to the row is resolved by the sheet that opens it, and closing the sheet cancels
 the read. Attachments currently show metadata because the desktop does not provide file bytes.
-ConversationApprovals reads the interaction input (inline for local, deferred for desktop), uses the
-bound response action and cancels only the execution associated with the displayed approval.
+ConversationApprovals shows decisions only: it reads the interaction input (inline for local,
+deferred for desktop), uses the bound response action and cancels only the execution associated
+with the displayed approval. Pending questions never open the sheet; `RemoteChatScreen` wraps
+`RemoteComposer` in the shared `ConversationQuestionComposer`, so desktop question forms use the
+same compact composer as local questions.
 
 The matching desktop protocol supports question answers and system-workspace creation. Question
 forms consume a bound resource; responses carry complete answers rather than a boolean approval.
