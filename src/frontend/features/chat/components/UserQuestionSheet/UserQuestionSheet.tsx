@@ -1,12 +1,8 @@
 import { BottomSheet, Button, Input, SelectionIndicator } from '@cherrystudio/ui/components';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import {
-  KeyboardAwareScrollView,
-  KeyboardController,
-  useKeyboardState,
-} from 'react-native-keyboard-controller';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 
 import { useComposerPresentationActions } from '@/frontend/components/Composer';
 
@@ -21,13 +17,13 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
   const { t } = useTranslation();
   const form = useUserQuestionForm(props);
   const { dismissInput } = useComposerPresentationActions();
-  // A medium sheet leaves almost no room above the keyboard, so typing grows it.
-  const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   useEffect(() => {
     if (!open) return;
     // The sheet covers the chat input, so its editing session and keyboard end here.
     dismissInput();
     void KeyboardController.dismiss();
+    // Closing, whether answered or behind an approval, drops the keyboard of the sheet's field.
+    return () => void KeyboardController.dismiss();
   }, [dismissInput, open]);
   const total = form.questions.length;
   const actionLabel = t(
@@ -38,9 +34,15 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         : 'chat.question.skip',
   );
   const actionVariant = form.action === 'skip' ? 'secondary' : 'default';
+  const advance = () => {
+    // Submitting ends typing at once rather than when the answered sheet closes.
+    if (form.action === 'submit') void KeyboardController.dismiss();
+    form.advance();
+  };
 
   return (
     <BottomSheet
+      avoidKeyboard
       dismissible={false}
       footer={
         <View className="flex-row gap-3">
@@ -63,7 +65,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
               key={actionVariant}
               disabled={form.locked || !form.canAct}
               loading={form.busy}
-              onPress={form.advance}
+              onPress={advance}
               testID="user-question-action"
               variant={actionVariant}
             >
@@ -88,20 +90,17 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       }
       onClose={ignoreClose}
       open={open}
-      size={isKeyboardVisible ? 'large' : 'medium'}
+      size="medium"
       testID="user-question-sheet"
       title={form.question.question}
     >
-      <KeyboardAwareScrollView
+      <ScrollView
         key={form.question.id}
-        bottomOffset={16}
-        contentContainerStyle={styles.content}
-        disableScrollOnKeyboardHide
+        className="min-h-0 flex-1"
+        contentContainerClassName="gap-4 px-5 pt-2 pb-4"
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
-        mode="layout"
         showsVerticalScrollIndicator={false}
-        style={styles.page}
       >
         {form.question.header ? (
           <Text className="text-foreground-tertiary text-sm">{form.question.header}</Text>
@@ -136,17 +135,6 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
             })}
           </View>
         ) : null}
-        <Input
-          accessibilityLabel={t('chat.question.custom')}
-          disabled={form.locked}
-          maxLength={4000}
-          onChangeText={form.setText}
-          onSubmitEditing={form.advance}
-          placeholder={t('chat.question.custom')}
-          returnKeyType={form.action === 'submit' ? 'done' : 'next'}
-          testID="user-question-custom"
-          value={form.answer.text}
-        />
         {form.answer.skipped ? (
           <Text className="text-foreground-tertiary text-sm">{t('chat.question.skipped')}</Text>
         ) : null}
@@ -155,12 +143,21 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
             {t('chat.question.failed')}
           </Text>
         ) : null}
-      </KeyboardAwareScrollView>
+      </ScrollView>
+      {/* Outside the scroll view, so the keyboard shrinks the options instead of hiding it. */}
+      <View className="px-5 pb-3">
+        <Input
+          accessibilityLabel={t('chat.question.custom')}
+          disabled={form.locked}
+          maxLength={4000}
+          onChangeText={form.setText}
+          onSubmitEditing={advance}
+          placeholder={t('chat.question.custom')}
+          returnKeyType={form.action === 'submit' ? 'done' : 'next'}
+          testID="user-question-custom"
+          value={form.answer.text}
+        />
+      </View>
     </BottomSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  content: { gap: 16, paddingBottom: 16, paddingHorizontal: 20, paddingTop: 8 },
-  page: { flex: 1 },
-});

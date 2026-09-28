@@ -31,8 +31,8 @@ message list keeps its geometry and selection does not subscribe into the chat r
   text, and require every question. An unreadable desktop form opens a retryable error sheet.
   `UserQuestionSheet/` shows one question at a time: the question is the sheet title, followed by
   an optional header, radio options for a single choice or checkboxes for multiple, option
-  descriptions, and a free-text field. The sheet grows to the large size while the keyboard is up
-  and scrolls that field above it. Choosing never navigates; the footer's action reads skip while the question is unanswered, next once it is answered, and submit on the
+  descriptions, and a free-text field pinned below the scrolling options. The sheet avoids the
+  keyboard, so typing lifts the field and footer above it and shrinks only the options. Choosing never navigates; the footer's action reads skip while the question is unanswered, next once it is answered, and submit on the
   last question, where local requests skip whatever is still unanswered. Request identity resets
   the form; failed or unconfirmed submissions keep the answers editable for resubmission. A leading
   approval closes the sheet without unmounting it, so drafts survive. Opening the sheet ends the
