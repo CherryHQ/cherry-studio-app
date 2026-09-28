@@ -13,6 +13,7 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { type PendingChatSend } from '../../runtime';
 import { ConversationApprovals } from '../ConversationApprovals';
+import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import { ChatTranscript } from './ChatTranscript';
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
@@ -273,7 +274,12 @@ export function ChatWorkspace({
           />
         </ChatMessageRowProvider>
       </AssistantMessageActionsProvider>
-      {sessionId ? <ConversationApprovals snapshot={live} /> : null}
+      {sessionId ? (
+        <>
+          <ConversationApprovals snapshot={live} />
+          <ConversationQuestionSheet snapshot={live} />
+        </>
+      ) : null}
     </View>
   );
 }

@@ -133,6 +133,7 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 }));
 
 jest.mock('../../ConversationApprovals', () => ({ ConversationApprovals: () => null }));
+jest.mock('../../ConversationQuestionSheet', () => ({ ConversationQuestionSheet: () => null }));
 
 const projected = new WeakMap<AgentMessageView, ConversationMessage>();
 function project(message: AgentMessageView): ConversationMessage {

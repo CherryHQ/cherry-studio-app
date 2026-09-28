@@ -23,15 +23,19 @@ message list keeps its geometry and selection does not subscribe into the chat r
 - `components/ChatInput/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
   edited on the Agent screen; image attachment admission failures restore the managed draft and
   surface a user-facing reason.
-- `components/ConversationQuestionComposer.tsx` replaces the chat input for a pending question
-  interaction from either source. It reads the bound input (inline for local `ask_user_question`,
-  deferred for desktop question forms), maps both into one presentation model, and returns the
-  matching response: local answers keep option and question IDs and may skip; desktop answers are
-  keyed by question text, joined from selected labels and free text, and require every question.
-  `UserQuestionComposer/` owns its compact options, optional header and option descriptions,
-  top-right navigation, per-question drafts, and explicit batch submission. Request identity resets
-  the form; failed or unconfirmed submissions keep the answers editable for resubmission. A leading approval disables the form
-  without unmounting it. The ordinary composer session retains its separate text and attachments.
+- `components/ConversationQuestionSheet.tsx` presents a pending question interaction from either
+  source in a non-dismissible sheet mounted beside `ConversationApprovals`. It reads the bound input
+  (inline for local `ask_user_question`, deferred for desktop question forms), maps both into one
+  presentation model, and returns the matching response: local answers keep option and question IDs
+  and may skip; desktop answers are keyed by question text, joined from selected labels and free
+  text, and require every question. An unreadable desktop form opens a retryable error sheet.
+  `UserQuestionSheet/` shows one question at a time with its options, optional header and option
+  descriptions, and a free-text field. A single choice moves to the next question; the footer's
+  action reads skip while the question is unanswered, next once it is answered, and submit on the
+  last question, where local requests skip whatever is still unanswered. Request identity resets
+  the form; failed or unconfirmed submissions keep the answers editable for resubmission. A leading
+  approval closes the sheet without unmounting it, so drafts survive. Opening the sheet ends the
+  ordinary composer's editing session; its text and attachments stay intact.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,
   initial-render gating and pending first-send rows. Message actions and approvals use the bound
@@ -101,9 +105,8 @@ resource read bound to the row is resolved by the sheet that opens it, and closi
 the read. Attachments currently show metadata because the desktop does not provide file bytes.
 ConversationApprovals shows decisions only: it reads the interaction input (inline for local,
 deferred for desktop), uses the bound response action and cancels only the execution associated
-with the displayed approval. Pending questions never open the sheet; `RemoteChatScreen` wraps
-`RemoteComposer` in the shared `ConversationQuestionComposer`, so desktop question forms use the
-same compact composer as local questions.
+with the displayed approval. Pending questions never open the approval sheet; desktop question
+forms use the same `ConversationQuestionSheet` as local questions.
 
 The matching desktop protocol supports question answers and system-workspace creation. Question
 forms consume a bound resource; responses carry complete answers rather than a boolean approval.

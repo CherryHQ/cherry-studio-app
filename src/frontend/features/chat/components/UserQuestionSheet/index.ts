@@ -1,7 +1,7 @@
-export { UserQuestionComposer } from './UserQuestionComposer';
+export { UserQuestionSheet, type UserQuestionSheetProps } from './UserQuestionSheet';
 export type {
   QuestionFormAnswer,
   QuestionFormOption,
   QuestionFormQuestion,
-  UserQuestionComposerProps,
+  UserQuestionFormProps,
 } from './useUserQuestionForm';

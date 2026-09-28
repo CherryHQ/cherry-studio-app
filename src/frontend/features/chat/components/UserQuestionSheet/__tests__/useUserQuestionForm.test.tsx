@@ -58,26 +58,29 @@ afterEach(() => {
   act(() => renderer.unmount());
 });
 
-test('keeps single-choice, multi-choice and text drafts editable until explicit batch submission', async () => {
+test('advances on a single choice, turns skip into next once answered, and submits on the last', async () => {
+  expect(form.action).toBe('skip');
   act(() => form.select('a'));
-  expect(form.index).toBe(0);
-  await act(async () => form.submit());
-  expect(respond).not.toHaveBeenCalled();
-  act(() => form.navigate(1));
+  expect(form.index).toBe(1);
+  expect(form.action).toBe('skip');
   act(() => {
     form.select('a');
     form.select('b');
   });
-  act(() => form.navigate(2));
+  expect(form.index).toBe(1);
+  expect(form.action).toBe('next');
+  act(() => form.advance());
+  expect(form.index).toBe(2);
+  expect(form.action).toBe('submit');
   act(() => form.setText(' No car '));
   act(() => form.navigate(0));
   expect(form.answer.selectedOptionIds).toEqual(['a']);
   act(() => form.select('b'));
-  act(() => form.navigate(1));
+  expect(form.index).toBe(1);
   expect(form.answer.selectedOptionIds).toEqual(['a', 'b']);
-  expect(form.isComplete).toBe(true);
   expect(respond).not.toHaveBeenCalled();
-  await act(async () => form.submit());
+  act(() => form.navigate(2));
+  await act(async () => form.advance());
   expect(respond).toHaveBeenCalledWith([
     { questionId: 'city', selectedOptionIds: ['b'], text: '', skipped: false },
     { questionId: 'activities', selectedOptionIds: ['a', 'b'], text: '', skipped: false },
@@ -85,45 +88,65 @@ test('keeps single-choice, multi-choice and text drafts editable until explicit 
   ]);
 });
 
-test('skips only the current question, never auto-submits, and clears skip when editing again', async () => {
-  act(() => form.select('a'));
-  act(() => form.setText('discard this'));
-  act(() => form.skip());
-  expect(form.index).toBe(1);
-  act(() => form.skip());
-  act(() => form.skip());
-  expect(form.index).toBe(2);
-  expect(form.isComplete).toBe(true);
+test('stays on the last question after a single choice', () => {
+  const value: QuestionFormQuestion[] = [questions[0]];
+  act(() => {
+    renderer.update(<Harness key="single" value={value} />);
+  });
+  act(() => form.select('b'));
+  expect(form.index).toBe(0);
+  expect(form.action).toBe('submit');
   expect(respond).not.toHaveBeenCalled();
+});
+
+test('skips the current question, clears skip when editing again, and skips the rest on submit', async () => {
+  act(() => form.setText('discard this'));
+  act(() => form.setText(''));
+  act(() => form.advance());
+  expect(form.index).toBe(1);
   act(() => form.navigate(0));
   expect(form.answer).toEqual({ selectedOptionIds: [], text: '', skipped: true });
   act(() => form.select('b'));
-  expect(form.answer.skipped).toBe(false);
-  await act(async () => form.submit());
-  expect(respond.mock.calls[0][0]).toMatchObject([
-    { questionId: 'city', skipped: false },
-    { questionId: 'activities', skipped: true },
-    { questionId: 'notes', skipped: true },
+  expect(form.index).toBe(1);
+  act(() => form.navigate(0));
+  expect(form.answer).toEqual({ selectedOptionIds: ['b'], text: '', skipped: false });
+  act(() => form.navigate(2));
+  expect(form.isComplete).toBe(true);
+  await act(async () => form.advance());
+  expect(respond.mock.calls[0][0]).toEqual([
+    { questionId: 'city', selectedOptionIds: ['b'], text: '', skipped: false },
+    { questionId: 'activities', selectedOptionIds: [], text: '', skipped: true },
+    { questionId: 'notes', selectedOptionIds: [], text: '', skipped: true },
   ]);
 });
 
-test('ignores skip when the request requires every answer', async () => {
+test('requires every answer when the request does not accept skips', async () => {
   act(() => {
     renderer.update(<Harness key="required" allowSkip={false} />);
   });
   expect(form.allowSkip).toBe(false);
+  expect(form.action).toBe('next');
+  expect(form.canAct).toBe(false);
   act(() => form.skip());
+  act(() => form.advance());
   expect(form.index).toBe(0);
   expect(form.answer.skipped).toBe(false);
+  act(() => form.select('a'));
+  act(() => form.select('a'));
+  expect(form.canAct).toBe(true);
+  act(() => form.advance());
+  expect(form.action).toBe('submit');
   expect(form.isComplete).toBe(false);
   await act(async () => form.submit());
   expect(respond).not.toHaveBeenCalled();
+  act(() => form.setText('Anything'));
+  expect(form.isComplete).toBe(true);
+  await act(async () => form.advance());
+  expect(respond).toHaveBeenCalledTimes(1);
 });
 
 test('locks a pending submission, preserves answers on failure, and allows exactly one retry', async () => {
-  act(() => form.skip());
-  act(() => form.skip());
-  act(() => form.skip());
+  act(() => form.navigate(2));
   let reject!: (error: Error) => void;
   respond.mockImplementationOnce(
     () =>
@@ -155,15 +178,13 @@ test('locks a pending submission, preserves answers on failure, and allows exact
 
 test('unlocks drafts without a failure when the response is in flight without a receipt', async () => {
   act(() => form.select('a'));
-  act(() => form.navigate(1));
-  act(() => form.skip());
-  act(() => form.skip());
+  act(() => form.navigate(2));
   respond.mockResolvedValueOnce('pending');
   await act(async () => form.submit());
   expect(respond).toHaveBeenCalledTimes(1);
   expect(form.locked).toBe(false);
   expect(form.failed).toBe(false);
-  expect(form.answer).toEqual({ selectedOptionIds: [], text: '', skipped: true });
+  expect(form.answer).toEqual({ selectedOptionIds: [], text: '', skipped: false });
   act(() => form.navigate(0));
   expect(form.answer.selectedOptionIds).toEqual(['a']);
   await act(async () => form.submit());
@@ -173,15 +194,14 @@ test('unlocks drafts without a failure when the response is in flight without a 
 });
 
 test('replacing a request resets its draft and invalidates its retained submit callback', async () => {
-  act(() => form.skip());
-  act(() => form.skip());
-  act(() => form.skip());
+  act(() => form.select('a'));
+  act(() => form.navigate(2));
   const staleSubmit = form.submit;
   act(() => {
     renderer.update(<Harness key="replacement" />);
   });
   expect(form.index).toBe(0);
-  expect(form.isComplete).toBe(false);
+  expect(form.answer.selectedOptionIds).toEqual([]);
   await act(async () => staleSubmit());
   expect(respond).not.toHaveBeenCalled();
 });

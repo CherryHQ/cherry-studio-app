@@ -16,7 +16,7 @@ export type QuestionFormAnswer = {
   skipped: boolean;
 };
 
-export type UserQuestionComposerProps = {
+export type UserQuestionFormProps = {
   questions: readonly QuestionFormQuestion[];
   /** Desktop question forms require every answer; only the local tool accepts a skip. */
   allowSkip: boolean;
@@ -38,7 +38,7 @@ export function useUserQuestionForm({
   allowSkip,
   disabled,
   onRespond,
-}: UserQuestionComposerProps) {
+}: UserQuestionFormProps) {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState(() => new Map<string, AnswerDraft>());
   const [busy, setBusy] = useState(false);
@@ -54,12 +54,16 @@ export function useUserQuestionForm({
   const question = questions[index];
   const answer = answers.get(question.id) ?? emptyAnswer;
   const locked = disabled || busy;
-  const isComplete = questions.every(({ id }) => {
-    const value = answers.get(id);
-    return (
-      value && (value.skipped || value.selectedOptionIds.length > 0 || Boolean(value.text.trim()))
-    );
-  });
+  const isLast = index === questions.length - 1;
+  const answered = isAnswered(answer);
+  // Submitting skips whatever is still unanswered when the request accepts skips.
+  const isComplete = allowSkip || questions.every(({ id }) => isAnswered(answers.get(id)));
+  const action: 'submit' | 'next' | 'skip' = isLast
+    ? 'submit'
+    : answered || !allowSkip
+      ? 'next'
+      : 'skip';
+  const canAct = action === 'submit' ? isComplete : action === 'next' ? answered : true;
 
   function change(update: (answer: AnswerDraft) => AnswerDraft) {
     if (disabled || submitting.current || !active.current) return;
@@ -69,6 +73,7 @@ export function useUserQuestionForm({
     );
   }
 
+  /** A single choice answers its question, so every question but the last moves on. */
   function select(id: string) {
     change((current) => ({
       ...current,
@@ -80,6 +85,7 @@ export function useUserQuestionForm({
             ? current.selectedOptionIds.filter((selected) => selected !== id)
             : [...current.selectedOptionIds, id],
     }));
+    if (question.selection === 'single' && !isLast) navigate(index + 1);
   }
 
   function navigate(next: number) {
@@ -99,8 +105,10 @@ export function useUserQuestionForm({
     setBusy(true);
     setFailed(false);
     const response = questions.map(({ id }) => {
-      const answer = answers.get(id)!;
-      return { ...answer, text: answer.text.trim(), questionId: id };
+      const answer = answers.get(id);
+      return answer && isAnswered(answer)
+        ? { ...answer, text: answer.text.trim(), skipped: false, questionId: id }
+        : { ...emptyAnswer, skipped: true, questionId: id };
     });
     try {
       const outcome = await onRespond(response);
@@ -118,10 +126,20 @@ export function useUserQuestionForm({
     }
   }
 
+  function advance() {
+    if (!canAct) return;
+    if (action === 'submit') void submit();
+    else if (action === 'skip') skip();
+    else navigate(index + 1);
+  }
+
   return {
+    action,
+    advance,
     allowSkip,
     answer,
     busy,
+    canAct,
     failed,
     index,
     isComplete,
@@ -134,4 +152,8 @@ export function useUserQuestionForm({
     submit,
     setText: (text: string) => change((current) => ({ ...current, text, skipped: false })),
   };
+}
+
+function isAnswered(answer: AnswerDraft | undefined) {
+  return Boolean(answer && (answer.selectedOptionIds.length > 0 || answer.text.trim()));
 }

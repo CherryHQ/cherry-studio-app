@@ -40,7 +40,6 @@ import { usePersistCache } from '@/frontend/data/hooks';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
-import { ConversationQuestionComposer } from '../components/ConversationQuestionComposer';
 import { ConversationPresenter } from './ConversationPresenter';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
@@ -225,17 +224,15 @@ function RemoteChatSession() {
                 <ContentState.Empty title={t('remoteAgent.noAgents')} />
               ) : null}
               {/* Agent-scoped workspace controls reset; the user's composer above stays mounted. */}
-              <ConversationQuestionComposer snapshot={snapshot}>
-                <RemoteComposer
-                  key={agent?.ref}
-                  agent={agent}
-                  session={opened.session}
-                  snapshot={snapshot}
-                  draftId={target.sessionId ? undefined : draftId}
-                  draftKey={draftKey}
-                  onSessionCreated={onSessionCreated}
-                />
-              </ConversationQuestionComposer>
+              <RemoteComposer
+                key={agent?.ref}
+                agent={agent}
+                session={opened.session}
+                snapshot={snapshot}
+                draftId={target.sessionId ? undefined : draftId}
+                draftKey={draftKey}
+                onSessionCreated={onSessionCreated}
+              />
               <ChatDockFooter>
                 <Text className="text-center text-xs text-muted-foreground">
                   {t('chat.input.disclaimer')}

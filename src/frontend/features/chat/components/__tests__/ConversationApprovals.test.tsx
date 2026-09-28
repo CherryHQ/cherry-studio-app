@@ -4,24 +4,25 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { ConversationSnapshot, ResourceValue } from '@/frontend/appShell/conversation';
 
 import { ConversationApprovals } from '../ConversationApprovals';
-import { ConversationQuestionComposer } from '../ConversationQuestionComposer';
+import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import type { ToolApprovalRespondInput } from '../ToolApprovalSheet';
 import type {
   QuestionFormAnswer,
   QuestionFormQuestion,
-} from '../UserQuestionComposer/useUserQuestionForm';
+} from '../UserQuestionSheet/useUserQuestionForm';
 
-let questionComposer:
+let questionSheet:
   | {
+      open: boolean;
       questions: readonly QuestionFormQuestion[];
       allowSkip: boolean;
       disabled: boolean;
       onRespond(answers: QuestionFormAnswer[]): Promise<'applied' | 'pending'>;
     }
   | undefined;
-jest.mock('../UserQuestionComposer', () => ({
-  UserQuestionComposer: (props: typeof questionComposer) => {
-    questionComposer = props;
+jest.mock('../UserQuestionSheet', () => ({
+  UserQuestionSheet: (props: typeof questionSheet) => {
+    questionSheet = props;
     return null;
   },
 }));
@@ -32,7 +33,12 @@ let sheet: {
   onCancel?(): Promise<void>;
   approvals: { approvalId: string; input: unknown }[];
 };
+let errorSheetOpen = false;
 jest.mock('@cherrystudio/ui/components', () => ({
+  BottomSheet: () => {
+    errorSheetOpen = true;
+    return null;
+  },
   ContentState: { Loading: () => null, Error: () => null },
   useToast: () => ({ toast: { show: mockToast } }),
 }));
@@ -99,7 +105,7 @@ async function render(test: ReturnType<typeof fixture>) {
     const tree = (
       <QueryClientProvider client={queryClient}>
         <ConversationApprovals snapshot={test.snapshot} />
-        <ConversationQuestionComposer snapshot={test.snapshot} />
+        <ConversationQuestionSheet snapshot={test.snapshot} />
       </QueryClientProvider>
     );
     if (renderer) renderer.update(tree);
@@ -110,7 +116,8 @@ async function render(test: ReturnType<typeof fixture>) {
 }
 beforeEach(() => {
   jest.clearAllMocks();
-  questionComposer = undefined;
+  questionSheet = undefined;
+  errorSheetOpen = false;
   sheet = undefined!;
   queryClient = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
 });
@@ -198,7 +205,7 @@ it('cancels only the execution bound to the displayed approval', async () => {
   expect(otherCancel).not.toHaveBeenCalled();
 });
 
-it('presents a desktop question form in the composer and returns text-keyed answers', async () => {
+it('presents a desktop question form in the sheet and returns text-keyed answers', async () => {
   const test = fixture();
   const questions = [
     {
@@ -215,9 +222,9 @@ it('presents a desktop question form in the composer and returns text-keyed answ
   });
   await render(test);
   expect(sheet.approvals).toEqual([]);
-  expect(questionComposer?.allowSkip).toBe(false);
-  expect(questionComposer?.disabled).toBe(false);
-  expect(questionComposer?.questions).toEqual([
+  expect(questionSheet?.allowSkip).toBe(false);
+  expect(questionSheet?.disabled).toBe(false);
+  expect(questionSheet?.questions).toEqual([
     {
       id: '目录？',
       header: 'Workspace',
@@ -230,7 +237,7 @@ it('presents a desktop question form in the composer and returns text-keyed answ
     },
   ]);
   await act(async () =>
-    questionComposer!.onRespond([
+    questionSheet!.onRespond([
       {
         questionId: '目录？',
         selectedOptionIds: ['src', 'docs'],
@@ -253,7 +260,8 @@ it('shows a retryable state while a deferred question form cannot be read', asyn
     interactions: test.snapshot.interactions.map((item) => ({ ...item, kind: 'question' })),
   });
   await render(test);
-  expect(questionComposer).toBeUndefined();
+  expect(questionSheet).toBeUndefined();
+  expect(errorSheetOpen).toBe(true);
   expect(sheet.approvals).toEqual([]);
   expect(test.read).toHaveBeenCalledTimes(1);
 });
@@ -286,19 +294,19 @@ it('preserves option IDs and skipping, and allows retry when a user answer is re
   });
   await render(test);
   expect(test.read).not.toHaveBeenCalled();
-  expect(questionComposer?.allowSkip).toBe(true);
-  expect(questionComposer?.questions).toBe(input.question.questions);
+  expect(questionSheet?.allowSkip).toBe(true);
+  expect(questionSheet?.questions).toBe(input.question.questions);
   const answer = [{ questionId: 'choice', selectedOptionIds: [], text: '', skipped: true }];
   const edited = [
     { questionId: 'choice', selectedOptionIds: ['b'], text: 'extra', skipped: false },
   ];
   // The fixture's response has no receipt yet, so the form must stay editable for a resubmission.
-  await expect(questionComposer!.onRespond(answer)).resolves.toBe('pending');
+  await expect(questionSheet!.onRespond(answer)).resolves.toBe('pending');
   expect(test.respond).toHaveBeenCalledWith({ kind: 'user-answer', answer: { answers: answer } });
   test.respond.mockResolvedValueOnce({ state: 'applied', value: undefined } as never);
-  await expect(questionComposer!.onRespond(answer)).resolves.toBe('applied');
+  await expect(questionSheet!.onRespond(answer)).resolves.toBe('applied');
   test.respond.mockResolvedValueOnce({ state: 'rejected', failure: { code: 'conflict' } } as never);
-  await expect(questionComposer!.onRespond(edited)).rejects.toThrow();
+  await expect(questionSheet!.onRespond(edited)).rejects.toThrow();
   expect(test.respond).toHaveBeenLastCalledWith({
     kind: 'user-answer',
     answer: { answers: edited },
@@ -326,8 +334,9 @@ it('keeps the question visible but blocks responses while an approval takes prio
   };
   test.update({ ...test.snapshot, interactions: [question] });
   await render(test);
-  const questions = questionComposer!.questions;
-  expect(questionComposer?.disabled).toBe(false);
+  const questions = questionSheet!.questions;
+  expect(questionSheet?.open).toBe(true);
+  expect(questionSheet?.disabled).toBe(false);
   expect(sheet.approvals).toEqual([]);
   const approval = {
     ...question,
@@ -338,15 +347,23 @@ it('keeps the question visible but blocks responses while an approval takes prio
   test.update({ ...test.snapshot, interactions: [approval, question] });
   await render(test);
   expect(sheet.approvals.map((item) => item.approvalId)).toEqual(['approval']);
-  expect(questionComposer?.questions).toBe(questions);
-  expect(questionComposer?.disabled).toBe(true);
+  expect(questionSheet?.questions).toBe(questions);
+  expect(questionSheet?.open).toBe(false);
+  expect(questionSheet?.disabled).toBe(true);
   await expect(
-    questionComposer!.onRespond([
+    questionSheet!.onRespond([
       { questionId: 'notes', selectedOptionIds: [], text: 'Answer', skipped: false },
     ]),
   ).rejects.toThrow();
   expect(test.respond).not.toHaveBeenCalled();
   test.update({ ...test.snapshot, interactions: [question] });
   await render(test);
-  expect(questionComposer?.disabled).toBe(false);
+  expect(questionSheet?.open).toBe(true);
+  expect(questionSheet?.disabled).toBe(false);
+  test.update({ ...test.snapshot, interactions: [] });
+  await render(test);
+  // The answered request stays mounted, closed and inert, for the sheet's close animation.
+  expect(questionSheet?.questions).toBe(questions);
+  expect(questionSheet?.open).toBe(false);
+  expect(questionSheet?.disabled).toBe(true);
 });

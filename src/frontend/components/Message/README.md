@@ -358,11 +358,10 @@ File-input generation uses a static title while its adjacent content updates; th
 the normal running animation during tool execution.
 
 
-`ask_user_question` tool parts stay in the message body as compact `MessagePart.Tool` status rows,
-matching tool approval presentation. Opening a row shows every read-only question and its answer or
-skip state; history never submits responses. The chat
-feature owns the active question composer and Protocol correlation. It replaces the ordinary input,
-retains per-question drafts while navigating, and submits the complete answer set explicitly.
+`ask_user_question` tool parts render flat in the message body: each question in secondary text
+followed by its answer, skip state, or waiting/closed status. There is no row or detail sheet, and
+history never submits responses. The chat feature owns the active question sheet and Protocol
+correlation; it retains per-question drafts while navigating and submits the complete answer set.
 
 
 Successful `agent_create` and `agent_update` parts render compact saved-Agent capsules in the

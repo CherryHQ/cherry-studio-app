@@ -1,3 +1,4 @@
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ToolMessagePart } from '../toolPartState';
@@ -8,10 +9,6 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     ContextMenuExclusion: (props: object) => createElement('Exclusion', props),
-    MessagePart: {
-      Tool: (props: object) => createElement('Tool', props),
-      TextSection: (props: object) => createElement('TextSection', props),
-    },
   };
 });
 jest.mock('../GenericToolPart', () => ({ GenericToolPart: () => null }));
@@ -34,6 +31,8 @@ function render(input: unknown, output: unknown) {
   });
   return renderer.root;
 }
+const texts = (root: ReactTestRenderer['root']) =>
+  root.findAllByType(Text).map((node) => node.props.children);
 
 test('shows all questions with the answers bound by ID, including a skipped question', () => {
   const root = render(
@@ -70,14 +69,14 @@ test('shows all questions with the answers bound by ID, including a skipped ques
       ],
     },
   );
-  expect(root.findByType('Tool').props.statusText).toBe('common.done');
-  expect(root.findAllByType('TextSection').map((node) => node.props.value)).toEqual([
+  expect(texts(root)).toEqual([
+    'Where?',
     'Hangzhou',
-    'Food\n\nNature\n\nWalking distance',
+    'What?',
+    'Food\nNature\nWalking distance',
+    'Notes?',
+    'chat.question.skipped',
   ]);
-  const text = JSON.stringify(renderer.toJSON());
-  for (const expected of ['Where?', 'What?', 'Notes?', 'chat.question.skipped'])
-    expect(text).toContain(expected);
 });
 
 test('ignores auxiliary selected-option metadata in the persisted result', () => {
@@ -100,7 +99,7 @@ test('ignores auxiliary selected-option metadata in the persisted result', () =>
       selectedOptions: [{ questionId: 'first', options: [{ id: 'b', label: 'Suzhou' }] }],
     },
   );
-  expect(root.findByType('TextSection').props.value).toBe('Suzhou\n\nNo car');
+  expect(texts(root)).toEqual(['Where?', 'Suzhou\nNo car']);
 });
 
 test('does not present incomplete persisted answers as completed', () => {
@@ -113,6 +112,5 @@ test('does not present incomplete persisted answers as completed', () => {
     },
     { answers: [{ questionId: 'first', selectedOptionIds: [], text: 'Hangzhou', skipped: false }] },
   );
-  expect(root.findByType('Tool').props.statusText).toBe('chat.question.closed');
-  expect(root.findAllByType('TextSection')).toHaveLength(0);
+  expect(texts(root)).toEqual(['Where?', 'chat.question.closed', 'Notes?', 'chat.question.closed']);
 });

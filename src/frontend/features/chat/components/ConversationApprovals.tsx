@@ -8,7 +8,7 @@ import { ToolApprovalSheet, type ToolApprovalRespondInput } from './ToolApproval
 
 /**
  * The sheet consumes a bound decision and its input, never a connection or protocol method.
- * Questions belong to the composer; a leading question also holds back later approvals.
+ * Questions have their own sheet; a leading question also holds back later approvals.
  */
 export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnapshot }) {
   const { t } = useTranslation();
