@@ -11,6 +11,7 @@ import { Linking, Platform, Text, View } from 'react-native';
 
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
+import { AppUpdateSection } from '../components/AppUpdateSection';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
 const APP_VERSION = Constants.expoConfig?.version?.trim();
@@ -98,6 +99,8 @@ export default function AboutSettingsScreen() {
           <Text className="text-sm text-muted-foreground">{versionLabel}</Text>
         </View>
       </View>
+
+      <AppUpdateSection />
 
       <Section>
         <Section.Item

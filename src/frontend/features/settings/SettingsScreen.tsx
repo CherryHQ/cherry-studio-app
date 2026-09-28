@@ -20,6 +20,7 @@ import { useUniwind } from 'uniwind';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePreference } from '@/frontend/data/hooks';
 
+import { AppUpdateSection } from './components/AppUpdateSection';
 import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { ProfileHero } from './components/ProfileHero';
 import { useProviderListNavigation } from './provider';
@@ -109,6 +110,7 @@ export default function SettingsScreen() {
               onPress={() => router.push('/settings/device-connections')}
             />
           </Section>
+          <AppUpdateSection />
           <Section>
             <Section.Item
               label={t('backup.title')}
