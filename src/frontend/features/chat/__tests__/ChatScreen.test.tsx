@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
@@ -139,6 +140,11 @@ jest.mock('../components/ChatRouteResolver', () => ({
   },
 }));
 
+// The question composer reads interaction resources through react-query; dock wiring only needs
+// the ordinary input it wraps.
+jest.mock('../components/ConversationQuestionComposer', () => ({
+  ConversationQuestionComposer: ({ children }: { children: ReactNode }) => children,
+}));
 jest.mock('../components/ChatWorkspace', () => ({
   AssistantMessageUsage: () => null,
   ChatDraftState: () => null,
