@@ -391,7 +391,9 @@ persistence:
 
 `SelectionIndicator` is the decorative selected/unselected mark inside a parent checkbox or radio
 row. The parent owns the accessible role, state, and press handling. Use its `overlay` variant when
-the unselected ring sits on imagery and needs a dark contrast fill.
+the unselected ring sits on imagery and needs a dark contrast fill. A form that mixes single and
+multiple choice passes `control="radio"` (dot) or `control="checkbox"` (square check) so the shape,
+not a caption, tells them apart.
 
 `Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
 surfaces: the background is the lightest, the border is stronger, and the label has the highest

@@ -56,4 +56,22 @@ describe('SelectionIndicator', () => {
     expect(indicator.props.className).toContain('opacity-40');
     expect(renderer!.root.findAllByProps({ testID: 'selection-check' })).toHaveLength(0);
   });
+
+  test('marks a radio with a dot and a checkbox with a square check', () => {
+    const indicatorClass = (testID: string) =>
+      renderer!.root.find((node) => node.type === View && node.props.testID === testID).props
+        .className as string;
+
+    act(() => {
+      renderer = create(<SelectionIndicator control="radio" selected testID="radio" />);
+    });
+    expect(renderer!.root.findAllByProps({ testID: 'selection-check' })).toHaveLength(0);
+    expect(indicatorClass('radio')).toContain('rounded-full');
+
+    act(() => {
+      renderer!.update(<SelectionIndicator control="checkbox" selected testID="checkbox" />);
+    });
+    expect(renderer!.root.findByProps({ testID: 'selection-check' })).toBeDefined();
+    expect(indicatorClass('checkbox')).toContain('rounded-md');
+  });
 });
