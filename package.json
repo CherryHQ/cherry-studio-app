@@ -169,7 +169,7 @@
     "react-native-background-actions": "4.1.0",
     "react-native-chart-kit": "7.0.2",
     "react-native-enriched-markdown": "1.0.1",
-    "react-native-gesture-handler": "~2.32.0",
+    "react-native-gesture-handler": "~2.33.0",
     "react-native-keyboard-controller": "^1.21.13",
     "react-native-mmkv": "4.3.2",
     "react-native-nitro-healthkit": "1.0.0",

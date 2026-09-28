@@ -63,7 +63,8 @@ export type Availability =
 export type OperationOutcome<T> =
   | { state: 'applied'; value: T }
   | { state: 'pending'; operationId: string }
-  | { state: 'rejected'; failure: ConversationFailure }
+  /** An operation ID means the rejected input stays recorded for the user to resolve. */
+  | { state: 'rejected'; failure: ConversationFailure; operationId?: string }
   | { state: 'interrupted'; operationId: string };
 export type ConversationAction<Input, Output> = {
   availability: Availability;

@@ -19,7 +19,7 @@ function mockScope(lease: DesktopDomainLease) {
   const scope = {
     scope: 'scope',
     getState: () => ({ status }),
-    getCommands: () => (pending ? [{ id: 'command', status: 'confirming' }] : []),
+    getCommands: () => (pending ? [{ id: 'command', status: 'pending' }] : []),
     getStarts: () => [],
     subscribeOperations: (listener: () => void) => {
       operations.add(listener);

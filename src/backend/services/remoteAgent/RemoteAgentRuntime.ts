@@ -185,17 +185,13 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
         assertActive();
         return subscribe(scope.subscribeOperations(listener));
       },
-      recover: (operationId) => {
+      discard: (operationId) => {
         assertActive();
-        return scope.recover(operationId);
+        scope.discard(operationId);
       },
-      dismiss: (operationId) => {
+      release: (startId) => {
         assertActive();
-        scope.dismiss(operationId);
-      },
-      resync: (sessionId) => {
-        assertActive();
-        return scope.resync(sessionId);
+        scope.release(startId);
       },
       dispose: () => {
         if (disposed) return;
@@ -214,9 +210,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
       return;
     }
     if (
-      entry.scope
-        .getCommands()
-        .some((action) => ['confirming', 'accepted'].includes(action.status)) ||
+      entry.scope.getCommands().some((action) => action.status === 'pending') ||
       entry.scope.getStarts().some((start) => start.status === 'pending')
     )
       return;

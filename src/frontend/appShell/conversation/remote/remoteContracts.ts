@@ -45,19 +45,18 @@ export type Submission = {
   userMessage?: MessageRef;
   execution?: ExecutionRef;
 };
-export type ConversationOperation = {
+/**
+ * The latest input the desktop did not deliver. A Session or Draft holds at most one; pending work is
+ * recovered by the journal and never shown here.
+ */
+export type UndeliveredMessage = {
   id: OperationId;
-  kind: 'start' | 'send' | 'cancel' | 'respond';
-  state: 'pending' | 'applied' | 'rejected' | 'interrupted';
-  conversation?: ConversationRef;
-  draftId?: DraftId;
-  /** Admitted input remains recoverable after navigation and explicit rejection. */
-  input?: ConversationInput;
-  recovery?: ConversationAction<void, void>;
-  /** Rebuilds the owning Session's state; offered where the outcome may reflect a stale view. */
-  resync?: ConversationAction<void, void>;
-  dismiss?: () => void;
+  input: ConversationInput;
+  state: 'rejected' | 'interrupted';
   failure?: ConversationFailure;
+  /** Submits the same input through the owner's current send or start, replacing this message. */
+  resend: ConversationAction<void, Submission>;
+  discard(): void;
 };
 export type RemoteConversationExecution = ConversationExecution & {
   terminal?: { message: ConversationMessage; durable: boolean; historyReady: boolean };
@@ -69,6 +68,7 @@ export type RemoteConversationSnapshot = Omit<ConversationSnapshot, 'executions'
     inputPolicy: InputPolicy;
     send?: ConversationAction<ConversationInput, Submission>;
   };
+  undelivered?: UndeliveredMessage;
 };
 export type HistoryPage = {
   items: readonly ConversationMessage[];
@@ -101,7 +101,6 @@ export interface RemoteConversationSession {
   readonly scope: QueryScope;
   readonly state: Readable<RemoteConversationSnapshot>;
   readonly history: ConversationHistory;
-  readonly operations: Readable<readonly ConversationOperation[]>;
   activate(): () => void;
   refresh(signal: AbortSignal): Promise<void>;
   dispose(): void;
@@ -111,8 +110,10 @@ export interface ConversationDraft {
   readonly state: Readable<{
     inputPolicy: InputPolicy;
     start: ConversationAction<ConversationInput, Submission>;
+    /** The Session this draft's start created; the route hands off to it, then releases the start. */
+    created?: { conversation: ConversationRef; release(): void };
+    undelivered?: UndeliveredMessage;
   }>;
-  readonly operations: Readable<readonly ConversationOperation[]>;
   dispose(): void;
 }
 export interface RemoteConversationCatalog extends ConversationCatalog {
@@ -124,8 +125,9 @@ export interface RemoteConversationCatalog extends ConversationCatalog {
 export interface RemoteConversationSource extends ConversationSource {
   /** Stable identity/grant binding for unsent drafts; independent of Query lifetime. */
   readonly draftScope: string;
-  readonly operations: Readable<readonly ConversationOperation[]>;
   readonly catalog: RemoteConversationCatalog;
+  /** Whether the draft's input already belongs to a start; an undelivered one stays with the draft. */
+  hasSubmission(draftId: DraftId): boolean;
   openSession(ref: ConversationRef, signal: AbortSignal): Promise<RemoteConversationSession>;
 }
 export function isRemoteConversationSource(
