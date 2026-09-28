@@ -1138,6 +1138,7 @@
   "remoteAgent.operation.confirming": "Επιβεβαίωση",
   "remoteAgent.operation.failed": "Απέτυχε",
   "remoteAgent.operation.interrupted": "Διακόπηκε",
+  "remoteAgent.operation.resync": "Επανασυγχρονισμός",
   "remoteAgent.output": "Έξοδος",
   "remoteAgent.pairAgain": "Συνδέστε ξανά τη συσκευή για πρόσβαση στους Agent του PC.",
   "remoteAgent.repair": "Νέα σάρωση",

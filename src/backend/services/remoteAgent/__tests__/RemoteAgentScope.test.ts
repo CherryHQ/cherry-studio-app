@@ -230,6 +230,29 @@ it('resubscribes after the desktop rejects a send for a stale idle revision', as
   await test.source.drain();
 });
 
+it('rebuilds an observed session on request and ignores sessions it does not observe', async () => {
+  const test = fixture();
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  test.projection.session = { ...test.projection.session, title: 'Renamed on PC' };
+  test.source.resync('unobserved');
+  test.source.resync('s');
+  expect(snapshot?.current).toBe(false);
+  expect(snapshot?.sendTarget).toBeUndefined();
+  await settle();
+  expect(snapshot).toMatchObject({ current: true, session: { title: 'Renamed on PC' } });
+  expect(
+    test.request.mock.calls
+      .filter(([method]) => method === 'agent.sessions.subscribe')
+      .map(([, params]) => params),
+  ).toEqual([{ sessionId: 's' }, { sessionId: 's' }]);
+  test.source.dispose();
+  await test.source.drain();
+});
+
 it('does not admit another send while the original command receipt is still uncertain', async () => {
   const test = fixture();
   let snapshot: RemoteSessionSnapshot | undefined;

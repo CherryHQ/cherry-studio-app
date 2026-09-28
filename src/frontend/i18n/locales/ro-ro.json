@@ -1147,6 +1147,7 @@
   "remoteAgent.operation.confirming": "Se confirmă",
   "remoteAgent.operation.failed": "Eșuat",
   "remoteAgent.operation.interrupted": "Întrerupt",
+  "remoteAgent.operation.resync": "Resincronizează",
   "remoteAgent.output": "Ieșire",
   "remoteAgent.pairAgain": "Asociați din nou dispozitivul pentru a accesa Agent de pe PC.",
   "remoteAgent.repair": "Scanați din nou",

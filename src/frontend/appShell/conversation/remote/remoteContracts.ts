@@ -54,6 +54,8 @@ export type ConversationOperation = {
   /** Admitted input remains recoverable after navigation and explicit rejection. */
   input?: ConversationInput;
   recovery?: ConversationAction<void, void>;
+  /** Rebuilds the owning Session's state; offered where the outcome may reflect a stale view. */
+  resync?: ConversationAction<void, void>;
   dismiss?: () => void;
   failure?: ConversationFailure;
 };

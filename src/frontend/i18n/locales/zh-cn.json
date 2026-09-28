@@ -1129,6 +1129,7 @@
   "remoteAgent.operation.confirming": "正在确认",
   "remoteAgent.operation.failed": "失败",
   "remoteAgent.operation.interrupted": "已中断",
+  "remoteAgent.operation.resync": "重新同步",
   "remoteAgent.output": "输出",
   "remoteAgent.pairAgain": "请重新配对设备以访问 PC Agent。",
   "remoteAgent.repair": "重新扫码",

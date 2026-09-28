@@ -1,5 +1,5 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import { Button, useAlert } from '@cherrystudio/ui/components';
+import { Button, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -19,7 +19,8 @@ const STATUS_KEYS = {
 
 /**
  * One quiet line per outcome discovered after its submission returned; the failure reason lives
- * behind details. The journal recovers uncertain work automatically, so no row resubmits it.
+ * behind details. The journal recovers uncertain work automatically, so no row resubmits it;
+ * a row can only rebuild its Session's state.
  */
 export function ConversationOperations({
   operations,
@@ -30,6 +31,7 @@ export function ConversationOperations({
 }) {
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const { toast } = useToast();
   return (
     <View className="px-4">
       {operations
@@ -49,6 +51,24 @@ export function ConversationOperations({
               <Text numberOfLines={1} className="min-w-0 flex-1 text-xs text-foreground">
                 {preview}
               </Text>
+              {operation.resync ? (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  disabled={operation.resync.availability.state !== 'enabled'}
+                  onPress={() =>
+                    void operation.resync!.execute(undefined).then((outcome) => {
+                      if (outcome.state === 'rejected')
+                        toast.show({
+                          label: t(conversationFailureKey(outcome.failure)),
+                          variant: 'danger',
+                        });
+                    })
+                  }
+                >
+                  {t('remoteAgent.operation.resync')}
+                </Button>
+              ) : null}
               {operation.state === 'rejected' && operation.input ? (
                 <Button size="xs" variant="ghost" onPress={() => onRestore(operation.input!)}>
                   {t('common.edit')}

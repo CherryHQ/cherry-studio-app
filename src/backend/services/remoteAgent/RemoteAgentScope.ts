@@ -139,7 +139,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
     for (const listener of observation.listeners) listener(observation.snapshot);
   }
   /** A desktop CONFLICT proves this projection missed a session change; rebuild from a checkpoint. */
-  private resync(sessionId: string) {
+  resync(sessionId: string) {
+    this.assertActive();
     const observation = this.observations.get(sessionId);
     if (!observation || this.stopped || this.state.status !== 'ready') return;
     this.stopObservation(observation);

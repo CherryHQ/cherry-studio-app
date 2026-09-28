@@ -193,6 +193,10 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
         assertActive();
         scope.dismiss(operationId);
       },
+      resync: (sessionId) => {
+        assertActive();
+        scope.resync(sessionId);
+      },
       dispose: () => {
         if (disposed) return;
         disposed = true;

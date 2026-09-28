@@ -1129,6 +1129,7 @@
   "remoteAgent.operation.confirming": "確認中",
   "remoteAgent.operation.failed": "失敗",
   "remoteAgent.operation.interrupted": "中断",
+  "remoteAgent.operation.resync": "再同期",
   "remoteAgent.output": "出力",
   "remoteAgent.pairAgain": "PC Agent にアクセスするには、この端末を再度ペアリングしてください。",
   "remoteAgent.repair": "再スキャン",

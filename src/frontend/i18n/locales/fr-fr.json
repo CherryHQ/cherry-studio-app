@@ -1147,6 +1147,7 @@
   "remoteAgent.operation.confirming": "Confirmation",
   "remoteAgent.operation.failed": "Échec",
   "remoteAgent.operation.interrupted": "Interrompu",
+  "remoteAgent.operation.resync": "Resynchroniser",
   "remoteAgent.output": "Sortie",
   "remoteAgent.pairAgain": "Associez à nouveau cet appareil pour accéder aux Agents du PC.",
   "remoteAgent.repair": "Scanner à nouveau",

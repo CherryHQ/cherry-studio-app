@@ -174,6 +174,18 @@ export function createRemoteConversationSession(
               }
             },
           },
+          resync: {
+            availability: remoteAvailability(source.getState(), disposed),
+            execute: async () => {
+              try {
+                assertCurrent();
+                source.resync(ref.sessionId);
+                return { state: 'applied', value: undefined };
+              } catch (error) {
+                return { state: 'rejected', failure: remoteConversationFailure(error) };
+              }
+            },
+          },
         })),
     );
   }

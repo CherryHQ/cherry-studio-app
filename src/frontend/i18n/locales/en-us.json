@@ -1138,6 +1138,7 @@
   "remoteAgent.operation.confirming": "Confirming",
   "remoteAgent.operation.failed": "Failed",
   "remoteAgent.operation.interrupted": "Interrupted",
+  "remoteAgent.operation.resync": "Resync",
   "remoteAgent.output": "Output",
   "remoteAgent.pairAgain": "Pair this device again to access PC Agents.",
   "remoteAgent.repair": "Scan again",

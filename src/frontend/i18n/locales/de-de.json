@@ -1138,6 +1138,7 @@
   "remoteAgent.operation.confirming": "Wird bestätigt",
   "remoteAgent.operation.failed": "Fehlgeschlagen",
   "remoteAgent.operation.interrupted": "Unterbrochen",
+  "remoteAgent.operation.resync": "Neu synchronisieren",
   "remoteAgent.output": "Ausgabe",
   "remoteAgent.pairAgain": "Gerät erneut koppeln, um auf PC-Agents zuzugreifen.",
   "remoteAgent.repair": "Erneut scannen",

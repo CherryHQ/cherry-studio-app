@@ -1129,6 +1129,7 @@
   "remoteAgent.operation.confirming": "Đang xác nhận",
   "remoteAgent.operation.failed": "Thất bại",
   "remoteAgent.operation.interrupted": "Đã gián đoạn",
+  "remoteAgent.operation.resync": "Đồng bộ lại",
   "remoteAgent.output": "Đầu ra",
   "remoteAgent.pairAgain": "Ghép nối lại thiết bị để truy cập Agent trên PC.",
   "remoteAgent.repair": "Quét lại",

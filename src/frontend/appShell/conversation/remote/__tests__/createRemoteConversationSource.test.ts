@@ -87,6 +87,7 @@ function fixture(scope = 'scope', binding = 'binding') {
     },
     recover: jest.fn(async () => undefined),
     dismiss: jest.fn(),
+    resync: jest.fn(),
     dispose: jest.fn(),
   };
   const source = createRemoteConversationSource('pc', remote);
@@ -367,6 +368,20 @@ it('returns the rejected send explanation to the caller and drops the reported c
       .actions.send!.execute({ parts: [{ type: 'text', text: 'hello' }] }),
   ).toMatchObject({ state: 'rejected', failure });
   expect(test.remote.dismiss).toHaveBeenCalledWith('send');
+  handle.dispose();
+  test.source.dispose();
+});
+
+it('lets an operation row rebuild the state of the Session that owns it', async () => {
+  const test = fixture();
+  test.remote.getCommands = () => [
+    { id: 'send', kind: 'send', status: 'failed', sessionId: 's', error: 'CONFLICT' },
+  ];
+  const handle = await test.source.openSession(address, signal());
+  const resync = handle.operations.getSnapshot()[0].resync!;
+  expect(resync.availability.state).toBe('enabled');
+  await expect(resync.execute(undefined)).resolves.toEqual({ state: 'applied', value: undefined });
+  expect(test.remote.resync).toHaveBeenCalledWith('s');
   handle.dispose();
   test.source.dispose();
 });
