@@ -392,7 +392,6 @@
   "chat.question.closed": "Этот вопрос больше не активен",
   "chat.question.custom": "Другие пожелания…",
   "chat.question.failed": "Не удалось отправить. Попробуйте ещё раз.",
-  "chat.question.multiple": "Несколько вариантов",
   "chat.question.next": "Следующий вопрос",
   "chat.question.previous": "Предыдущий вопрос",
   "chat.question.progress": "{{current}} / {{total}}",

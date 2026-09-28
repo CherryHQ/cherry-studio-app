@@ -73,7 +73,6 @@ export function useUserQuestionForm({
     );
   }
 
-  /** A single choice answers its question, so every question but the last moves on. */
   function select(id: string) {
     change((current) => ({
       ...current,
@@ -85,7 +84,6 @@ export function useUserQuestionForm({
             ? current.selectedOptionIds.filter((selected) => selected !== id)
             : [...current.selectedOptionIds, id],
     }));
-    if (question.selection === 'single' && !isLast) navigate(index + 1);
   }
 
   function navigate(next: number) {

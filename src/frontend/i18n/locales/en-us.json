@@ -384,7 +384,6 @@
   "chat.question.closed": "This question is no longer active",
   "chat.question.custom": "Other thoughts…",
   "chat.question.failed": "Could not submit. Please try again.",
-  "chat.question.multiple": "Multiple choice",
   "chat.question.next": "Next question",
   "chat.question.previous": "Previous question",
   "chat.question.progress": "{{current}} / {{total}}",

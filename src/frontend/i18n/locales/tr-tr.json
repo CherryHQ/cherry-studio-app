@@ -384,7 +384,6 @@
   "chat.question.closed": "Bu soru artık etkin değil",
   "chat.question.custom": "Diğer düşünceler…",
   "chat.question.failed": "Gönderilemedi. Lütfen tekrar deneyin.",
-  "chat.question.multiple": "Çoklu seçim",
   "chat.question.next": "Sonraki soru",
   "chat.question.previous": "Önceki soru",
   "chat.question.progress": "{{current}} / {{total}}",

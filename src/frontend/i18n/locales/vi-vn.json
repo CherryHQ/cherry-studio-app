@@ -380,7 +380,6 @@
   "chat.question.closed": "Câu hỏi này không còn hiệu lực",
   "chat.question.custom": "Ý kiến khác…",
   "chat.question.failed": "Không gửi được. Vui lòng thử lại.",
-  "chat.question.multiple": "Chọn nhiều",
   "chat.question.next": "Câu hỏi tiếp theo",
   "chat.question.previous": "Câu hỏi trước",
   "chat.question.progress": "{{current}} / {{total}}",

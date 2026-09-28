@@ -58,9 +58,14 @@ afterEach(() => {
   act(() => renderer.unmount());
 });
 
-test('advances on a single choice, turns skip into next once answered, and submits on the last', async () => {
+test('stays on a single choice, turns skip into next once answered, and submits on the last', async () => {
   expect(form.action).toBe('skip');
   act(() => form.select('a'));
+  expect(form.index).toBe(0);
+  expect(form.action).toBe('next');
+  act(() => form.select('b'));
+  expect(form.answer.selectedOptionIds).toEqual(['b']);
+  act(() => form.advance());
   expect(form.index).toBe(1);
   expect(form.action).toBe('skip');
   act(() => {
@@ -73,30 +78,13 @@ test('advances on a single choice, turns skip into next once answered, and submi
   expect(form.index).toBe(2);
   expect(form.action).toBe('submit');
   act(() => form.setText(' No car '));
-  act(() => form.navigate(0));
-  expect(form.answer.selectedOptionIds).toEqual(['a']);
-  act(() => form.select('b'));
-  expect(form.index).toBe(1);
-  expect(form.answer.selectedOptionIds).toEqual(['a', 'b']);
   expect(respond).not.toHaveBeenCalled();
-  act(() => form.navigate(2));
   await act(async () => form.advance());
   expect(respond).toHaveBeenCalledWith([
     { questionId: 'city', selectedOptionIds: ['b'], text: '', skipped: false },
     { questionId: 'activities', selectedOptionIds: ['a', 'b'], text: '', skipped: false },
     { questionId: 'notes', selectedOptionIds: [], text: 'No car', skipped: false },
   ]);
-});
-
-test('stays on the last question after a single choice', () => {
-  const value: QuestionFormQuestion[] = [questions[0]];
-  act(() => {
-    renderer.update(<Harness key="single" value={value} />);
-  });
-  act(() => form.select('b'));
-  expect(form.index).toBe(0);
-  expect(form.action).toBe('submit');
-  expect(respond).not.toHaveBeenCalled();
 });
 
 test('skips the current question, clears skip when editing again, and skips the rest on submit', async () => {
@@ -107,8 +95,7 @@ test('skips the current question, clears skip when editing again, and skips the 
   act(() => form.navigate(0));
   expect(form.answer).toEqual({ selectedOptionIds: [], text: '', skipped: true });
   act(() => form.select('b'));
-  expect(form.index).toBe(1);
-  act(() => form.navigate(0));
+  expect(form.index).toBe(0);
   expect(form.answer).toEqual({ selectedOptionIds: ['b'], text: '', skipped: false });
   act(() => form.navigate(2));
   expect(form.isComplete).toBe(true);
@@ -132,8 +119,9 @@ test('requires every answer when the request does not accept skips', async () =>
   expect(form.index).toBe(0);
   expect(form.answer.skipped).toBe(false);
   act(() => form.select('a'));
-  act(() => form.select('a'));
   expect(form.canAct).toBe(true);
+  act(() => form.advance());
+  act(() => form.select('a'));
   act(() => form.advance());
   expect(form.action).toBe('submit');
   expect(form.isComplete).toBe(false);

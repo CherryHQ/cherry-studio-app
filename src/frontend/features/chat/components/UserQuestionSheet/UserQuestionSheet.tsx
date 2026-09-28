@@ -1,9 +1,12 @@
-import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import { BottomSheet, Button, Input } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Input, SelectionIndicator } from '@cherrystudio/ui/components';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { KeyboardAvoidingView, KeyboardController } from 'react-native-keyboard-controller';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAwareScrollView,
+  KeyboardController,
+  useKeyboardState,
+} from 'react-native-keyboard-controller';
 
 import { useComposerPresentationActions } from '@/frontend/components/Composer';
 
@@ -18,6 +21,8 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
   const { t } = useTranslation();
   const form = useUserQuestionForm(props);
   const { dismissInput } = useComposerPresentationActions();
+  // A medium sheet leaves almost no room above the keyboard, so typing grows it.
+  const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   useEffect(() => {
     if (!open) return;
     // The sheet covers the chat input, so its editing session and keyboard end here.
@@ -32,6 +37,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         ? 'chat.question.next'
         : 'chat.question.skip',
   );
+  const actionVariant = form.action === 'skip' ? 'secondary' : 'default';
 
   return (
     <BottomSheet
@@ -51,12 +57,15 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
             </View>
           ) : null}
           <View className="flex-1">
+            {/* Remount on a variant change: switching the mounted button from secondary to
+                default in place left its label invisible on iOS. */}
             <Button
+              key={actionVariant}
               disabled={form.locked || !form.canAct}
               loading={form.busy}
               onPress={form.advance}
               testID="user-question-action"
-              variant={form.action === 'skip' ? 'secondary' : 'default'}
+              variant={actionVariant}
             >
               <Button.Label>{actionLabel}</Button.Label>
             </Button>
@@ -79,92 +88,79 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       }
       onClose={ignoreClose}
       open={open}
-      size="medium"
+      size={isKeyboardVisible ? 'large' : 'medium'}
       testID="user-question-sheet"
-      title={t('chat.question.title')}
+      title={form.question.question}
     >
-      <KeyboardAvoidingView behavior="padding" style={styles.page}>
-        <ScrollView
-          key={form.question.id}
-          className="min-h-0 flex-1"
-          contentContainerClassName="gap-4 px-5 pt-2 pb-4"
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View className="gap-1">
-            {form.question.header ? (
-              <Text className="text-foreground-tertiary text-sm">{form.question.header}</Text>
-            ) : null}
-            <Text accessibilityRole="header" className="font-semibold text-base text-foreground">
-              {form.question.question}
-            </Text>
-            {form.question.selection === 'multiple' && form.question.options.length > 0 ? (
-              <Text className="text-foreground-tertiary text-xs">
-                {t('chat.question.multiple')}
-              </Text>
-            ) : null}
+      <KeyboardAwareScrollView
+        key={form.question.id}
+        bottomOffset={16}
+        contentContainerStyle={styles.content}
+        disableScrollOnKeyboardHide
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        mode="layout"
+        showsVerticalScrollIndicator={false}
+        style={styles.page}
+      >
+        {form.question.header ? (
+          <Text className="text-foreground-tertiary text-sm">{form.question.header}</Text>
+        ) : null}
+        {form.question.options.length ? (
+          <View className="-mx-3 gap-1">
+            {form.question.options.map((option) => {
+              const selected = form.answer.selectedOptionIds.includes(option.id);
+              return (
+                <Pressable
+                  key={option.id}
+                  accessibilityLabel={option.label}
+                  accessibilityHint={option.description}
+                  accessibilityRole={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
+                  accessibilityState={{ checked: selected, disabled: form.locked }}
+                  className={`min-h-11 flex-row items-center gap-3 rounded-lg px-3 py-2 active:opacity-70 ${selected ? 'bg-secondary' : ''}`}
+                  disabled={form.locked}
+                  onPress={() => form.select(option.id)}
+                >
+                  <SelectionIndicator
+                    control={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
+                    selected={selected}
+                  />
+                  <View className="min-w-0 flex-1 gap-0.5">
+                    <Text className="text-base text-foreground">{option.label}</Text>
+                    {option.description ? (
+                      <Text className="text-foreground-tertiary text-sm">{option.description}</Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
-          {form.question.options.length ? (
-            <View className="-mx-3 gap-1">
-              {form.question.options.map((option) => {
-                const selected = form.answer.selectedOptionIds.includes(option.id);
-                return (
-                  <Pressable
-                    key={option.id}
-                    accessibilityLabel={option.label}
-                    accessibilityHint={option.description}
-                    accessibilityRole={
-                      form.question.selection === 'multiple' ? 'checkbox' : 'radio'
-                    }
-                    accessibilityState={{ checked: selected, disabled: form.locked }}
-                    className={`min-h-11 flex-row items-center gap-2 rounded-lg px-3 py-2 active:opacity-70 ${selected ? 'bg-secondary' : ''}`}
-                    disabled={form.locked}
-                    onPress={() => form.select(option.id)}
-                  >
-                    <View className="min-w-0 flex-1 gap-0.5">
-                      <Text className="text-base text-foreground">{option.label}</Text>
-                      {option.description ? (
-                        <Text className="text-foreground-tertiary text-sm">
-                          {option.description}
-                        </Text>
-                      ) : null}
-                    </View>
-                    {selected ? (
-                      <CheckIcon className="size-5 text-foreground" />
-                    ) : (
-                      <View className="size-5" />
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
-          <Input
-            accessibilityLabel={t('chat.question.custom')}
-            disabled={form.locked}
-            maxLength={4000}
-            onChangeText={form.setText}
-            onSubmitEditing={form.advance}
-            placeholder={t('chat.question.custom')}
-            returnKeyType={form.action === 'submit' ? 'done' : 'next'}
-            testID="user-question-custom"
-            value={form.answer.text}
-          />
-          {form.answer.skipped ? (
-            <Text className="text-foreground-tertiary text-sm">{t('chat.question.skipped')}</Text>
-          ) : null}
-          {form.failed ? (
-            <Text accessibilityRole="alert" className="text-sm text-error">
-              {t('chat.question.failed')}
-            </Text>
-          ) : null}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        ) : null}
+        <Input
+          accessibilityLabel={t('chat.question.custom')}
+          disabled={form.locked}
+          maxLength={4000}
+          onChangeText={form.setText}
+          onSubmitEditing={form.advance}
+          placeholder={t('chat.question.custom')}
+          returnKeyType={form.action === 'submit' ? 'done' : 'next'}
+          testID="user-question-custom"
+          value={form.answer.text}
+        />
+        {form.answer.skipped ? (
+          <Text className="text-foreground-tertiary text-sm">{t('chat.question.skipped')}</Text>
+        ) : null}
+        {form.failed ? (
+          <Text accessibilityRole="alert" className="text-sm text-error">
+            {t('chat.question.failed')}
+          </Text>
+        ) : null}
+      </KeyboardAwareScrollView>
     </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  content: { gap: 16, paddingBottom: 16, paddingHorizontal: 20, paddingTop: 8 },
   page: { flex: 1 },
 });

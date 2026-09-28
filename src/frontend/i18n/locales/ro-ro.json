@@ -388,7 +388,6 @@
   "chat.question.closed": "Această întrebare nu mai este activă",
   "chat.question.custom": "Alte idei…",
   "chat.question.failed": "Trimiterea a eșuat. Încearcă din nou.",
-  "chat.question.multiple": "Selecție multiplă",
   "chat.question.next": "Întrebarea următoare",
   "chat.question.previous": "Întrebarea anterioară",
   "chat.question.progress": "{{current}} / {{total}}",

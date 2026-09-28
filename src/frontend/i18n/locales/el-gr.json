@@ -384,7 +384,6 @@
   "chat.question.closed": "Αυτή η ερώτηση δεν είναι πλέον ενεργή",
   "chat.question.custom": "Άλλες σκέψεις…",
   "chat.question.failed": "Η υποβολή απέτυχε. Δοκιμάστε ξανά.",
-  "chat.question.multiple": "Πολλαπλή επιλογή",
   "chat.question.next": "Επόμενη ερώτηση",
   "chat.question.previous": "Προηγούμενη ερώτηση",
   "chat.question.progress": "{{current}} / {{total}}",

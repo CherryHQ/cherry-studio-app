@@ -380,7 +380,6 @@
   "chat.question.closed": "この質問は無効になりました",
   "chat.question.custom": "その他の希望…",
   "chat.question.failed": "送信できませんでした。もう一度お試しください。",
-  "chat.question.multiple": "複数選択",
   "chat.question.next": "次の質問",
   "chat.question.previous": "前の質問",
   "chat.question.progress": "{{current}} / {{total}}",

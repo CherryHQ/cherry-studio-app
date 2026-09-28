@@ -29,9 +29,10 @@ message list keeps its geometry and selection does not subscribe into the chat r
   presentation model, and returns the matching response: local answers keep option and question IDs
   and may skip; desktop answers are keyed by question text, joined from selected labels and free
   text, and require every question. An unreadable desktop form opens a retryable error sheet.
-  `UserQuestionSheet/` shows one question at a time with its options, optional header and option
-  descriptions, and a free-text field. A single choice moves to the next question; the footer's
-  action reads skip while the question is unanswered, next once it is answered, and submit on the
+  `UserQuestionSheet/` shows one question at a time: the question is the sheet title, followed by
+  an optional header, radio options for a single choice or checkboxes for multiple, option
+  descriptions, and a free-text field. The sheet grows to the large size while the keyboard is up
+  and scrolls that field above it. Choosing never navigates; the footer's action reads skip while the question is unanswered, next once it is answered, and submit on the
   last question, where local requests skip whatever is still unanswered. Request identity resets
   the form; failed or unconfirmed submissions keep the answers editable for resubmission. A leading
   approval closes the sheet without unmounting it, so drafts survive. Opening the sheet ends the

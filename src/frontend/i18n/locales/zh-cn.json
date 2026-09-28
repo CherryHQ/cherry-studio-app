@@ -380,7 +380,6 @@
   "chat.question.closed": "问题已失效",
   "chat.question.custom": "其他想法…",
   "chat.question.failed": "提交失败，请重试。",
-  "chat.question.multiple": "多选",
   "chat.question.next": "下一题",
   "chat.question.previous": "上一题",
   "chat.question.progress": "{{current}} / {{total}}",

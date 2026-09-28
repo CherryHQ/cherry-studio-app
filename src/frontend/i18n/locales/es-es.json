@@ -388,7 +388,6 @@
   "chat.question.closed": "Esta pregunta ya no está activa",
   "chat.question.custom": "Otras ideas…",
   "chat.question.failed": "No se pudo enviar. Inténtalo de nuevo.",
-  "chat.question.multiple": "Selección múltiple",
   "chat.question.next": "Pregunta siguiente",
   "chat.question.previous": "Pregunta anterior",
   "chat.question.progress": "{{current}} / {{total}}",
