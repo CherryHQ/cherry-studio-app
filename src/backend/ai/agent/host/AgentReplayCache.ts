@@ -7,6 +7,8 @@ import {
   MAX_RUNTIME_TURN_REPLAY_BYTES,
   parseRuntimeTurnReplay,
   type RuntimeTurnReplay,
+  type SerializedRuntimeTurnReplay,
+  serializeRuntimeTurnReplay,
 } from '../runtime';
 import type { ForkedMessageCopy } from '../sessionStore/AgentSessionStore';
 
@@ -58,8 +60,8 @@ export class AgentReplayCache {
       for (const message of messages) {
         if (message.role !== 'assistant' || message.status !== 'success' || !message.turnId)
           continue;
-        const replay = this.read(sessionId, message);
-        if (replay) result[message.id] = replay;
+        const stored = this.read(sessionId, message);
+        if (stored) result[message.id] = stored.replay;
       }
       this.saveIndex();
       return result;
@@ -69,9 +71,9 @@ export class AgentReplayCache {
   write(sessionId: string, message: ReplayMessageRef, value: unknown): void {
     this.attempt(undefined, () => {
       if (!message.turnId) return;
-      const replay = parseRuntimeTurnReplay(value);
-      if (!replay) return;
-      this.writeEntry(sessionId, message, replay);
+      const stored = serializeRuntimeTurnReplay(value);
+      if (!stored) return;
+      this.writeEntry(sessionId, message, stored);
       this.saveIndex();
     });
   }
@@ -81,8 +83,8 @@ export class AgentReplayCache {
       // Newest turns have priority if copying a large fork evicts older source entries.
       for (const copy of copies.toReversed()) {
         if (!copy.source.turnId || !copy.target.turnId) continue;
-        const replay = this.read(sourceSessionId, copy.source);
-        if (replay) this.writeEntry(sessionId, copy.target, replay);
+        const stored = this.read(sourceSessionId, copy.source);
+        if (stored) this.writeEntry(sessionId, copy.target, stored);
       }
       // Restore chronological recency after copying backwards, so the fork's
       // newest turns stay hot when subsequent writes need more space.
@@ -119,36 +121,32 @@ export class AgentReplayCache {
     });
   }
 
-  private read(sessionId: string, message: ReplayMessageRef): RuntimeTurnReplay | undefined {
+  private read(
+    sessionId: string,
+    message: ReplayMessageRef,
+  ): SerializedRuntimeTurnReplay | undefined {
     const key = entryKey(sessionId, message);
     const entries = this.loadIndex();
     const bytes = entries.get(key);
     if (bytes === undefined) return undefined;
     const serialized = this.getStorage().getString(key);
-    let replay: RuntimeTurnReplay | undefined;
-    try {
-      replay =
-        serialized && serialized.length <= MAX_RUNTIME_TURN_REPLAY_BYTES
-          ? parseRuntimeTurnReplay(JSON.parse(serialized))
-          : undefined;
-    } catch {
-      // Corrupt and obsolete entries degrade to the persisted display transcript.
-    }
+    const stored = serialized === undefined ? undefined : decodeStored(serialized, bytes);
     entries.delete(key);
-    if (replay) entries.set(key, bytes);
-    else this.getStorage().remove(key);
-    return replay;
+    if (!stored) {
+      this.getStorage().remove(key);
+      return undefined;
+    }
+    entries.set(key, bytes);
+    return stored;
   }
 
   private writeEntry(
     sessionId: string,
     message: ReplayMessageRef,
-    replay: RuntimeTurnReplay,
+    { serialized, bytes }: SerializedRuntimeTurnReplay,
   ): void {
     const entries = this.loadIndex();
     const key = entryKey(sessionId, message);
-    const serialized = JSON.stringify(replay);
-    const bytes = new TextEncoder().encode(serialized).byteLength;
     entries.delete(key);
     let total = [...entries.values()].reduce((sum, size) => sum + size, 0) + bytes;
     let evicted = false;
@@ -224,6 +222,17 @@ export class AgentReplayCache {
       logger.warn('Replay cache unavailable; using message history for this app session');
       return fallback;
     }
+  }
+}
+
+function decodeStored(serialized: string, bytes: number): SerializedRuntimeTurnReplay | undefined {
+  if (serialized.length > MAX_RUNTIME_TURN_REPLAY_BYTES) return undefined;
+  try {
+    const replay = parseRuntimeTurnReplay(JSON.parse(serialized));
+    return replay ? { replay, serialized, bytes } : undefined;
+  } catch {
+    // Corrupt and obsolete entries degrade to the persisted display transcript.
+    return undefined;
   }
 }
 

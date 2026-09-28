@@ -1,7 +1,11 @@
 import type { AssistantMessage, Message, Model, ToolResultMessage } from '@earendil-works/pi-ai';
 import { stream } from '@earendil-works/pi-ai/api/anthropic-messages';
 
-import { MAX_RUNTIME_TURN_REPLAY_BYTES, parseRuntimeTurnReplay } from '../../runtimeTurnReplay';
+import {
+  MAX_RUNTIME_TURN_REPLAY_BYTES,
+  parseRuntimeTurnReplay,
+  serializeRuntimeTurnReplay,
+} from '../../runtimeTurnReplay';
 import type { RuntimeExecutionRequest } from '../../types';
 import { toPiConversation } from '../modelMessages';
 import { createPiTurnReplay, readPiTurnReplay } from '../piTurnReplay';
@@ -206,5 +210,5 @@ test('bounds artifacts without truncating signed content and omits provider diag
   expect(readPiTurnReplay(replay)?.[0]).toMatchObject({ responseId: 'response-id' });
   const cyclic: Record<string, unknown> = { version: 1 };
   cyclic.payload = cyclic;
-  expect(parseRuntimeTurnReplay(cyclic)).toBeUndefined();
+  expect(serializeRuntimeTurnReplay(cyclic)).toBeUndefined();
 });

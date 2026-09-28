@@ -368,7 +368,7 @@ thinking signatures, concurrent tool-call grouping, and model-visible discovery 
 only the turn's assistant and tool messages, never user attachments, connection credentials, or
 Host session/turn ids. Pi types and decoding stay inside `runtime/pi`; public message views, search,
 and traces do not expose the artifact. Missing, oversized, or unsupported artifacts use normalized
-history. Original provider/model provenance is retained for cross-model conversion. Usage is rebuilt
+history, and the Runtime logs why an artifact was dropped or ignored. Original provider/model provenance is retained for cross-model conversion. Usage is rebuilt
 from the Host's current context anchor rather than stale per-request measurements.
 After live tool-loop compaction, the final request's context measurement is not persisted as an
 anchor: the next execution restores the full turn and estimates it before deciding to compact again.

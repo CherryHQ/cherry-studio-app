@@ -38,7 +38,12 @@ export type {
 } from './types';
 
 export { RuntimeContextCheckpointSchema, RuntimeJsonValueSchema } from './runtimeSchemas';
-export { MAX_RUNTIME_TURN_REPLAY_BYTES, parseRuntimeTurnReplay } from './runtimeTurnReplay';
+export {
+  MAX_RUNTIME_TURN_REPLAY_BYTES,
+  parseRuntimeTurnReplay,
+  type SerializedRuntimeTurnReplay,
+  serializeRuntimeTurnReplay,
+} from './runtimeTurnReplay';
 
 export type {
   FakeExecutionController,
