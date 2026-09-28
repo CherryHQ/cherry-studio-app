@@ -87,12 +87,13 @@ export function remoteMessage(
   const attachments: NonNullable<ConversationMessage['attachments']>[number][] = [];
   for (const part of message.parts) {
     if (part.kind === 'text' || part.kind === 'reasoning') {
+      // The desktop renames text parts when history commits; position keeps the rendered part.
+      keys.push(`${message.id}:${part.kind}:${parts.length}`);
       parts.push({
         type: part.kind,
         text: part.text,
         state: message.state === 'streaming' ? 'streaming' : 'done',
       });
-      keys.push(part.id);
     } else if (part.kind === 'tool') {
       const base = {
         type: 'dynamic-tool' as const,

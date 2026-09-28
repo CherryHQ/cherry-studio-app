@@ -86,7 +86,13 @@ it('keeps tools in process order without putting deferred input/output values in
     ],
   };
   const projected = remoteMessage(message, resource);
-  expect(projected.display.data.partKeys).toEqual(['r', 'call1', 't', 'call2', 'last']);
+  expect(projected.display.data.partKeys).toEqual([
+    'reply:reasoning:0',
+    'call1',
+    'reply:text:2',
+    'call2',
+    'reply:text:4',
+  ]);
   expect(projected.display.data.parts?.map((part) => part.type)).toEqual([
     'reasoning',
     'dynamic-tool',
@@ -102,6 +108,32 @@ it('keeps tools in process order without putting deferred input/output values in
   expect(projected.display.data.parts?.[3]).toMatchObject({ state: 'output-error' });
   expect(JSON.stringify(projected.display)).not.toMatch(/input-ref|output-ref|error-ref/);
   expect(projected.tools?.[0].output).toMatchObject({ kind: 'deferred', key: 'output-ref' });
+});
+
+it('keeps part keys when committed history renames the live text parts', () => {
+  const live: RemoteMessageView = {
+    id: 'reply',
+    version: '3',
+    role: 'assistant',
+    state: 'success',
+    parts: [
+      { id: 'stream-r', kind: 'reasoning', text: 'Plan', complete: true },
+      { id: 'call', kind: 'tool', callId: 'call', name: 'read_file', state: 'completed' },
+      { id: 'stream-t', kind: 'text', text: 'Done', complete: true },
+    ],
+  };
+  const persisted: RemoteMessageView = {
+    ...live,
+    version: '4',
+    parts: [
+      { ...live.parts[0], id: 'reply:0' },
+      { ...live.parts[1], id: 'call' },
+      { ...live.parts[2], id: 'reply:2' },
+    ] as RemoteMessageView['parts'],
+  };
+  expect(remoteMessage(persisted, resource).display.data.partKeys).toEqual(
+    remoteMessage(live, resource).display.data.partKeys,
+  );
 });
 
 it('preserves trailing live prose and keeps metadata-only files out of local file identifiers', () => {
@@ -125,7 +157,7 @@ it('preserves trailing live prose and keeps metadata-only files out of local fil
     },
     resource,
   );
-  expect(projected.display.data.partKeys).toEqual(['call', 'text']);
+  expect(projected.display.data.partKeys).toEqual(['call', 'reply:text:1']);
   expect(projected.display.data.parts?.[0]).toMatchObject({ state: 'input-streaming' });
   expect(projected.attachments?.[0]).toEqual({
     key: 'file',
