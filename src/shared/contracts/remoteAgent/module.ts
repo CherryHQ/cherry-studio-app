@@ -56,8 +56,11 @@ export interface RemoteAgentSource {
   subscribeOperations(listener: () => void): () => void;
   recover(operationId: string): Promise<void>;
   dismiss(operationId: string): void;
-  /** Rebuilds an observed Session from a fresh desktop checkpoint; unobserved Sessions are ignored. */
-  resync(sessionId: string): void;
+  /**
+   * Rebuilds an observed Session from a fresh desktop checkpoint and its stored summary; unobserved
+   * Sessions are ignored.
+   */
+  resync(sessionId: string): Promise<void>;
   dispose(): void;
 }
 export interface RemoteAgentModule {

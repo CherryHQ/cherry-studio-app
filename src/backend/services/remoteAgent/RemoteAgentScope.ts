@@ -7,6 +7,7 @@ import {
   type ContentRef,
   type AgentPart,
   type AgentProjection,
+  type AgentSession,
 } from '@cherrystudio/remote-protocol/agent';
 import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
@@ -43,9 +44,31 @@ type Observation = {
   sync?: SessionSync;
   snapshot?: RemoteSessionSnapshot;
   projection?: AgentProjection;
+  /** Session summary read from desktop storage by an explicit resync. */
+  stored?: AgentSession;
   retryTimer?: ReturnType<typeof setTimeout>;
   retries?: number;
 };
+/**
+ * The desktop can serve a checkpoint from a cached session that missed an out-of-run change, such
+ * as an automatic title, while send admission checks storage. A newer idle summary read from
+ * storage therefore supplies the idle revision and metadata; history revision stays with the stream.
+ */
+function withStoredSession(session: AgentSession, stored: AgentSession | undefined) {
+  if (
+    !stored?.idleRevision ||
+    !session.idleRevision ||
+    stored.sessionId !== session.sessionId ||
+    Date.parse(stored.updatedAt) <= Date.parse(session.updatedAt)
+  )
+    return session;
+  return {
+    ...session,
+    title: stored.title,
+    updatedAt: stored.updatedAt,
+    idleRevision: stored.idleRevision,
+  };
+}
 const targetSchema = z.object({
   scope: z.string(),
   kind: z.string(),
@@ -138,14 +161,37 @@ export class RemoteAgentScope implements RemoteAgentSource {
     };
     for (const listener of observation.listeners) listener(observation.snapshot);
   }
-  /** A desktop CONFLICT proves this projection missed a session change; rebuild from a checkpoint. */
-  resync(sessionId: string) {
+  private publishObservation(
+    sessionId: string,
+    observation: Observation,
+    projection: AgentProjection,
+    current: boolean,
+  ) {
+    const session = withStoredSession(projection.session, observation.stored);
+    const view = session === projection.session ? projection : { ...projection, session };
+    const entry = this.cacheEntry(sessionId);
+    this.readCache.setEpoch(entry, projection.cursor.streamEpoch);
+    this.readCache.put(entry, entry.generation, 'session', session);
+    observation.projection = projection;
+    observation.snapshot = projectSnapshot(this.scope, view, current, this.issueResource);
+    for (const listener of observation.listeners) listener(observation.snapshot);
+  }
+  /**
+   * A desktop CONFLICT proves this projection missed a session change: rebuild it from a checkpoint
+   * and read the stored session summary, which admission checks even when the checkpoint is stale.
+   */
+  async resync(sessionId: string) {
     this.assertActive();
     const observation = this.observations.get(sessionId);
     if (!observation || this.stopped || this.state.status !== 'ready') return;
     this.stopObservation(observation);
     this.withdrawTargets(observation);
     this.startObservation(sessionId, observation);
+    const { session } = await this.track(this.request('agent.sessions.get', { sessionId }));
+    if (this.stopped || this.observations.get(sessionId) !== observation) return;
+    observation.stored = session;
+    if (observation.projection && observation.snapshot?.current)
+      this.publishObservation(sessionId, observation, observation.projection, true);
   }
   private request: AgentRequest = async (method, params, caller) => {
     this.assertActive();
@@ -495,17 +541,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
           (projection, current) => {
             if (this.lease.signal.aborted || observation.sync !== sync) return;
             if (current) observation.retries = 0;
-            const entry = this.cacheEntry(sessionId);
-            this.readCache.setEpoch(entry, projection.cursor.streamEpoch);
-            this.readCache.put(entry, entry.generation, 'session', projection.session);
-            observation.projection = projection;
-            observation.snapshot = projectSnapshot(
-              this.scope,
-              projection,
-              current,
-              this.issueResource,
-            );
-            for (const listener of observation.listeners) listener(observation.snapshot);
+            this.publishObservation(sessionId, observation, projection, current);
           },
           () => {
             if (observation.sync !== sync) return;
@@ -582,7 +618,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
         .create('send', 'agent.messages.send', { ...params, text }, text)
         .then((command) => {
           if (command.status === 'failed' && command.error === 'CONFLICT')
-            this.resync(params.sessionId);
+            void this.resync(params.sessionId).catch(() => undefined);
           return command;
         }),
     );

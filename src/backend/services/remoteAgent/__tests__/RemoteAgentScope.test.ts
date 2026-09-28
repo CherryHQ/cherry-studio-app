@@ -230,25 +230,39 @@ it('resubscribes after the desktop rejects a send for a stale idle revision', as
   await test.source.drain();
 });
 
-it('rebuilds an observed session on request and ignores sessions it does not observe', async () => {
+it('resyncs from storage when the desktop checkpoint still carries a stale idle revision', async () => {
   const test = fixture();
   let snapshot: RemoteSessionSnapshot | undefined;
   test.source.observe('s', (value) => {
     snapshot = value;
   });
   await settle();
-  test.projection.session = { ...test.projection.session, title: 'Renamed on PC' };
-  test.source.resync('unobserved');
-  test.source.resync('s');
+  // The desktop renamed the session in storage, but its checkpoint cache still serves the old summary.
+  const stored = {
+    ...test.projection.session,
+    title: 'Renamed on PC',
+    updatedAt: '2026-09-22T00:00:05.000Z',
+    historyRevision: '5',
+    idleRevision: '5',
+  };
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) =>
+    method === 'agent.sessions.get' ? ({ session: stored } as never) : request(method, params),
+  );
+  const resynced = test.source.resync('s');
   expect(snapshot?.current).toBe(false);
   expect(snapshot?.sendTarget).toBeUndefined();
+  await resynced;
   await settle();
-  expect(snapshot).toMatchObject({ current: true, session: { title: 'Renamed on PC' } });
+  expect(snapshot).toMatchObject({
+    current: true,
+    session: { title: 'Renamed on PC', historyVersion: '1' },
+  });
+  expect(JSON.parse(snapshot!.sendTarget!).params.expectedIdleRevision).toBe('5');
   expect(
-    test.request.mock.calls
-      .filter(([method]) => method === 'agent.sessions.subscribe')
-      .map(([, params]) => params),
-  ).toEqual([{ sessionId: 's' }, { sessionId: 's' }]);
+    test.request.mock.calls.filter(([method]) => method === 'agent.sessions.subscribe'),
+  ).toHaveLength(2);
+  await expect(test.source.resync('unobserved')).resolves.toBeUndefined();
   test.source.dispose();
   await test.source.drain();
 });
