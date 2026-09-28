@@ -14,7 +14,10 @@ import * as z from 'zod';
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/desktopConnections';
 import type { DesktopSession } from '@/backend/services/desktopConnections/DesktopSession';
-import { RemoteFailureError } from '@/backend/services/desktopConnections/remoteErrors';
+import {
+  RemoteFailureError,
+  RemoteTransportError,
+} from '@/backend/services/desktopConnections/remoteErrors';
 import type {
   RemoteAgentSource,
   RemoteSessionSnapshot,
@@ -153,6 +156,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
       signal.throwIfAborted();
       return value;
     } catch (error) {
+      // A lost reply is not a desktop verdict: the command stays uncertain and is recovered by receipt.
+      if (error instanceof RemoteTransportError)
+        throw new RemoteAgentError('CONNECTION_LOST', true, error.message);
       if (error instanceof RemoteFailureError) {
         if (
           error.reason === 'NOT_FOUND' &&

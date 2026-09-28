@@ -101,6 +101,53 @@ function protocolWithObservation(
 }
 
 describe('AgentSessionChatClient', () => {
+  test('pauses live observation in background and restores missed text from the next snapshot', async () => {
+    let publish!: (event: AgentEvent) => void;
+    let snapshotText = 'before';
+    const unsubscribeObservation = jest.fn();
+    const protocol = protocolWithObservation(async (_sessionId, listener) => {
+      publish = listener;
+      return {
+        snapshot: {
+          ...snapshot(),
+          streamingMessage: {
+            ...assistantMessage(),
+            parts: [{ id: 'text-1', state: 'streaming', text: snapshotText, type: 'text' }],
+          },
+        },
+        unsubscribe: unsubscribeObservation,
+      };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    const release = client.subscribe('session-1', () => undefined);
+    await client.observe('session-1');
+    expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+      text: 'before',
+    });
+
+    const stalePublish = publish;
+    client.pauseObservedSessions();
+    expect(unsubscribeObservation).toHaveBeenCalledTimes(1);
+    snapshotText = 'before and after';
+    stalePublish({
+      type: 'message.delta',
+      messageId: 'assistant-1',
+      delta: { op: 'text.append', partId: 'text-1', text: ' stale' },
+    });
+    await client.observe('session-1');
+    expect(protocol.observeSession).toHaveBeenCalledTimes(1);
+    expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+      text: 'before',
+    });
+
+    await client.resumeObservedSessions();
+    expect(protocol.observeSession).toHaveBeenCalledTimes(2);
+    expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+      text: 'before and after',
+    });
+    release();
+  });
+
   test('restores a live question from observation and rejects responses after it resolves', async () => {
     const question = {
       turnId: 'turn-1',

@@ -5,6 +5,7 @@ import type {
   AgentTool as PiAgentTool,
 } from '@earendil-works/pi-agent-core';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
+import { calculateContextTokens } from '@earendil-works/pi-agent-core/compaction';
 import type {
   Api as PiApi,
   AssistantMessage,
@@ -512,6 +513,17 @@ function collectSensitiveValues(value: unknown, values: string[], sensitive = fa
   }
 }
 
+/**
+ * The final request's real context size. Without a reported input count the
+ * total collapses to the output alone, a bogus anchor that would suppress
+ * compaction, so it is left unknown.
+ */
+function measuredContextTokens(usage: PiUsage): number | undefined {
+  if (usage.input + usage.cacheRead + usage.cacheWrite <= 0) return undefined;
+  const tokens = calculateContextTokens(usage);
+  return Number.isFinite(tokens) && tokens > 0 ? tokens : undefined;
+}
+
 function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
   const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   return {
@@ -733,6 +745,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // signal — which is absent in the pre-agent window and third-party after.
       const providerStream: PiModelResolution['streamFn'] = async (model, context, options) => {
         const contextUsage = measurePiContext({
+          api: model.api,
           contextWindow: model.contextWindow,
           maxInputTokens: resolution.maxInputTokens,
           messages: context.messages,
@@ -783,6 +796,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         completeSimple: async (model, context, options) => {
           if (
             estimatePiLoopContextHeadroomTokens({
+              api: model.api,
               contextWindow: model.contextWindow,
               maxInputTokens: resolution.maxInputTokens,
               messages: context.messages,
@@ -871,6 +885,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       let responsePhase: 'tools' | 'final-response' | 'done' = 'tools';
       const updateModelContextHeadroom = (messages: PiAgentMessage[]) => {
         const usage = measurePiContext({
+          api: resolution.model.api,
           contextWindow: resolution.model.contextWindow,
           maxInputTokens: resolution.maxInputTokens,
           messages,
@@ -1025,9 +1040,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
       switch (terminal.stopReason) {
         case 'stop':
-        case 'length':
-          this.emit(turn, { type: 'completed' });
+        case 'length': {
+          const contextTokens = measuredContextTokens(terminal.usage);
+          this.emit(turn, {
+            type: 'completed',
+            ...(contextTokens !== undefined ? { contextTokens } : {}),
+          });
           break;
+        }
         case 'aborted':
           this.emit(turn, { type: 'cancelled' });
           break;

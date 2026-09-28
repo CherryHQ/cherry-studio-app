@@ -18,7 +18,7 @@ export type MessageProcessGroup<TItem extends MessageProcessItem> =
   | { kind: 'part'; item: TItem }
   | { kind: 'tools'; items: TItem[]; tools: ToolMessagePart[] };
 
-/** Narration separates runs; reasoning between calls belongs to the same disclosure. */
+/** Keep narration between tool calls inside the same disclosure. */
 export function groupMessageProcessItems<TItem extends MessageProcessItem>(
   items: readonly TItem[],
 ): MessageProcessGroup<TItem>[] {
@@ -35,7 +35,11 @@ export function groupMessageProcessItems<TItem extends MessageProcessItem>(
     if (isToolMessagePart(item.part)) {
       run.push(item);
       tools.push(item.part);
-    } else if (item.part.type === 'reasoning') {
+    } else if (
+      item.part.type === 'reasoning' ||
+      item.part.type === 'text' ||
+      item.part.type === 'data-compaction-anchor'
+    ) {
       run.push(item);
     } else {
       flush();

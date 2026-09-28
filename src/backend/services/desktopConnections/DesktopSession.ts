@@ -10,16 +10,21 @@ import { agentMethods } from '@cherrystudio/remote-protocol/agent';
 import { configurationMethods } from '@cherrystudio/remote-protocol/configuration';
 import type { SecureChannel } from '@cherrystudio/remote-transport';
 import type { MessageStream } from '@libp2p/interface';
-import { JSONRPCClient, JSONRPCErrorException } from 'json-rpc-2.0';
+import { createJSONRPCErrorResponse, JSONRPCClient, JSONRPCErrorException } from 'json-rpc-2.0';
 import type * as z from 'zod';
 
-import { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
+import { DesktopUnreachableError, RemoteFailureError, RemoteTransportError } from './remoteErrors';
 import { transportLogger } from './transportLogger';
 
-export { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
+export { DesktopUnreachableError, RemoteFailureError, RemoteTransportError } from './remoteErrors';
 
 const PROTOCOL_VERSIONS = [1];
 const REFRESH_MARGIN_MS = 60_000;
+// json-rpc-2.0 reports its own timeouts, send failures and rejectAllPendingRequests() as error
+// responses with this code and no `data`; a desktop verdict always carries protocol `data`.
+const LOCAL_ERROR_CODE = 0;
+const TIMEOUT_MESSAGE = 'Request timeout';
+const CLOSED_MESSAGE = 'Connection closed';
 
 export const desktopMethods = {
   ...connectionMethods(remoteAuthorizationSchema),
@@ -140,7 +145,11 @@ export class DesktopSession {
     try {
       const result = await withAbort(
         Promise.resolve(
-          this.client.timeout(remoteLimits.idleMs).request(method, schema.params.parse(params)),
+          this.client
+            .timeout(remoteLimits.idleMs, (id) =>
+              createJSONRPCErrorResponse(id, LOCAL_ERROR_CODE, TIMEOUT_MESSAGE),
+            )
+            .request(method, schema.params.parse(params)),
         ),
         signal,
       );
@@ -148,9 +157,18 @@ export class DesktopSession {
     } catch (error) {
       if (error instanceof JSONRPCErrorException) {
         const failure = remoteFailureSchema.safeParse(error.data);
-        throw new RemoteFailureError(
-          failure.success ? failure.data : { reason: 'INTERNAL', message: error.message },
-        );
+        if (failure.success) throw new RemoteFailureError(failure.data);
+        // Without a verdict the outcome stays unknown; callers must not record it as rejected.
+        if (error.code === LOCAL_ERROR_CODE && error.data === undefined)
+          throw new RemoteTransportError(
+            this.closed || error.message === CLOSED_MESSAGE
+              ? 'closed'
+              : error.message === TIMEOUT_MESSAGE
+                ? 'timeout'
+                : 'send-failed',
+            error.message,
+          );
+        throw new RemoteFailureError({ reason: 'INTERNAL', message: error.message });
       }
       throw error;
     } finally {
@@ -178,7 +196,7 @@ export class DesktopSession {
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    this.client.rejectAllPendingRequests('Connection closed');
+    this.client.rejectAllPendingRequests(CLOSED_MESSAGE);
     clearInterval(this.heartbeat);
     clearTimeout(this.refreshTimer);
     void this.channel.close().catch(() => undefined);
@@ -211,7 +229,7 @@ export class DesktopSession {
       // The channel is gone; pending callers learn it below.
     } finally {
       this.close();
-      this.client.rejectAllPendingRequests('Connection closed');
+      this.client.rejectAllPendingRequests(CLOSED_MESSAGE);
       this.listeners.clear();
       this.authorizationListeners.clear();
     }

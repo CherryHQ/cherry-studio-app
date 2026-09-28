@@ -10,6 +10,7 @@ import {
 } from '@earendil-works/pi-agent-core/compaction';
 import type {
   Api as PiApi,
+  ImageContent,
   Message as PiLlmMessage,
   Model as PiModel,
   Models,
@@ -18,12 +19,13 @@ import type {
 
 import type { RuntimeContextCheckpoint, RuntimeContextCompaction } from '../types';
 import type { PiConversation, PiHistoryTurn } from './modelMessages';
+import { estimatePiImageTokens } from './piImageTokens';
 
 const PI_CONTEXT_CHECKPOINT_KIND = 'pi-context-compaction';
+// Pi's own estimate prices every image at this flat cost; the dialect formula replaces it.
 const PI_ESTIMATED_IMAGE_TOKENS = 1_200;
 
 export const PI_ESTIMATED_CHARACTERS_PER_TOKEN = 4;
-export const PI_IMAGE_CONTEXT_TOKEN_RESERVE = 4_096;
 export const PI_CONTEXT_SAFETY_MARGIN_TOKENS = 1_024;
 // Pi's per-request output clamp keeps 4,096 tokens clear of the window before sizing output.
 export const PI_OUTPUT_CLAMP_SAFETY_TOKENS = 4_096;
@@ -124,6 +126,7 @@ type ProjectedContext = {
 type PiToolSchema = Pick<PiAgentTool, 'name' | 'description' | 'parameters'>;
 
 function estimatePiNonMessageContextCosts(input: {
+  api: PiApi;
   imageMessages: readonly AgentMessage[];
   outputReserveTokens: number;
   systemPrompt: string;
@@ -134,12 +137,12 @@ function estimatePiNonMessageContextCosts(input: {
     (total, tool) => total + estimateTextTokens(serializeTool(tool)),
     0,
   );
-  const imageCount = input.imageMessages.reduce(
-    (total, message) => total + countImages(message),
-    0,
-  );
-  const attachmentTokens =
-    imageCount * Math.max(0, PI_IMAGE_CONTEXT_TOKEN_RESERVE - PI_ESTIMATED_IMAGE_TOKENS);
+  const attachmentTokens = input.imageMessages
+    .flatMap(messageImages)
+    .reduce(
+      (total, image) => total + estimatePiImageTokens(input.api, image) - PI_ESTIMATED_IMAGE_TOKENS,
+      0,
+    );
   const outputReserveTokens = Math.max(0, input.outputReserveTokens);
   const safetyMarginTokens = PI_CONTEXT_SAFETY_MARGIN_TOKENS;
   return {
@@ -194,6 +197,7 @@ export function estimatePiMessageTokens(message: AgentMessage): number {
 
 /** Remaining room for model-loop messages before another provider request. */
 export function estimatePiLoopContextHeadroomTokens(input: {
+  api: PiApi;
   contextWindow: number;
   maxInputTokens?: number;
   messages: AgentMessage[];
@@ -206,6 +210,7 @@ export function estimatePiLoopContextHeadroomTokens(input: {
 }
 
 export function measurePiContext(input: {
+  api: PiApi;
   contextWindow: number;
   maxInputTokens?: number;
   messages: AgentMessage[];
@@ -224,6 +229,7 @@ export function measurePiContext(input: {
     ),
   );
   const fixedCosts = estimatePiNonMessageContextCosts({
+    api: input.api,
     imageMessages: unmeasuredMessages,
     outputReserveTokens: input.outputReserveTokens,
     // Live usage already covers the system prompt, tool definitions, and old images.
@@ -263,6 +269,7 @@ function resolveContextBudget(input: {
 }
 
 export function estimatePiContextFixedCosts(input: {
+  api: PiApi;
   conversation: PiConversation;
   outputReserveTokens: number;
   tools: readonly PiToolSchema[];
@@ -270,6 +277,7 @@ export function estimatePiContextFixedCosts(input: {
   const currentMessages = [input.conversation.prompt, ...(input.conversation.resume ?? [])];
   const currentInputTokens = estimatePiMessagesTokens(currentMessages);
   const fixedCosts = estimatePiNonMessageContextCosts({
+    api: input.api,
     imageMessages: currentMessages,
     outputReserveTokens: input.outputReserveTokens,
     systemPrompt: input.conversation.systemPrompt,
@@ -349,6 +357,7 @@ async function planProjectedContext(
     );
   const currentMessages = input.currentMessages ?? [];
   const fixedCosts = estimatePiNonMessageContextCosts({
+    api: input.model.api,
     imageMessages: currentMessages,
     outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
     systemPrompt: input.systemPrompt,
@@ -366,6 +375,7 @@ async function planProjectedContext(
 
   const measure = (messages: AgentMessage[]) =>
     measurePiContext({
+      api: input.model.api,
       contextWindow: input.model.contextWindow,
       maxInputTokens: input.maxInputTokens,
       messages: [...messages, ...currentMessages],
@@ -796,9 +806,14 @@ function nonAsciiTokenReserve(text: string): number {
   return reserve;
 }
 
-function countImages(message: AgentMessage): number {
-  if (message.role !== 'user' || typeof message.content === 'string') return 0;
-  return message.content.filter((part) => part.type === 'image').length;
+function messageImages(message: AgentMessage): ImageContent[] {
+  if (
+    (message.role !== 'user' && message.role !== 'toolResult') ||
+    typeof message.content === 'string'
+  ) {
+    return [];
+  }
+  return message.content.filter((part): part is ImageContent => part.type === 'image');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

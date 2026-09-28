@@ -78,7 +78,13 @@ export function toPiConversation(
         });
         continue;
       }
-      appendAssistantHistory(historyTurn.messages, message.parts, providerNamesByCallId, model);
+      appendAssistantHistory(
+        historyTurn.messages,
+        message.parts,
+        providerNamesByCallId,
+        model,
+        message.contextTokens,
+      );
     }
     historyTurns.push(historyTurn);
   }
@@ -218,12 +224,14 @@ function appendAssistantHistory(
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
   model: PiModel<PiApi>,
+  contextTokens?: number,
 ): void {
   let content: AssistantMessage['content'] = [];
+  let lastAssistant: AssistantMessage | undefined;
   const flushAssistant = () => {
     if (content.length === 0) return;
     const stopReason = content.some((part) => part.type === 'toolCall') ? 'toolUse' : 'stop';
-    history.push({
+    lastAssistant = {
       api: model.api,
       content,
       model: model.id,
@@ -232,9 +240,9 @@ function appendAssistantHistory(
       stopReason,
       timestamp: Date.now(),
       // Persisted message usage sums multiple requests, not this context's size.
-      // Leave it unknown so Pi estimates the reconstructed history by content.
       usage: EMPTY_PI_USAGE,
-    });
+    };
+    history.push(lastAssistant);
     content = [];
   };
 
@@ -278,6 +286,11 @@ function appendAssistantHistory(
   }
 
   flushAssistant();
+  // The measured size of the request that ended this answer anchors Pi's
+  // estimate; everything replayed after it is estimated by content.
+  if (lastAssistant && contextTokens !== undefined) {
+    lastAssistant.usage = { ...EMPTY_PI_USAGE, input: contextTokens, totalTokens: contextTokens };
+  }
 }
 
 function piToolName(part: Extract<RuntimeMessagePart, { type: 'tool-call' }>): string {

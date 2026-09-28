@@ -1,5 +1,3 @@
-import type { TFunction } from 'i18next';
-
 import type { AgentToolInputPreview } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
@@ -86,11 +84,9 @@ export type ToolGroupSummary = {
   approvalCount: number;
   dangerCount: number;
   state: 'complete' | 'running';
-  tone: ToolStatusTone;
-  warningCount: number;
 };
 
-/** Derives one group-level state and tone from a run of tool calls. */
+/** Derives process state and pending approvals without promoting tool failures to group failures. */
 export function deriveToolGroupSummary(parts: readonly ToolMessagePart[]): ToolGroupSummary {
   const approvalCount = parts.filter((part) => part.state === 'approval-requested').length;
   const dangerCount = parts.filter(
@@ -98,30 +94,11 @@ export function deriveToolGroupSummary(parts: readonly ToolMessagePart[]): ToolG
       part.state === 'output-error' ||
       (part.state === 'output-available' && isRecord(part.output) && part.output.isError === true),
   ).length;
-  const warningCount = parts.filter((part) => getToolStatusTone(part) === 'warning').length;
-
   return {
     approvalCount,
     dangerCount,
     state: parts.some((part) => getToolDisplayState(part) === 'running') ? 'running' : 'complete',
-    tone:
-      dangerCount > 0 ? 'danger' : warningCount > 0 || approvalCount > 0 ? 'warning' : 'default',
-    warningCount,
   };
-}
-
-export function getToolGroupStatusText(summary: ToolGroupSummary, t: TFunction) {
-  return (
-    [
-      summary.approvalCount
-        ? t('chat.toolGroup.approvalCount', { count: summary.approvalCount })
-        : '',
-      summary.dangerCount ? t('chat.toolGroup.failedCount', { count: summary.dangerCount }) : '',
-      summary.warningCount ? t('chat.toolGroup.deniedCount', { count: summary.warningCount }) : '',
-    ]
-      .filter(Boolean)
-      .join(' · ') || undefined
-  );
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

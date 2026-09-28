@@ -147,7 +147,6 @@ describe('ComposerDropArea', () => {
         nativeDropEvent({
           failedCount: 0,
           images: [dropImage('first.jpg'), dropImage('second.jpg')],
-          totalDropped: 2,
         }),
       ),
     );
@@ -179,7 +178,6 @@ describe('ComposerDropArea', () => {
         nativeDropEvent({
           failedCount: 0,
           images: [first],
-          totalDropped: 1,
         }),
       ),
     );
@@ -188,7 +186,6 @@ describe('ComposerDropArea', () => {
         nativeDropEvent({
           failedCount: 0,
           images: [second],
-          totalDropped: 1,
         }),
       ),
     );
@@ -214,69 +211,12 @@ describe('ComposerDropArea', () => {
             },
             { id: 'drop-txt', mediaType: 'text/plain', name: 'note.txt', uri: 'x' },
           ],
-          totalDropped: 2,
         }),
       ),
     );
 
     expect(attachments).toEqual([]);
     expect(mockToastShow).not.toHaveBeenCalled();
-  });
-
-  it('caps a batch at the photo selection limit and says so', async () => {
-    await renderDropArea();
-
-    await act(async () =>
-      mockDropTargetProps?.onDropImages?.(
-        nativeDropEvent({
-          failedCount: 0,
-          images: Array.from({ length: 11 }, (_, index) => dropImage(`photo-${index}.jpg`)),
-          totalDropped: 11,
-        }),
-      ),
-    );
-
-    expect(attachments).toHaveLength(9);
-    expect(attachments.map(({ name }) => name)).not.toContain('photo-9.jpg');
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: expect.stringContaining('chat.attachments.dropLimit'),
-      variant: 'warning',
-    });
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: expect.stringContaining('"added":9'),
-      variant: 'warning',
-    });
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: expect.stringContaining('"total":11'),
-      variant: 'warning',
-    });
-  });
-
-  it('counts natively truncated items in the overflow feedback', async () => {
-    await renderDropArea();
-
-    // The real native event: an 11-image drop delivers at most 9 payloads.
-    await act(async () =>
-      mockDropTargetProps?.onDropImages?.(
-        nativeDropEvent({
-          failedCount: 0,
-          images: Array.from({ length: 9 }, (_, index) => dropImage(`kept-${index}.jpg`)),
-          totalDropped: 11,
-        }),
-      ),
-    );
-
-    // All nine delivered images fit the composer, yet two were discarded
-    // before delivery — the drop total must still reach the feedback.
-    expect(attachments).toHaveLength(9);
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: expect.stringContaining('"added":9'),
-      variant: 'warning',
-    });
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: expect.stringContaining('"total":11'),
-      variant: 'warning',
-    });
   });
 
   it('shows the accept highlight while the drag hovers and clears it on drop', async () => {
@@ -296,7 +236,6 @@ describe('ComposerDropArea', () => {
         nativeDropEvent({
           failedCount: 0,
           images: [dropImage('first.jpg')],
-          totalDropped: 1,
         }),
       ),
     );
@@ -305,49 +244,40 @@ describe('ComposerDropArea', () => {
     );
   });
 
-  it('accepts only the remaining per-message quota and says what was skipped', async () => {
+  it('adds every dropped image, with no per-message cap', async () => {
     await renderDropArea();
-    // The composer already holds eight images: one slot is left.
     const held = Array.from({ length: 8 }, (_, index) => heldImage(`held-${index}.jpg`));
     act(() => composerActionsRef.current?.addAttachments(held));
-    expect(attachments).toHaveLength(8);
 
     await act(async () =>
       mockDropTargetProps?.onDropImages?.(
         nativeDropEvent({
           failedCount: 0,
-          images: [dropImage('a.jpg'), dropImage('b.jpg')],
-          totalDropped: 2,
+          images: [
+            ...Array.from({ length: 11 }, (_, index) => dropImage(`photo-${index}.jpg`)),
+            {
+              id: 'drop-pdf',
+              mediaType: 'application/pdf',
+              name: 'brief.pdf',
+              uri: 'file:///cache/ImageDropTarget/brief.pdf',
+            },
+          ],
         }),
       ),
     );
 
-    expect(attachments).toHaveLength(9);
-    expect(attachments.map(({ name }) => name)).toContain('a.jpg');
-    expect(attachments.map(({ name }) => name)).not.toContain('b.jpg');
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: expect.stringContaining('chat.attachments.dropLimit'),
-      variant: 'warning',
-    });
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: expect.stringContaining('"added":1'),
-      variant: 'warning',
-    });
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: expect.stringContaining('"total":2'),
-      variant: 'warning',
-    });
-    // The rejected overflow copy is a staged file nobody owns anymore.
-    expect(mockConstructedUris).toContain('file:///cache/ImageDropTarget/b.jpg');
-    expect(mockFileDelete).toHaveBeenCalled();
+    expect(attachments).toHaveLength(19);
+    expect(mockToastShow).not.toHaveBeenCalled();
+    // The unsupported payload is a staged copy nobody owns.
+    expect(mockConstructedUris).toContain('file:///cache/ImageDropTarget/brief.pdf');
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
   });
 
   it('reports native staging failures to the user', async () => {
     await renderDropArea();
 
     // The real native event: five items dropped, two failed staging, three
-    // delivered. All three delivered images fit the composer, so the quota
-    // was never approached and the limit toast must stay silent.
+    // delivered.
     await act(async () =>
       mockDropTargetProps?.onDropImages?.(
         nativeDropEvent({
@@ -357,7 +287,6 @@ describe('ComposerDropArea', () => {
             dropImage('survivor-1.jpg'),
             dropImage('survivor-2.jpg'),
           ],
-          totalDropped: 5,
         }),
       ),
     );
@@ -365,10 +294,6 @@ describe('ComposerDropArea', () => {
     expect(attachments).toHaveLength(3);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: expect.stringContaining('chat.attachments.dropFailed'),
-      variant: 'warning',
-    });
-    expect(mockToastShow).not.toHaveBeenCalledWith({
-      label: expect.stringContaining('chat.attachments.dropLimit'),
       variant: 'warning',
     });
   });

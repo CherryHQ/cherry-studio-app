@@ -3324,6 +3324,63 @@ describe('MobileAgentHost', () => {
     );
   });
 
+  test('carries the final request context size into the next turn as its estimate anchor', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const answer = (controller: Parameters<Parameters<FakeRuntime['script']>[0]>[0]) => {
+      requests.push(controller.request);
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'Answer.', state: 'done' },
+      });
+    };
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        answer(controller);
+        controller.emit({ type: 'completed', contextTokens: 42_000 });
+      })
+      .script((controller) => {
+        answer(controller);
+        controller.emit({
+          type: 'failed',
+          error: { code: 'runtime_error', message: 'Provider failed.', retryable: false },
+        });
+      })
+      .script((controller) => {
+        answer(controller);
+        controller.emit({ type: 'completed' });
+      });
+    const host = createHost(fake);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const send = async (text: string) => {
+      events.length = 0;
+      await host.submitMessage({
+        ...messageIds(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text }],
+      });
+      await waitFor(() => terminalTurnEvent(events) !== undefined, text);
+    };
+
+    await send('First.');
+    expect((await store.listMessages(session.id))[1]?.stats?.contextTokens).toBe(42_000);
+
+    await send('Second.');
+    expect(requests[1]?.history.at(-1)?.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      contextTokens: 42_000,
+    });
+    // A failed answer carries no measurement, so the next turn estimates by content.
+    expect((await store.listMessages(session.id))[3]?.stats?.contextTokens).toBeUndefined();
+
+    await send('Third.');
+    expect(
+      requests[2]?.history.flatMap((turn) => turn.messages).some((m) => 'contextTokens' in m),
+    ).toBe(false);
+  });
+
   test('retries the same terminal outcome when persistence fails transiently', async () => {
     const events: AgentEvent[] = [];
     const host = hostWithText(['Recovered']);

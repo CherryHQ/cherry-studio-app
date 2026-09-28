@@ -26,7 +26,12 @@ import {
 } from '@/shared/data/api/schemas/desktopConnections';
 
 import type { DesktopConnectionManager } from './DesktopConnectionManager';
-import { DesktopSession, DesktopUnreachableError, RemoteFailureError } from './DesktopSession';
+import {
+  DesktopSession,
+  DesktopUnreachableError,
+  RemoteFailureError,
+  RemoteTransportError,
+} from './DesktopSession';
 
 type ConnectionStore = Pick<
   DesktopConnectionService,
@@ -348,6 +353,10 @@ function translate(error: unknown): unknown {
   if (error instanceof DesktopUnreachableError) {
     logger.warn('Desktop unreachable', { attempts: error.attempts });
     return desktopError(error.reason, 'Could not connect to the desktop');
+  }
+  if (error instanceof RemoteTransportError) {
+    logger.warn('Desktop request lost', { kind: error.kind });
+    return desktopError('unreachable', 'Could not connect to the desktop');
   }
   if (!(error instanceof RemoteFailureError)) {
     if (error instanceof Error && error.name !== 'AbortError') {

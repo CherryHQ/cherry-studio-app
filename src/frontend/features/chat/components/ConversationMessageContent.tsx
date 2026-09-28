@@ -11,21 +11,25 @@ import { useConversationResourceValue } from '../hooks/useConversationResourceVa
 import { getConversationToolTitle } from './conversationToolTitle';
 
 export function ConversationMessageContent({
-  message,
   children,
-}: PropsWithChildren<{ message: ConversationMessage }>) {
+  messageState,
+  tools,
+}: PropsWithChildren<{
+  messageState?: ConversationMessage['state'];
+  tools?: ConversationMessage['tools'];
+}>) {
   const { t } = useTranslation();
-  if (!message.tools?.length) return children;
+  if (!tools?.length) return children;
   return (
     <ToolRendererProvider
       getToolTitle={(name) => getConversationToolTitle(name, t)}
       renderTool={(part) => {
-        const tool = message.tools?.find((item) => item.key === part.toolCallId);
+        const tool = tools.find((item) => item.key === part.toolCallId);
         return tool ? (
           <MessagePart.Tool
             title={getConversationToolTitle(tool.title, t)}
             state={
-              message.state === 'streaming' &&
+              messageState === 'streaming' &&
               (tool.state === 'streaming' || tool.state === 'input-ready')
                 ? 'running'
                 : 'complete'
@@ -80,11 +84,15 @@ function ConversationResourceSection({
             );
   return <MessagePart.TextSection title={title} value={value} />;
 }
-export function ConversationAttachments({ message }: { message: ConversationMessage }) {
+export function ConversationAttachments({
+  attachments,
+}: {
+  attachments: NonNullable<ConversationMessage['attachments']>;
+}) {
   const { t } = useTranslation();
   return (
     <View className="w-full gap-2">
-      {message.attachments?.map((item) => (
+      {attachments.map((item) => (
         <FileAttachmentPreview
           key={item.key}
           categoryLabel={t('filePreview.document')}

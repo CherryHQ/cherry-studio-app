@@ -100,10 +100,15 @@ export function ChatProvider({ children }: PropsWithChildren) {
   }, [navigation, pathname, router]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') {
-        void client.refreshObservedSessions();
+      if (nextState === 'background') {
+        client.pauseObservedSessions();
+      } else if (nextState === 'active') {
+        void client.resumeObservedSessions();
       }
     });
+    if (AppState.currentState === 'background') {
+      client.pauseObservedSessions();
+    }
 
     return () => subscription.remove();
   }, [client]);

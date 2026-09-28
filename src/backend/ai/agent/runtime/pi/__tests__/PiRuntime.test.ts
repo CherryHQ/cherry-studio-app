@@ -35,7 +35,6 @@ import {
   estimatePiContextFixedCosts,
   estimatePiLoopContextHeadroomTokens,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
-  PI_IMAGE_CONTEXT_TOKEN_RESERVE,
 } from '../contextCompaction';
 import {
   PI_DOCUMENT_ATTACHMENT_ENVELOPE_PREFIX,
@@ -48,6 +47,7 @@ import {
   PI_TOOL_DESCRIBE_TOOL_NAME,
   PI_TOOL_SEARCH_TOOL_NAME,
 } from '../piDeferredToolDiscovery';
+import { estimatePiImageTokens } from '../piImageTokens';
 import {
   DEFAULT_PI_RUNTIME_LIMITS,
   PI_TURN_SETTLE_GRACE_MS,
@@ -230,6 +230,9 @@ function assistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantM
   };
 }
 
+// The fake provider reports usage(3, 2): the final request measured 5 tokens of context.
+const COMPLETED = { type: 'completed', contextTokens: 5 } as const;
+
 async function emitText(context: TestAgentContext, text: string): Promise<void> {
   const starting = assistantMessage({ content: [{ type: 'text', text: '' }] });
   const final = assistantMessage({ content: [{ type: 'text', text }] });
@@ -398,7 +401,6 @@ function compactableHistory() {
         {
           role: 'assistant' as const,
           parts: [{ type: 'text' as const, text: 'Recent.' }],
-          usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
         },
       ],
     },
@@ -551,7 +553,7 @@ describe('Pi invocation capture', () => {
         }),
       ),
     );
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     expect(outputCap).toBeLessThanOrEqual(128_000 - 100_000 - 4_096);
     expect(outputCap).toBeGreaterThanOrEqual(1_024);
     await session.close();
@@ -770,17 +772,19 @@ describe('PiRuntime mapping', () => {
     const events = await collect(session.execute(request));
     const messages = holder.lastOptions?.initialState?.messages ?? [];
     expect(messages.map((message) => message.role)).toEqual(['user', 'assistant', 'toolResult']);
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     expect(events.some((event) => event.type === 'part.add' && event.part.type === 'tool')).toBe(
       false,
     );
     expect(events.some((event) => event.type === 'approval.requested')).toBe(false);
     const withResume = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(request, holder.resolution.model),
       outputReserveTokens: 1024,
       tools: [],
     });
     const withoutResume = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(baseRequest('fresh'), holder.resolution.model),
       outputReserveTokens: 1024,
       tools: [],
@@ -1089,16 +1093,20 @@ describe('PiRuntime mapping', () => {
     model.input = ['text', 'image'];
     const conversation = toPiConversation(baseRequest('document-costs', { input: [part] }), model);
     const costs = estimatePiContextFixedCosts({
+      api: model.api,
       conversation,
       outputReserveTokens: 512,
       tools: [],
     });
     const empty = estimatePiContextFixedCosts({
+      api: model.api,
       conversation: toPiConversation(baseRequest('empty', { input: [] }), model),
       outputReserveTokens: 512,
       tools: [],
     });
-    expect(costs.totalTokens - empty.totalTokens).toBeGreaterThan(PI_IMAGE_CONTEXT_TOKEN_RESERVE);
+    expect(costs.totalTokens - empty.totalTokens).toBeGreaterThan(
+      estimatePiImageTokens(model.api, { type: 'image', mimeType: 'image/png', data: 'AQID' }),
+    );
     const repeated = toPiConversation(
       baseRequest('history-costs', {
         input: [part],
@@ -1315,11 +1323,13 @@ describe('PiRuntime mapping', () => {
       parameters: tool.inputSchema as never,
     }));
     const costs = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(request, holder.resolution.model),
       outputReserveTokens: 512,
       tools: piTools,
     });
     const costsWithoutTextAttachment = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(
         { ...request, input: request.input.filter((_, index) => index !== 1) },
         holder.resolution.model,
@@ -1332,7 +1342,13 @@ describe('PiRuntime mapping', () => {
       systemInstructionsTokens: expect.any(Number),
       currentInputTokens: expect.any(Number),
       toolSchemaTokens: expect.any(Number),
-      attachmentTokens: PI_IMAGE_CONTEXT_TOKEN_RESERVE - 1_200,
+      // Pi's flat 1,200-token image charge is replaced by the dialect estimate.
+      attachmentTokens:
+        estimatePiImageTokens(holder.resolution.model.api, {
+          type: 'image',
+          mimeType: 'image/png',
+          data: 'AAAA',
+        }) - 1_200,
       outputReserveTokens: 512,
       safetyMarginTokens: PI_CONTEXT_SAFETY_MARGIN_TOKENS,
     });
@@ -1350,7 +1366,7 @@ describe('PiRuntime mapping', () => {
     );
   });
 
-  test('budgets replayed history by content instead of cumulative request usage', async () => {
+  test('budgets replayed history by content when no answer carries a measured context', async () => {
     let summaryCalls = 0;
     const runtime = createCompactionRuntime({
       completeSimple: summaryCompletion('Unused summary.', () => {
@@ -1360,13 +1376,9 @@ describe('PiRuntime mapping', () => {
     const holder = arrange(runtime, (context) => emitText(context, 'Short answer.'));
     const session = await runtime.open();
 
-    const history: RuntimeExecutionRequest['history'] = compactableHistory();
-    history[1].messages[1].usage = {
-      inputTokens: 125_000,
-      outputTokens: 1_000,
-      totalTokens: 126_000,
-    };
-    const events = await collect(session.execute(baseRequest('turn-short', { history })));
+    const events = await collect(
+      session.execute(baseRequest('turn-short', { history: compactableHistory() })),
+    );
 
     expect(summaryCalls).toBe(0);
     expect(events.some((event) => event.type === 'context.checkpoint')).toBe(false);
@@ -1404,14 +1416,19 @@ describe('PiRuntime mapping', () => {
       );
 
       expect(events.some((event) => event.type === 'failed')).toBe(false);
-      expect(events.at(-1)).toEqual({ type: 'completed' });
+      expect(events.at(-1)).toEqual(COMPLETED);
       expect(holder.lastOptions?.initialState?.model?.maxTokens).toBe(contextWindow);
       await session.close();
     },
   );
 
   test('reserves output once while respecting independent input and total context limits', () => {
-    const context = { messages: [], systemPrompt: 'x'.repeat(400), tools: [] };
+    const context = {
+      api: 'openai-responses',
+      messages: [],
+      systemPrompt: 'x'.repeat(400),
+      tools: [],
+    };
     const inputCosts = 100 + PI_CONTEXT_SAFETY_MARGIN_TOKENS;
     for (const outputReserveTokens of [512, 32_768]) {
       expect(
@@ -1476,6 +1493,51 @@ describe('PiRuntime mapping', () => {
     },
   );
 
+  test('anchors replayed history on the measured context of the newest answer', async () => {
+    // Six older turns of about 5k tokens by content: well under the 128k window's trigger.
+    const history = (contextTokens?: number): RuntimeExecutionRequest['history'] => [
+      ...Array.from({ length: 6 }, (_, index) => ({
+        turnId: `turn-old-${index}`,
+        messages: [
+          { role: 'user' as const, parts: [{ type: 'text' as const, text: 'x'.repeat(20_000) }] },
+          { role: 'assistant' as const, parts: [{ type: 'text' as const, text: 'Noted.' }] },
+        ],
+      })),
+      {
+        turnId: 'turn-recent',
+        messages: [
+          { role: 'user' as const, parts: [{ type: 'text' as const, text: 'Recent question.' }] },
+          {
+            role: 'assistant' as const,
+            parts: [{ type: 'text' as const, text: 'Recent.' }],
+            ...(contextTokens !== undefined ? { contextTokens } : {}),
+          },
+        ],
+      },
+    ];
+    const run = async (turnId: string, contextTokens?: number) => {
+      let summaryCalls = 0;
+      const runtime = createCompactionRuntime({
+        completeSimple: summaryCompletion('Anchored summary.', () => {
+          summaryCalls += 1;
+        }),
+      });
+      const holder = arrange(runtime, (context) => emitText(context, 'Continued.'));
+      const session = await runtime.open();
+      await collect(session.execute(baseRequest(turnId, { history: history(contextTokens) })));
+      await session.close();
+      return { summaryCalls, first: holder.lastOptions?.initialState?.messages?.[0].role };
+    };
+
+    expect(await run('turn-by-content')).toEqual({ summaryCalls: 0, first: 'user' });
+    // The provider measured the last request near the window: images and
+    // attachments the content estimate undercounts are already in that number.
+    expect(await run('turn-anchored', 125_000)).toEqual({
+      summaryCalls: 1,
+      first: 'compactionSummary',
+    });
+  });
+
   test('compacts at the independent input cap and discards usage for the old prefix', async () => {
     let summaryCalls = 0;
     const runtime = createCompactionRuntime(
@@ -1489,10 +1551,7 @@ describe('PiRuntime mapping', () => {
     const holder = arrange(runtime, (context) => emitText(context, 'Continued.'));
     holder.resolution = { ...holder.resolution, maxInputTokens: 12_000 };
     const history: RuntimeExecutionRequest['history'] = compactableHistory();
-    history[1].messages[1] = {
-      ...history[1].messages[1],
-      usage: { inputTokens: 120_000, outputTokens: 8, totalTokens: 120_008 },
-    };
+    history[1].messages[1] = { ...history[1].messages[1], contextTokens: 120_008 };
     const session = await runtime.open();
 
     const events = await collect(
@@ -1646,6 +1705,7 @@ describe('PiRuntime mapping', () => {
         }),
       ),
     );
+    // The provider reported no input tokens, so no context size is carried forward.
     expect(events.at(-1)).toEqual({ type: 'completed' });
     expect(execute).toHaveBeenCalledTimes(2);
     expect(requests).toHaveLength(3);
@@ -2045,7 +2105,7 @@ describe('PiRuntime mapping', () => {
       ),
     );
 
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     expect(arranged.lastOptions?.initialState?.messages).toEqual([
       { role: 'user', content: omitted, timestamp: expect.any(Number) },
     ]);
@@ -2694,7 +2754,7 @@ describe('PiRuntime mapping', () => {
         output: { value: { total: 1 }, artifacts: [] },
       },
     });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     await session.close();
   });
 
@@ -2764,7 +2824,7 @@ describe('PiRuntime mapping', () => {
         output: errorDetails,
       },
     });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     await session.close();
   });
 
@@ -2845,7 +2905,7 @@ describe('PiRuntime mapping', () => {
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({ input: { query: 'cherry' }, toolCallId: 'corrected-call' }),
     );
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     await session.close();
   });
 
@@ -2926,7 +2986,7 @@ describe('PiRuntime mapping', () => {
         error: { code: 'tool_execution_error' },
       },
     });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     await session.close();
   });
 
@@ -2991,7 +3051,7 @@ describe('PiRuntime mapping', () => {
           event.part.state === 'error',
       ),
     ).toMatchObject({ part: { input, error: { code: 'tool_execution_error' } } });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     await session.close();
   });
 
@@ -3088,7 +3148,7 @@ describe('PiRuntime mapping', () => {
           event.part.providerName === PI_TOOL_CALL_TOOL_NAME,
       ),
     ).toBe(false);
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     await session.close();
   });
 
@@ -3193,7 +3253,7 @@ describe('PiRuntime mapping', () => {
         expect.objectContaining({ toolCallId: 'parallel-call-2', state: 'output-available' }),
       ]),
     );
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     await session.close();
   });
 
@@ -3342,7 +3402,7 @@ describe('PiRuntime mapping', () => {
       session.execute(baseRequest('real-loop', { tools: createWebTools({ webSearch }) })),
     );
 
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     expect(seenTools).toEqual([
       ['web_search', 'web_fetch'],
       ['web_search', 'web_fetch'],
@@ -3409,7 +3469,7 @@ describe('PiRuntime mapping', () => {
     });
     const session = await runtime.open();
     const first = await collect(session.execute(baseRequest('group-first', { tools })));
-    expect(first.at(-1)).toEqual({ type: 'completed' });
+    expect(first.at(-1)).toEqual(COMPLETED);
     expect(read).toHaveBeenCalledTimes(1);
     expect(other).toHaveBeenCalledTimes(1);
 
@@ -3421,7 +3481,7 @@ describe('PiRuntime mapping', () => {
       await emitText(context, 'Fresh answer.');
     });
     const later = await collect(session.execute(baseRequest('group-later', { tools })));
-    expect(later.at(-1)).toEqual({ type: 'completed' });
+    expect(later.at(-1)).toEqual(COMPLETED);
     expect(read).toHaveBeenCalledTimes(2);
     await session.close();
   });
@@ -3718,7 +3778,7 @@ describe('PiRuntime mapping', () => {
       );
 
       expect(executionCount).toBe(allowedCalls);
-      expect(events.at(-1)).toEqual({ type: 'completed' });
+      expect(events.at(-1)).toEqual(COMPLETED);
       const reports = events.filter((event) => event.type === 'usage');
       expect(reports).toMatchObject([
         { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
@@ -3782,7 +3842,7 @@ describe('PiRuntime mapping', () => {
     );
 
     expect(executed).toHaveBeenCalledTimes(20);
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toEqual(COMPLETED);
     await session.close();
   });
 

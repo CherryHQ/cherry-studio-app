@@ -5,12 +5,10 @@ import { Platform, View } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
 import { ImageDropTargetView, type ImageDropEvent } from '../../../../../modules/image-drop-target';
-import { useComposerActions, useComposerState } from '../context/ComposerProvider';
+import { useComposerActions } from '../context/ComposerProvider';
 import {
   cleanupDropStagedFile,
-  COMPOSER_PHOTO_SELECTION_LIMIT,
   createDroppedImageAttachmentDraft,
-  isComposerImageMediaType,
   isDropStagedFile,
   isDroppedImagePayload,
 } from '../utils/composerAttachments';
@@ -27,12 +25,11 @@ type ComposerDropAreaProps = PropsWithChildren<{
  * the drop works anywhere over the chat, not just over the input field.
  *
  * Non-image payloads never reach staging: the native side rejects sessions
- * without image items, and a media-type filter guards the JS side too. The
- * native side caps a drop at the photo-picker limit, and the remaining
- * per-message image quota is enforced here, so the warnings describe the
- * real limit. Every file this module staged but the composer did not accept
- * is deleted — imported ones right after the managed copy, rejected or
- * failed ones when the drop is processed. Dropping needs no photo-library
+ * without image items, and a media-type filter guards the JS side too. A
+ * drop is not capped: like the photo picker, a message holds any number of
+ * images. Every file this module staged but the composer did not accept is
+ * deleted — imported ones right after the managed copy, rejected or failed
+ * ones when the drop is processed. Dropping needs no photo-library
  * permission — the system delivers the data as part of the user's explicit
  * drag.
  *
@@ -44,7 +41,6 @@ export function ComposerDropArea({ children, enabled = true }: ComposerDropAreaP
   // TODO(ios-only): adopt an Android drop surface if one emerges.
   const containerStyle = useResolveClassNames('flex-1');
   const { addAttachments } = useComposerActions();
-  const { attachments } = useComposerState();
   const { toast } = useToast();
   const { t } = useTranslation();
   const [isHoverActive, setIsHoverActive] = useState(false);
@@ -59,17 +55,9 @@ export function ComposerDropArea({ children, enabled = true }: ComposerDropAreaP
       if (images.length === 0 && unsupported.length === 0 && event.failedCount === 0) {
         return;
       }
-      // The per-message quota counts the images the composer already holds,
-      // so a drop can only fill the capacity that is actually left.
-      const heldImageCount = attachments.filter((attachment) =>
-        isComposerImageMediaType(attachment.mediaType),
-      ).length;
-      const remaining = Math.max(0, COMPOSER_PHOTO_SELECTION_LIMIT - heldImageCount);
-      const accepted = images.slice(0, remaining);
-
-      // Files the composer did not accept — unsupported payloads, overflow
-      // over the remaining quota — are staged cache copies nobody owns.
-      for (const image of [...images.slice(remaining), ...unsupported]) {
+      // Unsupported payloads never reach the composer; their staged cache
+      // copies are owned by nobody.
+      for (const image of unsupported) {
         if (isDropStagedFile(image.uri)) {
           void cleanupDropStagedFile(image.uri);
         }
@@ -81,25 +69,11 @@ export function ComposerDropArea({ children, enabled = true }: ComposerDropAreaP
           variant: 'warning',
         });
       }
-      // Staging failures already got their dedicated toast; the quota count
-      // covers only the items that were eligible to reach the composer, so
-      // native truncation still shows up without double-reporting failures.
-      const droppedTotal = event.totalDropped - event.failedCount - unsupported.length;
-      if (droppedTotal > accepted.length) {
-        toast.show({
-          label: t('chat.attachments.dropLimit', {
-            added: accepted.length,
-            limit: COMPOSER_PHOTO_SELECTION_LIMIT,
-            total: droppedTotal,
-          }),
-          variant: 'warning',
-        });
-      }
-      if (accepted.length > 0) {
-        addAttachments(accepted.map((image) => createDroppedImageAttachmentDraft(image)));
+      if (images.length > 0) {
+        addAttachments(images.map((image) => createDroppedImageAttachmentDraft(image)));
       }
     },
-    [addAttachments, attachments, t, toast],
+    [addAttachments, t, toast],
   );
 
   if (Platform.OS !== 'ios' || !ImageDropTargetView) {

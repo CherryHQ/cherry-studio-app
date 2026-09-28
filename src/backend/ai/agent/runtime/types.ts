@@ -180,8 +180,12 @@ export type RuntimeMessagePart =
 export type RuntimeMessage = {
   role: 'user' | 'assistant' | 'system';
   parts: RuntimeMessagePart[];
-  /** Persisted provider usage, when available, for Runtime-owned context estimation. */
-  usage?: RuntimeUsage;
+  /**
+   * Provider-measured context size of the request that produced this assistant
+   * message: everything sent plus its output. Present only on the newest
+   * replayed assistant message, as the anchor for context estimation.
+   */
+  contextTokens?: number;
 };
 
 /** One persisted application turn, kept intact for Runtime-owned context policy. */
@@ -384,6 +388,10 @@ export type RuntimeEvent =
   | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
   | { type: 'context.compaction'; compaction: RuntimeContextCompaction }
   | ({ type: 'usage' } & RuntimeUsageReport)
-  | { type: 'completed' }
+  | {
+      type: 'completed';
+      /** Context size of the final request, when the provider reported its input. */
+      contextTokens?: number;
+    }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' };

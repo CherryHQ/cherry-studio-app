@@ -442,6 +442,52 @@ describe('ChatWorkspace message rendering integration', () => {
     expect(mockPendingSendDisplayed).toHaveBeenCalledWith('user-1');
   });
 
+  test('keys a draft first send by its pending Session while the draft window has no key', () => {
+    const pendingSend: PendingChatSend = {
+      sessionId: 'session-1',
+      isNewSession: true,
+      isSubmitting: true,
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'pending',
+          data: { parts: [{ type: 'text', text: 'Hello' }] },
+        },
+        { id: 'assistant-1', role: 'assistant', status: 'pending', data: { parts: [] } },
+      ],
+    };
+    act(() => {
+      renderer = create(
+        <ChatWorkspace
+          pendingSend={pendingSend}
+          enteringUserMessageId="user-1"
+          onPendingSendDisplayed={mockPendingSendDisplayed}
+          contentBottomInset={96}
+          isAssistantToolbarEnabled={false}
+          keyboardOffset={26}
+          messageWindow={{
+            // A draft history window has no Session and reports an empty key.
+            dataKey: '',
+            hasNewerMessages: false,
+            isLoadingInitial: false,
+            isRefreshing: false,
+            isLoadingNewer: false,
+            isLoadingOlder: false,
+            loadNewer: mockLoadOlder,
+            loadOlder: mockLoadOlder,
+            messages: [],
+            retry: mockRetry,
+          }}
+        />,
+      );
+    });
+
+    // A keyless list would bootstrap LegendList's initial end target from the
+    // empty draft and later retarget the viewport to that stale target.
+    expect(mockMessageListProps?.dataKey).toBe('session-1');
+  });
+
   test('merges live rows with displayable history and passes list layout', () => {
     const pendingUserMessage = createMessage('user-pending', 'user', 'pending');
     const messages = [
@@ -473,6 +519,29 @@ describe('ChatWorkspace message rendering integration', () => {
     const renderMessage = mockMessageListProps?.renderMessage;
     act(() => renderer?.update(createWorkspaceElement(false, messages)));
     expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
+  });
+
+  test('keeps the row renderer and list-wide extraData stable while an answer streams', () => {
+    const history = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    const streaming = (text: string): AgentMessageView => ({
+      ...createMessage('assistant-2', 'assistant', 'streaming'),
+      parts: [{ id: 'assistant-2-text', state: 'streaming', text, type: 'text' }],
+    });
+    mockAgentChatSession = { ...mockAgentChatSession, liveMessages: [streaming('a')] };
+    renderer = renderWorkspace(false, history);
+    const renderMessage = mockMessageListProps?.renderMessage;
+    const extraData = mockMessageListProps?.extraData;
+
+    mockAgentChatSession = { ...mockAgentChatSession, liveMessages: [streaming('ab')] };
+    act(() => renderer?.update(createWorkspaceElement(false, history)));
+
+    // LegendList refreshes every mounted row when extraData changes, so a
+    // streamed chunk must reach only its own row through the item data.
+    expect(mockMessageListProps?.messages.at(-1)?.data.parts).toEqual([
+      expect.objectContaining({ text: 'ab' }),
+    ]);
+    expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
+    expect(mockMessageListProps?.extraData).toBe(extraData);
   });
 
   test('empties the retrying answer while admission runs, so the wait reads as pending', () => {

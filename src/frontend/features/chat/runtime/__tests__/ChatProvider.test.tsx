@@ -13,7 +13,8 @@ import { localImageResult } from '../localImageResult';
 
 const mockDispose = jest.fn();
 const mockInvalidateQueries = jest.fn();
-const mockRefreshObservedSessions = jest.fn();
+const mockPauseObservedSessions = jest.fn();
+const mockResumeObservedSessions = jest.fn();
 const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockStartSession = jest.fn();
@@ -52,7 +53,8 @@ jest.mock('../AgentSessionChatClient', () => ({
   ).isAgentSessionBusy,
   AgentSessionChatClient: jest.fn().mockImplementation(() => ({
     dispose: mockDispose,
-    refreshObservedSessions: mockRefreshObservedSessions,
+    pauseObservedSessions: mockPauseObservedSessions,
+    resumeObservedSessions: mockResumeObservedSessions,
     startSession: mockStartSession,
     submitMessage: mockSubmitMessage,
     getState: () => mockChatState,
