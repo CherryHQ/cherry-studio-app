@@ -342,7 +342,7 @@ test('metadata refs survive reconnect within a grant but never cross a replaceme
   other.source.dispose();
 });
 
-it('carries the rejected send explanation through both the action and its operation snapshot', async () => {
+it('returns the rejected send explanation to the caller and drops the reported command', async () => {
   const test = fixture();
   const command = {
     id: 'send',
@@ -366,8 +366,34 @@ it('carries the rejected send explanation through both the action and its operat
       .getSnapshot()
       .actions.send!.execute({ parts: [{ type: 'text', text: 'hello' }] }),
   ).toMatchObject({ state: 'rejected', failure });
-  expect(handle.operations.getSnapshot()[0]).toMatchObject({ state: 'rejected', failure });
+  expect(test.remote.dismiss).toHaveBeenCalledWith('send');
   handle.dispose();
+  test.source.dispose();
+});
+
+it('drops a first send the caller has already been told was rejected', async () => {
+  const test = fixture();
+  test.remote.start = jest.fn(async () => ({
+    id: 'start',
+    draftId: 'draft',
+    agentId: 'a',
+    workspaceId: 'w',
+    text: 'hello',
+    status: 'rejected' as const,
+    error: 'TARGET_UNAVAILABLE',
+  }));
+  const agent = (await test.source.catalog.listAgents(undefined, signal())).items[0].ref;
+  const workspace = (await test.source.catalog.listWorkspaces!(agent, undefined, signal())).items[0]
+    .ref;
+  const draft = await test.source.catalog.prepareDraft(
+    { agent, workspace, draftId: 'draft' as DraftId },
+    signal(),
+  );
+  await expect(
+    draft.state.getSnapshot().start.execute({ parts: [{ type: 'text', text: 'hello' }] }),
+  ).resolves.toMatchObject({ state: 'rejected', failure: { code: 'target-unavailable' } });
+  expect(test.remote.dismiss).toHaveBeenCalledWith('start');
+  draft.dispose();
   test.source.dispose();
 });
 

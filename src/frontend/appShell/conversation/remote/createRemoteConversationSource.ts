@@ -277,9 +277,15 @@ export function createRemoteConversationSource(
                   const text = remoteInput(value);
                   pending = true;
                   state.set(snapshot());
-                  return outcome(
-                    await remote.start({ draftId: input.draftId, agentId, workspace, text }),
-                  );
+                  const start = await remote.start({
+                    draftId: input.draftId,
+                    agentId,
+                    workspace,
+                    text,
+                  });
+                  // The caller reports a rejection it receives; keep only outcomes discovered later.
+                  if (start.status === 'rejected') remote.dismiss(start.id);
+                  return outcome(start);
                 } catch (error) {
                   return {
                     state: 'rejected',

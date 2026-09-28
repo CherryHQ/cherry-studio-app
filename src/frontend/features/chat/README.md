@@ -99,8 +99,9 @@ Backend.remoteAgent; no Controller provider or Controller query keys remain.
 
 `RemoteComposer` owns text editing and registered/system workspace selection. New conversations call the
 bound Draft start action, existing conversations call Session send, and stop targets a selected
-execution. Backend journals own create/send IDs and uncertain-command recovery. Pending/interrupted
-outcomes remain visible in ConversationOperations; navigation does not resend them. The initiating
+execution. Backend journals own create/send IDs and uncertain-command recovery. Once the submitting request
+returns, uncertain outcomes remain visible in ConversationOperations as one-line statuses; navigation
+does not resend them. The initiating
 route can hand an applied creation to its Session without remounting the composer. Late completion
 from another route cannot navigate the current view. Unsent text is persisted under its stable
 source identity/grant binding, separately from the ephemeral Query scope.

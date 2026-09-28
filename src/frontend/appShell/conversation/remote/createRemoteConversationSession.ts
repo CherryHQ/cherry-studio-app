@@ -203,6 +203,8 @@ export function createRemoteConversationSession(
           pending.add(key);
           publish();
           const command = await run(target, input);
+          // The caller reports a rejection it receives; keep only outcomes discovered later.
+          if (command.status === 'failed') source.dismiss(command.id);
           return commandOutcome(command, operationId(command.id), value);
         } catch (error) {
           return {
