@@ -1,9 +1,15 @@
 # GitCode APK Update Checks
 
 `createAppUpdateModule()` checks the latest stable release of `CherryHQ/cherry-studio-app` on
-GitCode. Settings home and About share the update section and a six-hour in-memory query cache.
-Opening either page checks when the cache is stale; tapping Check for updates refreshes immediately.
-The app never blocks continued use or starts a download without a user action.
+GitCode. The app-wide `AppUpdateObserver` checks after bootstrap, without blocking startup or
+displaying a dialog, and records the result in the shared frontend query cache. Each cold launch
+checks again; returning to the foreground refreshes results older than six hours.
+
+Settings home and About each expose one Check for updates row, with no description. A known newer
+APK adds a `NEW` badge on the right. Opening these pages and tapping the row never initiate a check;
+they only read the recorded result. Tapping a marked row opens confirmation with the current/latest
+versions and the browser-download notice. Cancel does nothing; only confirming Download APK opens
+the browser. Other results appear as toasts after a tap, without adding text beneath the row.
 
 ## Distribution Gate
 
@@ -43,8 +49,11 @@ this public APK. See [Local EAS Builds](../../../../docs/guides/local-builds.md)
   produce an update action.
 - Compare numeric components, so `1.10.0` is newer than `1.9.0`. Never suggest a downgrade. A missing
   release/APK is distinct from up-to-date. Malformed data, timeouts, and network/API failures remain
-  errors and allow retry. A failed refresh hides a previously cached success.
-- On Download APK, recheck the channel and URL, then open the APK URL with the system browser.
+  errors; the background query retries once and can retry on a later app foreground event. An error
+  never claims the app is current. A previously recorded newer version keeps its badge if a later
+  background refresh fails. No background result presents a dialog or toast automatically.
+- The row only opens confirmation for its recorded newer APK. No second download row is rendered.
+- On confirming Download APK, recheck the channel and URL, then open the APK URL with the system browser.
   The browser downloads it and the user installs it. No in-app downloader, installer, package-install
   permission, or native dependency is added. Browser launch errors show retry feedback; the app
   cannot observe browser download progress or installation completion.

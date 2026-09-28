@@ -69,8 +69,10 @@ in `eas.json` points to an App Store Connect app matching the new production bun
 
 ## APK Update Distribution
 
-Only Android builds with `APK_UPDATE_SOURCE=gitcode` show Check for updates and Download APK in
-Settings and About. `production` sets this flag, while `production-google-play` explicitly overrides
+Only Android builds with `APK_UPDATE_SOURCE=gitcode` show Check for updates in Settings and About.
+The app checks in the background after startup. The row reads that result and shows `NEW` for a newer
+APK, with no description; tapping it asks for confirmation before opening the browser download.
+`production` sets this flag, while `production-google-play` explicitly overrides
 it with `disabled`. Development and preview default to disabled. iOS always
 hides the feature, regardless of the flag. Disabled builds also reject detection and download calls.
 

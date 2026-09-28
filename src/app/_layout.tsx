@@ -28,7 +28,11 @@ import {
 import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/observability';
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
-import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
+import {
+  AppUpdateObserver,
+  StartupCoordinator,
+  StartupRouteReadyReporter,
+} from '@/frontend/appShell/startup';
 import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -61,6 +65,7 @@ function RootLayout() {
                           <AppAlertProvider>
                             <BottomSheetProvider>
                               <RouteHeaderProvider rootAction="back">
+                                <AppUpdateObserver />
                                 <BackgroundActivityBridge />
                                 <LanguagePreferenceObserver />
                                 <SystemEntryBridge />

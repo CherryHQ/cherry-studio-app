@@ -1,9 +1,9 @@
-import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
-import { Section, useToast } from '@cherrystudio/ui/components';
+import { Chip, Section, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
+import { appUpdateQueryOptions } from '@/frontend/data/appUpdate';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 
 const UNAVAILABLE_KEYS = {
@@ -12,7 +12,7 @@ const UNAVAILABLE_KEYS = {
   noRelease: 'settings.update.noRelease',
 } as const;
 
-/** Settings owns this subscription; checking never opens a dialog or blocks app usage. */
+/** Settings reads the startup result; only download confirmation is owned by this row. */
 export function AppUpdateSection() {
   const appUpdate = useBackendModule('appUpdate');
   return appUpdate.isEnabled ? <GitcodeAppUpdateSection /> : null;
@@ -20,72 +20,66 @@ export function AppUpdateSection() {
 
 function GitcodeAppUpdateSection() {
   const { t } = useTranslation();
+  const { alert } = useAlert();
   const { toast } = useToast();
   const appUpdate = useBackendModule('appUpdate');
-  const { data, isFetching, isError, refetch } = useQuery({
-    queryKey: ['appUpdate', 'gitcode'],
-    queryFn: ({ signal }) => appUpdate.check(signal),
-    staleTime: 6 * 60 * 60 * 1000,
-    gcTime: 6 * 60 * 60 * 1000,
-    retry: false,
-    refetchOnWindowFocus: false,
+  const { data, isFetching, isError } = useQuery({
+    ...appUpdateQueryOptions(appUpdate),
+    enabled: false,
   });
-  // Never present a stale success as the outcome of a failed refresh.
-  const result = isError ? undefined : data;
-  const available = result?.status === 'available' ? result : undefined;
-  let description = t('settings.update.description');
-  if (isFetching) {
-    description = t('settings.update.checking');
-  } else if (isError) {
-    description = t('settings.update.failed');
-  } else if (result?.status === 'unavailable') {
-    description = t(UNAVAILABLE_KEYS[result.reason]);
-  } else if (result?.status === 'upToDate') {
-    description = t('settings.update.upToDate', { version: result.currentVersion });
-  } else if (available) {
-    description = t('settings.update.availableVersion', {
-      current: available.currentVersion,
-      latest: available.latestVersion,
-    });
-  }
+  // Preserve a known newer version if a later background refresh fails.
+  const available = data?.status === 'available' ? data : undefined;
 
-  const openDownload = async () => {
-    if (!available) return;
-    try {
-      await appUpdate.openDownload(available.downloadUrl);
-    } catch {
-      toast.show({ label: t('settings.update.openFailed'), variant: 'danger' });
+  const showUpdate = () => {
+    if (available) {
+      alert.confirm({
+        title: t('settings.update.confirmTitle'),
+        description: t('settings.update.confirmDescription', {
+          current: available.currentVersion,
+          latest: available.latestVersion,
+        }),
+        confirmLabel: t('settings.update.download'),
+        onConfirm: async () => {
+          try {
+            await appUpdate.openDownload(available.downloadUrl);
+          } catch {
+            toast.show({ label: t('settings.update.openFailed'), variant: 'danger' });
+          }
+        },
+      });
+      return;
+    }
+    if (isFetching) {
+      toast.show({ label: t('settings.update.checking') });
+    } else if (isError) {
+      toast.show({ label: t('settings.update.failed'), variant: 'danger' });
+    } else if (data?.status === 'upToDate') {
+      toast.show({ label: t('settings.update.upToDate', { version: data.currentVersion }) });
+    } else if (data?.status === 'unavailable') {
+      toast.show({ label: t(UNAVAILABLE_KEYS[data.reason]) });
+    } else {
+      toast.show({ label: t('settings.update.checking') });
     }
   };
 
   return (
     <Section>
       <Section.Item
-        accessibilityHint={description}
+        accessibilityHint={available ? t('settings.update.confirmTitle') : undefined}
         accessibilityState={{ busy: isFetching }}
-        description={description}
-        disabled={isFetching}
         label={t('settings.update.check')}
         leading={<RefreshCwIcon className="size-4 text-foreground" />}
-        onPress={() => {
-          void refetch({ cancelRefetch: false });
-        }}
+        onPress={showUpdate}
         showChevron={false}
         testID="settings-check-update"
+        trailing={
+          available ? (
+            <Chip.Tag className="px-2 py-0.5" testID="settings-update-new">
+              <Chip.Label className="text-xs">{t('settings.update.newBadge')}</Chip.Label>
+            </Chip.Tag>
+          ) : undefined
+        }
       />
-      {available && !isFetching ? (
-        <Section.Item
-          accessibilityRole="link"
-          description={t('settings.update.downloadDescription')}
-          accessibilityHint={t('settings.update.downloadDescription')}
-          label={t('settings.update.download')}
-          leading={<DownloadIcon className="size-4 text-foreground" />}
-          onPress={() => {
-            void openDownload();
-          }}
-          testID="settings-open-update"
-        />
-      ) : null}
     </Section>
   );
 }

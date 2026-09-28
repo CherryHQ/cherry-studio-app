@@ -17,6 +17,8 @@ This page tree owns the settings home and every page reached beneath `/settings`
 
 - `components/` contains UI private to the settings home.
 - `components/AppUpdateSection.tsx` is shared with About and owns GitCode APK update feedback for enabled Android builds.
+  It renders one row with an optional `NEW` badge and reads the startup result without requesting it;
+  downloads require confirmation. The row has no description or separate download action.
   Version sources and behavior live in [appUpdate](../../../backend/services/appUpdate/README.md).
 - `hooks/` and `utils/` contain behavior shared by settings child pages.
 - `about/`, `appearance/`, `fontSize/`, `notifications/`, `permissions/`, and `profile/` each own one

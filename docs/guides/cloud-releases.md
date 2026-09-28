@@ -64,7 +64,9 @@ published manually from the matching tag using the same APK, `SHA256SUMS`, and r
 the GitHub release.
 
 The public APK uses `production`, which enables Android update checks against GitCode's
-latest stable mobile release and opens its APK attachment in the system browser when requested.
+latest stable mobile release after app startup. Settings marks the update row with `NEW` when a newer
+APK is recorded. Tapping that row only reads the cached result; users confirm the download before
+its APK attachment opens in the system browser.
 Keep the matching GitCode release and APK published for the app to announce that version; it does
 not fall back to GitHub or the desktop website's release service. `production-google-play`
 explicitly disables this feature, and iOS always disables it regardless of profile. Store artifacts
