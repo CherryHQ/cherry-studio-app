@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { createHttpClient, HttpError } from '@/backend/services/http';
 import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
 
-import { compareReleaseVersions } from './releaseVersion';
+import { compareReleaseVersions, parseReleaseVersion } from './releaseVersion';
 
 const REPOSITORY = 'CherryHQ/cherry-studio-app';
 const ReleaseSchema = z.object({
@@ -32,8 +32,8 @@ export function createAppUpdateModule(): AppUpdateModule {
       if (!isEnabled) return { status: 'unavailable', reason: 'unsupported' };
       const currentVersion = Constants.expoConfig?.version?.trim();
       if (!currentVersion) return { status: 'unavailable', reason: 'unknownVersion' };
-      // Validate locally before making a network request; never infer "up to date" from bad data.
-      compareReleaseVersions(currentVersion, currentVersion);
+      // Reject an unparseable installed version before the request; never infer "up to date" from bad data.
+      parseReleaseVersion(currentVersion);
       let data: unknown;
       try {
         const response = await gitcode.request<unknown>({

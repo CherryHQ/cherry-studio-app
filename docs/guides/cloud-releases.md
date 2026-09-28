@@ -65,8 +65,8 @@ the GitHub release.
 
 The public APK uses `production`, which enables Android update checks against GitCode's
 latest stable mobile release after app startup. Settings marks the update row with `NEW` when a newer
-APK is recorded. Tapping that row only reads the cached result; users confirm the download before
-its APK attachment opens in the system browser.
+APK is recorded. Tapping that row confirms the download when a newer APK is recorded and otherwise
+runs a fresh check; users confirm before the APK attachment opens in the system browser.
 Keep the matching GitCode release and APK published for the app to announce that version; it does
 not fall back to GitHub or the desktop website's release service. `production-google-play`
 explicitly disables this feature, and iOS always disables it regardless of profile. Store artifacts

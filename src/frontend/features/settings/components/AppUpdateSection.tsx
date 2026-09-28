@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { appUpdateQueryOptions } from '@/frontend/data/appUpdate';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
+import type { AppUpdateResult } from '@/shared/contracts/appUpdate';
 
 const UNAVAILABLE_KEYS = {
   unsupported: 'settings.update.unsupported',
@@ -12,7 +13,9 @@ const UNAVAILABLE_KEYS = {
   noRelease: 'settings.update.noRelease',
 } as const;
 
-/** Settings reads the startup result; only download confirmation is owned by this row. */
+type AvailableAppUpdate = Extract<AppUpdateResult, { status: 'available' }>;
+
+/** Settings reads the startup result and refetches on tap; download confirmation is owned here. */
 export function AppUpdateSection() {
   const appUpdate = useBackendModule('appUpdate');
   return appUpdate.isEnabled ? <GitcodeAppUpdateSection /> : null;
@@ -23,42 +26,50 @@ function GitcodeAppUpdateSection() {
   const { alert } = useAlert();
   const { toast } = useToast();
   const appUpdate = useBackendModule('appUpdate');
-  const { data, isFetching, isError } = useQuery({
+  const { data, isFetching, refetch } = useQuery({
     ...appUpdateQueryOptions(appUpdate),
     enabled: false,
   });
   // Preserve a known newer version if a later background refresh fails.
   const available = data?.status === 'available' ? data : undefined;
 
-  const showUpdate = () => {
+  const confirmDownload = (release: AvailableAppUpdate) => {
+    alert.confirm({
+      title: t('settings.update.confirmTitle'),
+      description: t('settings.update.confirmDescription', {
+        current: release.currentVersion,
+        latest: release.latestVersion,
+      }),
+      confirmLabel: t('settings.update.download'),
+      onConfirm: async () => {
+        try {
+          await appUpdate.openDownload(release.downloadUrl);
+        } catch {
+          toast.show({ label: t('settings.update.openFailed'), variant: 'danger' });
+        }
+      },
+    });
+  };
+
+  const checkForUpdates = async () => {
     if (available) {
-      alert.confirm({
-        title: t('settings.update.confirmTitle'),
-        description: t('settings.update.confirmDescription', {
-          current: available.currentVersion,
-          latest: available.latestVersion,
-        }),
-        confirmLabel: t('settings.update.download'),
-        onConfirm: async () => {
-          try {
-            await appUpdate.openDownload(available.downloadUrl);
-          } catch {
-            toast.show({ label: t('settings.update.openFailed'), variant: 'danger' });
-          }
-        },
-      });
+      confirmDownload(available);
       return;
     }
     if (isFetching) {
       toast.show({ label: t('settings.update.checking') });
-    } else if (isError) {
+      return;
+    }
+    toast.show({ label: t('settings.update.checking') });
+    const result = await refetch();
+    if (result.isError || !result.data) {
       toast.show({ label: t('settings.update.failed'), variant: 'danger' });
-    } else if (data?.status === 'upToDate') {
-      toast.show({ label: t('settings.update.upToDate', { version: data.currentVersion }) });
-    } else if (data?.status === 'unavailable') {
-      toast.show({ label: t(UNAVAILABLE_KEYS[data.reason]) });
+    } else if (result.data.status === 'available') {
+      confirmDownload(result.data);
+    } else if (result.data.status === 'upToDate') {
+      toast.show({ label: t('settings.update.upToDate', { version: result.data.currentVersion }) });
     } else {
-      toast.show({ label: t('settings.update.checking') });
+      toast.show({ label: t(UNAVAILABLE_KEYS[result.data.reason]) });
     }
   };
 
@@ -69,7 +80,7 @@ function GitcodeAppUpdateSection() {
         accessibilityState={{ busy: isFetching }}
         label={t('settings.update.check')}
         leading={<RefreshCwIcon className="size-4 text-foreground" />}
-        onPress={showUpdate}
+        onPress={checkForUpdates}
         showChevron={false}
         testID="settings-check-update"
         trailing={

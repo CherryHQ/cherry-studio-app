@@ -53,7 +53,9 @@ this public APK. See [Local EAS Builds](../../../../docs/guides/local-builds.md)
   errors; the background query retries once and can retry on a later app foreground event. An error
   never claims the app is current. A previously recorded newer version keeps its badge if a later
   background refresh fails. No background result presents a dialog or toast automatically.
-- The row only opens confirmation for its recorded newer APK. No second download row is rendered.
+- Tapping the settings row opens confirmation when a newer APK is recorded. Otherwise it runs a
+  fresh check and reports that result, so a failed startup check can be retried in place. No second
+  download row is rendered.
 - On confirming Download APK, recheck the channel and URL, then open the APK URL with the system browser.
   The browser downloads it and the user installs it. No in-app downloader, installer, package-install
   permission, or native dependency is added. Browser launch errors show retry feedback; the app
@@ -68,6 +70,5 @@ and increment their native version code to update existing installations.
 
 Focused tests cover numeric ordering, newer/equal/older releases, attachment selection, unsafe URLs,
 malformed metadata, missing versions, cancellation forwarding, API failures, browser launch errors,
-and disabled channels/platforms. Tests were added without running them. No build, typecheck, or
-application/device acceptance was run. When authorized, exercise newer/current APKs,
+and disabled channels/platforms. Device acceptance still needs newer/current APKs,
 offline/retry/download failure, store builds, and both themes with long translations.
