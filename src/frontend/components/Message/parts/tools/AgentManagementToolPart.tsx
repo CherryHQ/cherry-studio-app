@@ -20,14 +20,9 @@ export function AgentManagementToolPart({ part }: { part: ToolMessagePart }) {
   if (!result?.success) return <GenericToolPart part={part} />;
   const { agent, status } = result.data;
   return (
-    <ContextMenuExclusion className="min-h-11 max-w-full flex-row items-center gap-3 self-start rounded-full border border-border bg-secondary px-4 py-1">
+    <ContextMenuExclusion className="min-h-11 max-w-full flex-row items-center gap-3 self-start rounded-3xl border border-border bg-secondary px-4 py-1">
       <View className="min-w-0 shrink flex-row items-center gap-2">
-        <Text
-          className="min-w-0 shrink font-medium text-base text-foreground"
-          ellipsizeMode="tail"
-          numberOfLines={1}
-          selectable
-        >
+        <Text className="min-w-0 shrink font-medium text-base text-foreground" selectable>
           {agent.name}
         </Text>
         <Text
@@ -37,7 +32,7 @@ export function AgentManagementToolPart({ part }: { part: ToolMessagePart }) {
         >
           ·
         </Text>
-        <Text className="min-w-0 shrink text-muted-foreground text-xs" numberOfLines={1}>
+        <Text className="shrink-0 text-muted-foreground text-xs">
           {t(status === 'created' ? 'chat.agentTool.created' : 'chat.agentTool.updated')}
         </Text>
       </View>

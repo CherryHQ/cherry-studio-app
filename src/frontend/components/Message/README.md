@@ -365,10 +365,10 @@ cancellation, and Protocol correlation. Its neutral options and action layout fo
 sheet, while its footer stays inside keyboard avoidance and the sheet owns the bottom safe area.
 
 
-Successful `agent_create` and `agent_update` parts render compact, single-line saved-Agent capsules
-in the body. Each capsule shows the name and a short status, with a text-only chat action when a
-model is configured. The capsule is bounded by the message width; long names and statuses truncate
-while preserving space for the action. Model metadata is not shown. The capsule uses persisted
+Successful `agent_create` and `agent_update` parts render compact saved-Agent capsules in the
+body. Each capsule shows the name and a short status, with a text-only chat action when a model is
+configured. The capsule fits its content up to the message width; beyond that, the name wraps while
+the status and action keep their width. Model metadata is not shown. The capsule uses persisted
 result metadata; navigation opens the current record, so a later-deleted Agent follows the
 destination's ordinary unavailable state. `ContextMenuExclusion` keeps name selection and the chat
 button separate from the message context menu; the shared button retains native press cancellation.
