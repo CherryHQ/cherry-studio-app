@@ -1,8 +1,8 @@
 import type { MessageListItem } from '@/frontend/components/Message';
 import type {
   AgentMessageView,
-  AgentUserQuestion,
-  AgentUserAnswer,
+  AgentUserQuestions,
+  AgentUserAnswers,
   JsonValue,
 } from '@/shared/contracts/agent';
 import type { ExecutionFailure } from '@/shared/contracts/aiFailure';
@@ -63,7 +63,8 @@ export type Availability =
 export type OperationOutcome<T> =
   | { state: 'applied'; value: T }
   | { state: 'pending'; operationId: string }
-  | { state: 'rejected'; failure: ConversationFailure }
+  /** An operation ID means the rejected input stays recorded for the user to resolve. */
+  | { state: 'rejected'; failure: ConversationFailure; operationId?: string }
   | { state: 'interrupted'; operationId: string };
 export type ConversationAction<Input, Output> = {
   availability: Availability;
@@ -92,7 +93,7 @@ export type ConversationExecution = {
   cancel?: ConversationAction<void, void>;
 };
 export type ResourceValue =
-  | { kind: 'user-question'; question: AgentUserQuestion }
+  | { kind: 'user-question'; question: AgentUserQuestions }
   | { kind: 'question'; questions: readonly InteractionQuestion[] }
   | { kind: 'text'; text: string; complete: true }
   | { kind: 'json'; value: JsonValue; complete: true }
@@ -103,7 +104,7 @@ export type ResourceRead =
   | { kind: 'deferred'; key: string; read(signal: AbortSignal): Promise<ResourceValue> };
 export type ConversationInteractionResponse =
   | InteractionResponse
-  | { kind: 'user-answer'; answer: AgentUserAnswer };
+  | { kind: 'user-answer'; answer: AgentUserAnswers };
 export type ConversationInteraction = {
   execution?: string;
   id: string;

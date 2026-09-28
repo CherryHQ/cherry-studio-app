@@ -8,6 +8,8 @@ export type RemoteStartInput = { draftId: string; agentId: string; text: string 
   | { workspace: RemoteWorkspaceSelection; workspaceId?: never }
   | { workspaceId: string; workspace?: never }
 );
+/** Pending work is recovered by the journal; the other states are final desktop outcomes. */
+export type RemoteOperationStatus = 'pending' | 'applied' | 'rejected' | 'interrupted';
 /** Durable operation views contain product state, never authorization or wire envelopes. */
 export type RemoteCommand = Readonly<{
   id: string;
@@ -17,16 +19,7 @@ export type RemoteCommand = Readonly<{
   sessionId?: string;
   interactionId?: string;
   text?: string;
-  status:
-    | 'confirming'
-    | 'accepted'
-    | 'queued'
-    | 'applied'
-    | 'resolved'
-    | 'cancelled'
-    | 'execution-changed'
-    | 'interrupted'
-    | 'failed';
+  status: RemoteOperationStatus;
   error?: string;
   errorMessage?: string;
 }>;
@@ -37,7 +30,7 @@ export type RemoteStartOperation = Readonly<{
   workspaceId?: string;
   workspace?: RemoteWorkspaceSelection;
   text: string;
-  status: 'pending' | 'applied' | 'rejected' | 'interrupted';
+  status: RemoteOperationStatus;
   sessionId?: string;
   error?: string;
   errorMessage?: string;

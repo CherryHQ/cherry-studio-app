@@ -40,9 +40,11 @@ import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentImageGenerationPort } from '../agentImageGeneration';
+import { AgentReplayCache } from '../AgentReplayCache';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { MobileAgentHost } from '../MobileAgentHost';
+import { createReplayCacheStorage } from './_replayCacheStorage';
 
 const originalAbortController = globalThis.AbortController;
 const originalAbortSignal = globalThis.AbortSignal;
@@ -164,6 +166,7 @@ const stubTool: RuntimeTool = {
 };
 
 type HostOverrides = {
+  replayCache?: AgentReplayCache;
   imageGeneration?: AgentImageGenerationPort;
   traces?: TraceRecorder;
   agents?: AgentDefinitionSource;
@@ -188,6 +191,7 @@ function createHost(
       files,
       inferenceModel: resolveInferenceModel,
       imageGeneration: overrides.imageGeneration,
+      replayCache: overrides.replayCache,
       naming: () => naming,
       runtimeTools: {
         resolve: overrides.resolveRuntimeTools ?? (async () => ({ tools: [], pluginGuides: [] })),
@@ -1329,6 +1333,113 @@ describe('MobileAgentHost', () => {
     },
   );
 
+  test('reopens cached model history in a fresh Host without exposing it in events or stored messages', async () => {
+    const replay = {
+      version: 1 as const,
+      payload: { nativeHistory: 'signature-and-full-tool-output' },
+    };
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
+      { type: 'completed', replay },
+    ]);
+    const { storage } = createReplayCacheStorage();
+    const host = createHost(runtime, undefined, undefined, undefined, undefined, {
+      replayCache: new AgentReplayCache(() => storage),
+    });
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First' }],
+    });
+    await waitFor(
+      () => terminalTurnEvent(events)?.turn.status === 'completed',
+      'the cached replay',
+    );
+    expect(JSON.stringify(events)).not.toContain('signature-and-full-tool-output');
+    expect(JSON.stringify(await store.listMessages(session.id))).not.toContain(
+      'signature-and-full-tool-output',
+    );
+
+    const requests: RuntimeExecutionRequest[] = [];
+    const restarted = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+        requests.push(controller.request);
+        controller.emit({ type: 'completed' });
+      }),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { replayCache: new AgentReplayCache(() => storage) },
+    );
+    const nextEvents: AgentEvent[] = [];
+    await restarted.observeSession(session.id, (event) => nextEvents.push(event));
+    await restarted.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Second' }],
+    });
+    await waitFor(
+      () => terminalTurnEvent(nextEvents)?.turn.status === 'completed',
+      'the replayed turn',
+    );
+    expect(requests[0].history[0].replay).toEqual(replay);
+    expect(JSON.stringify(nextEvents)).not.toContain('signature-and-full-tool-output');
+  });
+
+  test('retry discards cached history for the replaced answer', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'old', type: 'text', text: 'Old answer', state: 'done' },
+    ]);
+    const { storage } = createReplayCacheStorage();
+    const replayCache = new AgentReplayCache(() => storage);
+    const history = await store.listMessages(session.id);
+    replayCache.write(session.id, history[1], { version: 1, payload: 'old-native-answer' });
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([{ type: 'completed' }]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { replayCache },
+    );
+    await host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'retry');
+    expect(replayCache.readHistory(session.id, history)).toEqual({});
+    expect(replayCache.readHistory(session.id, await store.listMessages(session.id))).toEqual({});
+  });
+
+  test('fork copies cached history and deleting each branch clears only its own replay', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'text', type: 'text', text: 'Answer', state: 'done' },
+    ]);
+    const { storage } = createReplayCacheStorage();
+    const replayCache = new AgentReplayCache(() => storage);
+    const history = await store.listMessages(session.id);
+    const replay = { version: 1 as const, payload: 'native-answer' };
+    replayCache.write(session.id, history[1], replay);
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { replayCache },
+    );
+    const fork = await host.forkSession({
+      sessionId: session.id,
+      fromMessageId: reserved.assistantMessage.id,
+    });
+    const forkHistory = await store.listMessages(fork.id);
+    await host.deleteSession({ sessionId: session.id });
+    expect(replayCache.readHistory(session.id, history)).toEqual({});
+    expect(replayCache.readHistory(fork.id, forkHistory)).toEqual({ [forkHistory[1].id]: replay });
+    await host.deleteTurn({ sessionId: fork.id, turnId: forkHistory[1].turnId! });
+    expect(new AgentReplayCache(() => storage).readHistory(fork.id, forkHistory)).toEqual({});
+  });
+
   test('persists a completed checkpoint and replays it after Host recreation', async () => {
     const checkpoint = {
       version: 1 as const,
@@ -2117,11 +2228,16 @@ describe('MobileAgentHost', () => {
   test('answers ask_user_question through the catalog-bound channel of the calling turn', async () => {
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
     const question = {
-      question: 'Which focus?',
-      selection: 'single' as const,
-      options: [
-        { id: 'a', label: 'Writing', description: '' },
-        { id: 'b', label: 'Reading', description: '' },
+      questions: [
+        {
+          id: 'focus',
+          question: 'Which focus?',
+          selection: 'single' as const,
+          options: [
+            { id: 'a', label: 'Writing' },
+            { id: 'b', label: 'Reading' },
+          ],
+        },
       ],
     };
     let answered: unknown;
@@ -2161,7 +2277,9 @@ describe('MobileAgentHost', () => {
         (event) => event.type === 'turn.updated' && event.turn.status === 'awaiting-input',
       ),
     ).toBe(true);
-    const answer = { selectedOptionIds: ['a'], text: '', skipped: false };
+    const answer = {
+      answers: [{ questionId: 'focus', selectedOptionIds: ['a'], text: '', skipped: false }],
+    };
     // A response for another turn never reaches the waiter.
     await expect(
       host.respondQuestion({
@@ -2181,8 +2299,8 @@ describe('MobileAgentHost', () => {
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(answered).toMatchObject({
-      selectedOptionIds: ['a'],
-      selectedOptions: [{ id: 'a', label: 'Writing', description: '' }],
+      answers: answer.answers,
+      selectedOptions: [{ questionId: 'focus', options: [{ id: 'a', label: 'Writing' }] }],
     });
     expect(
       events.some((event) => event.type === 'question.updated' && event.question === null),
@@ -3322,6 +3440,63 @@ describe('MobileAgentHost', () => {
         },
       ]),
     );
+  });
+
+  test('carries the final request context size into the next turn as its estimate anchor', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const answer = (controller: Parameters<Parameters<FakeRuntime['script']>[0]>[0]) => {
+      requests.push(controller.request);
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'Answer.', state: 'done' },
+      });
+    };
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        answer(controller);
+        controller.emit({ type: 'completed', contextTokens: 42_000 });
+      })
+      .script((controller) => {
+        answer(controller);
+        controller.emit({
+          type: 'failed',
+          error: { code: 'runtime_error', message: 'Provider failed.', retryable: false },
+        });
+      })
+      .script((controller) => {
+        answer(controller);
+        controller.emit({ type: 'completed' });
+      });
+    const host = createHost(fake);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const send = async (text: string) => {
+      events.length = 0;
+      await host.submitMessage({
+        ...messageIds(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text }],
+      });
+      await waitFor(() => terminalTurnEvent(events) !== undefined, text);
+    };
+
+    await send('First.');
+    expect((await store.listMessages(session.id))[1]?.stats?.contextTokens).toBe(42_000);
+
+    await send('Second.');
+    expect(requests[1]?.history.at(-1)?.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      contextTokens: 42_000,
+    });
+    // A failed answer carries no measurement, so the next turn estimates by content.
+    expect((await store.listMessages(session.id))[3]?.stats?.contextTokens).toBeUndefined();
+
+    await send('Third.');
+    expect(
+      requests[2]?.history.flatMap((turn) => turn.messages).some((m) => 'contextTokens' in m),
+    ).toBe(false);
   });
 
   test('retries the same terminal outcome when persistence fails transiently', async () => {

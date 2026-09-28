@@ -1,10 +1,10 @@
 import { OpenAIImageModel } from '@ai-sdk/openai/internal';
 import { describe, expect, it } from 'vitest';
 
-// Guards the image hunks in patches/@ai-sdk__openai@3.0.53.patch. The upstream
+// Guards the image hunks in patches/@ai-sdk__openai@3.0.109.patch. The upstream
 // image response schema requires `data[].b64_json`, but aggregator gateways route
 // url-returning models here: CherryIN sends everything that is neither Google nor
-// Qwen to `OpenAIImageModel` (packages/ai-sdk-provider cherryin-provider.ts), and
+// Qwen to `OpenAIImageModel` (@cherrystudio/ai-sdk-provider), and
 // so does dmxapi. Kolors answers with `data: [{ url }]` — a valid HTTP 200 that,
 // unpatched, fails schema validation (AI_TypeValidationError → "Invalid JSON
 // response") and breaks every such generation. The patch makes `b64_json` optional,

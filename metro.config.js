@@ -60,7 +60,14 @@ config = withStorybook(config, {
   enabled: process.env.EXPO_PUBLIC_STORYBOOK_ENABLED === 'true',
 });
 
-module.exports = withUniwindConfig(config, {
+config = withUniwindConfig(config, {
   cssEntryFile: './src/frontend/styles/global.css',
   dtsFile: './src/types/uniwind-types.d.ts',
 });
+
+// Cached transforms can reference generated worklet files from a different EAS build directory.
+if (process.env.EAS_BUILD === '1') {
+  config.cacheStores = [];
+}
+
+module.exports = config;

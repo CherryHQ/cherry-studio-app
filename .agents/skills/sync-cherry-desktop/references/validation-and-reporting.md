@@ -18,7 +18,7 @@ Follow [Testing And CI](../../../../docs/guides/testing-and-ci.md), including fo
 specialized checks, local draft-PR gates, and the remote PR-suite boundary. Do not add a conflicting
 full-local-suite policy here.
 
-- AI ports: owning package and consumer tests, export-boundary checks, and provider-registry
+- AI package upgrades: Mobile consumer tests, export-boundary checks, and provider-registry
   admission gates when compatibility changes.
 - Persisted data: affected schema/migration, preference, serialization, and supported round-trip
   regressions. Do not demand tests for retired desktop-only domains.

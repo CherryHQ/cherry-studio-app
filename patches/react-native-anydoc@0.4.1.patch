@@ -1,5 +1,5 @@
 diff --git a/android/build.gradle b/android/build.gradle
-index 6c2b8d5a2ad8dea655036622a265e2c9c314bb50..f1b3b5d7d8b64c7d821bde71e76f4e66cb22184a 100644
+index 6c2b8d5a2ad8dea655036622a265e2c9c314bb50..de88cfaac3c1418ce2c1f163c5afb4e056afac37 100644
 --- a/android/build.gradle
 +++ b/android/build.gradle
 @@ -14,6 +14,10 @@ apply plugin: 'org.jetbrains.kotlin.android'
@@ -23,3 +23,14 @@ index 6c2b8d5a2ad8dea655036622a265e2c9c314bb50..f1b3b5d7d8b64c7d821bde71e76f4e66
        }
      }
    }
+@@ -64,7 +69,9 @@ dependencies {
+   //noinspection GradleDynamicVersion
+   implementation "com.facebook.react:react-android:+"
+   //noinspection GradleDynamicVersion
+-  implementation "com.facebook.fbjni:fbjni:+"
++  // Match React Native's fbjni. A dynamic version resolves to the newest release,
++  // which wins conflict resolution and breaks React Native's native libraries.
++  implementation "com.facebook.fbjni:fbjni:0.7.0"
+ }
+ 
+ // Nitrogen's generated Kotlin sources + the "boosted by nitro" banner.

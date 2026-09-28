@@ -301,8 +301,9 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 `Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
 
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
-`destructive`, `outline`, `secondary`, `ghost`, and `link` variants, along with loading and disabled
-behavior. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
+`destructive`, `outline`, `secondary`, `ghost`, `link`, and `text` variants, along with loading and disabled
+behavior. `text` uses the link color without an underline for standalone text actions; `link` retains
+its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
 `inline`, `default`, `field`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
 compact zero-horizontal-padding action for headings or prose. The `icon` prop renders an icon before
@@ -390,7 +391,9 @@ persistence:
 
 `SelectionIndicator` is the decorative selected/unselected mark inside a parent checkbox or radio
 row. The parent owns the accessible role, state, and press handling. Use its `overlay` variant when
-the unselected ring sits on imagery and needs a dark contrast fill.
+the unselected ring sits on imagery and needs a dark contrast fill. A form that mixes single and
+multiple choice passes `control="radio"` (dot) or `control="checkbox"` (square check) so the shape,
+not a caption, tells them apart.
 
 `Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
 surfaces: the background is the lightest, the border is stronger, and the label has the highest

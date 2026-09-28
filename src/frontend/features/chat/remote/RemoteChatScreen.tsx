@@ -183,7 +183,8 @@ function RemoteChatSession() {
           key={`${source.scope}:${identity}`}
           initialDraft={drafts[draftKey] ?? ''}
         >
-          <ComposerDismissArea disabled testID="chat-background">
+          {/* Native background taps yield to scrolling and excluded message content. */}
+          <ComposerDismissArea testID="chat-background">
             {opened.error ? (
               <ContentState.Error
                 title={t('remoteAgent.loadFailed')}

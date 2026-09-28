@@ -51,7 +51,6 @@ describe('catalog consumer ownership', () => {
       scope: 'scope',
       ref: { kind: 'desktop', connectionId: 'pc' },
       state,
-      operations: createConversationState([]),
       catalog: {
         cacheScope: 'binding',
         listAgents: jest.fn(

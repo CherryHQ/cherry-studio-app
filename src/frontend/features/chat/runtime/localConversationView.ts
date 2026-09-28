@@ -175,7 +175,7 @@ export function createLocalConversationProjector(input: {
           id: question.toolCallId,
           execution: question.turnId,
           kind: 'question',
-          title: question.question.question,
+          title: question.question.questions.map((item) => item.question).join(' · '),
           state: 'pending',
           input: { kind: 'inline', value: { kind: 'user-question', question: question.question } },
           respond: action<ConversationInteractionResponse, void>(state, false, async (response) => {

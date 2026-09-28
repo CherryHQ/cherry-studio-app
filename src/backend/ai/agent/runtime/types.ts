@@ -180,14 +180,25 @@ export type RuntimeMessagePart =
 export type RuntimeMessage = {
   role: 'user' | 'assistant' | 'system';
   parts: RuntimeMessagePart[];
-  /** Persisted provider usage, when available, for Runtime-owned context estimation. */
-  usage?: RuntimeUsage;
+  /**
+   * Provider-measured context size of the request that produced this assistant
+   * message: everything sent plus its output. Present only on the newest
+   * replayed assistant message, as the anchor for context estimation.
+   */
+  contextTokens?: number;
 };
 
 /** One persisted application turn, kept intact for Runtime-owned context policy. */
 export type RuntimeHistoryTurn = {
   turnId: string | null;
   messages: RuntimeMessage[];
+  replay?: RuntimeTurnReplay;
+};
+
+/** Private per-turn model history; never a public message or an execution binding. */
+export type RuntimeTurnReplay = {
+  version: 1;
+  payload: RuntimeJsonValue;
 };
 
 /** Versioned, opaque Runtime context artifact persisted and replayed by the Host. */
@@ -384,6 +395,11 @@ export type RuntimeEvent =
   | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
   | { type: 'context.compaction'; compaction: RuntimeContextCompaction }
   | ({ type: 'usage' } & RuntimeUsageReport)
-  | { type: 'completed' }
+  | {
+      type: 'completed';
+      /** Context size of the final request, when the provider reported its input. */
+      contextTokens?: number;
+      replay?: RuntimeTurnReplay;
+    }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' };

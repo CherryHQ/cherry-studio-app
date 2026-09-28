@@ -1,4 +1,4 @@
-import { BottomSheet, Button, Input, Section } from '@cherrystudio/ui/components';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -21,18 +21,6 @@ jest.mock('@cherrystudio/ui/components', () => {
     return <MockView {...props}>{children}</MockView>;
   }
   MockButton.Label = MockText;
-  function MockInput(props: object) {
-    return <MockView {...props} />;
-  }
-  function MockSection({ children }: { children?: ReactNode }) {
-    return <MockView>{children}</MockView>;
-  }
-  MockSection.Item = function MockItem(props: object) {
-    return <MockView {...props} />;
-  };
-  MockSection.RadioItem = function MockRadioItem(props: object) {
-    return <MockView {...props} />;
-  };
 
   function MockBottomSheet({
     children,
@@ -53,9 +41,6 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     BottomSheet: MockBottomSheet,
     Button: MockButton,
-    Input: MockInput,
-    Section: MockSection,
-    SelectionIndicator: () => null,
   };
 });
 
@@ -317,38 +302,6 @@ describe('ToolApprovalSheet', () => {
     expect(onRespond).not.toHaveBeenCalled();
     await press(stopLabel);
     expect(onCancel).toHaveBeenCalledTimes(1);
-  });
-
-  test('requires every answer and resets the form when advancing to another request', async () => {
-    const questions = [
-      { question: 'Choose one', multiple: false, options: [{ label: 'A' }, { label: 'B' }] },
-      { question: 'Choose several', multiple: true, options: [{ label: 'C' }, { label: 'D' }] },
-    ];
-    const { onRespond, rerender } = render({ approvals: [makeApproval({ questions })] });
-    const submitLabel = 'remoteAgent.submitAnswers';
-    expect(findButton(submitLabel)?.props.disabled).toBe(true);
-    await press(submitLabel);
-    expect(onRespond).not.toHaveBeenCalled();
-
-    act(() => renderer.root.findAllByType(Section.RadioItem)[0].props.onPress());
-    act(() => renderer.root.findAllByType(Input)[0].props.onChangeText('Custom choice'));
-    expect(renderer.root.findAllByType(Section.RadioItem)[0].props.selected).toBe(false);
-    expect(findButton(submitLabel)?.props.disabled).toBe(true);
-    act(() => renderer.root.findAllByType(Section.Item)[0].props.onPress());
-    act(() => renderer.root.findAllByType(Section.Item)[1].props.onPress());
-    act(() => renderer.root.findAllByType(Section.Item)[0].props.onPress());
-    act(() => renderer.root.findAllByType(Input)[1].props.onChangeText('Extra choice'));
-
-    await press(submitLabel);
-    expect(onRespond).toHaveBeenCalledWith({
-      approvalId: 'approval-1',
-      approved: true,
-      answers: { 'Choose one': 'Custom choice', 'Choose several': 'D, Extra choice' },
-    });
-
-    rerender([makeApproval({ approvalId: 'approval-2', questions })]);
-    expect(findButton(submitLabel)?.props.disabled).toBe(true);
-    expect(renderer.root.findAllByType(Input).map((input) => input.props.value)).toEqual(['', '']);
   });
 
   test('retains asynchronously loaded arguments during the close animation', () => {

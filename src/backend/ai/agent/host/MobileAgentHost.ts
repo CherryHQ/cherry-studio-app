@@ -56,7 +56,7 @@ import {
   AgentRespondQuestionSchema,
   type AgentRespondQuestionInput,
   type AgentPendingQuestion,
-  type AgentUserQuestion,
+  type AgentUserQuestions,
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
@@ -103,6 +103,7 @@ import type {
   RuntimeContextCheckpoint,
   RuntimeEvent,
   RuntimeUsage,
+  RuntimeTurnReplay,
 } from '../runtime';
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
@@ -115,6 +116,7 @@ import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPort } from './agentImageGeneration';
+import type { AgentReplayCache } from './AgentReplayCache';
 import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { buildAgentSystemPrompt } from './agentSystemPrompt';
@@ -185,6 +187,7 @@ export type MobileAgentHostPorts = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
+  replayCache?: AgentReplayCache;
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;
@@ -318,6 +321,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   private get files(): ManagedFileResolver {
     return this.ports.files;
+  }
+
+  /** Storage restore invalidates optional local replay before the Host starts. */
+  resetReplayCacheForRestore(): void {
+    this.ports.replayCache?.resetForRestore();
   }
 
   private get usage(): MobileAgentHostPorts['usage'] {
@@ -515,6 +523,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('SESSION_BUSY', 'The fork point has not settled yet.');
         break;
       case 'forked':
+        this.ports.replayCache?.copyFork(parsed.sessionId, result.session.id, result.messageCopies);
         return result.session;
     }
   }
@@ -544,6 +553,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           fail('SESSION_BUSY', 'The turn has not settled yet.');
           break;
         case 'deleted':
+          this.ports.replayCache?.removeMessages(parsed.sessionId, result.deletedMessageIds);
           break;
       }
 
@@ -604,6 +614,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot: plan.inferenceSnapshot,
       });
+      this.ports.replayCache?.removeMessages(sessionId, [source.assistant.id]);
       this.startReservedTurn(
         sessionId,
         plan.sessionTitle,
@@ -659,6 +670,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (!deleted) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
+      this.ports.replayCache?.removeSession(sessionId);
       this.updateSessionStatus(sessionId, null);
       this.listeners.delete(sessionId);
     } finally {
@@ -745,7 +757,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
    * The call's turn id selects the live turn; a call from a turn that is no
    * longer active fails closed instead of reaching a different session.
    */
-  private async askUserQuestion(question: AgentUserQuestion, call: RuntimeToolCall) {
+  private async askUserQuestion(question: AgentUserQuestions, call: RuntimeToolCall) {
     call.signal.throwIfAborted();
     const state = [...this.activeTurns.values()].find((entry) => entry.turn.id === call.turnId);
     if (!state || state.abortController.signal.aborted) {
@@ -1054,7 +1066,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           ...(plan.retry ? { retry: resume.length ? 'resumed' : 'restarted' } : {}),
         }),
         model: plan.agent.model,
-        history: toRuntimeHistory(plan.history, runtimeAttachments),
+        history: toRuntimeHistory(
+          plan.history,
+          runtimeAttachments,
+          plan.inferenceSnapshot.model.uniqueModelId,
+          this.ports.replayCache?.readHistory(sessionId, plan.history),
+        ),
         contextCheckpoint: plan.runtimeContextCheckpoint,
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
         ...(resume.length ? { resume } : {}),
@@ -1305,7 +1322,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'completed':
-        await this.finalize(sessionId, state, 'completed', null);
+        await this.finalize(sessionId, state, 'completed', null, event.contextTokens, event.replay);
         return true;
       case 'failed':
         state.trace?.setAttributes(traceErrorAttributes(event.error));
@@ -1324,6 +1341,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     state: ActiveTurnState,
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
+    /** The next turn's context-estimate anchor; kept only on a completed answer. */
+    contextTokens?: number,
+    replay?: RuntimeTurnReplay,
   ): Promise<void> {
     const interruption: unknown = state.abortController.signal.reason;
     if (interruption instanceof KeepAliveInterruptionError) {
@@ -1363,8 +1383,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       usage: state.usage ? toAgentUsageView(state.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
-      runtimeStats: { runtimeTiming },
+      runtimeStats: {
+        runtimeTiming,
+        ...(outcome === 'completed' && contextTokens !== undefined ? { contextTokens } : {}),
+      },
     });
+    if (outcome === 'completed') this.ports.replayCache?.write(sessionId, finalized, replay);
     const turn: AgentTurnView = {
       ...state.turn,
       status: outcome,

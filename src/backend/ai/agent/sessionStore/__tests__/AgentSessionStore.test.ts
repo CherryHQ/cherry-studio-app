@@ -609,6 +609,12 @@ describe.each([
     expect(await store.getSession(fork.id)).toEqual(fork);
 
     const copied = await store.listMessages(fork.id);
+    expect(result.messageCopies).toEqual(
+      copied.map((message, index) => ({
+        source: { id: original[index].id, turnId: original[index].turnId },
+        target: { id: message.id, turnId: message.turnId },
+      })),
+    );
     expect(copied.map((message) => message.role)).toEqual([
       'user',
       'assistant',

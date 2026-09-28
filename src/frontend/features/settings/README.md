@@ -16,6 +16,10 @@ This page tree owns the settings home and every page reached beneath `/settings`
 ## Organization
 
 - `components/` contains UI private to the settings home.
+- `about/useAppUpdateCheck.ts` owns GitCode APK update feedback for enabled Android builds.
+  About shows one row with an optional `NEW` badge and reads the startup result without requesting it;
+  downloads require confirmation. Version sources and behavior live in
+  [appUpdate](../../../backend/services/appUpdate/README.md).
 - `hooks/` and `utils/` contain behavior shared by settings child pages.
 - `about/`, `appearance/`, `fontSize/`, `notifications/`, `permissions/`, and `profile/` each own one
   direct child page.

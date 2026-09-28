@@ -60,15 +60,14 @@ native module ownership and the network-independent pairing migration.
 
 ## Shared packages
 
-- `packages/remote-protocol`: mirrored from the desktop repository (`desktop-sync-manifest.json`
-  domain `remote-protocol`, strategy `semantic-port`; only `package.json` differs). Backend-only
-  import. Its tests (`applyAgentEvents`, `installAgentCheckpoint`, canonical encoding) run unchanged
-  under Vitest.
-- `packages/remote-transport`: mirrored the same way. Its Node tests pass under the mobile
-  toolchain; the app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
-  along with the service registry (Jest cannot resolve it). Android device pairing and configuration sync were verified against the desktop on 2026-09-22.
-  Metro applies the libp2p legacy browser maps so native bundles use the pure-JS entries.
-  iOS interoperability and Agent execution remain unverified.
+- `@cherrystudio/remote-protocol@0.1.0` comes from npm. Its published exports include the Agent,
+  configuration, failure, and connection contracts; Mobile owns only its consumers and adapters.
+- `@cherrystudio/remote-transport@0.1.0` comes from npm and depends on the matching protocol
+  version. The app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
+  along with the service registry. Metro applies the libp2p legacy browser maps so native bundles
+  use the pure-JS entries. Android pairing and configuration sync were verified against the former
+  source-direct packages on 2026-09-22; the published artifacts, iOS interoperability, and Agent
+  execution still require device acceptance.
 - RN `WebSocket` is wrapped into the transport's `RemoteSocket` shape (`binaryType = 'arraybuffer'`,
   `bufferedAmount` reported as 0, `close(code)`).
 

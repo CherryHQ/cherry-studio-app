@@ -40,6 +40,7 @@ import type {
   DeleteTurnInput,
   DeleteTurnResult,
   FinalizeAssistantMessageInput,
+  ForkedMessageCopy,
   ForkSessionInput,
   ForkSessionResult,
   ReserveInitialSubmissionInput,
@@ -279,6 +280,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
 
       const forkedTurnIds = new Map<string, string>();
+      const messageCopies: ForkedMessageCopy[] = [];
       // Serial inserts, not one multi-row statement: the copy relies on the
       // generated UUID v7 ids staying monotonic in transcript order, and a
       // batched insert would also risk the bound-parameter ceiling on a long
@@ -286,6 +288,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       let forkBoundaryMessageId: string | undefined;
       for (const row of copied) {
         const copiedMessageId = createOrderedUuid();
+        const copiedTurnId = reissueTurnId(forkedTurnIds, row.turnId);
         await tx.insert(agentSessionMessageTable).values({
           // Deliberate exception to the "never write createdAt" rule in
           // `_columnHelpers.ts`: the fork presents the same history, so its
@@ -305,8 +308,12 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           // contextCheckpoint is deliberately dropped: it is a Runtime-private
           // artifact anchored to a turn id that this copy no longer carries, so
           // the fork's first execution replays full history instead.
-          turnId: reissueTurnId(forkedTurnIds, row.turnId),
+          turnId: copiedTurnId,
           usage: row.usage,
+        });
+        messageCopies.push({
+          source: { id: row.id, turnId: row.turnId },
+          target: { id: copiedMessageId, turnId: copiedTurnId },
         });
         if (row.id === anchor.id) {
           forkBoundaryMessageId = copiedMessageId;
@@ -322,7 +329,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .where(eq(agentSessionTable.id, forked.id))
         .returning();
 
-      return { session: toAgentSessionView(forkedWithBoundary), status: 'forked' };
+      return { session: toAgentSessionView(forkedWithBoundary), status: 'forked', messageCopies };
     });
   }
 

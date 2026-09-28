@@ -20,7 +20,6 @@ import {
 } from '../conversationState';
 import type {
   ConversationInput,
-  ConversationOperation,
   HistoryCursor,
   HistoryVersion,
   OperationId,
@@ -33,6 +32,7 @@ import {
   remoteConversationFailure,
   remoteMessage,
   remoteTranscriptMessage,
+  undeliveredMessage,
 } from './remoteConversationViews';
 
 export const REMOTE_INPUT_POLICY = {
@@ -54,16 +54,14 @@ export function remoteInput(input: ConversationInput): string {
     throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
   return text;
 }
-export function commandOutcome<T>(
-  command: RemoteCommand,
-  id: OperationId,
-  value: T,
-): OperationOutcome<T> {
+function commandOutcome<T>(command: RemoteCommand, id: OperationId, value: T): OperationOutcome<T> {
   if (command.status === 'applied') return { state: 'applied', value };
-  if (command.status === 'failed')
+  if (command.status === 'rejected')
     return {
       state: 'rejected',
       failure: remoteConversationFailure({ code: command.error, detail: command.errorMessage }),
+      // Only a send stays recorded as the Session's undelivered message.
+      ...(command.kind === 'send' ? { operationId: id } : {}),
     };
   if (command.status === 'interrupted') return { state: 'interrupted', operationId: id };
   return { state: 'pending', operationId: id };
@@ -122,61 +120,6 @@ export function createRemoteConversationSession(
   const project = (message: Parameters<typeof remoteMessage>[0]) =>
     remoteMessage(message, resource);
   const operationId = (id: string) => refs.issue<OperationId>('operation', id);
-  const operations = createConversationState<readonly ConversationOperation[]>([]);
-  function updateOperations() {
-    operations.set(
-      source
-        .getCommands()
-        .filter((command) => command.sessionId === ref.sessionId && command.kind !== 'create')
-        .map((command) => ({
-          id: operationId(command.id),
-          kind: command.kind === 'create' ? 'start' : command.kind,
-          state:
-            command.status === 'applied'
-              ? 'applied'
-              : command.status === 'failed'
-                ? 'rejected'
-                : command.status === 'interrupted'
-                  ? 'interrupted'
-                  : 'pending',
-          conversation: ref,
-          ...(command.text
-            ? { input: { parts: [{ type: 'text' as const, text: command.text }] } }
-            : {}),
-          ...(command.error
-            ? {
-                failure: remoteConversationFailure({
-                  code: command.error,
-                  detail: command.errorMessage,
-                }),
-              }
-            : {}),
-          ...(!['confirming', 'accepted', 'queued'].includes(command.status)
-            ? {
-                dismiss: () => {
-                  assertCurrent();
-                  source.dismiss(command.id);
-                },
-              }
-            : {}),
-          recovery: {
-            availability: remoteAvailability(source.getState(), disposed),
-            execute: async () => {
-              try {
-                assertCurrent();
-                await source.recover(command.id);
-                const current = source.getCommands().find((item) => item.id === command.id);
-                return current
-                  ? commandOutcome(current, operationId(command.id), undefined)
-                  : { state: 'rejected', failure: { code: 'not-found', retry: 'none' } };
-              } catch (error) {
-                return { state: 'rejected', failure: remoteConversationFailure(error) };
-              }
-            },
-          },
-        })),
-    );
-  }
   function action<Input, Output>(
     key: string,
     target: string | undefined,
@@ -221,6 +164,15 @@ export function createRemoteConversationSession(
   }
   function snapshot(): RemoteConversationSnapshot {
     const sourceState = source.getState();
+    const send = action<ConversationInput, Submission>(
+      'send',
+      latest?.sendTarget,
+      (target, input) => source.send(target, remoteInput(input)),
+      { conversation: ref },
+    );
+    const undelivered = source
+      .getCommands()
+      .findLast((command) => command.kind === 'send' && command.sessionId === ref.sessionId);
     return {
       title: session.title,
       agentId: session.agentId,
@@ -309,15 +261,13 @@ export function createRemoteConversationSession(
               }
             : {}),
         })) ?? [],
-      actions: {
-        inputPolicy: REMOTE_INPUT_POLICY,
-        send: action<ConversationInput, Submission>(
-          'send',
-          latest?.sendTarget,
-          (target, input) => source.send(target, remoteInput(input)),
-          { conversation: ref },
-        ),
-      },
+      actions: { inputPolicy: REMOTE_INPUT_POLICY, send },
+      undelivered:
+        undelivered &&
+        undeliveredMessage(undelivered, operationId(undelivered.id), send, () => {
+          assertCurrent();
+          source.discard(undelivered.id);
+        }),
     };
   }
   const state = createConversationState(snapshot());
@@ -334,15 +284,12 @@ export function createRemoteConversationSession(
     sourceStatus = status;
     if (status === 'retired') lifetime.abort();
     publish();
-    updateOperations();
   });
-  const unoperations = source.subscribeOperations(updateOperations);
-  updateOperations();
+  const unoperations = source.subscribeOperations(publish);
   const handle: RemoteConversationSession = {
     ref,
     scope,
     state,
-    operations,
     activate: () => {
       assertCurrent();
       if (++observers === 1)

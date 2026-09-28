@@ -19,6 +19,7 @@ import type {
   RuntimeInputPart,
   RuntimeMessage,
   RuntimeMessagePart,
+  RuntimeTurnReplay,
 } from '../runtime';
 
 export type RuntimeAttachmentContents = ReadonlyMap<string, RuntimeInputPart>;
@@ -54,8 +55,12 @@ export function toRuntimeInputParts(
 export function toRuntimeHistory(
   messages: AgentMessageView[],
   attachments: RuntimeAttachmentContents = new Map(),
+  /** The turn's model: a context anchor measured by another model's tokenizer is not used. */
+  anchorModelId?: string,
+  runtimeReplays: Readonly<Record<string, RuntimeTurnReplay>> = {},
 ): RuntimeHistoryTurn[] {
   const history: RuntimeHistoryTurn[] = [];
+  const anchor = contextAnchor(messages, anchorModelId);
   for (const message of messages) {
     const parts: RuntimeMessagePart[] = [];
     for (const part of message.parts) {
@@ -112,23 +117,46 @@ export function toRuntimeHistory(
       }
     }
     const currentTurn = history.at(-1);
-    const runtimeTurn =
+    const runtimeTurn: RuntimeHistoryTurn =
       message.turnId !== null && currentTurn?.turnId === message.turnId
         ? currentTurn
         : { turnId: message.turnId, messages: [] };
     if (runtimeTurn !== currentTurn) {
       history.push(runtimeTurn);
     }
+    if (message.role === 'assistant' && message.status === 'success') {
+      const replay = runtimeReplays[message.id];
+      if (replay) runtimeTurn.replay = replay;
+    }
     if (parts.length > 0) {
       const runtimeMessage: RuntimeMessage = {
         role: message.role,
         parts,
-        ...(message.role === 'assistant' && message.usage ? { usage: message.usage } : {}),
+        ...(message === anchor.message ? { contextTokens: anchor.contextTokens } : {}),
       };
       runtimeTurn.messages.push(runtimeMessage);
     }
   }
   return history;
+}
+
+/**
+ * Only the newest assistant message may anchor the estimate: it follows any
+ * context checkpoint, and its measurement already covers everything before it.
+ * A failed, cancelled, or retried answer carries no measurement, so the next
+ * turn falls back to estimating by content.
+ */
+function contextAnchor(
+  messages: readonly AgentMessageView[],
+  modelId: string | undefined,
+): { message?: AgentMessageView; contextTokens?: number } {
+  const newest = messages.findLast((message) => message.role === 'assistant');
+  const contextTokens = newest?.stats?.contextTokens;
+  if (!newest || modelId === undefined || newest.modelId !== modelId) return {};
+  if (typeof contextTokens !== 'number' || !Number.isFinite(contextTokens) || contextTokens <= 0) {
+    return {};
+  }
+  return { message: newest, contextTokens };
 }
 
 /** Preserve message-scoped plugin intent as user content, without changing the stored text. */

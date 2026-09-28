@@ -25,7 +25,8 @@ type UseLogoDrawProgressOptions = {
 /**
  * Drives the master progress: the orange phase is one ease-in-out ramp up to
  * the check segment, then a spring lands (and slightly overshoots) the green
- * check. Returns `play`, which (re)starts the timeline from zero.
+ * check. Returns `play`, which (re)starts the timeline from zero, and
+ * `finish`, which jumps it to the settled end.
  *
  * In controlled mode nothing is driven; `onSettle` fires each time the
  * external progress crosses 1 from below.
@@ -35,7 +36,7 @@ export function useLogoDrawProgress({
   controlled,
   autoPlay,
   onSettle,
-}: UseLogoDrawProgressOptions): () => void {
+}: UseLogoDrawProgressOptions): { play: () => void; finish: () => void } {
   // Keep the settle callback identity-stable so play() and the animated
   // reaction never rebuild when the caller passes a fresh closure.
   const settleRef = useRef(onSettle);
@@ -60,6 +61,15 @@ export function useLogoDrawProgress({
     );
   }, [controlled, progress, settle]);
 
+  const finish = useCallback(() => {
+    if (controlled) {
+      return;
+    }
+    cancelAnimation(progress);
+    progress.value = 1;
+    settle();
+  }, [controlled, progress, settle]);
+
   useEffect(() => {
     if (autoPlay && !controlled) {
       play();
@@ -76,5 +86,5 @@ export function useLogoDrawProgress({
     [controlled, progress],
   );
 
-  return play;
+  return { play, finish };
 }

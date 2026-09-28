@@ -564,21 +564,32 @@ desktop event labels or persistence shapes.
 `ask_user_question` is a core system tool, available when the model supports tool calls and the
 Agent does not use automatic approval. Choosing automatic approval means the user does not want the
 turn to stop for them, so that mode withholds the tool and the model asks for missing decisions in
-its reply. It asks
-one bounded question with two to four options and single or multiple selection. The tool waits
-for a user response; it is not a tool-approval request and never auto-selects an answer. A custom
+its reply. One call contains one to eight questions with unique IDs, each with up to four concise
+options and single or multiple selection. An empty options array requests free text only. The tool
+waits for a user response; it is not a tool-approval request and never auto-selects an answer. A custom
 text answer and skipping are always available. Skipping does not authorize an action.
 
 The Host supplies the response channel to the catalog through turn preparation; each call carries
 its turn id, so the Host correlates the question to the live turn and tool-call ID. The Protocol
 publishes `question.updated` and includes `pendingQuestion` in observation snapshots. While a
-question is pending, the turn reports `awaiting-input`. The mobile chat displays a non-dismissible
-bottom sheet, locks the ordinary composer, and accepts single-tap answers, multi-selection plus
-Continue, free text, Skip, or Stop. Approval requests take presentation priority if tools were
-called concurrently. A second simultaneous question is rejected.
+question is pending, the turn reports `awaiting-input`. A question sheet opens over the chat and
+leaves the ordinary input's draft intact; desktop question forms in remote chat reuse the same sheet
+through the shared interaction contract. It shows one question at a time with its full text in the
+scrolling body, radio options for a single choice, and checkboxes for multiple. Choosing never
+navigates; tapping a selected option clears it so the answer can return to free text only or be
+skipped. The footer action reads skip until the question is answered, next once it is, and submit on
+the last question, with previous beside it. Choices and free text remain editable until the user
+submits the complete set; local submission marks any unanswered question skipped.
+Skip never submits or cancels the turn. There is no close control.
+Turn cancellation discards the pending request without submitting answers. Approval requests take
+presentation priority if tools were called concurrently, without discarding the question draft.
+When the source is no longer current, the sheet closes while preserving its draft so navigation and
+connection recovery stay reachable; the same request reopens when the source recovers.
+A second simultaneous question call is rejected.
 
 Question arguments and successful answers use ordinary persisted tool parts. The transcript shows
-a read-only question/answer record. Pending callbacks and waiting state are memory-only, like
+a flat read-only record of every question and answer, associated by `questionId`. Missing, duplicate,
+unknown, or invalid answers reject the whole response without settling the wait. Pending callbacks and waiting state are memory-only, like
 approvals: leaving a route does not cancel the turn, but cancellation, host disposal, and process
 restart invalidate the question. Persisted unanswered questions are not resumable controls.
 

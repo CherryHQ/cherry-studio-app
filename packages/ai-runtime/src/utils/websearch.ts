@@ -1,4 +1,4 @@
-import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
+import type { WebSearchToolConfigMap } from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import {
@@ -12,6 +12,20 @@ import type { AppProviderId } from '../types';
 export interface CherryWebSearchConfig {
   maxResults: number;
 }
+
+export type WebSearchPluginConfig = WebSearchToolConfigMap & {
+  openrouter?: {
+    plugins?: {
+      id: 'web';
+      max_results?: number;
+      search_prompt?: string;
+    }[];
+    web_search_options?: {
+      max_results?: number;
+      search_prompt?: string;
+    };
+  };
+};
 
 export function getWebSearchParams(model: Model): Record<string, unknown> {
   if (model.providerId === 'hunyuan') {

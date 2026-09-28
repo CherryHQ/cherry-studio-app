@@ -1,30 +1,23 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type {
-  ConversationOperation,
-  RemoteConversationSource,
-} from '@/frontend/appShell/conversation/remote';
+import type { RemoteConversationSource } from '@/frontend/appShell/conversation/remote';
 import type { RemoteChatTarget } from '@/frontend/appShell/navigation/chat';
 
 import { useRemoteChatNavigation } from '../useRemoteChatNavigation';
 
 const mockOpen = jest.fn();
-const mockReplace = jest.fn();
+const mockSetParams = jest.fn();
 let mockFocused = true;
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => ({ setParams: mockSetParams }),
   useIsFocused: () => mockFocused,
 }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   useChatSource: () => ({ openRemote: mockOpen }),
-  conversationHref: (ref: unknown) => ref,
 }));
-let operations: readonly ConversationOperation[];
-const source = { operations: { getSnapshot: () => operations } } as Pick<
-  RemoteConversationSource,
-  'operations'
->;
+let submitted = false;
+const source: Pick<RemoteConversationSource, 'hasSubmission'> = { hasSubmission: () => submitted };
 let navigation: ReturnType<typeof useRemoteChatNavigation>;
 let renderer: ReactTestRenderer;
 function Probe({ target }: { target: RemoteChatTarget }) {
@@ -46,7 +39,7 @@ async function render(target: RemoteChatTarget) {
   });
 }
 beforeEach(() => {
-  operations = [];
+  submitted = false;
   mockFocused = true;
   jest.clearAllMocks();
 });
@@ -63,26 +56,23 @@ it('retargets an unsent draft without changing its composer or desktop identity'
   await render(mockOpen.mock.lastCall![0]);
   expect(navigation.identity).toBe(identity);
   expect(navigation.draftId).toBe('draft');
-  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockSetParams).not.toHaveBeenCalled();
 });
 
-it.each(['pending', 'interrupted', 'applied', 'rejected'] as const)(
-  'separates a submitted draft (%s) and rejects its late result even before route rendering',
-  async (state) => {
-    await render(draft);
-    const oldResult = navigation.onSessionCreated;
-    // Admission is newer than the rendered header.
-    operations = [{ id: 'start', kind: 'start', draftId: 'draft', state } as ConversationOperation];
-    await act(async () => navigation.selectAgent('b'));
-    const target = mockOpen.mock.lastCall![0];
-    expect(target).toMatchObject({ connectionId: 'desktop', agentId: 'b' });
-    expect(target.draftId).not.toBe('draft');
-    expect(oldResult(created)).toBe(false);
-    await render(target);
-    expect(oldResult(created)).toBe(false);
-    expect(mockReplace).not.toHaveBeenCalled();
-  },
-);
+it('separates a submitted draft and rejects its late result even before route rendering', async () => {
+  await render(draft);
+  const oldResult = navigation.onSessionCreated;
+  // Admission is newer than the rendered header.
+  submitted = true;
+  await act(async () => navigation.selectAgent('b'));
+  const target = mockOpen.mock.lastCall![0];
+  expect(target).toMatchObject({ connectionId: 'desktop', agentId: 'b' });
+  expect(target.draftId).not.toBe('draft');
+  expect(oldResult(created)).toBe(false);
+  await render(target);
+  expect(oldResult(created)).toBe(false);
+  expect(mockSetParams).not.toHaveBeenCalled();
+});
 
 it('selecting from an existing conversation opens a new draft instead of changing its Agent', async () => {
   await render({ connectionId: 'desktop', sessionId: 'existing' });
@@ -100,8 +90,8 @@ it('accepts only the current focused draft handoff and preserves its composer ac
   await act(async () => {
     expect(navigation.onSessionCreated(created)).toBe(true);
   });
-  expect(mockReplace).toHaveBeenCalledWith(created);
-  await render({ connectionId: 'desktop', sessionId: 'created' });
+  expect(mockSetParams).toHaveBeenCalledWith({ sessionId: 'created', draftId: undefined });
+  await render({ ...draft, sessionId: 'created', draftId: undefined });
   expect(navigation.identity).toBe(identity);
   const result = navigation.onSessionCreated;
   await act(async () => renderer.unmount());
@@ -135,9 +125,9 @@ it('accepts recovered creation from a child effect after mount, and ignores it w
   await act(async () => {
     renderer = create(<RecoveringRoute />);
   });
-  expect(mockReplace).toHaveBeenCalledTimes(1);
+  expect(mockSetParams).toHaveBeenCalledTimes(1);
   mockFocused = false;
   await render(draft);
   expect(navigation.onSessionCreated(created)).toBe(false);
-  expect(mockReplace).toHaveBeenCalledTimes(1);
+  expect(mockSetParams).toHaveBeenCalledTimes(1);
 });

@@ -99,10 +99,14 @@ describe('Pi API adapters', () => {
       maxRetries: 0,
       maxTokens: 2048,
       temperature: 0.2,
+      cacheRetention: 'none',
+      sessionId: 'stable-conversation',
     });
     const model = { api: testCase.api } as PiModel<SupportedPiApi>;
     const signal = new AbortController().signal;
     const result = streamFn(model, context, {
+      cacheRetention: 'long',
+      sessionId: 'per-request-id',
       fetch: jest.fn() as unknown as FetchFunction,
       headers: { 'X-Request': 'request' },
       maxTokens: 32,
@@ -123,6 +127,8 @@ describe('Pi API adapters', () => {
         reasoning: 'high',
         signal,
         temperature: 0.2,
+        cacheRetention: 'none',
+        sessionId: 'stable-conversation',
       }),
     );
   });

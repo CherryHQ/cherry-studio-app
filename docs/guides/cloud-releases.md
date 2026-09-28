@@ -6,8 +6,8 @@ Push a version tag such as `v0.1.0` or `v0.1.0-beta.1` to trigger the
 Stable tags such as `v0.1.0` also trigger the independent
 [Google Play AAB](../../.github/workflows/google-play-release.yml) workflow; prerelease tags do not.
 The tag's base version must match `expo.version` in `app.json`; update and commit the version before
-tagging. GitHub APK and iOS builds use the EAS `production` profile. Google Play builds use
-`production-google-play`, which inherits the production identity, environment, signing credentials,
+tagging. Public APK and iOS builds use the existing EAS `production` profile.
+Google Play builds use `production-google-play`, which inherits the production identity, environment, signing credentials,
 and automatic native build-number increments, but generates an AAB instead of an APK. Both Android
 profiles retain the current ARM64-only device support.
 
@@ -62,6 +62,15 @@ build numbers even when they share a release tag.
 GitHub prepares a draft, attaches the files, and publishes it automatically. GitCode releases are
 published manually from the matching tag using the same APK, `SHA256SUMS`, and release notes from
 the GitHub release.
+
+The public APK uses `production`, which enables Android update checks against GitCode's
+latest stable mobile release after app startup. Settings marks the update row with `NEW` when a newer
+APK is recorded. Tapping that row confirms the download when a newer APK is recorded and otherwise
+runs a fresh check; users confirm before the APK attachment opens in the system browser.
+Keep the matching GitCode release and APK published for the app to announce that version; it does
+not fall back to GitHub or the desktop website's release service. `production-google-play`
+explicitly disables this feature, and iOS always disables it regardless of profile. Store artifacts
+must be built with their own profiles rather than reusing this APK.
 
 Tags with a prerelease suffix are marked as prereleases on GitHub. Plain version tags publish regular
 releases. The workflow does not replace an existing attachment with different contents.

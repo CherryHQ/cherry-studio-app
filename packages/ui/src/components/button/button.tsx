@@ -12,7 +12,14 @@ import { useResolveClassNames } from 'uniwind';
 import { cn } from '../../utils';
 import { Spinner, type SpinnerSize } from '../loading/spinner';
 
-export type ButtonVariant = 'default' | 'destructive' | 'ghost' | 'link' | 'outline' | 'secondary';
+export type ButtonVariant =
+  | 'default'
+  | 'destructive'
+  | 'ghost'
+  | 'link'
+  | 'outline'
+  | 'secondary'
+  | 'text';
 export type ButtonShape = 'pill' | 'rounded';
 export type ButtonSize = 'default' | 'field' | 'inline' | 'lg' | 'sm' | 'xs';
 
@@ -107,6 +114,10 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
   secondary: {
     label: 'text-secondary-foreground',
     root: 'border border-border bg-field shadow-none',
+  },
+  text: {
+    label: 'text-link',
+    root: 'bg-transparent shadow-none active:opacity-70',
   },
 };
 

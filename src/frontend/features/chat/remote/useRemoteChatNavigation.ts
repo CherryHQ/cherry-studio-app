@@ -4,16 +4,12 @@ import { v7 as uuidv7 } from 'uuid';
 
 import type { ConversationRef } from '@/frontend/appShell/conversation';
 import type { DraftId, RemoteConversationSource } from '@/frontend/appShell/conversation/remote';
-import {
-  conversationHref,
-  useChatSource,
-  type RemoteChatTarget,
-} from '@/frontend/appShell/navigation/chat';
+import { useChatSource, type RemoteChatTarget } from '@/frontend/appShell/navigation/chat';
 
 /** Draft identity owns input; Agent selection only changes the destination until submission. */
 export function useRemoteChatNavigation(
   target: RemoteChatTarget,
-  source: Pick<RemoteConversationSource, 'operations'>,
+  source: Pick<RemoteConversationSource, 'hasSubmission'>,
 ) {
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -39,11 +35,9 @@ export function useRemoteChatNavigation(
     draftId,
     identity,
     selectAgent: (agentId: string) => {
-      // Read at click time: admission may have happened since the header last rendered.
-      const submitted = source.operations
-        .getSnapshot()
-        .some((operation) => operation.draftId === draftId);
-      const nextDraftId = target.sessionId || submitted ? uuidv7() : draftId;
+      // Read at click time: admission may have happened since the header last rendered. A submitted
+      // start keeps its route; an undelivered one stays on the draft and still resends to its Agent.
+      const nextDraftId = target.sessionId || source.hasSubmission(draftId) ? uuidv7() : draftId;
       if (nextDraftId !== draftId || target.sessionId) origin.current = undefined;
       openRemote({ connectionId: target.connectionId, agentId, draftId: nextDraftId });
     },
@@ -54,7 +48,8 @@ export function useRemoteChatNavigation(
     onSessionCreated: (ref: ConversationRef) => {
       if (origin.current !== identity) return false;
       setHandoff({ sessionId: ref.sessionId, key: identity });
-      router.replace(conversationHref(ref));
+      // Same route: replacing would remount the whole screen and flash it.
+      router.setParams({ sessionId: ref.sessionId, draftId: undefined });
       return true;
     },
   };

@@ -2,7 +2,7 @@ import { type PropsWithChildren, useState } from 'react';
 import { Appearance, StyleSheet, View } from 'react-native';
 
 import { StartupCover } from './StartupCover';
-import { StartupReadinessProvider } from './StartupReadinessContext';
+import { StartupCoverVisibleProvider, StartupReadinessProvider } from './StartupReadinessContext';
 import { normalizeStartupColorScheme } from './startupState';
 import { useStartupLifecycle } from './useStartupLifecycle';
 
@@ -28,7 +28,9 @@ export function StartupCoordinator({
           pointerEvents={lifecycle.coverVisible ? 'none' : 'auto'}
           style={styles.content}
         >
-          {children}
+          <StartupCoverVisibleProvider visible={lifecycle.coverVisible}>
+            {children}
+          </StartupCoverVisibleProvider>
         </View>
         {lifecycle.coverVisible ? (
           <StartupCover

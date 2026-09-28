@@ -23,6 +23,24 @@ message list keeps its geometry and selection does not subscribe into the chat r
 - `components/ChatInput/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
   edited on the Agent screen; image attachment admission failures restore the managed draft and
   surface a user-facing reason.
+- `components/ConversationQuestionSheet.tsx` presents a pending question interaction from either
+  source in a non-dismissible sheet mounted beside `ConversationApprovals`. It reads the bound input
+  (inline for local `ask_user_question`, deferred for desktop question forms), maps both into one
+  presentation model, and returns the matching response: local answers keep option and question IDs
+  and may skip; desktop answers are keyed by question text, joined from selected labels and free
+  text, and require every question. An unreadable desktop form opens a retryable error sheet.
+  `UserQuestionSheet/` shows one question at a time: an optional header and the full question are
+  in the scrolling body, followed by radio options for a single choice or checkboxes for multiple
+  and option descriptions. A free-text field stays pinned below that body. The sheet avoids the
+  keyboard, so typing lifts the field and footer above it and shrinks only the scrolling body.
+  Choosing never navigates; the footer's action reads skip while the question is unanswered, next
+  once it is answered, and submit on the last question, where local requests skip whatever is still
+  unanswered. Tapping a selected option clears it, including a single choice, so the answer can
+  return to free text only or be skipped. Request identity resets the form; failed or unconfirmed
+  submissions keep the answers editable for resubmission. A leading approval or a source that is no
+  longer current closes the sheet without unmounting it, so drafts survive while navigation and
+  connection recovery remain reachable. Opening the sheet ends the ordinary composer's editing
+  session; its text and attachments stay intact.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,
   initial-render gating and pending first-send rows. Message actions and approvals use the bound
@@ -81,17 +99,25 @@ Backend.remoteAgent; no Controller provider or Controller query keys remain.
 
 `RemoteComposer` owns text editing and registered/system workspace selection. New conversations call the
 bound Draft start action, existing conversations call Session send, and stop targets a selected
-execution. Backend journals own create/send IDs and uncertain-command recovery. Pending/interrupted
-outcomes remain visible in ConversationOperations; navigation does not resend them. The initiating
-route can hand an applied creation to its Session without remounting the composer. Late completion
-from another route cannot navigate the current view. Unsent text is persisted under its stable
-source identity/grant binding, separately from the ephemeral Query scope.
+execution. Backend journals own create/send IDs and recover pending commands silently; navigation
+does not resend them. A Session or Draft holds at most one undelivered message, the latest input
+the desktop rejected or interrupted, and `UndeliveredMessageRow` shows it as one line with its
+reason and the action that can deliver it. Resending submits the same text through the current
+send or start, which replaces the record in the journal; editing moves the text back into the
+composer. A send CONFLICT resynchronizes the Session before the user resends. Input rejected before
+admission never reaches the journal, so the composer restores it and reports the failure. The
+initiating route hands a created Session over without remounting the composer, then releases the
+start; a first send that failed after creation becomes that Session's undelivered message. Late
+completion from another route cannot navigate the current view. Unsent text is persisted under its
+stable source identity/grant binding, separately from the ephemeral Query scope.
 
 `ConversationMessageContent` renders tool summaries in the shared process layout; a deferred
 resource read bound to the row is resolved by the sheet that opens it, and closing the sheet cancels
 the read. Attachments currently show metadata because the desktop does not provide file bytes.
-ConversationApprovals reads the interaction input (inline for local, deferred for desktop), uses the
-bound response action and cancels only the execution associated with the displayed approval.
+ConversationApprovals shows decisions only: it reads the interaction input (inline for local,
+deferred for desktop), uses the bound response action and cancels only the execution associated
+with the displayed approval. Pending questions never open the approval sheet; desktop question
+forms use the same `ConversationQuestionSheet` as local questions.
 
 The matching desktop protocol supports question answers and system-workspace creation. Question
 forms consume a bound resource; responses carry complete answers rather than a boolean approval.

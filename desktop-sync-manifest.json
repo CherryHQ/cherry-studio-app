@@ -56,24 +56,6 @@
         }
       ]
     },
-    "ai-core": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["packages/aiCore"],
-      "targetPaths": ["packages/ai-core"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": ["packages/aiCore/src/core/context/**"]
-    },
-    "ai-sdk-provider": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["packages/ai-sdk-provider"],
-      "targetPaths": ["packages/ai-sdk-provider"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": []
-    },
     "provider-registry": {
       "strategy": "semantic-port",
       "status": "aligned",
@@ -177,38 +159,6 @@
       "sourceCommit": null,
       "sourceSha256": null,
       "explicitExclusions": []
-    },
-    "remote-protocol": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["packages/remote-protocol"],
-      "targetPaths": ["packages/remote-protocol"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": ["packages/remote-protocol/tsdown.config.ts"],
-      "mobileExtensions": [
-        {
-          "path": "packages/remote-protocol/package.json",
-          "keeps": "the package identity, entry points and dependency pins",
-          "adds": "src-facing exports because Metro does not consume dist, no tsdown build, vitest 3 and the root TypeScript instead of desktop's vitest 4 / tsdown / typescript6"
-        }
-      ]
-    },
-    "remote-transport": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["packages/remote-transport"],
-      "targetPaths": ["packages/remote-transport"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": ["packages/remote-transport/tsdown.config.ts"],
-      "mobileExtensions": [
-        {
-          "path": "packages/remote-transport/package.json",
-          "keeps": "the package identity, entry points and dependency pins",
-          "adds": "src-facing exports because Metro does not consume dist, no tsdown build, vitest 3 and the root TypeScript instead of desktop's vitest 4 / tsdown / typescript6"
-        }
-      ]
     }
   }
 }

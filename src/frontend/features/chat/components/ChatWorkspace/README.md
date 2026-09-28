@@ -24,7 +24,13 @@ placement. The virtualized list and message rendering live in `@/frontend/compon
   input exists and must keep that session outside its session/empty-state branch.
 - `context/` owns message copy/share actions and assistant toolbar state/actions. Dynamic
   copied/busy/enabled state is consumed only by toolbar leaves; context menus consume only actions,
-  and the virtualized list and expensive message body do not subscribe.
+  and the virtualized list and expensive message body do not subscribe. Action handlers read the
+  latest transcript and snapshot when invoked, so their identities change only when an action's
+  availability does, not on every streamed update.
+- `context/` also owns each row's conversation state beyond its list item: tool calls, attachments,
+  and the timestamp boundary. Rows subscribe to it by message id and only rows whose state changed
+  are woken. The list's `extraData` carries only list-wide presentation, because changing it
+  refreshes every mounted row.
 - `hooks/` owns the cover handoff after the list controller completes initial restoration.
 - `utils/` contains pure helpers with co-located tests, including copyable-text projection.
 

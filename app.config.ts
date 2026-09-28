@@ -9,6 +9,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   if (!['development', 'preview', 'production'].includes(profile)) {
     throw new Error(`Unknown PROFILE: ${profile}. Expected development, preview, or production.`);
   }
+  const apkUpdatesSetting = process.env.APK_UPDATES_ENABLED ?? 'false';
+  if (!['true', 'false'].includes(apkUpdatesSetting)) {
+    throw new Error(`Invalid APK_UPDATES_ENABLED: ${apkUpdatesSetting}. Expected true or false.`);
+  }
 
   const suffix = profile === 'development' ? '.dev' : profile === 'preview' ? '.preview' : '';
   const bundleIdentifier = `${config.ios!.bundleIdentifier}${suffix}`;
@@ -85,6 +89,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       }),
     extra: {
       ...config.extra,
+      isApkUpdatesEnabled: apkUpdatesSetting === 'true',
       sentryEnvironment: profile,
       reporting,
       eas: {

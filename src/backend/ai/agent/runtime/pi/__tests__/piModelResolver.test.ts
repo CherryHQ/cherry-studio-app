@@ -104,6 +104,80 @@ describe('Pi model resolver', () => {
     resolver = createPiModelResolver();
   });
 
+  test.each([
+    { baseUrl: 'https://openrouter.ai/api', preset: undefined, enabled: true },
+    { baseUrl: 'https://relay.example', preset: 'openrouter', enabled: false },
+  ])(
+    'enables explicit OpenRouter compatibility for custom provider ids: %p',
+    async ({ baseUrl, preset, enabled }) => {
+      const provider = makeProvider(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, baseUrl, 'openai');
+      provider.presetProviderId = preset;
+      provider.settings.cacheControl = { enabled };
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(
+        makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, {
+          apiModelId: 'anthropic/claude-sonnet-4.6',
+        }),
+      );
+      const resolution = await resolve(resolver);
+      expect(resolution.model).toMatchObject({
+        provider: 'test-provider',
+        compat: {
+          cacheControlFormat: 'anthropic',
+          sendSessionAffinityHeaders: true,
+          sessionAffinityFormat: 'openrouter',
+        },
+      });
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          sessionId: 'session-1',
+          cacheRetention: enabled ? 'short' : 'none',
+        }),
+      );
+    },
+  );
+
+  test('does not infer Anthropic cache support from a Claude model name on an unknown relay', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(
+        ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        'https://openrouter.ai.untrusted.example/api',
+        'openai',
+      ),
+    );
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, {
+        apiModelId: 'anthropic/claude-sonnet-4.6',
+      }),
+    );
+    const resolution = await resolve(resolver);
+    expect(resolution.model.compat).not.toHaveProperty('cacheControlFormat');
+    expect(resolution.model.compat).not.toHaveProperty('sendSessionAffinityHeaders');
+  });
+
+  test.each([undefined, true, false])(
+    'applies native Anthropic cache setting %p',
+    async (enabled) => {
+      const provider = makeProvider(
+        ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        'https://api.anthropic.com',
+        'anthropic',
+      );
+      if (enabled !== undefined) provider.settings.cacheControl = { enabled };
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES));
+      await resolve(resolver);
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          cacheRetention: enabled === false ? 'none' : 'short',
+          sessionId: 'session-1',
+        }),
+      );
+    },
+  );
+
   test('uses the selected probe key for transport, attribution, and redaction', async () => {
     const testCase = CASES[0];
     const provider = makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily);

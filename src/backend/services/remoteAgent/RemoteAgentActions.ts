@@ -24,17 +24,7 @@ const ActionSchema = z.object({
   agentId: z.string().optional(),
   userMessageId: z.string().optional(),
   text: z.string().optional(),
-  status: z.enum([
-    'confirming',
-    'accepted',
-    'queued',
-    'applied',
-    'resolved',
-    'cancelled',
-    'execution-changed',
-    'interrupted',
-    'failed',
-  ]),
+  status: z.enum(['confirming', 'accepted', 'applied', 'rejected', 'interrupted']),
   error: z.string().optional(),
   errorMessage: z.string().max(512).optional(),
 });
@@ -61,19 +51,34 @@ const StartSchema = z
   })
   .refine((entry) => (entry.workspaceId !== undefined) !== (entry.workspace !== undefined));
 const JournalSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(3),
   records: z.array(RecordSchema),
   starts: z.array(StartSchema),
 });
 type StartEntry = z.infer<typeof StartSchema>;
 type RecordEntry = z.infer<typeof RecordSchema>;
+const isUncertain = (entry: RecordEntry) =>
+  entry.action.status === 'confirming' || entry.action.status === 'accepted';
 
-function projectAction({ action, params, receipt }: RecordEntry): RemoteCommand {
-  if (receipt?.error) action = { ...action, errorMessage: receipt.error.message };
-  if (action.status === 'accepted') action = { ...action, status: 'confirming' };
-  return action.kind === 'respond' && typeof params.interactionId === 'string'
-    ? { ...action, interactionId: params.interactionId }
-    : action;
+function projectAction(entry: RecordEntry): RemoteCommand {
+  const { action, params, receipt } = entry;
+  return {
+    ...action,
+    status: isUncertain(entry) ? 'pending' : (action.status as RemoteCommand['status']),
+    ...(receipt?.error ? { errorMessage: receipt.error.message } : {}),
+    ...(action.kind === 'respond' && typeof params.interactionId === 'string'
+      ? { interactionId: params.interactionId }
+      : {}),
+  };
+}
+
+/** Forgets a start whose Session exists; that Session keeps an undelivered first send like any other. */
+function handOff(start: StartEntry, records: RecordEntry[]) {
+  return records.filter(
+    (entry) =>
+      entry.action.id !== start.createId &&
+      !(entry.action.id === start.sendId && entry.action.status === 'applied'),
+  );
 }
 
 function projectStart(
@@ -110,7 +115,7 @@ export class RemoteAgentActions {
   private records: RecordEntry[];
   private starts: StartEntry[];
   private startSnapshot: readonly RemoteStartOperation[];
-  private readonly starting = new Map<string, Promise<void>>();
+  private readonly starting = new Map<string, Promise<RemoteStartOperation>>();
   private snapshot: readonly RemoteCommand[];
   private readonly listeners = new Set<() => void>();
   private readonly running = new Map<string, Promise<void>>();
@@ -122,7 +127,12 @@ export class RemoteAgentActions {
   ) {
     const parsed = readJournal(journal, binding);
     this.records = parsed?.records ?? [];
-    this.starts = parsed?.starts ?? [];
+    this.starts = [];
+    // After a restart no route is left to hand a created Session to.
+    for (const start of parsed?.starts ?? [])
+      if (start.sessionId && start.status !== 'pending')
+        this.records = handOff(start, this.records);
+      else this.starts.push(start);
     this.startSnapshot = this.starts.map((entry) => projectStart(entry, this.records));
     this.snapshot = this.records.map(projectAction);
   }
@@ -141,7 +151,7 @@ export class RemoteAgentActions {
   private commit(records: RecordEntry[], starts = this.starts) {
     if (this.stopped) return;
     if (records.length || starts.length)
-      this.journal.write(this.binding, JSON.stringify({ version: 2, records, starts }));
+      this.journal.write(this.binding, JSON.stringify({ version: 3, records, starts }));
     else this.journal.remove(this.binding);
     this.records = records;
     this.starts = starts;
@@ -157,14 +167,23 @@ export class RemoteAgentActions {
     commandId = randomUUID(),
   ): Promise<RemoteCommand> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
+    // Keep pending work, open start records and each Session's one undelivered send; a new send
+    // replaces it. A settled start's Session already owns its first send like any other.
+    const owned = new Set(
+      this.starts.flatMap((start) =>
+        start.status === 'pending' || !start.sessionId ? [start.createId, start.sendId] : [],
+      ),
+    );
     const retained = this.records.filter(
-      ({ action }) =>
-        action.kind === 'create' ||
-        action.status !== 'applied' ||
-        this.starts.some((start) => start.sendId === action.id),
+      (entry) =>
+        owned.has(entry.action.id) ||
+        isUncertain(entry) ||
+        (entry.action.kind === 'send' &&
+          entry.action.status !== 'applied' &&
+          !(kind === 'send' && entry.action.sessionId === params.sessionId)),
     );
     if (retained.length >= 200) throw new RemoteAgentError('ACTION_LIMIT');
-    const action: RemoteCommand = {
+    const action: RecordEntry['action'] = {
       id: commandId,
       kind,
       status: 'confirming',
@@ -179,22 +198,20 @@ export class RemoteAgentActions {
     });
     this.commit([...retained, entry]);
     await this.run(action.id, false).catch(() => undefined);
-    return this.snapshot.find((item) => item.id === action.id) ?? action;
+    return this.snapshot.find((item) => item.id === action.id) ?? projectAction(entry);
   }
-  recover() {
+  async recover() {
     if (this.stopped) return;
-    for (const start of this.starts)
-      if (start.status === 'pending') void this.advanceStart(start.id).catch(() => undefined);
-    for (const entry of this.records) {
-      if (['confirming', 'accepted'].includes(entry.action.status))
-        void this.run(entry.action.id, true).catch(() => undefined);
-    }
+    await Promise.allSettled([
+      ...this.starts.flatMap((start) =>
+        start.status === 'pending' ? [this.advanceStart(start.id)] : [],
+      ),
+      ...this.records.flatMap((entry) =>
+        isUncertain(entry) ? [this.run(entry.action.id, true)] : [],
+      ),
+    ]);
   }
-  async retry(id: string) {
-    if (this.starts.some((entry) => entry.id === id)) await this.advanceStart(id);
-    else await this.run(id, true);
-  }
-  dismiss(id: string) {
+  discard(id: string) {
     const start = this.starts.find((entry) => entry.id === id);
     if (start) {
       if (start.status === 'pending') return;
@@ -207,18 +224,30 @@ export class RemoteAgentActions {
       return;
     }
     // Uncertain actions must remain recoverable across page changes and process death.
-    if (
-      this.records.some(
-        (entry) =>
-          entry.action.id === id && ['confirming', 'accepted'].includes(entry.action.status),
-      )
-    )
-      return;
-    this.commit(this.records.filter((entry) => entry.action.id !== id));
+    const entry = this.records.find((item) => item.action.id === id);
+    if (!entry || isUncertain(entry)) return;
+    this.commit(this.records.filter((item) => item !== entry));
+  }
+  release(id: string) {
+    const start = this.starts.find((entry) => entry.id === id);
+    if (!start?.sessionId || start.status === 'pending') return;
+    this.commit(
+      handOff(start, this.records),
+      this.starts.filter((entry) => entry !== start),
+    );
   }
   async start(input: RemoteStartInput): Promise<RemoteStartOperation> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
     let entry = this.starts.find((item) => item.draftId === input.draftId);
+    // A draft keeps one start: submitting again replaces one that failed before creating a Session.
+    if (
+      entry &&
+      !entry.sessionId &&
+      (entry.status === 'rejected' || entry.status === 'interrupted')
+    ) {
+      this.discard(entry.id);
+      entry = undefined;
+    }
     if (
       entry &&
       (entry.agentId !== input.agentId ||
@@ -255,23 +284,28 @@ export class RemoteAgentActions {
       };
       this.commit(this.records, [...this.starts, entry]);
     }
-    await this.advanceStart(entry.id);
-    return this.getStarts().find((item) => item.id === entry.id)!;
+    // Observers may dismiss a finished start before this resolves, so return the settled view.
+    const settled = await this.advanceStart(entry.id);
+    if (!settled) throw new RemoteAgentError('CLOSED');
+    return settled;
   }
-  private advanceStart(id: string): Promise<void> {
+  private advanceStart(id: string): Promise<RemoteStartOperation | undefined> {
     const active = this.starting.get(id);
     if (active) return active;
     const entry = this.starts.find((item) => item.id === id);
-    if (!entry || entry.status !== 'pending' || this.stopped) return Promise.resolve();
+    if (!entry || entry.status !== 'pending' || this.stopped)
+      return Promise.resolve(entry && projectStart(entry, this.records));
     const work = this.executeStart(entry).finally(() => this.starting.delete(id));
     this.starting.set(id, work);
     return work;
   }
-  private updateStart(entry: StartEntry) {
+  private updateStart(entry: StartEntry, records = this.records) {
+    const view = projectStart(entry, records);
     this.commit(
-      this.records,
+      records,
       this.starts.map((item) => (item.id === entry.id ? entry : item)),
     );
+    return view;
   }
   private async startCommand(
     id: string,
@@ -285,8 +319,9 @@ export class RemoteAgentActions {
     else await this.create(kind, method, params, text, id);
     return this.snapshot.find((entry) => entry.id === id)!;
   }
-  private async executeStart(original: StartEntry) {
+  private async executeStart(original: StartEntry): Promise<RemoteStartOperation> {
     let entry = original;
+    let settled = projectStart(entry, this.records);
     try {
       const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
         agentId: entry.agentId,
@@ -294,14 +329,11 @@ export class RemoteAgentActions {
           ? { workspace: entry.workspace }
           : { workspaceId: entry.workspace?.id ?? entry.workspaceId! }),
       });
-      if (this.stopped) return;
-      if (created.status !== 'applied') {
-        this.finishStart(entry, created);
-        return;
-      }
+      if (this.stopped) return settled;
+      if (created.status !== 'applied') return this.finishStart(entry, created);
       if (!created.sessionId) throw new RemoteAgentError('PROTOCOL_ERROR');
       entry = { ...entry, sessionId: created.sessionId };
-      this.updateStart(entry);
+      settled = this.updateStart(entry);
       const storedSend = this.records.find((record) => record.action.id === entry.sendId);
       let sent: RemoteCommand;
       if (storedSend) {
@@ -311,7 +343,7 @@ export class RemoteAgentActions {
         const result = agentMethods['agent.sessions.get'].result.parse(
           await this.request('agent.sessions.get', { sessionId: entry.sessionId }),
         );
-        if (this.stopped) return;
+        if (this.stopped) return settled;
         if (!result.session.idleRevision) throw new RemoteAgentError('CONFLICT');
         sent = await this.startCommand(
           entry.sendId,
@@ -325,52 +357,69 @@ export class RemoteAgentActions {
           entry.text,
         );
       }
-      if (!this.stopped) this.finishStart(entry, sent, true);
+      if (!this.stopped) return this.finishStart(entry, sent, true);
     } catch (error) {
       if (
         error instanceof RemoteAgentError &&
         !error.retryable &&
         !['CLOSED', 'PROTOCOL_ERROR'].includes(error.code)
-      )
-        this.updateStart({
-          ...entry,
-          status: error.code === 'COMMAND_INTERRUPTED' ? 'interrupted' : 'rejected',
-          error: error.code,
-          errorMessage: error.detail,
-        });
+      ) {
+        const status: StartEntry['status'] =
+          error.code === 'COMMAND_INTERRUPTED' ? 'interrupted' : 'rejected';
+        const failure = { error: error.code, errorMessage: error.detail };
+        // The Session exists but its first send was never recorded; record it so the input stays
+        // with that Session after the handoff.
+        const unsent =
+          entry.sessionId && !this.records.some((record) => record.action.id === entry.sendId)
+            ? [
+                {
+                  action: {
+                    id: entry.sendId,
+                    kind: 'send' as const,
+                    sessionId: entry.sessionId,
+                    text: entry.text,
+                    status,
+                    ...failure,
+                  },
+                  method: 'agent.messages.send',
+                  params: { commandId: entry.sendId, sessionId: entry.sessionId, text: entry.text },
+                },
+              ]
+            : [];
+        settled = this.updateStart({ ...entry, status, ...failure }, [...this.records, ...unsent]);
+      }
     }
     this.changed();
+    return settled;
   }
   private finishStart(entry: StartEntry, command: RemoteCommand, sent = false) {
-    this.updateStart({
+    const view = this.updateStart({
       ...entry,
       status:
-        command.status === 'failed'
-          ? 'rejected'
-          : command.status === 'interrupted'
-            ? 'interrupted'
-            : sent && command.status === 'applied'
-              ? 'applied'
-              : 'pending',
+        command.status === 'rejected' || command.status === 'interrupted'
+          ? command.status
+          : sent && command.status === 'applied'
+            ? 'applied'
+            : 'pending',
       ...(command.error ? { error: command.error, errorMessage: command.errorMessage } : {}),
     });
     this.changed();
+    return view;
   }
   private run(id: string, recover: boolean): Promise<void> {
     if (this.stopped) return Promise.resolve();
     const existing = this.running.get(id);
     if (existing) return existing;
     const entry = this.records.find((item) => item.action.id === id);
-    if (!entry || !['confirming', 'accepted'].includes(entry.action.status))
-      return Promise.resolve();
+    if (!entry || !isUncertain(entry)) return Promise.resolve();
     const work = this.execute(entry, recover).finally(() => this.running.delete(id));
     this.running.set(id, work);
     return work;
   }
   private async execute(entry: RecordEntry, recover: boolean) {
-    let action: RemoteCommand = {
+    let action: RecordEntry['action'] = {
       ...entry.action,
-      status: 'confirming' as RemoteCommand['status'],
+      status: 'confirming',
       error: undefined,
       errorMessage: undefined,
     };
@@ -397,7 +446,7 @@ export class RemoteAgentActions {
       storedReceipt = parsed;
       action = {
         ...action,
-        status: parsed.status === 'rejected' ? 'failed' : parsed.status,
+        status: parsed.status,
         ...(parsed.error ? { error: parsed.error.reason, errorMessage: parsed.error.message } : {}),
         ...(parsed.sessionId ? { sessionId: parsed.sessionId } : {}),
       };
@@ -409,7 +458,7 @@ export class RemoteAgentActions {
       ) {
         action = {
           ...action,
-          status: error.code === 'COMMAND_INTERRUPTED' ? 'interrupted' : 'failed',
+          status: error.code === 'COMMAND_INTERRUPTED' ? 'interrupted' : 'rejected',
           error: error.code,
           errorMessage: error.detail,
         };

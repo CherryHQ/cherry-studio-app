@@ -31,11 +31,16 @@ const question = {
   turnId: 'turn',
   toolCallId: 'question',
   question: {
-    question: 'Choose a focus',
-    selection: 'single' as const,
-    options: [
-      { id: 'a', label: 'Writing', description: '' },
-      { id: 'b', label: 'Reading', description: '' },
+    questions: [
+      {
+        id: 'focus',
+        question: 'Choose a focus',
+        selection: 'single' as const,
+        options: [
+          { id: 'a', label: 'Writing' },
+          { id: 'b', label: 'Reading' },
+        ],
+      },
     ],
   },
 };
@@ -100,10 +105,12 @@ test('a changed approval payload under the same id rejects the earlier decision'
   expect(f.client.respondApproval).toHaveBeenCalledWith('session', 'approval', 'deny');
 });
 
-test.each([
-  { selectedOptionIds: ['a'], text: 'more context', skipped: false },
-  { selectedOptionIds: [], text: '', skipped: true },
-])('preserves a user answer through the bound question capability: %j', async (answer) => {
+test.each(
+  [
+    { selectedOptionIds: ['a'], text: 'more context', skipped: false },
+    { selectedOptionIds: [], text: '', skipped: true },
+  ].map((item) => ({ answers: [{ questionId: 'focus', ...item }] })),
+)('preserves a user answer through the bound question capability: %j', async (answer) => {
   const f = fixture({ pendingQuestion: question });
   const interaction = f.projector.snapshot(f.state, undefined).interactions[0];
   expect(interaction).toMatchObject({
@@ -117,6 +124,48 @@ test.each([
   });
   expect(f.client.respondQuestion).toHaveBeenCalledWith('session', 'question', answer);
   f.set({ pendingQuestion: { ...question, turnId: 'replacement' } });
+  expect(await interaction.respond!.execute({ kind: 'user-answer', answer })).toMatchObject({
+    state: 'rejected',
+    failure: { code: 'conflict' },
+  });
+  expect(f.client.respondQuestion).toHaveBeenCalledTimes(1);
+});
+
+test('rejects a batch response after any question in the bound payload changes', async () => {
+  const batch = {
+    ...question,
+    question: {
+      questions: [
+        { ...question.question.questions[0], id: 'first' },
+        { ...question.question.questions[0], id: 'second' },
+      ],
+    },
+  };
+  const f = fixture({ pendingQuestion: batch });
+  const interaction = f.projector.snapshot(f.state, undefined).interactions[0];
+  const answer = {
+    answers: batch.question.questions.map(({ id }) => ({
+      questionId: id,
+      selectedOptionIds: ['a'],
+      text: '',
+      skipped: false,
+    })),
+  };
+  expect(await interaction.respond!.execute({ kind: 'user-answer', answer })).toMatchObject({
+    state: 'applied',
+  });
+  expect(f.client.respondQuestion).toHaveBeenCalledWith('session', 'question', answer);
+  f.set({
+    pendingQuestion: {
+      ...batch,
+      question: {
+        questions: [
+          batch.question.questions[0],
+          { ...batch.question.questions[1], question: 'Changed?' },
+        ],
+      },
+    },
+  });
   expect(await interaction.respond!.execute({ kind: 'user-answer', answer })).toMatchObject({
     state: 'rejected',
     failure: { code: 'conflict' },

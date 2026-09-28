@@ -1,7 +1,6 @@
 export type {
   ConversationDraft,
   ConversationInput,
-  ConversationOperation,
   DraftId,
   HistoryVersion,
   MessageRef,
@@ -10,6 +9,7 @@ export type {
   RemoteConversationSnapshot,
   RemoteConversationSource,
   Submission,
+  UndeliveredMessage,
 } from './remoteContracts';
 export { isRemoteConversationSource } from './remoteContracts';
 export { useConversation, useConversationSnapshot } from './useConversation';
@@ -17,5 +17,5 @@ export {
   useConversationHistory,
   type RemoteConversationHistoryView,
 } from './useConversationHistory';
-export { useConversationDraft, useConversationOperations } from './useConversationDraft';
+export { useConversationDraft } from './useConversationDraft';
 export { useRemoteConversationSource } from './useRemoteConversationSource';

@@ -1,4 +1,5 @@
 import type { AgentProtocol } from './agent';
+import type { AppUpdateModule } from './appUpdate';
 import type { BackupModule } from './backup';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DocumentExportModule } from './documentExport';
@@ -15,6 +16,7 @@ import type { SystemEntryModule } from './systemEntry';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;
   readonly systemEntry: SystemEntryModule;
   readonly agent: AgentProtocol;

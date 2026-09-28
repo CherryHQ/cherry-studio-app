@@ -358,14 +358,17 @@ File-input generation uses a static title while its adjacent content updates; th
 the normal running animation during tool execution.
 
 
-`ask_user_question` tool parts stay in the message body as compact `MessagePart.Tool` status rows,
-matching tool approval presentation. Opening a row shows the complete read-only question and answer;
-history never submits responses. The chat feature owns the active response sheet, including input,
-cancellation, and Protocol correlation. Its neutral options and action layout follow the approval
-sheet, while its footer stays inside keyboard avoidance and the sheet owns the bottom safe area.
+`ask_user_question` tool parts render flat in the message body: each question in secondary text
+followed by its answer, skip state, or waiting/closed status. There is no row or detail sheet, and
+history never submits responses. The chat feature owns the active question sheet and Protocol
+correlation; it retains per-question drafts while navigating and submits the complete answer set.
 
 
-Successful `agent_create` and `agent_update` parts render saved-Agent result cards in the body,
-with a Start chat action when a model is configured. The card uses persisted result metadata; navigation opens the
-current record, so a later-deleted Agent follows the destination's ordinary unavailable state.
+Successful `agent_create` and `agent_update` parts render compact saved-Agent capsules in the
+body. Each capsule shows the name and a short status, with a text-only chat action when a model is
+configured. The capsule fits its content up to the message width; beyond that, the name wraps while
+the status and action keep their width. Model metadata is not shown. The capsule uses persisted
+result metadata; navigation opens the current record, so a later-deleted Agent follows the
+destination's ordinary unavailable state. `ContextMenuExclusion` keeps name selection and the chat
+button separate from the message context menu; the shared button retains native press cancellation.
 Agent list/read calls remain in the execution disclosure.

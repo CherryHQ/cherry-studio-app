@@ -1,7 +1,7 @@
 import {
   AgentEventSchema,
   AgentRespondQuestionSchema,
-  validateUserAnswer,
+  validateUserAnswers,
   AgentApprovalViewSchema,
   AgentErrorViewSchema,
   AgentFailureSnapshotSchema,
@@ -522,13 +522,21 @@ describe('Agent tool and managed-file contracts', () => {
 
 describe('user question protocol', () => {
   const question = {
-    question: 'Choose a focus',
-    selection: 'multiple' as const,
-    options: [
-      { id: 'a', label: 'Writing', description: '' },
-      { id: 'b', label: 'Reading', description: '' },
+    questions: [
+      {
+        id: 'focus',
+        question: 'Choose a focus',
+        selection: 'multiple' as const,
+        options: [
+          { id: 'a', label: 'Writing' },
+          { id: 'b', label: 'Reading' },
+        ],
+      },
     ],
   };
+  const answerWith = (answer: { selectedOptionIds: string[]; text: string; skipped: boolean }) => ({
+    answers: [{ questionId: 'focus', ...answer }],
+  });
   test('round-trips pending questions, answers, and the waiting turn status', () => {
     const event = {
       type: 'question.updated',
@@ -539,7 +547,7 @@ describe('user question protocol', () => {
       sessionId: 'session',
       turnId: 'turn',
       toolCallId: 'call',
-      answer: { selectedOptionIds: ['a', 'b'], text: 'At work', skipped: false },
+      answer: answerWith({ selectedOptionIds: ['a', 'b'], text: 'At work', skipped: false }),
     };
     expect(AgentRespondQuestionSchema.parse(roundTrip(response))).toEqual(response);
     expect(
@@ -548,20 +556,29 @@ describe('user question protocol', () => {
   });
   test('rejects empty answers, duplicate options, and answers combined with skipping', () => {
     expect(() =>
-      validateUserAnswer(question, { selectedOptionIds: [], text: '', skipped: false }),
+      validateUserAnswers(
+        question,
+        answerWith({ selectedOptionIds: [], text: '', skipped: false }),
+      ),
     ).toThrow();
     expect(() =>
-      validateUserAnswer(question, { selectedOptionIds: ['a', 'a'], text: '', skipped: false }),
+      validateUserAnswers(
+        question,
+        answerWith({ selectedOptionIds: ['a', 'a'], text: '', skipped: false }),
+      ),
     ).toThrow();
     expect(() =>
-      validateUserAnswer(question, { selectedOptionIds: [], text: 'yes', skipped: true }),
+      validateUserAnswers(
+        question,
+        answerWith({ selectedOptionIds: [], text: 'yes', skipped: true }),
+      ),
     ).toThrow();
     expect(
       AgentRespondQuestionSchema.safeParse({
         sessionId: 's',
         turnId: 't',
         toolCallId: 'c',
-        answer: { selectedOptionIds: [], text: 'x'.repeat(4001), skipped: false },
+        answer: answerWith({ selectedOptionIds: [], text: 'x'.repeat(4001), skipped: false }),
       }).success,
     ).toBe(false);
   });

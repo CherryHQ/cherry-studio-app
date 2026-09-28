@@ -167,18 +167,24 @@ describe('createSystemCapabilitySource', () => {
   });
 
   test('binds the Host response channel into ask_user_question with the calling turn', async () => {
-    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(async () => ({
-      selectedOptionIds: ['a'],
-      text: '',
-      skipped: false,
-    }));
+    const answer = {
+      answers: [{ questionId: 'pick', selectedOptionIds: ['a'], text: '', skipped: false }],
+    };
+    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(
+      async () => answer,
+    );
     const tools = await resolve({}, { askUser });
     const question = {
-      question: 'Which?',
-      selection: 'single',
-      options: [
-        { id: 'a', label: 'A', description: '' },
-        { id: 'b', label: 'B', description: '' },
+      questions: [
+        {
+          id: 'pick',
+          question: 'Which?',
+          selection: 'single',
+          options: [
+            { id: 'a', label: 'A' },
+            { id: 'b', label: 'B' },
+          ],
+        },
       ],
     };
     const ask = tools.find((tool) => tool.providerName === 'ask_user_question');
@@ -196,8 +202,50 @@ describe('createSystemCapabilitySource', () => {
       expect.objectContaining({ toolCallId: 'question-1', turnId: 'turn-7' }),
     );
     expect(result.value).toMatchObject({
-      selectedOptionIds: ['a'],
-      selectedOptions: [{ id: 'a', label: 'A', description: '' }],
+      ...answer,
+      selectedOptions: [{ questionId: 'pick', options: [{ id: 'a', label: 'A' }] }],
+    });
+  });
+
+  test('returns batch answers and selected labels associated by question ID', async () => {
+    const answer = {
+      answers: [
+        { questionId: 'second', selectedOptionIds: ['a'], text: 'Extra', skipped: false },
+        { questionId: 'first', selectedOptionIds: [], text: '', skipped: true },
+      ],
+    };
+    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(
+      async () => answer,
+    );
+    const tools = await resolve({}, { askUser });
+    const ask = tools.find((tool) => tool.providerName === 'ask_user_question')!;
+    const result = await ask.execute({
+      input: {
+        questions: [
+          {
+            id: 'first',
+            question: 'Choose',
+            selection: 'single',
+            options: [{ id: 'a', label: 'City' }],
+          },
+          {
+            id: 'second',
+            question: 'Choose',
+            selection: 'multiple',
+            options: [{ id: 'a', label: 'Food' }],
+          },
+        ],
+      },
+      signal: new AbortController().signal,
+      toolCallId: 'batch',
+      turnId: 'turn',
+    });
+    expect(result.value).toEqual({
+      ...answer,
+      selectedOptions: [
+        { questionId: 'second', options: [{ id: 'a', label: 'Food' }] },
+        { questionId: 'first', options: [] },
+      ],
     });
   });
 

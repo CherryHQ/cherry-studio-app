@@ -1,5 +1,11 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, Model, Models, ToolResultMessage } from '@earendil-works/pi-ai';
+import type {
+  AssistantMessage,
+  ImageContent,
+  Model,
+  Models,
+  ToolResultMessage,
+} from '@earendil-works/pi-ai';
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 
 import {
@@ -8,12 +14,12 @@ import {
   estimatePiMessagesTokens,
   measurePiContext,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
-  PI_IMAGE_CONTEXT_TOKEN_RESERVE,
   PI_MIN_OUTPUT_RESERVE_TOKENS,
   planPiContext,
   planPiLoopContext,
 } from '../contextCompaction';
 import type { PiConversation } from '../modelMessages';
+import { estimatePiImageTokens } from '../piImageTokens';
 
 const model: Model<'openai-responses'> = {
   api: 'openai-responses',
@@ -75,6 +81,16 @@ function conversation(historyTokens = 0, turnTokens = 5_000): PiConversation {
   };
 }
 
+/** An image whose PNG header declares `width`×`height`, so it is priced by its dimensions. */
+function pngImage(width: number, height: number): ImageContent {
+  const bytes = new Uint8Array(33);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return { type: 'image', mimeType: 'image/png', data: Buffer.from(bytes).toString('base64') };
+}
+
 function plan(
   overrides: Partial<Parameters<typeof planPiContext>[0]> = {},
   completeSimple: Models['completeSimple'] = async () => response(),
@@ -93,6 +109,33 @@ function plan(
 }
 
 describe('Pi context admission and compaction', () => {
+  test('keeps the summary but replays the whole retained turn when native offsets no longer apply', async () => {
+    const current = conversation(100);
+    const result = await plan({
+      conversation: current,
+      checkpoint: {
+        version: 1,
+        anchorTurnId: 'summarized-turn',
+        payload: {
+          kind: 'pi-context-compaction',
+          summary: 'Earlier history',
+          tokensBefore: 500,
+          resume: {
+            turnId: current.historyTurns[0].turnId!,
+            messageOffset: 1,
+            replayKind: 'pi-turn-replay-v1',
+          },
+        },
+      },
+    });
+    if (!result.ok) throw new Error('Expected a replayable context');
+    expect(result.messages[0]).toMatchObject({
+      role: 'compactionSummary',
+      summary: 'Earlier history',
+    });
+    expect(result.messages.slice(1)).toEqual(current.history);
+  });
+
   test('charges a retry prefix to the current turn instead of compactible history', async () => {
     const withPrefix = conversation(100_000);
     const retainedResult: ToolResultMessage = {
@@ -119,6 +162,22 @@ describe('Pi context admission and compaction', () => {
     // History is summarized; the current-turn prefix is never a compaction candidate.
     expect(result.ok && result.messages).not.toContain(retainedResult);
     expect(result.ok && result.checkpoint).not.toBeNull();
+  });
+
+  test('rejects a current input whose images alone exceed the window before any provider call', async () => {
+    const current = conversation();
+    const photo = pngImage(1024, 1024);
+    current.prompt.content = Array.from({ length: 40 }, () => photo);
+    const completeSimple = jest.fn(async () => response());
+    const window = 40 * estimatePiImageTokens(model.api, photo);
+
+    expect(
+      await plan(
+        { model: { ...model, contextWindow: window }, conversation: current },
+        completeSimple,
+      ),
+    ).toMatchObject({ ok: false, code: 'context_window_exceeded' });
+    expect(completeSimple).not.toHaveBeenCalled();
   });
 
   test('admits a current input above the compaction trigger when Pi can shrink the output', async () => {
@@ -204,7 +263,8 @@ describe('Pi context admission and compaction', () => {
 
   test('allows Pi to compact removable history images instead of treating them as fixed input', async () => {
     const current = conversation();
-    current.historyTurns = Array.from({ length: 9 }, (_, index) => ({
+    // Unreadable images cost the OpenAI typical 765 tokens each: together they outgrow the window.
+    current.historyTurns = Array.from({ length: 30 }, (_, index) => ({
       turnId: `image-${index}`,
       messages: [
         {
@@ -303,6 +363,7 @@ describe('Pi live context accounting', () => {
     usage: { ...response().usage, input: 49_000, output: 1_000, totalTokens: 50_000 },
   });
   const context = {
+    api: model.api,
     contextWindow: 128_000,
     outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
     systemPrompt: 'x'.repeat(40_000),
@@ -337,7 +398,31 @@ describe('Pi live context accounting', () => {
     const before = estimatePiLoopContextHeadroomTokens({ ...context, messages: [measured] });
     const after = estimatePiLoopContextHeadroomTokens({ ...context, messages: [measured, image] });
 
-    expect(before - after).toBe(PI_IMAGE_CONTEXT_TOKEN_RESERVE);
+    // An unreadable image costs the OpenAI high-detail typical estimate.
+    expect(before - after).toBe(765);
+  });
+
+  test('prices tool-result images by the dialect formula instead of the flat Pi charge', () => {
+    const photo = pngImage(1024, 1024);
+    const result = (content: ToolResultMessage['content']): ToolResultMessage => ({
+      role: 'toolResult',
+      toolCallId: 'screenshot',
+      toolName: 'screenshot',
+      content,
+      isError: false,
+      timestamp: 3,
+    });
+    const without = estimatePiLoopContextHeadroomTokens({
+      ...context,
+      messages: [measured, result([])],
+    });
+    const withImage = estimatePiLoopContextHeadroomTokens({
+      ...context,
+      messages: [measured, result([photo])],
+    });
+
+    expect(without - withImage).toBe(estimatePiImageTokens(model.api, photo));
+    expect(without - withImage).not.toBe(1_200);
   });
 
   test('still counts tool definitions introduced after the last measured request', () => {

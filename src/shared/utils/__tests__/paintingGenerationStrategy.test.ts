@@ -2,7 +2,6 @@ import type { ImageGenerationSupport } from '@cherrystudio/provider-registry';
 
 import type { Model } from '@/shared/data/types/model';
 
-import { MAX_IMAGE_ATTACHMENT_COUNT } from '../fileAttachmentPolicy';
 import { createPaintingGenerationStrategy } from '../paintingGenerationStrategy';
 
 const image = { fileEntryId: 'image-1', name: 'image.png', mediaType: 'image/png', size: 100 };
@@ -80,7 +79,12 @@ describe('painting generation strategy', () => {
     const unbounded = createPaintingGenerationStrategy(
       model({ modes: { edit: { supports: {} } } }),
     );
-    expect(unbounded.maxInputImages).toBe(MAX_IMAGE_ATTACHMENT_COUNT);
+    expect(unbounded.maxInputImages).toBeUndefined();
+    const many = Array.from({ length: 20 }, (_, index) => ({
+      ...image,
+      fileEntryId: `image-${index}`,
+    }));
+    expect(unbounded.prepare({ images: many, prompt: 'Blue', paramValues: {} }).mode).toBe('edit');
   });
 
   it('refuses stale, unsupported and invalid parameters instead of silently dropping them', () => {

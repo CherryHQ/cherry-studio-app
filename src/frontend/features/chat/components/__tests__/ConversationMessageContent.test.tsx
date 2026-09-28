@@ -71,7 +71,7 @@ describe('remote tool sheet content', () => {
     await act(async () => {
       row = create(
         <QueryClientProvider client={queryClient}>
-          <ConversationMessageContent message={message}>
+          <ConversationMessageContent messageState={message.state} tools={message.tools}>
             <></>
           </ConversationMessageContent>
         </QueryClientProvider>,

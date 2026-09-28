@@ -278,9 +278,7 @@ agent-device session list
 
 Keep Metro running across ordinary iterations and preserve its cache. `dev:clear` is for explicit
 cache troubleshooting, not the default self-test startup. Local Conductor run settings should use
-normal startup; setup scripts must not automatically build or boot a device. Both `dev` and
-`dev:clear` currently run `packages:build` first, so starting them requires applicable build
-authorization and must not be described as compilation-free.
+normal startup; setup scripts must not automatically build or boot a device.
 
 Start Metro on the allocated base port:
 

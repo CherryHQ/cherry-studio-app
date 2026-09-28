@@ -7,6 +7,7 @@ import {
   type ContentRef,
   type AgentPart,
   type AgentProjection,
+  type AgentSession,
 } from '@cherrystudio/remote-protocol/agent';
 import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
@@ -43,9 +44,31 @@ type Observation = {
   sync?: SessionSync;
   snapshot?: RemoteSessionSnapshot;
   projection?: AgentProjection;
+  /** Session summary read from desktop storage by a conflict resync. */
+  stored?: AgentSession;
   retryTimer?: ReturnType<typeof setTimeout>;
   retries?: number;
 };
+/**
+ * The desktop can serve a checkpoint from a cached session that missed an out-of-run change, such
+ * as an automatic title, while send admission checks storage. A newer idle summary read from
+ * storage therefore supplies the idle revision and metadata; history revision stays with the stream.
+ */
+function withStoredSession(session: AgentSession, stored: AgentSession | undefined) {
+  if (
+    !stored?.idleRevision ||
+    !session.idleRevision ||
+    stored.sessionId !== session.sessionId ||
+    Date.parse(stored.updatedAt) <= Date.parse(session.updatedAt)
+  )
+    return session;
+  return {
+    ...session,
+    title: stored.title,
+    updatedAt: stored.updatedAt,
+    idleRevision: stored.idleRevision,
+  };
+}
 const targetSchema = z.object({
   scope: z.string(),
   kind: z.string(),
@@ -89,7 +112,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       () => this.scheduleRecovery(),
     );
     this.unsubscribe = lease.subscribe(() => this.onConnectionChanged());
-    if (this.state.status === 'ready') this.actions.recover();
+    if (this.state.status === 'ready') void this.actions.recover();
   }
   getState = () => this.state;
   subscribeState = (listener: () => void) => {
@@ -113,28 +136,62 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.state = this.lease.getSnapshot();
     for (const observation of this.observations.values()) {
       this.stopObservation(observation);
-      if (observation.snapshot) {
-        observation.snapshot = {
-          ...observation.snapshot,
-          current: false,
-          sendTarget: undefined,
-          executions: observation.snapshot.executions.map(
-            ({ cancelTarget: _target, ...execution }) => execution,
-          ),
-          interactions: observation.snapshot.interactions.map(
-            ({ respondTarget: _target, ...interaction }) => interaction,
-          ),
-        };
-        for (const listener of observation.listeners) listener(observation.snapshot);
-      }
+      this.withdrawTargets(observation);
     }
     clearTimeout(this.recoveryTimer);
     if (this.state.status === 'retired') this.actions.stop();
     for (const listener of this.stateListeners) listener();
     if (this.state.status === 'ready') {
       for (const [id, observation] of this.observations) this.startObservation(id, observation);
-      this.actions.recover();
+      void this.actions.recover();
     }
+  }
+  private withdrawTargets(observation: Observation) {
+    if (!observation.snapshot) return;
+    observation.snapshot = {
+      ...observation.snapshot,
+      current: false,
+      sendTarget: undefined,
+      executions: observation.snapshot.executions.map(
+        ({ cancelTarget: _target, ...execution }) => execution,
+      ),
+      interactions: observation.snapshot.interactions.map(
+        ({ respondTarget: _target, ...interaction }) => interaction,
+      ),
+    };
+    for (const listener of observation.listeners) listener(observation.snapshot);
+  }
+  private publishObservation(
+    sessionId: string,
+    observation: Observation,
+    projection: AgentProjection,
+    current: boolean,
+  ) {
+    const session = withStoredSession(projection.session, observation.stored);
+    const view = session === projection.session ? projection : { ...projection, session };
+    const entry = this.cacheEntry(sessionId);
+    this.readCache.setEpoch(entry, projection.cursor.streamEpoch);
+    this.readCache.put(entry, entry.generation, 'session', session);
+    observation.projection = projection;
+    observation.snapshot = projectSnapshot(this.scope, view, current, this.issueResource);
+    for (const listener of observation.listeners) listener(observation.snapshot);
+  }
+  /**
+   * A desktop CONFLICT proves this projection missed a session change: rebuild it from a checkpoint
+   * and read the stored session summary, which admission checks even when the checkpoint is stale.
+   */
+  private async resync(sessionId: string) {
+    this.assertActive();
+    const observation = this.observations.get(sessionId);
+    if (!observation || this.stopped || this.state.status !== 'ready') return;
+    this.stopObservation(observation);
+    this.withdrawTargets(observation);
+    this.startObservation(sessionId, observation);
+    const { session } = await this.track(this.request('agent.sessions.get', { sessionId }));
+    if (this.stopped || this.observations.get(sessionId) !== observation) return;
+    observation.stored = session;
+    if (observation.projection && observation.snapshot?.current)
+      this.publishObservation(sessionId, observation, observation.projection, true);
   }
   private request: AgentRequest = async (method, params, caller) => {
     this.assertActive();
@@ -484,17 +541,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
           (projection, current) => {
             if (this.lease.signal.aborted || observation.sync !== sync) return;
             if (current) observation.retries = 0;
-            const entry = this.cacheEntry(sessionId);
-            this.readCache.setEpoch(entry, projection.cursor.streamEpoch);
-            this.readCache.put(entry, entry.generation, 'session', projection.session);
-            observation.projection = projection;
-            observation.snapshot = projectSnapshot(
-              this.scope,
-              projection,
-              current,
-              this.issueResource,
-            );
-            for (const listener of observation.listeners) listener(observation.snapshot);
+            this.publishObservation(sessionId, observation, projection, current);
           },
           () => {
             if (observation.sync !== sync) return;
@@ -543,7 +590,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       .get()
       .some(
         (command) =>
-          ['confirming', 'accepted'].includes(command.status) &&
+          command.status === 'pending' &&
           command.kind === kind &&
           command.sessionId === target.params.sessionId &&
           (kind !== 'respond' || command.interactionId === target.params.interactionId),
@@ -567,7 +614,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
     const params = this.target(target, 'send');
     agentMethods['agent.messages.send'].params.parse({ ...params, commandId: 'validation', text });
     return this.track(
-      this.actions.create('send', 'agent.messages.send', { ...params, text }, text),
+      this.actions
+        .create('send', 'agent.messages.send', { ...params, text }, text)
+        .then((command) => {
+          if (command.status === 'rejected' && command.error === 'CONFLICT')
+            void this.resync(params.sessionId).catch(() => undefined);
+          return command;
+        }),
     );
   }
   cancel(target: string) {
@@ -586,23 +639,23 @@ export class RemoteAgentScope implements RemoteAgentSource {
       }),
     );
   }
-  recover(id: string) {
+  discard(id: string) {
     this.assertActive();
-    return this.track(this.actions.retry(id));
+    this.actions.discard(id);
   }
-  dismiss(id: string) {
+  release(id: string) {
     this.assertActive();
-    this.actions.dismiss(id);
+    this.actions.release(id);
   }
   private scheduleRecovery() {
     clearTimeout(this.recoveryTimer);
     if (
       !this.stopped &&
       this.state.status === 'ready' &&
-      (this.actions.get().some((action) => ['confirming', 'accepted'].includes(action.status)) ||
+      (this.actions.get().some((action) => action.status === 'pending') ||
         this.actions.getStarts().some((start) => start.status === 'pending'))
     )
-      this.recoveryTimer = setTimeout(() => this.actions.recover(), 5000);
+      this.recoveryTimer = setTimeout(() => void this.actions.recover(), 5000);
   }
   dispose() {
     if (this.stopped) return;

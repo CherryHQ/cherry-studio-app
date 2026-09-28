@@ -133,6 +133,7 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 }));
 
 jest.mock('../../ConversationApprovals', () => ({ ConversationApprovals: () => null }));
+jest.mock('../../ConversationQuestionSheet', () => ({ ConversationQuestionSheet: () => null }));
 
 const projected = new WeakMap<AgentMessageView, ConversationMessage>();
 function project(message: AgentMessageView): ConversationMessage {
@@ -519,6 +520,29 @@ describe('ChatWorkspace message rendering integration', () => {
     const renderMessage = mockMessageListProps?.renderMessage;
     act(() => renderer?.update(createWorkspaceElement(false, messages)));
     expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
+  });
+
+  test('keeps the row renderer and list-wide extraData stable while an answer streams', () => {
+    const history = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    const streaming = (text: string): AgentMessageView => ({
+      ...createMessage('assistant-2', 'assistant', 'streaming'),
+      parts: [{ id: 'assistant-2-text', state: 'streaming', text, type: 'text' }],
+    });
+    mockAgentChatSession = { ...mockAgentChatSession, liveMessages: [streaming('a')] };
+    renderer = renderWorkspace(false, history);
+    const renderMessage = mockMessageListProps?.renderMessage;
+    const extraData = mockMessageListProps?.extraData;
+
+    mockAgentChatSession = { ...mockAgentChatSession, liveMessages: [streaming('ab')] };
+    act(() => renderer?.update(createWorkspaceElement(false, history)));
+
+    // LegendList refreshes every mounted row when extraData changes, so a
+    // streamed chunk must reach only its own row through the item data.
+    expect(mockMessageListProps?.messages.at(-1)?.data.parts).toEqual([
+      expect.objectContaining({ text: 'ab' }),
+    ]);
+    expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
+    expect(mockMessageListProps?.extraData).toBe(extraData);
   });
 
   test('empties the retrying answer while admission runs, so the wait reads as pending', () => {

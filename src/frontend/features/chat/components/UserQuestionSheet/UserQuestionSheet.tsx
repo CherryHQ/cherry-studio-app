@@ -1,224 +1,166 @@
 import { BottomSheet, Button, Input, SelectionIndicator } from '@cherrystudio/ui/components';
-import { useRef, useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 
-import type { AgentPendingQuestion, AgentUserAnswer } from '@/shared/contracts/agent';
+import { useComposerPresentationActions } from '@/frontend/components/Composer';
+
+import { type UserQuestionFormProps, useUserQuestionForm } from './useUserQuestionForm';
 
 const ignoreClose = () => undefined;
 
-type UserQuestionSheetProps = {
-  request: AgentPendingQuestion | null;
-  isOpen: boolean;
-  onRespond(toolCallId: string, answer: AgentUserAnswer): Promise<void>;
-  onCancel(): Promise<void>;
-};
+export type UserQuestionSheetProps = UserQuestionFormProps & { open: boolean };
 
-export function UserQuestionSheet({
-  request,
-  isOpen,
-  onRespond,
-  onCancel,
-}: UserQuestionSheetProps) {
+/** Asks one question at a time and retains drafts while its owner hides the request. */
+export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
   const { t } = useTranslation();
-  // Preserve content during the native close animation, like ToolApprovalSheet.
-  const [lastRequest, setLastRequest] = useState(request);
-  if (
-    request &&
-    (request.toolCallId !== lastRequest?.toolCallId || request.turnId !== lastRequest?.turnId)
-  ) {
-    setLastRequest(request);
-  }
-  const current = request ?? lastRequest;
-  if (!current) return null;
+  const form = useUserQuestionForm(props);
+  const { dismissInput } = useComposerPresentationActions();
+  useEffect(() => {
+    if (!open) return;
+    // The sheet covers the chat input, so its editing session and keyboard end here.
+    dismissInput();
+    void KeyboardController.dismiss();
+    // Closing, whether answered or behind an approval, drops the keyboard of the sheet's field.
+    return () => void KeyboardController.dismiss();
+  }, [dismissInput, open]);
+  const total = form.questions.length;
+  const actionLabel = t(
+    form.action === 'submit'
+      ? 'chat.question.submit'
+      : form.action === 'next'
+        ? 'chat.question.next'
+        : 'chat.question.skip',
+  );
+  const actionVariant = form.action === 'skip' ? 'secondary' : 'default';
+  const advance = () => {
+    // Submitting ends typing at once rather than when the answered sheet closes.
+    if (form.action === 'submit') void KeyboardController.dismiss();
+    form.advance();
+  };
+
   return (
     <BottomSheet
+      avoidKeyboard
       dismissible={false}
+      footer={
+        <View className="flex-row gap-3">
+          {total > 1 ? (
+            <View className="flex-1">
+              <Button
+                disabled={form.locked || form.index === 0}
+                onPress={() => form.navigate(form.index - 1)}
+                testID="user-question-previous"
+                variant="secondary"
+              >
+                <Button.Label>{t('chat.question.previous')}</Button.Label>
+              </Button>
+            </View>
+          ) : null}
+          <View className="flex-1">
+            {/* Remount on a variant change: switching the mounted button from secondary to
+                default in place left its label invisible on iOS. */}
+            <Button
+              key={actionVariant}
+              disabled={form.locked || !form.canAct}
+              loading={form.busy}
+              onPress={advance}
+              testID="user-question-action"
+              variant={actionVariant}
+            >
+              <Button.Label>{actionLabel}</Button.Label>
+            </Button>
+          </View>
+        </View>
+      }
+      headerAction={
+        total > 1 ? (
+          <Text
+            accessibilityLabel={t('chat.question.progressLabel', {
+              current: form.index + 1,
+              total,
+            })}
+            accessibilityLiveRegion="polite"
+            className="text-foreground-tertiary text-sm"
+          >
+            {t('chat.question.progress', { current: form.index + 1, total })}
+          </Text>
+        ) : undefined
+      }
       onClose={ignoreClose}
-      open={isOpen}
-      size="large"
+      open={open}
+      size="medium"
       testID="user-question-sheet"
       title={t('chat.question.title')}
     >
-      <QuestionForm
-        key={`${current.turnId}:${current.toolCallId}`}
-        request={current}
-        disabled={!isOpen || !request}
-        onCancel={onCancel}
-        onRespond={onRespond}
-      />
-    </BottomSheet>
-  );
-}
-
-function QuestionForm({
-  request,
-  disabled,
-  onRespond,
-  onCancel,
-}: Omit<UserQuestionSheetProps, 'request' | 'isOpen'> & {
-  request: AgentPendingQuestion;
-  disabled: boolean;
-}) {
-  const { t } = useTranslation();
-  const [selected, setSelected] = useState<string[]>([]);
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const submitting = useRef(false);
-  const { question, toolCallId } = request;
-  const isMultiple = question.selection === 'multiple';
-
-  async function submit(answer: AgentUserAnswer | 'stop') {
-    if (disabled || submitting.current) return;
-    submitting.current = true;
-    setBusy(true);
-    setFailed(false);
-    Keyboard.dismiss();
-    try {
-      if (answer === 'stop') await onCancel();
-      else await onRespond(toolCallId, answer);
-      // Keep controls locked until the Host removes this request.
-    } catch {
-      submitting.current = false;
-      setBusy(false);
-      setFailed(true);
-    }
-  }
-
-  return (
-    <KeyboardAvoidingView behavior="padding" style={styles.page}>
       <ScrollView
+        key={form.question.id}
         className="min-h-0 flex-1"
-        contentContainerClassName="gap-4 px-6 pt-2 pb-4"
+        contentContainerClassName="gap-4 px-5 pt-2 pb-4"
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-1">
-          <Text className="text-foreground-tertiary text-sm">
-            {t(isMultiple ? 'chat.question.multiple' : 'chat.question.single')}
-          </Text>
-          <Text accessibilityRole="header" className="font-semibold text-base text-foreground">
-            {question.question}
-          </Text>
-        </View>
-        <View className="gap-2">
-          {question.options.map((option) => (
-            <QuestionOption
-              key={option.id}
-              option={option}
-              isSelected={selected.includes(option.id)}
-              isMultiple={isMultiple}
-              disabled={disabled || busy}
-              onPress={() => {
-                if (submitting.current) return;
-                if (isMultiple)
-                  setSelected((current) =>
-                    current.includes(option.id)
-                      ? current.filter((id) => id !== option.id)
-                      : [...current, option.id],
-                  );
-                else {
-                  setSelected([option.id]);
-                  void submit({
-                    selectedOptionIds: [option.id],
-                    text: text.trim(),
-                    skipped: false,
-                  });
-                }
-              }}
-            />
-          ))}
-        </View>
-        <Input
-          accessibilityLabel={t('chat.question.custom')}
-          disabled={disabled || busy}
-          maxLength={4000}
-          multiline
-          onChangeText={setText}
-          placeholder={t('chat.question.custom')}
-          value={text}
-        />
-      </ScrollView>
-      {/* Match the approval footer inside keyboard avoidance; BottomSheet owns the safe area. */}
-      <View className="gap-4 border-t border-border px-4 pt-3 pb-4">
-        {failed ? (
-          <Text accessibilityRole="alert" className="text-error text-sm">
+        {form.question.header ? (
+          <Text className="text-foreground-tertiary text-sm">{form.question.header}</Text>
+        ) : null}
+        <Text accessibilityRole="header" className="font-semibold text-base text-foreground">
+          {form.question.question}
+        </Text>
+        {form.question.options.length ? (
+          <View className="-mx-3 gap-1">
+            {form.question.options.map((option) => {
+              const selected = form.answer.selectedOptionIds.includes(option.id);
+              return (
+                <Pressable
+                  key={option.id}
+                  accessibilityLabel={option.label}
+                  accessibilityHint={option.description}
+                  accessibilityRole={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
+                  accessibilityState={{ checked: selected, disabled: form.locked }}
+                  className={`min-h-11 flex-row items-center gap-3 rounded-lg px-3 py-2 active:opacity-70 ${selected ? 'bg-secondary' : ''}`}
+                  disabled={form.locked}
+                  onPress={() => form.select(option.id)}
+                >
+                  <SelectionIndicator
+                    control={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
+                    selected={selected}
+                  />
+                  <View className="min-w-0 flex-1 gap-0.5">
+                    <Text className="text-base text-foreground">{option.label}</Text>
+                    {option.description ? (
+                      <Text className="text-foreground-tertiary text-sm">{option.description}</Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+        {form.answer.skipped ? (
+          <Text className="text-foreground-tertiary text-sm">{t('chat.question.skipped')}</Text>
+        ) : null}
+        {form.failed ? (
+          <Text accessibilityRole="alert" className="text-sm text-error">
             {t('chat.question.failed')}
           </Text>
         ) : null}
-        <Button disabled={disabled || busy} onPress={() => void submit('stop')} variant="secondary">
-          {t('chat.input.action.stopGenerating')}
-        </Button>
-        <View className="flex-row gap-3">
-          <View className="flex-1">
-            <Button
-              disabled={disabled || busy}
-              onPress={() => void submit({ selectedOptionIds: [], text: '', skipped: true })}
-              variant="secondary"
-            >
-              {t('chat.question.skip')}
-            </Button>
-          </View>
-          {isMultiple || text.trim() || busy ? (
-            <View className="flex-1">
-              <Button
-                disabled={disabled || busy || (!selected.length && !text.trim())}
-                loading={busy}
-                onPress={() =>
-                  void submit({
-                    selectedOptionIds: isMultiple ? selected : [],
-                    text: text.trim(),
-                    skipped: false,
-                  })
-                }
-              >
-                {t('chat.question.continue')}
-              </Button>
-            </View>
-          ) : null}
-        </View>
+      </ScrollView>
+      {/* Outside the scroll view, so the keyboard shrinks the options instead of hiding it. */}
+      <View className="px-5 pb-3">
+        <Input
+          accessibilityLabel={t('chat.question.custom')}
+          disabled={form.locked}
+          maxLength={4000}
+          onChangeText={form.setText}
+          onSubmitEditing={advance}
+          placeholder={t('chat.question.custom')}
+          returnKeyType={form.action === 'submit' ? 'done' : 'next'}
+          testID="user-question-custom"
+          value={form.answer.text}
+        />
       </View>
-    </KeyboardAvoidingView>
+    </BottomSheet>
   );
 }
-
-function QuestionOption({
-  option,
-  isSelected,
-  isMultiple,
-  disabled,
-  onPress,
-}: {
-  option: AgentPendingQuestion['question']['options'][number];
-  isSelected: boolean;
-  isMultiple: boolean;
-  disabled: boolean;
-  onPress(): void;
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={option.label}
-      accessibilityHint={option.description}
-      accessibilityRole={isMultiple ? 'checkbox' : 'radio'}
-      accessibilityState={{ checked: isSelected, disabled }}
-      className={`min-h-14 flex-row items-center gap-3 rounded-xl border p-3 active:opacity-80 ${isSelected ? 'border-border-selected bg-secondary' : 'border-border bg-field'} ${disabled && !isSelected ? 'opacity-40' : ''}`}
-      disabled={disabled}
-      onPress={onPress}
-    >
-      <SelectionIndicator selected={isSelected} />
-      <View className="min-w-0 flex-1 gap-1">
-        <Text className="font-medium text-foreground text-base">{option.label}</Text>
-        {option.description ? (
-          <Text className="text-muted-foreground text-sm">{option.description}</Text>
-        ) : null}
-      </View>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  page: { flex: 1, minHeight: 0 },
-});

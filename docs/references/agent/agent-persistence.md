@@ -64,6 +64,16 @@ artifact anchored to a durable turn, not an engine id, resumable Runtime instanc
 or routing choice. The Host treats its payload as opaque and a process restart still interrupts an
 active turn.
 
+**Native model replay is an optional local cache.** Successful Runtime turns may preserve signed
+thinking blocks and the original assistant/tool-result sequence in an Agent-private MMKV store,
+`cherry-agent-replay-cache`. It survives process restarts but is bounded and disposable, separate from
+the SQLite transcript and excluded from application backups. There is no replay column or schema
+migration. The Host writes it after terminal message persistence, reads it by Session/message/Turn
+identity, and removes it on retry or deletion. Fork transactions return backend-private source/copy
+identities so the Host can copy available cache entries after commit. Storage restore clears this
+cache before startup. Missing or invalid entries use normalized message history; see
+[Agent Runtime](./agent-runtime.md#history) for limits and decoding ownership.
+
 **No workspace; controlled resources come from managed references.** A desktop workspace encodes a
 working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
 no workspace reference. `execution_target` records the mobile boundary (`{"kind":"local"}`). Every
@@ -234,7 +244,7 @@ recency; no `orderKey`).
 | `data` | text (json) | NOT NULL | `{ version: 1, parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
 | `usage` | text (json) | NULL | Assistant messages only |
-| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming` |
+| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
 | `error` | text (json) | NULL | Turn-level `AgentErrorView`, including the versioned failure snapshot when available; projected into `AgentTurnView.error`, not part of the message view |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |

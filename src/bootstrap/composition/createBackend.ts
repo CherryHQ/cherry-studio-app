@@ -23,6 +23,7 @@ import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
+import { createAppUpdateModule } from '@/backend/services/appUpdate';
 import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
 import type {
@@ -219,6 +220,7 @@ export function createBackend(
   return {
     disposeSystemEntry: systemEntry.dispose,
     backend: {
+      appUpdate: createAppUpdateModule(),
       backup: infrastructure.backup,
       systemEntry: systemEntry.module,
       agent: services.agent,

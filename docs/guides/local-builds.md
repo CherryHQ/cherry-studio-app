@@ -46,8 +46,9 @@ development identity. An unset `PROFILE` defaults to production; unknown values 
 | `production` / `production-google-play` | Cherry Studio | none | `cherrystudio` |
 
 `production-google-play` inherits `PROFILE=production`. It changes Android's artifact format to
-AAB without adding an app identity or runtime environment. The `production` profile continues
-to create APKs for GitHub downloads and IPAs for iOS.
+AAB without adding an app identity or runtime environment, and explicitly disables APK update
+checks. The existing `production` profile creates public Android APKs with GitCode update checks
+and iOS IPAs with this feature disabled. Public APKs are published to GitHub and mirrored to GitCode.
 
 The base IDs are `com.cherryai.cherrystudio-app` (iOS) and
 `com.cherryai.cherrystudio_app` (Android). Widget identifiers and iOS App Groups follow the selected
@@ -65,6 +66,23 @@ These identity changes require new native builds. Each iOS variant needs
 matching Apple app identifiers, widget identifiers, App Groups, and provisioning profiles. The EAS
 project ID stays unchanged. Before production submission, check that `submit.production.ios.ascAppId`
 in `eas.json` points to an App Store Connect app matching the new production bundle identifier.
+
+## APK Update Distribution
+
+Only Android builds with `APK_UPDATES_ENABLED=true` show Check for updates in Settings and About.
+The app checks in the background after startup. The row reads that result and shows `NEW` for a newer
+APK, with no description; tapping it asks for confirmation before opening the browser download.
+`production` sets this flag, while `production-google-play` explicitly overrides
+it with `false`. Development and preview default to disabled. iOS always
+hides the feature, regardless of the flag. Disabled builds also reject detection and download calls.
+
+The value is parsed into the boolean `extra.isApkUpdatesEnabled` by `app.config.ts`; it is not a user
+preference or remote toggle. Only `true` and `false` are accepted; an unset value defaults to `false`.
+GitCode is the fixed update source. Keep store profiles disabled and never upload the public APK as
+a store artifact. Future Android store profiles must explicitly set `APK_UPDATES_ENABLED=false`, as
+`production-google-play` does. For an explicitly authorized Android development session exercising
+this feature, supply `APK_UPDATES_ENABLED=true` to Metro.
+The local build wrapper's default remains development.
 
 ## Sentry Environment Variables
 
@@ -126,9 +144,14 @@ pnpm build:local --platform ios --profile preview
 ```
 
 Preview and development bundles do not report to Sentry, even when the native dependency and a DSN
-are present. Production APK and IPA builds require `--profile production`; that profile is never
-the wrapper's default. When a Google Play release build is explicitly requested, use its separate
-AAB profile:
+are present. Production profiles are never the wrapper's default. Use `--profile production` for
+production iOS builds. When a public APK release is explicitly requested, enable its update path:
+
+```bash
+pnpm build:local --platform android --profile production --output /absolute/path/to/cherry-studio-0.1.0-android.apk
+```
+
+When a Google Play release build is explicitly requested, use its separate AAB profile:
 
 ```bash
 pnpm build:local --platform android --profile production-google-play --output /absolute/path/to/cherry-studio-0.1.0-android.aab

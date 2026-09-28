@@ -153,11 +153,16 @@ describe('AgentSessionChatClient', () => {
       turnId: 'turn-1',
       toolCallId: 'question-1',
       question: {
-        question: 'Choose a focus',
-        selection: 'single' as const,
-        options: [
-          { id: 'a', label: 'Writing', description: '' },
-          { id: 'b', label: 'Reading', description: '' },
+        questions: [
+          {
+            id: 'focus',
+            question: 'Choose a focus',
+            selection: 'single' as const,
+            options: [
+              { id: 'a', label: 'Writing' },
+              { id: 'b', label: 'Reading' },
+            ],
+          },
         ],
       },
     };
@@ -172,7 +177,9 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol);
     await client.observe('session-1');
     expect(client.getState('session-1').pendingQuestion).toEqual(question);
-    const answer = { selectedOptionIds: ['a'], text: '', skipped: false };
+    const answer = {
+      answers: [{ questionId: 'focus', selectedOptionIds: ['a'], text: '', skipped: false }],
+    };
     await client.respondQuestion('session-1', 'question-1', answer);
     expect(protocol.respondQuestion).toHaveBeenCalledWith({
       sessionId: 'session-1',

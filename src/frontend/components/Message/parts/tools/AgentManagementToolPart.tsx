@@ -20,23 +20,33 @@ export function AgentManagementToolPart({ part }: { part: ToolMessagePart }) {
   if (!result?.success) return <GenericToolPart part={part} />;
   const { agent, status } = result.data;
   return (
-    <ContextMenuExclusion>
-      <View className="gap-3 rounded-2xl bg-card p-4">
-        <Text className="text-muted-foreground text-sm">
-          {t(status === 'created' ? 'chat.agentTool.created' : 'chat.agentTool.updated')}
-        </Text>
-        <Text className="font-semibold text-foreground text-lg" selectable>
+    <ContextMenuExclusion className="min-h-11 max-w-full flex-row items-center gap-3 self-start rounded-3xl border border-border bg-secondary px-4 py-1">
+      <View className="min-w-0 shrink flex-row items-center gap-2">
+        <Text className="min-w-0 shrink font-medium text-base text-foreground" selectable>
           {agent.name}
         </Text>
-        <Text className="text-muted-foreground text-sm">
-          {agent.modelName ?? t('agent.model.none')}
+        <Text
+          accessibilityElementsHidden
+          className="text-muted-foreground text-xs"
+          importantForAccessibility="no"
+        >
+          ·
         </Text>
-        {agent.modelId ? (
-          <Button onPress={() => router.push(chatHref({ kind: 'draft', agentId: agent.id }))}>
-            {t('chat.agentTool.chat')}
-          </Button>
-        ) : null}
+        <Text className="shrink-0 text-muted-foreground text-xs">
+          {t(status === 'created' ? 'chat.agentTool.created' : 'chat.agentTool.updated')}
+        </Text>
       </View>
+      {agent.modelId ? (
+        <Button
+          accessibilityLabel={t('chat.agentTool.chatWithAgent', { name: agent.name })}
+          hitSlop={10}
+          onPress={() => router.push(chatHref({ kind: 'draft', agentId: agent.id }))}
+          size="inline"
+          variant="text"
+        >
+          <Button.Label numberOfLines={1}>{t('chat.agentTool.chat')}</Button.Label>
+        </Button>
+      ) : null}
     </ContextMenuExclusion>
   );
 }

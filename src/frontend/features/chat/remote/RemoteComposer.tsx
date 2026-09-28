@@ -8,9 +8,9 @@ import {
   Section,
   useToast,
 } from '@cherrystudio/ui/components';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text } from 'react-native';
 
 import {
   useConversationWorkspaces,
@@ -20,8 +20,6 @@ import {
 } from '@/frontend/appShell/conversation';
 import {
   useConversationDraft,
-  useConversationOperations,
-  useRemoteConversationSource,
   type DraftId,
   type RemoteConversationSession,
   type RemoteConversationSnapshot,
@@ -35,8 +33,8 @@ import {
 import { usePersistCache } from '@/frontend/data/hooks';
 
 import { ChatInputSurface } from '../components/ChatInput';
-import { ConversationOperations } from '../components/ConversationOperations';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
+import { UndeliveredMessageRow } from './UndeliveredMessageRow';
 
 export function RemoteComposer({
   agent,
@@ -55,7 +53,6 @@ export function RemoteComposer({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const source = useRemoteConversationSource();
   const existing = draftId === undefined;
   const { draft: text } = useComposerState();
   const { setDraft } = useComposerActions();
@@ -81,31 +78,14 @@ export function RemoteComposer({
       void workspaces.fetchNextPage();
   }, [snapshot.workspaceId, snapshot.workspaceKind, selectedWorkspace, workspaces]);
   const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, draftId);
-  const starts = useConversationOperations(source);
-  const commands = useConversationOperations(session);
-  const handedOff = useRef<string | undefined>(undefined);
+  const created = draft.state?.created;
   useEffect(() => {
-    const completed = starts.find(
-      (operation) =>
-        operation.draftId === draftId && operation.state === 'applied' && operation.conversation,
-    );
-    if (!session && completed?.conversation && handedOff.current !== completed.id) {
-      if (onSessionCreated(completed.conversation)) {
-        handedOff.current = completed.id;
-        completed.dismiss?.();
-      }
-    }
-  }, [starts, draftId, session, onSessionCreated]);
+    if (!session && created && onSessionCreated(created.conversation)) created.release();
+  }, [created, session, onSessionCreated]);
 
-  const operations = [
-    ...starts.filter(
-      (operation) => !session || operation.conversation?.sessionId === session.ref.sessionId,
-    ),
-    ...commands,
-  ];
-  const startPending = starts.some(
-    (operation) => operation.draftId === draftId && operation.state === 'pending',
-  );
+  const undelivered = existing ? snapshot.undelivered : draft.state?.undelivered;
+  const startAvailability = draft.state?.start.availability;
+  const starting = startAvailability?.state === 'disabled' && startAvailability.reason === 'busy';
   const action = existing ? snapshot.actions.send : draft.state?.start;
   const cancellations = snapshot.executions.filter((execution) => execution.cancel);
   const canStop = cancellations.some(
@@ -124,39 +104,26 @@ export function RemoteComposer({
   };
   return (
     <>
-      <View className="max-h-36">
-        <ScrollView keyboardShouldPersistTaps="handled">
-          <ConversationOperations
-            operations={operations}
-            onRestore={(input) =>
-              setDraft((current) =>
-                [
-                  input.parts
-                    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
-                    .join('\n'),
-                  current,
-                ]
-                  .filter(Boolean)
-                  .join('\n'),
-              )
-            }
-          />
-        </ScrollView>
-      </View>
+      <UndeliveredMessageRow
+        message={undelivered}
+        onEdit={(restored) => setDraft((current) => [restored, current].filter(Boolean).join('\n'))}
+      />
       <ComposerSurface
         getSendErrorLabel={(error) =>
           error instanceof ConversationActionError
             ? t(conversationFailureKey(error.failure))
             : undefined
         }
-        canSend={action?.availability.state === 'enabled' && Boolean(text.trim()) && !startPending}
+        canSend={action?.availability.state === 'enabled' && Boolean(text.trim())}
         streaming={canStop}
         dismissKeyboardOnSend
         onSend={async ({ text }) => {
           if (!action || action.availability.state !== 'enabled') throw new Error('UNAVAILABLE');
           const result = await action.execute({ parts: [{ type: 'text', text }] });
-          if (result.state === 'rejected') throw new ConversationActionError(result.failure);
-          // Pending/interrupted admission is visible in operations; never create a second send here.
+          // A recorded rejection is held by the undelivered row; only unadmitted input returns here.
+          if (result.state === 'rejected' && !result.operationId)
+            throw new ConversationActionError(result.failure);
+          // Pending work is recovered by the journal; never create a second send here.
         }}
         onStop={() => {
           if (cancellations.length === 1) void stop(0);
@@ -170,16 +137,16 @@ export function RemoteComposer({
           leadingAction={
             <Composer.Action
               accessibilityLabel={t('common.more')}
-              disabled
+              onPress={() => toast.show({ label: t('remoteAgent.attachmentsUnavailable') })}
               testID="composer-menu-trigger"
             >
-              <PlusIcon className="size-6 text-muted-foreground" />
+              <PlusIcon className="size-6 text-foreground" />
             </Composer.Action>
           }
           secondaryAction={
             <Composer.Pill
               accessibilityLabel={t('remoteAgent.workspace')}
-              disabled={existing || startPending}
+              disabled={existing || starting}
               onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
               icon={<FolderIcon className="size-5 text-foreground" />}
               testID="composer-workspace-button"
@@ -211,7 +178,7 @@ export function RemoteComposer({
                   key={item.ref}
                   label={item.kind === 'system' ? t('remoteAgent.systemWorkspace') : item.name}
                   selected={selectedWorkspace?.ref === item.ref}
-                  disabled={startPending}
+                  disabled={starting}
                   onPress={() => {
                     setWorkspace(item);
                     setChoosingWorkspace(false);
