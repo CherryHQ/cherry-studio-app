@@ -32,6 +32,7 @@ import {
   projectMessage,
   projectSession,
   projectSnapshot,
+  type MessageViewCache,
   type RemoteResourceDescriptor,
 } from './remoteAgentViews';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
@@ -87,6 +88,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
     string,
     { sessionId: string; value: RemoteResourceDescriptor }
   >();
+  private readonly messageViews: MessageViewCache = new WeakMap();
+  private readonly partResources = new WeakMap<AgentPart, { sessionId: string; id: string }>();
   private readonly work = new Set<Promise<unknown>>();
   private readonly actions: RemoteAgentActions;
   private readonly unsubscribe: () => void;
@@ -175,7 +178,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
     if (this.readCache.get(entry, 'session') !== session)
       this.readCache.put(entry, entry.generation, 'session', session);
     observation.projection = projection;
-    observation.snapshot = projectSnapshot(this.scope, view, current, this.issueResource);
+    observation.snapshot = projectSnapshot(
+      this.scope,
+      view,
+      current,
+      this.issueResource,
+      this.messageViews,
+    );
     for (const listener of observation.listeners) listener(observation.snapshot);
   }
   /**
@@ -431,8 +440,14 @@ export class RemoteAgentScope implements RemoteAgentSource {
     return { items, next: page.nextCursor ?? undefined };
   }
   private issueResource = (sessionId: string, value: RemoteResourceDescriptor): string => {
-    const descriptor = { scope: this.scope, sessionId, value };
-    const id = `${this.scope}:resource:${integrity.sha256(new TextEncoder().encode(JSON.stringify(descriptor)))}`;
+    // Hashing a part serializes its whole payload; an unchanged part object keeps its id.
+    const part = value.kind === 'part' ? value.part : undefined;
+    const issued = part && this.partResources.get(part);
+    const id =
+      issued?.sessionId === sessionId
+        ? issued.id
+        : `${this.scope}:resource:${integrity.sha256(new TextEncoder().encode(JSON.stringify({ scope: this.scope, sessionId, value })))}`;
+    if (part && issued?.id !== id) this.partResources.set(part, { sessionId, id });
     if (!this.resources.has(id)) {
       this.resources.set(id, { sessionId, value });
       // Old live-input revisions may expire; no payload is copied into frontend query keys.

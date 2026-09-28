@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ConversationMessage, ResourceValue } from '@/frontend/appShell/conversation';
@@ -12,8 +12,18 @@ let mockSheetContent: ReactNode;
 jest.mock('@/frontend/data', () => ({ useBackendModule: () => mockModule }));
 jest.mock('@/frontend/components/Message', () => ({
   getBuiltInToolDisplay: () => undefined,
-  ToolRendererProvider: ({ renderTool }: { renderTool(part: { toolCallId: string }): ReactNode }) =>
-    renderTool({ toolCallId: 'call' }),
+  ToolRendererProvider: ({
+    children,
+    renderTool,
+  }: {
+    children: ReactNode;
+    renderTool(part: { toolCallId: string }): ReactNode;
+  }) => (
+    <>
+      {renderTool({ toolCallId: 'call' })}
+      {children}
+    </>
+  ),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@cherrystudio/ui/components', () => {
@@ -119,4 +129,35 @@ describe('remote tool sheet content', () => {
     sheet = undefined;
     expect(signal?.aborted).toBe(true);
   });
+});
+
+it('keeps the message mounted when its first tool arrives', async () => {
+  const mounts = jest.fn();
+  function Body() {
+    useEffect(() => mounts(), []);
+    return null;
+  }
+  const client = new QueryClient();
+  let row!: ReactTestRenderer;
+  await act(async () => {
+    row = create(
+      <QueryClientProvider client={client}>
+        <ConversationMessageContent messageState="streaming" tools={[]}>
+          <Body />
+        </ConversationMessageContent>
+      </QueryClientProvider>,
+    );
+  });
+  await act(async () => {
+    row.update(
+      <QueryClientProvider client={client}>
+        <ConversationMessageContent messageState="streaming" tools={message.tools}>
+          <Body />
+        </ConversationMessageContent>
+      </QueryClientProvider>,
+    );
+  });
+  expect(mounts).toHaveBeenCalledTimes(1);
+  await act(async () => row.unmount());
+  client.clear();
 });

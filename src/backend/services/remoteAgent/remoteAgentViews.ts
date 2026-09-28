@@ -118,11 +118,17 @@ export function projectMessage(
     ...(message.failure ? { failure: message.failure } : {}),
   };
 }
+/** Projected messages keyed by protocol message; valid while every part keeps its identity. */
+export type MessageViewCache = WeakMap<
+  AgentMessage,
+  { parts: readonly AgentPart[]; view: RemoteMessageView }
+>;
 export function projectSnapshot(
   scope: string,
   value: AgentProjection,
   current: boolean,
   issueResource: ResourceIssuer,
+  views?: MessageViewCache,
 ): RemoteSessionSnapshot {
   const sessionId = value.session.sessionId;
   return {
@@ -137,14 +143,19 @@ export function projectSnapshot(
           }),
         }
       : {}),
-    messages: Object.values(value.messages).map((message) =>
-      projectMessage(
-        sessionId,
-        message,
-        message.partIds.flatMap((id) => value.parts[id] ?? []),
-        issueResource,
-      ),
-    ),
+    // Events replace only the objects they change, so unchanged messages keep their views.
+    messages: Object.values(value.messages).map((message) => {
+      const parts = message.partIds.flatMap((id) => value.parts[id] ?? []);
+      const cached = views?.get(message);
+      if (
+        cached?.parts.length === parts.length &&
+        cached.parts.every((part, index) => part === parts[index])
+      )
+        return cached.view;
+      const view = projectMessage(sessionId, message, parts, issueResource);
+      views?.set(message, { parts, view });
+      return view;
+    }),
     executions: Object.values(value.executions).map((execution) => ({
       id: execution.executionId,
       state: execution.status,

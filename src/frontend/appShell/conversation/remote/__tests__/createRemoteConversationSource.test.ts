@@ -174,6 +174,32 @@ it('pins a history window and prepares a complete chronological selection before
   test.source.dispose();
 });
 
+it('keeps rows for unchanged live views and history revisions so only changed messages re-render', async () => {
+  const test = fixture();
+  const session = await test.source.openSession(address, signal());
+  session.activate();
+  const settled = message('settled');
+  const streaming = message('streaming');
+  test.publish({ ...test.snapshot, messages: [settled, streaming] });
+  const [first, growing] = session.state.getSnapshot().liveMessages;
+  test.publish({ ...test.snapshot, messages: [settled, { ...streaming, parts: [] }] });
+  expect(session.state.getSnapshot().liveMessages[0]).toBe(first);
+  expect(session.state.getSnapshot().liveMessages[1]).not.toBe(growing);
+
+  // A newer history version re-reads every page; unchanged revisions keep their rows.
+  const before = await session.history.openLatest(signal());
+  const after = await session.history.openLatest(signal());
+  expect(after.initial.items).toEqual(before.initial.items);
+  after.initial.items.forEach((item, index) => expect(item).toBe(before.initial.items[index]));
+  jest.mocked(test.remote.history).mockResolvedValueOnce({
+    items: [{ ...message('m3'), version: '2' }, message('m2')],
+  });
+  const revised = await session.history.openLatest(signal());
+  expect(revised.initial.items[0]).toBe(before.initial.items[0]);
+  expect(revised.initial.items[1]).not.toBe(before.initial.items[1]);
+  test.source.dispose();
+});
+
 it('rejects cursors from a different scope', async () => {
   const left = fixture('left');
   const right = fixture('right');

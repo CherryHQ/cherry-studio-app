@@ -19,7 +19,8 @@ export function ConversationMessageContent({
   tools?: ConversationMessage['tools'];
 }>) {
   const { t } = useTranslation();
-  if (!tools?.length) return children;
+  // Remote rows always carry a list; wrapping only once a tool arrives would remount the message.
+  if (!tools) return children;
   return (
     <ToolRendererProvider
       getToolTitle={(name) => getConversationToolTitle(name, t)}

@@ -1,6 +1,7 @@
 import type {
   RemoteAgentSource,
   RemoteCommand,
+  RemoteMessageView,
   RemoteSessionSnapshot,
   RemoteSessionView,
 } from '@/shared/contracts/remoteAgent';
@@ -8,6 +9,7 @@ import type {
 import type {
   ConversationAction,
   ConversationInteractionResponse,
+  ConversationMessage,
   ConversationRef,
   OperationOutcome,
   QueryScope,
@@ -119,8 +121,25 @@ export function createRemoteConversationSession(
       return result.kind === 'text' ? { ...result, complete: true } : result;
     },
   });
-  const project = (message: Parameters<typeof remoteMessage>[0]) =>
-    remoteMessage(message, resource);
+  // Unchanged messages keep their rows so the list re-renders only what moved. Live views keep
+  // their identity until an event changes them; a history message is immutable per revision.
+  const liveRows = new WeakMap<RemoteMessageView, ConversationMessage>();
+  const historyRows = new Map<string, { version: string; row: ConversationMessage }>();
+  const project = (message: RemoteMessageView) => {
+    let row = liveRows.get(message);
+    if (!row) {
+      row = remoteMessage(message, resource);
+      liveRows.set(message, row);
+    }
+    return row;
+  };
+  const projectHistory = (message: RemoteMessageView) => {
+    const cached = historyRows.get(message.id);
+    if (cached?.version === message.version) return cached.row;
+    const row = remoteMessage(message, resource);
+    historyRows.set(message.id, { version: message.version, row });
+    return row;
+  };
   const operationId = (id: string) => refs.issue<OperationId>('operation', id);
   const operations = createConversationState<readonly ConversationOperation[]>([]);
   function updateOperations() {
@@ -266,20 +285,23 @@ export function createRemoteConversationSession(
           ...(execution.messageId && (execution.failure || execution.persistenceFailure)
             ? {
                 terminal: {
-                  message: project({
-                    id: execution.messageId,
-                    version: execution.history?.messageRevision ?? execution.id,
-                    role: 'assistant',
-                    parts: [],
-                    state:
-                      execution.state === 'failed'
-                        ? 'error'
-                        : execution.state === 'cancelled' || execution.state === 'interrupted'
-                          ? 'cancelled'
-                          : 'success',
-                    failure: execution.failure,
-                    persistenceFailure: execution.persistenceFailure,
-                  }),
+                  message: remoteMessage(
+                    {
+                      id: execution.messageId,
+                      version: execution.history?.messageRevision ?? execution.id,
+                      role: 'assistant',
+                      parts: [],
+                      state:
+                        execution.state === 'failed'
+                          ? 'error'
+                          : execution.state === 'cancelled' || execution.state === 'interrupted'
+                            ? 'cancelled'
+                            : 'success',
+                      failure: execution.failure,
+                      persistenceFailure: execution.persistenceFailure,
+                    },
+                    resource,
+                  ),
                   durable: execution.durable === true,
                   historyReady:
                     !!execution.history &&
@@ -392,7 +414,7 @@ export function createRemoteConversationSession(
         const preview = source.peekSession(ref.sessionId)?.history;
         return preview
           ? {
-              items: preview.items.toReversed().map(project),
+              items: preview.items.toReversed().map(projectHistory),
               version: refs.issue<HistoryVersion>('history', preview.version),
               readAt: preview.readAt,
               hasOlderMessages: preview.hasOlderMessages,
@@ -420,7 +442,7 @@ export function createRemoteConversationSession(
             source.history(ref.sessionId, fixed.historyVersion, cursor, signal),
           );
           return {
-            items: value.items.toReversed().map(project),
+            items: value.items.toReversed().map(projectHistory),
             ...(value.next ? { older: cursors.issue<HistoryCursor>('older', value.next) } : {}),
           };
         };

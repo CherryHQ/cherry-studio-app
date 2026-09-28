@@ -1,4 +1,6 @@
-import { projectMessage } from '../remoteAgentViews';
+import type { AgentProjection } from '@cherrystudio/remote-protocol/agent';
+
+import { projectMessage, projectSnapshot, type MessageViewCache } from '../remoteAgentViews';
 
 const issueResource = () => 'opaque-resource';
 const message = {
@@ -85,4 +87,45 @@ it('keeps the remote message model snapshot without consulting the mobile model 
   const model = { modelId: 'model', providerId: 'desktop-provider', name: 'Historical model' };
   expect(projectMessage('s', { ...message, model }, [], issueResource).model).toEqual(model);
   expect(projectMessage('s', message, [], issueResource).model).toBeUndefined();
+});
+
+it('reuses message views until the message or one of its parts is replaced', () => {
+  const text = (partId: string, value: string) => ({
+    partId,
+    revision: '1',
+    kind: 'text' as const,
+    content: { text: value },
+    state: 'streaming' as const,
+  });
+  const settled = { ...message, messageId: 'settled', partIds: ['a'] };
+  const streaming = { ...message, messageId: 'streaming', partIds: ['b'] };
+  const projection: AgentProjection = {
+    cursor: { sessionId: 's', streamEpoch: 'epoch', seq: '0' },
+    session: {
+      sessionId: 's',
+      agentId: 'a',
+      workspaceId: 'w',
+      title: 'Session',
+      updatedAt: '2026-09-22T00:00:00.000Z',
+      historyRevision: '1',
+    },
+    messages: { settled, streaming },
+    parts: { a: text('a', 'done'), b: text('b', 'grow') },
+    executions: {},
+    interactions: {},
+    tombstones: [],
+  };
+  const issue = jest.fn(issueResource);
+  const views: MessageViewCache = new WeakMap();
+  const first = projectSnapshot('scope', projection, true, issue, views).messages;
+  const next = projectSnapshot(
+    'scope',
+    { ...projection, parts: { ...projection.parts, b: text('b', 'growing') } },
+    true,
+    issue,
+    views,
+  ).messages;
+  expect(next[0]).toBe(first[0]);
+  expect(next[1]).not.toBe(first[1]);
+  expect(next[1].parts[0]).toMatchObject({ text: 'growing' });
 });
