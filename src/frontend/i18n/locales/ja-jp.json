@@ -1096,6 +1096,7 @@
   "remoteAgent.actionFailed": "操作が失敗または中断されました。状態を更新してから再試行してください。",
   "remoteAgent.actionReceived": "PC が操作を受け付けました",
   "remoteAgent.artifact": "成果物",
+  "remoteAgent.attachmentsUnavailable": "デスクトップの会話では添付ファイルはまだサポートされていません",
   "remoteAgent.awaitingApproval": "応答を待っています",
   "remoteAgent.configured": "モデル設定済み",
   "remoteAgent.confirming": "結果を確認中です。同じ操作を再送しないでください",

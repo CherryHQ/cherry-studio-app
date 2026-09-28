@@ -170,10 +170,10 @@ export function RemoteComposer({
           leadingAction={
             <Composer.Action
               accessibilityLabel={t('common.more')}
-              disabled
+              onPress={() => toast.show({ label: t('remoteAgent.attachmentsUnavailable') })}
               testID="composer-menu-trigger"
             >
-              <PlusIcon className="size-6 text-muted-foreground" />
+              <PlusIcon className="size-6 text-foreground" />
             </Composer.Action>
           }
           secondaryAction={

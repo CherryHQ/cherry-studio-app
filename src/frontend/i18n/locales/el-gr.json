@@ -1105,6 +1105,7 @@
   "remoteAgent.actionFailed": "Η ενέργεια απέτυχε ή διακόπηκε. Ανανεώστε πριν δοκιμάσετε ξανά.",
   "remoteAgent.actionReceived": "Ο PC δέχτηκε την ενέργεια",
   "remoteAgent.artifact": "Παραγόμενο αρχείο",
+  "remoteAgent.attachmentsUnavailable": "Οι συνομιλίες υπολογιστή δεν υποστηρίζουν ακόμη συνημμένα",
   "remoteAgent.awaitingApproval": "Αναμονή για την απάντησή σας",
   "remoteAgent.configured": "Το μοντέλο έχει ρυθμιστεί",
   "remoteAgent.confirming": "Επιβεβαίωση αποτελέσματος· μην επαναλάβετε την ενέργεια",

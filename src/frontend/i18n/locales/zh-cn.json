@@ -1096,6 +1096,7 @@
   "remoteAgent.actionFailed": "操作失败或已中断，请刷新状态后再试。",
   "remoteAgent.actionReceived": "PC 已受理操作",
   "remoteAgent.artifact": "产物",
+  "remoteAgent.attachmentsUnavailable": "桌面端会话暂不支持添加附件",
   "remoteAgent.awaitingApproval": "等待你回应",
   "remoteAgent.configured": "已配置模型",
   "remoteAgent.confirming": "正在确认结果，请勿重复提交同一操作",

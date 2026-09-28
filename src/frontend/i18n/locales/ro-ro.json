@@ -1114,6 +1114,7 @@
   "remoteAgent.actionFailed": "Acțiunea a eșuat sau a fost întreruptă. Reîmprospătați înainte de a reîncerca.",
   "remoteAgent.actionReceived": "PC a acceptat acțiunea",
   "remoteAgent.artifact": "Fișier generat",
+  "remoteAgent.attachmentsUnavailable": "Conversațiile desktop nu acceptă încă atașamente",
   "remoteAgent.awaitingApproval": "Se așteaptă răspunsul dvs.",
   "remoteAgent.configured": "Model configurat",
   "remoteAgent.confirming": "Se confirmă rezultatul; nu repetați acțiunea",

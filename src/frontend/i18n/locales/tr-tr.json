@@ -1105,6 +1105,7 @@
   "remoteAgent.actionFailed": "İşlem başarısız oldu veya kesildi. Yeniden denemeden önce yenileyin.",
   "remoteAgent.actionReceived": "PC işlemi kabul etti",
   "remoteAgent.artifact": "Çıktı dosyası",
+  "remoteAgent.attachmentsUnavailable": "Masaüstü sohbetleri henüz ek dosyaları desteklemiyor",
   "remoteAgent.awaitingApproval": "Yanıtınız bekleniyor",
   "remoteAgent.configured": "Model yapılandırıldı",
   "remoteAgent.confirming": "Sonuç doğrulanıyor; aynı işlemi tekrar göndermeyin",

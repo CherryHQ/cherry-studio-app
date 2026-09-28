@@ -1096,6 +1096,7 @@
   "remoteAgent.actionFailed": "Thao tác thất bại hoặc bị gián đoạn. Hãy làm mới trước khi thử lại.",
   "remoteAgent.actionReceived": "PC đã tiếp nhận thao tác",
   "remoteAgent.artifact": "Tệp kết quả",
+  "remoteAgent.attachmentsUnavailable": "Cuộc trò chuyện trên máy tính chưa hỗ trợ tệp đính kèm",
   "remoteAgent.awaitingApproval": "Đang chờ phản hồi của bạn",
   "remoteAgent.configured": "Đã cấu hình mô hình",
   "remoteAgent.confirming": "Đang xác nhận kết quả; không gửi lại cùng thao tác",

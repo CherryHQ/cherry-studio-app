@@ -1105,6 +1105,7 @@
   "remoteAgent.actionFailed": "Action failed or was interrupted. Refresh before trying again.",
   "remoteAgent.actionReceived": "PC received the action",
   "remoteAgent.artifact": "Artifact",
+  "remoteAgent.attachmentsUnavailable": "Desktop conversations don't support attachments yet",
   "remoteAgent.awaitingApproval": "Waiting for your response",
   "remoteAgent.configured": "Model configured",
   "remoteAgent.confirming": "Confirming the result; do not send the same action again",

@@ -1114,6 +1114,7 @@
   "remoteAgent.actionFailed": "A ação falhou ou foi interrompida. Atualize antes de tentar novamente.",
   "remoteAgent.actionReceived": "O PC aceitou a ação",
   "remoteAgent.artifact": "Ficheiro gerado",
+  "remoteAgent.attachmentsUnavailable": "As conversas do computador ainda não suportam anexos",
   "remoteAgent.awaitingApproval": "À espera da sua resposta",
   "remoteAgent.configured": "Modelo configurado",
   "remoteAgent.confirming": "A confirmar o resultado; não repita a ação",

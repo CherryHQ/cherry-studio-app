@@ -1114,6 +1114,7 @@
   "remoteAgent.actionFailed": "Action échouée ou interrompue. Actualisez avant de réessayer.",
   "remoteAgent.actionReceived": "Le PC a accepté l’action",
   "remoteAgent.artifact": "Fichier produit",
+  "remoteAgent.attachmentsUnavailable": "Les conversations de bureau ne prennent pas encore en charge les pièces jointes",
   "remoteAgent.awaitingApproval": "En attente de votre réponse",
   "remoteAgent.configured": "Modèle configuré",
   "remoteAgent.confirming": "Confirmation du résultat ; ne répétez pas l’action",

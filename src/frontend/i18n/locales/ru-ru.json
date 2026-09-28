@@ -1123,6 +1123,7 @@
   "remoteAgent.actionFailed": "Действие не выполнено или прервано. Обновите состояние перед повтором.",
   "remoteAgent.actionReceived": "PC принял действие",
   "remoteAgent.artifact": "Результат",
+  "remoteAgent.attachmentsUnavailable": "Разговоры на компьютере пока не поддерживают вложения",
   "remoteAgent.awaitingApproval": "Ожидание вашего ответа",
   "remoteAgent.configured": "Модель настроена",
   "remoteAgent.confirming": "Результат уточняется; не отправляйте действие повторно",

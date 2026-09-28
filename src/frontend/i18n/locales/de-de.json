@@ -1105,6 +1105,7 @@
   "remoteAgent.actionFailed": "Aktion fehlgeschlagen oder unterbrochen. Vor erneutem Versuch aktualisieren.",
   "remoteAgent.actionReceived": "PC hat die Aktion angenommen",
   "remoteAgent.artifact": "Ergebnisdatei",
+  "remoteAgent.attachmentsUnavailable": "Desktop-Unterhaltungen unterstützen noch keine Anhänge",
   "remoteAgent.awaitingApproval": "Warten auf Ihre Antwort",
   "remoteAgent.configured": "Modell konfiguriert",
   "remoteAgent.confirming": "Ergebnis wird geprüft; Aktion nicht erneut senden",
