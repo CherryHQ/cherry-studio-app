@@ -36,7 +36,7 @@ export function useRemoteChatNavigation(
     identity,
     selectAgent: (agentId: string) => {
       // Read at click time: admission may have happened since the header last rendered. A submitted
-      // start keeps its Agent; an undelivered one moves with the draft to the new Agent.
+      // start keeps its route; an undelivered one stays on the draft and still resends to its Agent.
       const nextDraftId = target.sessionId || source.hasSubmission(draftId) ? uuidv7() : draftId;
       if (nextDraftId !== draftId || target.sessionId) origin.current = undefined;
       openRemote({ connectionId: target.connectionId, agentId, draftId: nextDraftId });

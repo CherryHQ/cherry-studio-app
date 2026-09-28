@@ -1,4 +1,8 @@
-import type { RemoteAgentSource, RemoteStartOperation } from '@/shared/contracts/remoteAgent';
+import type {
+  RemoteAgentSource,
+  RemoteStartOperation,
+  RemoteWorkspaceSelection,
+} from '@/shared/contracts/remoteAgent';
 
 import type {
   AgentRef,
@@ -213,47 +217,55 @@ export function createRemoteConversationSource(
             : { kind: 'registered' as const, id: selected.id };
         let retired = false;
         let pending = false;
+        const submit = async (
+          target: { agentId: string; workspace?: RemoteWorkspaceSelection },
+          value: ConversationInput,
+        ): Promise<OperationOutcome<Submission>> => {
+          try {
+            assertSource();
+            if (retired) throw new ConversationReadError({ code: 'retired', retry: 'none' });
+            if (!target.workspace)
+              throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
+            const text = remoteInput(value);
+            pending = true;
+            state.set(snapshot());
+            return outcome(
+              await remote.start({
+                draftId: input.draftId,
+                agentId: target.agentId,
+                workspace: target.workspace,
+                text,
+              }),
+            );
+          } catch (error) {
+            return {
+              state: 'rejected',
+              failure:
+                error instanceof ConversationReadError
+                  ? error.failure
+                  : remoteConversationFailure(error),
+            };
+          } finally {
+            pending = false;
+            if (!retired) state.set(snapshot());
+          }
+        };
         function snapshot(): ReturnType<ConversationDraft['state']['getSnapshot']> {
           const availability = remoteAvailability(remote.getState(), retired || disposed);
           const starts = remote.getStarts();
           const own = starts.find((start) => start.draftId === input.draftId);
+          const ready: ConversationAction<ConversationInput, Submission>['availability'] =
+            availability.state === 'disabled'
+              ? availability
+              : pending || (own && !isUndelivered(own))
+                ? { state: 'disabled', reason: 'busy' }
+                : availability;
           const start: ConversationAction<ConversationInput, Submission> = {
             availability:
-              availability.state === 'disabled'
-                ? availability
-                : !workspace
-                  ? { state: 'disabled', reason: 'workspace-required' }
-                  : pending || (own && !isUndelivered(own))
-                    ? { state: 'disabled', reason: 'busy' }
-                    : availability,
-            execute: async (value) => {
-              try {
-                assertSource();
-                if (retired) throw new ConversationReadError({ code: 'retired', retry: 'none' });
-                if (!workspace)
-                  throw new ConversationReadError({
-                    code: 'invalid-input',
-                    retry: 'revise-input',
-                  });
-                const text = remoteInput(value);
-                pending = true;
-                state.set(snapshot());
-                return outcome(
-                  await remote.start({ draftId: input.draftId, agentId, workspace, text }),
-                );
-              } catch (error) {
-                return {
-                  state: 'rejected',
-                  failure:
-                    error instanceof ConversationReadError
-                      ? error.failure
-                      : remoteConversationFailure(error),
-                };
-              } finally {
-                pending = false;
-                if (!retired) state.set(snapshot());
-              }
-            },
+              ready.state === 'enabled' && !workspace
+                ? { state: 'disabled', reason: 'workspace-required' }
+                : ready,
+            execute: (value) => submit({ agentId, workspace }, value),
           };
           // A start that failed after its route left surfaces on the next draft instead of vanishing.
           const failed =
@@ -274,17 +286,33 @@ export function createRemoteConversationSource(
             undeliveredMessage(
               failed,
               refs.issue<OperationId>('operation', failed.id),
-              failed === own
-                ? start
-                : {
-                    availability: start.availability,
-                    // Resubmitting replaces only this draft's own start, so retire the adopted one.
-                    execute: async (value) => {
-                      const result = await start.execute(value);
-                      if (result.state !== 'rejected' || result.operationId) discard();
-                      return result;
+              {
+                availability: ready,
+                // Resend to the Agent and workspace it was written for, even if this draft has
+                // moved on. The new start replaces this draft's own record and hands off to its
+                // Session; an adopted record is retired once the new start holds the input.
+                execute: async (value) => {
+                  const result = await submit(
+                    {
+                      agentId: failed.agentId,
+                      workspace: failed.workspace ?? {
+                        kind: 'registered',
+                        id: failed.workspaceId!,
+                      },
                     },
-                  },
+                    value,
+                  );
+                  if (
+                    failed !== own &&
+                    (result.state !== 'rejected' || result.operationId) &&
+                    !retired &&
+                    !disposed &&
+                    remote.getState().status !== 'retired'
+                  )
+                    remote.discard(failed.id);
+                  return result;
+                },
+              },
               discard,
             );
           return {

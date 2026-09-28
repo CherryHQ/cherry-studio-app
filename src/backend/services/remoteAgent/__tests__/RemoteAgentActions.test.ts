@@ -283,6 +283,42 @@ it('hands a created Session its undelivered first send on release', async () => 
   ]);
 });
 
+it('keeps the first send with its Session when the start fails before recording it', async () => {
+  const { port } = journal();
+  const request = jest.fn(async (name: string, body: any) =>
+    name === 'agent.sessions.get'
+      ? { session: { ...sessionResult('s').session, idleRevision: undefined } }
+      : { ...receipt(body.commandId, 'applied'), method: name },
+  );
+  const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  const start = await actions.start(startInput);
+  expect(start).toMatchObject({ status: 'rejected', sessionId: 's', error: 'CONFLICT' });
+  actions.release(start.id);
+  expect(actions.get()).toEqual([
+    expect.objectContaining({ kind: 'send', sessionId: 's', status: 'rejected', text: 'hello' }),
+  ]);
+});
+
+it('lets a later send replace a settled start first send that was never released', async () => {
+  const { port } = journal();
+  const request = jest.fn(async (name: string, body: any) => {
+    if (name === 'agent.sessions.get') return sessionResult('s');
+    return { ...receipt(body.commandId, name === method ? 'rejected' : 'applied'), method: name };
+  });
+  const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  await actions.start(startInput);
+  request.mockImplementation(async (name: string, body: any) => ({
+    ...receipt(body.commandId, 'applied'),
+    method: name,
+    sessionId: body.sessionId,
+  }));
+  const resent = await actions.create('send', method, params, 'hello');
+  await actions.create('cancel', 'agent.executions.cancel', { sessionId: 'o' });
+  // Neither the applied resend nor the replaced first send may resurface as undelivered.
+  expect(actions.get().filter((command) => command.sessionId === 's')).toEqual([]);
+  expect(resent.status).toBe('applied');
+});
+
 it('keeps one undelivered send per Session and drops settled cancel and respond records', async () => {
   const { port } = journal();
   const request = jest.fn(async (name: string, body: any) => ({

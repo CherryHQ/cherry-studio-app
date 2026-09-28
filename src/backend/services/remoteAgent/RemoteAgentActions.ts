@@ -167,8 +167,13 @@ export class RemoteAgentActions {
     commandId = randomUUID(),
   ): Promise<RemoteCommand> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
-    // Keep pending work, start records and each Session's one undelivered send; a new send replaces it.
-    const owned = new Set(this.starts.flatMap((start) => [start.createId, start.sendId]));
+    // Keep pending work, open start records and each Session's one undelivered send; a new send
+    // replaces it. A settled start's Session already owns its first send like any other.
+    const owned = new Set(
+      this.starts.flatMap((start) =>
+        start.status === 'pending' || !start.sessionId ? [start.createId, start.sendId] : [],
+      ),
+    );
     const retained = this.records.filter(
       (entry) =>
         owned.has(entry.action.id) ||
@@ -294,10 +299,10 @@ export class RemoteAgentActions {
     this.starting.set(id, work);
     return work;
   }
-  private updateStart(entry: StartEntry) {
-    const view = projectStart(entry, this.records);
+  private updateStart(entry: StartEntry, records = this.records) {
+    const view = projectStart(entry, records);
     this.commit(
-      this.records,
+      records,
       this.starts.map((item) => (item.id === entry.id ? entry : item)),
     );
     return view;
@@ -358,13 +363,31 @@ export class RemoteAgentActions {
         error instanceof RemoteAgentError &&
         !error.retryable &&
         !['CLOSED', 'PROTOCOL_ERROR'].includes(error.code)
-      )
-        settled = this.updateStart({
-          ...entry,
-          status: error.code === 'COMMAND_INTERRUPTED' ? 'interrupted' : 'rejected',
-          error: error.code,
-          errorMessage: error.detail,
-        });
+      ) {
+        const status: StartEntry['status'] =
+          error.code === 'COMMAND_INTERRUPTED' ? 'interrupted' : 'rejected';
+        const failure = { error: error.code, errorMessage: error.detail };
+        // The Session exists but its first send was never recorded; record it so the input stays
+        // with that Session after the handoff.
+        const unsent =
+          entry.sessionId && !this.records.some((record) => record.action.id === entry.sendId)
+            ? [
+                {
+                  action: {
+                    id: entry.sendId,
+                    kind: 'send' as const,
+                    sessionId: entry.sessionId,
+                    text: entry.text,
+                    status,
+                    ...failure,
+                  },
+                  method: 'agent.messages.send',
+                  params: { commandId: entry.sendId, sessionId: entry.sessionId, text: entry.text },
+                },
+              ]
+            : [];
+        settled = this.updateStart({ ...entry, status, ...failure }, [...this.records, ...unsent]);
+      }
     }
     this.changed();
     return settled;

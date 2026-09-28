@@ -264,8 +264,8 @@ it('surfaces a start that failed after its draft closed on the next draft, and r
   const orphan = {
     id: 'orphan',
     draftId: 'old-draft',
-    agentId: 'a',
-    workspaceId: 'w',
+    agentId: 'other-agent',
+    workspaceId: 'other-workspace',
     text: 'Retained input',
     status: 'rejected' as const,
     error: 'TARGET_UNAVAILABLE',
@@ -287,9 +287,13 @@ it('surfaces a start that failed after its draft closed on the next draft, and r
     input: { parts: [{ type: 'text', text: 'Retained input' }] },
   });
   await expect(undelivered.resend.execute(undefined)).resolves.toMatchObject({ state: 'pending' });
-  expect(test.remote.start).toHaveBeenCalledWith(
-    expect.objectContaining({ draftId: 'new-draft', text: 'Retained input' }),
-  );
+  // It resends to the Agent and workspace it was written for, not the draft's current selection.
+  expect(test.remote.start).toHaveBeenCalledWith({
+    draftId: 'new-draft',
+    agentId: 'other-agent',
+    workspace: { kind: 'registered', id: 'other-workspace' },
+    text: 'Retained input',
+  });
   expect(test.remote.discard).toHaveBeenCalledWith('orphan');
   draft.dispose();
   source.dispose();
