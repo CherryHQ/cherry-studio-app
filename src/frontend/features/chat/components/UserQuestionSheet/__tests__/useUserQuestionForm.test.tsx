@@ -107,6 +107,41 @@ test('skips the current question, clears skip when editing again, and skips the 
   ]);
 });
 
+test('clears a selected single choice so the question can be skipped', async () => {
+  act(() => form.select('a'));
+  expect(form.action).toBe('next');
+  act(() => form.select('a'));
+  expect(form.answer.selectedOptionIds).toEqual([]);
+  expect(form.action).toBe('skip');
+  act(() => form.advance());
+  act(() => form.navigate(2));
+  await act(async () => form.advance());
+  expect(respond.mock.calls[0][0][0]).toEqual({
+    questionId: 'city',
+    selectedOptionIds: [],
+    text: '',
+    skipped: true,
+  });
+});
+
+test('clears a required single choice without losing free text or allowing an empty answer', async () => {
+  act(() =>
+    renderer.update(<Harness key="required-single" value={[questions[0]]} allowSkip={false} />),
+  );
+  act(() => form.select('a'));
+  act(() => form.select('a'));
+  expect(form.canAct).toBe(false);
+  await act(async () => form.advance());
+  expect(respond).not.toHaveBeenCalled();
+  act(() => form.select('b'));
+  act(() => form.setText('Another city'));
+  act(() => form.select('b'));
+  await act(async () => form.advance());
+  expect(respond).toHaveBeenCalledWith([
+    { questionId: 'city', selectedOptionIds: [], text: 'Another city', skipped: false },
+  ]);
+});
+
 test('requires every answer when the request does not accept skips', async () => {
   act(() => {
     renderer.update(<Harness key="required" allowSkip={false} />);

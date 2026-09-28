@@ -12,7 +12,7 @@ const ignoreClose = () => undefined;
 
 export type UserQuestionSheetProps = UserQuestionFormProps & { open: boolean };
 
-/** Asks one question at a time; the request stays on screen until it is answered. */
+/** Asks one question at a time and retains drafts while its owner hides the request. */
 export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
   const { t } = useTranslation();
   const form = useUserQuestionForm(props);
@@ -92,7 +92,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       open={open}
       size="medium"
       testID="user-question-sheet"
-      title={form.question.question}
+      title={t('chat.question.title')}
     >
       <ScrollView
         key={form.question.id}
@@ -105,6 +105,9 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         {form.question.header ? (
           <Text className="text-foreground-tertiary text-sm">{form.question.header}</Text>
         ) : null}
+        <Text accessibilityRole="header" className="font-semibold text-base text-foreground">
+          {form.question.question}
+        </Text>
         {form.question.options.length ? (
           <View className="-mx-3 gap-1">
             {form.question.options.map((option) => {

@@ -40,8 +40,10 @@ export function ConversationQuestionSheet({ snapshot }: { snapshot: Conversation
   );
   const interaction = retired ? undefined : pending;
   const input = useConversationResourceValue(interaction?.input, retired);
-  // Approvals keep presentation priority; the question sheet stays mounted so its drafts survive.
+  // Stale sources expose the chat's navigation and connection recovery controls. Keep the form
+  // mounted while hidden, whether behind an approval or waiting for the source to recover.
   const open =
+    snapshot.freshness.state === 'current' &&
     Boolean(interaction) &&
     snapshot.interactions.find((item) => item.state === 'pending') === interaction;
   const canRespond = open && interaction?.respond?.availability.state === 'enabled';

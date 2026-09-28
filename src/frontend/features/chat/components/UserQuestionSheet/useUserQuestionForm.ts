@@ -77,12 +77,11 @@ export function useUserQuestionForm({
     change((current) => ({
       ...current,
       skipped: false,
-      selectedOptionIds:
-        question.selection === 'single'
+      selectedOptionIds: current.selectedOptionIds.includes(id)
+        ? current.selectedOptionIds.filter((selected) => selected !== id)
+        : question.selection === 'single'
           ? [id]
-          : current.selectedOptionIds.includes(id)
-            ? current.selectedOptionIds.filter((selected) => selected !== id)
-            : [...current.selectedOptionIds, id],
+          : [...current.selectedOptionIds, id],
     }));
   }
 

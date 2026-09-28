@@ -29,14 +29,18 @@ message list keeps its geometry and selection does not subscribe into the chat r
   presentation model, and returns the matching response: local answers keep option and question IDs
   and may skip; desktop answers are keyed by question text, joined from selected labels and free
   text, and require every question. An unreadable desktop form opens a retryable error sheet.
-  `UserQuestionSheet/` shows one question at a time: the question is the sheet title, followed by
-  an optional header, radio options for a single choice or checkboxes for multiple, option
-  descriptions, and a free-text field pinned below the scrolling options. The sheet avoids the
-  keyboard, so typing lifts the field and footer above it and shrinks only the options. Choosing never navigates; the footer's action reads skip while the question is unanswered, next once it is answered, and submit on the
-  last question, where local requests skip whatever is still unanswered. Request identity resets
-  the form; failed or unconfirmed submissions keep the answers editable for resubmission. A leading
-  approval closes the sheet without unmounting it, so drafts survive. Opening the sheet ends the
-  ordinary composer's editing session; its text and attachments stay intact.
+  `UserQuestionSheet/` shows one question at a time: an optional header and the full question are
+  in the scrolling body, followed by radio options for a single choice or checkboxes for multiple
+  and option descriptions. A free-text field stays pinned below that body. The sheet avoids the
+  keyboard, so typing lifts the field and footer above it and shrinks only the scrolling body.
+  Choosing never navigates; the footer's action reads skip while the question is unanswered, next
+  once it is answered, and submit on the last question, where local requests skip whatever is still
+  unanswered. Tapping a selected option clears it, including a single choice, so the answer can
+  return to free text only or be skipped. Request identity resets the form; failed or unconfirmed
+  submissions keep the answers editable for resubmission. A leading approval or a source that is no
+  longer current closes the sheet without unmounting it, so drafts survive while navigation and
+  connection recovery remain reachable. Opening the sheet ends the ordinary composer's editing
+  session; its text and attachments stay intact.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,
   initial-render gating and pending first-send rows. Message actions and approvals use the bound

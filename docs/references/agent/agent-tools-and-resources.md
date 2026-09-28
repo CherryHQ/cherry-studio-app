@@ -574,14 +574,17 @@ its turn id, so the Host correlates the question to the live turn and tool-call 
 publishes `question.updated` and includes `pendingQuestion` in observation snapshots. While a
 question is pending, the turn reports `awaiting-input`. A question sheet opens over the chat and
 leaves the ordinary input's draft intact; desktop question forms in remote chat reuse the same sheet
-through the shared interaction contract. It shows one question at a time, titled by the question,
-with radio options for a single choice and checkboxes for multiple. Choosing never navigates; the
-footer action reads skip until the question is answered, next once it is, and submit on the last
-question, with previous beside it. Choices and free text remain editable
-until the user submits the complete set; local submission marks any unanswered question skipped.
+through the shared interaction contract. It shows one question at a time with its full text in the
+scrolling body, radio options for a single choice, and checkboxes for multiple. Choosing never
+navigates; tapping a selected option clears it so the answer can return to free text only or be
+skipped. The footer action reads skip until the question is answered, next once it is, and submit on
+the last question, with previous beside it. Choices and free text remain editable until the user
+submits the complete set; local submission marks any unanswered question skipped.
 Skip never submits or cancels the turn. There is no close control.
 Turn cancellation discards the pending request without submitting answers. Approval requests take
 presentation priority if tools were called concurrently, without discarding the question draft.
+When the source is no longer current, the sheet closes while preserving its draft so navigation and
+connection recovery stay reachable; the same request reopens when the source recovers.
 A second simultaneous question call is rejected.
 
 Question arguments and successful answers use ordinary persisted tool parts. The transcript shows

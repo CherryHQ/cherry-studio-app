@@ -266,6 +266,76 @@ it('shows a retryable state while a deferred question form cannot be read', asyn
   expect(test.read).toHaveBeenCalledTimes(1);
 });
 
+it('hides a disconnected question and reopens the retained form when the source recovers', async () => {
+  const test = fixture();
+  test.read.mockResolvedValue({
+    kind: 'question',
+    questions: [{ question: 'Where?', multiple: false, options: [] }],
+  });
+  const connected: ConversationSnapshot = {
+    ...test.snapshot,
+    interactions: test.snapshot.interactions.map((item) => ({ ...item, kind: 'question' })),
+  };
+  test.update(connected);
+  await render(test);
+  expect(questionSheet?.open).toBe(true);
+  const questions = questionSheet!.questions;
+
+  test.update({
+    ...connected,
+    freshness: { state: 'cached', reason: 'offline' },
+    interactions: connected.interactions.map((item) => ({
+      ...item,
+      respond: { availability: { state: 'disabled', reason: 'offline' }, execute: test.respond },
+    })),
+  });
+  await render(test);
+  expect(questionSheet?.open).toBe(false);
+  expect(questionSheet?.disabled).toBe(true);
+  expect(questionSheet?.questions).toEqual(questions);
+  await expect(
+    questionSheet!.onRespond([
+      { questionId: 'Where?', selectedOptionIds: [], text: 'Hangzhou', skipped: false },
+    ]),
+  ).rejects.toThrow();
+  expect(test.respond).not.toHaveBeenCalled();
+
+  test.update(connected);
+  await render(test);
+  expect(questionSheet?.open).toBe(true);
+  expect(questionSheet?.disabled).toBe(false);
+  expect(questionSheet?.questions).toEqual(questions);
+
+  // A response being sent keeps its sheet visible; it does not mean the source is disconnected.
+  test.update({
+    ...connected,
+    interactions: connected.interactions.map((item) => ({
+      ...item,
+      respond: { availability: { state: 'disabled', reason: 'busy' }, execute: test.respond },
+    })),
+  });
+  await render(test);
+  expect(questionSheet?.open).toBe(true);
+  expect(questionSheet?.disabled).toBe(true);
+});
+
+it('does not block connection recovery with an unreadable question error sheet while offline', async () => {
+  const test = fixture();
+  test.read.mockRejectedValue(new Error('offline'));
+  test.update({
+    ...test.snapshot,
+    freshness: { state: 'cached', reason: 'offline' },
+    interactions: test.snapshot.interactions.map((item) => ({
+      ...item,
+      kind: 'question',
+      respond: { availability: { state: 'disabled', reason: 'offline' }, execute: test.respond },
+    })),
+  });
+  await render(test);
+  expect(questionSheet).toBeUndefined();
+  expect(errorSheetOpen).toBe(false);
+});
+
 it('preserves option IDs and skipping, and allows retry when a user answer is rejected', async () => {
   const test = fixture();
   const input: ResourceValue = {
