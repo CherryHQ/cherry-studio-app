@@ -1,7 +1,7 @@
 import { easing } from '@cherrystudio/ui/motion';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -12,10 +12,12 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import {
   getStartupExitDurationMs,
+  STARTUP_ATTRIBUTION_ENTER_DURATION_MS,
   STARTUP_EXIT_FADE_DELAY_MS,
   STARTUP_EXIT_FADE_DURATION_MS,
   STARTUP_EXIT_LOGO_DURATION_MS,
@@ -24,6 +26,7 @@ import {
 
 const STARTUP_LOGO = require('@/assets/icon.png');
 const LOGO_SIZE = 96;
+const ATTRIBUTION_SAFE_AREA_GAP = 48;
 // The fade starts slowly so the logo's growth is readable before the cover thins out.
 const coverFadeEasing = Easing.inOut(Easing.cubic);
 
@@ -38,6 +41,7 @@ const colors = {
 
 type StartupCoverProps = {
   colorScheme: 'dark' | 'light';
+  coverPresented: boolean;
   exitRequested: boolean;
   onExitComplete: () => void;
   onLayout: () => void;
@@ -45,17 +49,40 @@ type StartupCoverProps = {
 
 export function StartupCover({
   colorScheme,
+  coverPresented,
   exitRequested,
   onExitComplete,
   onLayout,
 }: StartupCoverProps) {
+  const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
+  const attributionOpacity = useSharedValue(reducedMotion ? 1 : 0);
   const coverOpacity = useSharedValue(1);
   const logoScale = useSharedValue(1);
   const palette = colors[colorScheme];
   const exitDurationMs = getStartupExitDurationMs(reducedMotion);
+  const attributionStyle = useAnimatedStyle(() => ({ opacity: attributionOpacity.get() }));
   const coverStyle = useAnimatedStyle(() => ({ opacity: coverOpacity.get() }));
   const logoStyle = useAnimatedStyle(() => ({ transform: [{ scale: logoScale.get() }] }));
+
+  useEffect(() => {
+    if (!coverPresented) {
+      return;
+    }
+
+    if (reducedMotion) {
+      attributionOpacity.set(1);
+      return;
+    }
+
+    attributionOpacity.set(
+      withTiming(1, {
+        duration: STARTUP_ATTRIBUTION_ENTER_DURATION_MS,
+        easing: easing.settle,
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [attributionOpacity, coverPresented, reducedMotion]);
 
   useEffect(() => {
     if (!exitRequested) {
@@ -97,10 +124,11 @@ export function StartupCover({
 
   useEffect(() => {
     return () => {
+      cancelAnimation(attributionOpacity);
       cancelAnimation(coverOpacity);
       cancelAnimation(logoScale);
     };
-  }, [coverOpacity, logoScale]);
+  }, [attributionOpacity, coverOpacity, logoScale]);
 
   return (
     <Animated.View
@@ -121,11 +149,37 @@ export function StartupCover({
           style={[styles.logo, logoStyle]}
         />
       </View>
+      <Animated.View
+        accessible={false}
+        pointerEvents="none"
+        style={[
+          styles.attribution,
+          { bottom: insets.bottom + ATTRIBUTION_SAFE_AREA_GAP },
+          attributionStyle,
+        ]}
+      >
+        <Text accessible={false} allowFontScaling={false} style={styles.brandText}>
+          Cherry Studio
+        </Text>
+      </Animated.View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  attribution: {
+    alignItems: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+  },
+  brandText: {
+    color: '#FF5757',
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 0,
+    lineHeight: 24,
+  },
   cover: {
     bottom: 0,
     elevation: 1_000,

@@ -2,6 +2,7 @@ import {
   getStartupExitDurationMs,
   isStartupReadyToExit,
   normalizeStartupColorScheme,
+  STARTUP_ATTRIBUTION_ENTER_DURATION_MS,
   STARTUP_EXIT_FADE_DELAY_MS,
   STARTUP_EXIT_FADE_DURATION_MS,
   STARTUP_EXIT_LOGO_DURATION_MS,
@@ -19,12 +20,14 @@ const readyState = {
 describe('startup state', () => {
   test('uses the calibrated startup motion timeline', () => {
     expect({
+      attributionEnter: STARTUP_ATTRIBUTION_ENTER_DURATION_MS,
       exitFadeDelay: STARTUP_EXIT_FADE_DELAY_MS,
       exitFadeDuration: STARTUP_EXIT_FADE_DURATION_MS,
       exitLogoDuration: STARTUP_EXIT_LOGO_DURATION_MS,
       exitLogoScale: STARTUP_EXIT_LOGO_SCALE,
       minimumVisible: STARTUP_MINIMUM_VISIBLE_MS,
     }).toEqual({
+      attributionEnter: 260,
       exitFadeDelay: 60,
       exitFadeDuration: 280,
       exitLogoDuration: 320,

@@ -15,13 +15,15 @@ Cherry uses two visually matching surfaces during every process cold start:
 
 The native and React Native surfaces use the same desktop-aligned `assets/icon.png` at 96 dp on
 `#FFFFFF` in Light appearance and `#000000` in Dark appearance. The brand artwork remains fixed in
-both modes. The native surface contains no animation.
+both modes. The native surface contains no attribution or animation.
 
-The React Native cover matches the native surface exactly, so the native-to-React handoff is
-invisible. After the application renders behind the opaque cover, the cover exits in 340 ms: the
-logo scales to 1.15× over 320 ms, and the cover starts fading 60 ms later over 280 ms with an
-ease-in-out curve. The slow start of the fade keeps the logo's growth readable before the cover
-thins out. The application tree itself is never animated.
+The React Native cover adds a single-line `Cherry Studio` attribution 48 dp above the bottom
+safe area. The centered logo stays fixed across the native-to-React handoff, while the attribution
+fades in over 260 ms after the React Native cover is confirmed visible. After the application
+renders behind the opaque cover, the cover exits in 340 ms: the logo scales to 1.15× over 320 ms,
+and the cover, including the attribution, starts fading 60 ms later over 280 ms with an ease-in-out
+curve. The slow start of the fade keeps the logo's growth readable before the cover thins out. The
+application tree itself is never animated.
 
 This lifecycle is process-owned state. Background-to-foreground transitions do not remount or reset
 the coordinator, so they do not replay the launch experience.
@@ -35,9 +37,10 @@ the coordinator, so they do not replay the launch experience.
 4. `StartupCoordinator`, inside the bootstrap provider and outside `AppBootstrapGate`, renders an
    opaque cover without reading Uniwind or the saved application theme.
 5. After layout and two animation frames, the coordinator hides the native launch screen. Its
-   matching background, centered logo, and status bar style make this a direct visual handoff.
+   matching background, centered logo, and status bar style make this a direct visual handoff; the
+   attribution appears as part of the complete React Native startup screen.
 6. `hideAsync()` resolves after dispatching native removal, so the coordinator crosses two more
-   animation frames before starting the 800 ms minimum. It then
+   animation frames before starting the 800 ms minimum and the attribution fade-in. It then
    releases `startupCoverHandoff`,
    allowing theme and i18n initialization behind the opaque cover. This ordering prevents
    `Uniwind.setTheme()` from recoloring the still-visible iOS LaunchScreen when the system and saved
@@ -63,13 +66,14 @@ timeout remains a fallback for navigation trees that never report layout.
 
 ## Motion And Accessibility
 
-The cover's logo scale and opacity transitions use Reanimated timing on the UI thread. When the
-operating system's Reduce Motion setting is enabled, the cover is removed immediately after
-readiness and the 800 ms minimum.
+The cover's logo scale and the cover and attribution opacity transitions use Reanimated timing on
+the UI thread. When the operating system's Reduce Motion setting is enabled, the attribution appears
+without animation and the cover is removed immediately after readiness and the 800 ms minimum.
 
 While visible, the cover owns pointer input. The underlying application uses
 `no-hide-descendants`/`accessibilityElementsHidden`, preventing focus from reaching controls that
-are not yet visible. The logo is decorative and does not become an accessibility focus target.
+are not yet visible. The attribution and logo are decorative and do not become accessibility focus
+targets.
 
 Screens behind the cover can read `useStartupCoverVisible` from the startup module. The onboarding
 welcome intro uses it to wait until the cover has been removed, so the intro is not spent behind it.

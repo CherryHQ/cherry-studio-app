@@ -35,6 +35,7 @@ export function StartupCoordinator({
         {lifecycle.coverVisible ? (
           <StartupCover
             colorScheme={colorScheme}
+            coverPresented={lifecycle.coverPresented}
             exitRequested={lifecycle.exitRequested}
             onExitComplete={lifecycle.handleCoverExitComplete}
             onLayout={lifecycle.handleCoverLayout}

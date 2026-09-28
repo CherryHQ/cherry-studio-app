@@ -96,12 +96,14 @@ describe('useStartupLifecycle', () => {
     act(() => lifecycle.current.handleCoverLayout());
     advanceTwoFrames();
     expect(mockHideAsync).toHaveBeenCalledTimes(1);
+    expect(lifecycle.current.coverPresented).toBe(false);
     expect(onCoverPresented).not.toHaveBeenCalled();
 
     await act(async () => Promise.resolve());
     expect(onCoverPresented).not.toHaveBeenCalled();
 
     advanceTwoFrames();
+    expect(lifecycle.current.coverPresented).toBe(true);
     expect(onCoverPresented).toHaveBeenCalledTimes(1);
     lifecycle.unmount();
   });
