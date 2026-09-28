@@ -4,11 +4,7 @@ import { v7 as uuidv7 } from 'uuid';
 
 import type { ConversationRef } from '@/frontend/appShell/conversation';
 import type { DraftId, RemoteConversationSource } from '@/frontend/appShell/conversation/remote';
-import {
-  conversationHref,
-  useChatSource,
-  type RemoteChatTarget,
-} from '@/frontend/appShell/navigation/chat';
+import { useChatSource, type RemoteChatTarget } from '@/frontend/appShell/navigation/chat';
 
 /** Draft identity owns input; Agent selection only changes the destination until submission. */
 export function useRemoteChatNavigation(
@@ -54,7 +50,8 @@ export function useRemoteChatNavigation(
     onSessionCreated: (ref: ConversationRef) => {
       if (origin.current !== identity) return false;
       setHandoff({ sessionId: ref.sessionId, key: identity });
-      router.replace(conversationHref(ref));
+      // Same route: replacing would remount the whole screen and flash it.
+      router.setParams({ sessionId: ref.sessionId, draftId: undefined });
       return true;
     },
   };

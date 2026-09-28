@@ -10,15 +10,14 @@ import type { RemoteChatTarget } from '@/frontend/appShell/navigation/chat';
 import { useRemoteChatNavigation } from '../useRemoteChatNavigation';
 
 const mockOpen = jest.fn();
-const mockReplace = jest.fn();
+const mockSetParams = jest.fn();
 let mockFocused = true;
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => ({ setParams: mockSetParams }),
   useIsFocused: () => mockFocused,
 }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   useChatSource: () => ({ openRemote: mockOpen }),
-  conversationHref: (ref: unknown) => ref,
 }));
 let operations: readonly ConversationOperation[];
 const source = { operations: { getSnapshot: () => operations } } as Pick<
@@ -63,7 +62,7 @@ it('retargets an unsent draft without changing its composer or desktop identity'
   await render(mockOpen.mock.lastCall![0]);
   expect(navigation.identity).toBe(identity);
   expect(navigation.draftId).toBe('draft');
-  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockSetParams).not.toHaveBeenCalled();
 });
 
 it.each(['pending', 'interrupted', 'applied', 'rejected'] as const)(
@@ -80,7 +79,7 @@ it.each(['pending', 'interrupted', 'applied', 'rejected'] as const)(
     expect(oldResult(created)).toBe(false);
     await render(target);
     expect(oldResult(created)).toBe(false);
-    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockSetParams).not.toHaveBeenCalled();
   },
 );
 
@@ -100,8 +99,8 @@ it('accepts only the current focused draft handoff and preserves its composer ac
   await act(async () => {
     expect(navigation.onSessionCreated(created)).toBe(true);
   });
-  expect(mockReplace).toHaveBeenCalledWith(created);
-  await render({ connectionId: 'desktop', sessionId: 'created' });
+  expect(mockSetParams).toHaveBeenCalledWith({ sessionId: 'created', draftId: undefined });
+  await render({ ...draft, sessionId: 'created', draftId: undefined });
   expect(navigation.identity).toBe(identity);
   const result = navigation.onSessionCreated;
   await act(async () => renderer.unmount());
@@ -135,9 +134,9 @@ it('accepts recovered creation from a child effect after mount, and ignores it w
   await act(async () => {
     renderer = create(<RecoveringRoute />);
   });
-  expect(mockReplace).toHaveBeenCalledTimes(1);
+  expect(mockSetParams).toHaveBeenCalledTimes(1);
   mockFocused = false;
   await render(draft);
   expect(navigation.onSessionCreated(created)).toBe(false);
-  expect(mockReplace).toHaveBeenCalledTimes(1);
+  expect(mockSetParams).toHaveBeenCalledTimes(1);
 });
