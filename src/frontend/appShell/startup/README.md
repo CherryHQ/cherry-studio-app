@@ -5,7 +5,8 @@ from the native splash screen to rendered application content.
 
 The root layout consumes `StartupCoordinator` and `StartupRouteReadyReporter` through `index.ts`.
 Feature screens report content readiness through the exported hook without owning the global
-startup lifecycle.
+startup lifecycle. A screen that runs its own entrance reads `useStartupCoverVisible` and holds the
+entrance until the cover is gone; outside `StartupCoordinator` the hook reports no cover.
 
 `AppUpdateObserver` starts a nonblocking GitCode APK check after the bootstrap gate opens. It keeps
 the result in the shared frontend query cache and refreshes stale data when the app returns to the

@@ -10,6 +10,7 @@
  */
 
 import { getLocales } from 'expo-localization';
+import { createMMKV } from 'react-native-mmkv';
 
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
@@ -37,6 +38,7 @@ import {
 import { createAgentRuntimeToolResolver } from '../tools/runtimeTools';
 import { type AgentDefinitionSource, createAgentTableDefinitionSource } from './agentDefinitions';
 import { createAgentImageGeneration } from './agentImageGeneration';
+import { AgentReplayCache } from './AgentReplayCache';
 import { AgentSessionNaming } from './AgentSessionNaming';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { createAgentInferenceModelResolver } from './inferenceSnapshot';
@@ -58,6 +60,9 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly runtimeTools;
   readonly imageGeneration;
   readonly usage = new AgentSessionUsageRecorder();
+  readonly replayCache = new AgentReplayCache(() =>
+    createMMKV({ id: 'cherry-agent-replay-cache' }),
+  );
 
   constructor(
     private readonly store: AgentSessionStore,

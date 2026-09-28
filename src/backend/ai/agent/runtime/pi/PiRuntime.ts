@@ -75,6 +75,7 @@ import {
 } from './piDeferredToolDiscovery';
 import { disablePiToolCalls } from './piToolChoice';
 import { PiToolInputPreviewBuffer } from './PiToolInputPreviewBuffer';
+import { createPiTurnReplay } from './piTurnReplay';
 import { tracePiStream } from './tracePiStream';
 
 export type PiModelResolution = {
@@ -222,6 +223,8 @@ type ActiveTurn = {
   failedToolCalls: Set<string>;
   recordedInvocations: Set<string>;
   recordedResponses: WeakSet<AssistantMessage>;
+  replayMessages: PiMessage[];
+  hasLoopCompaction?: boolean;
   nextInvocationOrdinal: number;
   unavailableTools: Map<string, RuntimeToolResult>;
   limitError?: RuntimeError;
@@ -598,6 +601,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       failedToolCalls: new Set(),
       recordedInvocations: new Set(),
       recordedResponses: new WeakSet(),
+      replayMessages: [],
       nextInvocationOrdinal: 0,
       unavailableTools: new Map(),
       modelContextHeadroomTokens: 0,
@@ -821,6 +825,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         },
       };
       const currentMessages = [conversation.prompt, ...(conversation.resume ?? [])];
+      turn.replayMessages.push(...(conversation.resume ?? []));
       const compactionRedactions = [
         ...secrets,
         ...sensitiveToolResultValues([...conversation.history, ...currentMessages]),
@@ -831,6 +836,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
         let activity: Pick<RuntimeContextCompaction, 'id' | 'startedAt'> | undefined;
         return {
           onCompaction: (update: PiCompactionUpdate) => {
+            if (phase === 'tool-loop' && update.status === 'completed') {
+              turn.hasLoopCompaction = true;
+            }
             if (update.status === 'running') {
               activity = { id: `compaction-${++compactionSequence}`, startedAt: Date.now() };
             }
@@ -1041,10 +1049,16 @@ class PiRuntimeSession implements AgentRuntimeSession {
       switch (terminal.stopReason) {
         case 'stop':
         case 'length': {
-          const contextTokens = measuredContextTokens(terminal.usage);
+          // Live loop compaction is not durable. The next turn replays the full batch,
+          // so its budget cannot be anchored to the smaller final provider request.
+          const contextTokens = turn.hasLoopCompaction
+            ? undefined
+            : measuredContextTokens(terminal.usage);
+          const replay = createPiTurnReplay(turn.replayMessages);
           this.emit(turn, {
             type: 'completed',
             ...(contextTokens !== undefined ? { contextTokens } : {}),
+            ...(replay ? { replay } : {}),
           });
           break;
         }
@@ -1110,6 +1124,8 @@ class PiRuntimeSession implements AgentRuntimeSession {
       case 'turn_end':
         if (event.message.role === 'assistant') {
           turn.terminalMessage = event.message;
+          // Pi appends this same ordered batch to its context, after parallel execution settles.
+          turn.replayMessages.push(event.message, ...event.toolResults);
         }
         this.settleUnmappedToolResults(turn, event.toolResults);
         break;

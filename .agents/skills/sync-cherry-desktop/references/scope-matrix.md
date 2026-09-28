@@ -11,15 +11,14 @@ generated-asset provenance; Mobile tokens and CSS have no desktop baseline.
 | --- | --- |
 | `design-catalog` | Desktop icon sources with Mobile asset/catalog adapters; no token mirroring |
 | `shared-portable` | Remaining portable types/helpers admitted by current package consumers |
-| `ai-core` | Selected provider and non-conversation AI SDK behavior; semantic port |
-| `ai-sdk-provider` | Provider transports consumed by Mobile's AI SDK path; semantic port |
 | `provider-registry` | Catalog semantics with a static Mobile loader and explicit compatibility review |
 | `shared-ai` | Portable vocabulary/helpers with current package consumers; preserve declared trims |
 | `services` | Selected behavior reached by Mobile composition roots; retain Mobile adapters |
-| `dependencies` | Versions/patches needed by admitted behavior; preserve Expo-compatible resolution |
+| `dependencies` | Published AI and remote package versions, SDK patches, and other dependencies needed by admitted behavior; preserve Expo-compatible resolution |
 
-The old `schema`, `shared-data`, `data-main`, `data-renderer`, `ai-runtime`, and `backup` domains
-are retired. Mobile data and conversation execution are independent. Do not recreate those domains
+The old `schema`, `shared-data`, `data-main`, `data-renderer`, `ai-runtime`, `backup`, `ai-core`,
+`ai-sdk-provider`, `remote-protocol`, and `remote-transport` source domains are retired. Mobile data
+and conversation execution are independent. Do not recreate those domains
 or require desktop-only tables and APIs as incidental sync work. The private Mobile package named
 `ai-runtime` still exists; it is not the retired whole-desktop-runtime synchronization domain.
 

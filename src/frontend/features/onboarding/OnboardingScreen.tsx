@@ -2,15 +2,26 @@ import { Button, useToast } from '@cherrystudio/ui/components';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { chatHref } from '@/frontend/appShell/navigation/chat';
-import { usePrivacyConsentPending } from '@/frontend/appShell/privacy';
 import { usePreference } from '@/frontend/data';
 import { useAgentsApi } from '@/frontend/hooks/agent';
 
-import { LogoDrawAnimation } from './components/LogoDraw';
+import { LOGO_ASPECT_RATIO, LogoDrawAnimation } from './components/LogoDraw';
+import { useWelcomeIntro, WELCOME_LOGO_INTRO_SCALE } from './hooks/useWelcomeIntro';
+
+const LOGO_SIZE = 104;
+const LOGO_INTRO_SIZE = LOGO_SIZE * WELCOME_LOGO_INTRO_SCALE;
+const logoFrameStyle = { height: LOGO_SIZE, width: LOGO_SIZE * LOGO_ASPECT_RATIO };
+// The logo renders at its intro size and scales down to rest, so the enlarged draw stays sharp.
+const logoCanvasStyle = {
+  left: ((LOGO_SIZE - LOGO_INTRO_SIZE) * LOGO_ASPECT_RATIO) / 2,
+  position: 'absolute',
+  top: (LOGO_SIZE - LOGO_INTRO_SIZE) / 2,
+} as const;
 
 export function OnboardingScreen() {
   const { t } = useTranslation();
@@ -19,9 +30,20 @@ export function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const [, setStatus] = usePreference('app.onboarding.status');
   const agents = useAgentsApi();
-  // The consent sheet covers this page on a first launch. Holding the reveal
-  // spends it on the moment the sheet falls away instead of behind it.
-  const isPrivacyConsentPending = usePrivacyConsentPending();
+  const {
+    rootRef,
+    logoFrameRef,
+    logoRef,
+    measureLogoFrame,
+    playing,
+    skippable,
+    skip,
+    logoStyle,
+    headingStyle,
+    descriptionStyle,
+    actionsStyle,
+    secondaryActionStyle,
+  } = useWelcomeIntro();
   const [pendingAction, setPendingAction] = useState<'provider' | 'desktop' | 'skip' | null>(null);
   const isFocused = useRef(false);
   const isSaving = useRef(false);
@@ -62,6 +84,7 @@ export function OnboardingScreen() {
 
   return (
     <View
+      ref={rootRef}
       className="flex-1 bg-background"
       style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
       testID="onboarding-welcome"
@@ -71,21 +94,29 @@ export function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="flex-grow items-center justify-center gap-8 px-8 py-12">
-          <LogoDrawAnimation autoPlay={!isPrivacyConsentPending} size={104} />
+          <View ref={logoFrameRef} style={logoFrameStyle} onLayout={measureLogoFrame}>
+            <Animated.View style={[logoCanvasStyle, logoStyle]}>
+              <LogoDrawAnimation ref={logoRef} autoPlay={playing} size={LOGO_INTRO_SIZE} />
+            </Animated.View>
+          </View>
           <View className="items-center gap-3">
-            <Text
-              accessibilityRole="header"
-              className="text-center font-semibold text-3xl text-foreground"
-            >
-              {t('onboarding.welcome.title')}
-            </Text>
-            <Text className="text-center text-base text-muted-foreground">
-              {t('onboarding.welcome.description')}
-            </Text>
+            <Animated.View style={headingStyle}>
+              <Text
+                accessibilityRole="header"
+                className="text-center font-semibold text-3xl text-foreground"
+              >
+                {t('onboarding.welcome.title')}
+              </Text>
+            </Animated.View>
+            <Animated.View style={descriptionStyle}>
+              <Text className="text-center text-base text-muted-foreground">
+                {t('onboarding.welcome.description')}
+              </Text>
+            </Animated.View>
           </View>
         </View>
         <View className="gap-3 px-6">
-          <View className="gap-3">
+          <Animated.View className="gap-3" style={actionsStyle}>
             <Button
               disabled={pendingAction !== null}
               loading={pendingAction === 'provider'}
@@ -105,8 +136,11 @@ export function OnboardingScreen() {
             >
               {t('onboarding.welcome.desktopSync')}
             </Button>
-          </View>
-          <View className="min-h-12 items-center justify-center">
+          </Animated.View>
+          <Animated.View
+            className="min-h-12 items-center justify-center"
+            style={secondaryActionStyle}
+          >
             <Button
               disabled={pendingAction !== null}
               loading={pendingAction === 'skip'}
@@ -117,9 +151,18 @@ export function OnboardingScreen() {
             >
               {t('onboarding.welcome.skip')}
             </Button>
-          </View>
+          </Animated.View>
         </View>
       </ScrollView>
+      {skippable ? (
+        <Pressable
+          accessible={false}
+          className="absolute inset-0"
+          importantForAccessibility="no"
+          onPress={skip}
+          testID="onboarding-intro-skip"
+        />
+      ) : null}
     </View>
   );
 }

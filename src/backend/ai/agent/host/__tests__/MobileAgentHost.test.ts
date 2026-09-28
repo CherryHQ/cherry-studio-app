@@ -40,9 +40,11 @@ import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentImageGenerationPort } from '../agentImageGeneration';
+import { AgentReplayCache } from '../AgentReplayCache';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { MobileAgentHost } from '../MobileAgentHost';
+import { createReplayCacheStorage } from './_replayCacheStorage';
 
 const originalAbortController = globalThis.AbortController;
 const originalAbortSignal = globalThis.AbortSignal;
@@ -164,6 +166,7 @@ const stubTool: RuntimeTool = {
 };
 
 type HostOverrides = {
+  replayCache?: AgentReplayCache;
   imageGeneration?: AgentImageGenerationPort;
   traces?: TraceRecorder;
   agents?: AgentDefinitionSource;
@@ -188,6 +191,7 @@ function createHost(
       files,
       inferenceModel: resolveInferenceModel,
       imageGeneration: overrides.imageGeneration,
+      replayCache: overrides.replayCache,
       naming: () => naming,
       runtimeTools: {
         resolve: overrides.resolveRuntimeTools ?? (async () => ({ tools: [], pluginGuides: [] })),
@@ -1328,6 +1332,113 @@ describe('MobileAgentHost', () => {
       }
     },
   );
+
+  test('reopens cached model history in a fresh Host without exposing it in events or stored messages', async () => {
+    const replay = {
+      version: 1 as const,
+      payload: { nativeHistory: 'signature-and-full-tool-output' },
+    };
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
+      { type: 'completed', replay },
+    ]);
+    const { storage } = createReplayCacheStorage();
+    const host = createHost(runtime, undefined, undefined, undefined, undefined, {
+      replayCache: new AgentReplayCache(() => storage),
+    });
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First' }],
+    });
+    await waitFor(
+      () => terminalTurnEvent(events)?.turn.status === 'completed',
+      'the cached replay',
+    );
+    expect(JSON.stringify(events)).not.toContain('signature-and-full-tool-output');
+    expect(JSON.stringify(await store.listMessages(session.id))).not.toContain(
+      'signature-and-full-tool-output',
+    );
+
+    const requests: RuntimeExecutionRequest[] = [];
+    const restarted = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+        requests.push(controller.request);
+        controller.emit({ type: 'completed' });
+      }),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { replayCache: new AgentReplayCache(() => storage) },
+    );
+    const nextEvents: AgentEvent[] = [];
+    await restarted.observeSession(session.id, (event) => nextEvents.push(event));
+    await restarted.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Second' }],
+    });
+    await waitFor(
+      () => terminalTurnEvent(nextEvents)?.turn.status === 'completed',
+      'the replayed turn',
+    );
+    expect(requests[0].history[0].replay).toEqual(replay);
+    expect(JSON.stringify(nextEvents)).not.toContain('signature-and-full-tool-output');
+  });
+
+  test('retry discards cached history for the replaced answer', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'old', type: 'text', text: 'Old answer', state: 'done' },
+    ]);
+    const { storage } = createReplayCacheStorage();
+    const replayCache = new AgentReplayCache(() => storage);
+    const history = await store.listMessages(session.id);
+    replayCache.write(session.id, history[1], { version: 1, payload: 'old-native-answer' });
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([{ type: 'completed' }]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { replayCache },
+    );
+    await host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'retry');
+    expect(replayCache.readHistory(session.id, history)).toEqual({});
+    expect(replayCache.readHistory(session.id, await store.listMessages(session.id))).toEqual({});
+  });
+
+  test('fork copies cached history and deleting each branch clears only its own replay', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'text', type: 'text', text: 'Answer', state: 'done' },
+    ]);
+    const { storage } = createReplayCacheStorage();
+    const replayCache = new AgentReplayCache(() => storage);
+    const history = await store.listMessages(session.id);
+    const replay = { version: 1 as const, payload: 'native-answer' };
+    replayCache.write(session.id, history[1], replay);
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { replayCache },
+    );
+    const fork = await host.forkSession({
+      sessionId: session.id,
+      fromMessageId: reserved.assistantMessage.id,
+    });
+    const forkHistory = await store.listMessages(fork.id);
+    await host.deleteSession({ sessionId: session.id });
+    expect(replayCache.readHistory(session.id, history)).toEqual({});
+    expect(replayCache.readHistory(fork.id, forkHistory)).toEqual({ [forkHistory[1].id]: replay });
+    await host.deleteTurn({ sessionId: fork.id, turnId: forkHistory[1].turnId! });
+    expect(new AgentReplayCache(() => storage).readHistory(fork.id, forkHistory)).toEqual({});
+  });
 
   test('persists a completed checkpoint and replays it after Host recreation', async () => {
     const checkpoint = {
