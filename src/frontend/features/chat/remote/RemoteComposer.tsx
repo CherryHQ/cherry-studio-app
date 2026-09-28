@@ -37,6 +37,7 @@ import { usePersistCache } from '@/frontend/data/hooks';
 import { ChatInputSurface } from '../components/ChatInput';
 import { ConversationOperations } from '../components/ConversationOperations';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
+import { restoreOperationInput } from './restoreOperationInput';
 import { visibleRemoteOperations } from './visibleRemoteOperations';
 
 export function RemoteComposer({
@@ -129,18 +130,7 @@ export function RemoteComposer({
         <ScrollView keyboardShouldPersistTaps="handled">
           <ConversationOperations
             operations={operations}
-            onRestore={(input) =>
-              setDraft((current) =>
-                [
-                  input.parts
-                    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
-                    .join('\n'),
-                  current,
-                ]
-                  .filter(Boolean)
-                  .join('\n'),
-              )
-            }
+            onRestore={(input) => setDraft((current) => restoreOperationInput(current, input))}
           />
         </ScrollView>
       </View>

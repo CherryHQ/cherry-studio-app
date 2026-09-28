@@ -343,7 +343,7 @@ test('metadata refs survive reconnect within a grant but never cross a replaceme
   other.source.dispose();
 });
 
-it('returns the rejected send explanation to the caller and drops the reported command', async () => {
+it('carries the rejected send explanation through both the action and its operation snapshot', async () => {
   const test = fixture();
   const command = {
     id: 'send',
@@ -367,7 +367,8 @@ it('returns the rejected send explanation to the caller and drops the reported c
       .getSnapshot()
       .actions.send!.execute({ parts: [{ type: 'text', text: 'hello' }] }),
   ).toMatchObject({ state: 'rejected', failure });
-  expect(test.remote.dismiss).toHaveBeenCalledWith('send');
+  expect(handle.operations.getSnapshot()[0]).toMatchObject({ state: 'rejected', failure });
+  expect(test.remote.dismiss).not.toHaveBeenCalled();
   handle.dispose();
   test.source.dispose();
 });
