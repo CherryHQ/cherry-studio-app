@@ -68,6 +68,7 @@ export function ConversationQuestionComposer({
         const result = await interaction.respond!.execute(form.response(answers));
         if (result.state === 'rejected' || result.state === 'interrupted')
           throw new Error('Question response failed');
+        return result.state === 'applied' ? 'applied' : 'pending';
       }}
     />
   );

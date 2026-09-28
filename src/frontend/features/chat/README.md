@@ -30,7 +30,7 @@ message list keeps its geometry and selection does not subscribe into the chat r
   keyed by question text, joined from selected labels and free text, and require every question.
   `UserQuestionComposer/` owns its compact options, optional header and option descriptions,
   top-right navigation, per-question drafts, and explicit batch submission. Request identity resets
-  the form; failed submissions preserve answers for retry. A leading approval disables the form
+  the form; failed or unconfirmed submissions keep the answers editable for resubmission. A leading approval disables the form
   without unmounting it. The ordinary composer session retains its separate text and attachments.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,

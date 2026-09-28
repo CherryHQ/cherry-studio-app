@@ -21,7 +21,11 @@ export type UserQuestionComposerProps = {
   /** Desktop question forms require every answer; only the local tool accepts a skip. */
   allowSkip: boolean;
   disabled: boolean;
-  onRespond(answers: QuestionFormAnswer[]): Promise<void>;
+  /**
+   * Resolves `applied` once the request is settled and `pending` when the response is in flight
+   * without a receipt, such as after a connection loss; rejects when it was refused.
+   */
+  onRespond(answers: QuestionFormAnswer[]): Promise<'applied' | 'pending'>;
 };
 
 type AnswerDraft = Omit<QuestionFormAnswer, 'questionId'>;
@@ -99,8 +103,13 @@ export function useUserQuestionForm({
       return { ...answer, text: answer.text.trim(), questionId: id };
     });
     try {
-      await onRespond(response);
-      // Keep the accepted request locked until its owner removes it.
+      const outcome = await onRespond(response);
+      // Keep an applied request locked until its owner removes it. An unconfirmed response
+      // unlocks the drafts so the user can resubmit once the owner recovers or fails it.
+      if (outcome === 'pending' && active.current) {
+        submitting.current = false;
+        setBusy(false);
+      }
     } catch {
       if (!active.current) return;
       submitting.current = false;

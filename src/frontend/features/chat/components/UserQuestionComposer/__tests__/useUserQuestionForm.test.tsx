@@ -30,7 +30,7 @@ const questions: readonly QuestionFormQuestion[] = [
 ];
 let form: ReturnType<typeof useUserQuestionForm>;
 let renderer: ReactTestRenderer;
-let respond: jest.Mock<Promise<void>, [QuestionFormAnswer[]]>;
+let respond: jest.Mock<Promise<'applied' | 'pending'>, [QuestionFormAnswer[]]>;
 
 function Harness({
   value = questions,
@@ -49,7 +49,7 @@ function Harness({
 }
 
 beforeEach(() => {
-  respond = jest.fn<Promise<void>, [QuestionFormAnswer[]]>(async () => {});
+  respond = jest.fn<Promise<'applied' | 'pending'>, [QuestionFormAnswer[]]>(async () => 'applied');
   act(() => {
     renderer = create(<Harness />);
   });
@@ -150,6 +150,25 @@ test('locks a pending submission, preserves answers on failure, and allows exact
   expect(form.isComplete).toBe(true);
   await act(async () => form.submit());
   expect(respond).toHaveBeenCalledTimes(2);
+  expect(form.locked).toBe(true);
+});
+
+test('unlocks drafts without a failure when the response is in flight without a receipt', async () => {
+  act(() => form.select('a'));
+  act(() => form.navigate(1));
+  act(() => form.skip());
+  act(() => form.skip());
+  respond.mockResolvedValueOnce('pending');
+  await act(async () => form.submit());
+  expect(respond).toHaveBeenCalledTimes(1);
+  expect(form.locked).toBe(false);
+  expect(form.failed).toBe(false);
+  expect(form.answer).toEqual({ selectedOptionIds: [], text: '', skipped: true });
+  act(() => form.navigate(0));
+  expect(form.answer.selectedOptionIds).toEqual(['a']);
+  await act(async () => form.submit());
+  expect(respond).toHaveBeenCalledTimes(2);
+  expect(respond.mock.calls[1][0]).toEqual(respond.mock.calls[0][0]);
   expect(form.locked).toBe(true);
 });
 

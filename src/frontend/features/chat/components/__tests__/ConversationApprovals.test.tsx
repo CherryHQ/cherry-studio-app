@@ -16,7 +16,7 @@ let questionComposer:
       questions: readonly QuestionFormQuestion[];
       allowSkip: boolean;
       disabled: boolean;
-      onRespond(answers: QuestionFormAnswer[]): Promise<void>;
+      onRespond(answers: QuestionFormAnswer[]): Promise<'applied' | 'pending'>;
     }
   | undefined;
 jest.mock('../UserQuestionComposer', () => ({
@@ -292,15 +292,18 @@ it('preserves option IDs and skipping, and allows retry when a user answer is re
   const edited = [
     { questionId: 'choice', selectedOptionIds: ['b'], text: 'extra', skipped: false },
   ];
-  await act(async () => questionComposer!.onRespond(answer));
+  // The fixture's response has no receipt yet, so the form must stay editable for a resubmission.
+  await expect(questionComposer!.onRespond(answer)).resolves.toBe('pending');
   expect(test.respond).toHaveBeenCalledWith({ kind: 'user-answer', answer: { answers: answer } });
+  test.respond.mockResolvedValueOnce({ state: 'applied', value: undefined } as never);
+  await expect(questionComposer!.onRespond(answer)).resolves.toBe('applied');
   test.respond.mockResolvedValueOnce({ state: 'rejected', failure: { code: 'conflict' } } as never);
   await expect(questionComposer!.onRespond(edited)).rejects.toThrow();
   expect(test.respond).toHaveBeenLastCalledWith({
     kind: 'user-answer',
     answer: { answers: edited },
   });
-  expect(test.respond).toHaveBeenCalledTimes(2);
+  expect(test.respond).toHaveBeenCalledTimes(3);
 });
 
 it('keeps the question visible but blocks responses while an approval takes priority', async () => {
