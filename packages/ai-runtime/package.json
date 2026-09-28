@@ -58,7 +58,7 @@
     "@ai-sdk/openai-compatible": "2.0.72",
     "@ai-sdk/perplexity": "^3.0.33",
     "@ai-sdk/provider": "^3.0.15",
-    "@ai-sdk/provider-utils": "4.0.48",
+    "@ai-sdk/provider-utils": "4.0.49",
     "@ai-sdk/togetherai": "^2.0.53",
     "@cherrystudio/ai-core": "2.1.0",
     "@cherrystudio/ai-sdk-provider": "0.1.7",
