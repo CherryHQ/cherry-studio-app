@@ -37,6 +37,7 @@ import { usePersistCache } from '@/frontend/data/hooks';
 import { ChatInputSurface } from '../components/ChatInput';
 import { ConversationOperations } from '../components/ConversationOperations';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
+import { visibleRemoteOperations } from './visibleRemoteOperations';
 
 export function RemoteComposer({
   agent,
@@ -84,6 +85,7 @@ export function RemoteComposer({
   const starts = useConversationOperations(source);
   const commands = useConversationOperations(session);
   const handedOff = useRef<string | undefined>(undefined);
+  const [submitting, setSubmitting] = useState(false);
   useEffect(() => {
     const completed = starts.find(
       (operation) =>
@@ -97,12 +99,11 @@ export function RemoteComposer({
     }
   }, [starts, draftId, session, onSessionCreated]);
 
-  const operations = [
-    ...starts.filter(
-      (operation) => !session || operation.conversation?.sessionId === session.ref.sessionId,
-    ),
-    ...commands,
-  ];
+  const operations = visibleRemoteOperations(starts, commands, {
+    sessionId: session?.ref.sessionId,
+    draftId,
+    submitting,
+  });
   const startPending = starts.some(
     (operation) => operation.draftId === draftId && operation.state === 'pending',
   );
@@ -154,7 +155,10 @@ export function RemoteComposer({
         dismissKeyboardOnSend
         onSend={async ({ text }) => {
           if (!action || action.availability.state !== 'enabled') throw new Error('UNAVAILABLE');
-          const result = await action.execute({ parts: [{ type: 'text', text }] });
+          setSubmitting(true);
+          const result = await action
+            .execute({ parts: [{ type: 'text', text }] })
+            .finally(() => setSubmitting(false));
           if (result.state === 'rejected') throw new ConversationActionError(result.failure);
           // Pending/interrupted admission is visible in operations; never create a second send here.
         }}
