@@ -91,14 +91,11 @@ export function DeviceConnectionScannerScreen({
           setHasScanned(false);
           return;
         }
-        // Provider sync is the next decision when it was granted; otherwise show what was.
-        if (connection.capabilities.includes('configuration')) {
+        // Only first-use setup continues directly into provider sync after pairing.
+        if (setupIntent === 'chat' && connection.capabilities.includes('configuration')) {
           router.replace({
             params: { connectionId: connection.id },
-            pathname:
-              setupIntent === 'chat'
-                ? '/onboarding/provider-sync'
-                : '/settings/provider/desktop-sync',
+            pathname: '/onboarding/provider-sync',
           });
         } else if (setupIntent === 'chat') {
           router.dismissTo('/onboarding');
