@@ -167,17 +167,18 @@ For production monitoring, provide a valid upload token and keep automatic uploa
 matching source maps and debug symbols, reported error stacks may not resolve back to source.
 Missing or invalid upload credentials can fail the build.
 
-Android preview and production APKs use arm64 Release builds with R8 code shrinking and unused
-resource removal enabled through `expo-build-properties`. These profiles also set
-`useLegacyPackaging` to compress native `.so` libraries for direct APK downloads. Android extracts
-those libraries during installation, so a smaller APK does not mean less installed storage or a
-faster startup. Development builds remain unminified and use uncompressed native libraries.
-The EAS Release commands allocate a 4 GiB Gradle heap for R8; the template's 2 GiB heap is insufficient
-for this dependency graph. The PDF text extractor supplies a consumer rule for PDFBox's optional,
-unbundled JPEG 2000 decoder.
-After changing native dependencies or shrinking rules, verify a Release build, including startup,
-desktop QR pairing, document import, and native Markdown rendering; a development client does not
-exercise the shrinker. Compare APK sizes using the same profile and architecture.
+Android preview and production APKs use arm64 Release builds without R8 code shrinking, so the
+Java and Kotlin stack traces Sentry receives stay readable without a mapping upload. The APK
+profiles set `useLegacyPackaging` to compress native `.so` libraries for direct downloads. Android
+extracts those libraries during installation, so a smaller APK does not mean less installed storage
+or a faster startup. The `production-google-play` profile sets `ANDROID_COMPRESS_NATIVE_LIBS=false`
+so the AAB keeps uncompressed libraries: Google Play compresses the download itself, and compressed
+libraries in an AAB only slow installation and double on-device storage. Development builds keep
+uncompressed native libraries. The EAS Release commands pass `-Xmx4096m` as the Gradle JVM
+arguments, which also drops the template Metaspace cap that made `lintVitalAnalyzeRelease` fail on
+local production builds. After changing native dependencies or packaging options, verify that a
+Release build starts and completes desktop QR pairing. Compare APK sizes using the same profile and
+architecture.
 
 Rebuild the native client after adding or changing native dependencies such as Sentry. Starting
 Metro again does not add a native module to an already installed client. Local and cloud EAS builds

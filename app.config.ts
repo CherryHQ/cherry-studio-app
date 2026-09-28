@@ -75,7 +75,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
             plugin[0],
             {
               ...plugin[1],
-              android: { ...plugin[1].android, useLegacyPackaging: profile !== 'development' },
+              android: {
+                ...plugin[1].android,
+                // Compressed native libraries only help direct APK downloads; the Google Play profile opts out.
+                useLegacyPackaging:
+                  profile !== 'development' && process.env.ANDROID_COMPRESS_NATIVE_LIBS !== 'false',
+              },
             },
           ];
         }

@@ -63,7 +63,8 @@
     "production-google-play": {
       "extends": "production",
       "env": {
-        "APK_UPDATES_ENABLED": "false"
+        "APK_UPDATES_ENABLED": "false",
+        "ANDROID_COMPRESS_NATIVE_LIBS": "false"
       },
       "android": {
         "buildType": "app-bundle",
