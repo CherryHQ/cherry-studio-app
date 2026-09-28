@@ -58,7 +58,8 @@ retired domains or desktop owners.
 ## Invariants
 
 - Do not mirror desktop conversation hosts, loops, tools, lifecycle, or persistence into Mobile.
-- `ai-core` and `ai-sdk-provider` are semantic ports, not byte-for-byte package mirrors.
+- Published `ai-core` and `ai-sdk-provider` versions are reviewed through the dependency domain
+  and Mobile consumer behavior, not synchronized as local source packages.
 - Admit remaining `universal` helpers by their current consumer closure; new Mobile contracts
   belong in `src/shared`.
 - Preserve existing persisted values when changing an admitted Mobile contract. Keep migrations

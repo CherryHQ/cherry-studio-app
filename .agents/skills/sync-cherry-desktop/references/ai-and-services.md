@@ -11,10 +11,11 @@ For each candidate, identify a current production caller and classify its execut
 - Non-conversation text, model checks/listing, and image generation use `AiService` and the AI SDK.
 - Shared provider connection facts may serve both paths through their existing resolvers.
 
-`packages/ai-core` and `packages/ai-sdk-provider` are semantic ports. Compare behavior, imports,
-tests, dependencies, and exports within the admitted consumer closure; do not copy whole desktop
-trees or require identical packaging. Do not restore desktop conversation-loop or context modules
-because their names include `Agent` or they reside in an AI package.
+`@cherrystudio/ai-core` and `@cherrystudio/ai-sdk-provider` are published dependencies. Review
+their new versions against Mobile's consumed behavior, package exports, patched SDK graph, and Expo
+compatibility. Keep Mobile-specific configuration and adapters in their current owners instead of
+restoring desktop package source trees. Desktop conversation-loop and context features do not
+become Mobile conversation behavior because the dependency contains them.
 
 Mobile owns its Pi host, persistence, lifecycle, tools, approval flow, and platform services.
 Desktop filesystem sessions, Shell tools, Electron services, and application owners do not cross

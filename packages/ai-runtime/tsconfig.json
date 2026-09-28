@@ -8,8 +8,6 @@
     "moduleResolution": "bundler",
     "noEmit": true,
     "paths": {
-      "@cherrystudio/ai-core/core": ["../ai-core/src/core/index.ts"],
-      "@cherrystudio/ai-core/core/*": ["../ai-core/src/core/*"],
       "@cherrystudio/provider-registry": ["../provider-registry/src/index.ts"],
       "@cherrystudio/provider-registry/*": ["../provider-registry/src/*"],
       "@cherrystudio/universal/*": ["../universal/src/*"],
