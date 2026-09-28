@@ -1,8 +1,8 @@
 import type { MessageListItem } from '@/frontend/components/Message';
 import type {
   AgentMessageView,
-  AgentUserQuestion,
-  AgentUserAnswer,
+  AgentUserQuestionRequest,
+  AgentUserResponse,
   JsonValue,
 } from '@/shared/contracts/agent';
 import type { ExecutionFailure } from '@/shared/contracts/aiFailure';
@@ -92,7 +92,7 @@ export type ConversationExecution = {
   cancel?: ConversationAction<void, void>;
 };
 export type ResourceValue =
-  | { kind: 'user-question'; question: AgentUserQuestion }
+  | { kind: 'user-question'; question: AgentUserQuestionRequest }
   | { kind: 'question'; questions: readonly InteractionQuestion[] }
   | { kind: 'text'; text: string; complete: true }
   | { kind: 'json'; value: JsonValue; complete: true }
@@ -103,7 +103,7 @@ export type ResourceRead =
   | { kind: 'deferred'; key: string; read(signal: AbortSignal): Promise<ResourceValue> };
 export type ConversationInteractionResponse =
   | InteractionResponse
-  | { kind: 'user-answer'; answer: AgentUserAnswer };
+  | { kind: 'user-answer'; answer: AgentUserResponse };
 export type ConversationInteraction = {
   execution?: string;
   id: string;

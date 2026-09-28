@@ -32,6 +32,7 @@ import { ChatInput } from './components/ChatInput';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import { ConversationQuestionComposer } from './components/ConversationQuestionComposer';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
 import {
@@ -163,26 +164,28 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
         </ComposerDismissArea>
         {hasComposer ? (
           <ComposerDock layoutMode="flow">
-            <View>
-              <ChatInput
-                agentId={resolvedAgentId}
-                controls={controls}
-                dismissKeyboardOnSend
-                imageResult={
-                  messageWindow.hasNewerMessages
-                    ? undefined
-                    : latestConversationImageResult(
-                        messageWindow.messages.map((message) => message.imageResult),
-                      )
-                }
-                sessionId={sessionId}
-              />
-              <ChatDockFooter>
-                <Text className="text-center text-xs text-muted-foreground">
-                  {t('chat.input.disclaimer')}
-                </Text>
-              </ChatDockFooter>
-            </View>
+            <ConversationQuestionComposer snapshot={snapshot}>
+              <View>
+                <ChatInput
+                  agentId={resolvedAgentId}
+                  controls={controls}
+                  dismissKeyboardOnSend
+                  imageResult={
+                    messageWindow.hasNewerMessages
+                      ? undefined
+                      : latestConversationImageResult(
+                          messageWindow.messages.map((message) => message.imageResult),
+                        )
+                  }
+                  sessionId={sessionId}
+                />
+                <ChatDockFooter>
+                  <Text className="text-center text-xs text-muted-foreground">
+                    {t('chat.input.disclaimer')}
+                  </Text>
+                </ChatDockFooter>
+              </View>
+            </ConversationQuestionComposer>
           </ComposerDock>
         ) : null}
       </ComposerDropArea>

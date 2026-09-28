@@ -8,6 +8,7 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
   const isEditingRef = useRef(false);
   const [isKeyboardTrackingEnabled, setIsKeyboardTrackingEnabled] = useState(false);
   const isDismissPendingRef = useRef(false);
+  const activeInputRef = useRef<Pick<ComposerInputHandle, 'blur'> | null>(null);
 
   useEffect(() => {
     const subscription = KeyboardEvents.addListener('keyboardDidHide', () => {
@@ -22,12 +23,16 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
     return () => subscription.remove();
   }, []);
 
-  const activateInput = useCallback(() => {
-    isEditingRef.current = true;
-    isDismissPendingRef.current = false;
-    setIsEditing(true);
-    setIsKeyboardTrackingEnabled(true);
-  }, []);
+  const activateInput = useCallback(
+    (input: Pick<ComposerInputHandle, 'blur'> | null = inputRef.current) => {
+      activeInputRef.current = input;
+      isEditingRef.current = true;
+      isDismissPendingRef.current = false;
+      setIsEditing(true);
+      setIsKeyboardTrackingEnabled(true);
+    },
+    [inputRef],
+  );
 
   const dismissInput = useCallback(() => {
     // Native blur hides the Android IME even when the field has already lost focus.
@@ -39,7 +44,7 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
     if (!isDismissPendingRef.current) {
       setIsKeyboardTrackingEnabled(false);
     }
-    inputRef.current?.blur();
+    (activeInputRef.current ?? inputRef.current)?.blur();
   }, [inputRef]);
 
   const runInputReplacement = useCallback(
@@ -49,7 +54,7 @@ export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle 
       // the composer away from its hit area.
       isDismissPendingRef.current = false;
       setIsKeyboardTrackingEnabled(false);
-      inputRef.current?.blur();
+      (activeInputRef.current ?? inputRef.current)?.blur();
 
       try {
         await KeyboardController.dismiss();

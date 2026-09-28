@@ -124,6 +124,48 @@ test.each([
   expect(f.client.respondQuestion).toHaveBeenCalledTimes(1);
 });
 
+test('rejects a batch response after any question in the bound payload changes', async () => {
+  const batch = {
+    ...question,
+    question: {
+      questions: [
+        { ...question.question, id: 'first' },
+        { ...question.question, id: 'second' },
+      ],
+    },
+  };
+  const f = fixture({ pendingQuestion: batch });
+  const interaction = f.projector.snapshot(f.state, undefined).interactions[0];
+  const answer = {
+    answers: batch.question.questions.map(({ id }) => ({
+      questionId: id,
+      selectedOptionIds: ['a'],
+      text: '',
+      skipped: false,
+    })),
+  };
+  expect(await interaction.respond!.execute({ kind: 'user-answer', answer })).toMatchObject({
+    state: 'applied',
+  });
+  expect(f.client.respondQuestion).toHaveBeenCalledWith('session', 'question', answer);
+  f.set({
+    pendingQuestion: {
+      ...batch,
+      question: {
+        questions: [
+          batch.question.questions[0],
+          { ...batch.question.questions[1], question: 'Changed?' },
+        ],
+      },
+    },
+  });
+  expect(await interaction.respond!.execute({ kind: 'user-answer', answer })).toMatchObject({
+    state: 'rejected',
+    failure: { code: 'conflict' },
+  });
+  expect(f.client.respondQuestion).toHaveBeenCalledTimes(1);
+});
+
 test('message actions follow the busy state and reuse projections while it is unchanged', async () => {
   const f = fixture();
   const answer = message('answer');

@@ -65,7 +65,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 - `useComposerPresentationActions` — activates editing on field focus, ends it on send or explicit
   outside dismissal, and presents a Sheet or native picker while retaining the editing state. The model
   pill and media menu already use the replacement action; caller-owned replacement buttons, such
-  as painting settings, use the same action.
+  as painting settings, use the same action. An alternative field such as the question composer
+  passes its blur handle to `activateInput` on focus so background dismissal targets that field;
+  the ordinary field resumes ownership on its next focus.
 - `ComposerDock` — connects that input-context state to CherryUI's
   `Composer.Dock`. Chat keeps it in normal parent flow; floating surfaces can pair it with
   CherryUI's `useComposerDockLayout` measurement and content-inset primitive.

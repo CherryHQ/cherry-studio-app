@@ -23,6 +23,11 @@ message list keeps its geometry and selection does not subscribe into the chat r
 - `components/ChatInput/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
   edited on the Agent screen; image attachment admission failures restore the managed draft and
   surface a user-facing reason.
+- `components/ConversationQuestionComposer.tsx` replaces local chat input for a bound question call.
+  `UserQuestionComposer/` owns its compact options, top-right navigation, per-question drafts, skip,
+  and explicit batch submission. Request identity resets the form; failed submissions preserve
+  answers for retry. Concurrent approvals disable it without unmounting it. The ordinary composer
+  session retains its separate text and attachments throughout.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,
   initial-render gating and pending first-send rows. Message actions and approvals use the bound

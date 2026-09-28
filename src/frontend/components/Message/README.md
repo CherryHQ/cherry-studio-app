@@ -359,10 +359,10 @@ the normal running animation during tool execution.
 
 
 `ask_user_question` tool parts stay in the message body as compact `MessagePart.Tool` status rows,
-matching tool approval presentation. Opening a row shows the complete read-only question and answer;
-history never submits responses. The chat feature owns the active response sheet, including input,
-cancellation, and Protocol correlation. Its neutral options and action layout follow the approval
-sheet, while its footer stays inside keyboard avoidance and the sheet owns the bottom safe area.
+matching tool approval presentation. Opening a row shows every read-only question and its answer or
+skip state, including legacy single-question records; history never submits responses. The chat
+feature owns the active question composer and Protocol correlation. It replaces the ordinary input,
+retains per-question drafts while navigating, and submits the complete answer set explicitly.
 
 
 Successful `agent_create` and `agent_update` parts render saved-Agent result cards in the body,

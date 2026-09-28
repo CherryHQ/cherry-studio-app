@@ -2,20 +2,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ConversationSnapshot, ResourceValue } from '@/frontend/appShell/conversation';
-import type { AgentPendingQuestion, AgentUserAnswer } from '@/shared/contracts/agent';
+import type { AgentPendingQuestion, AgentUserResponse } from '@/shared/contracts/agent';
 
 import { ConversationApprovals } from '../ConversationApprovals';
+import { ConversationQuestionComposer } from '../ConversationQuestionComposer';
 import type { ToolApprovalRespondInput } from '../ToolApprovalSheet';
 
-let questionSheet: {
-  request: AgentPendingQuestion | null;
-  isOpen: boolean;
-  onRespond(id: string, answer: AgentUserAnswer): Promise<void>;
-  onCancel(): Promise<void>;
+let questionComposer: {
+  request: AgentPendingQuestion;
+  disabled: boolean;
+  onRespond(id: string, answer: AgentUserResponse): Promise<void>;
 };
-jest.mock('../UserQuestionSheet', () => ({
-  UserQuestionSheet: (props: typeof questionSheet) => {
-    questionSheet = props;
+jest.mock('../UserQuestionComposer', () => ({
+  UserQuestionComposer: (props: typeof questionComposer) => {
+    questionComposer = props;
     return null;
   },
 }));
@@ -93,6 +93,7 @@ async function render(test: ReturnType<typeof fixture>) {
     const tree = (
       <QueryClientProvider client={queryClient}>
         <ConversationApprovals snapshot={test.snapshot} />
+        <ConversationQuestionComposer snapshot={test.snapshot} />
       </QueryClientProvider>
     );
     if (renderer) renderer.update(tree);
@@ -207,7 +208,7 @@ it('submits complete question answers through the bound response without reducin
 
 it('preserves option IDs and skipping, and allows retry when a user answer is rejected', async () => {
   const test = fixture();
-  test.read.mockResolvedValue({
+  const input: ResourceValue = {
     kind: 'user-question',
     question: {
       question: 'Choose',
@@ -217,18 +218,22 @@ it('preserves option IDs and skipping, and allows retry when a user answer is re
         { id: 'b', label: 'Same label', description: '' },
       ],
     },
-  });
+  };
   test.update({
     ...test.snapshot,
-    interactions: test.snapshot.interactions.map((item) => ({ ...item, kind: 'question' })),
+    interactions: test.snapshot.interactions.map((item) => ({
+      ...item,
+      kind: 'question',
+      input: { kind: 'inline', value: input },
+    })),
   });
   await render(test);
   const answer = { selectedOptionIds: [], text: '', skipped: true };
-  await act(async () => questionSheet.onRespond('decision', answer));
+  await act(async () => questionComposer.onRespond('decision', answer));
   expect(test.respond).toHaveBeenCalledWith({ kind: 'user-answer', answer });
   test.respond.mockResolvedValueOnce({ state: 'rejected', failure: { code: 'conflict' } } as never);
   await expect(
-    questionSheet.onRespond('decision', {
+    questionComposer.onRespond('decision', {
       selectedOptionIds: ['b'],
       text: 'extra',
       skipped: false,
@@ -238,8 +243,49 @@ it('preserves option IDs and skipping, and allows retry when a user answer is re
     kind: 'user-answer',
     answer: { selectedOptionIds: ['b'], text: 'extra', skipped: false },
   });
-  await expect(questionSheet.onRespond('stale-question', answer)).rejects.toThrow();
+  await expect(questionComposer.onRespond('stale-question', answer)).rejects.toThrow();
   expect(test.respond).toHaveBeenCalledTimes(2);
-  test.cancel.mockResolvedValueOnce({ state: 'rejected', failure: { code: 'conflict' } } as never);
-  await expect(questionSheet.onCancel()).rejects.toThrow();
+});
+
+it('keeps the question visible but blocks responses while an approval takes priority', async () => {
+  const test = fixture();
+  const question = {
+    ...test.snapshot.interactions[0],
+    id: 'question',
+    kind: 'question' as const,
+    input: {
+      kind: 'inline' as const,
+      value: {
+        kind: 'user-question' as const,
+        question: {
+          questions: [
+            { id: 'notes', question: 'Notes?', selection: 'single' as const, options: [] },
+          ],
+        },
+      },
+    },
+  };
+  test.update({ ...test.snapshot, interactions: [question] });
+  await render(test);
+  const request = questionComposer.request;
+  expect(questionComposer.disabled).toBe(false);
+  const approval = {
+    ...question,
+    id: 'approval',
+    kind: 'decision' as const,
+    input: { kind: 'deferred' as const, key: 'approval', read: test.read },
+  };
+  test.update({ ...test.snapshot, interactions: [approval, question] });
+  await render(test);
+  expect(questionComposer.request).toEqual(request);
+  expect(questionComposer.disabled).toBe(true);
+  await expect(
+    questionComposer.onRespond('question', {
+      answers: [{ questionId: 'notes', selectedOptionIds: [], text: 'Answer', skipped: false }],
+    }),
+  ).rejects.toThrow();
+  expect(test.respond).not.toHaveBeenCalled();
+  test.update({ ...test.snapshot, interactions: [question] });
+  await render(test);
+  expect(questionComposer.disabled).toBe(false);
 });

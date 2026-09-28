@@ -5,7 +5,6 @@ import type { ConversationSnapshot } from '@/frontend/appShell/conversation';
 
 import { useConversationResourceValue } from '../hooks/useConversationResourceValue';
 import { ToolApprovalSheet, type ToolApprovalRespondInput } from './ToolApprovalSheet';
-import { UserQuestionSheet } from './UserQuestionSheet';
 
 /** The sheet consumes a bound decision and its input, never a connection or protocol method. */
 export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnapshot }) {
@@ -51,38 +50,8 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
       }
     }
   };
-  if (interaction && input.data?.kind === 'user-question') {
-    return (
-      <UserQuestionSheet
-        key={interaction.input.kind === 'deferred' ? interaction.input.key : interaction.id}
-        request={
-          canRespond
-            ? {
-                toolCallId: interaction.id,
-                turnId: interaction.execution ?? interaction.id,
-                question: input.data.question,
-              }
-            : null
-        }
-        isOpen={isOpen}
-        onRespond={async (id, answer) => {
-          if (!canRespond || id !== interaction.id)
-            throw new Error('Question is no longer available');
-          const result = await interaction.respond!.execute({ kind: 'user-answer', answer });
-          if (result.state === 'rejected' || result.state === 'interrupted')
-            throw new Error('Question response failed');
-        }}
-        onCancel={async () => {
-          if (!cancellations.length) throw new Error('Cancellation is unavailable');
-          for (const action of cancellations) {
-            const result = await action.execute(undefined);
-            if (result.state === 'rejected' || result.state === 'interrupted')
-              throw new Error('Question cancellation failed');
-          }
-        }}
-      />
-    );
-  }
+  if (input.data?.kind === 'user-question') return null;
+
   return (
     <ToolApprovalSheet
       approvals={

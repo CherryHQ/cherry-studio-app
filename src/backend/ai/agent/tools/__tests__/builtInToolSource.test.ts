@@ -201,6 +201,48 @@ describe('createSystemCapabilitySource', () => {
     });
   });
 
+  test('returns batch answers and selected labels associated by question ID', async () => {
+    const answer = {
+      answers: [
+        { questionId: 'second', selectedOptionIds: ['a'], text: 'Extra', skipped: false },
+        { questionId: 'first', selectedOptionIds: [], text: '', skipped: true },
+      ],
+    };
+    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(
+      async () => answer,
+    );
+    const tools = await resolve({}, { askUser });
+    const ask = tools.find((tool) => tool.providerName === 'ask_user_question')!;
+    const result = await ask.execute({
+      input: {
+        questions: [
+          {
+            id: 'first',
+            question: 'Choose',
+            selection: 'single',
+            options: [{ id: 'a', label: 'City' }],
+          },
+          {
+            id: 'second',
+            question: 'Choose',
+            selection: 'multiple',
+            options: [{ id: 'a', label: 'Food' }],
+          },
+        ],
+      },
+      signal: new AbortController().signal,
+      toolCallId: 'batch',
+      turnId: 'turn',
+    });
+    expect(result.value).toEqual({
+      ...answer,
+      selectedOptions: [
+        { questionId: 'second', options: [{ id: 'a', label: 'Food' }] },
+        { questionId: 'first', options: [] },
+      ],
+    });
+  });
+
   test('offers generate_image only with a drawing model and the group enabled', async () => {
     const withoutModel = await resolve({ paintingModel: null });
     expect(capabilityIds(withoutModel)).not.toContain('generate_image');
