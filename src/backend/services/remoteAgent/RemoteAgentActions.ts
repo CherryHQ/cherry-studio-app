@@ -110,7 +110,7 @@ export class RemoteAgentActions {
   private records: RecordEntry[];
   private starts: StartEntry[];
   private startSnapshot: readonly RemoteStartOperation[];
-  private readonly starting = new Map<string, Promise<void>>();
+  private readonly starting = new Map<string, Promise<RemoteStartOperation>>();
   private snapshot: readonly RemoteCommand[];
   private readonly listeners = new Set<() => void>();
   private readonly running = new Map<string, Promise<void>>();
@@ -255,23 +255,28 @@ export class RemoteAgentActions {
       };
       this.commit(this.records, [...this.starts, entry]);
     }
-    await this.advanceStart(entry.id);
-    return this.getStarts().find((item) => item.id === entry.id)!;
+    // Observers may dismiss a finished start before this resolves, so return the settled view.
+    const settled = await this.advanceStart(entry.id);
+    if (!settled) throw new RemoteAgentError('CLOSED');
+    return settled;
   }
-  private advanceStart(id: string): Promise<void> {
+  private advanceStart(id: string): Promise<RemoteStartOperation | undefined> {
     const active = this.starting.get(id);
     if (active) return active;
     const entry = this.starts.find((item) => item.id === id);
-    if (!entry || entry.status !== 'pending' || this.stopped) return Promise.resolve();
+    if (!entry || entry.status !== 'pending' || this.stopped)
+      return Promise.resolve(entry && projectStart(entry, this.records));
     const work = this.executeStart(entry).finally(() => this.starting.delete(id));
     this.starting.set(id, work);
     return work;
   }
   private updateStart(entry: StartEntry) {
+    const view = projectStart(entry, this.records);
     this.commit(
       this.records,
       this.starts.map((item) => (item.id === entry.id ? entry : item)),
     );
+    return view;
   }
   private async startCommand(
     id: string,
@@ -285,8 +290,9 @@ export class RemoteAgentActions {
     else await this.create(kind, method, params, text, id);
     return this.snapshot.find((entry) => entry.id === id)!;
   }
-  private async executeStart(original: StartEntry) {
+  private async executeStart(original: StartEntry): Promise<RemoteStartOperation> {
     let entry = original;
+    let settled = projectStart(entry, this.records);
     try {
       const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
         agentId: entry.agentId,
@@ -294,14 +300,11 @@ export class RemoteAgentActions {
           ? { workspace: entry.workspace }
           : { workspaceId: entry.workspace?.id ?? entry.workspaceId! }),
       });
-      if (this.stopped) return;
-      if (created.status !== 'applied') {
-        this.finishStart(entry, created);
-        return;
-      }
+      if (this.stopped) return settled;
+      if (created.status !== 'applied') return this.finishStart(entry, created);
       if (!created.sessionId) throw new RemoteAgentError('PROTOCOL_ERROR');
       entry = { ...entry, sessionId: created.sessionId };
-      this.updateStart(entry);
+      settled = this.updateStart(entry);
       const storedSend = this.records.find((record) => record.action.id === entry.sendId);
       let sent: RemoteCommand;
       if (storedSend) {
@@ -311,7 +314,7 @@ export class RemoteAgentActions {
         const result = agentMethods['agent.sessions.get'].result.parse(
           await this.request('agent.sessions.get', { sessionId: entry.sessionId }),
         );
-        if (this.stopped) return;
+        if (this.stopped) return settled;
         if (!result.session.idleRevision) throw new RemoteAgentError('CONFLICT');
         sent = await this.startCommand(
           entry.sendId,
@@ -325,14 +328,14 @@ export class RemoteAgentActions {
           entry.text,
         );
       }
-      if (!this.stopped) this.finishStart(entry, sent, true);
+      if (!this.stopped) return this.finishStart(entry, sent, true);
     } catch (error) {
       if (
         error instanceof RemoteAgentError &&
         !error.retryable &&
         !['CLOSED', 'PROTOCOL_ERROR'].includes(error.code)
       )
-        this.updateStart({
+        settled = this.updateStart({
           ...entry,
           status: error.code === 'COMMAND_INTERRUPTED' ? 'interrupted' : 'rejected',
           error: error.code,
@@ -340,9 +343,10 @@ export class RemoteAgentActions {
         });
     }
     this.changed();
+    return settled;
   }
   private finishStart(entry: StartEntry, command: RemoteCommand, sent = false) {
-    this.updateStart({
+    const view = this.updateStart({
       ...entry,
       status:
         command.status === 'failed'
@@ -355,6 +359,7 @@ export class RemoteAgentActions {
       ...(command.error ? { error: command.error, errorMessage: command.errorMessage } : {}),
     });
     this.changed();
+    return view;
   }
   private run(id: string, recover: boolean): Promise<void> {
     if (this.stopped) return Promise.resolve();

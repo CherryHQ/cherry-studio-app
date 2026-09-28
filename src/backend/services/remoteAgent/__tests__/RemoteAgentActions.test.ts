@@ -287,6 +287,28 @@ it('retains uncertain workflows and dismisses both records only after a terminal
   expect(actions.getStarts()).toHaveLength(1);
 });
 
+it.each([
+  ['synchronously', (run: () => void) => run()],
+  ['in a microtask', (run: () => void) => queueMicrotask(run)],
+])('returns the applied start when an observer dismisses it %s', async (_timing, schedule) => {
+  const { port } = journal();
+  const request = jest.fn(async (name: string, body: any) =>
+    name === 'agent.sessions.get'
+      ? sessionResult('s')
+      : { ...receipt(body.commandId, 'applied'), method: name },
+  );
+  const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  actions.subscribe(() => {
+    const applied = actions.getStarts().find((start) => start.status === 'applied');
+    if (applied) schedule(() => actions.dismiss(applied.id));
+  });
+  await expect(actions.start(startInput)).resolves.toMatchObject({
+    status: 'applied',
+    sessionId: 's',
+  });
+  expect(actions.getStarts()).toEqual([]);
+});
+
 it('restores the exact answer payload and target after process restart', async () => {
   const { port } = journal();
   const responseMethod = 'agent.interactions.respond';
