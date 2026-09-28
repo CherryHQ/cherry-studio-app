@@ -113,20 +113,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.state = this.lease.getSnapshot();
     for (const observation of this.observations.values()) {
       this.stopObservation(observation);
-      if (observation.snapshot) {
-        observation.snapshot = {
-          ...observation.snapshot,
-          current: false,
-          sendTarget: undefined,
-          executions: observation.snapshot.executions.map(
-            ({ cancelTarget: _target, ...execution }) => execution,
-          ),
-          interactions: observation.snapshot.interactions.map(
-            ({ respondTarget: _target, ...interaction }) => interaction,
-          ),
-        };
-        for (const listener of observation.listeners) listener(observation.snapshot);
-      }
+      this.withdrawTargets(observation);
     }
     clearTimeout(this.recoveryTimer);
     if (this.state.status === 'retired') this.actions.stop();
@@ -135,6 +122,29 @@ export class RemoteAgentScope implements RemoteAgentSource {
       for (const [id, observation] of this.observations) this.startObservation(id, observation);
       this.actions.recover();
     }
+  }
+  private withdrawTargets(observation: Observation) {
+    if (!observation.snapshot) return;
+    observation.snapshot = {
+      ...observation.snapshot,
+      current: false,
+      sendTarget: undefined,
+      executions: observation.snapshot.executions.map(
+        ({ cancelTarget: _target, ...execution }) => execution,
+      ),
+      interactions: observation.snapshot.interactions.map(
+        ({ respondTarget: _target, ...interaction }) => interaction,
+      ),
+    };
+    for (const listener of observation.listeners) listener(observation.snapshot);
+  }
+  /** A desktop CONFLICT proves this projection missed a session change; rebuild from a checkpoint. */
+  private resync(sessionId: string) {
+    const observation = this.observations.get(sessionId);
+    if (!observation || this.stopped || this.state.status !== 'ready') return;
+    this.stopObservation(observation);
+    this.withdrawTargets(observation);
+    this.startObservation(sessionId, observation);
   }
   private request: AgentRequest = async (method, params, caller) => {
     this.assertActive();
@@ -567,7 +577,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
     const params = this.target(target, 'send');
     agentMethods['agent.messages.send'].params.parse({ ...params, commandId: 'validation', text });
     return this.track(
-      this.actions.create('send', 'agent.messages.send', { ...params, text }, text),
+      this.actions
+        .create('send', 'agent.messages.send', { ...params, text }, text)
+        .then((command) => {
+          if (command.status === 'failed' && command.error === 'CONFLICT')
+            this.resync(params.sessionId);
+          return command;
+        }),
     );
   }
   cancel(target: string) {

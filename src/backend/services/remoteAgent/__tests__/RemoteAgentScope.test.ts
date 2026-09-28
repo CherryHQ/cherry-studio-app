@@ -187,6 +187,49 @@ it('replaces disconnected state with a fresh desktop checkpoint before re-enabli
   await test.source.drain();
 });
 
+it('resubscribes after the desktop rejects a send for a stale idle revision', async () => {
+  const test = fixture();
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  const staleTarget = snapshot!.sendTarget!;
+  // The desktop renamed the session without publishing session.updated.
+  test.projection.session = {
+    ...test.projection.session,
+    title: 'Renamed on PC',
+    idleRevision: '2',
+  };
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) =>
+    method === 'agent.messages.send' && params.expectedIdleRevision !== '2'
+      ? {
+          commandId: params.commandId,
+          method,
+          status: 'rejected',
+          admittedAt: '2026-09-22T00:00:00.000Z',
+          sessionId: 's',
+          error: { reason: 'CONFLICT', message: 'Session is not idle at the expected revision' },
+        }
+      : request(method, params),
+  );
+  const rejected = await test.source.send(staleTarget, 'hello');
+  expect(rejected).toMatchObject({ status: 'failed', error: 'CONFLICT' });
+  expect(snapshot?.current).toBe(false);
+  expect(snapshot?.sendTarget).toBeUndefined();
+  await settle();
+  expect(snapshot).toMatchObject({ current: true, session: { title: 'Renamed on PC' } });
+  expect(
+    test.request.mock.calls.filter(([method]) => method === 'agent.sessions.subscribe'),
+  ).toHaveLength(2);
+  await expect(test.source.send(snapshot!.sendTarget!, 'hello')).resolves.toMatchObject({
+    status: 'confirming',
+  });
+  test.source.dispose();
+  await test.source.drain();
+});
+
 it('does not admit another send while the original command receipt is still uncertain', async () => {
   const test = fixture();
   let snapshot: RemoteSessionSnapshot | undefined;
