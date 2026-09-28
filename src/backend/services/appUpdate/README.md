@@ -5,11 +5,11 @@ GitCode. The app-wide `AppUpdateObserver` checks after bootstrap, without blocki
 displaying a dialog, and records the result in the shared frontend query cache. Each cold launch
 checks again; returning to the foreground refreshes results older than six hours.
 
-Settings home and About each expose one Check for updates row, with no description. A known newer
-APK adds a `NEW` badge on the right. Opening these pages and tapping the row never initiate a check;
-they only read the recorded result. Tapping a marked row opens confirmation with the current/latest
-versions and the browser-download notice. Cancel does nothing; only confirming Download APK opens
-the browser. Other results appear as toasts after a tap, without adding text beneath the row.
+About exposes one Check for updates row below the app version, with no description. A known newer
+APK adds a `NEW` badge on the right. Opening About reads the recorded result without starting a
+check. Tapping a marked row opens confirmation with the current/latest versions and the
+browser-download notice. Cancel does nothing; only confirming Download APK opens the browser.
+Tapping an unmarked row runs a fresh check and reports its result as a toast.
 
 ## Distribution Gate
 

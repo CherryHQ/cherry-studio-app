@@ -1,5 +1,4 @@
-import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
-import { Chip, Section, useAlert, useToast } from '@cherrystudio/ui/components';
+import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
@@ -15,13 +14,8 @@ const UNAVAILABLE_KEYS = {
 
 type AvailableAppUpdate = Extract<AppUpdateResult, { status: 'available' }>;
 
-/** Settings reads the startup result and refetches on tap; download confirmation is owned here. */
-export function AppUpdateSection() {
-  const appUpdate = useBackendModule('appUpdate');
-  return appUpdate.isEnabled ? <GitcodeAppUpdateSection /> : null;
-}
-
-function GitcodeAppUpdateSection() {
+/** About reads the startup result and refetches on tap; download confirmation stays here. */
+export function useAppUpdateCheck() {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
@@ -73,24 +67,10 @@ function GitcodeAppUpdateSection() {
     }
   };
 
-  return (
-    <Section>
-      <Section.Item
-        accessibilityHint={available ? t('settings.update.confirmTitle') : undefined}
-        accessibilityState={{ busy: isFetching }}
-        label={t('settings.update.check')}
-        leading={<RefreshCwIcon className="size-4 text-foreground" />}
-        onPress={checkForUpdates}
-        showChevron={false}
-        testID="settings-check-update"
-        trailing={
-          available ? (
-            <Chip.Tag className="px-2 py-0.5" testID="settings-update-new">
-              <Chip.Label className="text-xs">{t('settings.update.newBadge')}</Chip.Label>
-            </Chip.Tag>
-          ) : undefined
-        }
-      />
-    </Section>
-  );
+  return {
+    checkForUpdates,
+    hasAvailableUpdate: Boolean(available),
+    isEnabled: appUpdate.isEnabled,
+    isFetching,
+  };
 }
