@@ -20,10 +20,20 @@ type Connection = {
   onNotification(listener: (notification: DesktopNotification) => void): () => void;
 };
 
+type Notification = ReturnType<typeof agentNotificationSchema.parse>;
+
+const PRESENT_INTERVAL_MS = 100;
+
 /** Rebuilds from a desktop checkpoint; projection and cursor live only for this subscription. */
 export class SessionSync {
   private readonly lifetime = new AbortController();
   private tail: Promise<void> = Promise.resolve();
+  private inbox: Notification[] = [];
+  private ack?: { subscriptionId: string; cursor: AgentProjection['cursor'] };
+  private acking = false;
+  private presenting = false;
+  private presentTimer?: ReturnType<typeof setTimeout>;
+  private presentedAt = 0;
   private unsubscribe?: () => void;
   private subscriptionId?: string;
   private projection?: AgentProjection;
@@ -51,32 +61,97 @@ export class SessionSync {
       }
       const event = parsed.data;
       if (event.params.subscriptionId !== this.subscriptionId) return;
-      void this.enqueue(async () => {
-        if (event.params.subscriptionId !== this.subscriptionId) return;
-        if (event.method === 'agent.subscriptions.resetRequired') {
-          await this.prepare();
-          return;
-        }
-        if (!this.projection) throw new RemoteAgentError('PROTOCOL_ERROR');
-        const parts = event.params.events.flatMap((item) =>
-          item.kind === 'part.created' || item.kind === 'part.replaced' ? [item.payload.part] : [],
-        );
-        const content = await this.materialize(parts);
-        const result = applyAgentEvents(this.projection, event.params, content, integrity);
-        if (!result.ok) {
-          await this.prepare();
-          return;
-        }
-        await this.updateProjection(result.projection);
-        await this.connection.request(
-          'agent.subscriptions.ack',
-          { subscriptionId: event.params.subscriptionId, cursor: result.cursor },
-          this.lifetime.signal,
-        );
-      }).catch(() => undefined);
+      this.inbox.push(event);
+      if (this.inbox.length === 1)
+        void this.enqueue(() => this.applyInbox()).catch(() => undefined);
     });
     this.started = this.enqueue(() => this.prepare());
     return this.started;
+  }
+  /** Applies every batch that arrived meanwhile, then presents once; ACK tracks application, not rendering. */
+  private async applyInbox() {
+    let applied = false;
+    let structural = false;
+    try {
+      while (this.inbox.length) {
+        const event = this.inbox[0]!;
+        if (event.params.subscriptionId === this.subscriptionId) {
+          if (event.method === 'agent.subscriptions.resetRequired') {
+            applied = false;
+            await this.prepare();
+          } else {
+            if (!this.projection) throw new RemoteAgentError('PROTOCOL_ERROR');
+            const parts = event.params.events.flatMap((item) =>
+              item.kind === 'part.created' || item.kind === 'part.replaced'
+                ? [item.payload.part]
+                : [],
+            );
+            const content = await this.materialize(parts);
+            this.lifetime.signal.throwIfAborted();
+            const result = applyAgentEvents(this.projection, event.params, content, integrity);
+            if (result.ok) {
+              this.projection = result.projection;
+              applied = true;
+              structural ||= event.params.events.some((item) => item.kind !== 'part.append');
+            } else {
+              applied = false;
+              await this.prepare();
+            }
+          }
+        }
+        // Removing only after handling keeps later notifications from starting a second drain.
+        this.inbox.shift();
+      }
+    } catch (error) {
+      this.inbox = [];
+      throw error;
+    }
+    if (!applied || !this.projection || !this.subscriptionId) return;
+    this.acknowledge(this.subscriptionId, this.projection.cursor);
+    this.schedulePresent(structural);
+  }
+  private acknowledge(subscriptionId: string, cursor: AgentProjection['cursor']) {
+    this.ack = { subscriptionId, cursor };
+    if (this.acking) return;
+    this.acking = true;
+    void (async () => {
+      try {
+        for (let ack = this.ack; ack; ack = this.ack) {
+          this.ack = undefined;
+          if (ack.subscriptionId !== this.subscriptionId) continue;
+          try {
+            await this.connection.request('agent.subscriptions.ack', ack, this.lifetime.signal);
+          } catch (error) {
+            // A reset may close the subscription while its last ACK is in flight.
+            if (!this.lifetime.signal.aborted && ack.subscriptionId === this.subscriptionId)
+              this.failed(error);
+            return;
+          }
+        }
+      } finally {
+        this.acking = false;
+      }
+    })();
+  }
+  /** Streamed text commits at most once per interval, like local sessions; other changes present at once. */
+  private schedulePresent(immediate: boolean) {
+    if (this.presenting) return;
+    const delay = immediate ? 0 : this.presentedAt + PRESENT_INTERVAL_MS - Date.now();
+    if (delay > 0) {
+      this.presentTimer ??= setTimeout(() => this.queuePresent(), delay);
+      return;
+    }
+    this.queuePresent();
+  }
+  private queuePresent() {
+    clearTimeout(this.presentTimer);
+    this.presentTimer = undefined;
+    if (this.presenting) return;
+    this.presenting = true;
+    void this.enqueue(async () => {
+      this.presenting = false;
+      if (this.projection) await this.present(this.projection, true);
+    }).catch(() => undefined);
   }
   private enqueue(work: () => Promise<void>): Promise<void> {
     const pending = this.tail.then(async () => {
@@ -168,6 +243,7 @@ export class SessionSync {
   }
   private async present(projection: AgentProjection, current: boolean) {
     this.lifetime.signal.throwIfAborted();
+    this.presentedAt = Date.now();
     const parts = { ...projection.parts };
     const view = () => ({
       ...projection,
@@ -178,39 +254,35 @@ export class SessionSync {
         projection.interactions,
       ),
     });
-    for (const part of Object.values(parts)) {
-      if ((part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content) {
-        const ref = part.content.ref;
-        const text = this.textCache.get(`${ref.contentId}:${ref.revision}:${ref.sha256}`);
-        if (text !== undefined) parts[part.partId] = { ...part, content: { text } };
-      }
-    }
-    // Readable projection need not wait for content or persisted interactions.
-    // Only the final publication below grants current operation targets.
-    this.publish(view(), false);
     const retained = new Set<string>();
-    for (const part of Object.values(projection.parts)) {
+    const missing: { part: AgentPart; ref: ContentRef; key: string }[] = [];
+    for (const part of Object.values(parts)) {
       if ((part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content) {
         const ref = part.content.ref;
         const key = `${ref.contentId}:${ref.revision}:${ref.sha256}`;
         retained.add(key);
-        let text = this.textCache.get(key);
-        if (text === undefined) {
-          try {
-            text = decodeContent(await this.read(ref));
-            this.textCache.set(key, text);
-          } catch {
-            this.lifetime.signal.throwIfAborted();
-            continue;
-          }
-        }
+        const text = this.textCache.get(key);
+        if (text !== undefined) parts[part.partId] = { ...part, content: { text } };
+        else missing.push({ part, ref, key });
+      }
+    }
+    for (const key of this.textCache.keys()) if (!retained.has(key)) this.textCache.delete(key);
+    const refresh = current && this.interactionRevision !== projection.session.historyRevision;
+    // Readable projection need not wait for content or persisted interactions.
+    // Only the final publication below grants current operation targets.
+    if (missing.length || refresh) this.publish(view(), false);
+    for (const { part, ref, key } of missing) {
+      try {
+        const text = decodeContent(await this.read(ref));
+        this.textCache.set(key, text);
         parts[part.partId] = { ...part, content: { text } };
+      } catch {
+        this.lifetime.signal.throwIfAborted();
       }
     }
     this.lifetime.signal.throwIfAborted();
-    for (const key of this.textCache.keys()) if (!retained.has(key)) this.textCache.delete(key);
-    this.publish(view(), false);
-    if (current && this.interactionRevision !== projection.session.historyRevision) {
+    if (missing.length && refresh) this.publish(view(), false);
+    if (refresh) {
       const interactions: AgentInteraction[] = [];
       let cursor: string | undefined;
       do {
@@ -230,6 +302,7 @@ export class SessionSync {
   }
   stop() {
     this.lifetime.abort();
+    clearTimeout(this.presentTimer);
     this.unsubscribe?.();
     const subscriptionId = this.subscriptionId;
     this.subscriptionId = undefined;

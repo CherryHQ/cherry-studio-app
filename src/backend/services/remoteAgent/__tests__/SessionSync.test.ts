@@ -132,13 +132,142 @@ it('installs a desktop checkpoint before activating and applies events before AC
   test.notify(batch());
   await settle();
   expect(test.sync.current?.cursor.seq).toBe('1');
-  expect(test.order.indexOf('publish:1:true')).toBeLessThan(
-    test.order.indexOf('agent.subscriptions.ack'),
-  );
-  expect(test.publish.mock.calls.at(-1)![0].messages.m).toMatchObject({ messageId: 'm' });
+  expect(test.order).toContain('agent.subscriptions.ack');
+  expect(test.publish.mock.calls.at(-1)).toMatchObject([
+    { messages: { m: { messageId: 'm' } } },
+    true,
+  ]);
   expect(test.failed).not.toHaveBeenCalled();
   test.sync.stop();
   await test.sync.drain();
+});
+
+function streaming() {
+  const state = projection();
+  state.messages.m = {
+    messageId: 'm',
+    revision: '1',
+    role: 'assistant',
+    partIds: ['p'],
+    status: 'pending',
+  };
+  state.parts.p = {
+    partId: 'p',
+    revision: '1',
+    kind: 'text',
+    state: 'streaming',
+    content: { text: '' },
+  };
+  return state;
+}
+function append(seq: number, text = 'a') {
+  return {
+    method: 'agent.events',
+    params: {
+      sessionId: 's',
+      streamEpoch: 'epoch',
+      subscriptionId: 'sub-1',
+      events: [
+        {
+          seq: String(seq),
+          kind: 'part.append',
+          payload: {
+            messageId: 'm',
+            partId: 'p',
+            baseRevision: String(seq),
+            revision: String(seq + 1),
+            offsetUtf8: String(seq - 1),
+            text,
+          },
+        },
+      ],
+    },
+  };
+}
+
+it('applies batches that arrive during a pending ACK without waiting for it', async () => {
+  const test = setup(streaming());
+  const request = test.request.getMockImplementation()!;
+  const acks: (() => void)[] = [];
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.subscriptions.ack')
+      await new Promise<void>((resolve) => acks.push(resolve));
+    return request(method, params);
+  });
+  await test.sync.start();
+  test.notify(append(1));
+  await settle();
+  test.notify(append(2));
+  test.notify(append(3));
+  await settle();
+  // The first ACK is still in flight; later batches are applied and acknowledged together.
+  expect(test.sync.current?.parts.p).toMatchObject({ content: { text: 'aaa' } });
+  expect(acks).toHaveLength(1);
+  acks.shift()!();
+  await settle();
+  expect(
+    test.request.mock.calls
+      .filter(([method]) => method === 'agent.subscriptions.ack')
+      .map(([, params]) => params.cursor.seq),
+  ).toEqual(['1', '3']);
+  acks.shift()!();
+  test.sync.stop();
+  await test.sync.drain();
+  expect(test.failed).not.toHaveBeenCalled();
+});
+
+it('presents streamed text at most once per interval and structural changes at once', async () => {
+  jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+  try {
+    const test = setup(streaming());
+    await test.sync.start();
+    const presented = () => test.publish.mock.calls.filter(([, current]) => current).length;
+    const initial = presented();
+    for (let seq = 1; seq <= 5; seq++) {
+      test.notify(append(seq));
+      await settle();
+    }
+    expect(test.sync.current?.parts.p).toMatchObject({ content: { text: 'aaaaa' } });
+    expect(presented()).toBe(initial);
+    jest.advanceTimersByTime(100);
+    await settle();
+    expect(presented()).toBe(initial + 1);
+    expect(test.publish.mock.calls.at(-1)).toMatchObject([
+      { parts: { p: { content: { text: 'aaaaa' } } } },
+      true,
+    ]);
+    test.notify({
+      method: 'agent.events',
+      params: {
+        sessionId: 's',
+        streamEpoch: 'epoch',
+        subscriptionId: 'sub-1',
+        events: [
+          {
+            seq: '6',
+            kind: 'message.updated',
+            payload: {
+              baseRevision: '1',
+              message: {
+                messageId: 'm',
+                revision: '2',
+                role: 'assistant',
+                partIds: ['p'],
+                status: 'success',
+              },
+            },
+          },
+        ],
+      },
+    });
+    await settle();
+    expect(presented()).toBe(initial + 2);
+    expect(test.publish.mock.calls.at(-1)![0].messages.m).toMatchObject({ status: 'success' });
+    test.sync.stop();
+    await test.sync.drain();
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 it('applies events arriving during activation after installing the checkpoint', async () => {

@@ -2,6 +2,7 @@ import type { AgentProjection } from '@cherrystudio/remote-protocol/agent';
 
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopDomainLease, DesktopLeaseState } from '@/backend/services/desktopConnections';
+import type { DesktopNotification } from '@/backend/services/desktopConnections/DesktopSession';
 import {
   RemoteFailureError,
   RemoteTransportError,
@@ -66,6 +67,8 @@ function fixture(cache = new RemoteSessionReadCache()) {
         return { items: [] };
       case 'agent.subscriptions.close':
         return { closed: true };
+      case 'agent.subscriptions.ack':
+        return { acknowledged: params.cursor };
       case 'agent.messages.send':
         return {
           commandId: params.commandId,
@@ -78,7 +81,14 @@ function fixture(cache = new RemoteSessionReadCache()) {
         throw new Error(method);
     }
   });
-  const connection = { request, onNotification: () => () => undefined };
+  const notifications = new Set<(notification: DesktopNotification) => void>();
+  const connection = {
+    request,
+    onNotification: (listener: (notification: DesktopNotification) => void) => {
+      notifications.add(listener);
+      return () => notifications.delete(listener);
+    },
+  };
   const lease: DesktopDomainLease = {
     scope: 'pairing-scope',
     connectionId: 'pc',
@@ -114,6 +124,9 @@ function fixture(cache = new RemoteSessionReadCache()) {
     request,
     projection,
     lease,
+    notify(notification: DesktopNotification) {
+      for (const listener of notifications) listener(notification);
+    },
     setState(next: DesktopLeaseState) {
       state = next;
       for (const listener of listeners) listener();
@@ -142,6 +155,41 @@ it('observes through its lease, suppresses stale command targets, and never owns
   test.source.dispose();
   await test.source.drain();
   expect(test.lease.release).toHaveBeenCalledTimes(1);
+});
+
+it('publishes live events without rewriting an unchanged session into the history preview', async () => {
+  const test = fixture();
+  const published: RemoteSessionSnapshot[] = [];
+  test.source.observe('s', (value) => published.push(value));
+  await settle();
+  const reads = jest.fn();
+  test.source.subscribeReads('s', reads);
+  test.notify({
+    method: 'agent.events',
+    params: {
+      sessionId: 's',
+      streamEpoch: 'epoch',
+      subscriptionId: 'sub',
+      events: [
+        {
+          seq: '1',
+          kind: 'message.created',
+          payload: {
+            messageId: 'm',
+            revision: '1',
+            role: 'assistant',
+            status: 'pending',
+            partIds: [],
+          },
+        },
+      ],
+    },
+  });
+  await settle();
+  expect(published.at(-1)).toMatchObject({ current: true, messages: [{ id: 'm' }] });
+  expect(reads).not.toHaveBeenCalled();
+  test.source.dispose();
+  await test.source.drain();
 });
 
 it('replaces disconnected state with a fresh desktop checkpoint before re-enabling actions', async () => {

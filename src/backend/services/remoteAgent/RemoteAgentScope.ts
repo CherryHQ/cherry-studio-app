@@ -171,7 +171,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
     const view = session === projection.session ? projection : { ...projection, session };
     const entry = this.cacheEntry(sessionId);
     this.readCache.setEpoch(entry, projection.cursor.streamEpoch);
-    this.readCache.put(entry, entry.generation, 'session', session);
+    // Streamed batches keep the session object; rewriting it would re-project every history preview.
+    if (this.readCache.get(entry, 'session') !== session)
+      this.readCache.put(entry, entry.generation, 'session', session);
     observation.projection = projection;
     observation.snapshot = projectSnapshot(this.scope, view, current, this.issueResource);
     for (const listener of observation.listeners) listener(observation.snapshot);
