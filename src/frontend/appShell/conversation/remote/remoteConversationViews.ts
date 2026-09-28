@@ -1,14 +1,25 @@
-import type { RemoteMessageView, RemoteSourceState } from '@/shared/contracts/remoteAgent';
+import type {
+  RemoteCommand,
+  RemoteMessageView,
+  RemoteSourceState,
+} from '@/shared/contracts/remoteAgent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type {
   Availability,
+  ConversationAction,
   ConversationFailure,
   ConversationMessage,
   ResourceRead,
   TranscriptMessage,
 } from '../contracts';
+import type {
+  ConversationInput,
+  OperationId,
+  Submission,
+  UndeliveredMessage,
+} from './remoteContracts';
 
 export function remoteConversationFailure(error: unknown): ConversationFailure {
   const failure = classifyRemoteFailure(error);
@@ -56,6 +67,32 @@ function classifyRemoteFailure(error: unknown): ConversationFailure {
   )
     return { code: 'offline', retry: 'read-again' };
   return { code: 'internal', retry: 'none' };
+}
+/** A final send or start outcome the user still has to resolve; resending through `action` replaces it. */
+export function undeliveredMessage(
+  operation: Pick<RemoteCommand, 'status' | 'text' | 'error' | 'errorMessage'>,
+  id: OperationId,
+  action: ConversationAction<ConversationInput, Submission>,
+  discard: () => void,
+): UndeliveredMessage | undefined {
+  const { status, text } = operation;
+  if ((status !== 'rejected' && status !== 'interrupted') || !text) return undefined;
+  const input: ConversationInput = { parts: [{ type: 'text', text }] };
+  return {
+    id,
+    input,
+    state: status,
+    ...(status === 'rejected' && operation.error
+      ? {
+          failure: remoteConversationFailure({
+            code: operation.error,
+            detail: operation.errorMessage,
+          }),
+        }
+      : {}),
+    resend: { availability: action.availability, execute: () => action.execute(input) },
+    discard,
+  };
 }
 export function remoteAvailability(source: RemoteSourceState, disposed: boolean): Availability {
   if (!disposed && source.status !== 'retired' && source.reason === 'upgrade-required')

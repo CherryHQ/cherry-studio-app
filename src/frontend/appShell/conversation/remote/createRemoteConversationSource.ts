@@ -3,6 +3,7 @@ import type { RemoteAgentSource, RemoteStartOperation } from '@/shared/contracts
 import type {
   AgentRef,
   CatalogCursor,
+  ConversationAction,
   OperationOutcome,
   QueryScope,
   WorkspaceRef,
@@ -20,13 +21,19 @@ import {
 import type {
   ConversationDraft,
   ConversationInput,
-  ConversationOperation,
   DraftId,
   OperationId,
   RemoteConversationSource,
   Submission,
 } from './remoteContracts';
-import { remoteAvailability, remoteConversationFailure } from './remoteConversationViews';
+import {
+  remoteAvailability,
+  remoteConversationFailure,
+  undeliveredMessage,
+} from './remoteConversationViews';
+
+const isUndelivered = (start: RemoteStartOperation) =>
+  (start.status === 'rejected' || start.status === 'interrupted') && !start.sessionId;
 
 export function createRemoteConversationSource(
   connectionId: string,
@@ -70,6 +77,7 @@ export function createRemoteConversationSource(
       return {
         state: 'rejected',
         failure: remoteConversationFailure({ code: start.error, detail: start.errorMessage }),
+        operationId,
       };
     if (start.status === 'interrupted') return { state: 'interrupted', operationId };
     return { state: 'pending', operationId };
@@ -77,78 +85,36 @@ export function createRemoteConversationSource(
   const state = createConversationState({
     availability: remoteAvailability(remote.getState(), false),
   });
-  const operations = createConversationState<readonly ConversationOperation[]>([]);
-  const publishOperations = () =>
-    operations.set(
-      (disposed || remote.getState().status === 'retired' ? [] : remote.getStarts()).map(
-        (start) => ({
-          id: refs.issue<OperationId>('operation', start.id),
-          kind: 'start',
-          state: start.status,
-          draftId: start.draftId as DraftId,
-          ...(start.sessionId ? { conversation: { source: ref, sessionId: start.sessionId } } : {}),
-          input: { parts: [{ type: 'text', text: start.text }] },
-          ...(start.error
-            ? {
-                failure: remoteConversationFailure({
-                  code: start.error,
-                  detail: start.errorMessage,
-                }),
-              }
-            : {}),
-          ...(start.status === 'pending'
-            ? {
-                recovery: {
-                  availability: remoteAvailability(remote.getState(), disposed),
-                  execute: async (): Promise<OperationOutcome<void>> => {
-                    try {
-                      assertSource();
-                      await remote.recover(start.id);
-                      const current = remote.getStarts().find((item) => item.id === start.id);
-                      if (!current)
-                        return {
-                          state: 'rejected',
-                          failure: { code: 'not-found', retry: 'none' },
-                        };
-                      const recovered = outcome(current);
-                      return recovered.state === 'applied'
-                        ? { state: 'applied', value: undefined }
-                        : recovered;
-                    } catch (error) {
-                      return {
-                        state: 'rejected',
-                        failure:
-                          error instanceof ConversationReadError
-                            ? error.failure
-                            : remoteConversationFailure(error),
-                      };
-                    }
-                  },
-                },
-              }
-            : {
-                dismiss: () => {
-                  assertSource();
-                  remote.dismiss(start.id);
-                },
-              }),
-        }),
-      ),
-    );
+  const catalogListeners = new Set<(kind: 'agents' | 'sessions') => void>();
+  const created = new Set(remote.getStarts().flatMap((start) => start.sessionId ?? []));
   const unstate = remote.subscribeState(() => {
     state.set({ availability: remoteAvailability(remote.getState(), disposed) });
-    publishOperations();
   });
-  const unoperations = remote.subscribeOperations(publishOperations);
-  publishOperations();
+  const unoperations = remote.subscribeOperations(() => {
+    const fresh = remote
+      .getStarts()
+      .flatMap((start) =>
+        start.sessionId && !created.has(start.sessionId) ? start.sessionId : [],
+      );
+    if (!fresh.length) return;
+    for (const sessionId of fresh) created.add(sessionId);
+    for (const listener of catalogListeners) listener('sessions');
+  });
   return {
     draftScope: remote.draftScope,
-    operations,
     ref,
     scope,
     state,
+    hasSubmission: (draftId) =>
+      remote.getStarts().some((start) => start.draftId === draftId && !isUndelivered(start)),
     catalog: {
       cacheScope,
+      subscribe: (listener) => {
+        catalogListeners.add(listener);
+        return () => {
+          catalogListeners.delete(listener);
+        };
+      },
       readSession: (address, signal) =>
         read(signal, async () => {
           if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
@@ -247,74 +213,105 @@ export function createRemoteConversationSource(
             : { kind: 'registered' as const, id: selected.id };
         let retired = false;
         let pending = false;
-        const draftOperations = createConversationState<readonly ConversationOperation[]>([]);
-        const publishDraftOperations = () =>
-          draftOperations.set(
-            operations.getSnapshot().filter((operation) => operation.draftId === input.draftId),
-          );
         function snapshot(): ReturnType<ConversationDraft['state']['getSnapshot']> {
           const availability = remoteAvailability(remote.getState(), retired || disposed);
+          const starts = remote.getStarts();
+          const own = starts.find((start) => start.draftId === input.draftId);
+          const start: ConversationAction<ConversationInput, Submission> = {
+            availability:
+              availability.state === 'disabled'
+                ? availability
+                : !workspace
+                  ? { state: 'disabled', reason: 'workspace-required' }
+                  : pending || (own && !isUndelivered(own))
+                    ? { state: 'disabled', reason: 'busy' }
+                    : availability,
+            execute: async (value) => {
+              try {
+                assertSource();
+                if (retired) throw new ConversationReadError({ code: 'retired', retry: 'none' });
+                if (!workspace)
+                  throw new ConversationReadError({
+                    code: 'invalid-input',
+                    retry: 'revise-input',
+                  });
+                const text = remoteInput(value);
+                pending = true;
+                state.set(snapshot());
+                return outcome(
+                  await remote.start({ draftId: input.draftId, agentId, workspace, text }),
+                );
+              } catch (error) {
+                return {
+                  state: 'rejected',
+                  failure:
+                    error instanceof ConversationReadError
+                      ? error.failure
+                      : remoteConversationFailure(error),
+                };
+              } finally {
+                pending = false;
+                if (!retired) state.set(snapshot());
+              }
+            },
+          };
+          // A start that failed after its route left surfaces on the next draft instead of vanishing.
+          const failed =
+            own && isUndelivered(own)
+              ? own
+              : starts.findLast(
+                  (item) =>
+                    isUndelivered(item) &&
+                    item.draftId !== input.draftId &&
+                    ![...drafts].some((draft) => draft.id === item.draftId),
+                );
+          const discard = () => {
+            assertSource();
+            if (failed) remote.discard(failed.id);
+          };
+          const undelivered =
+            failed &&
+            undeliveredMessage(
+              failed,
+              refs.issue<OperationId>('operation', failed.id),
+              failed === own
+                ? start
+                : {
+                    availability: start.availability,
+                    // Resubmitting replaces only this draft's own start, so retire the adopted one.
+                    execute: async (value) => {
+                      const result = await start.execute(value);
+                      if (result.state !== 'rejected' || result.operationId) discard();
+                      return result;
+                    },
+                  },
+              discard,
+            );
           return {
             inputPolicy: REMOTE_INPUT_POLICY,
-            start: {
-              availability:
-                availability.state === 'disabled'
-                  ? availability
-                  : !workspace
-                    ? { state: 'disabled', reason: 'workspace-required' }
-                    : pending || remote.getStarts().some((start) => start.draftId === input.draftId)
-                      ? { state: 'disabled', reason: 'busy' }
-                      : availability,
-              execute: async (value: ConversationInput) => {
-                try {
-                  assertSource();
-                  if (retired) throw new ConversationReadError({ code: 'retired', retry: 'none' });
-                  if (!workspace)
-                    throw new ConversationReadError({
-                      code: 'invalid-input',
-                      retry: 'revise-input',
-                    });
-                  const text = remoteInput(value);
-                  pending = true;
-                  state.set(snapshot());
-                  const start = await remote.start({
-                    draftId: input.draftId,
-                    agentId,
-                    workspace,
-                    text,
-                  });
-                  // The caller reports a rejection it receives; keep only outcomes discovered later.
-                  if (start.status === 'rejected') remote.dismiss(start.id);
-                  return outcome(start);
-                } catch (error) {
-                  return {
-                    state: 'rejected',
-                    failure:
-                      error instanceof ConversationReadError
-                        ? error.failure
-                        : remoteConversationFailure(error),
-                  };
-                } finally {
-                  pending = false;
-                  if (!retired) state.set(snapshot());
+            start,
+            ...(own?.sessionId && own.status !== 'pending'
+              ? {
+                  created: {
+                    conversation: { source: ref, sessionId: own.sessionId },
+                    release: () => {
+                      assertSource();
+                      remote.release(own.id);
+                    },
+                  },
                 }
-              },
-            },
+              : {}),
+            ...(undelivered ? { undelivered } : {}),
           };
         }
         const state = createConversationState(snapshot());
         const unstate = remote.subscribeState(() => state.set(snapshot()));
         const unoperations = remote.subscribeOperations(() => {
-          publishOperations();
-          publishDraftOperations();
           if (!retired) state.set(snapshot());
         });
-        publishOperations();
-        publishDraftOperations();
         const draft: ConversationDraft = {
           id: input.draftId as DraftId,
           state,
-          operations: draftOperations,
           dispose: () => {
             if (retired) return;
             retired = true;
@@ -351,7 +348,7 @@ export function createRemoteConversationSource(
       disposed = true;
       unstate();
       unoperations();
-      operations.set([]);
+      catalogListeners.clear();
       state.set({ availability: remoteAvailability(remote.getState(), true) });
       for (const draft of drafts) draft.dispose();
       for (const session of sessions) session.dispose();

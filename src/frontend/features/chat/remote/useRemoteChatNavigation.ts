@@ -9,7 +9,7 @@ import { useChatSource, type RemoteChatTarget } from '@/frontend/appShell/naviga
 /** Draft identity owns input; Agent selection only changes the destination until submission. */
 export function useRemoteChatNavigation(
   target: RemoteChatTarget,
-  source: Pick<RemoteConversationSource, 'operations'>,
+  source: Pick<RemoteConversationSource, 'hasSubmission'>,
 ) {
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -35,11 +35,9 @@ export function useRemoteChatNavigation(
     draftId,
     identity,
     selectAgent: (agentId: string) => {
-      // Read at click time: admission may have happened since the header last rendered.
-      const submitted = source.operations
-        .getSnapshot()
-        .some((operation) => operation.draftId === draftId);
-      const nextDraftId = target.sessionId || submitted ? uuidv7() : draftId;
+      // Read at click time: admission may have happened since the header last rendered. A submitted
+      // start keeps its Agent; an undelivered one moves with the draft to the new Agent.
+      const nextDraftId = target.sessionId || source.hasSubmission(draftId) ? uuidv7() : draftId;
       if (nextDraftId !== draftId || target.sessionId) origin.current = undefined;
       openRemote({ connectionId: target.connectionId, agentId, draftId: nextDraftId });
     },

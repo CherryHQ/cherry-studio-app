@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
-import type { AgentRef, Readable, WorkspaceRef } from '../contracts';
-import type { ConversationDraft, ConversationOperation, DraftId } from './remoteContracts';
+import type { AgentRef, WorkspaceRef } from '../contracts';
+import type { ConversationDraft, DraftId } from './remoteContracts';
 import { useRemoteConversationSource } from './useRemoteConversationSource';
 
 export function useConversationDraft(
@@ -44,13 +44,3 @@ export function useConversationDraft(
 }
 const subscribeNone = () => () => {};
 const emptyDraft = () => undefined;
-const EMPTY_OPERATIONS: readonly ConversationOperation[] = [];
-const emptyOperations = () => EMPTY_OPERATIONS;
-export function useConversationOperations(owner?: {
-  operations: Readable<readonly ConversationOperation[]>;
-}) {
-  return useSyncExternalStore(
-    owner?.operations.subscribe ?? subscribeNone,
-    owner?.operations.getSnapshot ?? emptyOperations,
-  );
-}

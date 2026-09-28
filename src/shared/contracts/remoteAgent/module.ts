@@ -54,13 +54,10 @@ export interface RemoteAgentSource {
   getCommands(): readonly RemoteCommand[];
   getStarts(): readonly RemoteStartOperation[];
   subscribeOperations(listener: () => void): () => void;
-  recover(operationId: string): Promise<void>;
-  dismiss(operationId: string): void;
-  /**
-   * Rebuilds an observed Session from a fresh desktop checkpoint and its stored summary; unobserved
-   * Sessions are ignored.
-   */
-  resync(sessionId: string): Promise<void>;
+  /** Forgets a final outcome; pending work stays until the journal settles it. */
+  discard(operationId: string): void;
+  /** Hands a start's Session to its route: the start is forgotten, an undelivered first send stays. */
+  release(startId: string): void;
   dispose(): void;
 }
 export interface RemoteAgentModule {

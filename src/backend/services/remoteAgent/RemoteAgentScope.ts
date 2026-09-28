@@ -44,7 +44,7 @@ type Observation = {
   sync?: SessionSync;
   snapshot?: RemoteSessionSnapshot;
   projection?: AgentProjection;
-  /** Session summary read from desktop storage by an explicit resync. */
+  /** Session summary read from desktop storage by a conflict resync. */
   stored?: AgentSession;
   retryTimer?: ReturnType<typeof setTimeout>;
   retries?: number;
@@ -112,7 +112,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       () => this.scheduleRecovery(),
     );
     this.unsubscribe = lease.subscribe(() => this.onConnectionChanged());
-    if (this.state.status === 'ready') this.actions.recover();
+    if (this.state.status === 'ready') void this.actions.recover();
   }
   getState = () => this.state;
   subscribeState = (listener: () => void) => {
@@ -143,7 +143,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     for (const listener of this.stateListeners) listener();
     if (this.state.status === 'ready') {
       for (const [id, observation] of this.observations) this.startObservation(id, observation);
-      this.actions.recover();
+      void this.actions.recover();
     }
   }
   private withdrawTargets(observation: Observation) {
@@ -180,7 +180,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
    * A desktop CONFLICT proves this projection missed a session change: rebuild it from a checkpoint
    * and read the stored session summary, which admission checks even when the checkpoint is stale.
    */
-  async resync(sessionId: string) {
+  private async resync(sessionId: string) {
     this.assertActive();
     const observation = this.observations.get(sessionId);
     if (!observation || this.stopped || this.state.status !== 'ready') return;
@@ -590,7 +590,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       .get()
       .some(
         (command) =>
-          ['confirming', 'accepted'].includes(command.status) &&
+          command.status === 'pending' &&
           command.kind === kind &&
           command.sessionId === target.params.sessionId &&
           (kind !== 'respond' || command.interactionId === target.params.interactionId),
@@ -617,7 +617,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       this.actions
         .create('send', 'agent.messages.send', { ...params, text }, text)
         .then((command) => {
-          if (command.status === 'failed' && command.error === 'CONFLICT')
+          if (command.status === 'rejected' && command.error === 'CONFLICT')
             void this.resync(params.sessionId).catch(() => undefined);
           return command;
         }),
@@ -639,23 +639,23 @@ export class RemoteAgentScope implements RemoteAgentSource {
       }),
     );
   }
-  recover(id: string) {
+  discard(id: string) {
     this.assertActive();
-    return this.track(this.actions.retry(id));
+    this.actions.discard(id);
   }
-  dismiss(id: string) {
+  release(id: string) {
     this.assertActive();
-    this.actions.dismiss(id);
+    this.actions.release(id);
   }
   private scheduleRecovery() {
     clearTimeout(this.recoveryTimer);
     if (
       !this.stopped &&
       this.state.status === 'ready' &&
-      (this.actions.get().some((action) => ['confirming', 'accepted'].includes(action.status)) ||
+      (this.actions.get().some((action) => action.status === 'pending') ||
         this.actions.getStarts().some((start) => start.status === 'pending'))
     )
-      this.recoveryTimer = setTimeout(() => this.actions.recover(), 5000);
+      this.recoveryTimer = setTimeout(() => void this.actions.recover(), 5000);
   }
   dispose() {
     if (this.stopped) return;

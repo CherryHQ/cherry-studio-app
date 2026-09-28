@@ -99,14 +99,17 @@ Backend.remoteAgent; no Controller provider or Controller query keys remain.
 
 `RemoteComposer` owns text editing and registered/system workspace selection. New conversations call the
 bound Draft start action, existing conversations call Session send, and stop targets a selected
-execution. Backend journals own create/send IDs and uncertain-command recovery. Once the submitting request
-returns, uncertain and rejected outcomes remain visible in ConversationOperations as one-line
-statuses; navigation does not resend them. Session rows offer Resync, which resubscribes and reads
-the stored Session summary so a stale idle revision cannot keep rejecting sends. A rejected first
-send is dropped once its caller reports it, so the draft can be sent again. The initiating
-route can hand an applied creation to its Session without remounting the composer. Late completion
-from another route cannot navigate the current view. Unsent text is persisted under its stable
-source identity/grant binding, separately from the ephemeral Query scope.
+execution. Backend journals own create/send IDs and recover pending commands silently; navigation
+does not resend them. A Session or Draft holds at most one undelivered message, the latest input
+the desktop rejected or interrupted, and `UndeliveredMessageRow` shows it as one line with its
+reason and the action that can deliver it. Resending submits the same text through the current
+send or start, which replaces the record in the journal; editing moves the text back into the
+composer. A send CONFLICT resynchronizes the Session before the user resends. Input rejected before
+admission never reaches the journal, so the composer restores it and reports the failure. The
+initiating route hands a created Session over without remounting the composer, then releases the
+start; a first send that failed after creation becomes that Session's undelivered message. Late
+completion from another route cannot navigate the current view. Unsent text is persisted under its
+stable source identity/grant binding, separately from the ephemeral Query scope.
 
 `ConversationMessageContent` renders tool summaries in the shared process layout; a deferred
 resource read bound to the row is resolved by the sheet that opens it, and closing the sheet cancels

@@ -215,7 +215,7 @@ it('resubscribes after the desktop rejects a send for a stale idle revision', as
       : request(method, params),
   );
   const rejected = await test.source.send(staleTarget, 'hello');
-  expect(rejected).toMatchObject({ status: 'failed', error: 'CONFLICT' });
+  expect(rejected).toMatchObject({ status: 'rejected', error: 'CONFLICT' });
   expect(snapshot?.current).toBe(false);
   expect(snapshot?.sendTarget).toBeUndefined();
   await settle();
@@ -224,7 +224,7 @@ it('resubscribes after the desktop rejects a send for a stale idle revision', as
     test.request.mock.calls.filter(([method]) => method === 'agent.sessions.subscribe'),
   ).toHaveLength(2);
   await expect(test.source.send(snapshot!.sendTarget!, 'hello')).resolves.toMatchObject({
-    status: 'confirming',
+    status: 'pending',
   });
   test.source.dispose();
   await test.source.drain();
@@ -247,12 +247,22 @@ it('resyncs from storage when the desktop checkpoint still carries a stale idle 
   };
   const request = test.request.getMockImplementation()!;
   test.request.mockImplementation(async (method, params) =>
-    method === 'agent.sessions.get' ? ({ session: stored } as never) : request(method, params),
+    method === 'agent.sessions.get'
+      ? ({ session: stored } as never)
+      : method === 'agent.messages.send' && params.expectedIdleRevision !== '5'
+        ? ({
+            commandId: params.commandId,
+            method,
+            status: 'rejected',
+            admittedAt: '2026-09-22T00:00:00.000Z',
+            sessionId: 's',
+            error: { reason: 'CONFLICT', message: 'Session is not idle at the expected revision' },
+          } as never)
+        : request(method, params),
   );
-  const resynced = test.source.resync('s');
+  await test.source.send(snapshot!.sendTarget!, 'hello');
   expect(snapshot?.current).toBe(false);
   expect(snapshot?.sendTarget).toBeUndefined();
-  await resynced;
   await settle();
   expect(snapshot).toMatchObject({
     current: true,
@@ -262,7 +272,6 @@ it('resyncs from storage when the desktop checkpoint still carries a stale idle 
   expect(
     test.request.mock.calls.filter(([method]) => method === 'agent.sessions.subscribe'),
   ).toHaveLength(2);
-  await expect(test.source.resync('unobserved')).resolves.toBeUndefined();
   test.source.dispose();
   await test.source.drain();
 });
@@ -276,7 +285,7 @@ it('does not admit another send while the original command receipt is still unce
   await settle();
   const target = snapshot!.sendTarget!;
   const sent = await test.source.send(target, 'hello');
-  expect(sent.status).toBe('confirming');
+  expect(sent.status).toBe('pending');
   expect(() => test.source.send(target, 'again')).toThrow('CONFLICT');
   expect(
     test.request.mock.calls.filter(([method]) => method === 'agent.messages.send'),
@@ -597,7 +606,7 @@ it('keeps a command whose reply was lost in transit uncertain rather than failed
     throw new RemoteTransportError('timeout', 'Request timeout');
   });
   const sent = await test.source.send(target, 'hello');
-  expect(sent.status).toBe('confirming');
+  expect(sent.status).toBe('pending');
   expect(sent.error).toBeUndefined();
   test.request.mockRejectedValueOnce(new RemoteTransportError('closed', 'Connection closed'));
   await expect(test.source.readSession('s', new AbortController().signal)).rejects.toMatchObject({

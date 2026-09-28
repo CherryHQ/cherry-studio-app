@@ -64,7 +64,7 @@ function fixture(scope = 'scope', binding = 'binding') {
     send: jest.fn(async () => ({
       id: 'send',
       kind: 'send' as const,
-      status: 'confirming' as const,
+      status: 'pending' as const,
       sessionId: 's',
     })),
     cancel: jest.fn(async () => ({
@@ -85,9 +85,8 @@ function fixture(scope = 'scope', binding = 'binding') {
         operationListeners.delete(listener);
       };
     },
-    recover: jest.fn(async () => undefined),
-    dismiss: jest.fn(),
-    resync: jest.fn(),
+    discard: jest.fn(),
+    release: jest.fn(),
     dispose: jest.fn(),
   };
   const source = createRemoteConversationSource('pc', remote);
@@ -105,6 +104,9 @@ function fixture(scope = 'scope', binding = 'binding') {
     snapshot,
     unobserve,
     publish: (value = snapshot) => observer?.(value),
+    publishOperations: () => {
+      for (const listener of operationListeners) listener();
+    },
     setState: (next: RemoteSourceState) => {
       state = next;
       for (const listener of states) listener();
@@ -216,7 +218,7 @@ it('binds workspaces to the selected Agent and never invents a default workspace
   test.source.dispose();
 });
 
-it('keeps an admitted draft disabled when reopening it with a pending or rejected first-send receipt', async () => {
+it('keeps a submitted draft busy and hands a created Session to its route', async () => {
   const test = fixture();
   const agent = (await test.source.catalog.listAgents(undefined, signal())).items[0].ref;
   const workspace = (await test.source.catalog.listWorkspaces!(agent, undefined, signal())).items[0]
@@ -237,47 +239,83 @@ it('keeps an admitted draft disabled when reopening it with a pending or rejecte
       { agent, workspace, draftId: 'draft' as DraftId },
       signal(),
     );
-    expect(draft.state.getSnapshot().start.availability).toEqual({
-      state: 'disabled',
-      reason: 'busy',
-    });
-    expect(draft.operations.getSnapshot()[0]).toMatchObject({
-      state: status,
-      input: { parts: [{ type: 'text', text: 'original' }] },
-      conversation: { sessionId: 'created' },
-    });
+    const state = draft.state.getSnapshot();
+    expect(state.start.availability).toEqual({ state: 'disabled', reason: 'busy' });
+    // A first send rejected after its Session exists belongs to that Session, not the draft.
+    expect(state.undelivered).toBeUndefined();
+    expect(test.source.hasSubmission('draft' as DraftId)).toBe(true);
+    if (status === 'pending') expect(state.created).toBeUndefined();
+    else {
+      expect(state.created?.conversation).toEqual({
+        source: test.source.ref,
+        sessionId: 'created',
+      });
+      state.created!.release();
+      expect(test.remote.release).toHaveBeenCalledWith('start');
+    }
     draft.dispose();
   }
   expect(test.remote.start).not.toHaveBeenCalled();
   test.source.dispose();
 });
 
-it('exposes source-owned starts without reopening the original draft and separates durable binding from read scope', async () => {
+it('surfaces a start that failed after its draft closed on the next draft, and resends it there', async () => {
   const test = fixture('read-generation');
-  test.remote.getStarts = () => [
-    {
-      id: 'pending-start',
-      draftId: 'old-draft',
-      agentId: 'a',
-      workspaceId: 'w',
-      text: 'Retained input',
-      status: 'pending',
-      sessionId: 'created',
-    },
-  ];
+  const orphan = {
+    id: 'orphan',
+    draftId: 'old-draft',
+    agentId: 'a',
+    workspaceId: 'w',
+    text: 'Retained input',
+    status: 'rejected' as const,
+    error: 'TARGET_UNAVAILABLE',
+  };
+  test.remote.getStarts = () => [orphan];
   const source = createRemoteConversationSource('desktop', test.remote);
   expect(source.draftScope).toBe('binding');
   expect(source.scope).toBe('read-generation');
-  expect(source.operations.getSnapshot()[0]).toMatchObject({
-    draftId: 'old-draft',
-    state: 'pending',
-    conversation: { sessionId: 'created' },
+  const agent = (await source.catalog.listAgents(undefined, signal())).items[0].ref;
+  const workspace = (await source.catalog.listWorkspaces!(agent, undefined, signal())).items[0].ref;
+  const draft = await source.catalog.prepareDraft(
+    { agent, workspace, draftId: 'new-draft' as DraftId },
+    signal(),
+  );
+  const undelivered = draft.state.getSnapshot().undelivered!;
+  expect(undelivered).toMatchObject({
+    state: 'rejected',
+    failure: { code: 'target-unavailable' },
     input: { parts: [{ type: 'text', text: 'Retained input' }] },
   });
-  const session = await source.openSession({ source: source.ref, sessionId: 's' }, signal());
-  expect(session.state.getSnapshot()).toMatchObject({ agentId: 'a', workspaceId: 'w' });
+  await expect(undelivered.resend.execute(undefined)).resolves.toMatchObject({ state: 'pending' });
+  expect(test.remote.start).toHaveBeenCalledWith(
+    expect.objectContaining({ draftId: 'new-draft', text: 'Retained input' }),
+  );
+  expect(test.remote.discard).toHaveBeenCalledWith('orphan');
+  draft.dispose();
   source.dispose();
-  expect(source.operations.getSnapshot()).toEqual([]);
+  test.source.dispose();
+});
+
+it('announces a Session created by a start to catalog readers', async () => {
+  const test = fixture();
+  const changed = jest.fn();
+  test.source.catalog.subscribe!(changed);
+  const start = {
+    id: 'start',
+    draftId: 'draft',
+    agentId: 'a',
+    workspaceId: 'w',
+    text: 'hello',
+    status: 'pending' as const,
+  };
+  test.remote.getStarts = () => [start];
+  test.publishOperations();
+  expect(changed).not.toHaveBeenCalled();
+  test.remote.getStarts = () => [{ ...start, sessionId: 'created' }];
+  test.publishOperations();
+  test.publishOperations();
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(changed).toHaveBeenCalledWith('sessions');
   test.source.dispose();
 });
 
@@ -343,13 +381,14 @@ test('metadata refs survive reconnect within a grant but never cross a replaceme
   other.source.dispose();
 });
 
-it('carries the rejected send explanation through both the action and its operation snapshot', async () => {
+it('keeps a rejected send as the Session undelivered message with its explanation', async () => {
   const test = fixture();
   const command = {
     id: 'send',
     kind: 'send' as const,
-    status: 'failed' as const,
+    status: 'rejected' as const,
     sessionId: 's',
+    text: 'hello',
     error: 'TARGET_UNAVAILABLE',
     errorMessage: 'Agent has no model configured',
   };
@@ -366,30 +405,53 @@ it('carries the rejected send explanation through both the action and its operat
     await handle.state
       .getSnapshot()
       .actions.send!.execute({ parts: [{ type: 'text', text: 'hello' }] }),
-  ).toMatchObject({ state: 'rejected', failure });
-  expect(handle.operations.getSnapshot()[0]).toMatchObject({ state: 'rejected', failure });
-  expect(test.remote.dismiss).not.toHaveBeenCalled();
+  ).toMatchObject({ state: 'rejected', failure, operationId: expect.any(String) });
+  expect(handle.state.getSnapshot().undelivered).toMatchObject({
+    state: 'rejected',
+    failure,
+    input: { parts: [{ type: 'text', text: 'hello' }] },
+  });
+  expect(test.remote.discard).not.toHaveBeenCalled();
   handle.dispose();
   test.source.dispose();
 });
 
-it('lets an operation row rebuild the state of the Session that owns it', async () => {
+it('resends an undelivered message through the current send target, or discards it', async () => {
   const test = fixture();
   test.remote.getCommands = () => [
-    { id: 'send', kind: 'send', status: 'failed', sessionId: 's', error: 'CONFLICT' },
+    { id: 'send', kind: 'send', status: 'interrupted', sessionId: 's', text: 'hello' },
+    { id: 'other', kind: 'send', status: 'rejected', sessionId: 'o', text: 'elsewhere' },
   ];
   const handle = await test.source.openSession(address, signal());
-  const resync = handle.operations.getSnapshot()[0].resync!;
-  expect(resync.availability.state).toBe('enabled');
-  await expect(resync.execute(undefined)).resolves.toEqual({ state: 'applied', value: undefined });
-  expect(test.remote.resync).toHaveBeenCalledWith('s');
+  expect(handle.state.getSnapshot().undelivered?.resend.availability).toEqual({
+    state: 'disabled',
+    reason: 'synchronizing',
+  });
+  handle.activate();
+  test.publish();
+  const undelivered = handle.state.getSnapshot().undelivered!;
+  expect(undelivered).toMatchObject({
+    state: 'interrupted',
+    input: { parts: [{ text: 'hello' }] },
+  });
+  await expect(undelivered.resend.execute(undefined)).resolves.toMatchObject({ state: 'pending' });
+  expect(test.remote.send).toHaveBeenCalledWith('idle-1', 'hello');
+  undelivered.discard();
+  expect(test.remote.discard).toHaveBeenCalledWith('send');
+  // A later send supersedes it in the journal; the Session shows only its latest send.
+  test.remote.getCommands = () => [
+    { id: 'send', kind: 'send', status: 'interrupted', sessionId: 's', text: 'hello' },
+    { id: 'next', kind: 'send', status: 'pending', sessionId: 's', text: 'next' },
+  ];
+  test.publishOperations();
+  expect(handle.state.getSnapshot().undelivered).toBeUndefined();
   handle.dispose();
   test.source.dispose();
 });
 
-it('drops a first send the caller has already been told was rejected', async () => {
+it('keeps a rejected first send as the draft undelivered message and allows it to be resent', async () => {
   const test = fixture();
-  test.remote.start = jest.fn(async () => ({
+  const rejected = {
     id: 'start',
     draftId: 'draft',
     agentId: 'a',
@@ -397,7 +459,12 @@ it('drops a first send the caller has already been told was rejected', async () 
     text: 'hello',
     status: 'rejected' as const,
     error: 'TARGET_UNAVAILABLE',
-  }));
+  };
+  test.remote.start = jest.fn(async () => {
+    test.remote.getStarts = () => [rejected];
+    test.publishOperations();
+    return rejected;
+  });
   const agent = (await test.source.catalog.listAgents(undefined, signal())).items[0].ref;
   const workspace = (await test.source.catalog.listWorkspaces!(agent, undefined, signal())).items[0]
     .ref;
@@ -407,8 +474,18 @@ it('drops a first send the caller has already been told was rejected', async () 
   );
   await expect(
     draft.state.getSnapshot().start.execute({ parts: [{ type: 'text', text: 'hello' }] }),
-  ).resolves.toMatchObject({ state: 'rejected', failure: { code: 'target-unavailable' } });
-  expect(test.remote.dismiss).toHaveBeenCalledWith('start');
+  ).resolves.toMatchObject({
+    state: 'rejected',
+    failure: { code: 'target-unavailable' },
+    operationId: expect.any(String),
+  });
+  const state = draft.state.getSnapshot();
+  expect(state.undelivered).toMatchObject({
+    state: 'rejected',
+    input: { parts: [{ text: 'hello' }] },
+  });
+  expect(state.start.availability.state).toBe('enabled');
+  expect(test.remote.discard).not.toHaveBeenCalled();
   draft.dispose();
   test.source.dispose();
 });
