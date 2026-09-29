@@ -8,7 +8,7 @@ edits the same way wherever the user meets it.
 
 Sections always appear in one order and hide themselves when they do not apply:
 
-1. Identity — avatar (tap to replace) and name (tap to rename; a small pencil hints at it).
+1. Identity — avatar (tap to replace) and name (tap to rename; an input-style underline hints at it).
 2. Account — sign-in for providers whose account supplies keys or a balance.
 3. API keys — the first key is typed into the card; later keys toggle in place and open a
    sheet for their label or removal.

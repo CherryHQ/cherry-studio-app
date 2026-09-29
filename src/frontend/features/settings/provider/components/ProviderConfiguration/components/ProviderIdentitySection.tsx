@@ -1,5 +1,4 @@
 import CameraIcon from '@cherrystudio/app-icons/icons/camera';
-import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
 import { loggerService } from '@logger';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -65,26 +64,23 @@ export function ProviderIdentitySection({ value }: { value: ProviderConfiguratio
             </View>
           </View>
         </AvatarImagePicker>
-        {/* The name itself is the rename control; the small pencil only hints that it is. */}
+        {/* The name itself is the rename control; the underline reads as a field to edit. */}
         <Pressable
           accessibilityHint={t('common.rename')}
           accessibilityRole="button"
-          className="min-w-0 flex-1 flex-row items-center gap-1.5 active:opacity-70"
+          className="min-w-0 flex-1 border-border-strong border-b py-1.5 active:opacity-70"
           disabled={value.isBusy}
           onPress={openRename}
           testID="provider-rename"
         >
           <Text
             className={
-              value.name
-                ? 'shrink text-xl font-semibold text-foreground'
-                : 'shrink text-xl text-muted-foreground'
+              value.name ? 'text-xl font-semibold text-foreground' : 'text-xl text-muted-foreground'
             }
             numberOfLines={1}
           >
             {displayName}
           </Text>
-          <PencilIcon className="size-4 text-muted-foreground" />
         </Pressable>
       </View>
       {renameDraft ? (
