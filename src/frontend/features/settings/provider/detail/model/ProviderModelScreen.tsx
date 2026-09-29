@@ -95,7 +95,7 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
       <Section>
         <Section.Item
           destructive
-          disabled={management.isDeleting || settings.disabled}
+          disabled={management.isDeleting}
           label={t('settings.provider.models.detail.delete')}
           onPress={() => management.requestDelete([model])}
           showChevron={false}
