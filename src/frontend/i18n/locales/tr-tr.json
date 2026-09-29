@@ -1568,8 +1568,6 @@
   "settings.provider.config.moreProtocols": "Daha fazla protokol",
   "settings.provider.config.nameRequired": "Bir sağlayıcı adı girin.",
   "settings.provider.config.notSet": "Ayarlanmadı",
-  "settings.provider.config.statusEnabled_one": "Etkin · {{count}} model",
-  "settings.provider.config.statusEnabled_other": "Etkin · {{count}} model",
   "settings.provider.config.testConnection": "Bağlantıyı test et",
   "settings.provider.config.testModel": "Test modeli",
   "settings.provider.config.testPassedLatency": "Bağlandı · {{latency}} ms",

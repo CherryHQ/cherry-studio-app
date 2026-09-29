@@ -1,6 +1,5 @@
 import CameraIcon from '@cherrystudio/app-icons/icons/camera';
 import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
-import { Button } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +18,7 @@ import { ProviderValueSheet } from './ProviderValueSheet';
 const IDENTITY_AVATAR_SIZE = 56;
 const logger = loggerService.withContext('ProviderIdentitySection');
 
-/** The provider at a glance: its mark, name and state. Renaming and the avatar are edited in place. */
+/** The provider at a glance: its mark and name. Tapping either edits it in place. */
 export function ProviderIdentitySection({ value }: { value: ProviderConfigurationValue }) {
   const { t } = useTranslation();
   const [renameDraft, setRenameDraft] = useState<{ open: boolean; text: string } | null>(null);
@@ -66,34 +65,27 @@ export function ProviderIdentitySection({ value }: { value: ProviderConfiguratio
             </View>
           </View>
         </AvatarImagePicker>
+        {/* The name itself is the rename control; the small pencil only hints that it is. */}
         <Pressable
           accessibilityHint={t('common.rename')}
           accessibilityRole="button"
-          className="min-w-0 flex-1 gap-0.5 active:opacity-70"
+          className="min-w-0 flex-1 flex-row items-center gap-1.5 active:opacity-70"
+          disabled={value.isBusy}
           onPress={openRename}
+          testID="provider-rename"
         >
           <Text
             className={
-              value.name ? 'text-xl font-semibold text-foreground' : 'text-xl text-muted-foreground'
+              value.name
+                ? 'shrink text-xl font-semibold text-foreground'
+                : 'shrink text-xl text-muted-foreground'
             }
             numberOfLines={1}
           >
             {displayName}
           </Text>
-          {value.status ? (
-            <Text className="text-sm text-muted-foreground" numberOfLines={1}>
-              {value.status}
-            </Text>
-          ) : null}
+          <PencilIcon className="size-4 text-muted-foreground" />
         </Pressable>
-        <Button
-          accessibilityLabel={t('common.rename')}
-          disabled={value.isBusy}
-          icon={<PencilIcon />}
-          onPress={openRename}
-          testID="provider-rename"
-          variant="ghost"
-        />
       </View>
       {renameDraft ? (
         <ProviderValueSheet

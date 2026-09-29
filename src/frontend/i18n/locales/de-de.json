@@ -1568,8 +1568,6 @@
   "settings.provider.config.moreProtocols": "Weitere Protokolle",
   "settings.provider.config.nameRequired": "Geben Sie einen Anbieternamen ein.",
   "settings.provider.config.notSet": "Nicht festgelegt",
-  "settings.provider.config.statusEnabled_one": "Aktiviert · {{count}} Modell",
-  "settings.provider.config.statusEnabled_other": "Aktiviert · {{count}} Modelle",
   "settings.provider.config.testConnection": "Verbindung testen",
   "settings.provider.config.testModel": "Testmodell",
   "settings.provider.config.testPassedLatency": "Verbunden · {{latency}} ms",

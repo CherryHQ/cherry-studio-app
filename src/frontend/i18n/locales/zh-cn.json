@@ -1559,7 +1559,6 @@
   "settings.provider.config.moreProtocols": "更多协议",
   "settings.provider.config.nameRequired": "请填写服务商名称。",
   "settings.provider.config.notSet": "未设置",
-  "settings.provider.config.statusEnabled_other": "已启用 · {{count}} 个模型",
   "settings.provider.config.testConnection": "测试连接",
   "settings.provider.config.testModel": "测试模型",
   "settings.provider.config.testPassedLatency": "连接正常 · {{latency}} ms",

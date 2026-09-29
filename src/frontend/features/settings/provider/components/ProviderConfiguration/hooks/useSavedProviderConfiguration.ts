@@ -277,9 +277,6 @@ export function useSavedProviderConfiguration(providerId: string) {
         presetProviderId: provider.presetProviderId,
         provider,
         providerId,
-        status: provider.isEnabled
-          ? t('settings.provider.config.statusEnabled', { count: models.length })
-          : t('settings.provider.status.disabled'),
       }
     : undefined;
 

@@ -50,6 +50,4 @@ export type ProviderConfigurationValue = {
   presetProviderId?: string;
   provider?: Provider;
   providerId: string;
-  /** A short line under the name, such as whether the provider is enabled. */
-  status?: string;
 };

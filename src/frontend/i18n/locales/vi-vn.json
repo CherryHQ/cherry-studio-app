@@ -1559,7 +1559,6 @@
   "settings.provider.config.moreProtocols": "Thêm giao thức",
   "settings.provider.config.nameRequired": "Nhập tên nhà cung cấp.",
   "settings.provider.config.notSet": "Chưa đặt",
-  "settings.provider.config.statusEnabled_other": "Đã bật · {{count}} mô hình",
   "settings.provider.config.testConnection": "Kiểm tra kết nối",
   "settings.provider.config.testModel": "Mô hình kiểm tra",
   "settings.provider.config.testPassedLatency": "Đã kết nối · {{latency}} ms",

@@ -1559,7 +1559,6 @@
   "settings.provider.config.moreProtocols": "更多協定",
   "settings.provider.config.nameRequired": "請填寫供應商名稱。",
   "settings.provider.config.notSet": "未設定",
-  "settings.provider.config.statusEnabled_other": "已啟用 · {{count}} 個模型",
   "settings.provider.config.testConnection": "測試連線",
   "settings.provider.config.testModel": "測試模型",
   "settings.provider.config.testPassedLatency": "連線正常 · {{latency}} ms",

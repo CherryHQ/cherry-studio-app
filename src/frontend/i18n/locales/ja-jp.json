@@ -1559,7 +1559,6 @@
   "settings.provider.config.moreProtocols": "その他のプロトコル",
   "settings.provider.config.nameRequired": "プロバイダー名を入力してください。",
   "settings.provider.config.notSet": "未設定",
-  "settings.provider.config.statusEnabled_other": "有効 · {{count}} 個のモデル",
   "settings.provider.config.testConnection": "接続をテスト",
   "settings.provider.config.testModel": "テストモデル",
   "settings.provider.config.testPassedLatency": "接続成功 · {{latency}} ms",

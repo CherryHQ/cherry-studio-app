@@ -1568,8 +1568,6 @@
   "settings.provider.config.moreProtocols": "Περισσότερα πρωτόκολλα",
   "settings.provider.config.nameRequired": "Εισαγάγετε όνομα παρόχου.",
   "settings.provider.config.notSet": "Δεν έχει οριστεί",
-  "settings.provider.config.statusEnabled_one": "Ενεργός · {{count}} μοντέλο",
-  "settings.provider.config.statusEnabled_other": "Ενεργός · {{count}} μοντέλα",
   "settings.provider.config.testConnection": "Δοκιμή σύνδεσης",
   "settings.provider.config.testModel": "Μοντέλο δοκιμής",
   "settings.provider.config.testPassedLatency": "Συνδέθηκε · {{latency}} ms",

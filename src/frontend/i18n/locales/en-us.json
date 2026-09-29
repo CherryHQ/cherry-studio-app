@@ -1568,8 +1568,6 @@
   "settings.provider.config.moreProtocols": "More protocols",
   "settings.provider.config.nameRequired": "Enter a provider name.",
   "settings.provider.config.notSet": "Not set",
-  "settings.provider.config.statusEnabled_one": "Enabled · {{count}} model",
-  "settings.provider.config.statusEnabled_other": "Enabled · {{count}} models",
   "settings.provider.config.testConnection": "Test connection",
   "settings.provider.config.testModel": "Test model",
   "settings.provider.config.testPassedLatency": "Connected · {{latency}} ms",
