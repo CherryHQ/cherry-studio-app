@@ -42,10 +42,8 @@ const colorLiteralAllowlist: Record<string, string> = {
     'upstream of the tokens: picks ink by luminance, its output is the colour decision',
   'src/frontend/appShell/startup/StartupCover.tsx':
     'outside the theme runtime: paints before the CSS variable tree exists',
-  'src/frontend/features/onboarding/logoDraw/utils/logoPalette.ts':
+  'src/frontend/features/onboarding/components/LogoDraw/utils/logoPalette.ts':
     'artwork: the logo colours encode relationships with each other, not roles',
-  'src/shared/core/logger/LoggerService.ts':
-    'outside the render tree: `%c` console styles never pass through uniwind',
 };
 
 const forbiddenPatterns = [
