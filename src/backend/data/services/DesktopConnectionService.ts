@@ -44,13 +44,22 @@ function desktopError(reason: string, message: string): DataApiError {
   return new DataApiError(ErrorCode.INVALID_OPERATION, message, { reason });
 }
 
+/**
+ * Desktops pair under their network hostname, so `jds-MacBook-Pro.local` keeps only its host label.
+ * Anything that is not a dotted hostname, such as a spaced display name, is shown unchanged.
+ */
+function displayName(name: string): string {
+  const match = /^([a-z0-9-]*[a-z][a-z0-9-]*)(\.[a-z0-9-]+)+$/i.exec(name);
+  return match ? match[1] : name;
+}
+
 function rowToConnection(row: DesktopConnectionRow): DesktopConnection {
   return {
     configuredEndpoints: row.configuredEndpoints,
     capabilities: row.grants.map((grant) => grant.domain),
     id: row.id,
     lastFetchedAt: row.lastFetchedAt,
-    name: row.name,
+    name: displayName(row.name),
     status: row.status,
   };
 }

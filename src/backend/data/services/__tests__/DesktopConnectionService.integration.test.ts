@@ -87,6 +87,21 @@ describe('DesktopConnectionService provider synchronization', () => {
     );
   }
 
+  it('shows a paired hostname without its network domain', async () => {
+    for (const [stored, shown] of [
+      ['jddeMacBook-Pro-3.local', 'jddeMacBook-Pro-3'],
+      ['DESKTOP-4F2K9.corp.example.com', 'DESKTOP-4F2K9'],
+      ['192.168.1.20', '192.168.1.20'],
+      ["J.D.'s Mac", "J.D.'s Mac"],
+    ]) {
+      await testDb.database
+        .update(desktopConnectionTable)
+        .set({ name: stored })
+        .where(eq(desktopConnectionTable.id, connectionId));
+      await expect(service.getById(connectionId)).resolves.toMatchObject({ name: shown });
+    }
+  });
+
   it('imports the complete API key list and keeps desktop order and labels when resynced', async () => {
     const keys = ['a', 'b', 'c'].map((id) => ({
       id,
