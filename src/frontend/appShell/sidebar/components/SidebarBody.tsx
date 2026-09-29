@@ -5,7 +5,7 @@ import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import { ScrollInteractionBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
+import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
@@ -89,7 +89,7 @@ function SidebarBodyContent({
     <>
       {/* No home row: that surface moves under settings. These destinations only manage this phone. */}
       {source === 'local' ? (
-        <View className="pb-1">
+        <>
           <SidebarNavRow
             icon={MousePointerClickIcon}
             label={t('navigation.agents')}
@@ -114,7 +114,7 @@ function SidebarBodyContent({
             onPress={openLibrary}
             testID="sidebar-library"
           />
-        </View>
+        </>
       ) : null}
 
       <SidebarRecents registerEndReachedHandler={registerEndReachedHandler} />

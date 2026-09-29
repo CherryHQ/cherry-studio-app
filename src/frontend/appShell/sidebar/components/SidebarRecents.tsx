@@ -84,7 +84,8 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
     );
   return (
     <>
-      <View className="px-5 pt-4 pb-1">{header}</View>
+      {/* The whole break below the navigation rows, which add no trailing space of their own. */}
+      <View className="px-5 pt-2 pb-1">{header}</View>
       <ConversationSourceBoundary
         source={{ kind: 'local' }}
         fallback={(state) =>
