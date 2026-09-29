@@ -1,50 +1,11 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { Section, Spinner, Switch } from '@cherrystudio/ui/components';
-import { duration, easing } from '@cherrystudio/ui/motion';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  ReduceMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { Text, View } from 'react-native';
 
 import { ProviderAvatar } from '@/frontend/components/Avatar';
 import type { Provider } from '@/shared/data/types/provider';
-
-const providerStatusMotion = {
-  duration: duration.fast,
-  easing: easing.settle,
-  reduceMotion: ReduceMotion.System,
-} as const;
-
-function ProviderEnabledStatus({ isEnabled }: { isEnabled: boolean }) {
-  const { t } = useTranslation();
-  const progress = useSharedValue(isEnabled ? 1 : 0);
-
-  useEffect(() => {
-    progress.set(withTiming(isEnabled ? 1 : 0, providerStatusMotion));
-  }, [isEnabled, progress]);
-
-  const enabledStyle = useAnimatedStyle(() => ({ opacity: progress.get() }));
-  const disabledStyle = useAnimatedStyle(() => ({ opacity: 1 - progress.get() }));
-
-  return (
-    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Animated.Text className="text-muted-foreground text-xs" style={disabledStyle}>
-        {t('settings.provider.status.disabled')}
-      </Animated.Text>
-      <Animated.Text
-        className="text-success-subtle-foreground text-xs"
-        style={[StyleSheet.absoluteFill, enabledStyle]}
-      >
-        {t('settings.provider.status.enabled')}
-      </Animated.Text>
-    </View>
-  );
-}
 
 export const ProviderListRow = memo(function ProviderListRow({
   isEnabled,
@@ -68,7 +29,6 @@ export const ProviderListRow = memo(function ProviderListRow({
     <Section.Item
       accessibilityLabel={`${provider.name}, ${statusLabel}`}
       accessibilityState={{ busy: isPending }}
-      description={<ProviderEnabledStatus isEnabled={isEnabled} key={provider.id} />}
       label={
         <Text className="text-base text-foreground" numberOfLines={1}>
           {provider.name}
