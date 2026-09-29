@@ -43,6 +43,8 @@ export type ProviderModelSettingsValue = {
   group: ProviderModelTextSetting;
   /** Drawing models have no token limits to set. */
   limits?: Record<ProviderModelLimitField, ProviderModelTextSetting & { error?: string }>;
+  /** A saved model's ID, shown read-only and copied on tap. Adding a model types it instead. */
+  modelId?: string;
   name: ProviderModelTextSetting & { required: boolean };
   /** Absent while adding: notes are kept on saved models only. */
   notes?: ProviderModelTextSetting;

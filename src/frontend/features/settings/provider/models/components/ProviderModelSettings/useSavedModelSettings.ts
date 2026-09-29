@@ -213,6 +213,7 @@ export function useSavedModelSettings(
           maxInputTokens: limitSetting('maxInputTokens'),
           maxOutputTokens: limitSetting('maxOutputTokens'),
         },
+    modelId: model.modelId,
     name: { required: true, value: initial.name },
     notes: { value: initial.notes },
     primaryType: getProviderModelPrimaryType(capabilities, model),

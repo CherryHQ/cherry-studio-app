@@ -1,4 +1,11 @@
-import { BottomSheet, Button, OptionPickerBottomSheet, Section } from '@cherrystudio/ui/components';
+import {
+  BottomSheet,
+  Button,
+  OptionPickerBottomSheet,
+  Section,
+  useToast,
+} from '@cherrystudio/ui/components';
+import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text } from 'react-native';
@@ -31,11 +38,20 @@ const LIMIT_FIELDS: readonly ProviderModelLimitField[] = [
  */
 export function ProviderModelSettings({ value }: { value: ProviderModelSettingsValue }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { actions, capabilities, disabled } = value;
   const [textEdit, setTextEdit] = useState<TextEdit | null>(null);
   const [pricingEdit, setPricingEdit] = useState<PricingEdit | null>(null);
   const [isEndpointOpen, setIsEndpointOpen] = useState(false);
 
+  const copyModelId = async (modelId: string) => {
+    try {
+      await Clipboard.setStringAsync(modelId);
+      toast.show({ label: t('settings.provider.models.detail.copied'), variant: 'success' });
+    } catch {
+      toast.show({ label: t('settings.provider.models.detail.copyFailed'), variant: 'danger' });
+    }
+  };
   const textSetting = (field: TextField) =>
     field === 'name'
       ? value.name
@@ -126,6 +142,23 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
   return (
     <>
       <Section>
+        {value.modelId ? (
+          <Section.Item
+            accessibilityHint={t('settings.provider.models.detail.copyId')}
+            label={t('settings.provider.models.detail.modelId')}
+            onPress={() => void copyModelId(value.modelId ?? '')}
+            showChevron={false}
+            testID="model-setting-modelId"
+            trailing={
+              <Text
+                className="min-w-0 shrink text-right text-base text-muted-foreground"
+                numberOfLines={1}
+              >
+                {value.modelId}
+              </Text>
+            }
+          />
+        ) : null}
         {textRow('name')}
         <ProviderModelTypeField
           disabled={disabled}
