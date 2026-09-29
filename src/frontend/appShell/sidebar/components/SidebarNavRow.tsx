@@ -23,7 +23,7 @@ export function SidebarNavRow({ icon: Icon, label, onPress, testID }: SidebarNav
       {({ pressed }) => (
         <View
           className={cn(
-            'w-full flex-row items-center gap-4 rounded-xl px-5 py-3',
+            'w-full flex-row items-center gap-4 rounded-xl px-5 py-2.5',
             pressed && 'bg-sidebar-accent',
           )}
         >
