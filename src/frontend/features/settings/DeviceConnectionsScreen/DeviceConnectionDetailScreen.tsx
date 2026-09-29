@@ -1,4 +1,4 @@
-import { Button, ContentState, Section, useAlert } from '@cherrystudio/ui/components';
+import { ContentState, Section, useAlert } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -93,19 +93,6 @@ export function DeviceConnectionDetailScreen() {
         />
       </Section>
 
-      <DesktopEndpointsEditor key={connection.id} connection={connection} />
-      <Button
-        variant="outline"
-        onPress={() =>
-          router.push({
-            params: { connectionId: connection.id, purpose: 'location' },
-            pathname: '/settings/device-connections/scan',
-          })
-        }
-      >
-        {t('settings.deviceConnections.location.scan')}
-      </Button>
-
       {connection.status === 'paired' && connection.capabilities.includes('configuration') ? (
         <Section>
           <Section.Item
@@ -121,21 +108,37 @@ export function DeviceConnectionDetailScreen() {
         </Section>
       ) : null}
 
-      <Button
-        onPress={() =>
-          router.push({
-            params: { connectionId: connection.id },
-            pathname: '/settings/device-connections/scan',
-          })
-        }
-        variant={connection.status === 'paired' ? 'outline' : 'default'}
-      >
-        {t('settings.deviceConnections.repair')}
-      </Button>
+      <Section>
+        <Section.Item
+          label={t('settings.deviceConnections.repair')}
+          onPress={() =>
+            router.push({
+              params: { connectionId: connection.id },
+              pathname: '/settings/device-connections/scan',
+            })
+          }
+        />
+        <Section.Item
+          label={t('settings.deviceConnections.location.scan')}
+          onPress={() =>
+            router.push({
+              params: { connectionId: connection.id, purpose: 'location' },
+              pathname: '/settings/device-connections/scan',
+            })
+          }
+        />
+      </Section>
 
-      <Button loading={isRemoving} onPress={requestRemove} variant="destructive">
-        {t('settings.deviceConnections.remove.action')}
-      </Button>
+      <DesktopEndpointsEditor key={connection.id} connection={connection} />
+
+      <Section>
+        <Section.Item
+          destructive
+          disabled={isRemoving}
+          label={t('settings.deviceConnections.remove.action')}
+          onPress={requestRemove}
+        />
+      </Section>
     </SettingsScrollPage>
   );
 }

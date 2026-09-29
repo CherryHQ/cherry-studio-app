@@ -1,9 +1,10 @@
-import { Button, ContentState, Input, useToast } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, ContentState, Input, useToast } from '@cherrystudio/ui/components';
 import { CameraView } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { Keyboard, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
@@ -31,7 +32,9 @@ export function DeviceConnectionScannerScreen({
   const { toast } = useToast();
   const permissions = useBackendModule('permissions');
   const { camera, isPreparing, isActive, canSubmit, prepare } = useScannerPermissions();
+  const insets = useSafeAreaInsets();
   const [manualValue, setManualValue] = useState('');
+  const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
   const [scanError, setScanError] = useState<string>();
   const [claim, setClaim] = useState<DesktopPairingClaim>();
@@ -39,7 +42,8 @@ export function DeviceConnectionScannerScreen({
   const mounted = useRef(false);
   const { isPairing, pair, updateLocation } = useDesktopConnectionActions();
   const isReady = isActive && !isPreparing;
-  const showCamera = !isPreparing && !scanError && !claim && camera?.state === 'granted';
+  const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
+  const canSubmitManualValue = isReady && !hasScanned && Boolean(manualValue.trim());
 
   useEffect(() => {
     mounted.current = true;
@@ -135,6 +139,14 @@ export function DeviceConnectionScannerScreen({
     [canSubmit, submit, t],
   );
 
+  const submitManualValue = () => {
+    const value = manualValue.trim();
+    if (!value) return;
+    Keyboard.dismiss();
+    setIsManualEntryOpen(false);
+    parseAndSubmit(value);
+  };
+
   return (
     <View className="flex-1 bg-grouped-background">
       <RouteHeader
@@ -144,118 +156,137 @@ export function DeviceConnectionScannerScreen({
             : 'settings.deviceConnections.scan.title',
         )}
       />
-      <View className="px-4 pt-3 pb-4">
-        <Text className="text-sm text-muted-foreground">
-          {t(
-            updatingLocation
-              ? 'settings.deviceConnections.location.scanHelp'
-              : 'settings.deviceConnections.scan.guidance',
-          )}
-        </Text>
-      </View>
-      <View
-        className={
-          showCamera
-            ? 'min-h-0 flex-1 overflow-hidden bg-black'
-            : 'min-h-0 flex-1 overflow-hidden bg-grouped-background'
-        }
-      >
-        {claim ? (
-          <View className="flex-1 items-center justify-center gap-4 px-6">
-            <Text className="text-center text-sm text-muted-foreground">
-              {t('settings.deviceConnections.scan.approveOnDesktop')}
-            </Text>
-            <Text
-              accessibilityLabel={t('settings.deviceConnections.scan.verificationCode')}
-              className="font-mono text-4xl tracking-[0.3em] text-foreground"
-            >
-              {claim.verificationCode}
-            </Text>
-            <ContentState.Loading title={t('settings.deviceConnections.scan.waiting')} />
-          </View>
-        ) : isPreparing ? (
-          <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
-        ) : scanError ? (
-          <View className="flex-1 justify-center px-6">
-            <ContentState.Error
-              primaryAction={{ children: t('common.retry'), onPress: retryScan }}
-              title={scanError}
-            />
-          </View>
-        ) : camera?.state === 'granted' ? (
-          <>
-            <CameraView
-              active={isReady && !hasScanned && !isPairing}
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={
-                !isReady || hasScanned || isPairing
-                  ? undefined
-                  : ({ data }) => {
-                      parseAndSubmit(data);
-                    }
-              }
-              style={StyleSheet.absoluteFill}
-            />
-            <View className="flex-1 items-center justify-center" pointerEvents="none">
-              <View className="size-56 rounded-3xl border-2 border-white" />
-            </View>
-          </>
-        ) : (
-          <View className="flex-1 justify-center px-6">
-            <ContentState.Empty
-              description={t('settings.deviceConnections.scan.permissionDescription')}
-              primaryAction={
-                canRequestDevicePermission(camera) || camera?.state === 'error'
-                  ? {
-                      children: t('settings.deviceConnections.scan.allowCamera'),
-                      onPress: () => void prepare(true),
-                    }
-                  : camera?.state === 'denied'
-                    ? {
-                        children: t('settings.permissions.openSystemSettings'),
-                        onPress: openSystemSettings,
-                      }
-                    : undefined
-              }
-              title={t('settings.deviceConnections.scan.permissionTitle')}
-            />
-          </View>
-        )}
-      </View>
-      <View className="gap-3 border-border border-t bg-grouped-background px-4 py-5">
-        <Text className="text-sm text-muted-foreground">
-          {t('settings.deviceConnections.scan.manualDescription')}
-        </Text>
-        <Input
-          accessibilityLabel={t('settings.deviceConnections.scan.manualEntry')}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={isReady && !hasScanned}
-          multiline
-          onChangeText={setManualValue}
-          onSubmitEditing={() => {
-            const value = manualValue.trim();
-            if (value) {
-              parseAndSubmit(value);
+      {claim ? (
+        <View className="flex-1 items-center justify-center gap-4 px-6">
+          <Text className="text-center text-sm text-muted-foreground">
+            {t('settings.deviceConnections.scan.approveOnDesktop')}
+          </Text>
+          <Text
+            accessibilityLabel={t('settings.deviceConnections.scan.verificationCode')}
+            className="font-mono text-4xl tracking-[0.3em] text-foreground"
+          >
+            {claim.verificationCode}
+          </Text>
+          <ContentState.Loading title={t('settings.deviceConnections.scan.waiting')} />
+        </View>
+      ) : (
+        <View className="flex-1 gap-5 px-4 pt-3" style={{ paddingBottom: insets.bottom + 8 }}>
+          <View
+            className={
+              showCamera
+                ? 'aspect-square w-full overflow-hidden rounded-3xl bg-black'
+                : 'aspect-square w-full justify-center overflow-hidden rounded-3xl bg-card px-6'
             }
-          }}
-          placeholder={t('settings.deviceConnections.scan.manualPlaceholder')}
-          returnKeyType="done"
-          submitBehavior="blurAndSubmit"
-          value={manualValue}
-        />
-        <Button
-          disabled={!isReady || hasScanned || !manualValue.trim()}
-          loading={isPairing}
-          onPress={() => parseAndSubmit(manualValue.trim())}
-        >
-          {t(
-            updatingLocation
-              ? 'settings.deviceConnections.location.scan'
-              : 'settings.deviceConnections.scan.pair',
-          )}
-        </Button>
-      </View>
+            style={styles.viewport}
+          >
+            {isPreparing ? (
+              <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
+            ) : scanError ? (
+              <ContentState.Error
+                primaryAction={{ children: t('common.retry'), onPress: retryScan }}
+                title={scanError}
+              />
+            ) : camera?.state === 'granted' ? (
+              <>
+                <CameraView
+                  active={isReady && !hasScanned && !isPairing}
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                  onBarcodeScanned={
+                    !isReady || hasScanned || isPairing
+                      ? undefined
+                      : ({ data }) => {
+                          parseAndSubmit(data);
+                        }
+                  }
+                  style={StyleSheet.absoluteFill}
+                />
+                <View className="flex-1 items-center justify-center" pointerEvents="none">
+                  <View className="aspect-square w-2/3">
+                    <View className="absolute top-0 left-0 size-10 rounded-tl-3xl border-white border-t-4 border-l-4" />
+                    <View className="absolute top-0 right-0 size-10 rounded-tr-3xl border-white border-t-4 border-r-4" />
+                    <View className="absolute bottom-0 left-0 size-10 rounded-bl-3xl border-white border-b-4 border-l-4" />
+                    <View className="absolute right-0 bottom-0 size-10 rounded-br-3xl border-white border-r-4 border-b-4" />
+                  </View>
+                </View>
+              </>
+            ) : (
+              <ContentState.Empty
+                description={t('settings.deviceConnections.scan.permissionDescription')}
+                primaryAction={
+                  canRequestDevicePermission(camera) || camera?.state === 'error'
+                    ? {
+                        children: t('settings.deviceConnections.scan.allowCamera'),
+                        onPress: () => void prepare(true),
+                      }
+                    : camera?.state === 'denied'
+                      ? {
+                          children: t('settings.permissions.openSystemSettings'),
+                          onPress: openSystemSettings,
+                        }
+                      : undefined
+                }
+                title={t('settings.deviceConnections.scan.permissionTitle')}
+              />
+            )}
+          </View>
+          <Text className="px-6 text-center text-sm text-muted-foreground">
+            {t(
+              updatingLocation
+                ? 'settings.deviceConnections.location.scanHelp'
+                : 'settings.deviceConnections.scan.guidance',
+            )}
+          </Text>
+          <View className="flex-1" />
+          <View className="items-center">
+            <Button
+              disabled={!isReady || hasScanned}
+              onPress={() => setIsManualEntryOpen(true)}
+              size="sm"
+              variant="ghost"
+            >
+              {t('settings.deviceConnections.scan.manualAction')}
+            </Button>
+          </View>
+        </View>
+      )}
+      <BottomSheet
+        avoidKeyboard
+        closeAction={{ accessibilityLabel: t('common.cancel') }}
+        footer={
+          <Button disabled={!canSubmitManualValue} loading={isPairing} onPress={submitManualValue}>
+            {t(
+              updatingLocation
+                ? 'settings.deviceConnections.location.scan'
+                : 'settings.deviceConnections.scan.pair',
+            )}
+          </Button>
+        }
+        onClose={() => setIsManualEntryOpen(false)}
+        open={isManualEntryOpen}
+        size="medium"
+        title={t('settings.deviceConnections.scan.manualTitle')}
+      >
+        <View className="gap-3 px-4 pt-1">
+          <Text className="text-sm text-muted-foreground">
+            {t('settings.deviceConnections.scan.manualDescription')}
+          </Text>
+          <Input
+            accessibilityLabel={t('settings.deviceConnections.scan.manualEntry')}
+            autoCapitalize="none"
+            autoCorrect={false}
+            multiline
+            onChangeText={setManualValue}
+            placeholder={t('settings.deviceConnections.scan.manualPlaceholder')}
+            value={manualValue}
+          />
+        </View>
+      </BottomSheet>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  viewport: {
+    borderCurve: 'continuous',
+  },
+});
