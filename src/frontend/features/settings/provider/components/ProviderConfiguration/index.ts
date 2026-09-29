@@ -1,6 +1,6 @@
 export { useNewProviderConfiguration } from './hooks/useNewProviderConfiguration';
 export { useSavedProviderConfiguration } from './hooks/useSavedProviderConfiguration';
-export { ProviderConfiguration, ProviderConfigurationContinue } from './ProviderConfiguration';
+export { ProviderConfiguration } from './ProviderConfiguration';
 export type { ProviderConfigurationValue } from './types';
 export {
   createProviderConfigurationValues,

@@ -18,7 +18,7 @@ Sections always appear in one order and hide themselves when they do not apply:
    with the default marked, for custom providers.
 
 Callers add only a `header`, a `footer` inside the scroll view, or a fixed `bottomAction`
-(`ProviderConfigurationContinue`). They cannot reorder or restyle sections.
+(`ProviderBottomAction`, shared with adding a model). They cannot reorder or restyle sections.
 
 ## Data
 

@@ -16,15 +16,17 @@ export type ProviderValueSheetAction = {
 };
 
 /**
- * One value edited on its own: a name or an address. The owner keeps the text, so this
+ * One value edited on its own: a name, an address, a limit or a note. The owner keeps the text, so this
  * stays presentational and renders nothing that depends on app providers.
  */
 export function ProviderValueSheet({
+  autoCapitalize = 'none',
   children,
   description,
   error,
   keyboardType,
   label,
+  multiline = false,
   onChangeText,
   onClose,
   onSubmit,
@@ -36,12 +38,14 @@ export function ProviderValueSheet({
   title,
   value,
 }: {
+  autoCapitalize?: 'none' | 'sentences';
   /** Extra content under the field, such as the request URL an address produces. */
   children?: ReactNode;
   description?: string;
   error?: string;
   keyboardType?: InputKeyboardType;
   label: string;
+  multiline?: boolean;
   onChangeText: (value: string) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -86,12 +90,13 @@ export function ProviderValueSheet({
           <TextField.Label>{label}</TextField.Label>
           <Input
             accessibilityLabel={label}
-            autoCapitalize="none"
-            autoCorrect={false}
+            autoCapitalize={autoCapitalize}
+            autoCorrect={autoCapitalize === 'sentences'}
             autoFocus
             keyboardType={keyboardType}
+            multiline={multiline}
             onChangeText={onChangeText}
-            onSubmitEditing={submitDisabled ? undefined : onSubmit}
+            onSubmitEditing={submitDisabled || multiline ? undefined : onSubmit}
             placeholder={placeholder}
             returnKeyType="done"
             testID={`${testID}-input`}

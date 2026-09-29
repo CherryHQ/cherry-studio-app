@@ -13,10 +13,10 @@ import {
   type ModelPriceTierDraft,
   modelPriceFields,
 } from '../utils/providerModelPricing';
-import { ProviderModelFormSection } from './ProviderModelFormSection';
 import { ProviderModelNumberField } from './ProviderModelNumberField';
 
-export function ProviderModelPricingFields({
+/** Currency, base rates and input-token tiers, edited as one draft by its owner. */
+export function ProviderModelPricingEditor({
   draft,
   errors,
   disabled,
@@ -29,10 +29,6 @@ export function ProviderModelPricingFields({
 }) {
   const { t } = useTranslation();
   const [expandedTierId, setExpandedTierId] = useState<number | null>(draft.tiers[0]?.id ?? null);
-  const hasErrors = errors.some((tier) => Object.keys(tier).length > 0);
-  const hasPrices = draft.tiers.some((tier) =>
-    modelPriceFields.some((field) => tier[field].trim()),
-  );
   function updateTier(id: number, field: Exclude<keyof ModelPriceTierDraft, 'id'>, value: string) {
     onChange({
       ...draft,
@@ -40,21 +36,7 @@ export function ProviderModelPricingFields({
     });
   }
   return (
-    <ProviderModelFormSection
-      title={t('settings.provider.models.pricing.title')}
-      summary={
-        hasPrices || draft.tiers.length > 1
-          ? draft.tiers.length > 1
-            ? t('settings.provider.models.pricing.summary', {
-                currency: draft.currency,
-                value: draft.tiers.length - 1,
-              })
-            : draft.currency
-          : undefined
-      }
-      errorMessage={hasErrors ? t('settings.provider.models.pricing.invalidFields') : undefined}
-      disabled={disabled}
-    >
+    <View>
       <View className="flex-row flex-wrap items-center gap-3 px-4 pb-3">
         <View
           className="flex-row flex-wrap gap-2"
@@ -228,6 +210,6 @@ export function ProviderModelPricingFields({
           {t('settings.provider.models.pricing.addTier')}
         </Button>
       </View>
-    </ProviderModelFormSection>
+    </View>
   );
 }

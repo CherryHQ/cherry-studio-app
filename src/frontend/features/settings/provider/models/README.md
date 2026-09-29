@@ -8,8 +8,8 @@ This module owns provider model listing, connectivity checks, synchronization, a
 
 ## Organization
 
-- `components/` contains model rows and classification, token-limit, and pricing fields shared by
-  manual creation and editing.
+- `components/` contains model rows, the pricing editor, and `ProviderModelSettings`, the settings
+  rows shared by model details and manual creation.
 - `hooks/` owns displayed group state plus add/sync workflows.
 - `utils/` contains pure grouping and filtering helpers, synchronization previews, and the check's
   selection resolvers.
@@ -50,25 +50,19 @@ rates preserves per-image and per-minute prices. Clearing an edited token limit 
 restore catalog or app defaults through the existing nullable storage columns.
 
 Manual creation accepts one model at a time. Multiple or duplicate IDs and conflicting interfaces
-produce field errors. The mobile forms keep identity fields first and use bottom-sheet pickers for type and endpoint.
-Capabilities, token limits, pricing, and organization use plain collapsible rows with optional
-one-line values and visible validation errors. Persistent copy is limited to labels, pricing units,
-and contextual constraints; empty-state descriptions and repeated guidance are omitted. Pricing expands one tier at a time and opens newly added tiers; notes
-use a multiline input. Keyboard scrolling follows the focused input without section-level jumps.
-Numeric fields preserve raw input for validation; context/output checks share the
-runtime's mobile fallback constants. Failed writes keep the draft, and immediate duplicate saves are
-guarded. The separate synchronization workflow retains its batch support.
+produce field errors.
 
-The management list uses CherryUI context menus and a scroll boundary. A tap opens details; a long
-press offers details, editing, selection, and deletion. Selection disables navigation and endpoint
-controls, retains the current filter scope, and uses stable model IDs. The list owns selection until
-the user leaves the mode or deletion succeeds; a failure retains surviving selected IDs.
+`ProviderModelSettings` renders a model's settings as rows in one order for both model details and
+manual creation: name, type and endpoint; reasoning, tool use and streaming switches; image, audio
+and video input switches; token limits (not for drawing models); pricing; group and notes (notes on
+saved models only). Switches change in place. Names, limits, notes and pricing open a sheet that
+edits a copy and applies it on Save; a rejected value keeps the sheet open with its error.
 
-Management deletion uses the transactional model DELETE endpoint, not synchronization reconcile,
-which intentionally protects custom models. Default model assignments block deletion and link to
-model settings. Agent bindings are cleared by the existing database foreign key; model and Agent
-queries are refreshed, including inactive Agent detail caches. The single request limit is 1000 IDs.
-
-Model rows share one content layout across browsing and selection, including visible and accessible
-availability labels. Endpoint options are shared between the list picker and editor; the list saves
-immediately, while the editor keeps the choice in its draft until Save.
+Model details keep their introduction (avatar, name, provider and purpose, model ID) and put these
+rows under it. `useSavedModelSettings` writes each change immediately: it is the former edit draft
+with one field changed, turned into a patch by the same builders, so inheritance, validation and
+`null` limit resets are unchanged. There is no separate edit page, Save button or discard prompt.
+Deleting from details uses the list's protected-deletion flow and leaves the page when it succeeds.
+Manual creation adapts its draft through `useNewModelSettings`, shows catalog values as
+placeholders, and creates the model once with Add. Failed writes are reported and immediate
+duplicate submissions are guarded. The separate synchronization workflow retains its batch support.

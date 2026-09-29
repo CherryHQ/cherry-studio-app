@@ -14,8 +14,8 @@ import {
 } from '../../../apiService/utils/providerApiServiceEndpointRules';
 import { getProviderModelEndpointLabelKey } from '../../../models/utils/providerModelAdd';
 import { ProviderRequestUrl } from '../../ProviderRequestUrl';
+import { ProviderValueSheet } from '../../ProviderValueSheet';
 import type { ProviderAddress, ProviderConfigurationValue } from '../types';
-import { ProviderValueSheet } from './ProviderValueSheet';
 
 const CUSTOM_ENDPOINT_LABEL_KEYS = {
   'anthropic-messages': 'settings.provider.apiService.endpointAnthropic',

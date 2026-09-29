@@ -1,9 +1,8 @@
-import { Button, Spinner } from '@cherrystudio/ui/components';
+import { Spinner } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
@@ -83,36 +82,6 @@ export function ProviderConfiguration({
         )}
       </KeyboardAwareScrollView>
       {bottomAction}
-    </View>
-  );
-}
-
-/** The fixed action that finishes setup, with the reason it is unavailable underneath. */
-export function ProviderConfigurationContinue({
-  disabled,
-  hint,
-  label,
-  loading = false,
-  onPress,
-  testID,
-}: {
-  disabled: boolean;
-  hint?: string;
-  label: string;
-  loading?: boolean;
-  onPress: () => void;
-  testID?: string;
-}) {
-  const { bottom } = useSafeAreaInsets();
-
-  return (
-    <View className="gap-2 px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
-      <Button disabled={disabled} loading={loading} onPress={onPress} size="lg" testID={testID}>
-        {label}
-      </Button>
-      {disabled && hint && !loading ? (
-        <Text className="text-center text-xs text-muted-foreground">{hint}</Text>
-      ) : null}
     </View>
   );
 }

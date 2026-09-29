@@ -19,6 +19,8 @@ export function useProviderModelManagement(
   providerId: string,
   models: Model[],
   visibleModels: Model[],
+  /** Runs after a confirmed deletion succeeds, such as leaving a deleted model's page. */
+  onDeleted?: () => void,
 ) {
   const { t } = useTranslation();
   const { alert } = useAlert();
@@ -122,6 +124,7 @@ export function useProviderModelManagement(
               label: t('settings.provider.models.management.deleted', { count: targets.length }),
               variant: 'success',
             });
+            onDeleted?.();
           })
           .catch(async (error: unknown) => {
             await refreshProviderModelQueries(queryClient, providerId);

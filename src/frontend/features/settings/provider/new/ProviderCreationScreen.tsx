@@ -13,9 +13,9 @@ import {
 import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
 import { useProviderApiServiceSheetClose } from '../apiService';
+import { ProviderBottomAction } from '../components/ProviderBottomAction';
 import {
   ProviderConfiguration,
-  ProviderConfigurationContinue,
   useNewProviderConfiguration,
   useSavedProviderConfiguration,
 } from '../components/ProviderConfiguration';
@@ -112,7 +112,7 @@ function NewProviderScreen({
       <RouteHeader onBack={requestClose} title={t('settings.provider.add.title')} />
       <ProviderConfiguration
         bottomAction={
-          <ProviderConfigurationContinue
+          <ProviderBottomAction
             disabled={!configuration.canContinue || configuration.isCreating}
             hint={configuration.continueHint}
             label={t('settings.provider.config.continue')}
@@ -171,7 +171,7 @@ function SavedProviderSetupScreen({
       ) : (
         <ProviderConfiguration
           bottomAction={
-            <ProviderConfigurationContinue
+            <ProviderBottomAction
               disabled={!configuration.canContinue || isBusy}
               // A setup issue explains why the user landed here until they fix it.
               hint={
