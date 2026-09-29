@@ -69,8 +69,8 @@ export function ProviderIdentitySection({ value }: { value: ProviderConfiguratio
         <Pressable
           accessibilityHint={t('common.rename')}
           accessibilityRole="button"
-          // Sized to the name rather than the row, so a short name keeps a short underline.
-          className="min-w-0 shrink border-border-strong border-b pb-1.5 active:opacity-70"
+          // Sized to the name, but never so short that the underline stops reading as a field.
+          className="min-w-40 shrink border-border-strong border-b pb-1.5 active:opacity-70"
           disabled={value.isBusy}
           onPress={openRename}
           testID="provider-rename"
