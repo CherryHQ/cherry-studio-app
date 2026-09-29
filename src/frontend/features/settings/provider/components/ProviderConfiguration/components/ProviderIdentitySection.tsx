@@ -66,30 +66,25 @@ export function ProviderIdentitySection({ value }: { value: ProviderConfiguratio
           </View>
         </AvatarImagePicker>
         {/* The name itself is the rename control; the underline reads as a field to edit. */}
-        <View className="min-w-0 flex-1 items-start">
-          <Pressable
-            accessibilityHint={t('common.rename')}
-            accessibilityRole="button"
-            // At least 70% of the space beside the avatar so a short name still reads as a
-            // field, and no wider than the name needs beyond that. A proportion, not a fixed
-            // width, keeps the same look on wider screens.
-            className="min-w-[70%] max-w-full border-border-strong border-b pb-1.5 active:opacity-70"
-            disabled={value.isBusy}
-            onPress={openRename}
-            testID="provider-rename"
+        <Pressable
+          accessibilityHint={t('common.rename')}
+          accessibilityRole="button"
+          // Sized to the name with a little room after it, so the underline reads as a field
+          // without stretching across the row.
+          className="min-w-0 shrink border-border-strong border-b pr-6 pb-1.5 active:opacity-70"
+          disabled={value.isBusy}
+          onPress={openRename}
+          testID="provider-rename"
+        >
+          <Text
+            className={
+              value.name ? 'text-xl font-semibold text-foreground' : 'text-xl text-muted-foreground'
+            }
+            numberOfLines={1}
           >
-            <Text
-              className={
-                value.name
-                  ? 'text-xl font-semibold text-foreground'
-                  : 'text-xl text-muted-foreground'
-              }
-              numberOfLines={1}
-            >
-              {displayName}
-            </Text>
-          </Pressable>
-        </View>
+            {displayName}
+          </Text>
+        </Pressable>
       </View>
       {renameDraft ? (
         <ProviderValueSheet
