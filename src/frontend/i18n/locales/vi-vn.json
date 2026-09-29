@@ -1550,7 +1550,6 @@
   "settings.provider.apiService.useBaseUrl": "Dùng URL cơ sở",
   "settings.provider.catalog.create": "Tạo",
   "settings.provider.catalog.custom": "Nhà cung cấp tùy chỉnh",
-  "settings.provider.catalog.customDescription": "Định cấu hình khóa API và URL cơ sở theo cách thủ công",
   "settings.provider.catalog.empty": "Không có nhà cung cấp nào.",
   "settings.provider.catalog.import": "Thêm",
   "settings.provider.catalog.importFailed": "Không thêm được nhà cung cấp",

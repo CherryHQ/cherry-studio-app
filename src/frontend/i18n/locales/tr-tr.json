@@ -1559,7 +1559,6 @@
   "settings.provider.apiService.useBaseUrl": "Temel URL’yi kullan",
   "settings.provider.catalog.create": "Oluştur",
   "settings.provider.catalog.custom": "Özel sağlayıcı",
-  "settings.provider.catalog.customDescription": "Temel URL'yi ve API anahtarını manuel olarak yapılandırma",
   "settings.provider.catalog.empty": "Hiçbir sağlayıcı mevcut değil.",
   "settings.provider.catalog.import": "Ekle",
   "settings.provider.catalog.importFailed": "Sağlayıcı eklenemedi",

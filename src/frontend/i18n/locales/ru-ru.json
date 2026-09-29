@@ -1577,7 +1577,6 @@
   "settings.provider.apiService.useBaseUrl": "Использовать базовый URL",
   "settings.provider.catalog.create": "Создать",
   "settings.provider.catalog.custom": "Пользовательский поставщик",
-  "settings.provider.catalog.customDescription": "Настройте базовый URL-адрес и ключ API вручную.",
   "settings.provider.catalog.empty": "Ни один поставщик не доступен.",
   "settings.provider.catalog.import": "Добавить",
   "settings.provider.catalog.importFailed": "Не удалось добавить провайдера.",

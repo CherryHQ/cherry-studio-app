@@ -1550,7 +1550,6 @@
   "settings.provider.apiService.useBaseUrl": "改用基础地址",
   "settings.provider.catalog.create": "创建",
   "settings.provider.catalog.custom": "自定义服务商",
-  "settings.provider.catalog.customDescription": "手动配置 Base URL 与 API Key",
   "settings.provider.catalog.empty": "暂无可用服务商。",
   "settings.provider.catalog.import": "添加",
   "settings.provider.catalog.importFailed": "添加服务商失败",

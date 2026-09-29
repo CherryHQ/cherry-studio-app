@@ -1559,7 +1559,6 @@
   "settings.provider.apiService.useBaseUrl": "Basis-URL verwenden",
   "settings.provider.catalog.create": "Erstellen",
   "settings.provider.catalog.custom": "Benutzerdefinierter Anbieter",
-  "settings.provider.catalog.customDescription": "Konfigurieren Sie manuell eine Basis-URL und einen API-Schlüssel",
   "settings.provider.catalog.empty": "Es sind keine Anbieter verfügbar.",
   "settings.provider.catalog.import": "Hinzufügen",
   "settings.provider.catalog.importFailed": "Anbieter konnte nicht hinzugefügt werden",

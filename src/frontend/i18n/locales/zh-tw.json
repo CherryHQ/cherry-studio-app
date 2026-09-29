@@ -1550,7 +1550,6 @@
   "settings.provider.apiService.useBaseUrl": "改用基礎位址",
   "settings.provider.catalog.create": "建立",
   "settings.provider.catalog.custom": "自定義供應商",
-  "settings.provider.catalog.customDescription": "手動配置 Base URL 與 API Key",
   "settings.provider.catalog.empty": "暫無可用供應商。",
   "settings.provider.catalog.import": "新增",
   "settings.provider.catalog.importFailed": "添加供應商失敗",

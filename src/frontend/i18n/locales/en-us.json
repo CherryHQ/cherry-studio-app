@@ -1559,7 +1559,6 @@
   "settings.provider.apiService.useBaseUrl": "Use base URL",
   "settings.provider.catalog.create": "Create",
   "settings.provider.catalog.custom": "Custom provider",
-  "settings.provider.catalog.customDescription": "Configure a Base URL and API key manually",
   "settings.provider.catalog.empty": "No providers are available.",
   "settings.provider.catalog.import": "Add",
   "settings.provider.catalog.importFailed": "Failed to add provider",

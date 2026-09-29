@@ -132,7 +132,6 @@ function CustomProviderCatalogRow({ onCreate }: { onCreate: () => void }) {
       avatar={<ProviderAvatar providerId={CUSTOM_PROVIDER_ITEM_ID} providerName={name} />}
       id={CUSTOM_PROVIDER_ITEM_ID}
       name={name}
-      subtitle={t('settings.provider.catalog.customDescription')}
       testID="provider-catalog-entry-custom"
       trailingAction={
         <Button onPress={onCreate} size="xs" testID="provider-catalog-custom" variant="secondary">

@@ -1550,7 +1550,6 @@
   "settings.provider.apiService.useBaseUrl": "ベース URL を使用",
   "settings.provider.catalog.create": "作成",
   "settings.provider.catalog.custom": "カスタムプロバイダー",
-  "settings.provider.catalog.customDescription": "ベース URL と API キーを手動で構成する",
   "settings.provider.catalog.empty": "利用可能なプロバイダーがありません。",
   "settings.provider.catalog.import": "追加",
   "settings.provider.catalog.importFailed": "プロバイダーの追加に失敗しました",

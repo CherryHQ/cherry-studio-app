@@ -1568,7 +1568,6 @@
   "settings.provider.apiService.useBaseUrl": "Utiliser l’URL de base",
   "settings.provider.catalog.create": "Créer",
   "settings.provider.catalog.custom": "Fournisseur personnalisé",
-  "settings.provider.catalog.customDescription": "Configurer manuellement une URL de base et une clé API",
   "settings.provider.catalog.empty": "Aucun fournisseur n'est disponible.",
   "settings.provider.catalog.import": "Ajouter",
   "settings.provider.catalog.importFailed": "Échec de l'ajout du fournisseur",

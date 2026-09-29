@@ -1559,7 +1559,6 @@
   "settings.provider.apiService.useBaseUrl": "Χρήση βασικού URL",
   "settings.provider.catalog.create": "Δημιουργία",
   "settings.provider.catalog.custom": "Προσαρμοσμένος πάροχος",
-  "settings.provider.catalog.customDescription": "Διαμόρφωση μιας βασικής διεύθυνσης URL και ενός κλειδιού API με μη αυτόματο τρόπο",
   "settings.provider.catalog.empty": "Δεν υπάρχουν διαθέσιμοι πάροχοι.",
   "settings.provider.catalog.import": "Προσθήκη",
   "settings.provider.catalog.importFailed": "Αποτυχία προσθήκης παρόχου",

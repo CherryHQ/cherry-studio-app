@@ -1568,7 +1568,6 @@
   "settings.provider.apiService.useBaseUrl": "Folosește URL-ul de bază",
   "settings.provider.catalog.create": "Creează",
   "settings.provider.catalog.custom": "Furnizor personalizat",
-  "settings.provider.catalog.customDescription": "Configurați manual o adresă URL de bază și o cheie API",
   "settings.provider.catalog.empty": "Nu există furnizori disponibili.",
   "settings.provider.catalog.import": "Adăugați",
   "settings.provider.catalog.importFailed": "Nu s-a putut adăuga furnizorul",
