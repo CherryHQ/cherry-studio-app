@@ -1,5 +1,5 @@
 import { resolveWireModelId } from '@cherrystudio/ai-runtime/provider';
-import { Button, Section, SelectField } from '@cherrystudio/ui/components';
+import { Button, SelectField } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -91,8 +91,10 @@ export function ProviderModelCheckSection({
 
   return (
     <View className="gap-5">
-      <View className="gap-1">
-        <Section.Header title={t('settings.provider.models.checkTitle')} />
+      <View className="gap-2">
+        <Text className="font-medium text-base text-foreground">
+          {t('settings.provider.models.checkTitle')}
+        </Text>
         <View className="flex-row items-stretch gap-2">
           <SelectField
             accessibilityLabel={selectedModel?.name ?? t('settings.provider.models.checkNoModels')}

@@ -1466,7 +1466,7 @@
   "settings.provider.add.endpoint.openaiChatCompletions": "OpenAI Chat Completions",
   "settings.provider.add.endpoint.openaiResponses": "OpenAI Responses",
   "settings.provider.add.error": "创建服务商失败",
-  "settings.provider.add.name": "提供商名称",
+  "settings.provider.add.name": "服务商名称",
   "settings.provider.add.setAvatar": "设置头像",
   "settings.provider.add.title": "新建服务商",
   "settings.provider.apiService.accessKeyId": "Access Key ID",

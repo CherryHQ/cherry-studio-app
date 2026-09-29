@@ -56,7 +56,8 @@ export function ProviderFormEndpoint({
           testID={label ? `provider-endpoint-${endpoint}-input` : 'provider-base-url-input'}
           value={value}
         />
-        {!value.trim() ? (
+        {/* A labeled field belongs to the endpoint group, which explains base URLs once. */}
+        {!label && !value.trim() ? (
           <TextField.Description>
             {t('settings.provider.apiService.baseUrlHelp')}
           </TextField.Description>

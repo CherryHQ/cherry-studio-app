@@ -1,6 +1,6 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
-import { Alert, Button, ContentState, Spinner, useToast } from '@cherrystudio/ui/components';
+import { Alert, ContentState, Section, Spinner, useToast } from '@cherrystudio/ui/components';
 import { Redirect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -368,14 +368,15 @@ function ProviderDetailSettings({
                   provider={provider}
                   providerId={providerId}
                 />
-                <Button
-                  disabled={isDeleting || isSaving}
-                  onPress={handleDelete}
-                  size="lg"
-                  variant="destructive"
-                >
-                  {t('settings.provider.deleteProvider')}
-                </Button>
+                <Section>
+                  <Section.Item
+                    destructive
+                    disabled={isDeleting || isSaving}
+                    label={t('settings.provider.deleteProvider')}
+                    onPress={handleDelete}
+                    showChevron={false}
+                  />
+                </Section>
               </View>
             </>
           )}

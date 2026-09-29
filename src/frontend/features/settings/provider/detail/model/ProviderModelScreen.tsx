@@ -35,8 +35,9 @@ const capabilityLabelKeys = {
 } as const satisfies Record<Model['capabilities'][number], string>;
 
 export default function ProviderModelScreen() {
+  const { t } = useTranslation();
   return (
-    <ProviderModelPage>
+    <ProviderModelPage title={t('settings.provider.models.detail.title')}>
       {(model, provider) => <ModelDetails model={model} provider={provider} />}
     </ProviderModelPage>
   );

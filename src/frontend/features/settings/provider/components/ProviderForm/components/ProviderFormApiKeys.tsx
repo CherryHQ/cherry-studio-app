@@ -20,13 +20,19 @@ export function ProviderFormApiKeys() {
   const enabledCount = state.apiKeys.filter((entry) => entry.isEnabled).length;
 
   return (
-    <>
+    <View className="gap-2">
+      <Text className="font-medium text-base text-foreground">
+        {t('settings.provider.apiService.keys.title')}
+      </Text>
       <Section
-        title={t('settings.provider.apiService.keys.title')}
-        footer={t('settings.provider.apiService.keys.summary', {
-          enabled: enabledCount,
-          total: state.apiKeys.length,
-        })}
+        footer={
+          state.apiKeys.length > 0
+            ? t('settings.provider.apiService.keys.summary', {
+                enabled: enabledCount,
+                total: state.apiKeys.length,
+              })
+            : undefined
+        }
       >
         {state.apiKeys.map((entry, index) => {
           const error = getApiKeyValidationError(entry, state.apiKeys);
@@ -83,6 +89,6 @@ export function ProviderFormApiKeys() {
         </Section.Item>
       </Section>
       <ProviderApiKeyEditSheet disabled={meta.isSubmitting} editor={editor} />
-    </>
+    </View>
   );
 }

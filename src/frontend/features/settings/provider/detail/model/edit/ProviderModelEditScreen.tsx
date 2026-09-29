@@ -51,8 +51,9 @@ import {
 } from '../utils/providerModelEdit';
 
 export default function ProviderModelEditScreen() {
+  const { t } = useTranslation();
   return (
-    <ProviderModelPage>
+    <ProviderModelPage title={t('settings.provider.models.management.edit')}>
       {(model, provider) => <ModelEditor key={model.id} model={model} provider={provider} />}
     </ProviderModelPage>
   );

@@ -59,9 +59,14 @@ export function ProviderFormTextEndpoints() {
 
   return (
     <View className="gap-3">
-      <Text className="font-medium text-base text-foreground">
-        {t('settings.provider.apiService.textEndpointsTitle')}
-      </Text>
+      <View className="gap-1">
+        <Text className="font-medium text-base text-foreground">
+          {t('settings.provider.apiService.textEndpointsTitle')}
+        </Text>
+        <Text className="px-1 text-muted-foreground text-sm">
+          {t('settings.provider.apiService.baseUrlHelp')}
+        </Text>
+      </View>
 
       {COMMON_TEXT_ENDPOINTS.map((endpointType) => (
         <ProviderFormTextEndpointField endpoint={endpointType} key={endpointType} />

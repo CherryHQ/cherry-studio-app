@@ -1,8 +1,9 @@
-import { Button, ContentState, Spinner, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState, Section, Spinner, useToast } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
 import { SectionList } from '@legendapp/list/section-list';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -18,18 +19,22 @@ import { queryKeys, useBackendModule, useQuery as useDataQuery } from '@/fronten
 import type { ProviderCatalogEntry } from '@/shared/contracts';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { SettingsServiceRow } from '../../components/SettingsServiceRow';
+import { SettingsGroupedSeparator, SettingsServiceRow } from '../../components/SettingsServiceRow';
 
-const CATALOG_ROW_ESTIMATED_HEIGHT = 68;
+const CATALOG_ROW_ESTIMATED_HEIGHT = 56;
 const CUSTOM_PROVIDER_ITEM_ID = 'custom-provider' as const;
 
-type ProviderCatalogItem =
+type ProviderCatalogEntryItem =
   | { id: typeof CUSTOM_PROVIDER_ITEM_ID; type: 'custom' }
   | (Provider & { type: 'saved' })
   | (ProviderCatalogEntry & { type: 'preset' });
 
+/** Position within its section, so each row can draw its slice of the section's card. */
+type ProviderCatalogItem = ProviderCatalogEntryItem & { isFirst: boolean; isLast: boolean };
+
 type ProviderCatalogSection = {
   data: ProviderCatalogItem[];
+  isFirst: boolean;
   title: string;
 };
 
@@ -43,11 +48,28 @@ type ProviderCatalogRowProps = {
 
 const keyExtractor = (item: ProviderCatalogItem) => item.id;
 
+// Mirrors a titled `Section`: the title sits 12pt inside the card edge, 4pt above it.
 const renderProviderSectionHeader = ({ section }: { section: ProviderCatalogSection }) => (
-  <View className="h-12 justify-end px-4 pb-2">
-    <Text className="font-medium text-foreground-tertiary text-sm">{section.title}</Text>
+  <View className={cn('px-7 pb-1', section.isFirst ? 'pt-2' : 'pt-6')}>
+    <Section.Header accessibilityRole="header" title={section.title} />
   </View>
 );
+
+function CatalogCardSlice({ children, item }: { children: ReactNode; item: ProviderCatalogItem }) {
+  return (
+    <View
+      className={cn(
+        'mx-4 overflow-hidden bg-card',
+        item.isFirst && 'rounded-t-2xl',
+        item.isLast && 'rounded-b-2xl',
+      )}
+      style={styles.cardSlice}
+    >
+      {item.isFirst ? null : <SettingsGroupedSeparator />}
+      {children}
+    </View>
+  );
+}
 
 function ProviderCatalogRow({
   entry,
@@ -74,7 +96,7 @@ function ProviderCatalogRow({
       onPress={onPress ? () => onPress(entry) : undefined}
       statusLabel={entry.isEnabled ? t('settings.provider.status.enabled') : undefined}
       statusTone="success"
-      subtitle={onChoose ? entry.description : entry.id}
+      subtitle={onChoose ? entry.description : undefined}
       testID={`provider-catalog-entry-${entry.id}`}
       trailingAction={
         onChoose ? (
@@ -214,13 +236,13 @@ export default function ProviderCatalogScreen({
     [importPending, importProvider, openProviderSetup],
   );
   const sections = useMemo<ProviderCatalogSection[]>(() => {
-    const recommended: ProviderCatalogItem[] = [
+    const recommended: ProviderCatalogEntryItem[] = [
       ...(intent === 'chat' ? [] : [{ id: CUSTOM_PROVIDER_ITEM_ID, type: 'custom' as const }]),
       ...listedEntries
         .filter((entry) => entry.isRecommended)
         .map((entry) => ({ ...entry, type: 'preset' as const })),
     ];
-    const all: ProviderCatalogItem[] = listedEntries
+    const all: ProviderCatalogEntryItem[] = listedEntries
       .filter((entry) => !entry.isRecommended)
       .map((entry) => ({ ...entry, type: 'preset' as const }));
 
@@ -251,31 +273,44 @@ export default function ProviderCatalogScreen({
           intent !== 'chat' || query || showsAllProviders || recommended.length === 0 ? all : [],
         title: t('settings.provider.catalog.section.all'),
       },
-    ].filter(({ data }) => data.length > 0);
+    ]
+      .filter(({ data }) => data.length > 0)
+      .map((section, sectionIndex) => ({
+        isFirst: sectionIndex === 0,
+        title: section.title,
+        data: section.data.map((item, index) => ({
+          ...item,
+          isFirst: index === 0,
+          isLast: index === section.data.length - 1,
+        })),
+      }));
   }, [intent, listedEntries, query, savedProviders.data, showsAllProviders, t]);
   const renderProviderRow = useCallback(
-    ({ item }: { item: ProviderCatalogItem }) =>
-      item.type === 'custom' ? (
-        <CustomProviderCatalogRow onCreate={openCustomProvider} />
-      ) : item.type === 'saved' ? (
-        <SettingsServiceRow
-          avatar={<ProviderAvatar providerId={item.id} providerName={item.name} />}
-          disabled={importPending}
-          id={item.id}
-          name={item.name}
-          onPress={() => openProviderSetup(item)}
-          subtitle={t('onboarding.provider.continue')}
-          testID={`provider-catalog-entry-${item.id}`}
-        />
-      ) : (
-        <ProviderCatalogRow
-          entry={item}
-          importPending={importPending}
-          isPendingEntry={pendingProviderId === item.id}
-          onImport={handleImportProvider}
-          onChoose={intent === 'chat' ? handleImportProvider : undefined}
-        />
-      ),
+    ({ item }: { item: ProviderCatalogItem }) => (
+      <CatalogCardSlice item={item}>
+        {item.type === 'custom' ? (
+          <CustomProviderCatalogRow onCreate={openCustomProvider} />
+        ) : item.type === 'saved' ? (
+          <SettingsServiceRow
+            avatar={<ProviderAvatar providerId={item.id} providerName={item.name} />}
+            disabled={importPending}
+            id={item.id}
+            name={item.name}
+            onPress={() => openProviderSetup(item)}
+            subtitle={t('onboarding.provider.continue')}
+            testID={`provider-catalog-entry-${item.id}`}
+          />
+        ) : (
+          <ProviderCatalogRow
+            entry={item}
+            importPending={importPending}
+            isPendingEntry={pendingProviderId === item.id}
+            onImport={handleImportProvider}
+            onChoose={intent === 'chat' ? handleImportProvider : undefined}
+          />
+        )}
+      </CatalogCardSlice>
+    ),
     [
       handleImportProvider,
       importPending,
@@ -377,6 +412,9 @@ export default function ProviderCatalogScreen({
 }
 
 const styles = StyleSheet.create({
+  cardSlice: {
+    borderCurve: 'continuous',
+  },
   list: {
     flex: 1,
   },
