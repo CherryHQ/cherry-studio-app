@@ -1,9 +1,9 @@
-import { Button, Section, useAlert, useToast } from '@cherrystudio/ui/components';
+import { Section, useAlert, useToast } from '@cherrystudio/ui/components';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 
 import { useBackupState } from '@/frontend/hooks/useBackupState';
 import { BackupError, type BackupErrorCode } from '@/shared/contracts/backup';
@@ -22,6 +22,8 @@ const ERROR_KEYS: Record<BackupErrorCode, string> = {
   storage: 'backup.error.storage',
   'restart-required': 'backup.restart.description',
 };
+const PLATFORM_NAMES: Record<string, string> = { android: 'Android', ios: 'iOS' };
+
 export function BackupScreen() {
   const { t, i18n } = useTranslation();
   const { alert } = useAlert();
@@ -93,9 +95,15 @@ export function BackupScreen() {
     });
   };
 
+  const detailValue = (value: string) => (
+    <Text className="text-right text-base text-muted-foreground" numberOfLines={1}>
+      {value}
+    </Text>
+  );
+
   return (
     <SettingsScrollPage headerProps={{ title: t('backup.title') }} contentClassName="gap-6">
-      <Section footer={t('backup.sensitive')}>
+      <Section footer={t(available ? 'backup.sensitive' : 'backup.unavailable')}>
         <Section.Item
           label={t('backup.create')}
           onPress={() => void create()}
@@ -107,37 +115,55 @@ export function BackupScreen() {
           disabled={!available || busy}
         />
       </Section>
-      {!available && (
-        <Text className="text-sm text-muted-foreground">{t('backup.unavailable')}</Text>
-      )}
       {state.phase === 'ready' && preview && (
-        <View className="gap-4">
-          <Text className="text-lg font-semibold text-foreground">{t('backup.preview')}</Text>
-          <Text className="text-sm text-muted-foreground">
-            {t('backup.source', {
-              date: new Date(preview.createdAt).toLocaleString(i18n.language),
-              version: preview.appVersion,
-              platform: preview.platform,
-            })}
-          </Text>
-          <Text className="text-base text-foreground">
-            {t('backup.contents', {
-              sessions: preview.sessions,
-              messages: preview.messages,
-              files: preview.files,
-              size: (preview.bytes / 1024 / 1024).toLocaleString(i18n.language, {
-                maximumFractionDigits: 1,
-              }),
-            })}
-          </Text>
-          <Text className="text-sm text-muted-foreground">{t('backup.reconnect')}</Text>
-          <Button variant="destructive" onPress={confirmRestore}>
-            {t('backup.apply')}
-          </Button>
-          <Button variant="outline" onPress={backup.cancel}>
-            {t('common.cancel')}
-          </Button>
-        </View>
+        <>
+          <Section title={t('backup.preview')} footer={t('backup.reconnect')}>
+            <Section.Item
+              label={t('backup.details.createdAt')}
+              trailing={detailValue(new Date(preview.createdAt).toLocaleString(i18n.language))}
+            />
+            <Section.Item
+              label={t('backup.details.source')}
+              trailing={detailValue(
+                t('backup.details.sourceValue', {
+                  platform: PLATFORM_NAMES[preview.platform] ?? preview.platform,
+                  version: preview.appVersion,
+                }),
+              )}
+            />
+            <Section.Item
+              label={t('backup.details.sessions')}
+              trailing={detailValue(preview.sessions.toLocaleString(i18n.language))}
+            />
+            <Section.Item
+              label={t('backup.details.messages')}
+              trailing={detailValue(preview.messages.toLocaleString(i18n.language))}
+            />
+            <Section.Item
+              label={t('backup.details.files')}
+              trailing={detailValue(preview.files.toLocaleString(i18n.language))}
+            />
+            <Section.Item
+              label={t('backup.details.size')}
+              trailing={detailValue(
+                t('backup.details.sizeValue', {
+                  size: (preview.bytes / 1024 / 1024).toLocaleString(i18n.language, {
+                    maximumFractionDigits: 1,
+                  }),
+                }),
+              )}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              destructive
+              label={t('backup.apply')}
+              onPress={confirmRestore}
+              showChevron={false}
+            />
+            <Section.Item label={t('common.cancel')} onPress={backup.cancel} showChevron={false} />
+          </Section>
+        </>
       )}
     </SettingsScrollPage>
   );

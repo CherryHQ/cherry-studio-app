@@ -137,6 +137,7 @@ export function DeviceConnectionDetailScreen() {
           disabled={isRemoving}
           label={t('settings.deviceConnections.remove.action')}
           onPress={requestRemove}
+          showChevron={false}
         />
       </Section>
     </SettingsScrollPage>

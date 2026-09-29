@@ -1,6 +1,6 @@
-import { Button, Dialog } from '@cherrystudio/ui/components';
+import { Button, Dialog, Spinner } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { useBackupState } from '@/frontend/hooks/useBackupState';
 import type { BackupState } from '@/shared/contracts/backup';
@@ -23,6 +23,7 @@ export function BackupProgressGate() {
   const { t } = useTranslation();
   const { backup, state } = useBackupState();
   const title = RUNNING_PHASE_TITLES[state.phase];
+  const percent = state.total > 0 ? Math.floor((state.completed / state.total) * 100) : null;
 
   return (
     <Dialog
@@ -31,10 +32,26 @@ export function BackupProgressGate() {
       testID="backup-progress-dialog"
       title={title ? t(title) : ''}
     >
-      <Text accessibilityLiveRegion="polite" className="text-base text-muted-foreground">
-        {state.total > 0 ? `${Math.floor((state.completed / state.total) * 100)}%` : '…'}
-      </Text>
-      <Button onPress={backup.cancel} variant="outline">
+      {percent === null ? (
+        <View className="h-8 items-center justify-center">
+          <Spinner accessibilityLabel={title ? t(title) : undefined} size="sm" />
+        </View>
+      ) : (
+        <View
+          accessibilityLiveRegion="polite"
+          accessibilityRole="progressbar"
+          accessibilityValue={{ max: 100, min: 0, now: percent }}
+          className="flex-row items-center gap-3"
+        >
+          <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+            <View className="h-full rounded-full bg-foreground" style={{ width: `${percent}%` }} />
+          </View>
+          <Text className="w-10 text-right text-sm tabular-nums text-muted-foreground">
+            {percent}%
+          </Text>
+        </View>
+      )}
+      <Button onPress={backup.cancel} variant="secondary">
         {t('common.cancel')}
       </Button>
     </Dialog>
