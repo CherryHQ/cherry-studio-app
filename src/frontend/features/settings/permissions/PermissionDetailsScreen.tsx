@@ -41,9 +41,7 @@ function PermissionDetails({ kind }: { kind: PermissionKind }) {
       headerProps={{ title: t(`settings.permissions.type.${kind}`) }}
     >
       {isPermissionSupported(kind, statuses) ? (
-        <Section
-          footer={isHealth ? `${purpose}\n${t('settings.permissions.health.dataUse')}` : purpose}
-        >
+        <Section footer={purpose}>
           <PermissionSettingsItem kind={kind} statuses={statuses} refresh={refresh} />
         </Section>
       ) : (
