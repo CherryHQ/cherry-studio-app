@@ -17,7 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePreference } from '@/frontend/data/hooks';
 
-import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { ProfileHero } from './components/ProfileHero';
 import { useProviderListNavigation } from './provider';
 
@@ -43,7 +42,7 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ProfileHero onPress={openProfileSettings} userName={userName} />
-        <View className="gap-6 px-2 pt-2">
+        <View className="gap-6 px-4 pt-2">
           <Section>
             <Section.Item
               label={t('settings.items.modelService')}
@@ -56,9 +55,6 @@ export default function SettingsScreen() {
               leading={<PackageIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/model')}
             />
-          </Section>
-          <Section>
-            <DocumentParserSetting />
           </Section>
           <Section>
             <Section.Item

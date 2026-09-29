@@ -11,6 +11,7 @@ import { usePreference } from '@/frontend/data/hooks';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useSettingPreferences } from '../hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from '../utils/fontSizeOptions';
+import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
 export default function AppearanceSettingsScreen() {
@@ -67,12 +68,16 @@ export default function AppearanceSettingsScreen() {
               </View>
             }
           />
+        </Section>
+
+        <Section>
           <Section.SwitchItem
             label={t('settings.exportWatermark.title')}
             onValueChange={changeWatermark}
             testID="settings-export-watermark"
             value={isWatermarkEnabled}
           />
+          <DocumentParserSetting />
         </Section>
       </SettingsScrollPage>
       <OptionPickerBottomSheet
