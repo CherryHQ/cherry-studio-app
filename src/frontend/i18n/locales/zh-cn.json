@@ -1285,7 +1285,6 @@
   "settings.documentParser.builtinDescription": "仅提取文本，适合文字为主的文档摘要与问答；Token 消耗较少。",
   "settings.documentParser.saveFailed": "文档解析器设置保存失败",
   "settings.documentParser.title": "文档解析器",
-  "settings.exportWatermark.description": "分享或导出图片和文档时，在底部附上 Cherry Studio 标识和时间。",
   "settings.exportWatermark.saveFailed": "无法保存水印设置",
   "settings.exportWatermark.title": "分享水印",
   "settings.fontSize.level.extraLarge": "特大",

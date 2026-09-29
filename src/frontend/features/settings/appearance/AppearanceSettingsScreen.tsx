@@ -70,7 +70,7 @@ export default function AppearanceSettingsScreen() {
           />
         </Section>
 
-        <Section footer={t('settings.exportWatermark.description')}>
+        <Section>
           <Section.SwitchItem
             label={t('settings.exportWatermark.title')}
             onValueChange={changeWatermark}

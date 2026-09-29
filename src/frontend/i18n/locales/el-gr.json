@@ -1294,7 +1294,6 @@
   "settings.documentParser.builtinDescription": "Εξάγει μόνο κείμενο, κατάλληλο για περιλήψεις και Q&A για έγγραφα που εστιάζουν στο κείμενο. Χαμηλότερη χρήση διακριτικού.",
   "settings.documentParser.saveFailed": "Δεν ήταν δυνατή η αποθήκευση του αναλυτή εγγράφων",
   "settings.documentParser.title": "Αναλυτής εγγράφων",
-  "settings.exportWatermark.description": "Προσθέτει ένα σήμα Cherry Studio και την ώρα στο κάτω μέρος των εικόνων και εγγράφων που κοινοποιείτε ή εξάγετε.",
   "settings.exportWatermark.saveFailed": "Δεν ήταν δυνατή η αποθήκευση της ρύθμισης υδατογραφήματος",
   "settings.exportWatermark.title": "Υδατογράφημα κοινοποίησης",
   "settings.fontSize.level.extraLarge": "Εξαιρετικά μεγάλο",

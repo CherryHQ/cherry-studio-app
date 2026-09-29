@@ -1303,7 +1303,6 @@
   "settings.documentParser.builtinDescription": "Extrage numai text, potrivit pentru rezumate și întrebări și răspunsuri pentru documentele axate pe text. Utilizare mai redusă a tokenului.",
   "settings.documentParser.saveFailed": "Nu s-a putut salva analizatorul documentului",
   "settings.documentParser.title": "Analizor de documente",
-  "settings.exportWatermark.description": "Adaugă un marcaj Cherry Studio și ora în partea de jos a imaginilor și documentelor pe care le partajezi sau le exporți.",
   "settings.exportWatermark.saveFailed": "Nu s-a putut salva setarea filigranului",
   "settings.exportWatermark.title": "Filigran la partajare",
   "settings.fontSize.level.extraLarge": "Foarte mare",
