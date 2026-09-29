@@ -696,7 +696,7 @@
   "notifications.android.preparing": "Подготовка поколения",
   "notifications.android.runningTitle": "Выполняемые задачи",
   "notifications.android.settingsFailed": "Не удалось открыть настройки уведомлений.",
-  "notifications.android.systemDescription": "Разрешить уведомления о ходе создания чата и изображений, их завершении и запросах на утверждение. Коснитесь уведомления, чтобы открыть его задачу в приложении.",
+  "notifications.android.systemDescription": "Разрешите уведомления, чтобы видеть ход генерации, результаты и запросы на подтверждение.",
   "notifications.android.systemSettings": "Настройки системных уведомлений",
   "notifications.android.title": "Справочные ответы",
   "onboarding.check.authentication": "Ключ API не был принят. Отредактируйте соединение и проверьте, что ключ принадлежит этому провайдеру.",

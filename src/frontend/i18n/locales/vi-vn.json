@@ -669,7 +669,7 @@
   "notifications.android.preparing": "Chuẩn bị thế hệ",
   "notifications.android.runningTitle": "Nhiệm vụ đang tiến hành",
   "notifications.android.settingsFailed": "Không thể mở cài đặt thông báo.",
-  "notifications.android.systemDescription": "Cho phép thông báo để xem tiến trình tạo, hoàn thành và phê duyệt trò chuyện và hình ảnh. Nhấn vào một thông báo để mở nhiệm vụ của nó trong ứng dụng.",
+  "notifications.android.systemDescription": "Cho phép thông báo để xem tiến trình tạo, kết quả và yêu cầu phê duyệt.",
   "notifications.android.systemSettings": "Cài đặt thông báo hệ thống",
   "notifications.android.title": "Câu trả lời nền",
   "onboarding.check.authentication": "Khóa API không được chấp nhận. Chỉnh sửa kết nối và kiểm tra xem khóa có thuộc về nhà cung cấp này không.",

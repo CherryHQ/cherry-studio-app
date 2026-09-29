@@ -678,7 +678,7 @@
   "notifications.android.preparing": "Preparing generation",
   "notifications.android.runningTitle": "Tasks in progress",
   "notifications.android.settingsFailed": "Could not open notification settings.",
-  "notifications.android.systemDescription": "Allow notifications to see chat and image generation progress, completion, and approval requests. Tap a notification to open its task in the app.",
+  "notifications.android.systemDescription": "Allow notifications to see generation progress, results, and approval requests.",
   "notifications.android.systemSettings": "System notification settings",
   "notifications.android.title": "Background replies",
   "onboarding.check.authentication": "The API key was not accepted. Edit the connection and check that the key belongs to this provider.",

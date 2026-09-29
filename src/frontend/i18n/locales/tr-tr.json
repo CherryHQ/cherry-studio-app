@@ -678,7 +678,7 @@
   "notifications.android.preparing": "Oluşturma hazırlanıyor",
   "notifications.android.runningTitle": "Devam eden görevler",
   "notifications.android.settingsFailed": "Bildirim ayarları açılamadı.",
-  "notifications.android.systemDescription": "Bildirimlerin sohbet ve görüntü oluşturma ilerlemesini, tamamlanmasını ve onay isteklerini görmesine izin verin. Uygulamada görevini açmak için bir bildirime dokunun.",
+  "notifications.android.systemDescription": "Oluşturma ilerlemesini, sonuçları ve onay isteklerini görmek için bildirimlere izin verin.",
   "notifications.android.systemSettings": "Sistem bildirim ayarları",
   "notifications.android.title": "Arka planda yanıtlar",
   "onboarding.check.authentication": "API anahtarı kabul edilmedi. Bağlantıyı düzenleyin ve anahtarın bu sağlayıcıya ait olup olmadığını kontrol edin.",

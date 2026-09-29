@@ -669,7 +669,7 @@
   "notifications.android.preparing": "世代を準備しています",
   "notifications.android.runningTitle": "進行中のタスク",
   "notifications.android.settingsFailed": "通知設定を開けませんでした。",
-  "notifications.android.systemDescription": "チャットおよび画像生成の進行状況、完了、および承認リクエストを通知で確認できるようにします。通知をタップして、アプリでそのタスクを開きます。",
+  "notifications.android.systemDescription": "通知を許可すると、生成の進行状況、結果、承認リクエストを確認できます。",
   "notifications.android.systemSettings": "システム通知設定",
   "notifications.android.title": "バックグラウンド応答",
   "onboarding.check.authentication": "API キーが受け入れられませんでした。接続を編集し、キーがこのプロバイダーに属していることを確認します。",

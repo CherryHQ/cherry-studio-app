@@ -687,7 +687,7 @@
   "notifications.android.preparing": "Préparation de la génération",
   "notifications.android.runningTitle": "Tâches en cours",
   "notifications.android.settingsFailed": "Impossible d'ouvrir les paramètres de notification.",
-  "notifications.android.systemDescription": "Autorisez les notifications à voir la progression, l'achèvement et les demandes d'approbation de la génération de discussions et d'images. Appuyez sur une notification pour ouvrir sa tâche dans l'application.",
+  "notifications.android.systemDescription": "Autorisez les notifications pour suivre la progression des générations, leurs résultats et les demandes d’approbation.",
   "notifications.android.systemSettings": "Paramètres de notification du système",
   "notifications.android.title": "Réponses de fond",
   "onboarding.check.authentication": "La clé API n'a pas été acceptée. Modifiez la connexion et vérifiez que la clé appartient à ce fournisseur.",

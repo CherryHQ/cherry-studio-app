@@ -687,7 +687,7 @@
   "notifications.android.preparing": "Preparando generación",
   "notifications.android.runningTitle": "Tareas en curso",
   "notifications.android.settingsFailed": "No se pudo abrir la configuración de notificaciones.",
-  "notifications.android.systemDescription": "Permitir que las notificaciones vean el progreso, la finalización y las solicitudes de aprobación de la generación de imágenes y chat. Toque una notificación para abrir su tarea en la aplicación.",
+  "notifications.android.systemDescription": "Permite las notificaciones para ver el progreso de generación, los resultados y las solicitudes de aprobación.",
   "notifications.android.systemSettings": "Configuración de notificaciones del sistema",
   "notifications.android.title": "Respuestas de fondo",
   "onboarding.check.authentication": "La clave API no fue aceptada. Edita la conexión y comprueba que la clave pertenece a este proveedor.",

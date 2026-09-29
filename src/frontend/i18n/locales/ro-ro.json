@@ -687,7 +687,7 @@
   "notifications.android.preparing": "Se pregătește generația",
   "notifications.android.runningTitle": "Sarcini în curs",
   "notifications.android.settingsFailed": "Nu s-au putut deschide setările de notificare.",
-  "notifications.android.systemDescription": "Permite notificărilor pentru a vedea progresul, finalizarea și cererile de aprobare ale chatului și al generării de imagini. Atingeți o notificare pentru a-i deschide sarcina în aplicație.",
+  "notifications.android.systemDescription": "Permite notificările pentru a vedea progresul generării, rezultatele și cererile de aprobare.",
   "notifications.android.systemSettings": "Setări de notificare de sistem",
   "notifications.android.title": "Răspunsuri de fundal",
   "onboarding.check.authentication": "Cheia API nu a fost acceptată. Editați conexiunea și verificați dacă cheia aparține acestui furnizor.",

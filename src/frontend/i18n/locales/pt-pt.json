@@ -687,7 +687,7 @@
   "notifications.android.preparing": "Preparar geração",
   "notifications.android.runningTitle": "Tarefas em curso",
   "notifications.android.settingsFailed": "Não foi possível abrir as definições de notificação.",
-  "notifications.android.systemDescription": "Permitir notificações para ver o progresso da geração de chat e imagem, conclusão e pedidos de aprovação. Toque numa notificação para abrir a sua tarefa na aplicação.",
+  "notifications.android.systemDescription": "Permita notificações para ver o progresso da geração, os resultados e os pedidos de aprovação.",
   "notifications.android.systemSettings": "Definições de notificação do sistema",
   "notifications.android.title": "Respostas em segundo plano",
   "onboarding.check.authentication": "A chave API não foi aceite. Edite a ligação e verifique se a chave pertence a este fornecedor.",

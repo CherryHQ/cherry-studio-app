@@ -678,7 +678,7 @@
   "notifications.android.preparing": "Generierung wird vorbereitet",
   "notifications.android.runningTitle": "Aufgaben in Bearbeitung",
   "notifications.android.settingsFailed": "Benachrichtigungseinstellungen konnten nicht geöffnet werden.",
-  "notifications.android.systemDescription": "Erlauben Sie Benachrichtigungen, um den Fortschritt, den Abschluss und die Genehmigungsanfragen der Chat- und Bildgenerierung anzuzeigen. Tippen Sie auf eine Benachrichtigung, um deren Aufgabe in der App zu öffnen.",
+  "notifications.android.systemDescription": "Erlaube Benachrichtigungen, um Generierungsfortschritt, Ergebnisse und Genehmigungsanfragen zu sehen.",
   "notifications.android.systemSettings": "Systembenachrichtigungseinstellungen",
   "notifications.android.title": "Hintergrundantworten",
   "onboarding.check.authentication": "Der API-Schlüssel wurde nicht akzeptiert. Bearbeiten Sie die Verbindung und prüfen Sie, ob der Schlüssel zu diesem Anbieter gehört.",
