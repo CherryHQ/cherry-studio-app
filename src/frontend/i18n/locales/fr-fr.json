@@ -1460,7 +1460,7 @@
   "settings.provider.account.errors.request": "Le fournisseur n’a pas pu traiter cette demande. Réessayez.",
   "settings.provider.account.errors.storage": "Impossible d’enregistrer ou de lire les données du compte de manière sécurisée. Réessayez.",
   "settings.provider.account.errors.unsupported": "Ce fournisseur ne prend pas en charge cette opération sur le compte.",
-  "settings.provider.account.keyAccountHint": "Connectez-vous pour obtenir des clés API de modèles. Les clés synchronisées depuis votre PC peuvent être utilisées indépendamment ; connectez-vous sur cet appareil pour consulter les informations du compte.",
+  "settings.provider.account.keyAccountHint": "Connectez-vous pour récupérer automatiquement vos clés API, ou ajoutez-les manuellement ci-dessous.",
   "settings.provider.account.login": "Se connecter à {{name}}",
   "settings.provider.account.logout": "Se déconnecter sur ce téléphone",
   "settings.provider.account.refresh": "Actualiser le solde",

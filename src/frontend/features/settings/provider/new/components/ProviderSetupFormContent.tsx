@@ -81,9 +81,11 @@ export function ProviderSetupFormContent({
 }
 
 export function ProviderSetupPresetFields({
+  children,
   provider,
   showApiKey,
 }: {
+  children?: ReactNode;
   provider: Provider;
   showApiKey: boolean;
 }) {
@@ -104,6 +106,7 @@ export function ProviderSetupPresetFields({
         />
         <Text className="flex-1 font-medium text-lg text-foreground">{provider.name}</Text>
       </View>
+      {children}
       {showApiKey ? (
         <View className="gap-2">
           <ProviderForm.ApiKeys />

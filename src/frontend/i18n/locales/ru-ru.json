@@ -1469,7 +1469,7 @@
   "settings.provider.account.errors.request": "Провайдер не смог выполнить этот запрос. Повторите попытку.",
   "settings.provider.account.errors.storage": "Не удалось безопасно сохранить или прочитать данные аккаунта. Повторите попытку.",
   "settings.provider.account.errors.unsupported": "Этот провайдер не поддерживает данную операцию с аккаунтом.",
-  "settings.provider.account.keyAccountHint": "Войдите, чтобы получить API-ключи для моделей. Ключи, синхронизированные с ПК, можно использовать независимо от входа. Для просмотра информации об аккаунте войдите на этом устройстве.",
+  "settings.provider.account.keyAccountHint": "Войдите, чтобы получить API-ключи автоматически, или добавьте их вручную ниже.",
   "settings.provider.account.login": "Войти в {{name}}",
   "settings.provider.account.logout": "Выйти на этом телефоне",
   "settings.provider.account.refresh": "Обновить баланс",

@@ -1451,7 +1451,7 @@
   "settings.provider.account.errors.request": "Der Anbieter konnte diese Anfrage nicht abschließen. Versuchen Sie es erneut.",
   "settings.provider.account.errors.storage": "Die Kontodaten konnten nicht sicher gespeichert oder gelesen werden. Versuchen Sie es erneut.",
   "settings.provider.account.errors.unsupported": "Dieser Anbieter unterstützt diese Kontoaktion nicht.",
-  "settings.provider.account.keyAccountHint": "Melden Sie sich an, um API-Schlüssel für Modelle abzurufen. Vom PC synchronisierte Schlüssel können unabhängig davon verwendet werden. Um Kontoinformationen anzuzeigen, melden Sie sich auf diesem Gerät an.",
+  "settings.provider.account.keyAccountHint": "Melden Sie sich an, um API-Schlüssel automatisch abzurufen, oder fügen Sie sie unten manuell hinzu.",
   "settings.provider.account.login": "Bei {{name}} anmelden",
   "settings.provider.account.logout": "Auf diesem Telefon abmelden",
   "settings.provider.account.refresh": "Guthaben aktualisieren",

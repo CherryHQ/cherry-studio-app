@@ -1451,7 +1451,7 @@
   "settings.provider.account.errors.request": "Ο πάροχος δεν μπόρεσε να ολοκληρώσει αυτό το αίτημα. Δοκιμάστε ξανά.",
   "settings.provider.account.errors.storage": "Δεν ήταν δυνατή η ασφαλής αποθήκευση ή ανάγνωση των στοιχείων του λογαριασμού. Δοκιμάστε ξανά.",
   "settings.provider.account.errors.unsupported": "Αυτός ο πάροχος δεν υποστηρίζει αυτή την ενέργεια λογαριασμού.",
-  "settings.provider.account.keyAccountHint": "Συνδεθείτε για να λάβετε κλειδιά API μοντέλων. Τα κλειδιά που συγχρονίζονται από τον υπολογιστή σας μπορούν να χρησιμοποιηθούν ανεξάρτητα. Συνδεθείτε σε αυτή τη συσκευή για να δείτε τα στοιχεία του λογαριασμού.",
+  "settings.provider.account.keyAccountHint": "Συνδεθείτε για αυτόματη λήψη κλειδιών API ή προσθέστε τα μη αυτόματα παρακάτω.",
   "settings.provider.account.login": "Σύνδεση στο {{name}}",
   "settings.provider.account.logout": "Αποσύνδεση σε αυτό το τηλέφωνο",
   "settings.provider.account.refresh": "Ανανέωση υπολοίπου",

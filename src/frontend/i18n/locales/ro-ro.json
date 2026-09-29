@@ -1460,7 +1460,7 @@
   "settings.provider.account.errors.request": "Furnizorul nu a putut finaliza această cerere. Încercați din nou.",
   "settings.provider.account.errors.storage": "Datele contului nu au putut fi salvate sau citite în siguranță. Încercați din nou.",
   "settings.provider.account.errors.unsupported": "Acest furnizor nu acceptă această operațiune asupra contului.",
-  "settings.provider.account.keyAccountHint": "Autentificați-vă pentru a obține chei API pentru modele. Cheile sincronizate de pe PC pot fi folosite independent; autentificați-vă pe acest dispozitiv pentru a vedea informațiile contului.",
+  "settings.provider.account.keyAccountHint": "Autentificați-vă pentru a obține automat cheile API sau adăugați-le manual mai jos.",
   "settings.provider.account.login": "Autentificare la {{name}}",
   "settings.provider.account.logout": "Deconectare pe acest telefon",
   "settings.provider.account.refresh": "Actualizați soldul",

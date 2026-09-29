@@ -1442,7 +1442,7 @@
   "settings.provider.account.errors.request": "供應商無法完成此請求，請重試。",
   "settings.provider.account.errors.storage": "無法安全儲存或讀取帳號資訊，請重試。",
   "settings.provider.account.errors.unsupported": "此供應商不支援這項帳號操作。",
-  "settings.provider.account.keyAccountHint": "登入後可取得模型 API 金鑰。從 PC 同步的金鑰可獨立使用；如需查看帳號資訊，請在此裝置登入。",
+  "settings.provider.account.keyAccountHint": "登入後自動取得 API 金鑰，也可在下方手動新增。",
   "settings.provider.account.login": "登入 {{name}}",
   "settings.provider.account.logout": "登出此手機",
   "settings.provider.account.refresh": "重新整理餘額",

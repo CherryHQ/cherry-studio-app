@@ -140,6 +140,10 @@ menus, and scoped multi-selection. The detail page's `model/` branch owns model 
 provider IDs. The registered adapter determines sign-in, model API-key and balance support.
 Mobile adds only login-based providers that the desktop app already supports.
 
+The account panel follows provider identity and precedes manual configuration in setup, detail
+and onboarding. Signed-out accounts expose one primary sign-in action. Signed-in accounts show
+identity and local sign-out in the header, with a balance and adjacent refresh action below.
+
 The backend's `providers/account/ProviderAccountRuntime` owns attempts, callback validation,
 credential persistence, refresh, logout and provider deletion cleanup. `providerOauth` supplies the
 shared PKCE authorization-code client. Adapters own client configuration and account API response

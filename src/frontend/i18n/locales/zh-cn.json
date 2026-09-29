@@ -1442,7 +1442,7 @@
   "settings.provider.account.errors.request": "供应商暂时无法完成请求，请重试。",
   "settings.provider.account.errors.storage": "无法安全保存或读取账号信息，请重试。",
   "settings.provider.account.errors.unsupported": "此供应商暂不支持这项账号操作。",
-  "settings.provider.account.keyAccountHint": "登录后自动获取模型密钥。从 PC 同步的密钥可独立使用；账号信息需在本机登录后查看。",
+  "settings.provider.account.keyAccountHint": "登录后自动获取 API 密钥，也可在下方手动添加。",
   "settings.provider.account.login": "登录 {{name}}",
   "settings.provider.account.logout": "退出本机登录",
   "settings.provider.account.refresh": "刷新余额",

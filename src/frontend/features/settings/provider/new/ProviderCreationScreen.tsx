@@ -204,14 +204,18 @@ function ImportedProviderCreationScreen({
           form={importedProviderForm.form}
           onSave={handleSave}
         >
-          {account}
           {importedProviderForm.isCustomProvider ? (
-            <ProviderSetupCustomFields />
+            <>
+              {account}
+              <ProviderSetupCustomFields />
+            </>
           ) : (
             <ProviderSetupPresetFields
               provider={importedProviderForm.provider}
               showApiKey={importedProviderForm.showApiKey}
-            />
+            >
+              {account}
+            </ProviderSetupPresetFields>
           )}
         </ProviderSetupFormContent>
       ) : (

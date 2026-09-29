@@ -1442,7 +1442,7 @@
   "settings.provider.account.errors.request": "プロバイダーがリクエストを完了できませんでした。もう一度お試しください。",
   "settings.provider.account.errors.storage": "アカウント情報を安全に保存または読み込めませんでした。もう一度お試しください。",
   "settings.provider.account.errors.unsupported": "このプロバイダーは、このアカウント操作に対応していません。",
-  "settings.provider.account.keyAccountHint": "ログインすると、モデル用のAPIキーを取得できます。PCから同期したキーは単独で使用できます。アカウント情報を表示するには、この端末でログインしてください。",
+  "settings.provider.account.keyAccountHint": "ログインするとAPIキーを自動で取得できます。下で手動追加することもできます。",
   "settings.provider.account.login": "{{name}}にログイン",
   "settings.provider.account.logout": "このスマートフォンでログアウト",
   "settings.provider.account.refresh": "残高を更新",

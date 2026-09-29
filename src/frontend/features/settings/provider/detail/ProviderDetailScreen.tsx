@@ -336,6 +336,16 @@ function ProviderDetailSettings({
                     />
                   ) : undefined}
                 </ProviderForm.Avatar>
+                {provider && providers.accounts.getCapabilities(provider).signIn ? (
+                  <ProviderAccountPanel
+                    capabilities={providers.accounts.getCapabilities(provider)}
+                    providerName={provider.name}
+                    providerId={providerId}
+                    changesDisabled={accountChangesDisabled}
+                    onKeysChanged={reloadAccountKeys}
+                    onBusyChange={setIsAccountBusy}
+                  />
+                ) : null}
                 <ProviderForm.Name />
                 {isCustomProvider ? (
                   <>
@@ -350,16 +360,6 @@ function ProviderDetailSettings({
                 )}
               </ProviderForm>
               <View className="gap-6 px-4 pb-8">
-                {provider && providers.accounts.getCapabilities(provider).signIn ? (
-                  <ProviderAccountPanel
-                    capabilities={providers.accounts.getCapabilities(provider)}
-                    providerName={provider.name}
-                    providerId={providerId}
-                    changesDisabled={accountChangesDisabled}
-                    onKeysChanged={reloadAccountKeys}
-                    onBusyChange={setIsAccountBusy}
-                  />
-                ) : null}
                 <ProviderModelCheckSection
                   apiKeys={apiKeys}
                   isDisabled={formMeta.isDirty}

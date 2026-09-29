@@ -159,9 +159,9 @@ export function ProviderNewFormContent({
             ) : null}
           </View>
         ) : null}
-        {account ? <View className="px-4 py-3">{account}</View> : null}
         <ProviderForm value={form}>
           <ProviderForm.Avatar>{avatar}</ProviderForm.Avatar>
+          {account}
           <ProviderForm.Name />
           {endpointMode === 'custom-text' ? (
             <>

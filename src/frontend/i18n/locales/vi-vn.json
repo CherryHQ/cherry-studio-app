@@ -1442,7 +1442,7 @@
   "settings.provider.account.errors.request": "Nhà cung cấp không thể hoàn tất yêu cầu này. Vui lòng thử lại.",
   "settings.provider.account.errors.storage": "Không thể lưu hoặc đọc thông tin tài khoản một cách an toàn. Vui lòng thử lại.",
   "settings.provider.account.errors.unsupported": "Nhà cung cấp này không hỗ trợ thao tác tài khoản này.",
-  "settings.provider.account.keyAccountHint": "Đăng nhập để lấy khóa API cho mô hình. Các khóa đồng bộ từ PC có thể được sử dụng độc lập; hãy đăng nhập trên thiết bị này để xem thông tin tài khoản.",
+  "settings.provider.account.keyAccountHint": "Đăng nhập để tự động lấy khóa API hoặc thêm thủ công bên dưới.",
   "settings.provider.account.login": "Đăng nhập vào {{name}}",
   "settings.provider.account.logout": "Đăng xuất trên điện thoại này",
   "settings.provider.account.refresh": "Làm mới số dư",

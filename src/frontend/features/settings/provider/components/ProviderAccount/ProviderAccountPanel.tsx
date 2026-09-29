@@ -1,3 +1,4 @@
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Button, Spinner } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -25,19 +26,38 @@ export function ProviderAccountPanel({
   const account = useProviderAccount(providerId, onKeysChanged, onBusyChange);
   const status = account.status.data;
   return (
-    <View className="gap-3 rounded-2xl bg-card p-4">
-      <Text className="text-base font-semibold text-foreground">
-        {t('settings.provider.account.title', { name: providerName })}
-      </Text>
-      {account.status.isPending ? (
-        <Spinner />
-      ) : status?.signedIn ? (
-        <>
-          {status.displayName || status.email ? (
-            <Text className="text-sm text-foreground">{status.displayName ?? status.email}</Text>
+    <View className="gap-4 rounded-2xl bg-card p-4">
+      <View className="flex-row items-center justify-between gap-3">
+        <View className="min-w-0 flex-1 gap-1">
+          <Text className="text-base font-semibold text-foreground">
+            {t('settings.provider.account.title', { name: providerName })}
+          </Text>
+          {status?.signedIn && (status.displayName || status.email) ? (
+            <Text className="text-sm text-muted-foreground">
+              {status.displayName ?? status.email}
+            </Text>
           ) : null}
-          {capabilities.balance ? (
-            <>
+        </View>
+        {status?.signedIn ? (
+          <View className="max-w-[50%] shrink">
+            <Button
+              disabled={changesDisabled || account.busy}
+              loading={account.busy}
+              onPress={() => void account.logout()}
+              size="sm"
+              variant="ghost"
+            >
+              {t('settings.provider.account.logout')}
+            </Button>
+          </View>
+        ) : null}
+      </View>
+      {account.status.isPending ? (
+        <Spinner accessibilityLabel={t('settings.provider.loading')} />
+      ) : status?.signedIn ? (
+        capabilities.balance ? (
+          <View className="flex-row items-center gap-3">
+            <View className="min-w-0 flex-1 gap-1">
               <Text className="text-sm text-muted-foreground">
                 {t('settings.provider.account.balance')}
               </Text>
@@ -49,27 +69,17 @@ export function ProviderAccountPanel({
                       currency: status.balance.currency,
                     }).format(status.balance.amount)}
               </Text>
-            </>
-          ) : null}
-          {capabilities.balance ? (
+            </View>
             <Button
+              accessibilityLabel={t('settings.provider.account.refresh')}
               disabled={account.busy || account.refreshing}
+              icon={<RefreshCwIcon />}
               loading={account.refreshing}
               onPress={() => void account.refresh()}
-              variant="secondary"
-            >
-              {t('settings.provider.account.refresh')}
-            </Button>
-          ) : null}
-          <Button
-            disabled={changesDisabled || account.busy}
-            loading={account.busy}
-            onPress={() => void account.logout()}
-            variant="ghost"
-          >
-            {t('settings.provider.account.logout')}
-          </Button>
-        </>
+              variant="ghost"
+            />
+          </View>
+        ) : null
       ) : (
         <>
           <Text className="text-sm text-muted-foreground">

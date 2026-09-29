@@ -1460,7 +1460,7 @@
   "settings.provider.account.errors.request": "El proveedor no ha podido completar esta solicitud. Inténtalo de nuevo.",
   "settings.provider.account.errors.storage": "No se han podido guardar o leer los datos de la cuenta de forma segura. Inténtalo de nuevo.",
   "settings.provider.account.errors.unsupported": "Este proveedor no admite esta operación de cuenta.",
-  "settings.provider.account.keyAccountHint": "Inicia sesión para obtener claves API de modelos. Las claves sincronizadas desde el PC se pueden usar de forma independiente; inicia sesión en este dispositivo para ver la información de la cuenta.",
+  "settings.provider.account.keyAccountHint": "Inicia sesión para obtener claves API automáticamente o añádelas manualmente abajo.",
   "settings.provider.account.login": "Iniciar sesión en {{name}}",
   "settings.provider.account.logout": "Cerrar sesión en este teléfono",
   "settings.provider.account.refresh": "Actualizar saldo",
