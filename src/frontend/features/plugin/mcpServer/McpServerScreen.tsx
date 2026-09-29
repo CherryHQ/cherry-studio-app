@@ -1,28 +1,33 @@
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import {
+  Button,
   ContentState,
   Input,
-  Spinner,
   TextField,
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { Text, View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
+import { PluginIcon } from '@/frontend/components/PluginIcon';
 import { useBackendModule } from '@/frontend/data';
-import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
-import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import {
+  useMcpServerApiById,
+  useMcpServerMutations,
+  useMcpServerRuntimeSummaries,
+} from '@/frontend/hooks/mcp/useMcpServers';
+import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
-import { McpServerChrome } from './components/McpServerChrome/McpServerChrome';
-import { McpServerTabs } from './components/McpServerTabs/McpServerTabs';
-import type { McpServerTab } from './components/McpServerTabs/types';
+import { PluginPage } from '../components/PluginPage';
 import { McpToolsSection } from './components/McpToolsSection';
 import { parseMcpHeaders, serializeMcpHeaders } from './mcpHeaders';
 
@@ -110,6 +115,8 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
   const { toast } = useToast();
   const mcp = useBackendModule('mcp');
   const { alert } = useAlert();
+  const { theme } = useUniwind();
+  const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
 
   const isCreating = !serverId;
   const {
@@ -120,11 +127,18 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
     isUpdating,
     updateServer,
   } = useMcpServerMutations();
+  const summaryServers = useMemo(() => (server ? [server] : []), [server]);
+  const { summaries } = useMcpServerRuntimeSummaries(summaryServers);
+  const summary = server ? summaries[server.id] : undefined;
 
   const [form, setForm] = useState<McpServerFormState>(() => createFormState(server));
-  const [activeTab, setActiveTab] = useState<McpServerTab>('configuration');
-  const [isEditing, setIsEditing] = useState(isCreating);
   const [isSaving, setIsSaving] = useState(false);
+  const savedForm = createFormState(server);
+  const isDirty =
+    isCreating ||
+    form.name !== savedForm.name ||
+    form.endpointUrl !== savedForm.endpointUrl ||
+    form.headers !== savedForm.headers;
 
   const updateField = useCallback(
     <TKey extends keyof McpServerFormState>(key: TKey, value: McpServerFormState[TKey]) => {
@@ -144,7 +158,8 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
       setIsSaving(true);
       if (serverId) {
         await updateServer(serverId, dto.value);
-        setIsEditing(false);
+        // Show the stored values, including a name filled in from the endpoint.
+        setForm({ ...dto.value, headers: serializeMcpHeaders(dto.value.headers) });
       } else {
         const serverInfo = await mcp.getServerInfo({
           endpointUrl: dto.value.endpointUrl,
@@ -216,108 +231,114 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
       });
   }, [deleteServer, router, serverId, t, toast]);
 
-  const requestDelete = useCallback(() => {
-    if (!serverId || !server) {
-      return;
-    }
-
-    alert.confirm({
-      confirmLabel: t('common.delete'),
-      description: t('settings.mcp.delete.message', { name: server.name }),
-      onConfirm: handleDelete,
-      role: 'destructive',
-      title: t('settings.mcp.delete.title'),
-    });
-  }, [alert, handleDelete, server, serverId, t]);
-
   const isBusy = isSaving || isCreateMutationPending || isUpdating;
-  const saveActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      isBusy
-        ? {
-            element: (
-              <Spinner
-                accessibilityLabel={t('common.save')}
-                accessibilityRole="progressbar"
-                size="sm"
-                style={styles.headerSpinner}
-              />
-            ),
-            key: 'save',
-            type: 'custom',
-          }
-        : {
-            accessibilityLabel: t('common.save'),
-            key: 'save',
-            label: t('common.save'),
-            onPress: () => {
-              void handleSave();
+  const serverActions = useMemo<HeaderToolbarAction[] | undefined>(
+    () =>
+      server
+        ? [
+            {
+              accessibilityLabel: t('common.more'),
+              disabled: isBusy || isDeleting,
+              icon: EllipsisIcon,
+              items: [
+                {
+                  id: 'mcp-server-toggle',
+                  label: t(
+                    server.isEnabled ? 'settings.mcp.disableServer' : 'settings.mcp.enableServer',
+                  ),
+                  onPress: () => void handleToggleServer(),
+                },
+                {
+                  destructive: true,
+                  id: 'mcp-server-delete',
+                  label: t('settings.mcp.deleteServer'),
+                  onPress: () =>
+                    alert.confirm({
+                      confirmLabel: t('common.delete'),
+                      description: t('settings.mcp.delete.message', { name: server.name }),
+                      onConfirm: handleDelete,
+                      role: 'destructive',
+                      title: t('settings.mcp.delete.title'),
+                    }),
+                },
+              ],
+              key: 'mcp-server-actions',
+              testID: 'mcp-server-actions',
+              type: 'menu',
             },
-            type: 'label',
-          },
-    ],
-    [handleSave, isBusy, t],
-  );
-  const editActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.edit'),
-        key: 'edit',
-        label: t('common.edit'),
-        onPress: () => {
-          setForm(createFormState(server));
-          setIsEditing(true);
-        },
-        type: 'label',
-      },
-    ],
-    [server, t],
+          ]
+        : undefined,
+    [alert, handleDelete, handleToggleServer, isBusy, isDeleting, server, t],
   );
 
-  const displayedForm = isEditing ? form : createFormState(server);
-  const showHttpWarning = displayedForm.endpointUrl.trim().toLowerCase().startsWith('http://');
-  const canShowTools = Boolean(serverId && server);
-  const visibleTab = canShowTools ? activeTab : 'configuration';
+  const status = server ? getServerStatus(server, summary) : undefined;
+  const showHttpWarning = form.endpointUrl.trim().toLowerCase().startsWith('http://');
 
   return (
     <>
       <RouteHeader
-        rightActions={
-          visibleTab === 'configuration' ? (isEditing ? saveActions : editActions) : undefined
-        }
-        title={t('settings.mcp.tabs.configuration')}
-        titleElement={
-          canShowTools && !isEditing ? (
-            <McpServerTabs onTabChange={setActiveTab} tab={visibleTab} />
-          ) : undefined
-        }
+        rightActions={serverActions}
+        title={server ? server.name : t('settings.mcp.addServer')}
       />
-      {visibleTab === 'configuration' ? (
-        <KeyboardAwareScrollView
-          alwaysBounceVertical={false}
-          bottomOffset={keyboardBottomOffset}
-          contentContainerStyle={[
-            styles.scrollContent,
-            serverId ? styles.scrollContentWithChrome : null,
-          ]}
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          style={styles.scroll}
-        >
+      <PluginPage
+        footer={
+          <Button
+            disabled={!isDirty || isBusy || isDeleting}
+            loading={isBusy}
+            onPress={() => void handleSave()}
+            size="lg"
+            testID="mcp-server-save"
+          >
+            {isCreating ? t('settings.mcp.addServer') : t('common.save')}
+          </Button>
+        }
+        testID="mcp-server"
+      >
+        <View className="flex-row items-center gap-4">
+          <PluginIcon size="large" source={mcpIcon} />
+          <View className="min-w-0 flex-1 gap-1">
+            <Text
+              accessibilityRole="header"
+              className="text-2xl font-semibold text-foreground"
+              numberOfLines={1}
+            >
+              {server ? server.name : t('settings.mcp.defaultName')}
+            </Text>
+            {status ? (
+              <Text className="text-sm text-muted-foreground">
+                <Text
+                  className={
+                    status === 'connected'
+                      ? 'text-success'
+                      : status === 'error'
+                        ? 'text-error'
+                        : 'text-muted-foreground'
+                  }
+                >
+                  {t(`settings.mcp.list.status.${status}`)}
+                </Text>
+                {summary?.toolCount === undefined
+                  ? null
+                  : ` · ${t('settings.mcp.list.toolCount', { count: summary.toolCount })}`}
+              </Text>
+            ) : (
+              <Text className="text-sm text-muted-foreground">{t('plugins.custom.summary')}</Text>
+            )}
+          </View>
+        </View>
+        <View className="gap-4">
           {!isCreating ? (
-            <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.name')}>
+            <FormField label={t('settings.mcp.fields.name')}>
               <Input
                 accessibilityLabel={t('settings.mcp.fields.name')}
                 autoCorrect={false}
                 onChangeText={(value) => updateField('name', value)}
                 placeholder={t('settings.mcp.fields.name')}
-                value={displayedForm.name}
+                value={form.name}
               />
             </FormField>
           ) : null}
-          <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.endpointUrl')}>
+          <FormField label={t('settings.mcp.fields.endpointUrl')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.endpointUrl')}
               autoCapitalize="none"
@@ -325,14 +346,13 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
               keyboardType="url"
               onChangeText={(value) => updateField('endpointUrl', value)}
               placeholder="https://example.com/mcp"
-              spellCheck={false}
-              value={displayedForm.endpointUrl}
+              value={form.endpointUrl}
             />
             {showHttpWarning ? (
               <Text className="text-warning text-xs">{t('settings.mcp.fields.httpWarning')}</Text>
             ) : null}
           </FormField>
-          <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.headers')}>
+          <FormField label={t('settings.mcp.fields.headers')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.headers')}
               autoCapitalize="none"
@@ -342,55 +362,49 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
               placeholder={t('settings.mcp.fields.headersPlaceholder')}
               spellCheck={false}
               textAlignVertical="top"
-              value={displayedForm.headers}
+              value={form.headers}
             />
             <Text className="text-muted-foreground text-xs">
               {t('settings.mcp.fields.headersHint')}
             </Text>
           </FormField>
-        </KeyboardAwareScrollView>
-      ) : server ? (
-        <ScrollView
-          alwaysBounceVertical={false}
-          contentContainerStyle={[styles.scrollContent, styles.scrollContentWithChrome]}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-          style={styles.scroll}
-        >
-          <View className="rounded-2xl bg-card p-4">
-            <McpToolsSection isDisabled={isBusy} onToggleTool={handleToggleTool} server={server} />
+        </View>
+        {server ? (
+          <View className="gap-3">
+            <Text accessibilityRole="header" className="text-base font-semibold text-foreground">
+              {t('settings.mcp.tools.title')}
+            </Text>
+            <View className="rounded-2xl bg-card p-4" style={{ borderCurve: 'continuous' }}>
+              <McpToolsSection
+                isDisabled={isBusy}
+                onToggleTool={handleToggleTool}
+                server={server}
+              />
+            </View>
           </View>
-        </ScrollView>
-      ) : null}
-      {serverId && server ? (
-        <McpServerChrome
-          isDisabled={isEditing || isBusy || isDeleting}
-          isEnabled={server.isEnabled}
-          onDelete={requestDelete}
-          onToggleEnabled={() => {
-            void handleToggleServer();
-          }}
-        />
-      ) : null}
+        ) : null}
+      </PluginPage>
     </>
   );
 }
 
-function FormField({
-  children,
-  isDisabled,
-  label,
-}: {
-  children: React.ReactNode;
-  isDisabled: boolean;
-  label: string;
-}) {
+function FormField({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <TextField disabled={isDisabled}>
+    <TextField>
       <TextField.Label>{label}</TextField.Label>
       {children}
     </TextField>
   );
+}
+
+function getServerStatus(
+  server: McpServer,
+  summary: McpServerRuntimeSummary | undefined,
+): McpServerRuntimeSummary['state'] {
+  if (!server.isEnabled) {
+    return 'disabled';
+  }
+  return summary?.state ?? 'connecting';
 }
 
 function createFormState(server?: McpServer): McpServerFormState {
@@ -443,22 +457,3 @@ function getFallbackServerName(endpointUrl: string, defaultName: string): string
     return defaultName;
   }
 }
-
-const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    gap: 20,
-    paddingBottom: 32,
-    paddingHorizontal: 16,
-    paddingTop: 20,
-  },
-  scrollContentWithChrome: {
-    paddingBottom: 96,
-  },
-  headerSpinner: {
-    height: 32,
-    width: 32,
-  },
-});
