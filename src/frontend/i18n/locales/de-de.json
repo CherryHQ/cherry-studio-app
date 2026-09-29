@@ -1564,8 +1564,6 @@
   "settings.provider.config.advanced": "Erweitert",
   "settings.provider.config.apiAddress": "API-Adresse",
   "settings.provider.config.continue": "Weiter",
-  "settings.provider.config.fewerProtocols": "Weniger Protokolle",
-  "settings.provider.config.moreProtocols": "Weitere Protokolle",
   "settings.provider.config.nameRequired": "Geben Sie einen Anbieternamen ein.",
   "settings.provider.config.notSet": "Nicht festgelegt",
   "settings.provider.config.testConnection": "Verbindung testen",

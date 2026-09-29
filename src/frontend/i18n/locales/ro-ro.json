@@ -1573,8 +1573,6 @@
   "settings.provider.config.advanced": "Avansat",
   "settings.provider.config.apiAddress": "Adresa API",
   "settings.provider.config.continue": "Continuați",
-  "settings.provider.config.fewerProtocols": "Mai puține protocoale",
-  "settings.provider.config.moreProtocols": "Mai multe protocoale",
   "settings.provider.config.nameRequired": "Introduceți un nume de furnizor.",
   "settings.provider.config.notSet": "Nesetat",
   "settings.provider.config.testConnection": "Testați conexiunea",

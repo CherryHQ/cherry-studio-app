@@ -1564,8 +1564,6 @@
   "settings.provider.config.advanced": "Gelişmiş",
   "settings.provider.config.apiAddress": "API adresi",
   "settings.provider.config.continue": "Devam",
-  "settings.provider.config.fewerProtocols": "Daha az protokol",
-  "settings.provider.config.moreProtocols": "Daha fazla protokol",
   "settings.provider.config.nameRequired": "Bir sağlayıcı adı girin.",
   "settings.provider.config.notSet": "Ayarlanmadı",
   "settings.provider.config.testConnection": "Bağlantıyı test et",

@@ -1573,8 +1573,6 @@
   "settings.provider.config.advanced": "Avançado",
   "settings.provider.config.apiAddress": "Endereço da API",
   "settings.provider.config.continue": "Continuar",
-  "settings.provider.config.fewerProtocols": "Menos protocolos",
-  "settings.provider.config.moreProtocols": "Mais protocolos",
   "settings.provider.config.nameRequired": "Introduza um nome de fornecedor.",
   "settings.provider.config.notSet": "Não definido",
   "settings.provider.config.testConnection": "Testar ligação",

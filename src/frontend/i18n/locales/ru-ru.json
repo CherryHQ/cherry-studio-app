@@ -1582,8 +1582,6 @@
   "settings.provider.config.advanced": "Дополнительно",
   "settings.provider.config.apiAddress": "Адрес API",
   "settings.provider.config.continue": "Продолжить",
-  "settings.provider.config.fewerProtocols": "Скрыть протоколы",
-  "settings.provider.config.moreProtocols": "Другие протоколы",
   "settings.provider.config.nameRequired": "Введите название провайдера.",
   "settings.provider.config.notSet": "Не задан",
   "settings.provider.config.testConnection": "Проверить подключение",

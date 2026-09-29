@@ -1555,8 +1555,6 @@
   "settings.provider.config.advanced": "高级",
   "settings.provider.config.apiAddress": "API 地址",
   "settings.provider.config.continue": "继续",
-  "settings.provider.config.fewerProtocols": "收起协议",
-  "settings.provider.config.moreProtocols": "更多协议",
   "settings.provider.config.nameRequired": "请填写服务商名称。",
   "settings.provider.config.notSet": "未设置",
   "settings.provider.config.testConnection": "测试连接",

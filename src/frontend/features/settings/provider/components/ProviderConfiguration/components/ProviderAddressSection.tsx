@@ -17,10 +17,6 @@ import { ProviderRequestUrl } from '../../ProviderRequestUrl';
 import type { ProviderAddress, ProviderConfigurationValue } from '../types';
 import { ProviderValueSheet } from './ProviderValueSheet';
 
-// The two protocols most custom services speak; the rest stay behind "More protocols".
-const COMMON_TEXT_ENDPOINTS = CHAT_ENDPOINT_TYPES.slice(0, 2);
-const ADVANCED_TEXT_ENDPOINTS = CHAT_ENDPOINT_TYPES.slice(2);
-
 const CUSTOM_ENDPOINT_LABEL_KEYS = {
   'anthropic-messages': 'settings.provider.apiService.endpointAnthropic',
   'google-generate-content': 'settings.provider.apiService.endpointGemini',
@@ -43,7 +39,6 @@ function displayHost(url: string): string {
 export function ProviderAddressSection({ value }: { value: ProviderConfigurationValue }) {
   const { t } = useTranslation();
   const [edit, setEdit] = useState<AddressEdit | null>(null);
-  const [showsAllProtocols, setShowsAllProtocols] = useState(false);
   const { address } = value;
   if (address.kind === 'none') return null;
 
@@ -145,37 +140,25 @@ export function ProviderAddressSection({ value }: { value: ProviderConfiguration
         onEdit={(endpoint, title) =>
           setEdit({ endpoint, open: true, text: address.endpointUrls[endpoint] ?? '', title })
         }
-        onToggleProtocols={() => setShowsAllProtocols((current) => !current)}
-        showsAllProtocols={showsAllProtocols}
       />
       {sheet}
     </>
   );
 }
 
+/** Every chat protocol is listed; there are few enough that none needs to be hidden. */
 function CustomAddressRows({
   address,
   onEdit,
-  onToggleProtocols,
-  showsAllProtocols,
 }: {
   address: Extract<ProviderAddress, { kind: 'custom' }>;
   onEdit: (endpoint: EndpointType, title: string) => void;
-  onToggleProtocols: () => void;
-  showsAllProtocols: boolean;
 }) {
   const { t } = useTranslation();
-  const configuredAdvanced = ADVANCED_TEXT_ENDPOINTS.filter((endpoint) =>
-    address.endpointUrls[endpoint]?.trim(),
-  );
-  const endpoints = showsAllProtocols
-    ? CHAT_ENDPOINT_TYPES
-    : [...COMMON_TEXT_ENDPOINTS, ...configuredAdvanced];
-  const hiddenCount = CHAT_ENDPOINT_TYPES.length - endpoints.length;
 
   return (
     <Section title={t('settings.provider.config.apiAddress')}>
-      {endpoints.map((endpoint) => {
+      {CHAT_ENDPOINT_TYPES.map((endpoint) => {
         const label = t(CUSTOM_ENDPOINT_LABEL_KEYS[endpoint as CustomProviderTextEndpoint]);
         const url = address.endpointUrls[endpoint]?.trim() ?? '';
         return (
@@ -201,17 +184,6 @@ function CustomAddressRows({
           />
         );
       })}
-      {hiddenCount > 0 || showsAllProtocols ? (
-        <Section.Item
-          label={
-            showsAllProtocols
-              ? t('settings.provider.config.fewerProtocols')
-              : t('settings.provider.config.moreProtocols')
-          }
-          onPress={onToggleProtocols}
-          showChevron={false}
-        />
-      ) : null}
     </Section>
   );
 }

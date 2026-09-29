@@ -1555,8 +1555,6 @@
   "settings.provider.config.advanced": "Nâng cao",
   "settings.provider.config.apiAddress": "Địa chỉ API",
   "settings.provider.config.continue": "Tiếp tục",
-  "settings.provider.config.fewerProtocols": "Ẩn bớt giao thức",
-  "settings.provider.config.moreProtocols": "Thêm giao thức",
   "settings.provider.config.nameRequired": "Nhập tên nhà cung cấp.",
   "settings.provider.config.notSet": "Chưa đặt",
   "settings.provider.config.testConnection": "Kiểm tra kết nối",

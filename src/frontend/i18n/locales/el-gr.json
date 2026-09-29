@@ -1564,8 +1564,6 @@
   "settings.provider.config.advanced": "Για προχωρημένους",
   "settings.provider.config.apiAddress": "Διεύθυνση API",
   "settings.provider.config.continue": "Συνέχεια",
-  "settings.provider.config.fewerProtocols": "Λιγότερα πρωτόκολλα",
-  "settings.provider.config.moreProtocols": "Περισσότερα πρωτόκολλα",
   "settings.provider.config.nameRequired": "Εισαγάγετε όνομα παρόχου.",
   "settings.provider.config.notSet": "Δεν έχει οριστεί",
   "settings.provider.config.testConnection": "Δοκιμή σύνδεσης",
