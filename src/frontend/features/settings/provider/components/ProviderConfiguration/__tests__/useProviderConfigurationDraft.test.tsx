@@ -2,19 +2,19 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { createApiKeyEntry } from '../../../apiService/utils/providerApiServiceApiKeys';
 import { buildCustomProviderCreationPayload } from '../../../apiService/utils/providerApiServiceEndpointRules';
-import { useProviderFormDraft } from '../hooks/useProviderFormDraft';
+import { useProviderConfigurationDraft } from '../hooks/useProviderConfigurationDraft';
 import {
-  createEmptyProviderFormValues,
+  createEmptyProviderConfigurationValues,
   NEW_PROVIDER_ENDPOINT_TYPES,
-} from '../utils/providerFormValues';
+} from '../utils/providerConfigurationValues';
 
 describe('single-protocol provider setup', () => {
   let renderer: ReactTestRenderer;
-  let form: ReturnType<typeof useProviderFormDraft>;
+  let form: ReturnType<typeof useProviderConfigurationDraft>;
 
   function Probe() {
-    form = useProviderFormDraft({
-      createInitialValues: createEmptyProviderFormValues,
+    form = useProviderConfigurationDraft({
+      createInitialValues: createEmptyProviderConfigurationValues,
       endpointTypes: NEW_PROVIDER_ENDPOINT_TYPES,
       isSubmitting: false,
       normalizeCustomEndpoints: true,
@@ -65,7 +65,7 @@ describe('single-protocol provider setup', () => {
     const remaining = { id: 'b', key: 'sk-b', label: 'Backup', isEnabled: false };
     act(() =>
       form.actions.reset({
-        ...createEmptyProviderFormValues(),
+        ...createEmptyProviderConfigurationValues(),
         name: 'Provider',
         apiKeys: [{ id: 'a', key: 'sk-a', label: 'Primary', isEnabled: true }, remaining],
       }),
@@ -119,7 +119,7 @@ describe('single-protocol provider setup', () => {
 
   it('includes label-only and enabled-state edits in unsaved-change tracking', () => {
     const initial = {
-      ...createEmptyProviderFormValues(),
+      ...createEmptyProviderConfigurationValues(),
       apiKeys: [{ id: 'a', key: 'sk-a', label: 'Primary', isEnabled: true }],
     };
     act(() => form.actions.reset(initial));

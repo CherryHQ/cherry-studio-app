@@ -19,7 +19,7 @@ import {
  * same shape; what differs is where the starting values come from and which
  * slots a screen composes.
  */
-export type ProviderFormValues = {
+export type ProviderConfigurationValues = {
   apiKeys: ApiKeyEntry[];
   avatarUri: string | null;
   defaultChatEndpoint: EndpointType;
@@ -30,7 +30,7 @@ export type ProviderFormValues = {
 /** Text protocols offered when creating a fully custom mobile provider. */
 export const NEW_PROVIDER_ENDPOINT_TYPES: readonly EndpointType[] = CHAT_ENDPOINT_TYPES;
 
-export function createEmptyProviderFormValues(): ProviderFormValues {
+export function createEmptyProviderConfigurationValues(): ProviderConfigurationValues {
   return {
     apiKeys: [],
     avatarUri: null,
@@ -44,7 +44,9 @@ export function createEmptyProviderFormValues(): ProviderFormValues {
  * Fully custom providers expose every configurable chat endpoint. Presets keep their
  * single primary URL. Empty means the auth type has no editable URL at all.
  */
-export function resolveProviderFormEndpointTypes(provider: Provider): readonly EndpointType[] {
+export function resolveProviderConfigurationEndpointTypes(
+  provider: Provider,
+): readonly EndpointType[] {
   if (!canEditProviderEndpoint(provider)) {
     return [];
   }
@@ -52,7 +54,7 @@ export function resolveProviderFormEndpointTypes(provider: Provider): readonly E
   return isFullyCustomProvider(provider) ? CHAT_ENDPOINT_TYPES : [getPrimaryEndpoint(provider)];
 }
 
-export function createProviderFormValues({
+export function createProviderConfigurationValues({
   apiKeys = [],
   avatarUri,
   provider,
@@ -60,7 +62,7 @@ export function createProviderFormValues({
   apiKeys?: ApiKeyEntry[];
   avatarUri: string | null;
   provider: Provider;
-}): ProviderFormValues {
+}): ProviderConfigurationValues {
   if (isFullyCustomProvider(provider)) {
     const endpointUrls = Object.fromEntries(
       CHAT_ENDPOINT_TYPES.map((endpointType) => [
@@ -108,14 +110,14 @@ export function providerDefaultEndpointNeedsRepair(provider: Provider): boolean 
  * against the seeded values rather than against the provider record, so a row
  * the user typed into and cleared again counts as untouched.
  */
-export function isProviderFormDirty({
+export function isProviderConfigurationDirty({
   endpointTypes,
   initialValues,
   values,
 }: {
   endpointTypes: readonly EndpointType[];
-  initialValues: ProviderFormValues;
-  values: ProviderFormValues;
+  initialValues: ProviderConfigurationValues;
+  values: ProviderConfigurationValues;
 }): boolean {
   if (
     values.name !== initialValues.name ||

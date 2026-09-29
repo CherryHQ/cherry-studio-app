@@ -1,8 +1,8 @@
-import { ContentState, Spinner } from '@cherrystudio/ui/components';
+import { ContentState } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
@@ -10,21 +10,22 @@ import {
   type FirstUseSetupIntent,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
-import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
-import { useBackendModule } from '@/frontend/data';
 import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
-import { useProviderApiServiceSheetClose, useProviderConfigurationForm } from '../apiService';
-import { ProviderAccountPanel } from '../components/ProviderAccount';
-import { providerFormAvatarSize } from '../components/ProviderForm';
-import { useProviderSetup, type ProviderSetupIntent } from '../hooks/useProviderSetup';
-import { ProviderNewFormContent, useNewProviderForm } from './components/ProviderCreationForm';
+import { useProviderApiServiceSheetClose } from '../apiService';
 import {
-  ProviderSetupCustomFields,
-  ProviderSetupFormContent,
-  ProviderSetupPresetFields,
-} from './components/ProviderSetupFormContent';
+  ProviderConfiguration,
+  ProviderConfigurationContinue,
+  useNewProviderConfiguration,
+  useSavedProviderConfiguration,
+} from '../components/ProviderConfiguration';
+import { useProviderSetup, type ProviderSetupIntent } from '../hooks/useProviderSetup';
 
+/**
+ * Connecting a provider: a preset imported from the catalog, or a custom provider created
+ * here. Both render the shared provider configuration; onboarding reuses this screen with a
+ * step header and continues to model selection instead of provider setup.
+ */
 export default function ProviderCreationScreen({
   setupIntent,
 }: { setupIntent?: FirstUseSetupIntent } = {}) {
@@ -45,20 +46,31 @@ export default function ProviderCreationScreen({
   const returnTo = readProviderSetupReturnTo(rawReturnTo) ?? '/settings/provider';
 
   return providerId ? (
-    <ImportedProviderCreationScreen
+    <SavedProviderSetupScreen
+      intent={intent === 'sync' ? 'sync' : 'enable'}
+      issue={issue}
       providerId={providerId}
       providerName={providerName}
       returnTo={returnTo}
-      intent={intent === 'sync' ? 'sync' : 'enable'}
-      issue={issue}
       setupIntent={setupIntent}
     />
   ) : (
-    <CustomProviderCreationScreen returnTo={returnTo} setupIntent={setupIntent} />
+    <NewProviderScreen returnTo={returnTo} setupIntent={setupIntent} />
   );
 }
 
-function CustomProviderCreationScreen({
+function OnboardingHeader() {
+  const { t } = useTranslation();
+
+  return (
+    <View className="gap-2 px-5 pt-5">
+      <Text className="text-xs text-muted-foreground">{t('onboarding.step', { current: 2 })}</Text>
+      <Text className="text-base text-foreground">{t('onboarding.connection.description')}</Text>
+    </View>
+  );
+}
+
+function NewProviderScreen({
   returnTo,
   setupIntent,
 }: {
@@ -67,184 +79,114 @@ function CustomProviderCreationScreen({
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const newProviderForm = useNewProviderForm();
-  const saveNewProvider = newProviderForm.handleSave;
+  const configuration = useNewProviderConfiguration();
+  const create = configuration.create;
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
-    hasUnsavedChanges: newProviderForm.form.meta.isDirty,
-    isSaving: newProviderForm.isCreating,
+    hasUnsavedChanges: configuration.isDirty,
+    isSaving: configuration.isCreating,
   });
-  const handleSave = useCallback(() => {
-    void saveNewProvider().then((createdProvider) => {
-      if (!createdProvider) {
-        return;
-      }
-
+  const handleContinue = useCallback(() => {
+    void create().then((created) => {
+      if (!created) return;
       if (setupIntent === 'chat') {
-        router.setParams({
-          providerId: createdProvider.providerId,
-          providerName: createdProvider.providerName,
-        });
-        router.push({
-          pathname: '/onboarding/model',
-          params: { providerId: createdProvider.providerId },
-        });
+        router.setParams({ providerId: created.providerId, providerName: created.providerName });
+        router.push({ params: { providerId: created.providerId }, pathname: '/onboarding/model' });
         return;
       }
-
       allowNavigation();
       router.replace({
-        pathname: '/settings/provider/[providerId]/model-add',
         params: {
-          mode: 'sync',
           enableProvider: 'true',
-          providerId: createdProvider.providerId,
-          providerName: createdProvider.providerName,
+          mode: 'sync',
+          providerId: created.providerId,
+          providerName: created.providerName,
           returnTo,
         },
+        pathname: '/settings/provider/[providerId]/model-add',
       });
     });
-  }, [allowNavigation, returnTo, router, saveNewProvider, setupIntent]);
+  }, [allowNavigation, create, returnTo, router, setupIntent]);
 
   return (
     <>
       <RouteHeader onBack={requestClose} title={t('settings.provider.add.title')} />
-      {setupIntent === 'chat' ? (
-        <ProviderSetupFormContent
-          canSave={newProviderForm.canSubmit}
-          form={newProviderForm.form}
-          onSave={handleSave}
-        >
-          <ProviderSetupCustomFields />
-        </ProviderSetupFormContent>
-      ) : (
-        <ProviderNewFormContent
-          canSave={newProviderForm.canSubmit}
-          endpointMode="custom-text"
-          form={newProviderForm.form}
-          isSaving={newProviderForm.isCreating}
-          onSave={handleSave}
-        />
-      )}
+      <ProviderConfiguration
+        bottomAction={
+          <ProviderConfigurationContinue
+            disabled={!configuration.canContinue || configuration.isCreating}
+            hint={configuration.continueHint}
+            label={t('settings.provider.config.continue')}
+            loading={configuration.isCreating}
+            onPress={handleContinue}
+            testID="provider-continue"
+          />
+        }
+        header={setupIntent === 'chat' ? <OnboardingHeader /> : undefined}
+        testID={setupIntent === 'chat' ? 'onboarding-connection' : 'provider-configuration'}
+        value={configuration.value}
+      />
     </>
   );
 }
 
-function ImportedProviderCreationScreen({
+function SavedProviderSetupScreen({
+  intent,
+  issue,
   providerId,
   providerName,
   returnTo,
-  intent,
-  issue,
   setupIntent,
 }: {
+  intent: ProviderSetupIntent;
+  issue?: ProviderConfigurationIssue;
   providerId: string;
   providerName?: string;
   returnTo: string;
-  intent: ProviderSetupIntent;
-  issue?: ProviderConfigurationIssue;
   setupIntent?: FirstUseSetupIntent;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { isPreparing, openSetup } = useProviderSetup();
-  const accounts = useBackendModule('providers').accounts;
-  const importedProviderForm = useProviderConfigurationForm(providerId);
-  const saveImportedProvider = importedProviderForm.requestSave;
-  const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
-    hasUnsavedChanges: importedProviderForm.form.meta.isDirty,
-    isSaving: importedProviderForm.isSaving || isPreparing,
-  });
-  const handleSave = useCallback(() => {
-    saveImportedProvider((configuredProvider) => {
-      if (setupIntent === 'chat') {
-        router.push({
-          pathname: '/onboarding/model',
-          params: { providerId: configuredProvider.providerId },
-        });
-        return;
-      }
-
-      void openSetup(configuredProvider.providerId, returnTo, intent, true, allowNavigation);
-    });
-  }, [allowNavigation, intent, openSetup, returnTo, router, saveImportedProvider, setupIntent]);
-  const account =
-    importedProviderForm.provider &&
-    accounts.getCapabilities(importedProviderForm.provider).signIn ? (
-      <ProviderAccountPanel
-        capabilities={accounts.getCapabilities(importedProviderForm.provider)}
-        providerName={importedProviderForm.provider.name}
-        providerId={providerId}
-        changesDisabled={importedProviderForm.accountChangesDisabled}
-        onKeysChanged={importedProviderForm.reloadAccountKeys}
-        onBusyChange={importedProviderForm.setIsAccountBusy}
-      />
-    ) : null;
-  const displayedProviderName = importedProviderForm.provider?.name ?? providerName ?? '';
+  const configuration = useSavedProviderConfiguration(providerId);
+  const displayedProviderName = configuration.provider?.name ?? providerName ?? '';
+  const isBusy = isPreparing || (configuration.value?.isBusy ?? false);
+  const handleContinue = useCallback(() => {
+    if (setupIntent === 'chat') {
+      router.push({ params: { providerId }, pathname: '/onboarding/model' });
+      return;
+    }
+    void openSetup(providerId, returnTo, intent, true);
+  }, [intent, openSetup, providerId, returnTo, router, setupIntent]);
 
   return (
     <>
-      <RouteHeader
-        onBack={requestClose}
-        title={t('settings.provider.setup.title', { name: displayedProviderName })}
-      />
-      {importedProviderForm.isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <Spinner accessibilityLabel={t('settings.provider.loading')} />
-        </View>
-      ) : importedProviderForm.isError || !importedProviderForm.provider ? (
+      <RouteHeader title={t('settings.provider.setup.title', { name: displayedProviderName })} />
+      {configuration.isError ? (
         <View className="flex-1 justify-center px-6 py-10">
           <ContentState.Error
-            primaryAction={{ children: t('common.back'), onPress: requestClose }}
+            primaryAction={{ children: t('common.back'), onPress: () => router.back() }}
             title={t('settings.provider.setup.loadFailed')}
           />
         </View>
-      ) : setupIntent === 'chat' ? (
-        <ProviderSetupFormContent
-          canSave={importedProviderForm.canCompleteSetup}
-          form={importedProviderForm.form}
-          onSave={handleSave}
-        >
-          {importedProviderForm.isCustomProvider ? (
-            <>
-              {account}
-              <ProviderSetupCustomFields />
-            </>
-          ) : (
-            <ProviderSetupPresetFields
-              provider={importedProviderForm.provider}
-              showApiKey={importedProviderForm.showApiKey}
-            >
-              {account}
-            </ProviderSetupPresetFields>
-          )}
-        </ProviderSetupFormContent>
       ) : (
-        <ProviderNewFormContent
-          account={account}
-          avatar={
-            <ProviderBrandAvatar
-              presetProviderId={importedProviderForm.provider.presetProviderId}
-              providerId={importedProviderForm.provider.id}
-              providerName={importedProviderForm.form.state.name}
-              shape="circle"
-              size={providerFormAvatarSize}
+        <ProviderConfiguration
+          bottomAction={
+            <ProviderConfigurationContinue
+              disabled={!configuration.canContinue || isBusy}
+              // A setup issue explains why the user landed here until they fix it.
+              hint={
+                configuration.continueHint ??
+                (issue ? t(`settings.provider.setup.issues.${issue}`) : undefined)
+              }
+              label={t('settings.provider.config.continue')}
+              loading={isPreparing}
+              onPress={handleContinue}
+              testID="provider-continue"
             />
           }
-          canSave={importedProviderForm.canCompleteSetup && !isPreparing}
-          issue={
-            issue ??
-            (importedProviderForm.requiresApiKey &&
-            !importedProviderForm.form.state.apiKeys.some((entry) => entry.key.trim())
-              ? 'missing-api-key'
-              : undefined)
-          }
-          disabledKeys={importedProviderForm.disabledKeys}
-          onEnableKeys={importedProviderForm.enableKeys}
-          endpointMode={importedProviderForm.isCustomProvider ? 'custom-text' : 'primary'}
-          form={importedProviderForm.form}
-          isSaving={importedProviderForm.isSaving || isPreparing}
-          onSave={handleSave}
-          showApiKey={importedProviderForm.showApiKey}
+          header={setupIntent === 'chat' ? <OnboardingHeader /> : undefined}
+          testID={setupIntent === 'chat' ? 'onboarding-connection' : 'provider-configuration'}
+          value={configuration.value}
         />
       )}
     </>

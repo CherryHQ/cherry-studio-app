@@ -12,21 +12,21 @@ import {
   hasConfiguredCustomProviderTextEndpoint,
   normalizeCustomProviderDefaultEndpoint,
 } from '../../../apiService/utils/providerApiServiceEndpointRules';
-import type { ProviderForm, ProviderFormActions } from '../context';
-import { isProviderFormDirty, type ProviderFormValues } from '../utils/providerFormValues';
+import type { ProviderDraft, ProviderDraftActions } from '../draftTypes';
+import {
+  isProviderConfigurationDirty,
+  type ProviderConfigurationValues,
+} from '../utils/providerConfigurationValues';
 
 /**
- * The provider form's whole state, owned here so the slots stay presentational
- * and the screen keeps enough of it to drive its own header. Screens hold the
- * result and hand it to `<ProviderForm value={…}>`.
+ * Local state for a provider that does not exist yet. Saved providers write each
+ * change straight through (`useSavedProviderConfiguration`); only creation needs
+ * a draft, because there is no record to write to until the user continues.
  *
- * `sourceKey` is what the draft is seeded from — a provider id, or a constant
- * for the create screen. Seeding is keyed rather than compared by identity on
- * purpose: an edit screen mounts before its provider query lands and re-seeds
- * once it does, but a background refetch of the same provider must not throw
- * away what the user has typed.
+ * `sourceKey` is what the draft is seeded from. Seeding is keyed rather than
+ * compared by identity, so a re-render never throws away what the user entered.
  */
-export function useProviderFormDraft({
+export function useProviderConfigurationDraft({
   createInitialValues,
   defaultEndpointNeedsRepair = false,
   endpointTypes,
@@ -36,7 +36,7 @@ export function useProviderFormDraft({
   provider,
   sourceKey,
 }: {
-  createInitialValues: () => ProviderFormValues;
+  createInitialValues: () => ProviderConfigurationValues;
   defaultEndpointNeedsRepair?: boolean;
   endpointTypes: readonly EndpointType[];
   initiallyDirty?: boolean;
@@ -44,7 +44,7 @@ export function useProviderFormDraft({
   normalizeCustomEndpoints?: boolean;
   provider?: Provider;
   sourceKey: string;
-}): ProviderForm {
+}): ProviderDraft {
   const [seed, setSeed] = useState(() => ({
     defaultEndpointNeedsRepair,
     isInitiallyDirty: initiallyDirty,
@@ -68,7 +68,7 @@ export function useProviderFormDraft({
 
   const setName = useCallback((name: string) => setValues((current) => ({ ...current, name })), []);
   const reset = useCallback(
-    (nextValues?: ProviderFormValues) => {
+    (nextValues?: ProviderConfigurationValues) => {
       const nextSeed = nextValues ?? createInitialValues();
       setSeed({
         defaultEndpointNeedsRepair: nextValues ? false : defaultEndpointNeedsRepair,
@@ -81,14 +81,14 @@ export function useProviderFormDraft({
     },
     [createInitialValues, defaultEndpointNeedsRepair, initiallyDirty, sourceKey],
   );
-  const addApiKey = useCallback<ProviderFormActions['addApiKey']>((entry) => {
+  const addApiKey = useCallback<ProviderDraftActions['addApiKey']>((entry) => {
     setValues((current) =>
       current.apiKeys.some((key) => key.id === entry.id)
         ? current
         : { ...current, apiKeys: [...current.apiKeys, entry] },
     );
   }, []);
-  const updateApiKey = useCallback<ProviderFormActions['updateApiKey']>(
+  const updateApiKey = useCallback<ProviderDraftActions['updateApiKey']>(
     (id, updates) =>
       setValues((current) => {
         const apiKeys = current.apiKeys.map((entry) =>
@@ -106,10 +106,13 @@ export function useProviderFormDraft({
       }),
     [],
   );
-  const replaceSavedApiKeys = useCallback<ProviderFormActions['replaceSavedApiKeys']>((apiKeys) => {
-    setSeed((current) => ({ ...current, values: { ...current.values, apiKeys } }));
-    setValues((current) => ({ ...current, apiKeys }));
-  }, []);
+  const replaceSavedApiKeys = useCallback<ProviderDraftActions['replaceSavedApiKeys']>(
+    (apiKeys) => {
+      setSeed((current) => ({ ...current, values: { ...current.values, apiKeys } }));
+      setValues((current) => ({ ...current, apiKeys }));
+    },
+    [],
+  );
   const setAvatarUri = useCallback(
     (avatarUri: string | null) => setValues((current) => ({ ...current, avatarUri })),
     [],
@@ -153,7 +156,7 @@ export function useProviderFormDraft({
       return { ...current, defaultChatEndpoint: endpoint, endpointUrls };
     });
   }, []);
-  const actions = useMemo<ProviderFormActions>(
+  const actions = useMemo<ProviderDraftActions>(
     () => ({
       reset,
       replaceSavedApiKeys,
@@ -195,7 +198,7 @@ export function useProviderFormDraft({
         hasApiKeyChanges: !areApiKeyEntriesEqual(values.apiKeys, seed.values.apiKeys),
         isDirty:
           seed.isInitiallyDirty ||
-          isProviderFormDirty({ endpointTypes, initialValues: seed.values, values }),
+          isProviderConfigurationDirty({ endpointTypes, initialValues: seed.values, values }),
         isSubmitting,
       },
       state: values,

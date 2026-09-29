@@ -1,13 +1,13 @@
 import type { Provider } from '@/shared/data/types/provider';
 
 import {
-  createEmptyProviderFormValues,
-  createProviderFormValues,
-  isProviderFormDirty,
+  createEmptyProviderConfigurationValues,
+  createProviderConfigurationValues,
+  isProviderConfigurationDirty,
   providerDefaultEndpointNeedsRepair,
-  type ProviderFormValues,
-  resolveProviderFormEndpointTypes,
-} from '../utils/providerFormValues';
+  type ProviderConfigurationValues,
+  resolveProviderConfigurationEndpointTypes,
+} from '../utils/providerConfigurationValues';
 
 function createTestProvider(overrides: Partial<Provider> = {}): Provider {
   return {
@@ -33,7 +33,7 @@ describe('provider form values', () => {
       },
     });
 
-    expect(createProviderFormValues({ avatarUri: 'file:///logo.png', provider })).toEqual({
+    expect(createProviderConfigurationValues({ avatarUri: 'file:///logo.png', provider })).toEqual({
       apiKeys: [],
       avatarUri: 'file:///logo.png',
       defaultChatEndpoint: 'anthropic-messages',
@@ -48,7 +48,7 @@ describe('provider form values', () => {
   });
 
   it('offers all configurable chat endpoints for a fully custom provider', () => {
-    expect(resolveProviderFormEndpointTypes(createTestProvider())).toEqual([
+    expect(resolveProviderConfigurationEndpointTypes(createTestProvider())).toEqual([
       'openai-chat-completions',
       'anthropic-messages',
       'openai-responses',
@@ -58,22 +58,22 @@ describe('provider form values', () => {
 
   it('offers only the current primary endpoint for a preset provider', () => {
     expect(
-      resolveProviderFormEndpointTypes(createTestProvider({ presetProviderId: 'openai' })),
+      resolveProviderConfigurationEndpointTypes(createTestProvider({ presetProviderId: 'openai' })),
     ).toEqual(['openai-chat-completions']);
   });
 
   it('offers no endpoints at all when the auth type has no editable URL', () => {
-    expect(resolveProviderFormEndpointTypes(createTestProvider({ authType: 'iam-gcp' }))).toEqual(
-      [],
-    );
+    expect(
+      resolveProviderConfigurationEndpointTypes(createTestProvider({ authType: 'iam-gcp' })),
+    ).toEqual([]);
   });
 
   it('reports a draft as clean until a field actually changes', () => {
     const provider = createTestProvider();
-    const endpointTypes = resolveProviderFormEndpointTypes(provider);
-    const initialValues = createProviderFormValues({ avatarUri: null, provider });
-    const isDirty = (values: ProviderFormValues) =>
-      isProviderFormDirty({ endpointTypes, initialValues, values });
+    const endpointTypes = resolveProviderConfigurationEndpointTypes(provider);
+    const initialValues = createProviderConfigurationValues({ avatarUri: null, provider });
+    const isDirty = (values: ProviderConfigurationValues) =>
+      isProviderConfigurationDirty({ endpointTypes, initialValues, values });
 
     expect(isDirty(initialValues)).toBe(false);
     expect(isDirty({ ...initialValues, name: 'Renamed' })).toBe(true);
@@ -90,7 +90,7 @@ describe('provider form values', () => {
   });
 
   it('starts a new provider on the OpenAI chat completions endpoint', () => {
-    expect(createEmptyProviderFormValues()).toEqual({
+    expect(createEmptyProviderConfigurationValues()).toEqual({
       apiKeys: [],
       avatarUri: null,
       defaultChatEndpoint: 'openai-chat-completions',
@@ -107,9 +107,9 @@ describe('provider form values', () => {
       },
     });
 
-    expect(createProviderFormValues({ avatarUri: null, provider }).defaultChatEndpoint).toBe(
-      'anthropic-messages',
-    );
+    expect(
+      createProviderConfigurationValues({ avatarUri: null, provider }).defaultChatEndpoint,
+    ).toBe('anthropic-messages');
     expect(providerDefaultEndpointNeedsRepair(provider)).toBe(true);
   });
 });
