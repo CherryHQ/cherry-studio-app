@@ -1339,7 +1339,7 @@
   "settings.mcp.toast.deleted": "服務器已刪除",
   "settings.mcp.toast.saveFailed": "儲存服務器失敗",
   "settings.mcp.tools.empty": "該服務器未提供任何工具。",
-  "settings.mcp.tools.enabledAccessibilityLabel": "{{tool}}，已啓用",
+  "settings.mcp.tools.enabledSummary": "已啟用 {{enabled}}/{{total}}",
   "settings.mcp.tools.loadFailed": "加載工具失敗。",
   "settings.mcp.tools.loading": "正在加載工具……",
   "settings.mcp.tools.retry": "重試",

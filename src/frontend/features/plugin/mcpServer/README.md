@@ -7,6 +7,7 @@ server row edits. A created server returns to that list.
 ## Organization
 
 - `McpServerScreen.tsx` owns the page, laid out like a plugin's: identity and status, directly
-  editable connection fields with a save footer, and the server's tools. Enabling, disabling, and
-  deleting live in the header's more menu.
-- `components/` contains the tools section.
+  editable connection fields with a save footer, and the server's tool switches. Enabling,
+  disabling, and deleting live in the header's more menu.
+- `components/` contains the tools section, which keeps each tool to one compact row.
+- `hooks/` owns the tools query.

@@ -1348,7 +1348,7 @@
   "settings.mcp.toast.deleted": "Sunucu silindi",
   "settings.mcp.toast.saveFailed": "Sunucu kaydedilemedi",
   "settings.mcp.tools.empty": "Bu sunucu hiçbir araç göstermez.",
-  "settings.mcp.tools.enabledAccessibilityLabel": "{{tool}}, etkin",
+  "settings.mcp.tools.enabledSummary": "{{total}} araçtan {{enabled}} açık",
   "settings.mcp.tools.loadFailed": "Araçlar yüklenemedi.",
   "settings.mcp.tools.loading": "Araçlar yükleniyor...",
   "settings.mcp.tools.retry": "Yeniden dene",

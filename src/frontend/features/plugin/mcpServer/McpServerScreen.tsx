@@ -370,18 +370,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           </FormField>
         </View>
         {server ? (
-          <View className="gap-3">
-            <Text accessibilityRole="header" className="text-base font-semibold text-foreground">
-              {t('settings.mcp.tools.title')}
-            </Text>
-            <View className="rounded-2xl bg-card p-4" style={{ borderCurve: 'continuous' }}>
-              <McpToolsSection
-                isDisabled={isBusy}
-                onToggleTool={handleToggleTool}
-                server={server}
-              />
-            </View>
-          </View>
+          <McpToolsSection isDisabled={isBusy} onToggleTool={handleToggleTool} server={server} />
         ) : null}
       </PluginPage>
     </>

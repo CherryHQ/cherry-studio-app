@@ -1339,7 +1339,7 @@
   "settings.mcp.toast.deleted": "Máy chủ đã bị xóa",
   "settings.mcp.toast.saveFailed": "Không lưu được máy chủ",
   "settings.mcp.tools.empty": "Máy chủ này không có công cụ nào.",
-  "settings.mcp.tools.enabledAccessibilityLabel": "{{tool}}, đã bật",
+  "settings.mcp.tools.enabledSummary": "Đã bật {{enabled}}/{{total}}",
   "settings.mcp.tools.loadFailed": "Không tải được công cụ.",
   "settings.mcp.tools.loading": "Đang tải công cụ...",
   "settings.mcp.tools.retry": "Thử lại",

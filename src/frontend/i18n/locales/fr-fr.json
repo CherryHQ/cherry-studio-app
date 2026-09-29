@@ -1357,7 +1357,7 @@
   "settings.mcp.toast.deleted": "Serveur supprimé",
   "settings.mcp.toast.saveFailed": "Échec de la sauvegarde du serveur",
   "settings.mcp.tools.empty": "Ce serveur n'expose aucun outil.",
-  "settings.mcp.tools.enabledAccessibilityLabel": "{{tool}}, activé",
+  "settings.mcp.tools.enabledSummary": "{{enabled}} sur {{total}} activés",
   "settings.mcp.tools.loadFailed": "Échec du chargement des outils.",
   "settings.mcp.tools.loading": "Chargement des outils...",
   "settings.mcp.tools.retry": "Réessayer",

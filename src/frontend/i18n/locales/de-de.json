@@ -1348,7 +1348,7 @@
   "settings.mcp.toast.deleted": "Server gelöscht",
   "settings.mcp.toast.saveFailed": "Server konnte nicht gespeichert werden",
   "settings.mcp.tools.empty": "Dieser Server stellt keine Tools zur Verfügung.",
-  "settings.mcp.tools.enabledAccessibilityLabel": "{{tool}}, aktiviert",
+  "settings.mcp.tools.enabledSummary": "{{enabled}} von {{total}} aktiv",
   "settings.mcp.tools.loadFailed": "Werkzeuge konnten nicht geladen werden.",
   "settings.mcp.tools.loading": "Werkzeuge werden geladen...",
   "settings.mcp.tools.retry": "Wiederholen",

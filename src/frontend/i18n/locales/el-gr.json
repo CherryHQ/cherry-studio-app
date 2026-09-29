@@ -1348,7 +1348,7 @@
   "settings.mcp.toast.deleted": "Ο διακομιστής διαγράφηκε",
   "settings.mcp.toast.saveFailed": "Αποτυχία αποθήκευσης διακομιστή",
   "settings.mcp.tools.empty": "Αυτός ο διακομιστής δεν εκθέτει εργαλεία.",
-  "settings.mcp.tools.enabledAccessibilityLabel": "{{tool}}, ενεργοποιημένο",
+  "settings.mcp.tools.enabledSummary": "{{enabled}} από {{total}} ενεργά",
   "settings.mcp.tools.loadFailed": "Αποτυχία φόρτωσης εργαλείων.",
   "settings.mcp.tools.loading": "Φόρτωση εργαλείων...",
   "settings.mcp.tools.retry": "Επανάληψη",

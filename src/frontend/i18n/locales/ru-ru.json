@@ -1366,7 +1366,7 @@
   "settings.mcp.toast.deleted": "Сервер удален",
   "settings.mcp.toast.saveFailed": "Не удалось сохранить сервер.",
   "settings.mcp.tools.empty": "Этот сервер не предоставляет никаких инструментов.",
-  "settings.mcp.tools.enabledAccessibilityLabel": "{{tool}}, включено",
+  "settings.mcp.tools.enabledSummary": "Включено {{enabled}} из {{total}}",
   "settings.mcp.tools.loadFailed": "Не удалось загрузить инструменты.",
   "settings.mcp.tools.loading": "Загрузка инструментов...",
   "settings.mcp.tools.retry": "Повторить",
