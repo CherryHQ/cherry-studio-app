@@ -1,0 +1,12 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+[scripts]
+setup = "pnpm install --frozen-lockfile"
+run_mode = "concurrent"
+archive = 'if [ "$CONDUCTOR_IS_LOCAL" = "1" ] && [ -f scripts/agentEnvironment.ts ]; then pnpm agent:env archive; fi'
+
+[scripts.run.metro]
+available_in = ["local"]
+command = 'pnpm dev --port "$CONDUCTOR_PORT"'
+default = true
+icon = "server"

@@ -1,24 +1,224 @@
 # Parallel Device Testing
 
-This guide is the repository's execution standard for coding-agent device acceptance in local
-Conductor workspaces. It covers configuration preparation, development-client reuse, iOS simulator
-and Android emulator isolation, Metro sessions, and cleanup. Physical devices are outside this
-workflow. [Testing And CI](./testing-and-ci.md) owns test selection and repository gates.
+This guide owns local coding-agent self-test environments. Reuse shared simulators/emulators for
+compatible native code, reserve named native variants only when required, and reconcile resources
+at the next agent startup when a workspace disappears without cleanup. Physical devices and the
+primary user installation are never self-test targets.
 
-Apply the user's active authorization before execution. Designing this workflow does not authorize
-builds, device creation/startup, tests, or model/tool calls. Follow authorization already given for
-the task without asking again; this standard does not enable automatic acceptance after every edit.
+> Status: host lifecycle implemented; automated tests and device acceptance not run in this change.
+>
+> `pnpm agent:env` owns discovery, persistent ownership, exclusive leases, native fingerprints,
+> development-artifact caching, provisioning, launch, release, archival and reconciliation.
+> Configuration snapshot/import and automatic scenario-data handoff remain design below.
+
+Apply the user's active authorization. Startup reconciliation is the agreed maintenance action for
+registered resources; it does not authorize builds, device creation/boot, tests or external model/tool
+calls. `build`, `provision` and `start` require the corresponding task authorization. Never invoke
+those commands merely to verify this tooling implementation.
+
+## Agent Startup And Recovery
+
+At the beginning of a local macOS coding-agent session, run:
+
+```bash
+pnpm agent:env reconcile
+```
+
+`prepare` and `start` also reconcile before admission. `status` and
+`reconcile --dry-run` inspect without changing the registry or devices. Startup does not compute
+native fingerprints, boot devices, install packages, build, clear application data or clear Metro
+caches. Missing dependencies/tooling are reported, not installed automatically.
+
+Ownership lives at `$CONDUCTOR_ROOT_PATH/.local/agent-self-testing/state.json`, outside disposable
+worktrees. It records repository identity, workspace ID/path/Git administration directory, stable
+device identity/name, Android AVD path, device role, consumers, lease/session, installed artifact,
+Metro process identity and provisioning intents. Artifacts live in its `artifacts/` directory;
+workspace evidence/logs live under `.context/agent-self-testing/`. Do not store credentials in the
+resource registry. It is separate from future secret-bearing configuration snapshots.
+
+Retirement requires either the explicit `archive` command or both an authoritative Git worktree
+listing without the workspace and absence of its saved Git administration directory. Leftover
+untracked workspace directories do not prevent that second proof. Missing/failed inventory,
+renaming, elapsed time or a stale-looking device name alone is not proof. A workspace still listed
+by Git remains active. If an external archiver retains its Git registration, it remains protected
+until an explicit archive signal is recorded. The installed Conductor CLI's cloud inventory is not
+used as a local-workspace authority.
+
+A kernel-held, nonblocking repository lock serializes mutating commands across agents. A busy
+operation reports a retryable error; a process crash releases the lock. There is no timeout-based
+lease stealing. An abandoned lease in a still-active workspace requires an explicit owner release;
+a later agent must not guess that another session is dead.
+
+Legacy/unregistered devices appear in `status` but are never adopted, stopped or deleted by startup.
+Inspect them once and register only known test resources. Failed/interrupted creates retain an
+intent for inspection; they are not inferred from a matching name. Cleanup reports partial failures
+and preserves records for retry. Archive hooks are optional accelerators, not the only cleanup path.
+
+## Shared Devices And Native Variants
+
+There is at most one registered shared device per platform and one active self-test lease across
+platforms. Only the requested platform is started. Other running devices, including unregistered
+ones, block launch rather than being shut down. Coding agents can continue independent code work
+while waiting for the device. Creating a PR or finding a busy device never justifies another device.
+
+| Role | Use | Lifetime |
+| --- | --- | --- |
+| `primary` | User's source installation; protected from leasing and cleanup | User-owned |
+| `shared` | Common development client for the public native baseline | Retained; shut down on release |
+| `native` | A branch with a different native fingerprint | Reused by compatible tasks; optionally disposable |
+
+Discover first:
+
+```bash
+pnpm agent:env status
+```
+
+Register an explicitly selected existing device with its stable iOS UDID or Android AVD ID:
+
+```bash
+pnpm agent:env adopt --platform ios --device <udid> --role shared
+pnpm agent:env adopt --platform android --device <avd-id> --role primary
+```
+
+`--role native --disposable` explicitly admits automatic deletion after every recorded consumer
+retires. An adopted native device without that flag is retained. Adoption grants ownership, not
+proof of its installed binary or its data baseline; launch installs a verified cached artifact.
+Never adopt a daily-use installation as a disposable test device.
+
+Only when no reusable compatible device exists and creation is authorized:
+
+```bash
+pnpm agent:env provision --platform ios --template <existing-udid>
+pnpm agent:env provision --platform android --template <existing-avd-id>
+```
+
+Provisioning selects the shared/native role from the fingerprint and creates a distinct named device
+using an existing installed runtime/system image. It copies no app data, does not boot, and downloads
+no SDK image. Names include the repository or native fingerprint rather than a PR/workspace name.
+The creating provisioner also owns deletion. Android inventory refreshes the serial from the stable
+AVD ID and checks its absolute path; no operation targets a physical device or deletes by serial.
+
+## Native Compatibility And Development Builds
+
+The public baseline is computed from a clean checkout at the locally known `origin/main`. No command
+fetches, resets, checks out or updates a user's branch. Preparation recomputes the public fingerprint from the saved baseline checkout (initially the main
+repository checkout), because native environment inputs can change without a commit. It reports a
+prerequisite if that checkout is not clean and at the current reference. A compatible clean worktree
+can be supplied explicitly:
+
+```bash
+pnpm agent:env baseline --platform ios --source <clean-main-checkout>
+pnpm agent:env fingerprint --platform ios
+```
+
+Fingerprinting uses the installed `expo/fingerprint` API under the development profile, with the
+platform, architecture, native dependency/module inputs, evaluated Expo config and explicit local
+config-plugin/config inputs. Package script and Git ignore-file changes are excluded. Generated root `ios/` and
+`android/` directories are excluded consistently with the local EAS source archive: edit native
+sources/plugins in their repository owners, not generated prebuild output. Fingerprints run only
+when preparing/building, not at every agent startup. App versions, PR names and artifact age are not
+compatibility checks. The fingerprint source is in
+[`native.ts`](../../scripts/agentEnvironment/native.ts); keep additions to build inputs covered there.
+
+The `build` command is an explicit local EAS development build. It never produces a release build:
+
+```bash
+pnpm agent:env build --platform ios --source <checkout>
+pnpm agent:env build --platform android --source <checkout>
+```
+
+It delegates to `pnpm build:local`, selecting `development-simulator` for iOS and `development`
+for Android. iOS simulator artifacts and physical-device IPAs are not interchangeable. A verified
+cache hit reuses the artifact. New artifacts are checksummed and published only after a successful
+build and an unchanged post-build fingerprint. Interrupted staging is reclaimed at the next sweep.
+These internal reusable artifacts are not distributable release packages.
+
+When public native inputs change, refresh the baseline and build its matching artifact, then start
+on the existing shared device. A branch-specific artifact never replaces the public baseline.
+`prepare`/`start` report missing artifacts instead of building silently. Old installed artifacts stay
+available for rollback; installation completion updates the device record.
+
+## Prepare, Start And Data Handoff
+
+Commands use a stable task session (`CODEX_THREAD_ID` or `CLAUDE_CODE_SESSION_ID` can supply the default).
+The output includes the actual, repository-managed `agent-device` session name; use that name for
+subsequent interaction commands. Different sessions in the same workspace still cannot overlap.
+
+```bash
+pnpm agent:env prepare --platform ios --session <task-id>
+pnpm agent:env start --platform ios --session <task-id> --data-ready
+```
+
+Preparation acquires the device exclusively without booting it. It checks native compatibility,
+artifacts, competing sessions and the single-running-device budget. Startup rechecks preparation,
+starts or reuses its recorded Metro process on `CONDUCTOR_PORT`, waits for readiness, boots the
+selected device, installs only when the artifact changed, and fully relaunches the development app
+against the exact URL obtained from this Metro's Expo endpoint. It preserves Metro's cache.
+
+Shared-device data is separate from native compatibility. Before switching workspaces, preserve any
+needed previous scenario evidence/state and establish the new scenario's compatible data baseline
+under the lease. A schema change can require a data handoff even without native changes.
+`--data-ready` is an explicit acknowledgement of this preparation, not an importer or a reset command.
+The tool refuses first use/cross-workspace launch without it; it does not claim configuration import
+or scenario success. Reusing the same workspace is not proof that a newly changed database schema is
+compatible. Do not run destructive first-run flows against data required by another task.
+
+Use the project `agent-device` and `react-devtools` skills for application interaction. Keep commands
+for a session serial and target the leased device explicitly. Tool-specific command shapes come from
+installed CLI help. An app opening is not a successful model/tool call or a completed scenario.
+
+## Release, Archive And Cache Cleanup
+
+```bash
+pnpm agent:env release --session <task-id>
+pnpm agent:env archive
+pnpm agent:env gc
+```
+
+- `release` closes the task session, shuts down its test device and stops its recorded Metro process.
+  It retains the device/data and artifact for reuse. Call it after self-testing or before waiting for
+  PR review. A failed shutdown retains the lease and blocks process cleanup for that session.
+- `archive` durably marks the current workspace retired and reconciles. Shared devices survive;
+  disposable native devices are deleted only when every consumer retired and no lease/foreign session
+  remains. Re-entering the actual workspace through a mutating command registers it as active again.
+- `reconcile` performs retirement cleanup even if the previous agent never observed archival. It
+  verifies device identity/name/path and sessions before touching it, and verifies process PID/start
+  time, process group, working directory and launch command before signalling recorded Metro groups.
+  Port numbers are never used as authority to kill a process. Records are removed only after confirmed
+  completion; unknown identities are retained with a blocker. If a Metro process group survives its
+  recorded leader, preserve and report it instead of claiming that its children were reclaimed.
+- `gc` explicitly invokes the same sweep. Startup reconciliation also expires unreferenced cached
+  artifacts after seven days, retaining device references,
+  the public baseline and the latest two artifacts per platform. Primary data, user SDK/runtime images,
+  global package/build caches and release artifacts are outside its deletion scope.
+
+A failed scenario retains evidence in `.context/agent-self-testing/`; preserve needed evidence before
+archival removes the workspace. Application data is retained on release, but disposable-device
+archival deletes it. Host configuration transfers must be removed when a future importer finishes.
+Startup does not implement that importer or wipe shared application data.
+
+Conductor setup should install dependencies only. Its normal Metro command uses `pnpm dev`, not
+`dev:clear`. The shared `.conductor/settings.toml` wires an archive fallback with a guard for branches
+without this tool. Machine-local overrides can take precedence; do not claim that committing a
+settings file immediately activates it on every existing workspace. AGENTS startup instructions and
+mandatory prepare/start reconciliation supply the recovery path independently of that hook.
+
+The first implementation is deliberately conservative about missing CLI inventory, unknown legacy
+devices, active-workspace abandoned leases and changes to recorded identities. Report these as
+blockers rather than claiming complete reclamation. Device acceptance must cover concurrent starts,
+crashes during provisioning/build/launch, session mismatch, repeated cleanup and both platforms.
+Focused regression suites are local tooling checks selected by [Testing And CI](./testing-and-ci.md).
 
 ## Self-Test Preparation
 
 > Status: design
 >
-> The following preparation contract is accepted. Configuration export/import, source registration,
-> native-artifact compatibility checks, shared caches, and their orchestration are not implemented.
-> The device/session workflow later in this guide already exists.
+> The following configuration preparation contract is accepted. Configuration export/import,
+> primary-source registration and automatic scenario-data handoff are not implemented.
+> The host lifecycle commands above are implemented separately; they do not satisfy this preparation contract.
 
 An ordinary configured self-test reuses a compatible development client, copies the primary
-environment's user configuration into an independent workspace database, and creates conversation
+environment's user configuration into an independent scenario database on the exclusively leased test device, and creates conversation
 or file data only as its scenario requires. An explicit first-run scenario instead uses fresh app
 defaults and requires no primary registration, configuration snapshot, or import. Device ownership,
 artifact compatibility, authorization, and reporting rules apply to both.
@@ -49,11 +249,11 @@ Planned storage ownership:
 
 | Location | Contents |
 | --- | --- |
-| `$CONDUCTOR_ROOT_PATH/.local/agent-self-testing/` | Source registration, immutable configuration snapshots, and compatible development artifacts shared by this repository's workspaces |
+| `$CONDUCTOR_ROOT_PATH/.local/agent-self-testing/` | Implemented resource registry/artifact cache; planned source registration and configuration snapshots |
 | Workspace `.context/agent-self-testing/` | Preparation receipt, scenario evidence, timing, and temporary transfers |
-| Workspace device's app container | Independent writable database, configuration assets, and locally created scenario content |
+| Leased test device's app container | Independent writable scenario database/assets; handoff required before another workspace uses it |
 
-Snapshots intentionally contain credentials. Keep them and temporary backups private to the local
+Planned configuration snapshots intentionally contain credentials. Keep them and temporary backups private to the local
 user, outside version control and logs. Export actual credentials, not redacted UI projections.
 Publish shared snapshots/artifacts atomically and immutably. Remove temporary full-database backups
 after extracting configuration; retain only the allowed configuration payload and its assets.
@@ -78,6 +278,11 @@ The [schema registry](../../src/backend/data/db/schemas/index.ts) and
 [preference schema](../../src/shared/data/preference/preferenceSchema.ts) own these fields. New
 tables/preferences require classification before inclusion; do not copy unknown domains wholesale
 or silently drop unsupported configuration fields.
+
+Plugin authorization metadata and native SecureStore credentials need a dedicated transfer or
+reauthorization contract; copying SQLite references does not copy credentials. Desktop pairing and
+device identity remain target-owned. The existing full backup deliberately excludes these secrets
+and includes conversation history, so it is not a configuration-only self-test import.
 
 Initialize installation state separately: `app.onboarding.status` is `completed` for configured
 acceptance and `unseen` for an explicit first-run scenario. Device permission grants remain
@@ -137,7 +342,7 @@ Database migration acceptance uses a separate explicit scenario, not this config
 
 ### Reuse And Refresh
 
-Successful preparation pins the snapshot identity. Re-running preparation validates the device,
+Successful preparation pins the snapshot identity. Re-running preparation validates the exclusive device lease,
 app, and receipt and reuses existing data; it must not duplicate imports, reset scenario content, or
 overwrite workspace configuration edits. A newer primary snapshot does not automatically change an
 already prepared workspace.
@@ -152,158 +357,6 @@ would orphan existing conversations, invalidate required references, or collide 
 created configuration. Keep the target usable on rejection. A clean reset is separate and requires
 authorization to discard that workspace's scenario data; routine preparation never resets it.
 
-### Development Client Reuse
-
-Share immutable native development artifacts, not writable devices or databases. Each workspace
-installs a compatible artifact into its own device and loads its own JavaScript through Metro.
-[Expo development builds](https://docs.expo.dev/develop/development-builds/use-development-builds/)
-support this iteration without rebuilding until underlying native code changes.
-
-| Condition | Action |
-| --- | --- |
-| Compatible client installed | Reuse it with the workspace's Metro |
-| New device and matching cached artifact | Install that artifact without another native build |
-| JS/TS UI, business logic, or copied configuration changed | Reuse compatible native code; update code or import data as needed |
-| Native inputs changed | Recompute compatibility and use a matching artifact, or build within task authorization |
-| Artifact missing or compatibility unproven | Report the prerequisite; do not silently build or install an arbitrary package |
-
-The artifact manifest identifies app ID, platform, simulator/emulator target, architecture,
-development profile, native-input fingerprint, and artifact checksum. iOS device and simulator
-binaries are not interchangeable. Fingerprints cover resolved native dependencies, Expo/React Native
-versions, relevant lockfile/patch inputs, evaluated native config, local config-plugin implementation,
-native source, and relevant build environment; record fingerprint/toolchain versions. Branch names
-and app versions alone cannot establish compatibility.
-
-[Expo Fingerprint](https://docs.expo.dev/versions/latest/sdk/fingerprint/) is a candidate input
-collector, not an integrated cache. Account for its config-plugin limitations. Coordinate concurrent
-cache misses and publish only complete successful artifacts; do not weaken compatibility checks to
-obtain a cache hit. Record native compilation separately from internal package compilation.
-
-### Coding Agent Procedure And Evidence
-
-1. Identify behavior, platform, scenario baseline, dependencies, and existing authorization. Use
-   [Testing And CI](./testing-and-ci.md) for code-level checks.
-2. Resolve [workspace resources](#workspace-resources) and artifact compatibility; configured
-   acceptance also resolves the primary source and snapshot. Reuse a valid preparation receipt.
-3. Install only when required and import only for a new configured target or explicit refresh.
-   Keep source data separate from all target mutation/cleanup paths.
-4. Open the explicit [workspace session](#metro-and-app-session). Fully relaunch after import and
-   before persistence acceptance following Fast Refresh.
-5. Exercise the requested behavior. Create only the local conversation, attachment, or fixture the
-   scenario needs. Do not import primary conversation/file history to populate a screen. Missing
-   configuration, invalid credentials, inaccessible services, or unsupported device capabilities
-   block the dependent scenario; continue independent work where useful. Never silently substitute
-   a model, mock provider, tool server, or shared device and claim the original scenario passed.
-6. Report preparation separately from scenario results. An app opening proves neither valid
-   credentials nor a successful model/tool call. For actual calls, record Agent/model/MCP identities
-   and observed outcomes. Importing credentials does not authorize external tool actions or bypass
-   product approval behavior; do not require an extra real call for a UI-only scenario.
-7. Retain device/data for continued workspace work. At the cleanup point in
-   [Git Workflow](./git-workflow.md), follow [Cleanup](#cleanup), remove temporary secret-bearing
-   workspace transfers, and preserve the primary source and shared repository cache.
-
-Receipts record baseline, workspace/device/app identity, artifact identity, snapshot/import version
-when applicable, target schema, Metro port, and reuse decisions. Evidence records expected versus
-observed behavior, omissions/blockers, and durations for startup, build/install, import, Metro
-readiness, and scenario execution. Never log secret values or claim unmeasured timing guarantees.
-
-### Implementation Boundaries And Acceptance
-
-Host orchestration belongs under `scripts`; format validation and import belong to the backend data
-owner, with image handling delegated to existing profile, Agent, and provider image owners. Keep any
-runtime import entry development-only and separate from normal startup/seeding and product Data API
-routes. This workflow does not introduce a shared production database or a general remote backend.
-
-Before marking preparation implemented, demonstrate these outcomes with authorized checks:
-
-- Fresh configured target: six configuration domains and required assets restored; relationships
-  resolve; excluded content is empty.
-- Repeated/concurrent preparation: no duplicate imports, content resets, unnecessary native builds,
-  cache clearing, or cross-workspace writes.
-- Refresh: source changes stay pinned until requested; local conflicts are reported; failure leaves
-  existing target data usable.
-- Interruption/schema mismatch: no partial import or source mutation; recovery is repeatable.
-- Native changes: incompatible artifacts rejected and build authorization respected.
-- Missing prerequisites and first-run scenarios: outcomes and chosen baselines reported accurately.
-- Cleanup/retry: only owned resources removed; primary source and shared inputs preserved.
-
-These are future implementation acceptance criteria, not evidence that checks have run. Update the
-status as capabilities land. No preparation command or machine-local setting is installed by this
-design.
-
-## Workspace Resources
-
-Conductor assigns each workspace ten ports: `$CONDUCTOR_PORT` through
-`$((CONDUCTOR_PORT + 9))`. Use the base port for Metro and only that reserved range for companion
-services. A Conductor device test must not use a fixed port such as `8081` or `8084`.
-
-Each worktree uses a dedicated simulator named:
-
-```text
-iPhone 17 Pro ($CONDUCTOR_WORKSPACE_NAME)
-```
-
-Provision it lazily for the workspace, record its UDID under that workspace's `.context`, and never
-reuse a simulator with a live ownership claim. If the dedicated simulator cannot be provisioned,
-stop and report the blocker rather than taking another workspace's device.
-
-Before opening the app, inspect devices and ownership:
-
-```bash
-agent-device devices --platform ios
-agent-device device status --platform ios
-```
-
-Each worktree also uses a dedicated Android emulator named:
-
-```text
-CherryStudio API 36 ($CONDUCTOR_WORKSPACE_NAME)
-```
-
-Provision it lazily for the workspace and never substitute a physical device or another
-workspace's emulator. Record the provisioner's stable AVD identity and expected workspace-specific
-name under that workspace's `.context` when provisioning succeeds. After the emulator boots, also
-record its current serial and `kind: emulator`. An Android serial such as `emulator-5554` can change
-across boots, so refresh the runtime identity before each app session while retaining the stable
-AVD identity. If the dedicated emulator cannot be provisioned, stop and report the blocker.
-
-Before opening the Android app, inspect devices and active sessions:
-
-```bash
-agent-device devices --platform android
-agent-device session list
-```
-
-## Metro And App Session
-
-Keep Metro running across ordinary iterations and preserve its cache. `dev:clear` is for explicit
-cache troubleshooting, not the default self-test startup. Local Conductor run settings should use
-normal startup; setup scripts must not automatically build or boot a device.
-
-Start Metro on the allocated base port:
-
-```bash
-pnpm dev --port "$CONDUCTOR_PORT"
-```
-
-Use a workspace-unique session, explicit simulator, and explicit Metro hint:
-
-```bash
-agent-device open com.cherryai.cherrystudio-app.dev --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "iPhone 17 Pro ($CONDUCTOR_WORKSPACE_NAME)" --metro-host 127.0.0.1 --metro-port "$CONDUCTOR_PORT" --relaunch
-```
-
-For Android, relaunch the installed development client on the dedicated emulator, then open the
-exact development-client URL printed by this workspace's Metro process. Do not derive or reuse a
-URL from another workspace. Opening that URL through `agent-device` configures Android-to-host
-reachability for its Metro port.
-
-```bash
-agent-device open com.cherryai.cherrystudio_app.dev --session "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --serial "$ANDROID_SERIAL" --relaunch
-agent-device open "$DEV_CLIENT_URL" --session "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --serial "$ANDROID_SERIAL"
-```
-
-Keep commands for one session serial. Different sessions may run concurrently only when their
-devices and port ranges differ.
 
 ## Persistence Failures After Fast Refresh
 
@@ -316,8 +369,7 @@ connection reports no active transaction. The same app process may then hold two
 Before changing UI or persistence code in response to this failure:
 
 1. Capture the app log and confirm that the failure occurs at `BEGIN IMMEDIATE`.
-2. Fully relaunch the app with the workspace-specific `agent-device open ... --relaunch` command
-   above. A Metro reload is not a valid control experiment for this failure.
+2. Fully relaunch the app with the leased-device `agent-device open ... --relaunch` command. A Metro reload is not a valid control experiment for this failure.
 3. Repeat the exact save action. If it succeeds, classify the failure as a stale development
    runtime connection and remove any temporary diagnostic logging before committing.
 4. If it still fails after the full relaunch, investigate transaction ownership and competing
@@ -327,36 +379,3 @@ Before changing UI or persistence code in response to this failure:
 Always perform persistence acceptance from a fully relaunched app after using Fast Refresh. Do not
 delete the simulator database to clear this symptom; that destroys the state needed to reproduce a
 real transaction-lifecycle bug.
-
-## Cleanup
-
-After a PR or complete stack is created:
-
-1. Close the workspace session with `agent-device close --session "$CONDUCTOR_WORKSPACE_NAME"
-   --platform ios --shutdown`.
-2. Stop listeners only in `$CONDUCTOR_PORT..$((CONDUCTOR_PORT + 9))`.
-3. Delete only the simulator whose recorded UDID and expected workspace name both match.
-4. Remove the workspace simulator metadata after deletion succeeds or the recorded device is
-   already absent.
-
-Clean up Android with the same ownership guarantees:
-
-1. Resolve the recorded stable AVD identity through its provisioner and verify the expected
-   workspace-specific name. If running, also confirm the current serial resolves to that same AVD
-   with `kind: emulator`; never trust a serial that now belongs to a different device.
-2. For a running owned emulator, close the workspace session with `agent-device close --session
-   "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --shutdown`.
-3. Delete only the recorded AVD whose stable identity and expected name both match, using the same
-   provisioner that created it. A stopped emulator can be deleted without booting it. Never delete
-   an Android device by serial alone or guess an AVD identity from incomplete ownership metadata.
-4. Remove the workspace emulator metadata after the provisioner confirms that the recorded AVD is
-   absent. A missing runtime serial does not prove the AVD was deleted; retain the stable ownership
-   record across shutdown or interrupted cleanup.
-
-The repository does not provide a Conductor archive hook that guarantees this cleanup. Perform the
-steps above explicitly; do not assume archiving a workspace releases its devices and processes.
-A locally configured archive hook may repeat the same cleanup as a fallback. That configuration
-belongs to the local environment, not to this guide's current-state guarantees.
-
-All cleanup paths must be idempotent and refuse to delete unrecorded or name-mismatched devices.
-Android cleanup must also refuse to delete a physical device or an AVD with mismatched identity.
