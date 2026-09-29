@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
+import { ProviderAvatar } from '@/frontend/components/Avatar';
 import {
   useDesktopConnectionActions,
   useDesktopConnections,
@@ -26,7 +27,6 @@ import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
 import { describeCapabilities } from '../../describeCapabilities';
 import { desktopConnectionErrorMessage } from '../../desktopConnectionError';
-import { ProviderAvatar } from '../components/ProviderAvatar';
 
 // `keySeparator: false` makes the whole dotted key literal, so spell each state out.
 const UNAVAILABLE_KEYS = {

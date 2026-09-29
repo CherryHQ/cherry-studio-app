@@ -66,7 +66,7 @@ jest.mock('../../../components/ProviderForm', () => ({
   ...jest.requireActual('../../../components/ProviderForm/utils/providerFormValues'),
   ...jest.requireActual('../../../components/ProviderForm/hooks/useProviderFormDraft'),
 }));
-jest.mock('../../../hooks/useProviderAvatar', () => ({
+jest.mock('@/frontend/hooks/useProviderAvatar', () => ({
   useProviderAvatar: () => null,
   useProviderAvatarActions: () => ({ persist: jest.fn(), remove: jest.fn() }),
 }));

@@ -7,6 +7,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMutation } from '@/frontend/data';
+import { useProviderAvatarActions } from '@/frontend/hooks/useProviderAvatar';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
@@ -24,7 +25,6 @@ import {
   type ProviderFormValues,
   useProviderFormDraft,
 } from '../../components/ProviderForm';
-import { useProviderAvatarActions } from '../../hooks/useProviderAvatar';
 
 export function useNewProviderForm() {
   const { t } = useTranslation();

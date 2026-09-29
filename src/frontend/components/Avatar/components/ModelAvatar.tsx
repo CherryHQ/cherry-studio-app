@@ -1,8 +1,9 @@
+import { useProviderAvatar } from '@/frontend/hooks/useProviderAvatar';
 import { resolveModelIconSources } from '@/frontend/utils/modelIcons';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { BrandAvatar, BrandAvatarIcon } from './BrandAvatar';
+import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from './BrandAvatar';
 
 type ModelAvatarProps = {
   model: Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>;
@@ -21,8 +22,20 @@ type ModelAvatarProps = {
  */
 export function ModelAvatar({ model, provider, size }: ModelAvatarProps) {
   const providerIconId = provider?.presetProviderId ?? provider?.id ?? model.providerId;
-  const { iconSource, modelIconSource } = resolveModelIconSources(model.modelId, providerIconId);
+  const { iconSource, isProviderFallback, modelIconSource } = resolveModelIconSources(
+    model.modelId,
+    providerIconId,
+  );
+  const providerAvatarUri = useProviderAvatar(provider?.id ?? model.providerId);
   const frameProps = { label: model.name, ...(size !== undefined && { size }) };
+
+  if (isProviderFallback && providerAvatarUri) {
+    return (
+      <BrandAvatar {...frameProps}>
+        <BrandAvatarPhoto uri={providerAvatarUri} />
+      </BrandAvatar>
+    );
+  }
 
   if (!iconSource) {
     return <BrandAvatar {...frameProps} />;

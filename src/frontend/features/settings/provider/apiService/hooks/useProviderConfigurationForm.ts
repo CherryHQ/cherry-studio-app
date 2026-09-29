@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 
 import { useQuery } from '@/frontend/data';
+import { useProviderAvatar, useProviderAvatarActions } from '@/frontend/hooks/useProviderAvatar';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
@@ -14,7 +15,6 @@ import {
   resolveProviderFormEndpointTypes,
   useProviderFormDraft,
 } from '../../components/ProviderForm';
-import { useProviderAvatar, useProviderAvatarActions } from '../../hooks/useProviderAvatar';
 import { normalizeApiKeyEntries } from '../utils/providerApiServiceApiKeys';
 import { getEffectiveAuthConfig, shouldShowApiKeys } from '../utils/providerApiServiceAuth';
 import {

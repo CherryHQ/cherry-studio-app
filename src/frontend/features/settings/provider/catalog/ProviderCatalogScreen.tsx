@@ -12,13 +12,13 @@ import {
   type FirstUseSetupIntent,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
+import { ProviderAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import { queryKeys, useBackendModule, useQuery as useDataQuery } from '@/frontend/data';
 import type { ProviderCatalogEntry } from '@/shared/contracts';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { SettingsServiceRow } from '../../components/SettingsServiceRow';
-import { ProviderAvatar } from '../components/ProviderAvatar';
 
 const CATALOG_ROW_ESTIMATED_HEIGHT = 68;
 const CUSTOM_PROVIDER_ITEM_ID = 'custom-provider' as const;

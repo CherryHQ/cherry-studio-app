@@ -5,7 +5,7 @@ import { type AccessibilityActionEvent, type LayoutChangeEvent, View } from 'rea
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
-import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
+import { ProviderAvatar } from '@/frontend/components/Avatar';
 
 import {
   type ModelPickerFastScrollAnchor,
@@ -160,7 +160,7 @@ function ModelPickerFastScrollAnchorIcon({
 }) {
   return (
     <View className={isActive ? 'scale-110 opacity-100' : 'opacity-40'}>
-      <ProviderBrandAvatar
+      <ProviderAvatar
         presetProviderId={anchor.provider.presetProviderId}
         providerId={anchor.provider.id}
         providerName={anchor.provider.name}
