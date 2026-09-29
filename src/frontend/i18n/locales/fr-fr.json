@@ -1088,7 +1088,6 @@
   "plugins.errors.unknown-write": "Le résultat est inconnu. Confirmez-le sur le service avant de réessayer.",
   "plugins.examples.title": "Essayez de demander",
   "plugins.hideCredential": "Masquer les informations d'identification",
-  "plugins.listDescription": "Connectez vos services pour utiliser leurs outils et informations dans les conversations.",
   "plugins.loadFailed": "Les connexions de plug-in ne sont pas disponibles pour le moment",
   "plugins.loading": "Chargement…",
   "plugins.mcp.title": "MCP",

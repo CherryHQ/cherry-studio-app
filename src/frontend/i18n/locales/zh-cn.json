@@ -1070,7 +1070,6 @@
   "plugins.errors.unknown-write": "操作结果尚不确定，请先到服务平台确认后再重试。",
   "plugins.examples.title": "可以这样问",
   "plugins.hideCredential": "隐藏密钥",
-  "plugins.listDescription": "连接常用服务，在对话中使用你的工具与资料。",
   "plugins.loadFailed": "暂时无法加载插件连接",
   "plugins.loading": "正在加载…",
   "plugins.mcp.title": "MCP",

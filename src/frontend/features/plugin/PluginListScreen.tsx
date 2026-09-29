@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 
@@ -16,7 +15,6 @@ export function PluginListScreen() {
     <>
       <RouteHeader title={t('plugins.title')} />
       <PluginPage testID="plugins-list">
-        <Text className="text-sm text-muted-foreground">{t('plugins.listDescription')}</Text>
         <PluginCatalogGroup />
         <McpServerGroup />
         <BuiltinToolGroup />

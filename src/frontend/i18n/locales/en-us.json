@@ -1079,7 +1079,6 @@
   "plugins.errors.unknown-write": "The outcome is unknown. Confirm it on the service before retrying.",
   "plugins.examples.title": "Try asking",
   "plugins.hideCredential": "Hide credential",
-  "plugins.listDescription": "Connect your services to use their tools and information in conversations.",
   "plugins.loadFailed": "Plugin connections are unavailable right now",
   "plugins.loading": "Loading…",
   "plugins.mcp.title": "MCP",

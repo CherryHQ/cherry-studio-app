@@ -1097,7 +1097,6 @@
   "plugins.errors.unknown-write": "Результат неизвестен. Подтвердите это в сервисе, прежде чем повторять попытку.",
   "plugins.examples.title": "Попробуйте спросить",
   "plugins.hideCredential": "Скрыть учетные данные",
-  "plugins.listDescription": "Подключите свои сервисы, чтобы использовать их инструменты и информацию в разговорах.",
   "plugins.loadFailed": "Подключения плагинов сейчас недоступны",
   "plugins.loading": "Загрузка…",
   "plugins.mcp.title": "MCP",

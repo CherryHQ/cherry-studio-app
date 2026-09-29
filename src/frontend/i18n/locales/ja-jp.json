@@ -1070,7 +1070,6 @@
   "plugins.errors.unknown-write": "結果は不明です。再試行する前にサービス上で確認してください。",
   "plugins.examples.title": "聞いてみてください",
   "plugins.hideCredential": "認証情報を隠す",
-  "plugins.listDescription": "サービスを接続して、会話でツールや情報を使用します。",
   "plugins.loadFailed": "プラグイン接続は現在利用できません",
   "plugins.loading": "読み込み中…",
   "plugins.mcp.title": "MCP",

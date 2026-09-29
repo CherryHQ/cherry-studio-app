@@ -1079,7 +1079,6 @@
   "plugins.errors.unknown-write": "Das Ergebnis ist unbekannt. Bestätigen Sie dies im Dienst, bevor Sie es erneut versuchen.",
   "plugins.examples.title": "Versuchen Sie zu fragen",
   "plugins.hideCredential": "Anmeldeinformationen ausblenden",
-  "plugins.listDescription": "Verbinden Sie Ihre Dienste, um deren Tools und Informationen in Gesprächen zu nutzen.",
   "plugins.loadFailed": "Plugin-Verbindungen sind derzeit nicht verfügbar",
   "plugins.loading": "Laden…",
   "plugins.mcp.title": "MCP",

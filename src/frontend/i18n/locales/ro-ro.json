@@ -1088,7 +1088,6 @@
   "plugins.errors.unknown-write": "Rezultatul este necunoscut. Confirmați-l pe serviciu înainte de a reîncerca.",
   "plugins.examples.title": "Încercați să întrebați",
   "plugins.hideCredential": "Ascundeți acreditările",
-  "plugins.listDescription": "Conectați-vă serviciile pentru a le folosi instrumentele și informațiile în conversații.",
   "plugins.loadFailed": "Conexiunile la plugin nu sunt disponibile momentan",
   "plugins.loading": "Se încarcă...",
   "plugins.mcp.title": "MCP",

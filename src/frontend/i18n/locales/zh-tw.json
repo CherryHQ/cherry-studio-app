@@ -1070,7 +1070,6 @@
   "plugins.errors.unknown-write": "操作結果尚不確定，請先到服務平台確認後再重試。",
   "plugins.examples.title": "可以這樣問",
   "plugins.hideCredential": "隱藏密鑰",
-  "plugins.listDescription": "連接常用服務，在對話中使用你的工具與資料。",
   "plugins.loadFailed": "暫時無法加載插件連接",
   "plugins.loading": "正在加載…",
   "plugins.mcp.title": "MCP",

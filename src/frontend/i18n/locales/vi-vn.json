@@ -1070,7 +1070,6 @@
   "plugins.errors.unknown-write": "Chưa rõ kết quả. Hãy xác nhận nó trên dịch vụ trước khi thử lại.",
   "plugins.examples.title": "Thử hỏi xem",
   "plugins.hideCredential": "Ẩn thông tin xác thực",
-  "plugins.listDescription": "Kết nối các dịch vụ của bạn để sử dụng các công cụ và thông tin của chúng trong cuộc trò chuyện.",
   "plugins.loadFailed": "Kết nối plugin hiện không khả dụng",
   "plugins.loading": "Đang tải…",
   "plugins.mcp.title": "MCP",

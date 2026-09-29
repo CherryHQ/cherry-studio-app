@@ -1079,7 +1079,6 @@
   "plugins.errors.unknown-write": "Sonuç bilinmiyor. Tekrar denemeden önce serviste onaylayın.",
   "plugins.examples.title": "Sormayı deneyin",
   "plugins.hideCredential": "Kimlik bilgisini gizle",
-  "plugins.listDescription": "Görüşmelerde araçlarını ve bilgilerini kullanmak için hizmetlerinizi bağlayın.",
   "plugins.loadFailed": "Eklenti bağlantıları şu anda kullanılamıyor",
   "plugins.loading": "Yükleniyor…",
   "plugins.mcp.title": "MCP",
