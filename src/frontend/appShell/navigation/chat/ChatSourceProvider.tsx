@@ -29,7 +29,8 @@ type ChatSourceNavigation = {
   remoteTarget: RemoteChatTarget;
   viewMode: 'sessions' | 'agents';
   setViewMode(mode: 'sessions' | 'agents'): Promise<void>;
-  selectSource(source: ChatSource): void;
+  /** Opens the phone's own chats, or a paired desktop's when an id is given. */
+  selectDevice(connectionId?: string): void;
   openRemote(target: RemoteChatTarget): void;
   startRemoteChat(agentId?: string): void;
 };
@@ -64,27 +65,25 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
     },
     [pathname, router],
   );
-  const selectSource = useCallback(
-    (next: ChatSource) => {
-      if (next === source) return;
-      Keyboard.dismiss();
-      if (next === 'local') {
+  const selectDevice = useCallback(
+    (connectionId?: string) => {
+      if (!connectionId) {
+        if (source === 'local') return;
+        Keyboard.dismiss();
         lastRemote.current = remoteTarget;
         router.replace(lastLocal.current ? chatHref(lastLocal.current) : '/');
-      } else {
-        if (localRoute.status === 'ready') lastLocal.current = localRoute.target;
-        const previous = lastRemote.current;
-        const connectionId =
-          connections.find((item) => item.id === previous?.connectionId)?.id ??
-          connections.find((item) => item.status === 'paired')?.id;
-        openRemote(
-          connectionId === previous?.connectionId
-            ? { ...previous, connectionId }
-            : { connectionId },
-        );
+        return;
       }
+      if (source === 'remote' && connectionId === remoteTarget.connectionId) return;
+      if (source === 'local' && localRoute.status === 'ready')
+        lastLocal.current = localRoute.target;
+      const previous = lastRemote.current;
+      // Returning to the last desktop resumes its chat; another desktop starts at its catalog.
+      openRemote(
+        connectionId === previous?.connectionId ? { ...previous, connectionId } : { connectionId },
+      );
     },
-    [connections, localRoute, openRemote, remoteTarget, router, source],
+    [localRoute, openRemote, remoteTarget, router, source],
   );
   const startRemoteChat = useCallback(
     (agentId?: string) => {
@@ -113,7 +112,7 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
     () => ({
       source,
       remoteTarget,
-      selectSource,
+      selectDevice,
       openRemote,
       startRemoteChat,
       viewMode: source === 'local' ? localViewMode : remoteViewMode,
@@ -122,7 +121,7 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
     [
       source,
       remoteTarget,
-      selectSource,
+      selectDevice,
       openRemote,
       startRemoteChat,
       localViewMode,

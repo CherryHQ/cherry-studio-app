@@ -16,13 +16,7 @@ type SidebarRecentsProps = {
 
 export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
-  const {
-    source,
-    remoteTarget,
-    selectSource,
-    viewMode: mode,
-    setViewMode: setMode,
-  } = useChatSource();
+  const { source, remoteTarget, viewMode: mode, setViewMode: setMode } = useChatSource();
   const { toast } = useToast();
   const loadingKey = `${source}:${remoteTarget.connectionId ?? ''}:${mode}`;
   const [loadingFeedback, setLoadingFeedback] = useState<string>();
@@ -57,22 +51,8 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
         label: t('navigation.agents'),
         onPress: () => handleModeChange('agents'),
       },
-      {
-        group: 'source',
-        checked: source === 'local',
-        id: 'source-local',
-        label: t('navigation.local'),
-        onPress: () => selectSource('local'),
-      },
-      {
-        group: 'source',
-        checked: source === 'remote',
-        id: 'source-remote',
-        label: t('navigation.remote'),
-        onPress: () => selectSource('remote'),
-      },
     ],
-    [handleModeChange, isSessionMode, source, selectSource, t],
+    [handleModeChange, isSessionMode, t],
   );
 
   const header = (
@@ -83,10 +63,7 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
         className="min-h-10 flex-row items-center gap-1.5"
         testID="sidebar-recents-mode-toggle"
       >
-        <Text className="text-muted-foreground text-sm">
-          {modeLabel}
-          {source === 'remote' ? ` · ${t('navigation.remote')}` : ''}
-        </Text>
+        <Text className="text-muted-foreground text-sm">{modeLabel}</Text>
         <ChevronDownIcon className="size-4 text-muted-foreground" />
       </View>
     </ActionMenu>

@@ -35,22 +35,30 @@ column. Grouped conversation and pagination rows keep the avatar column empty; t
 conversation list has no avatar column and retains its original left gutter. Selection surfaces
 keep the same outer gutters across groups.
 
-The existing Conversations/Agents action menu has a second Local/Remote section. `ChatSourceProvider`
-keeps the source-specific view mode and last chat target. Both sources mount `SidebarConversationList`
-inside `ConversationSourceBoundary`; the same Agent groups, rows, pagination, selection and menu
-presentation consume catalog summaries and bound preview actions. `SidebarDesktopSource` owns only
-device selection and connection framing. Its device menu appears only when multiple devices are
-saved; device management stays in Settings.
+The drawer title names whose chats it shows: "Cherry Studio" for this phone, or the selected
+desktop's name. The name always reads in full and never ends in an ellipsis: a long one shrinks
+from 24 to at most 18 points, and one that still overflows is clipped and scrolls by in a single
+marquee lap each time the drawer opens or the name changes (`SidebarTitle` documents the motion;
+reduced motion keeps it still). Without a paired desktop it stays plain text. Once any desktop is saved, a centered
+disclosure chevron follows it and tapping opens a native menu listing "Cherry Studio" first, then
+every saved desktop, with a separate "Manage devices" entry that opens Device Connections; pairing,
+renaming and removal stay in Settings. The Conversations/Agents menu only switches the list view.
+`ChatSourceProvider` keeps the source-specific view mode and last chat target; returning to the
+last desktop resumes its chat, while another desktop opens at its catalog. Both sources mount
+`SidebarConversationList` inside `ConversationSourceBoundary`; the same Agent groups, rows,
+pagination, selection and menu presentation consume catalog summaries and bound preview actions.
+`SidebarDesktopSource` owns only connection framing.
 The original local sidebar is the visual and interaction baseline for both sources. Agent headers
 keep the full-width avatar/name/disclosure row; tapping anywhere on that row only toggles the
 group. New chat stays in the existing bottom dock, with no per-Agent new-chat icon. Row gutters,
 text columns, selection/pressed surfaces, empty/loading/error spacing and pagination feedback
 follow the local presentation. Avatar rendering is shared; desktop emoji is preserved, while a source without avatar metadata uses
 the common fallback.
-A connected PC is represented by a green status dot beside the view/source
-heading, with the device name retained in its accessibility label. Connection problems keep their
-message and recovery action. Source switching stays inside the drawer chat stack. Remote mode does
-not route into the local Agent editor or local full-text search.
+A connected PC is represented by a green status dot beside the list view heading, with the device
+name retained in its accessibility label. Connection problems keep their message and recovery
+action. Source switching stays inside the drawer chat stack. On a desktop, the drawer shows only
+what exists there: the search button and the Agents, Paintings, Plugins and Library rows are hidden
+because they manage this phone.
 
 Conversation source acquisition and loaded content share the same header frame, including a reserved status
 dot slot. For remote sources, one 200 ms loading-feedback delay spans controller acquisition, connection, and the first

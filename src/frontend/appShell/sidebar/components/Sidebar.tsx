@@ -20,7 +20,7 @@ export function Sidebar({ navigation }: SidebarProps) {
   const router = useRouter();
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
-  const { source, setViewMode, startRemoteChat } = useChatSource();
+  const { source, startRemoteChat } = useChatSource();
 
   const actions = useMemo<SidebarActions>(
     () => ({
@@ -33,10 +33,6 @@ export function Sidebar({ navigation }: SidebarProps) {
             }
           : undefined,
       navigateAgents: () => {
-        if (source === 'remote') {
-          setViewMode('agents');
-          return;
-        }
         navigation.closeDrawer();
         router.push('/agents');
       },
@@ -62,7 +58,7 @@ export function Sidebar({ navigation }: SidebarProps) {
         else void startNewChat();
       },
     }),
-    [navigation, openSessionSearch, router, source, setViewMode, startRemoteChat, startNewChat],
+    [navigation, openSessionSearch, router, source, startRemoteChat, startNewChat],
   );
 
   return (
