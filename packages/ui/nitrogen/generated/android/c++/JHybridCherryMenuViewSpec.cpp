@@ -19,11 +19,11 @@ namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuTrigger; }
 #include "NativeMenuItem.hpp"
 #include <vector>
 #include "JNativeMenuItem.hpp"
+#include <string>
 #include "NativeMenuCheckedState.hpp"
 #include "JNativeMenuCheckedState.hpp"
 #include "NativeMenuIcon.hpp"
 #include "JNativeMenuIcon.hpp"
-#include <string>
 #include <functional>
 #include "JFunc_void_std__string.hpp"
 #include <NitroModules/JNICallable.hpp>

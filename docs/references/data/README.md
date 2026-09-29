@@ -237,8 +237,8 @@ still reset development data; no legacy migration bridge is required before rele
 
 ## Startup Gate
 
-`AppBootstrapGate` initializes the backend cache before database seeding, then waits for database
-initialization, preference initialization, boot theme, and i18n only. The root route keeps the
+`AppBootstrapGate` waits for backend cache initialization, database initialization and seeding,
+preference initialization, boot theme, and i18n only. The root route keeps the
 native splash visible until initialization settles.
 The bootstrap runtime's `runPostReadyTasks()` starts the host PostReady phase after the gate opens;
 Agent reconciliation, MCP initialization, jobs, and other host-owned work remain off first paint.

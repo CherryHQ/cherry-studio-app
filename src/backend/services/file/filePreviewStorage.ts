@@ -5,12 +5,10 @@ import type { FileEntryService } from '@/backend/data/services/FileEntryService'
 import type { ResolvedFileUris } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { FileEntry } from '@/shared/data/types/file';
-import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import {
   createInternalEntry,
   type CreateInternalEntryInput,
-  createMessageParts,
   getInternalFileUri,
 } from './fileStorage';
 
@@ -24,6 +22,11 @@ const pendingThumbnails = new Map<string, Promise<string>>();
 const generationQueue: (() => void)[] = [];
 let activeGenerations = 0;
 
+/** Called only behind the cold-start gate, before any preview readers or generators exist. */
+export function resetFilePreviewsForRestore(): void {
+  if (thumbnailDirectory.exists) thumbnailDirectory.delete();
+}
+
 export async function createInternalEntryWithPreview(
   entries: Pick<FileEntryService, 'create'>,
   input: CreateInternalEntryInput,
@@ -31,15 +34,6 @@ export async function createInternalEntryWithPreview(
   const entry = await createInternalEntry(entries, input);
   await resolveFilePreviewUris(entry);
   return entry;
-}
-
-export async function createMessagePartsWithPreviews(
-  entries: Pick<FileEntryService, 'create' | 'delete'>,
-  parts: readonly CherryMessagePart[],
-): Promise<{ entries: FileEntry[]; parts: CherryMessagePart[] }> {
-  const managed = await createMessageParts(entries, parts);
-  await Promise.all(managed.entries.map(resolveFilePreviewUris));
-  return managed;
 }
 
 export async function resolveFilePreviewUris(entry: FileEntry): Promise<ResolvedFileUris> {

@@ -30,6 +30,8 @@
     "web-build/**",
     "packages/ai-core/**",
     "packages/ai-sdk-provider/**",
+    "packages/remote-protocol/**",
+    "packages/remote-transport/**",
     "packages/lucide-uniwind/src/index.ts",
     "packages/lucide-uniwind/src/icons/**",
     "packages/design-tokens/scripts/theme-contract.ts",

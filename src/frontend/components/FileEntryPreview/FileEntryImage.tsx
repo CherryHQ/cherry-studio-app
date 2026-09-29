@@ -10,10 +10,14 @@ import { useOpenFileEntry } from './hooks/useOpenFileEntry';
 import { PreviewImage } from './PreviewImage';
 
 /** A generated image is the deliverable, so its whole surface is visible in chat. */
-export function FileEntryImage({ entry, uri }: ResolvedFile) {
+export function FileEntryImage({
+  entry,
+  initialAspectRatio,
+  uri,
+}: ResolvedFile & { initialAspectRatio?: number }) {
   const file = useBackendModule('file');
   const { openFileEntry } = useOpenFileEntry();
-  const [aspectRatio, setAspectRatio] = useState(1);
+  const [aspectRatio, setAspectRatio] = useState(initialAspectRatio ?? 1);
   const preview = useQuery({
     networkMode: 'always',
     queryFn: async () => ({ entry, uri, previewUri: await file.generatePreviewUri(entry) }),

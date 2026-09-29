@@ -120,6 +120,35 @@ describe('react-native-enriched-markdown Android input patch', () => {
     expect(longPress).toMatch(/Log\.w\([^\n]+\)\s*\/\/[^\n]+\s*true\s*\}/);
   });
 
+  test('re-measures the field after an insert that suppresses the text watcher', () => {
+    const replaceRange = input
+      .split('private inline fun replaceTextInRange(')[1]
+      ?.split('fun applyFormatting()')[0];
+
+    // Paste and every programmatic insert run inside an edit phase, where the
+    // watcher's own invalidation never fires. Without this call the field keeps
+    // the height it had before the insert.
+    expect(replaceRange).toMatch(
+      /applyFormattingAndEmit\(\)\s*(?:\/\/[^\n]*\n\s*)*layoutManager\.invalidateLayout\(\)/,
+    );
+  });
+
+  test('clamps the leftover scroll offset once the field grows', () => {
+    const sizeChanged = input
+      .split('override fun onSizeChanged(')[1]
+      ?.split('fun attachTextWatcher(')[0];
+
+    expect(sizeChanged).toContain('val visibleTextHeight = h - paddingTop - paddingBottom');
+    expect(sizeChanged).toContain(
+      'val maxScrollY = (textLayout.height - visibleTextHeight).coerceAtLeast(0)',
+    );
+    // `super.scrollTo`, not `scrollTo`: the override above drops every scroll in
+    // auto-grow mode, and this one restores that mode's own invariant.
+    expect(sizeChanged).toMatch(
+      /if \(scrollY <= maxScrollY\) return\s*(?:\/\/[^\n]*\n\s*)*super\.scrollTo\(scrollX, maxScrollY\)/,
+    );
+  });
+
   test('measures an immutable snapshot instead of the live Editable', () => {
     const measurement = readFileSync(`${inputRoot}/layout/InputMeasurementStore.kt`, 'utf8');
     expect(measurement).toContain('val text: SpannedString?,');

@@ -45,6 +45,7 @@ Use this when:
 Notes:
 - Describe the desired image or edit vividly in the prompt.
 - Pass image_ids only when editing or using an existing image as a reference.
+- Generated images are displayed automatically in the conversation. Returned ids and names are file references, not URLs. Do not embed them as Markdown images or invent preview/download URLs; describe the result in text.
 - Generation can take 10-60 seconds.
 - Requires a drawing model configured in Settings > Model. If none is set, tell the user instead of retrying.`;
 

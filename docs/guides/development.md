@@ -35,9 +35,8 @@ After the development client is installed, start Metro with:
 pnpm dev
 ```
 
-The `ios`, `android`, and `dev` scripts build the required workspace packages and select the
-development app identity. There is no root application `build` script. To build only the workspace
-packages, use `pnpm packages:build`.
+The `ios`, `android`, and `dev` scripts select the development app identity. There is no root
+application `build` script. AI and remote packages are consumed from npm.
 
 Rebuild the development client after native dependency or native configuration changes. Ordinary
 JavaScript and TypeScript changes reuse the installed client. Use `pnpm dev:clear` when the Metro

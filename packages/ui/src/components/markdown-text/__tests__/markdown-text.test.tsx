@@ -133,7 +133,25 @@ describe('MarkdownText', () => {
   });
 
   test.each([
+    [true, 'StreamdownText'],
+    [false, 'EnrichedMarkdownText'],
+  ] as const)('normalizes TeX formulas for isStreaming=%p', (isStreaming, component) => {
+    const renderer = render(
+      <MarkdownText
+        fontSizeStep={0}
+        isStreaming={isStreaming}
+        markdown={'Inline \\(x\\).\n\n\\[\nE\n= 1\n\\]'}
+        onLinkPress={jest.fn()}
+      />,
+    );
+
+    expect(renderer.root.findByType(component).props.markdown).toBe('Inline $x$.\n\n$$ E = 1 $$');
+    act(() => renderer.unmount());
+  });
+
+  test.each([
     ['with the last text update', 'Partial', 'Complete'],
+    ['with an incomplete formula', String.raw`Partial \[E =`, String.raw`Partial \[E =`],
     [
       'without another text update',
       '| Item |\n| --- |\n| Final row',

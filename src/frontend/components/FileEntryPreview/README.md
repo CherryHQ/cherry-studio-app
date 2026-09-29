@@ -10,6 +10,7 @@ logging, and the single opening policy shared by the composer, messages, and fil
 - `LoadedFileEntryPreview`: the same tile with caller-resolved entry, original URI, and preview URI.
 - `FileEntryAttachment`: an assistant deliverable. Images render directly at their aspect ratio,
   with a height cap of 1.25 times the width; other kinds retain a full-width file row.
+- `FileEntryImage`: the same inline image for callers that already hold a resolved entry and URI.
 - `FileEntrySkeleton` and `FileEntryAttachmentSkeleton`: loading placeholders owned by the adapter.
 - `fileEntryPreviewKind`: one `mediaType` classifier for `image`, `markdown`, `text`, `html`, and
   `document`. JSON, XML, and YAML belong to `text`; PDF and unsupported types belong to `document`.

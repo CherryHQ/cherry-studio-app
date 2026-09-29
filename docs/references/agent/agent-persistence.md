@@ -54,7 +54,7 @@ The Agent Data API, `Backend.agent`, and frontend surfaces share these current c
 protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
 Mobile Agent has one execution target and one engine: `local → Pi` in this mobile app. Application
 composition injects Pi directly into the Host, so there is no implementation choice to persist. The
-planned PC Agent Controller does not represent PC execution as a local Runtime binding or extend the
+PC Agent Controller does not represent PC execution as a local Runtime binding or extend the
 current local execution-target value. PC Agent Sessions remain authoritative on the PC. A mobile
 adapter may map them into Agent Protocol values for the application, but it does not copy them into
 these tables as a second source of truth. Any offline cache or projection requires a separate
@@ -63,6 +63,16 @@ versioned adapter and invalidation design.
 artifact anchored to a durable turn, not an engine id, resumable Runtime instance, provider cursor,
 or routing choice. The Host treats its payload as opaque and a process restart still interrupts an
 active turn.
+
+**Native model replay is an optional local cache.** Successful Runtime turns may preserve signed
+thinking blocks and the original assistant/tool-result sequence in an Agent-private MMKV store,
+`cherry-agent-replay-cache`. It survives process restarts but is bounded and disposable, separate from
+the SQLite transcript and excluded from application backups. There is no replay column or schema
+migration. The Host writes it after terminal message persistence, reads it by Session/message/Turn
+identity, and removes it on retry or deletion. Fork transactions return backend-private source/copy
+identities so the Host can copy available cache entries after commit. Storage restore clears this
+cache before startup. Missing or invalid entries use normalized message history; see
+[Agent Runtime](./agent-runtime.md#history) for limits and decoding ownership.
 
 **No workspace; controlled resources come from managed references.** A desktop workspace encodes a
 working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
@@ -182,7 +192,7 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
 | `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
-| `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` |
+| `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` and withholds `ask_user_question` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |
 | `createdAt` / `updatedAt` / `deletedAt` | integer | helper defaults | Soft delete via `deletedAt` |
 
@@ -234,7 +244,7 @@ recency; no `orderKey`).
 | `data` | text (json) | NOT NULL | `{ version: 1, parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
 | `usage` | text (json) | NULL | Assistant messages only |
-| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming` |
+| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
 | `error` | text (json) | NULL | Turn-level `AgentErrorView`, including the versioned failure snapshot when available; projected into `AgentTurnView.error`, not part of the message view |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |

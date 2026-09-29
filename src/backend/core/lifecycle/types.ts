@@ -27,12 +27,6 @@ export const Phase = {
 
 export type Phase = (typeof Phase)[keyof typeof Phase];
 
-/** Phase ordering for comparison (lower runs earlier). */
-export const PhaseOrder: Record<Phase, number> = {
-  [Phase.Gate]: 0,
-  [Phase.PostReady]: 1,
-};
-
 /**
  * Lifecycle state of a single service.
  *

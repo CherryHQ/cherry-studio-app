@@ -8,11 +8,6 @@ export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassE
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
 
-// Padding below a screen-bottom action button when the safe-area inset is
-// smaller than this (home-button devices report 0), so the button never sits
-// flush against the screen edge.
-export const screenBottomActionInset = 16;
-
 // Native transition played over a theme switch (react-native-nitro-theme-transition).
 // The theme itself is instant — Uniwind commits it to the shadow tree in C++ — so
 // what animates is a GPU snapshot of the old screen fading out over the new one.

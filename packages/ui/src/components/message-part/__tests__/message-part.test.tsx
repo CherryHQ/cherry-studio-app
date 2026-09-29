@@ -39,6 +39,10 @@ jest.mock('@cherrystudio/app-icons/icons/triangle-alert', () => {
   };
 });
 
+jest.mock('../../background-press/background-press', () => ({
+  BackgroundPressExclusion: (props: object) =>
+    jest.requireActual('react').createElement(jest.requireActual('react-native').View, props),
+}));
 jest.mock('../../bottom-sheet', () => {
   const { View } = jest.requireActual('react-native');
 
@@ -187,6 +191,31 @@ describe('MessagePart', () => {
     expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
   });
 
+  it('reopens streaming reasoning before Markdown has reported any layout', () => {
+    const content = (text: string) => (
+      <MessagePart.Reasoning state="running" statusText="Thinking" testID="thinking">
+        {text ? <Text>{text}</Text> : null}
+      </MessagePart.Reasoning>
+    );
+    act(() => {
+      renderer = create(content(''));
+    });
+    const toggle = () =>
+      act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
+    toggle();
+    toggle();
+    toggle();
+    act(() => renderer!.update(content('Late reasoning result')));
+
+    const detail = findRenderedByTestId(renderer!, 'thinking-detail')[0];
+    expect(detail).toBeDefined();
+    // No height-zero wrapper or absolute child can keep a delayed native result hidden.
+    expect(detail.props.style).toBeUndefined();
+    expect(renderer!.root.findByProps({ children: 'Late reasoning result' })).toBeDefined();
+    toggle();
+    expect(renderer!.root.findAllByProps({ children: 'Late reasoning result' })).toHaveLength(0);
+  });
+
   it('keeps the total process duration folded until the reader expands it', () => {
     const onDisclosureToggle = jest.fn();
     act(() => {
@@ -278,7 +307,7 @@ describe('MessagePart', () => {
     expect(renderer!.root.findByProps({ children: 'File details' })).toBeDefined();
   });
 
-  it('keeps a running tool group expanded and folds it once complete', () => {
+  it('keeps tool groups collapsed while running and after completion until pressed', () => {
     const steps = (
       <>
         <Text>step one</Text>
@@ -293,8 +322,7 @@ describe('MessagePart', () => {
       );
     });
 
-    // Live run: steps visible without any press, title shimmering.
-    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
     expect(renderer!.root.findByProps({ accessibilityHint: 'shimmer' }).props.children).toBe(
       'Working with tools…',
     );
@@ -307,13 +335,12 @@ describe('MessagePart', () => {
       );
     });
 
-    // Settled run folds to its summary until the reader asks for the steps.
     expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
     expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
   });
 
-  it('lets a manual toggle override the running default of a tool group', () => {
+  it('keeps a manually opened tool group open after completion', () => {
     act(() => {
       renderer = create(
         <MessagePart.ToolGroup
@@ -329,10 +356,37 @@ describe('MessagePart', () => {
     });
 
     act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
-    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
     expect(renderer!.root.findByProps({ children: '1 failed' }).props.className).toContain(
       'text-error',
     );
+    act(() => {
+      renderer!.update(
+        <MessagePart.ToolGroup state="complete" testID="group" title="2 operations">
+          <Text>step</Text>
+          <Text>second step</Text>
+        </MessagePart.ToolGroup>,
+      );
+    });
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
+  });
+
+  it('preserves reading an open run when it first enters the completed process', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.Process
+          defaultExpanded
+          state="complete"
+          title="Thinking process"
+          testID="process"
+        >
+          <Text>Opened tool history</Text>
+        </MessagePart.Process>,
+      );
+    });
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(1);
+    act(() => renderer!.root.findByProps({ testID: 'process-trigger' }).props.onPress());
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(0);
   });
 
   it('renders the pending response as an active, accessible status row', () => {

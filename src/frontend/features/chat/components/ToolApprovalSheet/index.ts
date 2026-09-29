@@ -1,1 +1,5 @@
-export { type PendingToolApproval, ToolApprovalSheet } from './ToolApprovalSheet';
+export {
+  type PendingToolApproval,
+  type ToolApprovalRespondInput,
+  ToolApprovalSheet,
+} from './ToolApprovalSheet';

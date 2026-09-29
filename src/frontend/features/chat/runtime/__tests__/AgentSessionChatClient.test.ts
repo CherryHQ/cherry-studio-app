@@ -23,6 +23,7 @@ function snapshot(): AgentSessionSnapshot {
     agent: { id: 'agent-1', name: 'Agent' },
     capabilities: { approvals: true, attachments: false, reasoning: true, tools: true },
     pendingApprovals: [],
+    pendingQuestion: null,
     hasHistoryBeforeActiveTurn: null,
     session: {
       agentId: 'agent-1',
@@ -93,12 +94,105 @@ function protocolWithObservation(
     observeSession: jest.fn(observeSession),
     renameSession: jest.fn(),
     respondApproval: jest.fn(),
+    respondQuestion: jest.fn(),
     startSession: jest.fn(),
     submitMessage: jest.fn(),
   };
 }
 
 describe('AgentSessionChatClient', () => {
+  test('pauses live observation in background and restores missed text from the next snapshot', async () => {
+    let publish!: (event: AgentEvent) => void;
+    let snapshotText = 'before';
+    const unsubscribeObservation = jest.fn();
+    const protocol = protocolWithObservation(async (_sessionId, listener) => {
+      publish = listener;
+      return {
+        snapshot: {
+          ...snapshot(),
+          streamingMessage: {
+            ...assistantMessage(),
+            parts: [{ id: 'text-1', state: 'streaming', text: snapshotText, type: 'text' }],
+          },
+        },
+        unsubscribe: unsubscribeObservation,
+      };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    const release = client.subscribe('session-1', () => undefined);
+    await client.observe('session-1');
+    expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+      text: 'before',
+    });
+
+    const stalePublish = publish;
+    client.pauseObservedSessions();
+    expect(unsubscribeObservation).toHaveBeenCalledTimes(1);
+    snapshotText = 'before and after';
+    stalePublish({
+      type: 'message.delta',
+      messageId: 'assistant-1',
+      delta: { op: 'text.append', partId: 'text-1', text: ' stale' },
+    });
+    await client.observe('session-1');
+    expect(protocol.observeSession).toHaveBeenCalledTimes(1);
+    expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+      text: 'before',
+    });
+
+    await client.resumeObservedSessions();
+    expect(protocol.observeSession).toHaveBeenCalledTimes(2);
+    expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+      text: 'before and after',
+    });
+    release();
+  });
+
+  test('restores a live question from observation and rejects responses after it resolves', async () => {
+    const question = {
+      turnId: 'turn-1',
+      toolCallId: 'question-1',
+      question: {
+        questions: [
+          {
+            id: 'focus',
+            question: 'Choose a focus',
+            selection: 'single' as const,
+            options: [
+              { id: 'a', label: 'Writing' },
+              { id: 'b', label: 'Reading' },
+            ],
+          },
+        ],
+      },
+    };
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: { ...snapshot(), pendingQuestion: question }, unsubscribe: jest.fn() };
+    });
+    protocol.respondQuestion.mockImplementation(async () => {
+      publish({ type: 'question.updated', question: null });
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    expect(client.getState('session-1').pendingQuestion).toEqual(question);
+    const answer = {
+      answers: [{ questionId: 'focus', selectedOptionIds: ['a'], text: '', skipped: false }],
+    };
+    await client.respondQuestion('session-1', 'question-1', answer);
+    expect(protocol.respondQuestion).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      toolCallId: 'question-1',
+      answer,
+    });
+    expect(client.getState('session-1').pendingQuestion).toBeNull();
+    await expect(client.respondQuestion('session-1', 'question-1', answer)).rejects.toThrow();
+    expect(protocol.respondQuestion).toHaveBeenCalledTimes(1);
+    client.dispose();
+  });
+
   test('rejects a second retry or send during retry admission and releases the guard on failure', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),
@@ -399,7 +493,7 @@ describe('AgentSessionChatClient', () => {
       });
 
       expect(onChange).not.toHaveBeenCalled();
-      jest.advanceTimersByTime(16);
+      jest.advanceTimersByTime(100);
       expect(onChange).toHaveBeenCalledTimes(1);
       expect(client.getState('session-1').liveMessages[0]?.parts).toEqual([
         { id: 'text-1', state: 'streaming', text: 'Hello world', type: 'text' },
@@ -409,6 +503,68 @@ describe('AgentSessionChatClient', () => {
       jest.useRealTimers();
     }
   });
+
+  test.each([
+    [400_000, 200],
+    [8_000_000, 3000],
+  ])(
+    'spaces out %i characters without postponing an existing %i ms deadline',
+    async (length, interval) => {
+      jest.useFakeTimers();
+      let release = () => {};
+      try {
+        let listener: ((event: AgentEvent) => void) | undefined;
+        const text = 'a'.repeat(length);
+        const message: AgentMessageView = {
+          ...assistantMessage(),
+          parts: [{ id: 'reasoning-1', state: 'streaming', text, type: 'reasoning' }],
+        };
+        const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+          listener = nextListener;
+          return { snapshot: { ...snapshot(), streamingMessage: message }, unsubscribe: jest.fn() };
+        });
+        const client = new AgentSessionChatClient(protocol);
+        await client.observe('session-1');
+        const onChange = jest.fn();
+        release = client.subscribe('session-1', onChange);
+        const append = (value: string) =>
+          listener?.({
+            type: 'message.delta',
+            messageId: 'assistant-1',
+            delta: { op: 'text.append', partId: 'reasoning-1', text: value },
+          });
+        onChange.mockClear();
+        append('b');
+        jest.advanceTimersByTime(interval - 1);
+        expect(onChange).not.toHaveBeenCalled();
+        append('c');
+        jest.advanceTimersByTime(2);
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+          text: `${text}bc`,
+        });
+
+        append('d');
+        listener?.({
+          type: 'message.finalized',
+          message: {
+            ...message,
+            status: 'cancelled',
+            parts: [{ id: 'reasoning-1', type: 'reasoning', state: 'done', text: `${text}bcd` }],
+          },
+        });
+        expect(onChange).toHaveBeenCalledTimes(2);
+        expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+          text: `${text}bcd`,
+        });
+        jest.advanceTimersByTime(3000);
+        expect(onChange).toHaveBeenCalledTimes(2);
+      } finally {
+        release();
+        jest.useRealTimers();
+      }
+    },
+  );
 
   test('publishes tool previews only to the matching content subscriber and preserves list identity', async () => {
     let listener: ((event: AgentEvent) => void) | undefined;
@@ -567,7 +723,7 @@ describe('AgentSessionChatClient', () => {
         parts: [{ text: 'Complete' }],
         status: 'success',
       });
-      jest.advanceTimersByTime(16);
+      jest.advanceTimersByTime(100);
       expect(onChange).toHaveBeenCalledTimes(1);
     } finally {
       release();

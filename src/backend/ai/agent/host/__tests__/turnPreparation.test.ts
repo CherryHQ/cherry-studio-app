@@ -129,6 +129,7 @@ describe('turn preparation', () => {
         input: { file_entry_id: FILE_ENTRY_ID },
         signal: new AbortController().signal,
         toolCallId: 'read-1',
+        turnId: 'turn-1',
       });
       expect(read.value).toMatchObject({
         parser: 'anydoc',
@@ -172,6 +173,7 @@ describe('turn preparation', () => {
             input: { file_entry_id: FILE_ENTRY_ID },
             signal: new AbortController().signal,
             toolCallId: 'read-2',
+            turnId: 'turn-1',
           })
         ).value,
       ).toMatchObject({ parser: 'builtin', text: 'built-in result' });
@@ -240,6 +242,8 @@ describe('turn preparation', () => {
 
     expect(harness.routeExecutionTarget).toHaveBeenCalledWith(SESSION.executionTarget);
     expect(harness.getSystemTools).toHaveBeenCalledWith({
+      agentId: AGENT.id,
+      askUser: harness.askUser,
       disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       resources: plan.resources,
@@ -269,7 +273,11 @@ describe('turn preparation', () => {
     expect(() =>
       plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
     ).toThrow('already bound');
-    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID, expect.any(Function));
+    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(
+      AGENT_ID,
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
 
@@ -345,6 +353,29 @@ describe('turn preparation', () => {
 
     // The Agent runs in auto mode, but a consent-bearing ask must survive it.
     expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
+  });
+
+  test('withholds ask_user_question only under the auto approval mode', async () => {
+    const question = tool('ask_user_question', 'auto');
+    const prepare = async (toolApprovalMode: AgentDefinition['toolApprovalMode']) => {
+      const harness = createHarness();
+      harness.getSystemTools.mockResolvedValueOnce([question, harness.systemTool]);
+      harness.getAgent.mockResolvedValueOnce({ ...AGENT, toolApprovalMode });
+      const plan = await prepareTurn(
+        harness.dependencies,
+        textInput(),
+        new AbortController().signal,
+      );
+      return plan.tools.map((entry) => entry.providerName);
+    };
+
+    // Auto mode never blocks on the user, so missing decisions go into the reply.
+    expect(await prepare('auto')).toEqual(['system_tool', 'configured_tool']);
+    expect(await prepare('default')).toEqual([
+      'ask_user_question',
+      'system_tool',
+      'configured_tool',
+    ]);
   });
 
   test.each(['existing', 'initial'] as const)(
@@ -513,8 +544,12 @@ function createHarness() {
   });
   const preflightModel = jest.spyOn(runtime, 'preflightModel');
   const routeExecutionTarget = jest.fn(() => runtime);
+  const askUser = jest.fn(async () => {
+    throw new Error('Preparation never asks the user.');
+  });
   const dependencies: TurnPreparationDependencies = {
     agents: { getAgent },
+    askUser,
     documentParserMode: () => 'anydoc',
     files,
     inferenceModel: resolveInferenceModel,
@@ -525,6 +560,7 @@ function createHarness() {
   };
 
   return {
+    askUser,
     configuredTool,
     dependencies,
     files,

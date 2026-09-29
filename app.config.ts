@@ -9,6 +9,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   if (!['development', 'preview', 'production'].includes(profile)) {
     throw new Error(`Unknown PROFILE: ${profile}. Expected development, preview, or production.`);
   }
+  const apkUpdatesSetting = process.env.APK_UPDATES_ENABLED ?? 'false';
+  if (!['true', 'false'].includes(apkUpdatesSetting)) {
+    throw new Error(`Invalid APK_UPDATES_ENABLED: ${apkUpdatesSetting}. Expected true or false.`);
+  }
 
   const suffix = profile === 'development' ? '.dev' : profile === 'preview' ? '.preview' : '';
   const bundleIdentifier = `${config.ios!.bundleIdentifier}${suffix}`;
@@ -43,7 +47,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       bundleIdentifier,
       entitlements: {
         ...config.ios?.entitlements,
-        'com.apple.security.application-groups': [groupIdentifier],
+        'com.apple.security.application-groups': [
+          groupIdentifier,
+          `group.${bundleIdentifier}.system-integration`,
+        ],
       },
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
@@ -63,6 +70,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         if (plugin === 'expo-localization') {
           return [plugin, { supportedLocales: APP_LANGUAGES.map(({ value }) => value) }];
         }
+        if (Array.isArray(plugin) && plugin[0] === 'expo-build-properties') {
+          return [
+            plugin[0],
+            {
+              ...plugin[1],
+              android: {
+                ...plugin[1].android,
+                // Compressed native libraries only help direct APK downloads; the Google Play profile opts out.
+                useLegacyPackaging:
+                  profile !== 'development' && process.env.ANDROID_COMPRESS_NATIVE_LIBS !== 'false',
+              },
+            },
+          ];
+        }
         if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
           return [
             plugin[0],
@@ -73,6 +94,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       }),
     extra: {
       ...config.extra,
+      isApkUpdatesEnabled: apkUpdatesSetting === 'true',
       sentryEnvironment: profile,
       reporting,
       eas: {
@@ -88,6 +110,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
                   targetName: 'ExpoWidgetsTarget',
                   bundleIdentifier: widgetBundleIdentifier,
                   entitlements: { 'com.apple.security.application-groups': [groupIdentifier] },
+                },
+                {
+                  targetName: 'CherryShareExtension',
+                  bundleIdentifier: `${bundleIdentifier}.CherryShareExtension`,
+                  entitlements: {
+                    'com.apple.security.application-groups': [
+                      `group.${bundleIdentifier}.system-integration`,
+                    ],
+                  },
                 },
               ],
             },

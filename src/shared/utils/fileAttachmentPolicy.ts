@@ -5,7 +5,7 @@ import {
 } from '@/shared/contracts/fileAttachment';
 
 import { documentFileTypeFromMediaType } from './documentFileTypes';
-import { AI_IMAGE_INPUT_MAX_COUNT, isAiSupportedImageMediaType } from './imageFileTypes';
+import { isAiSupportedImageMediaType } from './imageFileTypes';
 import { isSupportedTextAttachment } from './textFileTypes';
 
 export const MAX_TEXT_ATTACHMENT_BYTES = 1024 * 1024;
@@ -13,9 +13,11 @@ export const MAX_TEXT_ATTACHMENT_CHARACTERS = 200_000;
 export const MAX_TEXT_ATTACHMENT_TOTAL_CHARACTERS = 400_000;
 export const MAX_DOCUMENT_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 export const MAX_PDF_ATTACHMENT_PAGES = 100;
-export const MAX_IMAGE_ATTACHMENT_COUNT = AI_IMAGE_INPUT_MAX_COUNT;
 export const MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-export const MAX_IMAGE_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024;
+// Attached images have no request-level count or byte ceiling: the Runtime prices them into the
+// context window and compaction folds old ones. Only document-embedded images, which the user did
+// not pick one by one, draw from this bounded budget alongside the attached images.
+export const MAX_DOCUMENT_IMAGE_TOTAL_BYTES = 20 * 1024 * 1024;
 export const IMAGE_CONTEXT_TOKEN_RESERVE = 4_096;
 export const MIN_TEXT_CONTEXT_TOKEN_RESERVE = 1_024;
 
@@ -55,20 +57,20 @@ export function validateFileAttachments(
           : MAX_TEXT_ATTACHMENT_BYTES;
     if (file.size > limit) throw new FileAttachmentError({ ...issue, code: 'file-bytes', limit });
   }
-  const maxImages = Math.min(
-    MAX_IMAGE_ATTACHMENT_COUNT,
-    target.maxImages ?? MAX_IMAGE_ATTACHMENT_COUNT,
+  // Painting models declare how many references they accept; chat images are unbounded.
+  if (target.maxImages !== undefined && images.length > target.maxImages) {
+    throw new FileAttachmentError({ code: 'count', limit: target.maxImages });
+  }
+}
+
+/** Document-embedded images one request can carry, bounded by the model's context reserve. */
+export function documentImageCountLimit(
+  target: Pick<FileAttachmentTarget, 'maxImages' | 'maxInputTokens'>,
+): number {
+  const count = target.maxImages ?? Infinity;
+  if (target.maxInputTokens === undefined) return count;
+  const byContext = Math.floor(
+    (target.maxInputTokens - MIN_TEXT_CONTEXT_TOKEN_RESERVE) / IMAGE_CONTEXT_TOKEN_RESERVE,
   );
-  if (images.length > maxImages) throw new FileAttachmentError({ code: 'count', limit: maxImages });
-  if (images.reduce((total, image) => total + image.size, 0) > MAX_IMAGE_ATTACHMENT_TOTAL_BYTES) {
-    throw new FileAttachmentError({ code: 'total-bytes', limit: MAX_IMAGE_ATTACHMENT_TOTAL_BYTES });
-  }
-  if (
-    images.length > 0 &&
-    target.maxInputTokens !== undefined &&
-    MIN_TEXT_CONTEXT_TOKEN_RESERVE + images.length * IMAGE_CONTEXT_TOKEN_RESERVE >
-      target.maxInputTokens
-  ) {
-    throw new FileAttachmentError({ code: 'context', limit: target.maxInputTokens });
-  }
+  return Math.max(0, Math.min(count, byContext));
 }

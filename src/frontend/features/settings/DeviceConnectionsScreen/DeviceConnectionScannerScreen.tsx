@@ -12,6 +12,7 @@ import { useDesktopConnectionActions } from '@/frontend/hooks/useDesktopConnecti
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
 import {
+  type DesktopPairingClaim,
   type DesktopPairingQr,
   DesktopPairingQrSchema,
 } from '@/shared/data/api/schemas/desktopConnections';
@@ -22,8 +23,9 @@ import { useScannerPermissions } from './useScannerPermissions';
 export function DeviceConnectionScannerScreen({
   setupIntent,
 }: { setupIntent?: FirstUseSetupIntent } = {}) {
-  const params = useLocalSearchParams<{ connectionId?: string | string[] }>();
+  const params = useLocalSearchParams<{ connectionId?: string | string[]; purpose?: string }>();
   const connectionId = getSingleRouteParam(params.connectionId);
+  const updatingLocation = params.purpose === 'location' && Boolean(connectionId);
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
@@ -32,11 +34,12 @@ export function DeviceConnectionScannerScreen({
   const [manualValue, setManualValue] = useState('');
   const [hasScanned, setHasScanned] = useState(false);
   const [scanError, setScanError] = useState<string>();
+  const [claim, setClaim] = useState<DesktopPairingClaim>();
   const scanInFlight = useRef(false);
   const mounted = useRef(false);
-  const { isPairing, pair } = useDesktopConnectionActions();
+  const { isPairing, pair, updateLocation } = useDesktopConnectionActions();
   const isReady = isActive && !isPreparing;
-  const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
+  const showCamera = !isPreparing && !scanError && !claim && camera?.state === 'granted';
 
   useEffect(() => {
     mounted.current = true;
@@ -48,6 +51,7 @@ export function DeviceConnectionScannerScreen({
   const retryScan = () => {
     scanInFlight.current = false;
     setScanError(undefined);
+    setClaim(undefined);
     setHasScanned(false);
   };
 
@@ -60,25 +64,55 @@ export function DeviceConnectionScannerScreen({
   const submit = useCallback(
     async (qr: DesktopPairingQr) => {
       try {
-        const connection = await pair({ ...qr, ...(connectionId ? { connectionId } : {}) });
+        if (updatingLocation && connectionId) {
+          const updated = await updateLocation(connectionId, qr);
+          if (updated && mounted.current)
+            router.replace({
+              params: { connectionId },
+              pathname: '/settings/device-connections/[connectionId]',
+            });
+          return;
+        }
+        // The desktop user decides which of the requested capabilities this device gets.
+        const connection = await pair(
+          {
+            ...qr,
+            capabilities: ['configuration', 'agent'],
+            ...(connectionId ? { connectionId } : {}),
+          },
+          (nextClaim) => {
+            if (mounted.current) setClaim(nextClaim);
+          },
+        );
         if (!mounted.current) return;
         if (!connection) {
           scanInFlight.current = false;
+          setClaim(undefined);
           setHasScanned(false);
           return;
         }
-        router.replace({
-          params: { connectionId: connection.id },
-          pathname:
-            setupIntent === 'chat'
-              ? '/onboarding/device-connections/sync-guide'
-              : '/settings/device-connections/sync-guide',
-        });
+        // Only first-use setup continues directly into provider sync after pairing.
+        if (setupIntent === 'chat' && connection.capabilities.includes('configuration')) {
+          router.replace({
+            params: { connectionId: connection.id },
+            pathname: '/onboarding/provider-sync',
+          });
+        } else if (setupIntent === 'chat') {
+          router.dismissTo('/onboarding');
+        } else {
+          router.replace({
+            params: { connectionId: connection.id },
+            pathname: '/settings/device-connections/[connectionId]',
+          });
+        }
       } catch (error) {
-        if (mounted.current) setScanError(desktopConnectionErrorMessage(error, t));
+        if (mounted.current) {
+          setClaim(undefined);
+          setScanError(desktopConnectionErrorMessage(error, t));
+        }
       }
     },
-    [connectionId, pair, router, setupIntent, t],
+    [connectionId, pair, router, setupIntent, t, updatingLocation, updateLocation],
   );
 
   const parseAndSubmit = useCallback(
@@ -103,7 +137,22 @@ export function DeviceConnectionScannerScreen({
 
   return (
     <View className="flex-1 bg-grouped-background">
-      <RouteHeader title={t('settings.deviceConnections.scan.title')} />
+      <RouteHeader
+        title={t(
+          updatingLocation
+            ? 'settings.deviceConnections.location.scan'
+            : 'settings.deviceConnections.scan.title',
+        )}
+      />
+      <View className="px-4 pt-3 pb-4">
+        <Text className="text-sm text-muted-foreground">
+          {t(
+            updatingLocation
+              ? 'settings.deviceConnections.location.scanHelp'
+              : 'settings.deviceConnections.scan.guidance',
+          )}
+        </Text>
+      </View>
       <View
         className={
           showCamera
@@ -111,7 +160,20 @@ export function DeviceConnectionScannerScreen({
             : 'min-h-0 flex-1 overflow-hidden bg-grouped-background'
         }
       >
-        {isPreparing ? (
+        {claim ? (
+          <View className="flex-1 items-center justify-center gap-4 px-6">
+            <Text className="text-center text-sm text-muted-foreground">
+              {t('settings.deviceConnections.scan.approveOnDesktop')}
+            </Text>
+            <Text
+              accessibilityLabel={t('settings.deviceConnections.scan.verificationCode')}
+              className="font-mono text-4xl tracking-[0.3em] text-foreground"
+            >
+              {claim.verificationCode}
+            </Text>
+            <ContentState.Loading title={t('settings.deviceConnections.scan.waiting')} />
+          </View>
+        ) : isPreparing ? (
           <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
         ) : scanError ? (
           <View className="flex-1 justify-center px-6">
@@ -187,7 +249,11 @@ export function DeviceConnectionScannerScreen({
           loading={isPairing}
           onPress={() => parseAndSubmit(manualValue.trim())}
         >
-          {t('settings.deviceConnections.scan.pair')}
+          {t(
+            updatingLocation
+              ? 'settings.deviceConnections.location.scan'
+              : 'settings.deviceConnections.scan.pair',
+          )}
         </Button>
       </View>
     </View>

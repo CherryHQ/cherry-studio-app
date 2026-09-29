@@ -1,3 +1,5 @@
+import { createMMKV } from 'react-native-mmkv';
+
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime } from '@/backend/ai/agent/runtime';
 import {
@@ -16,13 +18,19 @@ import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { ProviderAccountService } from '@/backend/data/services/ProviderAccountService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
 import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
+import { createAppUpdateModule } from '@/backend/services/appUpdate';
+import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
-import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import type {
+  DesktopConnectionManager,
+  DesktopConnectionRuntime,
+} from '@/backend/services/desktopConnections';
 import {
   createDocumentExportDependencies,
   type DocumentExportRuntime,
@@ -48,6 +56,8 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
+import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -55,6 +65,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;
+  disposeSystemEntry(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -68,8 +79,11 @@ export function createBackend(
   infrastructure: {
     dbService: DbService;
     providerAccounts: ProviderAccountRuntime;
+    backup: BackupRuntime;
     documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
+    desktopConnectionManager: DesktopConnectionManager;
+    remoteAgent: RemoteAgentRuntime;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
   },
@@ -80,12 +94,19 @@ export function createBackend(
   ]);
   // Capture this host's database; late work never resolves a replacement host.
   const exportFiles = new FileEntryService(dbService);
+  infrastructure.remoteAgent.configure({
+    connections: infrastructure.desktopConnectionManager,
+    journal: new RemoteAgentCommandJournal(createMMKV({ id: 'cherry-remote-agent-commands' })),
+  });
   infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
+  const desktopStore = new DesktopConnectionService(dbService, (provider) =>
+    infrastructure.providerAccounts.getCapabilities(provider),
+  );
+  infrastructure.desktopConnectionManager.configure(desktopStore);
   infrastructure.desktopConnections.configure(
-    new DesktopConnectionService(dbService, (provider) =>
-      infrastructure.providerAccounts.getCapabilities(provider),
-    ),
+    desktopStore,
     () => infrastructure.providerRegistryUpdater.ensureReady(),
+    infrastructure.desktopConnectionManager,
   );
   const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(
     infrastructure.languageServing,
@@ -204,9 +225,18 @@ export function createBackend(
     },
   });
 
+  const systemEntry = createSystemEntryModule({
+    importFiles: createSystemShareImporter(exportFiles),
+  });
+
   return {
+    disposeSystemEntry: systemEntry.dispose,
     backend: {
+      appUpdate: createAppUpdateModule(),
+      backup: infrastructure.backup,
+      systemEntry: systemEntry.module,
       agent: services.agent,
+      remoteAgent: infrastructure.remoteAgent,
       desktopConnections: infrastructure.desktopConnections,
       documentExport: infrastructure.documentExport,
       file: {

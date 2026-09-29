@@ -1,6 +1,6 @@
 import type { DbService } from '@/backend/data/db/DbService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
-import { providerService } from '@/backend/data/services/ProviderService';
+import { batchUpsertProviders } from '@/backend/data/services/ProviderService';
 
 import { PresetProviderSeeder } from '../PresetProviderSeeder';
 
@@ -22,9 +22,7 @@ jest.mock('@/backend/data/services/ProviderRegistryService', () => ({
   },
 }));
 jest.mock('@/backend/data/services/ProviderService', () => ({
-  providerService: {
-    batchUpsert: jest.fn(async () => undefined),
-  },
+  batchUpsertProviders: jest.fn(async () => undefined),
 }));
 
 describe('PresetProviderSeeder', () => {
@@ -32,10 +30,11 @@ describe('PresetProviderSeeder', () => {
     jest.clearAllMocks();
   });
 
-  test('installs recommended providers on a fresh database', async () => {
-    await new PresetProviderSeeder().run(createDbService({}));
+  test('installs recommended providers through the supplied database transaction', async () => {
+    const database = createDbService({});
+    await new PresetProviderSeeder().run(database);
 
-    expect(providerService.batchUpsert).toHaveBeenCalledWith([
+    expect(batchUpsertProviders).toHaveBeenCalledWith(database.getDb(), [
       { name: 'Recommended', providerId: 'recommended' },
     ]);
   });
@@ -43,7 +42,7 @@ describe('PresetProviderSeeder', () => {
   test('preserves an intentionally empty provider list after the first seed', async () => {
     await new PresetProviderSeeder().run(createDbService({ hasSeedJournal: true }));
 
-    expect(providerService.batchUpsert).toHaveBeenCalledWith([]);
+    expect(batchUpsertProviders).toHaveBeenCalledWith(expect.anything(), []);
   });
 
   test('refreshes only providers that remain installed', async () => {
@@ -54,7 +53,7 @@ describe('PresetProviderSeeder', () => {
       }),
     );
 
-    expect(providerService.batchUpsert).toHaveBeenCalledWith([
+    expect(batchUpsertProviders).toHaveBeenCalledWith(expect.anything(), [
       { name: 'Optional', providerId: 'optional' },
     ]);
     expect(providerRegistryService.loadProviders).toHaveBeenCalledTimes(1);
@@ -74,7 +73,7 @@ describe('PresetProviderSeeder', () => {
       }),
     );
 
-    expect(providerService.batchUpsert).toHaveBeenCalledWith([
+    expect(batchUpsertProviders).toHaveBeenCalledWith(expect.anything(), [
       { name: 'Optional', providerId: 'optional-copy' },
       { name: 'Plan', providerId: 'plan' },
     ]);
@@ -106,5 +105,6 @@ function createDbService({
 
   return {
     getDb: () => db,
+    withWriteTx: (callback: (tx: unknown) => Promise<void>) => callback(db),
   } as unknown as DbService;
 }

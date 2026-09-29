@@ -56,24 +56,6 @@
         }
       ]
     },
-    "ai-core": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["packages/aiCore"],
-      "targetPaths": ["packages/ai-core"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": ["packages/aiCore/src/core/context/**"]
-    },
-    "ai-sdk-provider": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["packages/ai-sdk-provider"],
-      "targetPaths": ["packages/ai-sdk-provider"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": []
-    },
     "provider-registry": {
       "strategy": "semantic-port",
       "status": "aligned",

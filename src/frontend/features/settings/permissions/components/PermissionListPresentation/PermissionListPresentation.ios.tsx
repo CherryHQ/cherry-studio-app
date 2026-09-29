@@ -32,6 +32,3 @@ export function PermissionListLeading({ kind }: { kind: PermissionKind }) {
     />
   );
 }
-
-export const healthPermissionProvider = 'apple' as const;
-export const healthSettingsNeedInstructions = true;

@@ -16,7 +16,7 @@ import { readableFilename } from '@/shared/data/types/file';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
 import { normalizeDocument } from './normalizeDocument';
-import { renderMarkdown } from './renderMarkdown';
+import { renderMarkdown, renderMarkdownWithImages } from './renderMarkdown';
 import type { PreparedAsset, ReadManagedImage } from './resolveDocumentAssets';
 
 export type DocumentExportDependencies = {
@@ -71,9 +71,24 @@ export function createDocumentExportSession(
     onProgress?: (progress: DocumentExportProgress) => void,
   ): Promise<DocumentExportArtifact> {
     signal.throwIfAborted();
+    const progress = (stage: DocumentExportProgress) => {
+      signal.throwIfAborted();
+      assertActive();
+      onProgress?.(stage);
+    };
+    let preparedMarkdown: Awaited<ReturnType<typeof renderMarkdownWithImages>> | undefined;
+    if (target.format === 'markdown') {
+      progress('resolving-assets');
+      preparedMarkdown = await renderMarkdownWithImages(
+        document,
+        assets,
+        dependencies.readManagedImage,
+        signal,
+      );
+    }
     const markdownText =
       target.format === 'markdown'
-        ? markdown + renderMarkdownSignature(target.watermark)
+        ? preparedMarkdown!.text + renderMarkdownSignature(target.watermark)
         : markdown;
     if (
       target.format === 'markdown' &&
@@ -82,11 +97,6 @@ export function createDocumentExportSession(
       new File(current.file.uri).exists
     )
       return current;
-    const progress = (stage: DocumentExportProgress) => {
-      signal.throwIfAborted();
-      assertActive();
-      onProgress?.(stage);
-    };
     const id = randomUUID();
     const outputDirectory = new Directory(directory, id);
     let didPublish = false;
@@ -106,7 +116,7 @@ export function createDocumentExportSession(
           id,
           format: 'markdown',
           text: markdownText,
-          issues: [],
+          issues: preparedMarkdown!.issues,
           file: { uri: file.uri, filename, mediaType: 'text/markdown' },
         };
       } else {
@@ -217,6 +227,11 @@ export function createDocumentExportSession(
   const session: DocumentExportSession & { cancel(): void } = {
     document,
     markdown,
+    previewMarkdown: (text, presentation) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
+      const { renderMarkdownPreview } = require('./renderHtml') as typeof import('./renderHtml');
+      return renderMarkdownPreview(text, presentation, document.labels);
+    },
     render: (target, context) =>
       run(context?.signal, (signal) => render(target, signal, context?.onProgress)),
     save: (artifact, signal) =>

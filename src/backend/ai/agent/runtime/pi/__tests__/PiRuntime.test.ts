@@ -35,7 +35,6 @@ import {
   estimatePiContextFixedCosts,
   estimatePiLoopContextHeadroomTokens,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
-  PI_IMAGE_CONTEXT_TOKEN_RESERVE,
 } from '../contextCompaction';
 import {
   PI_DOCUMENT_ATTACHMENT_ENVELOPE_PREFIX,
@@ -48,6 +47,7 @@ import {
   PI_TOOL_DESCRIBE_TOOL_NAME,
   PI_TOOL_SEARCH_TOOL_NAME,
 } from '../piDeferredToolDiscovery';
+import { estimatePiImageTokens } from '../piImageTokens';
 import {
   DEFAULT_PI_RUNTIME_LIMITS,
   PI_TURN_SETTLE_GRACE_MS,
@@ -58,6 +58,7 @@ import {
   type PiRuntimeContextOptions,
   type PiRuntimeLimits,
 } from '../PiRuntime';
+import { readPiTurnReplay } from '../piTurnReplay';
 
 const ERROR_SECRET = 'test-key';
 const TOOL_REF = { source: 'builtin', capabilityId: 'delete_file' } as const;
@@ -230,6 +231,9 @@ function assistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantM
   };
 }
 
+// The fake provider reports usage(3, 2): the final request measured 5 tokens of context.
+const COMPLETED = { type: 'completed', contextTokens: 5 } as const;
+
 async function emitText(context: TestAgentContext, text: string): Promise<void> {
   const starting = assistantMessage({ content: [{ type: 'text', text: '' }] });
   const final = assistantMessage({ content: [{ type: 'text', text }] });
@@ -398,7 +402,6 @@ function compactableHistory() {
         {
           role: 'assistant' as const,
           parts: [{ type: 'text' as const, text: 'Recent.' }],
-          usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
         },
       ],
     },
@@ -551,7 +554,7 @@ describe('Pi invocation capture', () => {
         }),
       ),
     );
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     expect(outputCap).toBeLessThanOrEqual(128_000 - 100_000 - 4_096);
     expect(outputCap).toBeGreaterThanOrEqual(1_024);
     await session.close();
@@ -739,6 +742,64 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
+  test('captures complete native batches before projecting them to display parts', async () => {
+    const runtime = createTestRuntime();
+    const batch = assistantMessage({
+      stopReason: 'toolUse',
+      content: [
+        { type: 'thinking', thinking: 'Discover tools.', thinkingSignature: 'signature' },
+        {
+          type: 'toolCall',
+          id: 'a',
+          name: PI_TOOL_SEARCH_TOOL_NAME,
+          arguments: { query: 'files' },
+        },
+        {
+          type: 'toolCall',
+          id: 'b',
+          name: PI_TOOL_DESCRIBE_TOOL_NAME,
+          arguments: { name: 'read' },
+        },
+      ],
+    });
+    const toolResults: ToolResultMessage[] = [
+      {
+        role: 'toolResult',
+        toolCallId: 'b',
+        toolName: PI_TOOL_DESCRIBE_TOOL_NAME,
+        content: [{ type: 'text', text: 'Full declaration for the model' }],
+        isError: false,
+        timestamp: 1,
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'a',
+        toolName: PI_TOOL_SEARCH_TOOL_NAME,
+        content: [{ type: 'text', text: 'Full search result for the model' }],
+        isError: false,
+        timestamp: 2,
+      },
+    ];
+    arrange(runtime, async (context) => {
+      await context.emit({ type: 'turn_end', message: batch, toolResults });
+      await emitText(context, 'Done');
+    });
+    const session = await runtime.open();
+    const events = await collect(session.execute(baseRequest('native-replay')));
+    const terminal = events.at(-1);
+    if (terminal?.type !== 'completed') throw new Error('Expected a completed turn');
+    const replay = readPiTurnReplay(JSON.parse(JSON.stringify(terminal.replay)));
+    expect(replay?.map((message) => message.role)).toEqual([
+      'assistant',
+      'toolResult',
+      'toolResult',
+      'assistant',
+    ]);
+    expect(replay?.[0]).toMatchObject({ content: batch.content });
+    expect(replay?.slice(1, 3)).toEqual(toolResults);
+    await session.close();
+  });
+
   test('continues from retained tool results without repeating the user prompt or replaying tool execution', async () => {
     const runtime = createTestRuntime();
     const tool = askTool(() => {
@@ -770,17 +831,24 @@ describe('PiRuntime mapping', () => {
     const events = await collect(session.execute(request));
     const messages = holder.lastOptions?.initialState?.messages ?? [];
     expect(messages.map((message) => message.role)).toEqual(['user', 'assistant', 'toolResult']);
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
+    const completed = events.at(-1);
+    expect(
+      completed?.type === 'completed' &&
+        readPiTurnReplay(completed.replay)?.map((message) => message.role),
+    ).toEqual(['assistant', 'toolResult', 'assistant']);
     expect(events.some((event) => event.type === 'part.add' && event.part.type === 'tool')).toBe(
       false,
     );
     expect(events.some((event) => event.type === 'approval.requested')).toBe(false);
     const withResume = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(request, holder.resolution.model),
       outputReserveTokens: 1024,
       tools: [],
     });
     const withoutResume = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(baseRequest('fresh'), holder.resolution.model),
       outputReserveTokens: 1024,
       tools: [],
@@ -1089,16 +1157,20 @@ describe('PiRuntime mapping', () => {
     model.input = ['text', 'image'];
     const conversation = toPiConversation(baseRequest('document-costs', { input: [part] }), model);
     const costs = estimatePiContextFixedCosts({
+      api: model.api,
       conversation,
       outputReserveTokens: 512,
       tools: [],
     });
     const empty = estimatePiContextFixedCosts({
+      api: model.api,
       conversation: toPiConversation(baseRequest('empty', { input: [] }), model),
       outputReserveTokens: 512,
       tools: [],
     });
-    expect(costs.totalTokens - empty.totalTokens).toBeGreaterThan(PI_IMAGE_CONTEXT_TOKEN_RESERVE);
+    expect(costs.totalTokens - empty.totalTokens).toBeGreaterThan(
+      estimatePiImageTokens(model.api, { type: 'image', mimeType: 'image/png', data: 'AQID' }),
+    );
     const repeated = toPiConversation(
       baseRequest('history-costs', {
         input: [part],
@@ -1315,11 +1387,13 @@ describe('PiRuntime mapping', () => {
       parameters: tool.inputSchema as never,
     }));
     const costs = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(request, holder.resolution.model),
       outputReserveTokens: 512,
       tools: piTools,
     });
     const costsWithoutTextAttachment = estimatePiContextFixedCosts({
+      api: holder.resolution.model.api,
       conversation: toPiConversation(
         { ...request, input: request.input.filter((_, index) => index !== 1) },
         holder.resolution.model,
@@ -1332,7 +1406,13 @@ describe('PiRuntime mapping', () => {
       systemInstructionsTokens: expect.any(Number),
       currentInputTokens: expect.any(Number),
       toolSchemaTokens: expect.any(Number),
-      attachmentTokens: PI_IMAGE_CONTEXT_TOKEN_RESERVE - 1_200,
+      // Pi's flat 1,200-token image charge is replaced by the dialect estimate.
+      attachmentTokens:
+        estimatePiImageTokens(holder.resolution.model.api, {
+          type: 'image',
+          mimeType: 'image/png',
+          data: 'AAAA',
+        }) - 1_200,
       outputReserveTokens: 512,
       safetyMarginTokens: PI_CONTEXT_SAFETY_MARGIN_TOKENS,
     });
@@ -1350,7 +1430,7 @@ describe('PiRuntime mapping', () => {
     );
   });
 
-  test('budgets replayed history by content instead of cumulative request usage', async () => {
+  test('budgets replayed history by content when no answer carries a measured context', async () => {
     let summaryCalls = 0;
     const runtime = createCompactionRuntime({
       completeSimple: summaryCompletion('Unused summary.', () => {
@@ -1360,13 +1440,9 @@ describe('PiRuntime mapping', () => {
     const holder = arrange(runtime, (context) => emitText(context, 'Short answer.'));
     const session = await runtime.open();
 
-    const history: RuntimeExecutionRequest['history'] = compactableHistory();
-    history[1].messages[1].usage = {
-      inputTokens: 125_000,
-      outputTokens: 1_000,
-      totalTokens: 126_000,
-    };
-    const events = await collect(session.execute(baseRequest('turn-short', { history })));
+    const events = await collect(
+      session.execute(baseRequest('turn-short', { history: compactableHistory() })),
+    );
 
     expect(summaryCalls).toBe(0);
     expect(events.some((event) => event.type === 'context.checkpoint')).toBe(false);
@@ -1404,14 +1480,19 @@ describe('PiRuntime mapping', () => {
       );
 
       expect(events.some((event) => event.type === 'failed')).toBe(false);
-      expect(events.at(-1)).toEqual({ type: 'completed' });
+      expect(events.at(-1)).toMatchObject(COMPLETED);
       expect(holder.lastOptions?.initialState?.model?.maxTokens).toBe(contextWindow);
       await session.close();
     },
   );
 
   test('reserves output once while respecting independent input and total context limits', () => {
-    const context = { messages: [], systemPrompt: 'x'.repeat(400), tools: [] };
+    const context = {
+      api: 'openai-responses',
+      messages: [],
+      systemPrompt: 'x'.repeat(400),
+      tools: [],
+    };
     const inputCosts = 100 + PI_CONTEXT_SAFETY_MARGIN_TOKENS;
     for (const outputReserveTokens of [512, 32_768]) {
       expect(
@@ -1476,6 +1557,51 @@ describe('PiRuntime mapping', () => {
     },
   );
 
+  test('anchors replayed history on the measured context of the newest answer', async () => {
+    // Six older turns of about 5k tokens by content: well under the 128k window's trigger.
+    const history = (contextTokens?: number): RuntimeExecutionRequest['history'] => [
+      ...Array.from({ length: 6 }, (_, index) => ({
+        turnId: `turn-old-${index}`,
+        messages: [
+          { role: 'user' as const, parts: [{ type: 'text' as const, text: 'x'.repeat(20_000) }] },
+          { role: 'assistant' as const, parts: [{ type: 'text' as const, text: 'Noted.' }] },
+        ],
+      })),
+      {
+        turnId: 'turn-recent',
+        messages: [
+          { role: 'user' as const, parts: [{ type: 'text' as const, text: 'Recent question.' }] },
+          {
+            role: 'assistant' as const,
+            parts: [{ type: 'text' as const, text: 'Recent.' }],
+            ...(contextTokens !== undefined ? { contextTokens } : {}),
+          },
+        ],
+      },
+    ];
+    const run = async (turnId: string, contextTokens?: number) => {
+      let summaryCalls = 0;
+      const runtime = createCompactionRuntime({
+        completeSimple: summaryCompletion('Anchored summary.', () => {
+          summaryCalls += 1;
+        }),
+      });
+      const holder = arrange(runtime, (context) => emitText(context, 'Continued.'));
+      const session = await runtime.open();
+      await collect(session.execute(baseRequest(turnId, { history: history(contextTokens) })));
+      await session.close();
+      return { summaryCalls, first: holder.lastOptions?.initialState?.messages?.[0].role };
+    };
+
+    expect(await run('turn-by-content')).toEqual({ summaryCalls: 0, first: 'user' });
+    // The provider measured the last request near the window: images and
+    // attachments the content estimate undercounts are already in that number.
+    expect(await run('turn-anchored', 125_000)).toEqual({
+      summaryCalls: 1,
+      first: 'compactionSummary',
+    });
+  });
+
   test('compacts at the independent input cap and discards usage for the old prefix', async () => {
     let summaryCalls = 0;
     const runtime = createCompactionRuntime(
@@ -1489,10 +1615,7 @@ describe('PiRuntime mapping', () => {
     const holder = arrange(runtime, (context) => emitText(context, 'Continued.'));
     holder.resolution = { ...holder.resolution, maxInputTokens: 12_000 };
     const history: RuntimeExecutionRequest['history'] = compactableHistory();
-    history[1].messages[1] = {
-      ...history[1].messages[1],
-      usage: { inputTokens: 120_000, outputTokens: 8, totalTokens: 120_008 },
-    };
+    history[1].messages[1] = { ...history[1].messages[1], contextTokens: 120_008 };
     const session = await runtime.open();
 
     const events = await collect(
@@ -1608,7 +1731,7 @@ describe('PiRuntime mapping', () => {
           ? [{ type: 'toolCall', id: `lookup-${requests.length}`, name: 'lookup', arguments: {} }]
           : [{ type: 'text', text: 'The answer is ready.' }],
         stopReason: toolCall ? 'toolUse' : 'stop',
-        usage: usage(0, 0),
+        usage: toolCall ? usage(0, 0) : usage(1000, 10),
       });
       const stream = new AssistantMessageEventStream();
       stream.push({ type: 'start', partial: message });
@@ -1646,7 +1769,16 @@ describe('PiRuntime mapping', () => {
         }),
       ),
     );
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    // The measured final request omits the compacted prefix, but durable replay retains it.
+    expect(events.at(-1)).toMatchObject({ type: 'completed' });
+    expect(events.at(-1)).not.toHaveProperty('contextTokens');
+    const terminal = events.at(-1);
+    expect(
+      terminal?.type === 'completed' &&
+        readPiTurnReplay(terminal.replay)
+          ?.filter((message) => message.role === 'toolResult')
+          .map((message) => message.toolCallId),
+    ).toEqual(['lookup-1', 'lookup-2']);
     expect(execute).toHaveBeenCalledTimes(2);
     expect(requests).toHaveLength(3);
     // Providers reject a request that opens with an assistant message.
@@ -2045,7 +2177,7 @@ describe('PiRuntime mapping', () => {
       ),
     );
 
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     expect(arranged.lastOptions?.initialState?.messages).toEqual([
       { role: 'user', content: omitted, timestamp: expect.any(Number) },
     ]);
@@ -2694,7 +2826,7 @@ describe('PiRuntime mapping', () => {
         output: { value: { total: 1 }, artifacts: [] },
       },
     });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -2764,7 +2896,7 @@ describe('PiRuntime mapping', () => {
         output: errorDetails,
       },
     });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -2845,7 +2977,7 @@ describe('PiRuntime mapping', () => {
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({ input: { query: 'cherry' }, toolCallId: 'corrected-call' }),
     );
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -2926,7 +3058,7 @@ describe('PiRuntime mapping', () => {
         error: { code: 'tool_execution_error' },
       },
     });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -2991,7 +3123,7 @@ describe('PiRuntime mapping', () => {
           event.part.state === 'error',
       ),
     ).toMatchObject({ part: { input, error: { code: 'tool_execution_error' } } });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -3088,7 +3220,7 @@ describe('PiRuntime mapping', () => {
           event.part.providerName === PI_TOOL_CALL_TOOL_NAME,
       ),
     ).toBe(false);
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -3193,7 +3325,7 @@ describe('PiRuntime mapping', () => {
         expect.objectContaining({ toolCallId: 'parallel-call-2', state: 'output-available' }),
       ]),
     );
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -3342,7 +3474,7 @@ describe('PiRuntime mapping', () => {
       session.execute(baseRequest('real-loop', { tools: createWebTools({ webSearch }) })),
     );
 
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     expect(seenTools).toEqual([
       ['web_search', 'web_fetch'],
       ['web_search', 'web_fetch'],
@@ -3409,7 +3541,7 @@ describe('PiRuntime mapping', () => {
     });
     const session = await runtime.open();
     const first = await collect(session.execute(baseRequest('group-first', { tools })));
-    expect(first.at(-1)).toEqual({ type: 'completed' });
+    expect(first.at(-1)).toMatchObject(COMPLETED);
     expect(read).toHaveBeenCalledTimes(1);
     expect(other).toHaveBeenCalledTimes(1);
 
@@ -3421,7 +3553,7 @@ describe('PiRuntime mapping', () => {
       await emitText(context, 'Fresh answer.');
     });
     const later = await collect(session.execute(baseRequest('group-later', { tools })));
-    expect(later.at(-1)).toEqual({ type: 'completed' });
+    expect(later.at(-1)).toMatchObject(COMPLETED);
     expect(read).toHaveBeenCalledTimes(2);
     await session.close();
   });
@@ -3718,7 +3850,7 @@ describe('PiRuntime mapping', () => {
       );
 
       expect(executionCount).toBe(allowedCalls);
-      expect(events.at(-1)).toEqual({ type: 'completed' });
+      expect(events.at(-1)).toMatchObject(COMPLETED);
       const reports = events.filter((event) => event.type === 'usage');
       expect(reports).toMatchObject([
         { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
@@ -3782,7 +3914,7 @@ describe('PiRuntime mapping', () => {
     );
 
     expect(executed).toHaveBeenCalledTimes(20);
-    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(events.at(-1)).toMatchObject(COMPLETED);
     await session.close();
   });
 
@@ -3854,108 +3986,59 @@ describe('PiRuntime mapping', () => {
     },
   );
 
-  test.each(['timeout', 'cancel'] as const)(
-    'keeps the final response subject to %s',
-    async (ending) => {
-      jest.useFakeTimers();
-      try {
-        const runtime = createTestRuntime({
-          ...DEFAULT_PI_RUNTIME_LIMITS,
-          maxToolSteps: 1,
-          turnTimeoutMs: 100,
-        });
-        let agentSignal: AbortSignal | undefined;
-        let finalResponseReady!: () => void;
-        const ready = new Promise<void>((resolve) => {
-          finalResponseReady = resolve;
-        });
-        arrange(runtime, async (context) => {
-          agentSignal = context.signal;
-          // Most of the original deadline has elapsed before tool execution ends.
-          await jest.advanceTimersByTimeAsync(90);
-          const message = assistantMessage({ content: [], stopReason: 'toolUse' });
-          const result: ToolResultMessage = {
-            role: 'toolResult',
-            toolCallId: 'last-call',
-            toolName: TOOL_PROVIDER_NAME,
-            content: [{ type: 'text', text: '{}' }],
-            isError: false,
-            timestamp: Date.now(),
-          };
-          await context.emit({ type: 'turn_end', message, toolResults: [result] });
-          const next = await prepareTestNextTurn(context, message, [result]);
-          expect(next.shouldStop).toBe(false);
-          expect(next.context.tools).toEqual([]);
-          const aborted = new Promise<void>((resolve) => {
-            context.signal.addEventListener('abort', () => resolve(), { once: true });
-          });
-          finalResponseReady();
-          await aborted;
-        });
-        const session = await runtime.open();
-        const eventsPromise = collect(session.execute(baseRequest('turn-final-ending')));
-        await ready;
-        if (ending === 'timeout') await jest.advanceTimersByTimeAsync(10);
-        else await session.cancel('turn-final-ending');
-        const events = await eventsPromise;
-
-        expect(agentSignal?.aborted).toBe(true);
-        expect(events.at(-1)).toMatchObject(
-          ending === 'timeout'
-            ? { type: 'failed', error: { code: 'turn_timeout' } }
-            : { type: 'cancelled' },
-        );
-        await session.close();
-      } finally {
-        jest.useRealTimers();
-      }
-    },
-  );
-
-  test('aborts the model and reports a classified whole-turn timeout', async () => {
-    const runtime = createTestRuntime({
-      maxToolCalls: 16,
-      maxToolSteps: 8,
-      turnTimeoutMs: 5,
-    });
+  test('keeps the final response subject to cancel', async () => {
+    const runtime = createTestRuntime({ ...DEFAULT_PI_RUNTIME_LIMITS, maxToolSteps: 1 });
     let agentSignal: AbortSignal | undefined;
-    arrange(runtime, (context) => {
+    let finalResponseReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      finalResponseReady = resolve;
+    });
+    arrange(runtime, async (context) => {
       agentSignal = context.signal;
-      return new Promise<void>(() => undefined);
+      const message = assistantMessage({ content: [], stopReason: 'toolUse' });
+      const result: ToolResultMessage = {
+        role: 'toolResult',
+        toolCallId: 'last-call',
+        toolName: TOOL_PROVIDER_NAME,
+        content: [{ type: 'text', text: '{}' }],
+        isError: false,
+        timestamp: Date.now(),
+      };
+      await context.emit({ type: 'turn_end', message, toolResults: [result] });
+      const next = await prepareTestNextTurn(context, message, [result]);
+      expect(next.shouldStop).toBe(false);
+      expect(next.context.tools).toEqual([]);
+      const aborted = new Promise<void>((resolve) => {
+        context.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+      finalResponseReady();
+      await aborted;
     });
     const session = await runtime.open();
+    const eventsPromise = collect(session.execute(baseRequest('turn-final-ending')));
+    await ready;
+    await session.cancel('turn-final-ending');
+    const events = await eventsPromise;
 
-    const events = await collect(session.execute(baseRequest('turn-timeout')));
-
-    expect(events).toEqual([
-      {
-        type: 'failed',
-        error: {
-          code: 'turn_timeout',
-          message: 'The Agent turn timed out.',
-          retryable: true,
-          origin: 'runtime',
-        },
-      },
-    ]);
     expect(agentSignal?.aborted).toBe(true);
+    expect(events.at(-1)).toMatchObject({ type: 'cancelled' });
     await session.close();
   });
 
-  test('interrupts a tool call arriving after the turn timeout without requesting approval', async () => {
-    const runtime = createTestRuntime({
-      maxToolCalls: 16,
-      maxToolSteps: 8,
-      turnTimeoutMs: 5,
-    });
+  test('interrupts a tool call arriving after cancellation without requesting approval', async () => {
+    const runtime = createTestRuntime(DEFAULT_PI_RUNTIME_LIMITS);
     const executed = jest.fn();
     let lateCall: Promise<unknown> | undefined;
+    let programStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      programStarted = resolve;
+    });
     arrange(runtime, (context) => {
       const piTool = context.options.initialState?.tools?.[0];
-      if (!piTool) throw new Error('Timeout program requires one tool.');
+      if (!piTool) throw new Error('Cancellation program requires one tool.');
       return new Promise((resolve) => {
         // The synchronous abort listener reaches the Runtime while the phase
-        // is `timing-out`, before the run loop publishes the timeout failure.
+        // is `cancelling`, before the turn publishes its terminal event.
         context.signal.addEventListener(
           'abort',
           () => {
@@ -3964,13 +4047,17 @@ describe('PiRuntime mapping', () => {
           },
           { once: true },
         );
+        programStarted();
       });
     });
     const session = await runtime.open();
 
-    const events = await collect(
-      session.execute(baseRequest('turn-timeout-late-tool', { tools: [askTool(executed)] })),
+    const eventsPromise = collect(
+      session.execute(baseRequest('turn-cancel-late-tool', { tools: [askTool(executed)] })),
     );
+    await started;
+    await session.cancel('turn-cancel-late-tool');
+    const events = await eventsPromise;
 
     expect(executed).not.toHaveBeenCalled();
     expect(events.some((event) => event.type === 'approval.requested')).toBe(false);
@@ -3982,7 +4069,7 @@ describe('PiRuntime mapping', () => {
           event.part.toolCallId === 'late-call',
       ),
     ).toMatchObject({ part: { state: 'interrupted' } });
-    expect(events.at(-1)).toMatchObject({ type: 'failed', error: { code: 'turn_timeout' } });
+    expect(events.at(-1)).toEqual({ type: 'cancelled' });
     await expect(lateCall).resolves.toMatchObject({
       details: { value: { status: 'interrupted' } },
     });

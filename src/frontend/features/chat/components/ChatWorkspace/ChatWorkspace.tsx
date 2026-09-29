@@ -1,41 +1,28 @@
-import { ContentState, useToast } from '@cherrystudio/ui/components';
-import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useEffect, useMemo } from 'react';
+import { BackgroundPressExclusion, ContentState } from '@cherrystudio/ui/components';
+import { type ReactNode, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { mainHeaderRowHeight } from '@/frontend/appShell/header';
-import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
-import { MessageList, type MessageListItem } from '@/frontend/components/Message';
-import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
-import { loggerService } from '@/shared/core/logger/LoggerService';
+import type {
+  ConversationHistoryView,
+  ConversationMessage,
+  ConversationSnapshot,
+} from '@/frontend/appShell/conversation';
+import { type MessageListItem } from '@/frontend/components/Message';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
-import {
-  createAgentMessageListProjectionCache,
-  mergeAgentMessageViews,
-  projectRetryingMessage,
-  toAgentMessageListItems,
-  useAgentChatActions,
-  useAgentChatSession,
-  type PendingChatSend,
-} from '../../runtime';
-import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
+import { type PendingChatSend } from '../../runtime';
+import { ConversationApprovals } from '../ConversationApprovals';
+import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
+import { ChatTranscript } from './ChatTranscript';
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
-import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
-import { ChatMessage } from './components/ChatMessage';
-import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
+import { ChatMessageRow } from './components/ChatMessageRow';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
+import { ChatMessageRowProvider } from './context/ChatMessageRowContext';
 import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
-import {
-  shouldWaitForInitialHistoryLayout,
-  useMessageListInitialRenderGate,
-} from './hooks/useMessageListInitialRenderGate';
-
-const logger = loggerService.withContext('AgentChatWorkspace');
-const MESSAGE_TIME_INTERVAL_MS = 5 * 60 * 1000;
+import { shouldWaitForInitialHistoryLayout } from './hooks/useMessageListInitialRenderGate';
+import { getTimestampMessageIds } from './messageTimestamps';
 
 type ChatWorkspaceProps = {
   enteringUserMessageId?: string;
@@ -51,11 +38,19 @@ type ChatWorkspaceProps = {
   /** Direct source Session named by the fork-origin divider. */
   forkedFromSessionId?: string;
   keyboardOffset: number;
-  messageWindow: AgentMessageHistoryWindow;
+  messageWindow: ConversationHistoryView;
+  /** History and live rows already reconciled by the source; the workspace only presents them. */
+  messages: readonly ConversationMessage[];
+  snapshot: ConversationSnapshot;
+  onShare?: (messageId: string) => void;
   sessionId?: string;
+  renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
 export function ChatWorkspace({
+  snapshot: live,
+  messages: mergedMessages,
+  onShare,
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
@@ -69,6 +64,7 @@ export function ChatWorkspace({
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
+  renderUsage,
 }: ChatWorkspaceProps) {
   const {
     dataKey,
@@ -84,48 +80,34 @@ export function ChatWorkspace({
     returnToLatest,
     retry,
   } = messageWindow;
-  const live = useAgentChatSession(sessionId);
   const listKey = sessionId ?? pendingSend?.sessionId;
-  const client = useAgentChatActions();
-  const headerHeight = useHeaderHeight();
-  const { top: safeAreaTop } = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { toast } = useToast();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
-  useEffect(() => {
-    if (sessionId) {
-      client.reconcilePersistedMessages(sessionId, messages);
-    }
-  }, [client, messages, sessionId]);
-  const mergedMessages = useMemo(
-    () =>
-      projectRetryingMessage(
-        hasNewerMessages ? messages : mergeAgentMessageViews(messages, live.liveMessages),
-        live.retryingMessageId,
-      ),
-    [hasNewerMessages, live.liveMessages, live.retryingMessageId, messages],
-  );
   // Only the Session's latest answer is replaceable, and an older window does
   // not hold it (agent-protocol.md "Manual answer retry").
   const retryableMessageId = useMemo(() => {
     if (hasNewerMessages) return undefined;
     const last = mergedMessages.at(-1);
-    return last?.role === 'assistant' ? last.id : undefined;
+    return last?.display.role === 'assistant' ? last.key : undefined;
   }, [hasNewerMessages, mergedMessages]);
   useEffect(() => {
     if (
       pendingSend &&
       pendingSend.messages.every((pending) =>
-        mergedMessages.some((message) => message.id === pending.id),
+        mergedMessages.some((message) => message.key === pending.id),
       )
     ) {
       onPendingSendDisplayed(pendingSend.messages[0].id);
     }
   }, [mergedMessages, onPendingSendDisplayed, pendingSend]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- listKey keys the cache lifetime, not its contents
-  const projectionCache = useMemo(() => createAgentMessageListProjectionCache(), [listKey]);
   const projectedMessages = useMemo(() => {
-    const projected = toAgentMessageListItems(mergedMessages, projectionCache);
+    const projected = mergedMessages
+      .filter((message) => message.display.role !== 'system')
+      .map((message) =>
+        message.key === live.retryingMessageKey
+          ? { ...message.display, status: 'pending' as const, data: { parts: [] } }
+          : message.display,
+      );
     if (!pendingSend) return projected;
     const [user, assistant] = pendingSend.messages;
     const userIndex = projected.findIndex((message) => message.id === user.id);
@@ -136,7 +118,7 @@ export function ChatWorkspace({
     else if (assistantIndex >= 0) result.splice(assistantIndex, 0, user);
     else result.push(user, assistant);
     return result;
-  }, [mergedMessages, pendingSend, projectionCache]);
+  }, [mergedMessages, pendingSend, live.retryingMessageKey]);
   const timestampMessageIds = useMemo(
     () => getTimestampMessageIds(projectedMessages),
     [projectedMessages],
@@ -179,6 +161,9 @@ export function ChatWorkspace({
     }),
     [assistantAvatar, assistantAvatarUri, assistantName, t],
   );
+  // Row-specific conversation state (tools, attachments, timestamps) reaches
+  // each row through its keyed subscription, so this renderer and `extraData`
+  // change only with list-wide presentation.
   const renderChatMessage = useCallback(
     (message: MessageListItem) => {
       if (message.role === 'system') {
@@ -188,83 +173,35 @@ export function ChatWorkspace({
       }
 
       return (
-        <ChatMessage
+        <ChatMessageRow
           assistantPresentation={assistantPresentation}
           isMessageActionsEnabled={isAssistantToolbarEnabled}
           isScreenReaderEnabled={isScreenReaderEnabled}
           message={message}
-          shouldShowTimestamp={timestampMessageIds.has(message.id)}
+          renderUsage={renderUsage}
         />
       );
     },
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, timestampMessageIds],
+    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
   );
   const messageListExtraData = useMemo(
     () => ({
       assistantPresentation,
       isAssistantToolbarEnabled,
       isScreenReaderEnabled,
-      timestampMessageIds,
+      renderUsage,
     }),
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, timestampMessageIds],
+    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
   );
-  const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
-    () =>
-      live.pendingApprovals.map((approval) => ({
-        approvalId: approval.id,
-        input: approval.input,
-        messageId: live.activeTurn?.assistantMessageId ?? '',
-        toolCallId: approval.toolCallId,
-        displayName: approval.displayName,
-      })),
-    [live.activeTurn?.assistantMessageId, live.pendingApprovals],
-  );
-  const handleApprovalRespond = useCallback(
-    async (input: { approvalId: string; approved: boolean }) => {
-      if (!sessionId) {
-        return;
-      }
-      try {
-        await client.respondApproval(
-          sessionId,
-          input.approvalId,
-          input.approved ? 'approve' : 'deny',
-        );
-      } catch (approvalError) {
-        logger.error('Tool approval response failed', approvalError as Error);
-        toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
-      }
-    },
-    [client, sessionId, t, toast],
-  );
-  const handleApprovalCancel = useCallback(async () => {
-    if (!sessionId) {
-      return;
-    }
-    try {
-      await client.cancelTurn(sessionId);
-    } catch (cancelError) {
-      logger.error('Turn cancellation from tool approval failed', cancelError as Error);
-      toast.show({ label: t('chat.input.stopFailed'), variant: 'danger' });
-    }
-  }, [client, sessionId, t, toast]);
   const requiresInitialHistoryLayout =
     typeof initialScrollTarget === 'object' ||
     (Boolean(sessionId) &&
       !pendingSend?.isNewSession &&
       shouldWaitForInitialHistoryLayout({
-        hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
+        hasHistoryBeforeActiveTurn: live.hasHistoryBeforeExecution,
         isLoadingInitial,
         messageCount: messages.length,
       }));
-  const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
-    renderGateKey: dataKey ?? listKey,
-    requiresInitialHistoryLayout,
-  });
-  const contentTopInset = resolveHeaderContentInset(
-    headerHeight,
-    safeAreaTop + mainHeaderRowHeight,
-  );
 
   if (!sessionId && listMessages.length === 0) {
     return (
@@ -280,85 +217,69 @@ export function ChatWorkspace({
   if (error && !isLoadingInitial && listMessages.length === 0) {
     return (
       <View className="flex-1 justify-center px-8 py-16">
-        <ContentState.Error
-          primaryAction={{ children: t('agent.actions.retry'), onPress: () => void retry() }}
-          secondaryAction={
-            returnToLatest
-              ? {
-                  children: t('chat.history.returnToLatest'),
-                  onPress: returnToLatest,
-                }
-              : undefined
-          }
-          title={t(
-            error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND
-              ? 'chat.history.messageUnavailable'
-              : 'chat.history.loadFailed',
-          )}
-        />
+        <BackgroundPressExclusion>
+          <ContentState.Error
+            primaryAction={{ children: t('agent.actions.retry'), onPress: () => void retry() }}
+            secondaryAction={
+              returnToLatest
+                ? {
+                    children: t('chat.history.returnToLatest'),
+                    onPress: returnToLatest,
+                  }
+                : undefined
+            }
+            title={t(
+              error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND
+                ? 'chat.history.messageUnavailable'
+                : 'chat.history.loadFailed',
+            )}
+          />
+        </BackgroundPressExclusion>
       </View>
     );
   }
 
   return (
     <View className="flex-1 bg-chat-background">
-      <ChatOlderMessagesIndicator isLoading={isLoadingOlder || isLoadingNewer} />
       <AssistantMessageActionsProvider
         key={`assistant-actions-${listKey}`}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
         retryableMessageId={retryableMessageId}
-        sessionId={sessionId}
+        onShare={onShare}
+        snapshot={live}
+        messages={mergedMessages}
       >
-        <MessageList
-          contentBottomInset={contentBottomInset}
-          contentTopInset={contentTopInset}
-          dataKey={dataKey ?? listKey}
-          enteringMessageId={enteringUserMessageId ?? live.enteringUserMessageId}
-          extraData={messageListExtraData}
-          initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
-          initialScrollTarget={initialScrollTarget}
-          hasNewerMessages={hasNewerMessages}
-          keyboardOffset={keyboardOffset}
-          // ChatScreen owns background presses so blur also ends composer editing.
-          keyboardShouldPersistTaps="always"
-          messages={listMessages}
-          onLoadOlder={loadOlder}
-          onLoadNewer={loadNewer}
-          onReturnToLatest={returnToLatest}
-          onReady={markListLoaded}
-          renderMessage={renderChatMessage}
-        />
+        <ChatMessageRowProvider messages={mergedMessages} timestampMessageIds={timestampMessageIds}>
+          <ChatTranscript
+            requiresInitialLayout={requiresInitialHistoryLayout}
+            isLoadingMore={isLoadingOlder || isLoadingNewer}
+            contentBottomInset={contentBottomInset}
+            // A draft window has no Session yet and reports an empty key. Keying the
+            // first send by its pending Session keeps the list on one dataset across
+            // the draft-to-Session handoff instead of starting as a keyless list.
+            dataKey={dataKey || listKey}
+            enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
+            extraData={messageListExtraData}
+            initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
+            initialScrollTarget={initialScrollTarget}
+            hasNewerMessages={hasNewerMessages}
+            keyboardOffset={keyboardOffset}
+            // ChatScreen owns background presses so blur also ends composer editing.
+            keyboardShouldPersistTaps="always"
+            messages={listMessages}
+            onLoadOlder={loadOlder}
+            onLoadNewer={loadNewer}
+            onReturnToLatest={returnToLatest}
+            renderMessage={renderChatMessage}
+          />
+        </ChatMessageRowProvider>
       </AssistantMessageActionsProvider>
-      <ChatInitialRenderCover isVisible={isCoverVisible} />
-      <ToolApprovalSheet
-        key={`tool-approval-${sessionId}`}
-        approvals={pendingApprovals}
-        isOpen={pendingApprovals.length > 0}
-        onCancel={handleApprovalCancel}
-        onRespond={handleApprovalRespond}
-      />
+      {sessionId ? (
+        <>
+          <ConversationApprovals snapshot={live} />
+          <ConversationQuestionSheet snapshot={live} />
+        </>
+      ) : null}
     </View>
   );
-}
-
-function getTimestampMessageIds(messages: readonly MessageListItem[]): ReadonlySet<string> {
-  const ids = new Set<string>();
-  let previousTimestamp: number | undefined;
-
-  for (const message of messages) {
-    if (message.role === 'system' || !message.createdAt) continue;
-
-    const timestamp = new Date(message.createdAt).getTime();
-    if (Number.isNaN(timestamp)) continue;
-
-    if (
-      previousTimestamp === undefined ||
-      timestamp - previousTimestamp >= MESSAGE_TIME_INTERVAL_MS
-    ) {
-      ids.add(message.id);
-    }
-    previousTimestamp = timestamp;
-  }
-
-  return ids;
 }

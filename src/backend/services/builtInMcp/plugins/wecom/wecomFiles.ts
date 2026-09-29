@@ -2,6 +2,7 @@ import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
+import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import { getFileUri } from '@/backend/services/file/fileStorage';
 import { PluginError } from '@/shared/contracts/plugins';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
@@ -68,7 +69,7 @@ async function uploadFile(value: string): Promise<File> {
   // These locations contain user attachments, document exports and prior Wecom downloads.
   // Never interpret a model-supplied path as permission to upload app databases/configuration.
   const roots = [
-    new Directory(Paths.document, 'Data', 'Files'),
+    new Directory(storageDirectory(), 'Data', 'Files'),
     new Directory(Paths.cache, 'DocumentExport'),
     outputDirectory(),
   ];

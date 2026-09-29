@@ -33,8 +33,8 @@ type BuildAgentDtoOptions = {
 export function createAgentFormState(agent?: Agent): AgentFormState {
   return {
     avatarUri: agent?.avatarUri ?? null,
-    // A new Agent starts with the sensitive device groups off; an existing
-    // record keeps exactly what was saved.
+    // A new Agent starts with the sensitive device groups and Agent management
+    // off; an existing record keeps exactly what was saved.
     disabledCapabilities: agent
       ? [...agent.disabledCapabilities]
       : [...DEFAULT_DISABLED_AGENT_CAPABILITIES],
@@ -43,6 +43,16 @@ export function createAgentFormState(agent?: Agent): AgentFormState {
     name: agent?.name ?? '',
     toolApprovalMode: agent?.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   };
+}
+
+export function setAgentCapabilityEnabled(
+  disabledCapabilities: readonly AgentCapability[],
+  capability: AgentCapability,
+  enabled: boolean,
+): AgentCapability[] {
+  return enabled
+    ? disabledCapabilities.filter((entry) => entry !== capability)
+    : [...new Set([...disabledCapabilities, capability])];
 }
 
 export function buildAgentDto(

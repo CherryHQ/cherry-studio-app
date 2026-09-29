@@ -23,9 +23,6 @@ const permissionIcons: Record<PermissionKind, ComponentType<LucideIconProps> | u
   reminders: undefined,
 };
 
-export const healthPermissionProvider = 'connect' as const;
-export const healthSettingsNeedInstructions = false;
-
 export function PermissionListLeading({ kind }: { kind: PermissionKind }) {
   const Icon = permissionIcons[kind];
   return Icon ? <Icon className="size-5 text-foreground" /> : null;

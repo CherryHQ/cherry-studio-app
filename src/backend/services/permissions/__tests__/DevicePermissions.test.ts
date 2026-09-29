@@ -45,16 +45,13 @@ function nativeHealthStatuses(
 
 describe('DevicePermissions', () => {
   const health = {
-    getAvailability: jest.fn(
-      async (): Promise<'available' | 'unsupported' | 'install-required'> => 'available',
-    ),
+    getAvailability: jest.fn(async (): Promise<'available' | 'unsupported'> => 'available'),
     getStatuses: jest.fn(async (types: readonly HealthDataType[]) =>
       nativeHealthStatuses(types, 'undetermined'),
     ),
     request: jest.fn(async (types: readonly HealthDataType[]) =>
       nativeHealthStatuses(types, 'requested'),
     ),
-    openSettings: jest.fn(async () => undefined),
   };
   let service: DevicePermissions;
 
@@ -77,7 +74,6 @@ describe('DevicePermissions', () => {
       );
       return nativeHealthStatuses(types, 'requested');
     });
-    health.openSettings.mockResolvedValue(undefined);
     service = new DevicePermissions(() => health);
   });
 
@@ -205,38 +201,21 @@ describe('DevicePermissions', () => {
     expect(health.request).toHaveBeenCalledWith(['steps']);
   });
 
-  test('preserves independent Android health grants', async () => {
+  test('reports health as unsupported on Android without a native bridge', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    health.getStatuses.mockResolvedValue({
-      steps: { state: 'granted', canAskAgain: false },
-      workouts: { state: 'denied', canAskAgain: false },
-    });
-    await expect(
-      service.getStatuses(['health.steps.read', 'health.workouts.read']),
-    ).resolves.toEqual({
-      'health.steps.read': { state: 'granted', canAskAgain: false },
-      'health.workouts.read': { state: 'denied', canAskAgain: false },
+    service = new DevicePermissions(() => null);
+    await expect(service.getStatuses(['health.steps.read'])).resolves.toEqual({
+      'health.steps.read': { state: 'unavailable', canAskAgain: false, reason: 'unsupported' },
     });
   });
 
-  test('opens Android health management even when every read is granted', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    health.getStatuses.mockImplementation(async (types) => nativeHealthStatuses(types, 'granted'));
-    await service.openSystemSettings('health');
-    expect(health.openSettings).toHaveBeenCalledTimes(1);
-    expect(health.request).not.toHaveBeenCalled();
+  test('reports a device without HealthKit as unsupported', async () => {
+    health.getAvailability.mockResolvedValue('unsupported');
+    await expect(service.getStatuses(['health.steps.read'])).resolves.toEqual({
+      'health.steps.read': { state: 'unavailable', canAskAgain: false, reason: 'unsupported' },
+    });
+    expect(health.getStatuses).not.toHaveBeenCalled();
   });
-
-  test.each(['unsupported', 'install-required'] as const)(
-    'preserves the recoverability of %s health services',
-    async (reason) => {
-      health.getAvailability.mockResolvedValue(reason);
-      await expect(service.getStatuses(['health.steps.read'])).resolves.toEqual({
-        'health.steps.read': { state: 'unavailable', canAskAgain: false, reason },
-      });
-      expect(health.getStatuses).not.toHaveBeenCalled();
-    },
-  );
 
   test('a missing native module needs an app update, not another permission request', async () => {
     service = new DevicePermissions(() => null);

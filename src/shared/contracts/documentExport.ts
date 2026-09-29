@@ -5,6 +5,18 @@ import type { ExportFile, ExportWatermark } from './fileExport';
 
 export const DOCUMENT_EXPORT_MAX_SECTIONS = 128;
 
+/** Resolved product copy travels with the snapshot, including portable text fallbacks. */
+export type ExportContentLabels = {
+  code: string;
+  codeOmitted: string;
+  file: string;
+  fileMetadataOnly: string;
+  image: string;
+  imageUnavailable: string;
+  sources: string;
+  table: string;
+};
+
 export type ExportBlock =
   | { kind: 'text'; text: string }
   | { kind: 'markdown'; source: string }
@@ -16,10 +28,16 @@ export type ExportBlock =
       presentation?: 'process' | 'reasoning';
       blocks: readonly ExportBlock[];
     }
-  | { kind: 'links'; items: readonly { label: string; url: string }[] };
+  | {
+      kind: 'links';
+      /** Source-localized count label for the compact summary. */
+      summary?: string;
+      items: readonly { label: string; url: string }[];
+    };
 
 export type ExportDocument = {
   title?: string;
+  labels?: ExportContentLabels;
   sections: readonly {
     id: string;
     heading?: string;
@@ -38,7 +56,7 @@ export type ExportDocument = {
 
 export type DocumentExportInput =
   | { kind: 'document'; document: ExportDocument }
-  | { kind: 'markdown'; source: string; title?: string };
+  | { kind: 'markdown'; source: string; title?: string; labels?: ExportContentLabels };
 
 export type ExportFormat = 'markdown' | 'html' | 'image';
 export type ExportImageLayout = 'pages' | 'single';
@@ -163,8 +181,10 @@ export class DocumentExportError extends Error {
 export interface DocumentExportSession {
   /** Frozen source snapshot for structured previews; does not resolve assets or create files. */
   readonly document: ExportDocument;
-  /** Portable source Markdown without presentation signatures; no files or resource reads. */
+  /** Lightweight fallback Markdown without embedded assets or signatures; no files or resource reads. */
   readonly markdown: string;
+  /** Styled view of prepared Markdown: embedded pictures display, remote links need no network read. */
+  previewMarkdown(text: string, presentation: ExportPresentation): string;
   render(
     target: DocumentExportTarget,
     context?: {

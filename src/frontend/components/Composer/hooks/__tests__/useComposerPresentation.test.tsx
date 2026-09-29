@@ -63,6 +63,43 @@ describe('useComposerPresentation', () => {
     expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
   });
 
+  test("does not blur a resting composer or dismiss another field's keyboard", () => {
+    act(() => presentation.actions.dismissInput());
+    expect(mockBlur).not.toHaveBeenCalled();
+    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+  });
+
+  test('dismisses only once per editing session, including before the next React commit', () => {
+    act(() => presentation.actions.activateInput());
+    act(() => {
+      presentation.actions.dismissInput();
+      // The keyboard may report hidden before its closing animation completes.
+      mockIsKeyboardVisible.mockReturnValue(false);
+      presentation.actions.dismissInput();
+    });
+
+    expect(mockBlur).toHaveBeenCalledTimes(1);
+    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: true });
+    act(() => emitKeyboardEvent('keyboardDidHide'));
+    expect(presentation.state.isKeyboardTrackingEnabled).toBe(false);
+
+    act(() => presentation.actions.activateInput());
+    act(() => presentation.actions.dismissInput());
+    expect(mockBlur).toHaveBeenCalledTimes(2);
+  });
+
+  test('dismisses the question field that owns focus and returns ownership to the ordinary composer', () => {
+    const questionInput = { blur: jest.fn() };
+    act(() => presentation.actions.activateInput(questionInput));
+    act(() => presentation.actions.dismissInput());
+    expect(questionInput.blur).toHaveBeenCalledTimes(1);
+    expect(mockBlur).not.toHaveBeenCalled();
+    act(() => presentation.actions.activateInput());
+    act(() => presentation.actions.dismissInput());
+    expect(mockBlur).toHaveBeenCalledTimes(1);
+    expect(questionInput.blur).toHaveBeenCalledTimes(1);
+  });
+
   test('follows dismissal until the keyboard finishes closing, then detaches', () => {
     act(() => presentation.actions.activateInput());
     act(() => presentation.actions.dismissInput());

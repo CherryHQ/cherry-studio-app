@@ -4,12 +4,14 @@ import { type ReactElement, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMutation } from '@/frontend/data';
+import { useProviderAvatarActions } from '@/frontend/hooks/useProviderAvatar';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
-import { buildApiKeyEntriesFromInput } from '../../apiService';
+import { normalizeApiKeyEntries } from '../../apiService';
 import {
   buildCustomProviderCreationPayload,
   findInvalidCustomProviderEndpointUrl,
@@ -23,7 +25,6 @@ import {
   type ProviderFormValues,
   useProviderFormDraft,
 } from '../../components/ProviderForm';
-import { useProviderAvatarActions } from '../../hooks/useProviderAvatar';
 
 export function useNewProviderForm() {
   const { t } = useTranslation();
@@ -51,7 +52,7 @@ export function useNewProviderForm() {
         endpointUrls: values.endpointUrls,
         preferredChatEndpoint: values.defaultChatEndpoint,
       });
-      const apiKeys = buildApiKeyEntriesFromInput(values.apiKey, []);
+      const apiKeys = normalizeApiKeyEntries(values.apiKeys);
 
       await createProvider({
         body: {
@@ -76,7 +77,7 @@ export function useNewProviderForm() {
     meta.canSubmit &&
     hasConfiguredCustomProviderTextEndpoint(state.endpointUrls) &&
     !findInvalidCustomProviderEndpointUrl(state.endpointUrls) &&
-    state.apiKey.trim().length > 0;
+    state.apiKeys.some((entry) => entry.isEnabled && entry.key.trim());
   const handleSave = useCallback(async () => {
     if (!canSubmit) {
       return undefined;
@@ -130,49 +131,52 @@ export function ProviderNewFormContent({
   onEnableKeys?: () => void;
 }) {
   const { t } = useTranslation();
+  const { bottom } = useSafeAreaInsets();
 
   return (
-    <KeyboardAwareScrollView
-      alwaysBounceVertical={false}
-      bottomOffset={keyboardBottomOffset}
-      className="flex-1"
-      contentInsetAdjustmentBehavior="automatic"
-      disableScrollOnKeyboardHide
-      keyboardDismissMode="on-drag"
-      keyboardShouldPersistTaps="handled"
-      mode="layout"
-      showsVerticalScrollIndicator={false}
-      testID="provider-form"
-    >
-      {issue || disabledKeys ? (
-        <View className="gap-3 px-4 py-3">
-          <Text className="text-muted-foreground text-sm">
-            {t(`settings.provider.setup.issues.${disabledKeys ? 'disabled-api-keys' : issue}`)}
-          </Text>
-          {disabledKeys && onEnableKeys ? (
-            <Button disabled={isSaving} onPress={onEnableKeys} variant="secondary">
-              {t('settings.provider.setup.enableKeys')}
-            </Button>
-          ) : null}
-        </View>
-      ) : null}
-      {account ? <View className="px-4 py-3">{account}</View> : null}
-      <ProviderForm value={form}>
-        <ProviderForm.Avatar>{avatar}</ProviderForm.Avatar>
-        <ProviderForm.Name />
-        {endpointMode === 'custom-text' ? (
-          <>
-            {showApiKey ? <ProviderForm.ApiKey autoFocus={issue === 'missing-api-key'} /> : null}
-            <ProviderForm.Endpoints />
-          </>
-        ) : (
-          <>
-            <ProviderForm.BaseUrl />
-            {showApiKey ? <ProviderForm.ApiKey autoFocus={issue === 'missing-api-key'} /> : null}
-          </>
-        )}
-      </ProviderForm>
-      <View className="px-4 pb-8">
+    <View className="flex-1">
+      <KeyboardAwareScrollView
+        alwaysBounceVertical={false}
+        bottomOffset={keyboardBottomOffset}
+        className="flex-1"
+        contentInsetAdjustmentBehavior="automatic"
+        disableScrollOnKeyboardHide
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        mode="layout"
+        showsVerticalScrollIndicator={false}
+        testID="provider-form"
+      >
+        {issue || disabledKeys ? (
+          <View className="gap-3 px-4 py-3">
+            <Text className="text-muted-foreground text-sm">
+              {t(`settings.provider.setup.issues.${disabledKeys ? 'disabled-api-keys' : issue}`)}
+            </Text>
+            {disabledKeys && onEnableKeys ? (
+              <Button disabled={isSaving} onPress={onEnableKeys} variant="secondary">
+                {t('settings.provider.setup.enableKeys')}
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
+        {account ? <View className="px-4 py-3">{account}</View> : null}
+        <ProviderForm value={form}>
+          <ProviderForm.Avatar>{avatar}</ProviderForm.Avatar>
+          <ProviderForm.Name />
+          {endpointMode === 'custom-text' ? (
+            <>
+              {showApiKey ? <ProviderForm.ApiKeys /> : null}
+              <ProviderForm.Endpoints />
+            </>
+          ) : (
+            <>
+              <ProviderForm.BaseUrl />
+              {showApiKey ? <ProviderForm.ApiKeys /> : null}
+            </>
+          )}
+        </ProviderForm>
+      </KeyboardAwareScrollView>
+      <View className="px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
         <Button
           disabled={!canSave}
           loading={isSaving}
@@ -183,6 +187,6 @@ export function ProviderNewFormContent({
           {t(isSaving ? 'settings.provider.setup.preparing' : 'settings.provider.setup.next')}
         </Button>
       </View>
-    </KeyboardAwareScrollView>
+    </View>
   );
 }

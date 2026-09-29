@@ -19,6 +19,12 @@ jest.mock('expo-widgets', () => ({
 }));
 
 describe('BackgroundActivityEnvironment', () => {
+  it('keeps reply completion notifications off until bootstrap configures them', () => {
+    const environment = new BackgroundActivityEnvironment();
+
+    expect(environment.isReplyCompletionNotificationEnabled()).toBe(false);
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockWidgetsDirectory = 'file:///widgets';

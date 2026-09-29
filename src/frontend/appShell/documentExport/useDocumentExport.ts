@@ -1,5 +1,6 @@
 import { type Href, router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useExportWatermarkStyle } from '@/frontend/appShell/fileExport';
 import { useBackendModule } from '@/frontend/data';
@@ -14,6 +15,7 @@ import { createDocumentExportRequest, finishDocumentExportRequest } from './docu
 
 export function useDocumentExport() {
   const module = useBackendModule('documentExport');
+  const { t } = useTranslation();
   const defaultWatermark = useExportWatermarkStyle();
   const open = useCallback(
     async ({
@@ -35,10 +37,29 @@ export function useDocumentExport() {
       /** Dismissed to after the system share sheet closes; without it the page stays open. */
       returnTo?: Href;
     }): Promise<'closed' | 'busy'> => {
-      const session = module.createSession(input);
+      const labels = {
+        code: t('documentExport.content.code'),
+        codeOmitted: t('documentExport.content.codeOmitted'),
+        file: t('documentExport.content.file'),
+        fileMetadataOnly: t('documentExport.content.fileMetadataOnly'),
+        image: t('documentExport.content.image'),
+        imageUnavailable: t('documentExport.content.imageUnavailable'),
+        sources: t('documentExport.content.sources'),
+        table: t('documentExport.content.table'),
+      };
+      const localize = (source: DocumentExportInput): DocumentExportInput =>
+        source.kind === 'document'
+          ? {
+              ...source,
+              document: { ...source.document, labels: source.document.labels ?? labels },
+            }
+          : { ...source, labels: source.labels ?? labels };
+      const session = module.createSession(localize(input));
       let uncheckedSession: DocumentExportSession | undefined;
       try {
-        uncheckedSession = option ? module.createSession(option.uncheckedInput) : undefined;
+        uncheckedSession = option
+          ? module.createSession(localize(option.uncheckedInput))
+          : undefined;
       } catch (error) {
         await session.dispose();
         throw error;
@@ -64,7 +85,7 @@ export function useDocumentExport() {
       await request.outcome;
       return 'closed';
     },
-    [module, defaultWatermark],
+    [module, defaultWatermark, t],
   );
   return useMemo(() => ({ open }), [open]);
 }

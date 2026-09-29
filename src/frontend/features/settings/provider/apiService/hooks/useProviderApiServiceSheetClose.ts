@@ -1,5 +1,5 @@
 import { useAlert } from '@cherrystudio/ui/components';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import type { NavigationAction } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ export function useProviderApiServiceSheetClose({
   isSaving: boolean;
 }) {
   const navigation = useNavigation();
+  const router = useRouter();
   const { t } = useTranslation();
   const { alert } = useAlert();
   const isConfirmedCloseRef = useRef(false);
@@ -24,8 +25,13 @@ export function useProviderApiServiceSheetClose({
 
   const closeWithoutPrompt = useCallback(() => {
     allowNavigation();
-    navigation.goBack();
-  }, [allowNavigation, navigation]);
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    router.replace('/');
+  }, [allowNavigation, navigation, router]);
 
   const confirmDiscard = useCallback(
     (onConfirm: () => void) => {

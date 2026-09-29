@@ -21,11 +21,11 @@ import {
 
 import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '..';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
+import { withPiApiKeyFallback } from './piApiKeyFallback';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
-
-const DEFAULT_PI_TIMEOUT_MS = 10 * 60_000;
+import { withPiStreamIdleTimeout } from './piStreamIdleTimeout';
 
 class PiModelResolutionError extends Error {
   readonly retryable = false;
@@ -70,6 +70,10 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       }
 
       const modelId = connection.wireModelId;
+      const isOpenRouter =
+        provider.id === 'openrouter' ||
+        provider.presetProviderId === 'openrouter' ||
+        isOpenRouterUrl(connection.baseUrl);
       const headers = { ...connection.headers };
       if (
         (provider.id === 'opencode' || provider.presetProviderId === 'opencode') &&
@@ -100,6 +104,15 @@ export function createPiModelResolver(): PiRuntimeDependencies {
                 supportsDeveloperRole: false,
                 ...(adapter.api === 'openai-completions'
                   ? {
+                      ...(isOpenRouter
+                        ? {
+                            ...(modelId.startsWith('anthropic/')
+                              ? { cacheControlFormat: 'anthropic' as const }
+                              : {}),
+                            sendSessionAffinityHeaders: true,
+                            sessionAffinityFormat: 'openrouter' as const,
+                          }
+                        : {}),
                       maxTokensField:
                         connection.adapterFamily === 'openai'
                           ? 'max_completion_tokens'
@@ -125,8 +138,10 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         provider: provider.id,
         reasoning: invocationModel.reasoning !== undefined,
       };
-      const streamFn = await bindPiStream(adapter, {
+      const streamBinding: Parameters<typeof bindPiStream>[1] = {
         apiKey: selectedApiKey.value,
+        cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
+        sessionId,
         fetch: expoFetch as unknown as FetchFunction,
         headers,
         maxRetries: 0,
@@ -141,11 +156,16 @@ export function createPiModelResolver(): PiRuntimeDependencies {
               : undefined,
         },
         temperature: runtimeOptions.temperature,
-        timeoutMs: DEFAULT_PI_TIMEOUT_MS,
         azureApiVersion,
-      });
+      };
+      const primaryStream = await bindPiStream(adapter, streamBinding);
+      const hasAuthHeader = Object.keys(headers).some((name) =>
+        adapter.authHeaderNames.includes(name.toLowerCase()),
+      );
       const capturedContext = createAiUsageCaptureContext({
-        credentialReceipt: selectedApiKey.apiKeySelection,
+        credentialReceipt: hasAuthHeader
+          ? { attribution: 'unknown' }
+          : selectedApiKey.apiKeySelection,
         messageRef: null,
         modelId,
         modelName: model.name,
@@ -167,12 +187,49 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         trustProviderReportedCost: capturedContext.trustProviderReportedCost,
       };
 
+      const selectedKeyId =
+        'id' in usageContext.credentialReceipt ? usageContext.credentialReceipt.id : undefined;
+      const enabledKeys =
+        apiKeyOverride === undefined &&
+        selectedKeyId !== undefined &&
+        provider.apiKeys.filter((key) => key.isEnabled).length > 1
+          ? (await providerService.listApiKeys(provider.id, { enabled: true })).keys
+          : [];
+      const selectedIndex = enabledKeys.findIndex((key) => key.id === selectedKeyId);
+      const fallbackKeys =
+        selectedIndex < 0
+          ? []
+          : [...enabledKeys.slice(selectedIndex + 1), ...enabledKeys.slice(0, selectedIndex)];
+      const primaryReceipt = usageContext.credentialReceipt;
+      const streamFn =
+        fallbackKeys.length === 0
+          ? primaryStream
+          : withPiApiKeyFallback([
+              async () => {
+                usageContext.credentialReceipt = primaryReceipt;
+                return primaryStream;
+              },
+              ...fallbackKeys.map((key) => async () => {
+                const selected = await providerService.resolveApiKey(provider.id, key.key);
+                const stream = await bindPiStream(adapter, {
+                  ...streamBinding,
+                  apiKey: selected.value,
+                });
+                usageContext.credentialReceipt = selected.apiKeySelection;
+                return stream;
+              }),
+            ]);
+
+      const timedStream = withPiStreamIdleTimeout(streamFn);
       return {
         defaultThinkingLevel: resolveDefaultThinkingLevel(invocationModel),
         maxInputTokens: model.maxInputTokens,
         model: piModel,
-        redactionValues: collectRedactionValues(selectedApiKey.value, headers),
-        streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(streamFn) : streamFn,
+        redactionValues: [
+          ...collectRedactionValues(selectedApiKey.value, headers),
+          ...fallbackKeys.map((key) => key.key),
+        ],
+        streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(timedStream) : timedStream,
         supportsTools: preflight.supportsTools,
         usageContext,
       };
@@ -228,6 +285,14 @@ function collectRedactionValues(apiKey: string, headers: Record<string, string>)
       /authorization|api[-_]key|token|secret/i.test(name) ? [value] : [],
     ),
   ];
+}
+
+function isOpenRouterUrl(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl).hostname === 'openrouter.ai';
+  } catch {
+    return false;
+  }
 }
 
 function resolveDefaultThinkingLevel(model: Model): ModelThinkingLevel {

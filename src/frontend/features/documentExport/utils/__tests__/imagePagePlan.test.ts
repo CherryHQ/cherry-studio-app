@@ -90,7 +90,7 @@ test('an object taller than a page fails instead of silently dropping or cutting
   ).toThrow();
 });
 
-test('single-image mode preserves the complete height without a page-height restriction', () => {
+test('single-image output preserves the complete height independently of capture tiles', () => {
   expect(imagePagePlan(measurement({ height: 150_000 }), 'single')).toEqual([
     { top: 0, height: 150_000 },
   ]);

@@ -1,6 +1,7 @@
 import { SearchField as HeroSearchField } from 'heroui-native/search-field';
 import { StyleSheet } from 'react-native';
 
+import { useFieldText } from '../input/use-field-text';
 import type { SearchFieldProps } from './search-field.types';
 
 export function SearchField({
@@ -19,13 +20,15 @@ export function SearchField({
   value,
   variant = 'default',
 }: SearchFieldProps) {
+  const [text, changeText] = useFieldText(value, onChangeText);
+
   return (
     <HeroSearchField
       isDisabled={disabled}
-      onChange={onChangeText}
+      onChange={changeText}
       style={style}
       testID={testID ? `${testID}-root` : undefined}
-      value={value}
+      value={text}
     >
       <HeroSearchField.Group>
         <HeroSearchField.SearchIcon />

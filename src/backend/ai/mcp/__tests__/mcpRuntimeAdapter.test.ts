@@ -100,6 +100,7 @@ describe('MCP Runtime adapter', () => {
         input: { query: 42 },
         signal: new AbortController().signal,
         toolCallId: 'call-1',
+        turnId: 'turn-1',
       }),
     ).rejects.toMatchObject({ code: 'mcp_tool_input_invalid', retryable: false });
     expect(invoke).not.toHaveBeenCalled();
@@ -113,6 +114,7 @@ describe('MCP Runtime adapter', () => {
       input: { query: 'cherry' },
       signal: new AbortController().signal,
       toolCallId: 'call-1',
+      turnId: 'turn-1',
     });
 
     expect(invoke).toHaveBeenCalledWith(
@@ -150,6 +152,7 @@ describe('MCP Runtime adapter', () => {
       input: { query: 'cherry' },
       signal: controller.signal,
       toolCallId: 'call-1',
+      turnId: 'turn-1',
     });
     controller.abort();
 
@@ -183,6 +186,7 @@ describe('MCP Runtime adapter', () => {
           input: { query: 'cherry' },
           signal: new AbortController().signal,
           toolCallId: 'call-1',
+          turnId: 'turn-1',
         });
 
         jest.advanceTimersByTime(MCP_TOOL_CALL_TIMEOUT_MS);
@@ -212,6 +216,7 @@ describe('MCP Runtime adapter', () => {
         input: { query: 'cherry' },
         signal: controller.signal,
         toolCallId: 'write',
+        turnId: 'turn-1',
       }),
     ).rejects.toMatchObject({ code: 'mcp_tool_cancelled', retryable: false });
     expect(invoke).not.toHaveBeenCalled();
@@ -229,6 +234,7 @@ describe('MCP Runtime adapter', () => {
         input: { query: 'cherry' },
         signal: controller.signal,
         toolCallId: 'write',
+        turnId: 'turn-1',
       }),
     ).rejects.toBe(rejection);
   });
@@ -257,6 +263,7 @@ describe('MCP Runtime adapter', () => {
           input: { query: 'cherry' },
           signal: new AbortController().signal,
           toolCallId: 'call-1',
+          turnId: 'turn-1',
         })
         .catch((failure: unknown) => failure);
 
@@ -296,6 +303,7 @@ describe('MCP Runtime adapter', () => {
       input: { query: 'private query' },
       signal: new AbortController().signal,
       toolCallId: 'call-1',
+      turnId: 'turn-1',
     });
     expect(result.value).toMatchObject({ truncated: true });
     expect(records.at(-1)).toMatchObject({
@@ -327,6 +335,7 @@ describe('MCP Runtime adapter', () => {
           input: { query: 'cherry' },
           signal: new AbortController().signal,
           toolCallId: 'call-1',
+          turnId: 'turn-1',
         }),
       ).resolves.toEqual({ artifacts: [], value: remotePayload });
     },
@@ -342,6 +351,7 @@ describe('MCP Runtime adapter', () => {
       input: { query: 'cherry' },
       signal: new AbortController().signal,
       toolCallId: 'call-1',
+      turnId: 'turn-1',
     });
     const serialized = JSON.stringify(output);
 

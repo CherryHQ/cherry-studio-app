@@ -42,11 +42,3 @@ export function resolvePaintingGenerationMode(
     ? mode
     : undefined;
 }
-
-/** `edit` here describes an image-input interaction, including generate with references. */
-export function supportsPaintingGenerationMode(
-  model: Model | undefined,
-  mode: Extract<ImageGenerationMode, 'edit' | 'generate'>,
-): boolean {
-  return resolvePaintingGenerationMode(model, mode === 'edit') !== undefined;
-}

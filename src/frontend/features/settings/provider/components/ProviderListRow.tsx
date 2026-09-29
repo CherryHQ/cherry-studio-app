@@ -11,9 +11,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { ProviderAvatar } from '@/frontend/components/Avatar';
 import type { Provider } from '@/shared/data/types/provider';
-
-import { ProviderAvatar } from './ProviderAvatar';
 
 const providerStatusMotion = {
   duration: duration.fast,

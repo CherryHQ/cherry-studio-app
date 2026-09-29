@@ -3,11 +3,12 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, health, location, web search and fetch,
-image generation, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
+image generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
 `{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location) are enabled per Agent in the editor; the three file tools belong to every turn. An
+health, location, agents) are enabled per Agent in the editor; the three file tools belong to every
+turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -150,6 +151,28 @@ Configuration changes affect the next turn. Permission and resource checks that 
 Cherry are repeated inside `execute()` immediately before the side effect. A missing tool, revoked
 permission, deleted file, or disconnected server fails closed; the callback never performs a
 fallback action with broader access.
+
+Step 4 does not wait on the network for a server that has already been listed. The MCP runtime
+reuses each server's last complete `tools/list` result, kept in memory for the current connection
+configuration and in a per-server file under the app cache directory, until that server is
+invalidated by an endpoint, header, or grant change, a disable, a delete, or a plugin connect or
+disconnect. Plugin connection validation collects the full tool catalog before saving the grant;
+after the save, the runtime caches those definitions under the new grant without a second network
+discovery. A send arriving during that local cache handoff waits for it through the existing turn
+preparation path. The temporary validation client is closed; actual tool calls still use a
+grant-bound client and its live routing checks.
+
+There is no timed refresh: the catalog is reconciled where the network is already in
+use, when a fresh connection lists tools before its first call and whenever the settings screens
+read live. A catalog with partial-discovery warnings is served immediately and never written to
+disk. Both partial and failed discoveries back off before a send can trigger another attempt;
+partial catalogs refresh in the background after that delay. Consecutive failures start at 30
+seconds and double to a five-minute ceiling, resetting only after complete discovery. Settings
+screens may still probe the server. The file stores a
+fingerprint of the connection configuration rather than its headers. Because the frozen tool is
+pinned to the catalog rather than to a live connection, it may execute over a reconnected client for
+the same configuration; execution still rereads the stored server row, and a tool absent from the
+live listing fails closed.
 
 The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
 application function by name: every callable target must still exist in the frozen turn catalog.
@@ -313,10 +336,11 @@ retry; cancellation still propagates without becoming a cached failure.
 - Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
   adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
   a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
-- The Host freezes the discovered tools for the turn, including the endpoint URL and live Runtime
-  generation that produced them. An endpoint edit, invalidation, or reconnect makes an old callback
+- The Host freezes the discovered tools for the turn, including the endpoint URL and the catalog
+  generation that produced them. An endpoint edit or invalidation makes an old callback
   unavailable; rediscovery may populate the next snapshot but never silently retargets the active
-  catalog, even when the server row keeps the same URL.
+  catalog, even when the server row keeps the same URL. A transport reconnect for the same
+  configuration keeps the frozen callback usable and lists the live catalog before its first call.
 - Third-party MCP bindings project to a base per-call `ask` policy. An explicit `deny` remains
   denied, while any legacy binding-level `auto` row is downgraded to `ask`. The Agent's automatic
   approval mode may then promote that effective turn policy to `auto` without rewriting the row.
@@ -354,19 +378,15 @@ retry; cancellation still propagates without becoming a cached failure.
 
 ### System Health
 
-- Health is currently exposed only on iOS. Android omits health permission settings, the Agent
-  capability switch, and runtime tools, including their permission-status lookups. Native Android
-  integration and historical health tool results are retained.
+- Health is exposed only on iOS. Android does not package Nitro HealthKit, the Health Access
+  module, or Health Connect permissions; its health permission lookups report `unsupported`.
+  Historical health tool results are retained.
 - [Health Access](../../../modules/health-access/README.md) owns native read authorization;
   `src/backend/services/permissions` maps its results to the shared permission contract. Data
   queries remain in `src/backend/services/device/health.ts` using Nitro HealthKit.
-- The Nitro HealthKit Android patch propagates record-read failures after quota retries and native
-  aggregate failures. Failed queries must not resolve as empty data or a measured zero; the caller
-  marks the affected metric as `error` while retaining successful metrics. This patch and the iOS
-  calendar requester patch require a new native build.
-- The retained Android implementation awaits the runtime permission callback on Android 14+ and
-  the Health Connect activity result on earlier versions, then reads grants per data type. Its
-  settings handler opens Health Connect management even when all permissions are already granted.
+- The Nitro HealthKit iOS patch narrows authorization to the read types used by the built-in
+  tools and removes per-query logging. This patch and the iOS calendar requester patch require a
+  new native build.
 - Apple Health never discloses whether a read permission was granted. `requested` means the system
   no longer needs to ask, and settings explain how to review access in Apple Health.
 - Summaries request only selected metrics, skip known denied metrics, and preserve successful
@@ -497,7 +517,7 @@ work must discard late results after the turn is terminal.
 
 Pi caps each turn at twenty tool-loop steps and sixty-four tool calls. Reaching either budget allows
 one final response with all tools disabled, using the current results and disclosing remaining gaps.
-This response remains subject to the context limit and the same ten-minute turn deadline. The MCP
+This response remains subject to the context limit; the turn itself has no wall-clock deadline. The MCP
 adapter separately caps each remote call at 60 seconds and projects at most 256 KiB of JSON. These
 limits are application constants rather than user settings in Version 1.
 
@@ -510,7 +530,7 @@ JavaScript tool execution, arbitrary filesystem paths, local MCP processes, and 
 trees are explicit mobile exclusions. Streamable HTTP MCP and device/application capability
 adapters are semantic ports.
 
-The planned PC Agent Controller may reuse the normalized application presentation of a tool or
+The PC Agent Controller reuses the normalized application presentation of a tool or
 approval, but PC tools remain owned and executed by the PC Agent Runtime. The mobile adapter maps
 their opaque identities, lifecycle, approval requests, and resource results into Agent Protocol
 values; it does not register them as local `RuntimeTool` callbacks. They are different from a local
@@ -537,3 +557,72 @@ desktop event labels or persistence shapes.
 - Mobile Skills cannot add tools, approvals, credentials, or resource-ledger grants.
 - Cancellation, denial, unavailable tools, and process interruption all fail closed without late
   side effects entering the transcript or non-terminal tool calls entering later model history.
+
+
+## User Questions
+
+`ask_user_question` is a core system tool, available when the model supports tool calls and the
+Agent does not use automatic approval. Choosing automatic approval means the user does not want the
+turn to stop for them, so that mode withholds the tool and the model asks for missing decisions in
+its reply. One call contains one to eight questions with unique IDs, each with up to four concise
+options and single or multiple selection. An empty options array requests free text only. The tool
+waits for a user response; it is not a tool-approval request and never auto-selects an answer. A custom
+text answer and skipping are always available. Skipping does not authorize an action.
+
+The Host supplies the response channel to the catalog through turn preparation; each call carries
+its turn id, so the Host correlates the question to the live turn and tool-call ID. The Protocol
+publishes `question.updated` and includes `pendingQuestion` in observation snapshots. While a
+question is pending, the turn reports `awaiting-input`. A question sheet opens over the chat and
+leaves the ordinary input's draft intact; desktop question forms in remote chat reuse the same sheet
+through the shared interaction contract. It shows one question at a time with its full text in the
+scrolling body, radio options for a single choice, and checkboxes for multiple. Choosing never
+navigates; tapping a selected option clears it so the answer can return to free text only or be
+skipped. The footer action reads skip until the question is answered, next once it is, and submit on
+the last question, with previous beside it. Choices and free text remain editable until the user
+submits the complete set; local submission marks any unanswered question skipped.
+Skip never submits or cancels the turn. There is no close control.
+Turn cancellation discards the pending request without submitting answers. Approval requests take
+presentation priority if tools were called concurrently, without discarding the question draft.
+When the source is no longer current, the sheet closes while preserving its draft so navigation and
+connection recovery stay reachable; the same request reopens when the source recovers.
+A second simultaneous question call is rejected.
+
+Question arguments and successful answers use ordinary persisted tool parts. The transcript shows
+a flat read-only record of every question and answer, associated by `questionId`. Missing, duplicate,
+unknown, or invalid answers reject the whole response without settling the wait. Pending callbacks and waiting state are memory-only, like
+approvals: leaving a route does not cancel the turn, but cancellation, host disposal, and process
+restart invalidate the question. Persisted unanswered questions are not resumable controls.
+
+A question waits for its answer like an approval wait; the turn has no deadline to expire meanwhile. Background activity uses the existing approval attention phase
+with a question-specific label and releases its keep-alive lease. This does not promise indefinite
+background execution or recovery after the operating system terminates the app.
+
+
+## Agent Management
+
+The `agents` capability group contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
+The editor lists it as Agent management alongside the other capability groups; it needs no OS
+permission. New Agents start with it disabled,
+whether created from the editor or by these tools; the seeded default Agent keeps it enabled so a
+fresh installation can create Agents from conversation. Reads use automatic approval; writes start at `ask` and follow the current Agent's approval
+preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
+or change MCP bindings.
+
+Creation accepts a name, instructions, and optional definition fields. Omitting `modelId` lets
+`AgentService` resolve the global default Agent model; omitted capability settings use the same
+disabled groups as the manual create form. A saved Agent without a model remains editable
+but cannot start chatting. The model derives instructions from the conversation and may use
+`ask_user_question` for material missing requirements.
+
+`agent_list` supports name search and pagination, returns at most 50 compact records per call,
+and omits instructions. `agent_get` returns the editable definition and `updatedAt`; both get and
+update accept `current` to refer to the originating conversation's Agent. Update requires that
+version and an explicit field patch. The persistence transaction compares the row timestamp before
+writing, rejecting a concurrent edit or deletion. A conflict requires reading and reconciling the
+latest definition. Changes to the active Agent apply to future turns only.
+
+Create/update publish committed Data API cache invalidations, including when a turn has no visible
+chat subscriber. Successful writes render a compact saved-Agent card with a Start chat action when a model is
+configured. List/read results remain in the process disclosure. Results omit managed
+avatar paths and credentials. Writes are not automatically replayed: after an uncertain outcome,
+inspect current saved records before deciding whether another write is needed.

@@ -68,7 +68,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   constructor(
     private readonly environment: Pick<
       BackgroundActivityEnvironment,
-      'translate' | 'onForegroundAttention'
+      'isReplyCompletionNotificationEnabled' | 'translate' | 'onForegroundAttention'
     >,
   ) {
     super();
@@ -150,9 +150,11 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
 
   createPresenter<Props extends ActivityProps>(): BackgroundActivityPresenter<Props> {
     return {
-      // A queued task can join an already-running service in the background.
-      // Hold protection only through notification submission, never through presentation.
-      canStartInBackground: true,
+      // A notification represents a task the execution runtime already admitted,
+      // whether or not the user can see the app, and a queued task can join an
+      // already-running service in the background. Hold protection only through
+      // notification submission, never through presentation.
+      presentWhile: 'always',
       shouldHoldLeaseUntilDelivery: true,
       clearOrphans: async () => 0,
       start: (props, deepLinkUrl) => {
@@ -165,6 +167,11 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         if (!this.disposed) this.activities.add(record);
         this.scheduleReconcile();
         return {
+          // The posted notification outlives its task record; a focused surface
+          // clears it here as well as through App Shell's own acknowledgement.
+          dismiss: async () => {
+            await this.notifications?.dismissNotificationAsync(record.id);
+          },
           update: (nextProps, context) => {
             record.latestProps = nextProps;
             const occurredInBackground =
@@ -337,6 +344,13 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
       return;
     const phase = record.props.phase;
     const requiresAttention = phase === 'awaiting-approval' || phase === 'failed';
+    // A plain completion follows its own preference; failures and approvals
+    // stay attention regardless. Consume the phase so a later preference
+    // change or title update never replays it.
+    if (phase === 'completed' && !this.environment.isReplyCompletionNotificationEnabled()) {
+      record.attention = kind;
+      return;
+    }
     // Foreground completion stays silent even if delivery runs after background entry.
     if (!occurredInBackground && !requiresAttention) {
       record.attention = kind;

@@ -1,5 +1,9 @@
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
-import { Button, ImageGenerationLoader } from '@cherrystudio/ui/components';
+import {
+  BackgroundPressExclusion,
+  Button,
+  ImageGenerationLoader,
+} from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -127,14 +131,16 @@ export function PaintingAssistantMessage({
               {t('painting.status.interruptedHint')}
             </Text>
             {onRetry ? (
-              <Button
-                accessibilityLabel={t('painting.status.retry')}
-                onPress={onRetry}
-                size="sm"
-                variant="secondary"
-              >
-                <Button.Label>{t('painting.status.retry')}</Button.Label>
-              </Button>
+              <BackgroundPressExclusion>
+                <Button
+                  accessibilityLabel={t('painting.status.retry')}
+                  onPress={onRetry}
+                  size="sm"
+                  variant="secondary"
+                >
+                  <Button.Label>{t('painting.status.retry')}</Button.Label>
+                </Button>
+              </BackgroundPressExclusion>
             ) : null}
           </View>
         </View>
@@ -188,7 +194,7 @@ export function PaintingAssistantMessage({
     );
 
     return (
-      <View className="w-full" key={output.fileEntryId} style={{ aspectRatio }}>
+      <BackgroundPressExclusion className="w-full" key={output.fileEntryId} style={{ aspectRatio }}>
         {paintingId ? (
           <ArtifactPreviewLink
             href={{
@@ -201,7 +207,7 @@ export function PaintingAssistantMessage({
         ) : (
           result
         )}
-      </View>
+      </BackgroundPressExclusion>
     );
   });
 

@@ -39,7 +39,6 @@ export function useDocumentExportPreview(
   const tail = useRef<Promise<unknown>>(Promise.resolve());
   const markdown = session.markdown + renderMarkdownSignature(presentation.watermark);
   useEffect(() => {
-    if (format === 'markdown') return;
     const controller = new AbortController();
     const publish = (state: PreviewState) => {
       if (!controller.signal.aborted)
@@ -69,9 +68,11 @@ export function useDocumentExportPreview(
         };
         try {
           const artifact = await session.render(
-            format === 'html'
-              ? { format, presentation }
-              : { format, presentation, capture, layout: imageLayout },
+            format === 'markdown'
+              ? { format, watermark: presentation.watermark }
+              : format === 'html'
+                ? { format, presentation }
+                : { format, presentation, capture, layout: imageLayout },
             context,
           );
           publish({ status: 'ready', artifact });
@@ -96,22 +97,20 @@ export function useDocumentExportPreview(
     return () => controller.abort();
   }, [attempt, capture, format, imageLayout, markdown, presentation, revision, session]);
   const state: PreviewState =
-    format === 'markdown'
-      ? { status: 'markdown', text: markdown }
-      : result?.session === session &&
-          result.format === format &&
-          result.presentation === presentation &&
-          result.attempt === attempt &&
-          result.imageLayout === imageLayout &&
-          result.revision === revision
-        ? result.state
-        : { status: 'loading', progress: 'rendering' };
+    result?.session === session &&
+    result.format === format &&
+    result.presentation === presentation &&
+    result.attempt === attempt &&
+    result.imageLayout === imageLayout &&
+    result.revision === revision
+      ? result.state
+      : { status: 'loading', progress: 'rendering' };
 
   const getArtifact = async (signal: AbortSignal): Promise<DocumentExportArtifact> => {
     signal.throwIfAborted();
     if (state.status === 'ready') return state.artifact;
     if (state.status !== 'markdown') throw new DocumentExportError('busy');
-    // Markdown becomes a file only on Share, after any cancelled conversion has settled.
+    // A source-only fallback retries Markdown preparation after cancelled work has settled.
     const rendering = tail.current
       .catch(() => {})
       .then(() => {

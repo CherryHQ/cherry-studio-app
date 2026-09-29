@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { getBrandAvatarIconDisplayConfig } from '@/frontend/components/Avatar';
+import { useProviderAvatar } from '@/frontend/hooks/useProviderAvatar';
 import { resolveModelIconSources } from '@/frontend/utils/modelIcons';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -17,10 +18,11 @@ type ModelPickerIconProps = {
 export function ModelPickerIcon({ model, provider, size = 32 }: ModelPickerIconProps) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
-  const { iconSource, modelIconSource } = resolveModelIconSources(
+  const { iconSource, isProviderFallback, modelIconSource } = resolveModelIconSources(
     model.modelId,
     provider?.presetProviderId ?? provider?.id,
   );
+  const providerAvatarUri = useProviderAvatar(provider?.id ?? model.providerId);
   const imageSize =
     !modelIconSource && iconSource
       ? size * getBrandAvatarIconDisplayConfig(iconSource, 'circle').scale
@@ -30,6 +32,20 @@ export function ModelPickerIcon({ model, provider, size = 32 }: ModelPickerIconP
     height: size,
     width: size,
   };
+
+  if (isProviderFallback && providerAvatarUri) {
+    return (
+      <View className="overflow-hidden rounded-full border-continuous" style={frameStyle}>
+        <Image
+          cachePolicy="memory-disk"
+          contentFit="cover"
+          recyclingKey={providerAvatarUri}
+          source={{ uri: providerAvatarUri }}
+          style={frameStyle}
+        />
+      </View>
+    );
+  }
 
   if (iconSource) {
     return (

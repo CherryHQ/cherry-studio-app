@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import {
   type AgentRow,
   agentTable,
@@ -152,6 +153,7 @@ export class AgentService {
     this.validateName(dto.name);
 
     const row = await this.dbService.withWriteTx((tx) => this.insertTx(tx, dto));
+    publishDataApiChanges(['/agents', `/agents/${row.id}`]);
 
     return rowToAgent(row, await this.getModelName(row.modelId));
   }
@@ -168,8 +170,25 @@ export class AgentService {
     return row ? rowToAgent(row, await this.getModelName(row.modelId)) : null;
   }
 
-  async update(id: string, dto: UpdateAgentDto): Promise<Agent> {
+  async update(
+    id: string,
+    dto: UpdateAgentDto,
+    options: { expectedUpdatedAt?: string } = {},
+  ): Promise<Agent> {
     const current = await this.getById(id);
+    const expectedTimestamp =
+      options.expectedUpdatedAt === undefined ? undefined : Date.parse(options.expectedUpdatedAt);
+    if (expectedTimestamp !== undefined && !Number.isFinite(expectedTimestamp)) {
+      throw DataApiErrorFactory.validation({ expectedUpdatedAt: ['Invalid Agent version'] });
+    }
+    if (
+      options.expectedUpdatedAt !== undefined &&
+      Date.parse(current.updatedAt) !== expectedTimestamp
+    ) {
+      throw DataApiErrorFactory.conflict(
+        'The Agent changed since it was read. Read it again before editing.',
+      );
+    }
 
     if (dto.name !== undefined) {
       this.validateName(dto.name);
@@ -197,14 +216,28 @@ export class AgentService {
           ...updates,
           updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
         })
-        .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
+        .where(
+          and(
+            eq(agentTable.id, id),
+            isNull(agentTable.deletedAt),
+            expectedTimestamp === undefined
+              ? undefined
+              : eq(agentTable.updatedAt, expectedTimestamp),
+          ),
+        )
         .returning();
       if (!updated) {
+        if (expectedTimestamp !== undefined) {
+          throw DataApiErrorFactory.conflict(
+            'The Agent changed or was deleted while saving. Read it again before editing.',
+          );
+        }
         throw DataApiErrorFactory.notFound('Agent', id);
       }
       return updated as AgentRow;
     });
 
+    publishDataApiChanges(['/agents', `/agents/${id}`]);
     const modelName =
       dto.modelId !== undefined && dto.modelId !== current.modelId
         ? await this.getModelName(dto.modelId)

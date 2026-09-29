@@ -23,6 +23,7 @@ const variants: ButtonVariant[] = [
   'secondary',
   'ghost',
   'link',
+  'text',
 ];
 const shapes: ButtonShape[] = ['rounded', 'pill'];
 const sizes: ButtonSize[] = ['xs', 'sm', 'inline', 'default', 'field', 'lg'];

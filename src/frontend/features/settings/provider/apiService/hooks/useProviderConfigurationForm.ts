@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 
 import { useBackendModule, useQuery } from '@/frontend/data';
+import { useProviderAvatar, useProviderAvatarActions } from '@/frontend/hooks/useProviderAvatar';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
@@ -14,12 +15,7 @@ import {
   resolveProviderFormEndpointTypes,
   useProviderFormDraft,
 } from '../../components/ProviderForm';
-import { useProviderAvatar, useProviderAvatarActions } from '../../hooks/useProviderAvatar';
-import {
-  buildApiKeyEntriesFromInput,
-  buildApiKeysInputFromEntries,
-  normalizeApiKeyEntries,
-} from '../utils/providerApiServiceApiKeys';
+import { areApiKeyEntriesEqual, normalizeApiKeyEntries } from '../utils/providerApiServiceApiKeys';
 import { getEffectiveAuthConfig, shouldShowApiKeys } from '../utils/providerApiServiceAuth';
 import {
   findInvalidCustomProviderEndpointUrl,
@@ -59,14 +55,13 @@ export function useProviderConfigurationForm(providerId: string) {
   const isError =
     providerQuery.isError || apiKeysQuery.isError || authConfigQuery.isError || modelsQuery.isError;
   const endpointTypes = provider ? resolveProviderFormEndpointTypes(provider) : [];
-  const apiKeysInput = buildApiKeysInputFromEntries(normalizeApiKeyEntries(apiKeys ?? []));
   const defaultEndpointNeedsRepair = provider
     ? providerDefaultEndpointNeedsRepair(provider)
     : false;
   const createInitialValues = () =>
     provider
       ? createProviderFormValues({
-          apiKey: apiKeysInput,
+          apiKeys: apiKeys ?? [],
           avatarUri: storedAvatarUri ?? null,
           provider,
         })
@@ -82,25 +77,26 @@ export function useProviderConfigurationForm(providerId: string) {
     sourceKey: !isLoading && provider ? provider.id : '',
   });
   const { state, meta } = form;
-  const previousKeys = useRef({ providerId, input: apiKeysInput });
-  const replaceSavedApiKey = form.actions.replaceSavedApiKey;
+  const previousKeys = useRef({ providerId, apiKeys: apiKeys ?? [] });
+  const replaceSavedApiKeys = form.actions.replaceSavedApiKeys;
   useEffect(() => {
     const previous = previousKeys.current;
-    previousKeys.current = { providerId, input: apiKeysInput };
+    const savedApiKeys = apiKeys ?? [];
+    previousKeys.current = { providerId, apiKeys: savedApiKeys };
     if (
       !isLoading &&
       provider &&
       accounts.getCapabilities(provider).apiKeys &&
       previous.providerId === providerId &&
-      previous.input !== apiKeysInput &&
-      state.apiKey === previous.input
+      !areApiKeyEntriesEqual(previous.apiKeys, savedApiKeys) &&
+      areApiKeyEntriesEqual(state.apiKeys, previous.apiKeys)
     ) {
-      replaceSavedApiKey(apiKeysInput);
+      replaceSavedApiKeys(savedApiKeys);
     }
-  }, [accounts, apiKeysInput, isLoading, provider, providerId, replaceSavedApiKey, state.apiKey]);
+  }, [accounts, apiKeys, isLoading, provider, providerId, replaceSavedApiKeys, state.apiKeys]);
   const showApiKey = shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type, provider);
   const requiresApiKey = showApiKey && !provider?.authOptional;
-  const disabledKeys = Boolean(apiKeys?.length) && !apiKeys?.some((key) => key.isEnabled);
+  const disabledKeys = state.apiKeys.length > 0 && !state.apiKeys.some((key) => key.isEnabled);
   const baseUrlEndpoint = meta.baseUrlEndpoint;
   const baseUrl = baseUrlEndpoint ? (state.endpointUrls[baseUrlEndpoint] ?? '') : '';
   const canSubmit =
@@ -114,18 +110,13 @@ export function useProviderConfigurationForm(providerId: string) {
   const canCompleteSetup =
     canSubmit &&
     (!baseUrlEndpoint || baseUrl.trim().length > 0 || isCustomProvider) &&
-    (!requiresApiKey ||
-      buildApiKeyEntriesFromInput(state.apiKey, apiKeys ?? []).some(
-        (key) => key.isEnabled && key.key.trim(),
-      ));
+    (!requiresApiKey || state.apiKeys.some((key) => key.isEnabled && key.key.trim()));
 
   function enableKeys() {
     if (isSaving) return;
-    void queries.replaceApiKeysMutation
-      .mutateAsync((apiKeys ?? []).map((key) => ({ ...key, isEnabled: true })))
-      .catch(() =>
-        toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' }),
-      );
+    for (const key of state.apiKeys) {
+      if (!key.isEnabled) form.actions.updateApiKey(key.id, { isEnabled: true });
+    }
   }
 
   function requestSave(onSaved?: (result: SavedProviderConfiguration) => void) {
@@ -189,8 +180,8 @@ export function useProviderConfigurationForm(providerId: string) {
       return;
     }
 
-    const nextApiKeys = buildApiKeyEntriesFromInput(state.apiKey, apiKeys ?? []);
-    const shouldSaveApiKeys = showApiKey && state.apiKey !== apiKeysInput;
+    const nextApiKeys = normalizeApiKeyEntries(state.apiKeys);
+    const shouldSaveApiKeys = showApiKey && meta.hasApiKeyChanges;
     const persist = () => {
       if (savePending.current) return;
       savePending.current = true;
@@ -205,7 +196,7 @@ export function useProviderConfigurationForm(providerId: string) {
           }
           form.actions.reset({
             ...state,
-            apiKey: shouldSaveApiKeys ? buildApiKeysInputFromEntries(nextApiKeys) : state.apiKey,
+            apiKeys: shouldSaveApiKeys ? nextApiKeys : (apiKeys ?? state.apiKeys),
             defaultChatEndpoint: updates.defaultChatEndpoint ?? state.defaultChatEndpoint,
             endpointUrls: savedEndpointUrls,
             name: providerName,
@@ -241,11 +232,11 @@ export function useProviderConfigurationForm(providerId: string) {
 
   async function reloadAccountKeys() {
     const result = await apiKeysQuery.refetch({ throwOnError: true });
-    form.actions.replaceSavedApiKey(buildApiKeysInputFromEntries(result.data ?? []));
+    form.actions.replaceSavedApiKeys(result.data ?? []);
   }
 
   return {
-    accountChangesDisabled: state.apiKey !== apiKeysInput || isSaving,
+    accountChangesDisabled: !areApiKeyEntriesEqual(state.apiKeys, apiKeys ?? []) || isSaving,
     reloadAccountKeys,
     setIsAccountBusy,
     apiKeys,

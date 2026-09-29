@@ -2,7 +2,13 @@ import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto, ProviderBrandAvatar } from '..';
+import {
+  BrandAvatar,
+  BrandAvatarIcon,
+  BrandAvatarPhoto,
+  ModelAvatar,
+  ProviderBrandAvatar,
+} from '..';
 
 const mockAvatar = jest.fn(({ children }: { children?: React.ReactNode }) => children);
 const mockAvatarFallback = jest.fn((_props: unknown) => null);
@@ -19,6 +25,12 @@ jest.mock('@cherrystudio/ui/components', () => {
 
 jest.mock('@/frontend/hooks/useAvatar', () => ({
   useAvatar: () => 'profile-avatar-source',
+}));
+
+const mockUseProviderAvatar = jest.fn((_providerId: string): string | undefined => undefined);
+
+jest.mock('@/frontend/hooks/useProviderAvatar', () => ({
+  useProviderAvatar: (providerId: string) => mockUseProviderAvatar(providerId),
 }));
 
 jest.mock('@cherrystudio/ui/icons', () => {
@@ -171,6 +183,45 @@ describe('BrandAvatar', () => {
 
     expect(mockResolveProviderIcon).toHaveBeenCalledWith('custom-provider');
     expect(mockAvatarFallback).toHaveBeenCalledWith(expect.objectContaining({ children: 'C' }));
+  });
+
+  it('shows the uploaded provider avatar for a model without its own icon', () => {
+    mockUseProviderAvatar.mockReturnValue('file:///relay.png');
+
+    render(
+      <ModelAvatar
+        model={{
+          id: 'relay::my-model',
+          modelId: 'my-model',
+          name: 'My Model',
+          providerId: 'relay',
+        }}
+      />,
+    );
+
+    expect(mockUseProviderAvatar).toHaveBeenCalledWith('relay');
+    expect(mockAvatarImage).toHaveBeenCalledWith(
+      expect.objectContaining({ contentFit: 'cover', source: { uri: 'file:///relay.png' } }),
+    );
+  });
+
+  it('keeps a model icon ahead of the uploaded provider avatar', () => {
+    mockUseProviderAvatar.mockReturnValue('file:///relay.png');
+
+    render(
+      <ModelAvatar
+        model={{
+          id: 'relay::deepseek-chat',
+          modelId: 'deepseek-chat',
+          name: 'DeepSeek',
+          providerId: 'relay',
+        }}
+      />,
+    );
+
+    expect(mockAvatarImage).toHaveBeenCalledWith(
+      expect.not.objectContaining({ source: { uri: 'file:///relay.png' } }),
+    );
   });
 
   function render(element: React.ReactElement) {

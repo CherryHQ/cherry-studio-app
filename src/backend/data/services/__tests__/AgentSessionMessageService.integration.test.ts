@@ -27,6 +27,32 @@ describe('AgentSessionMessageService persistence', () => {
     sqlite.close();
   });
 
+  test('reads a complete ordered selection and its title together, rejecting missing or foreign messages', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'first', text: 'First' });
+    insertMessage(sqlite, { createdAt: 200, id: 'second', text: 'Second' });
+    const snapshot = await agentSessionMessageService.readSelection('session-1', [
+      'second',
+      'first',
+    ]);
+    expect(snapshot.session.id).toBe('session-1');
+    expect(snapshot.assistantName).toBe('Agent');
+    expect(snapshot.messages.map((message) => message.id)).toEqual(['first', 'second']);
+    await expect(
+      agentSessionMessageService.readSelection('session-1', ['first', 'missing']),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    sqlite
+      .prepare("UPDATE agent_session_message SET status = 'streaming' WHERE id = 'second'")
+      .run();
+    await expect(
+      agentSessionMessageService.readSelection('session-1', ['second']),
+    ).rejects.toThrow();
+    expect(snapshot.messages[1].status).toBe('success');
+    sqlite.prepare("UPDATE agent_session_message SET role = 'system' WHERE id = 'first'").run();
+    await expect(
+      agentSessionMessageService.readSelection('session-1', ['first']),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   test('pages the linear transcript newest-first with a stable tie-breaker', async () => {
     insertMessage(sqlite, { createdAt: 100, id: 'message-a', text: 'A' });
     insertMessage(sqlite, { createdAt: 300, id: 'message-b', text: 'B' });

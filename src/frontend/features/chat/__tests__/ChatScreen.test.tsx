@@ -19,6 +19,8 @@ const mockSessionRefetch = jest.fn();
 const mockDismissInput = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  BackgroundPressArea: ({ children, ...props }: { children?: React.ReactNode }) =>
+    jest.requireActual('react').createElement('BackgroundPressArea', props, children),
   composerContentGap: 8,
   ContentState: {
     Error: () => null,
@@ -42,6 +44,7 @@ jest.mock('@/frontend/components/Composer', () => ({
     dockProps = props;
     return children;
   },
+  ComposerDropArea: ({ children }: { children?: React.ReactNode }) => children,
   ComposerSessionProvider: ({ children }: { children?: React.ReactNode }) => {
     const { useState } = jest.requireActual<typeof import('react')>('react');
     const [instance] = useState(() => ++mockComposerProviderMountCount);
@@ -52,6 +55,7 @@ jest.mock('@/frontend/components/Composer', () => ({
 
 jest.mock('@/frontend/components/Composer/context/ComposerProvider', () => ({
   useComposerPresentationActions: () => ({ dismissInput: mockDismissInput }),
+  useComposerPresentationState: () => ({ isEditing: true }),
 }));
 
 jest.mock('expo-router', () => ({
@@ -66,13 +70,6 @@ jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: (agentId: string | undefined) => ({
     agent: agentId === 'agent-1' ? { id: 'agent-1' } : undefined,
     isLoading: false,
-  }),
-  useAgentMessageHistoryWindow: () => ({
-    isLoadingInitial: false,
-    isLoadingOlder: false,
-    loadOlder: jest.fn(),
-    messages: [],
-    retry: jest.fn(),
   }),
   useAgentSession: () => ({
     data: mockSessionData,
@@ -94,12 +91,36 @@ const mockChatControls = {
 };
 
 jest.mock('../runtime', () => ({
-  latestAgentImageResult: jest.requireActual('../runtime/agentImageResult').latestAgentImageResult,
+  latestConversationImageResult: jest.requireActual('../runtime/agentImageResult')
+    .latestConversationImageResult,
   useAgentChatControls: (input: { agentId?: string; composerKey: number; sessionId?: string }) => {
     chatControlsInput = input;
     return mockChatControls;
   },
   useAgentChatDraftHandoff: () => undefined,
+  useLocalConversation: () => ({
+    snapshot: {
+      title: '',
+      freshness: { state: 'current' },
+      liveMessages: [],
+      executions: [],
+      interactions: [],
+    },
+    messages: [],
+    messageWindow: {
+      dataKey: 'session-1',
+      isLoadingInitial: false,
+      isRefreshing: false,
+      isLoadingOlder: false,
+      isLoadingNewer: false,
+      hasNewerMessages: false,
+      hasOlderMessages: false,
+      messages: [],
+      loadOlder: jest.fn(),
+      loadNewer: jest.fn(),
+      retry: jest.fn(),
+    },
+  }),
 }));
 
 jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
@@ -119,6 +140,7 @@ jest.mock('../components/ChatRouteResolver', () => ({
 }));
 
 jest.mock('../components/ChatWorkspace', () => ({
+  AssistantMessageUsage: () => null,
   ChatDraftState: () => null,
   ChatEmptyState: () => null,
   ChatWorkspace: (props: Record<string, unknown>) => {
@@ -131,7 +153,7 @@ describe('ChatScreen composer dock wiring', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
-    mockDismissInput.mockClear();
+    jest.clearAllMocks();
     chatControlsInput = undefined;
     chatInputProps = undefined;
     chatWorkspaceProps = undefined;
@@ -174,44 +196,6 @@ describe('ChatScreen composer dock wiring', () => {
     });
   });
 
-  it.each(['session', 'draft'] as const)(
-    'dismisses the %s composer on a completed background press, but yields to cancelled gestures',
-    (target) => {
-      if (target === 'draft') {
-        mockRouteParams = { agentId: 'agent-1' };
-        mockSessionData = undefined;
-      }
-      act(() => {
-        renderer = create(<ChatScreen />);
-      });
-      const background = renderer!.root.find(
-        (node) => typeof node.type === 'string' && node.props.testID === 'chat-background',
-      );
-      const nativeTarget = {
-        measure: (callback: (...bounds: number[]) => void) => callback(0, 0, 400, 800, 0, 0),
-      };
-      const event = {
-        currentTarget: nativeTarget,
-        nativeEvent: { pageX: 100, pageY: 100 },
-        persist: jest.fn(),
-        target: nativeTarget,
-      };
-
-      act(() => background.props.onResponderGrant(event));
-      expect(mockDismissInput).not.toHaveBeenCalled();
-      // A native scroll/selection recognizer can cancel this candidate press.
-      expect(background.props.onResponderTerminationRequest()).toBe(true);
-      act(() => background.props.onResponderTerminate(event));
-      expect(mockDismissInput).not.toHaveBeenCalled();
-
-      act(() => {
-        background.props.onResponderGrant(event);
-        background.props.onResponderRelease(event);
-      });
-      expect(mockDismissInput).toHaveBeenCalledTimes(1);
-    },
-  );
-
   it('keys the chat controls by the composer identity', () => {
     act(() => {
       renderer = create(<ChatScreen />);
@@ -245,6 +229,14 @@ describe('ChatScreen composer dock wiring', () => {
 
     expect(chatInputProps).toBeUndefined();
     expect(chatWorkspaceProps).toMatchObject({ sessionId: 'session-1' });
+
+    // Without a composer there is nothing to dismiss, so a background tap
+    // stays inert.
+    const background = renderer!.root.find(
+      (node) => typeof node.type === 'string' && node.props.testID === 'chat-background',
+    );
+    expect(background.props.disabled).toBe(true);
+    expect(mockDismissInput).not.toHaveBeenCalled();
   });
 
   it('resolves a draft when the requested Session is missing', () => {

@@ -3,6 +3,10 @@ import { prepareWecomFiles, saveWecomResult } from '../wecomFiles';
 import { resolveWecomSchema } from '../wecomSchema';
 
 const mockGetFileUri = jest.fn();
+let mockStorageUri = 'file:///documents/';
+jest.mock('@/backend/data/storage/storagePaths', () => ({
+  storageDirectory: () => ({ uri: mockStorageUri }),
+}));
 jest.mock('@/backend/data/services/FileEntryService', () => ({ fileEntryService: {} }));
 jest.mock('@/backend/services/file/fileStorage', () => ({
   getFileUri: (...args: unknown[]) => mockGetFileUri(...args),
@@ -64,11 +68,27 @@ const api = { call } as unknown as ReturnType<typeof createWecomApi>;
 const upload = { type: 'string', 'x-wecom-file-upload': true };
 const octet = { type: 'string', 'x-wecom-octet-stream': true };
 beforeEach(() => {
+  mockStorageUri = 'file:///documents/';
   testState.files.clear();
   testState.files.set(uri, 123);
   testState.writes.length = 0;
   mockGetFileUri.mockReset().mockResolvedValue(uri);
   call.mockReset().mockResolvedValue({ kind: 'json', value: { result: '{"media_id":"media-1"}' } });
+});
+
+it('permits restored attachments only from the selected storage generation', async () => {
+  mockStorageUri = 'file:///documents/stores/10000000-0000-4000-8000-000000000001/';
+  const restored = `${mockStorageUri}Data/Files/report.pdf`;
+  testState.files.set(restored, 123);
+  const schema = { type: 'object', properties: { file: upload } };
+  await expect(prepareWecomFiles(api, schema, { file: restored }, signal())).resolves.toMatchObject(
+    { payload: { file: 'media-1' } },
+  );
+  call.mockClear();
+  await expect(prepareWecomFiles(api, schema, { file: uri }, signal())).rejects.toThrow(
+    'Only Cherry attachments',
+  );
+  expect(call).not.toHaveBeenCalled();
 });
 
 it('resolves the attachment ID shown to the model into its current native file', async () => {

@@ -11,11 +11,15 @@ import {
   BackHandler,
   Keyboard,
   Pressable,
+  type StyleProp,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from 'react-native';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
@@ -26,6 +30,7 @@ const OPEN_INDEX = 1;
 const TOP_INSET = 12;
 const MAX_CARD_WIDTH = 720;
 const TOP_CORNER_RADIUS = 32;
+const KEYBOARD_GAP = 12;
 const HEIGHT_RATIOS = {
   compact: 0.4,
   full: 1,
@@ -42,6 +47,8 @@ export type BottomSheetBackAction = {
 };
 
 type BottomSheetBaseProps = {
+  /** Lift the sheet with the keyboard, frame by frame, so its inputs and footer stay above it. */
+  avoidKeyboard?: boolean;
   backAction?: BottomSheetBackAction;
   children: ReactNode;
   closeAction?: { accessibilityLabel: string };
@@ -84,6 +91,7 @@ export function BottomSheetProvider({ children }: { children: ReactNode }) {
  */
 export function BottomSheet(props: BottomSheetProps) {
   const {
+    avoidKeyboard = false,
     backAction,
     children,
     closeAction,
@@ -108,6 +116,9 @@ export function BottomSheet(props: BottomSheetProps) {
     [availableCardHeight, dismissible, height, size, sizes],
   );
   const hasFooter = footer != null;
+  // A handle promises a drag; a sheet that can neither close nor resize offers none.
+  const isDraggable = dismissible || (!avoidKeyboard && detents.length > 2);
+  const bottomInset = hasFooter ? Math.max(insets.bottom, 16) : insets.bottom;
   const isCloseActionVisible = Boolean(closeAction && !backAction);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
@@ -171,21 +182,22 @@ export function BottomSheet(props: BottomSheetProps) {
 
   return (
     <ModalBottomSheet
-      detents={detents}
+      // A keyboard-avoiding card animates its own height, which the content detent follows.
+      animateContentHeight={!avoidKeyboard}
+      detents={avoidKeyboard ? [detents[CLOSED_INDEX], 'content'] : detents}
       index={index}
       onIndexChange={handleIndexChange}
       onSettle={handleSettle}
       scrimColor={scrimColor}
     >
-      <View
+      <SheetLayout
+        availableCardHeight={availableCardHeight}
+        avoidKeyboard={avoidKeyboard}
+        bottomInset={bottomInset}
+        cardHeight={cardHeight}
         style={[
           styles.layout,
-          {
-            height: cardHeight,
-            width: '100%',
-            paddingLeft: insets.left,
-            paddingRight: insets.right,
-          },
+          { width: '100%', paddingLeft: insets.left, paddingRight: insets.right },
         ]}
       >
         {/* The native host keeps its full-window scrim. The transparent space
@@ -206,16 +218,18 @@ export function BottomSheet(props: BottomSheetProps) {
           onAccessibilityEscape={dismissible ? requestClose : undefined}
           style={[
             styles.card,
-            {
-              height: cardHeight,
-              width: cardWidth,
-            },
+            avoidKeyboard
+              ? { flex: 1, width: cardWidth }
+              : { height: cardHeight, width: cardWidth },
           ]}
           testID={testID}
         >
           <View className="absolute inset-0 dark:bg-secondary" pointerEvents="none" />
           <View accessibilityElementsHidden className="items-center pt-3" pointerEvents="none">
-            <View className="h-1 w-9 rounded-full bg-border-strong" />
+            <View
+              className={cn('h-1 w-9 rounded-full', isDraggable && 'bg-border-strong')}
+              testID={isDraggable ? 'bottom-sheet-handle' : undefined}
+            />
           </View>
           <View className="min-h-14 flex-row items-center px-5 py-1.5">
             {backAction ? (
@@ -272,10 +286,66 @@ export function BottomSheet(props: BottomSheetProps) {
               {footer}
             </View>
           ) : null}
+          {avoidKeyboard ? <KeyboardSpacer bottomInset={bottomInset} /> : null}
         </View>
-      </View>
+      </SheetLayout>
     </ModalBottomSheet>
   );
+}
+
+type SheetLayoutProps = {
+  availableCardHeight: number;
+  avoidKeyboard: boolean;
+  bottomInset: number;
+  cardHeight: number;
+  children: ReactNode;
+  style: StyleProp<ViewStyle>;
+};
+
+function SheetLayout({ avoidKeyboard, cardHeight, children, style, ...props }: SheetLayoutProps) {
+  return avoidKeyboard ? (
+    <KeyboardSheetLayout cardHeight={cardHeight} style={style} {...props}>
+      {children}
+    </KeyboardSheetLayout>
+  ) : (
+    <View style={[style, { height: cardHeight }]}>{children}</View>
+  );
+}
+
+/** The card grows by the lift until it reaches the top inset; past that its body shrinks. */
+function KeyboardSheetLayout({
+  availableCardHeight,
+  bottomInset,
+  cardHeight,
+  children,
+  style,
+}: Omit<SheetLayoutProps, 'avoidKeyboard'>) {
+  const { height, progress } = useReanimatedKeyboardAnimation();
+  const animatedStyle = useAnimatedStyle(() => ({
+    height: Math.min(
+      cardHeight + keyboardLift(height.value, progress.value, bottomInset),
+      availableCardHeight,
+    ),
+  }));
+  return <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>;
+}
+
+/** Fills the card behind the keyboard so the footer rides on top of it. */
+function KeyboardSpacer({ bottomInset }: { bottomInset: number }) {
+  const { height, progress } = useReanimatedKeyboardAnimation();
+  const animatedStyle = useAnimatedStyle(() => ({
+    height: keyboardLift(height.value, progress.value, bottomInset),
+  }));
+  return <Animated.View style={animatedStyle} />;
+}
+
+/**
+ * The keyboard covers the bottom safe area, so the lift replaces that inset with a small gap.
+ * `height` is negative while the keyboard is visible.
+ */
+function keyboardLift(height: number, progress: number, bottomInset: number): number {
+  'worklet';
+  return Math.max(0, -height - progress * (bottomInset - KEYBOARD_GAP));
 }
 
 function resolveSheetHeights(

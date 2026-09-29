@@ -46,12 +46,17 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
+  AgentRespondQuestionSchema,
+  type AgentRespondQuestionInput,
+  type AgentPendingQuestion,
+  type AgentUserQuestions,
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
@@ -92,11 +97,13 @@ import type { LanguageVarious } from '@/shared/data/preference';
 import { traceErrorAttributes, type TraceRecorder, type TraceSpan } from '../../observability';
 import type { ManagedFileResolver, TurnResourceLedger } from '../resources/managedFileResolver';
 import type {
+  RuntimeToolCall,
   AgentRuntime,
   AgentRuntimeSession,
   RuntimeContextCheckpoint,
   RuntimeEvent,
   RuntimeUsage,
+  RuntimeTurnReplay,
 } from '../runtime';
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
@@ -109,6 +116,7 @@ import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPort } from './agentImageGeneration';
+import type { AgentReplayCache } from './AgentReplayCache';
 import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { buildAgentSystemPrompt } from './agentSystemPrompt';
@@ -131,6 +139,7 @@ import {
 } from './turnPreparation';
 import { prepareRetryTurn } from './turnRetry';
 import { toRuntimeHistory, toRuntimeInputParts } from './turnRuntimeInput';
+import { TurnUserQuestions } from './TurnUserQuestions';
 
 const logger = loggerService.withContext('MobileAgentHost');
 
@@ -178,6 +187,7 @@ export type MobileAgentHostPorts = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
+  replayCache?: AgentReplayCache;
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;
@@ -202,6 +212,8 @@ type ActiveTurnState = {
   backgroundReply: BackgroundReplyTurn;
   hasHistoryBeforeActiveTurn: boolean;
   pendingApprovals: Map<string, AgentApprovalView>;
+  userQuestions: TurnUserQuestions;
+  pendingQuestion: AgentPendingQuestion | null;
   pendingContextCheckpoint: RuntimeContextCheckpoint | null;
   resources: TurnResourceLedger;
   runtimeTiming: MessageRuntimeTimingCollector;
@@ -311,6 +323,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return this.ports.files;
   }
 
+  /** Storage restore invalidates optional local replay before the Host starts. */
+  resetReplayCacheForRestore(): void {
+    this.ports.replayCache?.resetForRestore();
+  }
+
   private get usage(): MobileAgentHostPorts['usage'] {
     return this.ports.usage;
   }
@@ -319,6 +336,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private get turnPreparation(): TurnPreparationDependencies {
     return {
       agents: this.ports.agents,
+      askUser: (question, call) => this.askUserQuestion(question, call),
       documentParserMode: () => this.ports.documentParserMode(),
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
@@ -425,7 +443,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.initialAdmissions.add(admission);
     let openedRuntimeSession: AgentRuntimeSession | undefined;
     let isRuntimeSessionInstalled = false;
-    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+    const preparationLease = this.backgroundReply.acquirePreparation(parsed.sessionId, (reason) =>
       abortController.abort(reason),
     );
 
@@ -505,6 +523,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('SESSION_BUSY', 'The fork point has not settled yet.');
         break;
       case 'forked':
+        this.ports.replayCache?.copyFork(parsed.sessionId, result.session.id, result.messageCopies);
         return result.session;
     }
   }
@@ -534,6 +553,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           fail('SESSION_BUSY', 'The turn has not settled yet.');
           break;
         case 'deleted':
+          this.ports.replayCache?.removeMessages(parsed.sessionId, result.deletedMessageIds);
           break;
       }
 
@@ -572,7 +592,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     const abortController = new AbortController();
     const { signal } = abortController;
     this.admittingSessions.set(sessionId, { abortController, completion: completion.promise });
-    const lease = this.backgroundReply.acquirePreparation((reason) =>
+    const lease = this.backgroundReply.acquirePreparation(sessionId, (reason) =>
       abortController.abort(reason),
     );
     try {
@@ -594,6 +614,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot: plan.inferenceSnapshot,
       });
+      this.ports.replayCache?.removeMessages(sessionId, [source.assistant.id]);
       this.startReservedTurn(
         sessionId,
         plan.sessionTitle,
@@ -649,6 +670,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (!deleted) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
+      this.ports.replayCache?.removeSession(sessionId);
       this.updateSessionStatus(sessionId, null);
       this.listeners.delete(sessionId);
     } finally {
@@ -671,7 +693,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       abortController,
       completion: completion.promise,
     });
-    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+    const preparationLease = this.backgroundReply.acquirePreparation(sessionId, (reason) =>
       abortController.abort(reason),
     );
     try {
@@ -728,6 +750,60 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
     active.abortController.abort(new Error('The turn was cancelled.'));
     await active.runtimeSession?.cancel(parsed.turnId);
+  }
+
+  /**
+   * The `ask_user_question` response channel bound into every turn's catalog.
+   * The call's turn id selects the live turn; a call from a turn that is no
+   * longer active fails closed instead of reaching a different session.
+   */
+  private async askUserQuestion(question: AgentUserQuestions, call: RuntimeToolCall) {
+    call.signal.throwIfAborted();
+    const state = [...this.activeTurns.values()].find((entry) => entry.turn.id === call.turnId);
+    if (!state || state.abortController.signal.aborted) {
+      throw new Error('The question does not belong to an active turn.');
+    }
+    const sessionId = state.turn.sessionId;
+    // Register before publishing: an observer may answer synchronously.
+    if (state.pendingQuestion)
+      throw new Error('Wait for the current question before asking another.');
+    const response = state.userQuestions.ask(question, call);
+    state.pendingQuestion = { turnId: state.turn.id, toolCallId: call.toolCallId, question };
+    state.turn = { ...state.turn, status: 'awaiting-input' };
+    state.backgroundReply.awaitApproval(state.assistantMessage, 'question');
+    this.publish(sessionId, { type: 'question.updated', question: state.pendingQuestion });
+    this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
+    try {
+      return await response;
+    } finally {
+      state.pendingQuestion = null;
+      if (this.activeTurns.get(sessionId) === state) {
+        this.publish(sessionId, { type: 'question.updated', question: null });
+      }
+      if (this.activeTurns.get(sessionId) === state && state.turn.status === 'awaiting-input') {
+        state.turn = {
+          ...state.turn,
+          status: [...state.pendingApprovals.values()].some(
+            (approval) => approval.status === 'pending',
+          )
+            ? 'awaiting-approval'
+            : 'running',
+        };
+        this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
+      }
+    }
+  }
+
+  async respondQuestion(input: AgentRespondQuestionInput): Promise<void> {
+    const parsed = AgentRespondQuestionSchema.parse(input);
+    const active = this.activeTurns.get(parsed.sessionId);
+    if (!active || active.turn.id !== parsed.turnId || active.abortController.signal.aborted) {
+      fail('QUESTION_NOT_FOUND', 'This question does not belong to the active turn.');
+    }
+    if (active.pendingQuestion?.toolCallId !== parsed.toolCallId) {
+      fail('QUESTION_NOT_FOUND', 'This question is no longer waiting for an answer.');
+    }
+    active.userQuestions.respond(parsed.toolCallId, parsed.answer);
   }
 
   async respondApproval(input: {
@@ -790,6 +866,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           activeUserMessage: active?.activeUserMessage ?? null,
           hasHistoryBeforeActiveTurn: active?.hasHistoryBeforeActiveTurn ?? null,
           streamingMessage: active?.assistantMessage ?? null,
+          pendingQuestion: active?.pendingQuestion ?? null,
           pendingApprovals: active
             ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
             : [],
@@ -861,6 +938,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }),
       hasHistoryBeforeActiveTurn: plan.hasMessages,
       pendingApprovals: new Map(),
+      userQuestions: new TurnUserQuestions(),
+      pendingQuestion: null,
       pendingContextCheckpoint: null,
       resources: plan.resources,
       runtimeTiming,
@@ -987,7 +1066,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           ...(plan.retry ? { retry: resume.length ? 'resumed' : 'restarted' } : {}),
         }),
         model: plan.agent.model,
-        history: toRuntimeHistory(plan.history, runtimeAttachments),
+        history: toRuntimeHistory(
+          plan.history,
+          runtimeAttachments,
+          plan.inferenceSnapshot.model.uniqueModelId,
+          this.ports.replayCache?.readHistory(sessionId, plan.history),
+        ),
         contextCheckpoint: plan.runtimeContextCheckpoint,
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
         ...(resume.length ? { resume } : {}),
@@ -1189,7 +1273,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           (entry) => entry.status === 'pending',
         );
         if (!hasPending && state.turn.status === 'awaiting-approval') {
-          state.turn = { ...state.turn, status: 'running' };
+          state.turn = {
+            ...state.turn,
+            status: state.pendingQuestion ? 'awaiting-input' : 'running',
+          };
           this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
         }
         this.publish(sessionId, { type: 'approval.resolved', approval });
@@ -1235,7 +1322,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'completed':
-        await this.finalize(sessionId, state, 'completed', null);
+        await this.finalize(sessionId, state, 'completed', null, event.contextTokens, event.replay);
         return true;
       case 'failed':
         state.trace?.setAttributes(traceErrorAttributes(event.error));
@@ -1254,6 +1341,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     state: ActiveTurnState,
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
+    /** The next turn's context-estimate anchor; kept only on a completed answer. */
+    contextTokens?: number,
+    replay?: RuntimeTurnReplay,
   ): Promise<void> {
     const interruption: unknown = state.abortController.signal.reason;
     if (interruption instanceof KeepAliveInterruptionError) {
@@ -1293,8 +1383,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       usage: state.usage ? toAgentUsageView(state.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
-      runtimeStats: { runtimeTiming },
+      runtimeStats: {
+        runtimeTiming,
+        ...(outcome === 'completed' && contextTokens !== undefined ? { contextTokens } : {}),
+      },
     });
+    if (outcome === 'completed') this.ports.replayCache?.write(sessionId, finalized, replay);
     const turn: AgentTurnView = {
       ...state.turn,
       status: outcome,
@@ -1432,7 +1526,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   // ── Helpers ──
 
+  hasPendingStorageWork(): boolean {
+    return (
+      this.activeTurns.size > 0 ||
+      this.admittingSessions.size > 0 ||
+      this.initialAdmissions.size > 0 ||
+      this.runningTurns.size > 0
+    );
+  }
+
   private assertAcceptingSubmissions(): void {
+    storageMutationGate.assertWritable();
     if (!this.acceptingSubmissions) {
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is stopping.');
     }

@@ -13,7 +13,6 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { useComposerActions, useComposerPresentationActions } from '../context/ComposerProvider';
 import { useComposerDocumentPicker } from '../hooks/useComposerDocumentPicker';
 import {
-  COMPOSER_PHOTO_SELECTION_LIMIT,
   createCameraAttachmentDraft,
   createPhotoAttachmentDraft,
 } from '../utils/composerAttachments';
@@ -79,7 +78,6 @@ export function ComposerMenu({
         preferredAssetRepresentationMode:
           ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
         quality: 1,
-        selectionLimit: COMPOSER_PHOTO_SELECTION_LIMIT,
       });
 
       if (result.canceled) {

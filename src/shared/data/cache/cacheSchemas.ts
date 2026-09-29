@@ -10,6 +10,8 @@
  * user-visible configuration; the cache tiers hold recoverable runtime state.
  */
 
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
+
 // ============================================================================
 // Template Key Type Utilities
 // ============================================================================
@@ -80,12 +82,17 @@ export type BackendCacheSchema = {
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
+  'remote_agent.drafts': Record<string, string>;
+  // Last composer effort per Agent; clearing the cache restores model defaults.
+  'chat.reasoning_efforts': Record<string, ReasoningEffortOption>;
   // Persist-layer self-test key: exercises the typed persist API and round-trip
   // tests for the generic mechanism, independent of any real consumer.
   'internal.persist_probe': number;
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
+  'remote_agent.drafts': {},
+  'chat.reasoning_efforts': {},
   'internal.persist_probe': 0,
 };
 
@@ -94,10 +101,14 @@ export const DefaultPersistCache: PersistCacheSchema = {
  * frontend persist cache.
  */
 export type BackendPersistCacheSchema = {
+  // Local date (`YYYY-MM-DD`) of the last analytics activity ping, so cold starts
+  // and foreground entries report at most once a day. Empty means never reported.
+  'analytics.last_activity_date': string;
   'internal.persist_probe': number;
 };
 
 export const DefaultBackendPersistCache: BackendPersistCacheSchema = {
+  'analytics.last_activity_date': '',
   'internal.persist_probe': 0,
 };
 

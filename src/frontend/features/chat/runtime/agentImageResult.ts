@@ -26,3 +26,24 @@ export function latestAgentImageResult(messages: readonly AgentMessageView[]) {
   }
   return latest;
 }
+
+/** Keeps image editing independent of the transcript's storage DTO. */
+export function latestConversationImageResult(
+  results: readonly (
+    | import('@/frontend/appShell/conversation').ConversationImageResult
+    | undefined
+  )[],
+) {
+  return results.reduce<
+    import('@/frontend/appShell/conversation').ConversationImageResult | undefined
+  >(
+    (latest, result) =>
+      result &&
+      (!latest ||
+        result.createdAt > latest.createdAt ||
+        (result.createdAt === latest.createdAt && result.id > latest.id))
+        ? result
+        : latest,
+    undefined,
+  );
+}

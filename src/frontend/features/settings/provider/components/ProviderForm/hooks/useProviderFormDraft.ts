@@ -5,6 +5,10 @@ import type { Provider } from '@/shared/data/types/provider';
 import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import {
+  areApiKeyEntriesEqual,
+  getApiKeyValidationError,
+} from '../../../apiService/utils/providerApiServiceApiKeys';
+import {
   hasConfiguredCustomProviderTextEndpoint,
   normalizeCustomProviderDefaultEndpoint,
 } from '../../../apiService/utils/providerApiServiceEndpointRules';
@@ -77,13 +81,34 @@ export function useProviderFormDraft({
     },
     [createInitialValues, defaultEndpointNeedsRepair, initiallyDirty, sourceKey],
   );
-  const setApiKey = useCallback(
-    (apiKey: string) => setValues((current) => ({ ...current, apiKey })),
+  const addApiKey = useCallback<ProviderFormActions['addApiKey']>((entry) => {
+    setValues((current) =>
+      current.apiKeys.some((key) => key.id === entry.id)
+        ? current
+        : { ...current, apiKeys: [...current.apiKeys, entry] },
+    );
+  }, []);
+  const updateApiKey = useCallback<ProviderFormActions['updateApiKey']>(
+    (id, updates) =>
+      setValues((current) => {
+        const apiKeys = current.apiKeys.map((entry) =>
+          entry.id === id ? { ...entry, ...updates } : entry,
+        );
+        return areApiKeyEntriesEqual(apiKeys, current.apiKeys) ? current : { ...current, apiKeys };
+      }),
     [],
   );
-  const replaceSavedApiKey = useCallback((apiKey: string) => {
-    setSeed((current) => ({ ...current, values: { ...current.values, apiKey } }));
-    setValues((current) => ({ ...current, apiKey }));
+  const removeApiKey = useCallback(
+    (id: string) =>
+      setValues((current) => {
+        const apiKeys = current.apiKeys.filter((entry) => entry.id !== id);
+        return apiKeys.length === current.apiKeys.length ? current : { ...current, apiKeys };
+      }),
+    [],
+  );
+  const replaceSavedApiKeys = useCallback<ProviderFormActions['replaceSavedApiKeys']>((apiKeys) => {
+    setSeed((current) => ({ ...current, values: { ...current.values, apiKeys } }));
+    setValues((current) => ({ ...current, apiKeys }));
   }, []);
   const setAvatarUri = useCallback(
     (avatarUri: string | null) => setValues((current) => ({ ...current, avatarUri })),
@@ -131,9 +156,11 @@ export function useProviderFormDraft({
   const actions = useMemo<ProviderFormActions>(
     () => ({
       reset,
-      replaceSavedApiKey,
+      replaceSavedApiKeys,
       replaceTextEndpoint,
-      setApiKey,
+      addApiKey,
+      updateApiKey,
+      removeApiKey,
       setAvatarUri,
       setDefaultChatEndpoint,
       setEndpointUrl,
@@ -141,9 +168,11 @@ export function useProviderFormDraft({
     }),
     [
       reset,
-      replaceSavedApiKey,
+      replaceSavedApiKeys,
       replaceTextEndpoint,
-      setApiKey,
+      addApiKey,
+      updateApiKey,
+      removeApiKey,
       setAvatarUri,
       setDefaultChatEndpoint,
       setEndpointUrl,
@@ -157,9 +186,13 @@ export function useProviderFormDraft({
       meta: {
         provider,
         baseUrlEndpoint: endpointTypes[0] ?? null,
-        canSubmit: values.name.trim().length > 0 && !isSubmitting,
+        canSubmit:
+          values.name.trim().length > 0 &&
+          !isSubmitting &&
+          values.apiKeys.every((entry) => !getApiKeyValidationError(entry, values.apiKeys)),
         defaultEndpointNeedsRepair: seed.defaultEndpointNeedsRepair,
         hasEditedEndpointUrls,
+        hasApiKeyChanges: !areApiKeyEntriesEqual(values.apiKeys, seed.values.apiKeys),
         isDirty:
           seed.isInitiallyDirty ||
           isProviderFormDirty({ endpointTypes, initialValues: seed.values, values }),

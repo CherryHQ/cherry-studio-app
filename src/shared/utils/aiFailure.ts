@@ -37,7 +37,6 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   tool_call_limit_exceeded: 'tool_limit',
   tool_execution_error: 'tool_failed',
   tool_step_limit_exceeded: 'tool_limit',
-  turn_timeout: 'timeout',
   unsupported_approval: 'invalid_input',
   unsupported_input: 'invalid_input',
   unsupported_tool: 'invalid_input',

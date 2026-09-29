@@ -5,6 +5,7 @@ import type { ProviderAccountsModule } from './providerAccounts';
 export type ProviderCatalogEntry = {
   description?: string;
   id: string;
+  isEnabled: boolean;
   isInstalled: boolean;
   isRecommended: boolean;
   name: string;

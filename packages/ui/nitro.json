@@ -9,6 +9,16 @@
     "androidCxxLibName": "CherryStudioUI"
   },
   "autolinking": {
+    "CherryBackgroundPressView": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridCherryBackgroundPressView"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridCherryBackgroundPressView"
+      }
+    },
     "CherryMenuView": {
       "ios": {
         "language": "swift",

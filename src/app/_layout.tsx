@@ -15,6 +15,8 @@ import { withUniwind } from 'uniwind';
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
+import { BackupProgressGate, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
+import { ConversationProvider } from '@/frontend/appShell/conversation';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import {
   getRootHeaderStyle,
@@ -24,8 +26,14 @@ import {
   paintingViewerHeaderShown,
 } from '@/frontend/appShell/navigation';
 import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/observability';
+import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
-import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
+import {
+  AppUpdateObserver,
+  StartupCoordinator,
+  StartupRouteReadyReporter,
+} from '@/frontend/appShell/startup';
+import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { LanguagePreferenceObserver } from '@/frontend/i18n';
@@ -57,9 +65,16 @@ function RootLayout() {
                           <AppAlertProvider>
                             <BottomSheetProvider>
                               <RouteHeaderProvider rootAction="back">
+                                <AppUpdateObserver />
                                 <BackgroundActivityBridge />
                                 <LanguagePreferenceObserver />
-                                <RootStack />
+                                <SystemEntryBridge />
+                                <ConversationProvider>
+                                  <RootStack />
+                                </ConversationProvider>
+                                <PrivacyConsentGate />
+                                <RestoreOutcomeNotice />
+                                <BackupProgressGate />
                               </RouteHeaderProvider>
                             </BottomSheetProvider>
                           </AppAlertProvider>

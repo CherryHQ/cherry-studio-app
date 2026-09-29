@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
+import { application } from '@/backend/core/application/Application';
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database, DbService } from '@/backend/data/db/DbService';
@@ -363,6 +364,44 @@ describe('AI usage analytics', () => {
         expect.objectContaining({ isOther: true, totalTokens: 25, unpricedRequestCount: 1 }),
       ]),
     );
+  });
+
+  test('reports each newly committed invocation to product analytics exactly once', async () => {
+    const trackTokenUsage = jest.fn();
+    await installTestHost({
+      AnalyticsService: { trackTokenUsage },
+      DbService: application.get('DbService'),
+    });
+
+    const agentCall = invocation(
+      'analytics-1',
+      1000,
+      { inputTokens: 100, outputTokens: 20 },
+      context('openai', {
+        source: { type: 'agent', id: 'agent-1', name: 'Agent', icon: null },
+      }),
+    );
+    const assistantCall = invocation('analytics-2', 2000, { inputTokens: 5, outputTokens: 1 });
+    await service.recordInvocations([agentCall, assistantCall]);
+    // A replayed request is rejected by the unique requestId, so it must not be
+    // reported a second time either.
+    await service.recordInvocations([agentCall]);
+
+    expect(trackTokenUsage).toHaveBeenCalledTimes(2);
+    expect(trackTokenUsage).toHaveBeenNthCalledWith(1, {
+      input_tokens: 100,
+      model: 'model-1',
+      output_tokens: 20,
+      provider: 'openai',
+      source: 'agent',
+    });
+    expect(trackTokenUsage).toHaveBeenNthCalledWith(2, {
+      input_tokens: 5,
+      model: 'model-1',
+      output_tokens: 1,
+      provider: 'a',
+      source: 'chat',
+    });
   });
 });
 

@@ -2,15 +2,28 @@ import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button, ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAgentMessageHistoryWindow } from '@/frontend/hooks/agent';
+import type {
+  ConversationMessage,
+  ConversationHistoryView,
+} from '@/frontend/appShell/conversation';
+import {
+  useConversation,
+  useConversationSnapshot,
+  useConversationHistory,
+  type RemoteConversationSession,
+} from '@/frontend/appShell/conversation/remote';
+import { conversationRefFromRoute } from '@/frontend/appShell/navigation/chat';
+import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import type { AgentMessageView } from '@/shared/contracts/agent';
 
+import { createAgentMessageListProjectionCache } from '../runtime/agentMessageProjection';
+import { projectLocalTranscriptMessage } from '../runtime/localConversationView';
+import { useAgentMessageHistoryWindow } from '../runtime/useAgentMessageHistoryWindow';
 import { chatShareMessagePreview } from './chatShareMessagePreview';
 import {
   ChatShareSelectionProvider,
@@ -19,7 +32,7 @@ import {
   useChatShareSelectionState,
   useIsChatMessageSelected,
 } from './ChatShareSelectionProvider';
-import { isChatMessageExportable } from './toChatExportDocument';
+import type { ChatShareTarget } from './chatShareTarget';
 
 const LIST_STYLE = { flex: 1 };
 const LIST_CONTENT_STYLE = { paddingHorizontal: 20, paddingBottom: 12, gap: 8 };
@@ -27,9 +40,13 @@ const KEEP_VISIBLE_POSITION = { data: true, size: true };
 
 export function ChatShareScreen() {
   const params = useLocalSearchParams<{
+    connectionId?: string | string[];
+    scope?: string | string[];
     sessionId?: string | string[];
     messageId?: string | string[];
   }>();
+  const connectionId = getSingleRouteParam(params.connectionId);
+  const scope = getSingleRouteParam(params.scope);
   const sessionId = getSingleRouteParam(params.sessionId);
   const messageId = getSingleRouteParam(params.messageId);
   const { t } = useTranslation();
@@ -55,32 +72,146 @@ export function ChatShareScreen() {
         </Text>
         <View className="size-11" />
       </View>
-      {sessionId ? (
-        <ChatShareSelectionProvider
-          key={JSON.stringify([sessionId, messageId])}
-          sessionId={sessionId}
-          initialMessageId={messageId}
-        >
-          <Text className="px-5 pb-3 text-muted-foreground text-sm">
-            {t('chat.share.selectionHint')}
-          </Text>
-          <ChatShareMessages sessionId={sessionId} messageId={messageId} />
-          <ChatShareControls />
-        </ChatShareSelectionProvider>
-      ) : (
+      {!sessionId ? (
         <ContentState.Error title={t('chat.share.loadFailed')} />
+      ) : connectionId ? (
+        <RemoteShareContent
+          sessionId={sessionId}
+          connectionId={connectionId}
+          expectedScope={scope}
+          messageId={messageId}
+        />
+      ) : (
+        <LocalShareContent key={sessionId} sessionId={sessionId} messageId={messageId} />
       )}
     </View>
   );
 }
 
-function ChatShareMessages({ sessionId, messageId }: { sessionId: string; messageId?: string }) {
-  const { t } = useTranslation();
-  const history = useAgentMessageHistoryWindow(sessionId, { messageId });
+/** Local selection reads the Session-keyed history window and one SQLite selection snapshot. */
+function LocalShareContent({ sessionId, messageId }: { sessionId: string; messageId?: string }) {
+  const api = useApiClient();
+  const window = useAgentMessageHistoryWindow(sessionId, { messageId });
+  const cache = useMemo(() => createAgentMessageListProjectionCache(), []);
   const messages = useMemo(
-    () => history.messages.filter((message) => message.role !== 'system'),
-    [history.messages],
+    () => window.messages.map((message) => projectLocalTranscriptMessage(message, cache)),
+    [window.messages, cache],
   );
+  const history = useMemo<ConversationHistoryView>(
+    () => ({ ...window, messages }),
+    [window, messages],
+  );
+  const target = useMemo<ChatShareTarget>(
+    () => ({
+      ref: { source: { kind: 'local' }, sessionId },
+      prepareSelection: async (ids, signal) => {
+        const snapshot = await api.get(`/agent-sessions/${sessionId}/messages/selection`, {
+          query: { ids: [...ids] },
+          signal,
+        });
+        return {
+          title: snapshot.session.title,
+          assistantName: snapshot.assistantName,
+          messages: snapshot.messages,
+        };
+      },
+    }),
+    [api, sessionId],
+  );
+  return <ConversationShareSelection target={target} history={history} messageId={messageId} />;
+}
+
+function RemoteShareContent({
+  sessionId,
+  connectionId,
+  expectedScope,
+  messageId,
+}: {
+  sessionId: string;
+  connectionId: string;
+  expectedScope?: string;
+  messageId?: string;
+}) {
+  const { t } = useTranslation();
+  const { session, error, isLoading } = useConversation(
+    conversationRefFromRoute(sessionId, connectionId),
+  );
+  if (error || (session && expectedScope && session.scope !== expectedScope))
+    return <ContentState.Error title={t('chat.share.loadFailed')} />;
+  if (isLoading || !session) return <ContentState.Loading />;
+  return (
+    <RemoteShareSelection
+      key={JSON.stringify([session.scope, sessionId, messageId])}
+      session={session}
+      messageId={messageId}
+    />
+  );
+}
+function RemoteShareSelection({
+  session,
+  messageId,
+}: {
+  session: RemoteConversationSession;
+  messageId?: string;
+}) {
+  const snapshot = useConversationSnapshot(session);
+  const history = useConversationHistory(
+    session,
+    snapshot.historyVersion,
+    messageId ? { messageId, key: messageId } : undefined,
+  );
+  const target = useMemo<ChatShareTarget>(
+    () => ({
+      ref: session.ref,
+      prepareSelection: (ids, signal) => session.history.prepareSelection(ids, signal),
+    }),
+    [session],
+  );
+  return <ConversationShareSelection target={target} history={history} messageId={messageId} />;
+}
+function ConversationShareSelection({
+  target,
+  history,
+  messageId,
+}: {
+  target: ChatShareTarget;
+  history: ConversationHistoryView;
+  messageId?: string;
+}) {
+  const { t } = useTranslation();
+  const located = history.messages.find((message) => message.key === messageId);
+  const locating = Boolean(messageId && !located && history.hasOlderMessages && !history.error);
+  const { isLoadingInitial, isLoadingOlder, loadOlder } = history;
+  useEffect(() => {
+    if (locating && !isLoadingInitial && !isLoadingOlder) void loadOlder();
+  }, [locating, isLoadingInitial, isLoadingOlder, loadOlder]);
+  if (history.isLoadingInitial || locating) return <ContentState.Loading />;
+  return (
+    <ChatShareSelectionProvider
+      target={target}
+      initialMessageId={located && isExportable(located) ? messageId : undefined}
+    >
+      <Text className="px-5 pb-3 text-muted-foreground text-sm">
+        {t('chat.share.selectionHint')}
+      </Text>
+      <ChatShareMessages history={history} messageId={messageId} />
+      <ChatShareControls />
+    </ChatShareSelectionProvider>
+  );
+}
+type ShareHistory = ConversationHistoryView;
+function isExportable(message: ConversationMessage) {
+  return (
+    message.display.role !== 'system' &&
+    message.state !== 'pending' &&
+    message.state !== 'streaming' &&
+    message.completeness === 'complete'
+  );
+}
+
+function ChatShareMessages({ history, messageId }: { history: ShareHistory; messageId?: string }) {
+  const { t } = useTranslation();
+  const messages = history.messages.filter((message) => message.display.role !== 'system');
 
   if (history.isLoadingInitial)
     return (
@@ -109,7 +240,7 @@ function ChatShareMessages({ sessionId, messageId }: { sessionId: string; messag
         estimatedItemSize={144}
         initialScrollIndex={Math.max(
           0,
-          messages.findIndex((message) => message.id === messageId),
+          messages.findIndex((message) => message.key === messageId),
         )}
         keyExtractor={messageKey}
         maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
@@ -142,15 +273,15 @@ function ChatShareMessages({ sessionId, messageId }: { sessionId: string; messag
 const ChatShareMessageRow = memo(function ChatShareMessageRow({
   message,
 }: {
-  message: AgentMessageView;
+  message: ConversationMessage;
 }) {
   const { t, i18n } = useTranslation();
   const { isSharing } = useChatShareSelectionState();
   const { toggleMessage } = useChatShareSelectionActions();
-  const selected = useIsChatMessageSelected(message.id);
-  const disabled = isSharing || !isChatMessageExportable(message);
+  const selected = useIsChatMessageSelected(message.key);
+  const disabled = isSharing || !isExportable(message);
   const preview = useMemo(() => chatShareMessagePreview(message), [message]);
-  const role = t(message.role === 'user' ? 'chat.share.user' : 'chat.share.assistant');
+  const role = t(message.display.role === 'user' ? 'chat.share.user' : 'chat.share.assistant');
 
   return (
     <Pressable
@@ -163,8 +294,8 @@ const ChatShareMessageRow = memo(function ChatShareMessageRow({
           : 'flex-row items-start gap-3 rounded-2xl p-4 active:bg-secondary'
       }
       disabled={disabled}
-      onPress={() => toggleMessage(message.id)}
-      testID={`chat-share-select-${message.id}`}
+      onPress={() => toggleMessage(message.key)}
+      testID={`chat-share-select-${message.key}`}
     >
       <View
         pointerEvents="none"
@@ -179,9 +310,15 @@ const ChatShareMessageRow = memo(function ChatShareMessageRow({
             {role}
           </Text>
           <Text className="shrink text-muted-foreground text-xs" numberOfLines={1}>
-            {isChatMessageExportable(message)
-              ? new Date(message.createdAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language)
-              : t('chat.share.unsettled')}
+            {message.completeness === 'partial'
+              ? t('remoteAgent.truncated')
+              : !isExportable(message)
+                ? t('chat.share.unsettled')
+                : message.display.createdAt
+                  ? new Date(message.display.createdAt).toLocaleString(
+                      i18n.resolvedLanguage ?? i18n.language,
+                    )
+                  : ''}
           </Text>
         </View>
         <Text className="text-muted-foreground text-sm" numberOfLines={4}>
@@ -215,10 +352,10 @@ function ChatShareControls() {
   );
 }
 
-function messageKey(message: AgentMessageView) {
-  return message.id;
+function messageKey(message: ConversationMessage) {
+  return message.key;
 }
-function renderMessage({ item }: LegendListRenderItemProps<AgentMessageView>) {
+function renderMessage({ item }: LegendListRenderItemProps<ConversationMessage>) {
   return <ChatShareMessageRow message={item} />;
 }
 function closeSelection() {

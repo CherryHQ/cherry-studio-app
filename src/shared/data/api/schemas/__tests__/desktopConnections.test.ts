@@ -7,13 +7,16 @@ import {
 describe('desktop connection api schemas', () => {
   test('does not let QR payloads inject a local connection ID', () => {
     const qr = DesktopPairingQrSchema.parse({
-      code: '0123456789abcdef0123456789abcdef',
       connectionId: '0ad227b7-d202-4e30-a17d-6f6e22fbf1ef',
+      desktopIdentity: '12D3KooWDesktop',
+      invitationId: 'invitation',
+      invitationSecret: 'secret',
       ips: ['192.168.1.10'],
       name: 'Cherry Studio PC',
       port: 23333,
+      protocolVersions: [1],
       t: 'cherry-studio-pair',
-      v: 1,
+      v: 2,
     });
 
     expect(qr).not.toHaveProperty('connectionId');

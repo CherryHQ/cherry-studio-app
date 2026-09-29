@@ -20,7 +20,7 @@ jest.mock('expo-clipboard', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn() },
+  router: { push: jest.fn(), replace: jest.fn() },
   useFocusEffect: (callback: () => (() => void) | void) =>
     jest.requireActual<typeof import('react')>('react').useEffect(callback, [callback]),
 }));
@@ -38,17 +38,6 @@ jest.mock('@cherrystudio/ui/components', () => {
     useToast: () => ({ toast: { show: jest.fn() } }),
   };
 });
-
-jest.mock('../../../../runtime', () => ({
-  useAgentChatDeleteTurn: () => mockDeleteTurn,
-  useAgentChatFork: () => mockForkSession,
-  useAgentChatRetry: () => mockRetryMessage,
-  useAgentChatBusy: () => mockIsSessionBusy,
-}));
-
-jest.mock('@/frontend/hooks/agent', () => ({
-  useAgentSession: () => ({ data: { title: 'Arithmetic drills' } }),
-}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -225,7 +214,52 @@ describe('AssistantMessageToolbar', () => {
         <AssistantMessageActionsProvider
           isAssistantToolbarEnabled
           retryableMessageId={retryableMessageId}
-          sessionId="session-1"
+          onShare={jest.fn()}
+          snapshot={{
+            title: 'Arithmetic drills',
+            freshness: { state: 'current' },
+            liveMessages: [],
+            interactions: [],
+            executions: mockIsSessionBusy ? [{ id: 'turn', state: 'running' }] : [],
+          }}
+          messages={[
+            {
+              key: message.id,
+              state: 'success',
+              completeness: 'complete',
+              display: message,
+              actions: {
+                retry: {
+                  availability: { state: 'enabled' },
+                  execute: async () => {
+                    await mockRetryMessage({ sessionId: 'session-1', messageId: message.id });
+                    return { state: 'applied', value: undefined };
+                  },
+                },
+                fork: {
+                  availability: { state: 'enabled' },
+                  execute: async ({ title }) => {
+                    await mockForkSession({
+                      fromMessageId: message.id,
+                      sessionId: 'session-1',
+                      title,
+                    });
+                    return {
+                      state: 'applied',
+                      value: { source: { kind: 'local' }, sessionId: 'fork' },
+                    };
+                  },
+                },
+                remove: {
+                  availability: { state: 'enabled' },
+                  execute: async () => {
+                    await mockDeleteTurn({ sessionId: 'session-1', turnId: message.turnId });
+                    return { state: 'applied', value: undefined };
+                  },
+                },
+              },
+            },
+          ]}
         >
           <AssistantMessageToolbar message={message} />
         </AssistantMessageActionsProvider>,

@@ -1,13 +1,11 @@
+import { File } from 'expo-file-system';
+
 import type { FileUploadSelection } from '@/frontend/hooks/file';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
 import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
-import {
-  AI_IMAGE_INPUT_MAX_COUNT,
-  imageMediaTypeFromExtension,
-  isImageFileExtension,
-} from '@/shared/utils/imageFileTypes';
+import { imageMediaTypeFromExtension, isImageFileExtension } from '@/shared/utils/imageFileTypes';
 
 export type ComposerAttachmentKind = 'file' | 'image';
 
@@ -97,10 +95,6 @@ export function removeComposerAttachment(
   return attachments.filter((attachment) => attachment.id !== attachmentId);
 }
 
-// What the system photo picker is capped at. Chat and the drawing list share it
-// so a batch that is valid in one is valid in the other.
-export const COMPOSER_PHOTO_SELECTION_LIMIT = AI_IMAGE_INPUT_MAX_COUNT;
-
 export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ComposerAttachmentSource {
   const extension = photo.fileName?.trim().split('.').pop()?.toLowerCase();
 
@@ -118,6 +112,62 @@ export function createPastedImageAttachmentDraft(uri: string): ComposerAttachmen
   const fileName = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
 
   return createPhotoAttachmentDraft({ fileName, id: uri, uri });
+}
+
+/** What the drop target reports for one image dropped from another app. */
+export type DroppedImagePayload = {
+  height?: number;
+  /** Unique per staged item; the staged path can repeat across drops. */
+  id: string;
+  mediaType?: string;
+  name?: string;
+  size?: number;
+  uri: string;
+  width?: number;
+};
+
+export function isDroppedImagePayload(payload: DroppedImagePayload): boolean {
+  return isComposerImageMediaType(payload.mediaType) || isComposerImageFileName(payload.name);
+}
+
+/** Only files the drop target staged; anything else is someone else's to own. */
+export function isDropStagedFile(uri: string): boolean {
+  return uri.includes('/ImageDropTarget/');
+}
+
+/**
+ * Deletes a staged drop file nobody owns anymore: the managed import copied
+ * the bytes into My Files, or the composer rejected the payload outright.
+ * Best-effort — the OS evicts Caches regardless.
+ */
+export async function cleanupDropStagedFile(uri: string): Promise<void> {
+  try {
+    const file = new File(uri);
+    if (file.exists) file.delete();
+  } catch {
+    // Cache cleanup is best-effort; the OS evicts Caches anyway.
+  }
+}
+
+/** Mirrors the photo-library draft: the cache file is imported as-is. */
+export function createDroppedImageAttachmentDraft(
+  image: DroppedImagePayload,
+): ComposerAttachmentSource {
+  const attachment = createPhotoAttachmentDraft({
+    fileName: image.name,
+    id: image.id,
+    uri: image.uri,
+  });
+  const resolvedMediaType =
+    image.mediaType !== undefined && isComposerImageMediaType(image.mediaType)
+      ? image.mediaType
+      : attachment.mediaType;
+
+  return {
+    ...attachment,
+    mediaType: resolvedMediaType,
+    size: image.size,
+  };
 }
 
 type CameraPhotoInput = {

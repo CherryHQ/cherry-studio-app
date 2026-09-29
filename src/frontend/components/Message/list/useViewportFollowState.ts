@@ -17,12 +17,6 @@ export type ViewportFollowState =
   | { readonly mode: 'following'; readonly reason: FollowingReason }
   | { readonly mode: 'reading'; readonly reason: ReadingReason };
 
-export type ViewportFollowController = {
-  enterFollowing(reason: FollowingReason): void;
-  enterReading(reason: ReadingReason): void;
-  isFollowing(): boolean;
-};
-
 /** The single product-level source of truth for message-list scroll behavior. */
 export function useViewportFollowState() {
   const stateRef = useRef<ViewportFollowState>({ mode: 'reading', reason: 'initializing' });

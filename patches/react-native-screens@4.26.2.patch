@@ -12,3 +12,124 @@ index 1c844846a5c66e31cfa530ca462774d2fb6bbea1..c4ca0305c379d970ec1f1a8e3b433215
      [subview updateShadowStateInContextOfAncestorView:navigationBar];
    }
  }
+diff --git a/android/src/main/java/com/swmansion/rnscreens/Screen.kt b/android/src/main/java/com/swmansion/rnscreens/Screen.kt
+index 76bb694854b29d7f779f38244cd48113b429ea1f..45a1df39de53e05e7ec14f6832dc348099ee4745 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/Screen.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/Screen.kt
+@@ -72,6 +72,8 @@ class Screen(
+     var screenId: String? = null
+     var isStatusBarAnimated: Boolean? = null
+     var isBeingRemoved = false
++    private var isEndingRemovalTransition = false
++    private val removalTransitionViews = ArrayList<Pair<ViewGroup, View>>()
+ 
+     // Props for controlling modal presentation
+     var isSheetGrabberVisible: Boolean = false
+@@ -447,24 +449,19 @@ class Screen(
+     }
+ 
+     fun endRemovalTransition() {
+-        if (!isBeingRemoved) {
++        if (!isBeingRemoved || isEndingRemovalTransition) {
+             return
+         }
+-        isBeingRemoved = false
+-        endTransitionRecursive(this)
+-    }
+-
+-    private fun endTransitionRecursive(parent: ViewGroup) {
+-        parent.children.forEach { childView ->
+-            parent.endViewTransition(childView)
+-
+-            if (childView is ScreenStackHeaderConfig) {
+-                endTransitionRecursive(childView.toolbar)
++        isEndingRemovalTransition = true
++        val viewsToFinish = removalTransitionViews.toList()
++        removalTransitionViews.clear()
++        try {
++            for ((parent, child) in viewsToFinish.asReversed()) {
++                parent.endViewTransition(child)
+             }
+-
+-            if (childView is ViewGroup) {
+-                endTransitionRecursive(childView)
+-            }
++        } finally {
++            isBeingRemoved = false
++            isEndingRemovalTransition = false
+         }
+     }
+ 
+@@ -482,7 +479,10 @@ class Screen(
+                     // TODO: find a better way to handle this scenario
+                     it.addView(View(context), i)
+                 } else {
+-                    child?.let { view -> it.startViewTransition(view) }
++                    child?.let { view ->
++                        it.startViewTransition(view)
++                        removalTransitionViews.add(it to view)
++                    }
+                 }
+ 
+                 if (child is ScreenStackHeaderConfig) {
+diff --git a/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt b/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt
+index 9f9f8647a50a537d9eec0643db5be69d05089688..34cb5e56265599ca4fbe4b319ae3ec8dee1d097e 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt
+@@ -83,6 +83,8 @@ class ScreenStack(
+             return
+         }
+ 
++        // Finish descendants before Android detaches the fragment's root view.
++        view.fragment.screen.endRemovalTransition()
+         super.endViewTransition(view)
+ 
+         disappearingTransitioningChildren.remove(view)
+diff --git a/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt b/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt
+index f9648bc29b24554299bd52d951c2bafa2ccbea6b..0d62c5f46db762ccc2095467e7eb1a4377456e5d 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt
+@@ -7,6 +7,7 @@ import android.text.TextUtils
+ import android.util.TypedValue
+ import android.view.Gravity
+ import android.view.View.OnClickListener
++import android.view.ViewParent
+ import android.widget.ImageView
+ import android.widget.TextView
+ import androidx.appcompat.app.ActionBar
+@@ -213,6 +214,17 @@ class ScreenStackHeaderConfig(
+     private val screen: Screen?
+         get() = parent as? Screen
+ 
++    private fun isInRemovalTransition(): Boolean {
++        var ancestor: ViewParent? = parent
++        while (ancestor != null) {
++            if (ancestor is Screen && ancestor.isBeingRemoved) {
++                return true
++            }
++            ancestor = ancestor.parent
++        }
++        return false
++    }
++
+     private val screenStack: ScreenStack?
+         get() = screen?.container as? ScreenStack
+ 
+@@ -232,7 +244,7 @@ class ScreenStackHeaderConfig(
+         val stack = screenStack
+         val isTop = stack == null || stack.topScreen == parent
+ 
+-        if (!isAttachedToWindow || !isTop || isDestroyed) {
++        if (!isAttachedToWindow || !isTop || isDestroyed || isInRemovalTransition()) {
+             return
+         }
+ 
+@@ -399,7 +411,7 @@ class ScreenStackHeaderConfig(
+     }
+ 
+     private fun maybeUpdate() {
+-        if (parent != null && !isDestroyed && screen?.isBeingRemoved == false) {
++        if (parent != null) {
+             onUpdate()
+         }
+     }

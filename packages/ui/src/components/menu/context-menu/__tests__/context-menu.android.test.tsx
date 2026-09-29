@@ -11,9 +11,9 @@ import {
 import type { LongPressGestureHandlerEventPayload } from 'react-native-gesture-handler';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { ScrollInteractionBoundary } from '../../../scroll-interaction/scroll-interaction-boundary';
 import type { NativeCherryMenuRef } from '../../use-native-menu';
 import { ContextMenuExclusion } from '../context-menu-exclusion';
-import { ContextMenuScrollBoundary } from '../context-menu-scroll-boundary.android';
 import { ContextMenu } from '../context-menu.android';
 
 type NativeMenuProps = {
@@ -182,7 +182,7 @@ describe('ContextMenu.android', () => {
   it('keeps a touch that stops momentum blocked for its complete sequence', () => {
     act(() => {
       renderer = create(
-        <ContextMenuScrollBoundary>
+        <ScrollInteractionBoundary>
           {(scrollHandlers) => (
             <View {...scrollHandlers} testID="scroll-owner">
               <ContextMenu items={[{ id: 'rename', label: 'Rename', onPress: jest.fn() }]}>
@@ -192,7 +192,7 @@ describe('ContextMenu.android', () => {
               </ContextMenu>
             </View>
           )}
-        </ContextMenuScrollBoundary>,
+        </ScrollInteractionBoundary>,
       );
     });
 
@@ -206,7 +206,7 @@ describe('ContextMenu.android', () => {
     expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
 
     act(() => {
-      scrollOwner.props.onTouchEnd(touchEvent());
+      scrollOwner.props.onTouchEnd?.(touchEvent());
       mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
     });
     expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
@@ -360,7 +360,7 @@ describe('ContextMenu.android interaction ownership', () => {
   it('does not mistake native long-press takeover for a scroll cancellation', () => {
     act(() => {
       renderer = create(
-        <ContextMenuScrollBoundary>
+        <ScrollInteractionBoundary>
           {(handlers) => (
             <View {...handlers} testID="scroll-owner">
               <ContextMenu items={[{ id: 'copy', label: 'Copy', onPress: jest.fn() }]}>
@@ -368,13 +368,13 @@ describe('ContextMenu.android interaction ownership', () => {
               </ContextMenu>
             </View>
           )}
-        </ContextMenuScrollBoundary>,
+        </ScrollInteractionBoundary>,
       );
     });
     const scrollOwner = renderer!.root.findByProps({ testID: 'scroll-owner' });
     act(() => {
       scrollOwner.props.onTouchStart(touchEvent());
-      scrollOwner.props.onTouchCancel(touchEvent());
+      scrollOwner.props.onTouchCancel?.(touchEvent());
       mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
     });
     expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
@@ -423,7 +423,7 @@ describe('ContextMenu.android interaction ownership', () => {
   it('keeps a cancelled drag ineligible until the next touch starts', () => {
     act(() => {
       renderer = create(
-        <ContextMenuScrollBoundary>
+        <ScrollInteractionBoundary>
           {(handlers) => (
             <View {...handlers} testID="scroll-owner">
               <ContextMenu items={[{ id: 'copy', label: 'Copy', onPress: jest.fn() }]}>
@@ -431,7 +431,7 @@ describe('ContextMenu.android interaction ownership', () => {
               </ContextMenu>
             </View>
           )}
-        </ContextMenuScrollBoundary>,
+        </ScrollInteractionBoundary>,
       );
     });
     const scrollOwner = renderer!.root.findByProps({ testID: 'scroll-owner' });
@@ -440,7 +440,7 @@ describe('ContextMenu.android interaction ownership', () => {
       scrollOwner.props.onScrollBeginDrag(scrollEvent());
       scrollOwner.props.onScrollEndDrag(scrollEvent());
       mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
-      scrollOwner.props.onTouchCancel(touchEvent());
+      scrollOwner.props.onTouchCancel?.(touchEvent());
       mockLatestLongPressGesture?.onStartCallback?.(longPressEvent());
     });
     expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);

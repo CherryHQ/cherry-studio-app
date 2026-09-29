@@ -1,3 +1,5 @@
+import { BackgroundPressExclusion } from '@cherrystudio/ui/components';
+
 import { FileEntryPreview } from '@/frontend/components/FileEntryPreview';
 import type { FileEntryId } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
@@ -10,5 +12,9 @@ type FilePartProps = {
 export function FilePart({ part }: FilePartProps) {
   const fileEntryId = readCherryMeta(part)?.fileEntryId as FileEntryId | undefined;
 
-  return fileEntryId ? <FileEntryPreview entryId={fileEntryId} variant="attachment" /> : null;
+  return fileEntryId ? (
+    <BackgroundPressExclusion>
+      <FileEntryPreview entryId={fileEntryId} variant="attachment" />
+    </BackgroundPressExclusion>
+  ) : null;
 }

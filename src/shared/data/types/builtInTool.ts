@@ -19,6 +19,11 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { AgentToolApproval } from './agentToolBinding';
 
 export const BUILT_IN_TOOL_CAPABILITY_IDS = [
+  'agent_create',
+  'agent_get',
+  'agent_list',
+  'agent_update',
+  'ask_user_question',
   'calendar_create_event',
   'calendar_delete_event',
   'calendar_list_collections',
@@ -90,6 +95,11 @@ function describe(
  * mode.
  */
 export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
+  describe('agent_create', 'ask', { agentCapability: 'agents' }),
+  describe('agent_get', 'auto', { agentCapability: 'agents' }),
+  describe('agent_list', 'auto', { agentCapability: 'agents' }),
+  describe('agent_update', 'ask', { agentCapability: 'agents' }),
+  describe('ask_user_question', 'auto'),
   describe('calendar_list_collections', 'auto', {
     agentCapability: 'calendar',
     permissionScopes: ['calendar.read'],
@@ -167,14 +177,6 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('read_file', 'auto'),
   describe('write_file', 'auto'),
 ];
-
-const DESCRIPTORS_BY_ID = new Map<string, BuiltInToolDescriptor>(
-  BUILT_IN_TOOL_DESCRIPTORS.map((descriptor) => [descriptor.capabilityId, descriptor]),
-);
-
-export function getBuiltInToolDescriptor(capabilityId: string): BuiltInToolDescriptor | undefined {
-  return DESCRIPTORS_BY_ID.get(capabilityId);
-}
 
 export type AgentCapabilityAvailability = {
   /** Union of the member tools' OS permission scopes; empty when none apply. */

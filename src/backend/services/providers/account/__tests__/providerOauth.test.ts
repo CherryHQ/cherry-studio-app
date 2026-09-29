@@ -57,7 +57,11 @@ it('uses fresh S256 proofs with the active build callback and no verifier in the
   expect(url.searchParams.get('code_challenge_method')).toBe('S256');
   expect(first.state).not.toBe(second.state);
   expect(first.authorizationUrl).not.toContain(first.verifier);
-  jest.replaceProperty(Constants, 'expoConfig', { scheme: 'unregistered' });
+  jest.replaceProperty(Constants, 'expoConfig', {
+    name: 'Cherry',
+    slug: 'cherry',
+    scheme: 'unregistered',
+  });
   expect(() => getProviderOauthApplication(application.clientId)).toThrow();
 });
 

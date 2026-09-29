@@ -46,6 +46,17 @@ export function deriveBackgroundReplyContent(
     return createContent('awaiting-approval', t('chat.backgroundReply.awaitingApproval'), preview);
   }
 
+  const question = findLastToolPart(
+    parts,
+    (part) =>
+      part.state === 'running' &&
+      part.toolRef.source === 'builtin' &&
+      part.toolRef.capabilityId === 'ask_user_question',
+  );
+  if (question) {
+    // Reuse the native attention phase and its released keep-alive lease.
+    return createContent('awaiting-approval', t('chat.question.waiting'), preview);
+  }
   const activeTool = findLastToolPart(parts, isActiveToolPart);
   if (activeTool) {
     return createContent('using-tool', getToolActivityLabel(activeTool, t), preview);

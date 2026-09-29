@@ -61,9 +61,10 @@ describe('DesktopConnectionService provider synchronization', () => {
       {
         id: connectionId,
         name: 'Desktop',
-        desktopVersion: '2.0.8',
-        activeBaseUrl: 'http://192.168.1.2:23333',
-        baseUrls: ['http://192.168.1.2:23333'],
+        deviceId: 'device-1',
+        desktopIdentity: '12D3KooWDesktop',
+
+        grants: [{ domain: 'configuration', grantId: 'grant-1' }],
       },
       false,
       signal(),
@@ -85,6 +86,24 @@ describe('DesktopConnectionService provider synchronization', () => {
       requestSignal,
     );
   }
+
+  it('imports the complete API key list and keeps desktop order and labels when resynced', async () => {
+    const keys = ['a', 'b', 'c'].map((id) => ({
+      id,
+      key: `desktop-secret-${id}`,
+      label: `Account ${id}`,
+      isEnabled: true,
+    }));
+    const data = snapshot({ ...provider(), apiKeys: keys });
+    await importSnapshot(data);
+    const [created] = await testDb.database.select().from(userProviderTable);
+    expect(created!.apiKeys).toEqual(keys);
+
+    const updatedKeys = [keys[2]!, keys[0]!];
+    await importSnapshot(snapshot({ ...provider(), apiKeys: updatedKeys }));
+    const [updated] = await testDb.database.select().from(userProviderTable);
+    expect(updated!.apiKeys).toEqual(updatedKeys);
+  });
 
   it('syncs provider configuration while keeping every existing model column', async () => {
     await importSnapshot(snapshot(provider()));

@@ -11,7 +11,9 @@ import {
 } from '@/frontend/hooks/useDesktopConnections';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
+import { describeCapabilities } from '../describeCapabilities';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
+import { DesktopEndpointsEditor } from './DesktopEndpointsEditor';
 
 export function DeviceConnectionDetailScreen() {
   const { connectionId } = useLocalSearchParams<{ connectionId?: string }>();
@@ -68,8 +70,12 @@ export function DeviceConnectionDetailScreen() {
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>
       <Section footer={t('settings.deviceConnections.localNetworkNotice')}>
         <Section.Item
-          label={t('settings.deviceConnections.version')}
-          trailing={<Text className="text-muted-foreground">{connection.desktopVersion}</Text>}
+          label={t('settings.deviceConnections.capabilities.label')}
+          trailing={
+            <Text className="text-muted-foreground">
+              {describeCapabilities(connection.capabilities, t)}
+            </Text>
+          }
         />
         <Section.Item
           label={t('settings.deviceConnections.statusLabel')}
@@ -87,7 +93,20 @@ export function DeviceConnectionDetailScreen() {
         />
       </Section>
 
-      {connection.status === 'paired' ? (
+      <DesktopEndpointsEditor key={connection.id} connection={connection} />
+      <Button
+        variant="outline"
+        onPress={() =>
+          router.push({
+            params: { connectionId: connection.id, purpose: 'location' },
+            pathname: '/settings/device-connections/scan',
+          })
+        }
+      >
+        {t('settings.deviceConnections.location.scan')}
+      </Button>
+
+      {connection.status === 'paired' && connection.capabilities.includes('configuration') ? (
         <Section>
           <Section.Item
             description={t('settings.deviceConnections.syncGuide.entryDescription')}
@@ -95,7 +114,7 @@ export function DeviceConnectionDetailScreen() {
             onPress={() =>
               router.push({
                 params: { connectionId: connection.id },
-                pathname: '/settings/device-connections/sync-guide',
+                pathname: '/settings/provider/desktop-sync',
               })
             }
           />

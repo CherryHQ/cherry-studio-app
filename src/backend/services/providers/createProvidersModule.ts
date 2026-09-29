@@ -88,7 +88,9 @@ export function createProvidersModule({
       );
     },
     listCatalog: async () => {
-      const installedProviderIds = new Set((await providers.list()).map((provider) => provider.id));
+      const installedProviders = new Map(
+        (await providers.list()).map((provider) => [provider.id, provider]),
+      );
 
       return catalog
         .list()
@@ -96,7 +98,8 @@ export function createProvidersModule({
         .map((provider) => ({
           ...(provider.description ? { description: provider.description } : {}),
           id: provider.id,
-          isInstalled: installedProviderIds.has(provider.id),
+          isEnabled: installedProviders.get(provider.id)?.isEnabled ?? false,
+          isInstalled: installedProviders.has(provider.id),
           isRecommended: isRecommendedPresetProvider(provider.id),
           name: provider.name,
         }));

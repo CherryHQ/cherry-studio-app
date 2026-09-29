@@ -1,3 +1,4 @@
+import { BackgroundPressExclusion } from '@cherrystudio/ui/components';
 import { Image } from 'expo-image';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,37 +24,39 @@ export function WebSourceCard({ source }: WebSourceCardProps) {
     : openLabel;
 
   return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="link"
-      className="gap-2.5 rounded-2xl border-continuous bg-background-subtle px-3 py-4 active:bg-secondary-active active:opacity-80"
-      onPress={() => void openExternalUrl(source.url)}
-    >
-      <View className="flex-row items-center gap-1.5">
-        <WebSourceFavicon key={source.url} source={source} />
-        <Text
-          className="min-w-0 flex-1 font-medium text-muted-foreground text-xs"
-          numberOfLines={1}
-        >
-          {source.siteName}
-        </Text>
-        {source.publishedDate ? (
-          <Text className="shrink-0 text-muted-foreground text-xs">{source.publishedDate}</Text>
-        ) : null}
-      </View>
-      <View className="gap-1">
-        {source.title ? (
-          <Text className="font-medium text-foreground text-sm" numberOfLines={2}>
-            {source.title}
+    <BackgroundPressExclusion>
+      <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="link"
+        className="gap-2.5 rounded-2xl border-continuous bg-background-subtle px-3 py-4 active:bg-secondary-active active:opacity-80"
+        onPress={() => void openExternalUrl(source.url)}
+      >
+        <View className="flex-row items-center gap-1.5">
+          <WebSourceFavicon key={source.url} source={source} />
+          <Text
+            className="min-w-0 flex-1 font-medium text-muted-foreground text-xs"
+            numberOfLines={1}
+          >
+            {source.siteName}
           </Text>
-        ) : null}
-        {source.content ? (
-          <Text className="text-muted-foreground text-xs" numberOfLines={3}>
-            {source.content}
-          </Text>
-        ) : null}
-      </View>
-    </Pressable>
+          {source.publishedDate ? (
+            <Text className="shrink-0 text-muted-foreground text-xs">{source.publishedDate}</Text>
+          ) : null}
+        </View>
+        <View className="gap-1">
+          {source.title ? (
+            <Text className="font-medium text-foreground text-sm" numberOfLines={2}>
+              {source.title}
+            </Text>
+          ) : null}
+          {source.content ? (
+            <Text className="text-muted-foreground text-xs" numberOfLines={3}>
+              {source.content}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+    </BackgroundPressExclusion>
   );
 }
 

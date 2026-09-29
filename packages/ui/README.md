@@ -72,7 +72,8 @@ also includes `open` for callers that use one error reporter for both operations
 logging, or translation dependency.
 
 `FileAttachmentPreview` is the compact horizontal result variant. It requires the same `onPress`
-callback while showing a filename and caller-supplied category label; square
+callback while showing filename metadata and a caller-supplied category label. It accepts metadata
+without a resolved URI, and `disabled` covers pending transfers or unavailable sources; square
 thumbnail callers continue to use `FilePreview`.
 
 `FilePreview` has four explicit visual variants. The default `thumbnail` uses the plugin and
@@ -96,7 +97,19 @@ native renderer. A part that has streamed keeps the streaming renderer for its f
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
 the same theme tokens, syntax palette, LaTeX flags, and typography scale. Native streaming mode ends
 with each part, releasing pending tail blocks and requesting a final layout even when the text
-itself is unchanged. Product code supplies the active font size step, decides how links open, and
+itself is unchanged. `normalizeLatexDelimiters` from `@cherrystudio/ui/markdown` rewrites TeX
+`\(...\)` and `\[...\]` delimiters to dollar math before either renderer parses them, and the
+document exporter runs the same function so previews and exports agree. An inline formula never
+crosses a blank line or a code region; a `\[` that owns its line opens a display block that may
+span blank lines until a `\]` ends a line. Nested delimiters of the same kind are balanced and
+the inner pair dropped. `\[...\]` only counts as math when its body carries a TeX signal such as
+a command, `^`, `_`, `=`, or braces, so escaped citations like `\[1\]` stay text. Physical
+formula newlines become spaces (after dropping TeX `%` comments and block-quote markers) so
+Markdown cannot interpret equation lines as headings or quotes. During streaming, output stays
+append-only: a formula whose meaning a later chunk could still change is withheld until its
+paragraph closes, and an incomplete final formula retains its source. This only changes
+presentation, not stored messages. Product code supplies the active font size step, decides how
+links open, and
 passes the native copy-menu labels already translated. The renderer presents those menus itself, on
 text selections and on Markdown tables, so omitting the labels leaves the library's English
 defaults:
@@ -111,7 +124,29 @@ defaults:
 />;
 ```
 
-The enriched-renderer patch keeps overflowing tables horizontally scrollable across layout
+Streaming updates use the Desktop cadence at the chat-state owner: 100 ms for small
+messages, increasing with accumulated text length to at most 3 seconds. Terminal events
+publish immediately. The Streamdown dependency patch allows one repair job and one latest
+pending input per mounted renderer and publishes completed results within the same raw-source
+generation. Replacement, clear, or repair-option changes start a new generation and remount
+the native renderer; ordinary appends and completion retain it. This lets Android accept
+repaired snapshots whose temporary closing delimiters change, while old-generation results
+cannot return after replacement. It preserves full Markdown parsing; there is no tail-only
+parser or persisted-content truncation.
+
+The Android enriched-renderer patch similarly coalesces pending render requests instead of
+queuing every full-text snapshot. It stops text/block fades past 64 * 1024 UTF-16 code units
+without disabling native streaming filters or completion layout. Inline message disclosures
+mount into natural layout immediately and unmount when closed; their visibility never waits
+for a Markdown measurement or a height-animation callback.
+
+Android streaming-status changes invalidate in-flight render jobs and schedule another render
+even when the text is unchanged. Applying that result also invalidates Fabric/Yoga measurement
+so completion or cancellation releases filtered tails and pending code-block presentation.
+The native coalescer relies on Streamdown's generation key for source replacement isolation;
+streaming callers that bypass Streamdown must key their native renderer by source generation.
+
+The enriched-renderer patch also keeps overflowing tables horizontally scrollable across layout
 updates and exposes native scroll indicators. Tables retain the upstream native copy menu;
 whole-message copy stays with the message actions. Standalone code blocks have a 192-point maximum
 height, including their header, in both native layout and shadow measurement. Short blocks keep their
@@ -128,6 +163,16 @@ When rendering selectable content inside a scroll surface, follow the selection 
 scroll-cancellation contract in
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md)
 and verify the native interaction boundary on each supported platform.
+
+`BackgroundPressArea` recognizes background taps without taking the list's JavaScript responder.
+Its native view is the only owner of the press decision: movement and long-press thresholds,
+scrolling, a touch that stops momentum, extra pointers and nested areas cancel it on the UI thread,
+and JavaScript receives only completed presses. Readable content remains a background target.
+Wrap controls with their own taps in `BackgroundPressExclusion`, keeping each exclusion bounded to
+the press target and carrying the target's outer margins instead of covering a full-screen
+overlay. CherryUI press targets that render inside background areas exclude themselves. The native
+implementation requires regenerating Nitro bindings and rebuilding the development client when
+changed.
 
 Typography utilities are exported from `@cherrystudio/ui/utils`: `normalizeFontSizeStep`,
 `resolveTypographyScale`, and `createTypographyCSSVariables` keep native style objects, runtime CSS
@@ -152,6 +197,11 @@ translations, file identifiers, or application navigation:
 `MessagePart.Process` is the inline disclosure used for one total-duration row before an answer.
 The product adapter supplies its localized duration and every visible pre-result child; the
 primitive owns the quiet divider, running shimmer, disclosure state, and compact chevron.
+`defaultExpanded` preserves reading when a live tool group enters the completed process, and
+`statusText`/`statusTone` keep exceptions visible while the process is folded.
+`MessagePart.ToolGroup` defaults closed regardless of running state. Its optional controlled
+`expanded`/`onExpandedChange` pair lets a message retain group state across outer disclosure
+unmounts; new calls and completion never override the reader's choice.
 
 `MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
 already communicates live progress. The running state, status text, and detail action remain intact;
@@ -193,6 +243,14 @@ the at-bottom state and the one-shot scroll action:
   onPress={scrollToBottom}
 />;
 ```
+
+`Dialog` is the shared centered content dialog for decisions that need custom content, such as
+an external link. Pass `open`, `onOpenChange`, and `title`, then compose content and action buttons
+as children. Actions do not automatically dismiss it, so callers can wait for a successful save.
+Backdrop presses and swipe dismissal are disabled; `onOpenChange` handles system dismissal
+requests. Content scrolls when large text or a small viewport requires it.
+Mount it inside `Portal.AccessibilityBoundary` so an open dialog hides background content from
+screen readers; closing or unmounting the dialog releases that isolation.
 
 `Alert` is the shared native dialog primitive. Mount one provider at the application root and
 inject localized default action labels there; feature code can then enqueue informational,
@@ -243,8 +301,9 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 `Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
 
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
-`destructive`, `outline`, `secondary`, `ghost`, and `link` variants, along with loading and disabled
-behavior. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
+`destructive`, `outline`, `secondary`, `ghost`, `link`, and `text` variants, along with loading and disabled
+behavior. `text` uses the link color without an underline for standalone text actions; `link` retains
+its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
 `inline`, `default`, `field`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
 compact zero-horizontal-padding action for headings or prose. The `icon` prop renders an icon before
@@ -332,7 +391,9 @@ persistence:
 
 `SelectionIndicator` is the decorative selected/unselected mark inside a parent checkbox or radio
 row. The parent owns the accessible role, state, and press handling. Use its `overlay` variant when
-the unselected ring sits on imagery and needs a dark contrast fill.
+the unselected ring sits on imagery and needs a dark contrast fill. A form that mixes single and
+multiple choice passes `control="radio"` (dot) or `control="checkbox"` (square check) so the shape,
+not a caption, tells them apart.
 
 `Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
 surfaces: the background is the lightest, the border is stronger, and the label has the highest
@@ -403,6 +464,13 @@ import { Text } from 'react-native';
 
 The variant respects Reduce Motion and `enabled={false}`. Its `className` styles the clipping
 container; `textClassName` styles the phrases.
+`direction` sets which way each change travels: `up` (the default) brings the next phrase in from
+below, and `down` brings it in from above. A string value uses the direction supplied with that
+change, so it can follow the direction of a value change such as a level going up or down.
+Each change moves a short distance on a critically damped spring while the outgoing phrase fades out
+before the incoming one fades in. A phrase called back mid-exit continues from its current position,
+and every outgoing phrase stays mounted until it has faded, so rapid or reversed changes stay
+continuous. The initial phrase appears settled; only later changes animate.
 
 `TextField` is the provider-neutral field group for labels, descriptions, validation errors, and
 shared disabled/invalid/required state. Use its compound members instead of importing loose field
@@ -459,7 +527,7 @@ component instead of configuring a trigger:
 import {
   ActionMenu,
   ContextMenu,
-  ContextMenuScrollBoundary,
+  ScrollInteractionBoundary,
   type MenuItem,
 } from '@cherrystudio/ui/components';
 
@@ -479,9 +547,9 @@ const items = [
 </ContextMenu>;
 
 // The scroll owner exposes drag and momentum state to every descendant context menu.
-<ContextMenuScrollBoundary>
+<ScrollInteractionBoundary>
   {(scrollHandlers) => <ScrollView {...scrollHandlers}>{rows}</ScrollView>}
-</ContextMenuScrollBoundary>;
+</ScrollInteractionBoundary>;
 ```
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
@@ -538,12 +606,13 @@ selection sheets, forms, and system media/share interfaces retain their own inte
 Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
 Wrap every scroll component containing a gesture-owned `ContextMenu` in one
-`ContextMenuScrollBoundary`. The boundary supplies drag, momentum, and touch handlers through its
+`ScrollInteractionBoundary`. The boundary supplies drag, momentum, and touch handlers through its
 render callback without rendering another native view. Pass an existing scroll handler to the
-boundary itself when it needs to be composed with menu arbitration. A touch that only stops
-momentum stays ineligible for a context menu until that touch ends. iOS forwards the caller's scroll
-handlers and relies on UIKit arbitration. A custom trigger for a gesture-owned menu component must
-forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
+boundary itself when it needs to be composed with interaction arbitration. Android menus read
+the nearest boundary's state. A touch that only stops momentum stays ineligible until a new touch
+begins. The boundary is shared across platforms, while iOS keeps its native context-menu
+recognition and UIKit arbitration.
+A custom trigger for a gesture-owned menu component must forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
 target.
 
 `ContextMenu` recognition follows
@@ -654,6 +723,19 @@ still propagate. The failed interaction is consumed without retrying a partially
 change. These native guards require a new installation package; a JavaScript update cannot apply
 them. The composer native-patch suite checks the installed sources, while recovery and subsequent
 editing still need device acceptance. See [the stability tracker](https://github.com/CherryHQ/cherry-studio-app/issues/1011).
+
+The field's height is measured natively, not in JavaScript: `maxHeight` caps it and the native input
+reports its own content height back to Fabric. On Android, `replaceTextInRange` suppresses the text
+watcher during edits, so it reports the updated height after formatting is applied. This covers
+markdown paste and programmatic inserts without extending measurement to formatting-only commands.
+
+The Android field also clamps scroll offsets outside the content range when its size changes.
+Native scroll-to-caret can run before Fabric applies the new height, but Android's pre-draw pass
+also adjusts scrolling. The size-change clamp is a defensive measure; its effect on the reported
+first-line clipping still needs device acceptance. Record the view height, text layout height, and
+`scrollY` before and after resizing, including the pre-draw pass, to establish whether a stale offset
+survives. The installed-source guards confirm patch presence, not runtime layout behavior. Both
+native changes require a new installation package.
 
 Rows above the field follow composition order rather than named slots. Use `Composer.Collapsible`
 only when a conditional row should animate the surface height:
@@ -858,3 +940,6 @@ If the root app adds or removes the workspace dependency, also update
 ```sh
 pnpm install --lockfile-only
 ```
+
+`MenuItem.group` groups contiguous actions into sections. Android draws the shared panel separator;
+iOS maps sections to inline native menus. Omitted groups preserve the existing flat menu.

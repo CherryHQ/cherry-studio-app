@@ -8,11 +8,16 @@ import { TraceStorageService } from '@/backend/ai/observability/TraceStorageServ
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
+import { AnalyticsService } from '@/backend/services/analytics';
 import { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
-import { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import { BackupRuntime } from '@/backend/services/backup';
+import {
+  DesktopConnectionManager,
+  DesktopConnectionRuntime,
+} from '@/backend/services/desktopConnections';
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -20,6 +25,7 @@ import { AudioKeepAliveSource } from '@/backend/services/keepAlive/AudioKeepAliv
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
+import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
@@ -44,10 +50,14 @@ export const services = {
   ResourceScopeCoordinator,
   CacheService,
   DbService,
+  BackupRuntime,
+  DesktopConnectionManager,
   DesktopConnectionRuntime,
   ProviderAccountRuntime,
+  RemoteAgentRuntime,
   DocumentExportRuntime,
   PreferenceService,
+  AnalyticsService,
   BackgroundActivityEnvironment,
   AndroidBackgroundActivityRuntime,
   AudioKeepAliveSource,

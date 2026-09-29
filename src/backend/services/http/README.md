@@ -49,6 +49,9 @@ The shared transport is not a shared credential store. Static and interceptor-ad
 materialized on each request from its own route. Cloud authentication interceptors therefore do
 not run for desktop LAN requests, and desktop device credentials do not become cloud defaults.
 
+Desktop pairing, provider export, and remote Agent discovery use credential-scoped routes through
+`desktopConnectionClient`; encrypted Agent WebSocket traffic remains outside HTTP.
+
 Current production consumers include the provider-registry updater's separate GitCode and GitHub
 routes, plus the non-streaming Web Search JSON adapter. Web Search drivers continue to own provider
 request/response schemas and credentials; the adapter owns URL routing, query serialization, safe

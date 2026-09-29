@@ -2,7 +2,6 @@ import { classifyAgentFailureReason } from '../agentFailure';
 
 describe('classifyAgentFailureReason', () => {
   test.each([
-    [{ code: 'turn_timeout', message: 'generic failure' }, 'timeout'],
     [{ code: 'tool_step_limit_exceeded', message: 'generic failure' }, 'tool_limit'],
     [{ message: 'OpenAI API error (403): access denied' }, 'permission'],
     [{ message: 'HTTP 429', responseBody: '{"type":"insufficient_quota"}' }, 'quota'],

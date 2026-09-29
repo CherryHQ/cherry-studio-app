@@ -53,12 +53,14 @@ export function createTestDb(sqlite: DatabaseSync): TestDb {
         statement.run(...params);
         return { rows: [] };
       }
+      // Preserve duplicate column names in joins; Drizzle maps columns by position.
+      statement.setReturnArrays(true);
       if (method === 'get') {
-        const row = statement.get(...params) as Record<string, unknown> | undefined;
-        return { rows: row ? Object.values(row) : [] };
+        const row = statement.get(...params) as unknown as unknown[] | undefined;
+        return { rows: row ?? [] };
       }
-      const rows = statement.all(...params) as Record<string, unknown>[];
-      return { rows: rows.map((row) => Object.values(row)) };
+      const rows = statement.all(...params) as unknown as unknown[][];
+      return { rows };
     },
     undefined as never,
     { casing: 'snake_case', schema },

@@ -5,6 +5,7 @@ import type {
   AgentTool as PiAgentTool,
 } from '@earendil-works/pi-agent-core';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
+import { calculateContextTokens } from '@earendil-works/pi-agent-core/compaction';
 import type {
   Api as PiApi,
   AssistantMessage,
@@ -74,6 +75,7 @@ import {
 } from './piDeferredToolDiscovery';
 import { disablePiToolCalls } from './piToolChoice';
 import { PiToolInputPreviewBuffer } from './PiToolInputPreviewBuffer';
+import { createPiTurnReplay } from './piTurnReplay';
 import { tracePiStream } from './tracePiStream';
 
 export type PiModelResolution = {
@@ -129,13 +131,11 @@ const INTERRUPTED_TOOL_REASON = 'The turn ended before this tool call completed.
 export type PiRuntimeLimits = {
   maxToolCalls: number;
   maxToolSteps: number;
-  turnTimeoutMs: number;
 };
 
 export const DEFAULT_PI_RUNTIME_LIMITS: PiRuntimeLimits = Object.freeze({
   maxToolCalls: 64,
   maxToolSteps: 20,
-  turnTimeoutMs: 10 * 60 * 1000,
 });
 
 const TOOL_BUDGET_FINAL_RESPONSE_INSTRUCTIONS =
@@ -159,12 +159,6 @@ const TOOL_LOOP_CONTEXT_ERROR: RuntimeError = {
   code: 'context_window_exceeded',
   message: 'The tool loop exhausted the model context window before the next request.',
   retryable: false,
-  origin: 'runtime',
-};
-const TURN_TIMEOUT_ERROR: RuntimeError = {
-  code: 'turn_timeout',
-  message: 'The Agent turn timed out.',
-  retryable: true,
   origin: 'runtime',
 };
 const DUPLICATE_TOOL_CALL_ERROR: RuntimeError = {
@@ -213,14 +207,11 @@ type PiToolBinding =
   | { kind: 'dispatch'; displayName: string; providerName: string };
 
 /**
- * Turn lifecycle. The first transition out of `running` wins the phase — it is
- * never retargeted — and only the terminal fence in `emit()` reaches
- * `terminated`. The published terminal event is a separate concern: during
- * `timing-out` the run loop's timeout failure still races the unconditional
- * `cancelled` from `cancel()`/`close()`, and the fence keeps whichever lands
- * first.
+ * Turn lifecycle. A turn has no wall-clock deadline: it runs until it
+ * completes, fails, or is cancelled. Only the terminal fence in `emit()`
+ * reaches `terminated`.
  */
-type TurnPhase = 'running' | 'cancelling' | 'timing-out' | 'terminated';
+type TurnPhase = 'running' | 'cancelling' | 'terminated';
 
 type ActiveTurn = {
   abortController: AbortController;
@@ -232,6 +223,8 @@ type ActiveTurn = {
   failedToolCalls: Set<string>;
   recordedInvocations: Set<string>;
   recordedResponses: WeakSet<AssistantMessage>;
+  replayMessages: PiMessage[];
+  hasLoopCompaction?: boolean;
   nextInvocationOrdinal: number;
   unavailableTools: Map<string, RuntimeToolResult>;
   limitError?: RuntimeError;
@@ -244,7 +237,6 @@ type ActiveTurn = {
   streamingToolCalls: Set<string>;
   inputPreviews: PiToolInputPreviewBuffer;
   terminalMessage?: AssistantMessage;
-  timeoutHandle?: ReturnType<typeof setTimeout>;
   toolCallCount: number;
   toolBudgetError?: RuntimeError;
   toolBindingsByProviderName: Map<string, PiToolBinding>;
@@ -524,6 +516,17 @@ function collectSensitiveValues(value: unknown, values: string[], sensitive = fa
   }
 }
 
+/**
+ * The final request's real context size. Without a reported input count the
+ * total collapses to the output alone, a bogus anchor that would suppress
+ * compaction, so it is left unknown.
+ */
+function measuredContextTokens(usage: PiUsage): number | undefined {
+  if (usage.input + usage.cacheRead + usage.cacheWrite <= 0) return undefined;
+  const tokens = calculateContextTokens(usage);
+  return Number.isFinite(tokens) && tokens > 0 ? tokens : undefined;
+}
+
 function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
   const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   return {
@@ -598,6 +601,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       failedToolCalls: new Set(),
       recordedInvocations: new Set(),
       recordedResponses: new WeakSet(),
+      replayMessages: [],
       nextInvocationOrdinal: 0,
       unavailableTools: new Map(),
       modelContextHeadroomTokens: 0,
@@ -628,7 +632,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       turnId: request.turnId,
     };
     this.activeTurn = turn;
-    turn.timeoutHandle = setTimeout(() => this.timeoutTurn(turn), this.limits.turnTimeoutMs);
     void this.run(request, turn);
     return channel.drain();
   }
@@ -636,7 +639,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
   async cancel(turnId: string): Promise<void> {
     const turn = this.activeTurn;
     if (!turn || turn.turnId !== turnId) return;
-    this.advancePhase(turn, 'cancelling');
+    this.beginCancelling(turn);
     this.abortExecution(turn, new Error('The turn was cancelled.'));
     await settleWithin(turn.agent?.waitForIdle(), PI_TURN_SETTLE_GRACE_MS);
     this.emit(turn, { type: 'cancelled' });
@@ -660,7 +663,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     this.closed = true;
     const turn = this.activeTurn;
     if (turn) {
-      this.advancePhase(turn, 'cancelling');
+      this.beginCancelling(turn);
       this.abortExecution(turn, new Error('The session was closed.'));
       await settleWithin(turn.agent?.waitForIdle(), PI_TURN_SETTLE_GRACE_MS);
       this.emit(turn, { type: 'cancelled' });
@@ -746,6 +749,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // signal — which is absent in the pre-agent window and third-party after.
       const providerStream: PiModelResolution['streamFn'] = async (model, context, options) => {
         const contextUsage = measurePiContext({
+          api: model.api,
           contextWindow: model.contextWindow,
           maxInputTokens: resolution.maxInputTokens,
           messages: context.messages,
@@ -796,6 +800,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         completeSimple: async (model, context, options) => {
           if (
             estimatePiLoopContextHeadroomTokens({
+              api: model.api,
               contextWindow: model.contextWindow,
               maxInputTokens: resolution.maxInputTokens,
               messages: context.messages,
@@ -820,6 +825,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         },
       };
       const currentMessages = [conversation.prompt, ...(conversation.resume ?? [])];
+      turn.replayMessages.push(...(conversation.resume ?? []));
       const compactionRedactions = [
         ...secrets,
         ...sensitiveToolResultValues([...conversation.history, ...currentMessages]),
@@ -830,6 +836,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
         let activity: Pick<RuntimeContextCompaction, 'id' | 'startedAt'> | undefined;
         return {
           onCompaction: (update: PiCompactionUpdate) => {
+            if (phase === 'tool-loop' && update.status === 'completed') {
+              turn.hasLoopCompaction = true;
+            }
             if (update.status === 'running') {
               activity = { id: `compaction-${++compactionSequence}`, startedAt: Date.now() };
             }
@@ -884,6 +893,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       let responsePhase: 'tools' | 'final-response' | 'done' = 'tools';
       const updateModelContextHeadroom = (messages: PiAgentMessage[]) => {
         const usage = measurePiContext({
+          api: resolution.model.api,
           contextWindow: resolution.model.contextWindow,
           maxInputTokens: resolution.maxInputTokens,
           messages,
@@ -1038,9 +1048,20 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
       switch (terminal.stopReason) {
         case 'stop':
-        case 'length':
-          this.emit(turn, { type: 'completed' });
+        case 'length': {
+          // Live loop compaction is not durable. The next turn replays the full batch,
+          // so its budget cannot be anchored to the smaller final provider request.
+          const contextTokens = turn.hasLoopCompaction
+            ? undefined
+            : measuredContextTokens(terminal.usage);
+          const replay = createPiTurnReplay(turn.replayMessages);
+          this.emit(turn, {
+            type: 'completed',
+            ...(contextTokens !== undefined ? { contextTokens } : {}),
+            ...(replay ? { replay } : {}),
+          });
           break;
+        }
         case 'aborted':
           this.emit(turn, { type: 'cancelled' });
           break;
@@ -1103,6 +1124,8 @@ class PiRuntimeSession implements AgentRuntimeSession {
       case 'turn_end':
         if (event.message.role === 'assistant') {
           turn.terminalMessage = event.message;
+          // Pi appends this same ordered batch to its context, after parallel execution settles.
+          turn.replayMessages.push(event.message, ...event.toolResults);
         }
         this.settleUnmappedToolResults(turn, event.toolResults);
         break;
@@ -1419,6 +1442,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         input,
         signal: callbackSignal,
         toolCallId,
+        turnId: turn.turnId,
       });
       if (turn.phase !== 'running' || callbackSignal.aborted) {
         return this.interruptToolCall(turn, part);
@@ -1717,22 +1741,16 @@ class PiRuntimeSession implements AgentRuntimeSession {
     this.rejectApprovals(turn, approvalError);
   }
 
-  /**
-   * Moves the turn out of `running` exactly once; a turn already cancelling,
-   * timing out, or terminated keeps its first outcome.
-   */
-  private advancePhase(turn: ActiveTurn, phase: 'cancelling' | 'timing-out'): boolean {
-    if (turn.phase !== 'running') return false;
-    turn.phase = phase;
-    return true;
+  /** Moves a running turn to `cancelling`; a turn already past `running` keeps its outcome. */
+  private beginCancelling(turn: ActiveTurn): void {
+    if (turn.phase === 'running') turn.phase = 'cancelling';
   }
 
   /**
    * The single early-exit check for the run loop: reports whether the turn is
-   * past `running` and settles the outcome that is this loop's to publish. A
-   * timeout failure is always published here; `cancelled` only where the loop
-   * owns it (`emitCancelled`) — otherwise `cancel()`/`close()` publish it
-   * after their settle grace, and the terminal fence keeps exactly one.
+   * past `running`. `cancelled` is published here only where the loop owns it
+   * (`emitCancelled`) — otherwise `cancel()`/`close()` publish it after their
+   * settle grace, and the terminal fence keeps exactly one.
    */
   private settleIfEnding(turn: ActiveTurn, options?: { emitCancelled?: boolean }): boolean {
     switch (turn.phase) {
@@ -1741,17 +1759,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
       case 'cancelling':
         if (options?.emitCancelled) this.emit(turn, { type: 'cancelled' });
         return true;
-      case 'timing-out':
-        this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
-        return true;
       case 'terminated':
         return true;
     }
-  }
-
-  private timeoutTurn(turn: ActiveTurn): void {
-    if (!this.advancePhase(turn, 'timing-out')) return;
-    this.abortExecution(turn, new Error('The Agent turn timed out.'));
   }
 
   private recordInvocation(turn: ActiveTurn, message: AssistantMessage): void {
@@ -1782,7 +1792,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
     const isTerminal =
       event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled';
     if (isTerminal) {
-      if (turn.timeoutHandle) clearTimeout(turn.timeoutHandle);
       turn.inputPreviews.dispose();
       turn.abortController.abort();
       this.interruptUnsettledToolParts(turn);

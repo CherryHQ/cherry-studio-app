@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBackendModule, useQuery } from '@/frontend/data';
 import type {
   DesktopImportSelectionsDto,
+  DesktopPairingClaim,
+  DesktopPairingQr,
   PairDesktopConnectionDto,
 } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
@@ -33,7 +35,7 @@ export function useDesktopConnection(id: string | undefined) {
   };
 }
 
-type Operation = 'pair' | 'remove' | 'preview' | 'import';
+type Operation = 'location' | 'pair' | 'remove' | 'preview' | 'import';
 
 export function useDesktopConnectionActions() {
   const connections = useBackendModule('desktopConnections');
@@ -94,7 +96,16 @@ export function useDesktopConnectionActions() {
   );
 
   const pair = useCallback(
-    (input: PairDesktopConnectionDto) => run('pair', (signal) => connections.pair(input, signal)),
+    (input: PairDesktopConnectionDto, onClaim?: (claim: DesktopPairingClaim) => void) =>
+      run('pair', (signal) => connections.pair(input, signal, onClaim)),
+    [connections, run],
+  );
+  const updateLocation = useCallback(
+    (id: string, qr: DesktopPairingQr) =>
+      run('location', async (signal) => {
+        await connections.updateLocation(id, qr, signal);
+        return true;
+      }),
     [connections, run],
   );
   const remove = useCallback(
@@ -116,7 +127,8 @@ export function useDesktopConnectionActions() {
   );
 
   return {
-    isPairing: pending === 'pair',
+    isPairing: pending === 'pair' || pending === 'location',
+    updateLocation,
     isRemoving: pending === 'remove',
     isPreviewing: pending === 'preview',
     isImporting: pending === 'import',

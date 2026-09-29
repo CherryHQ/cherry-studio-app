@@ -15,6 +15,9 @@
 #include <fbjni/fbjni.h>
 #include <NitroModules/HybridObjectRegistry.hpp>
 
+#include "JHybridCherryBackgroundPressViewSpec.hpp"
+#include "JFunc_void.hpp"
+#include "views/JHybridCherryBackgroundPressViewStateUpdater.hpp"
 #include "JHybridCherryMenuViewSpec.hpp"
 #include "JFunc_void_std__string.hpp"
 #include "views/JHybridCherryMenuViewStateUpdater.hpp"
@@ -28,6 +31,14 @@ int initialize(JavaVM* vm) {
   });
 }
 
+struct JHybridCherryBackgroundPressViewSpecImpl: public jni::JavaClass<JHybridCherryBackgroundPressViewSpecImpl, JHybridCherryBackgroundPressViewSpec::JavaPart> {
+  static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/cherrystudio/ui/HybridCherryBackgroundPressView;";
+  static std::shared_ptr<JHybridCherryBackgroundPressViewSpec> create() {
+    static const auto constructorFn = javaClassStatic()->getConstructor<JHybridCherryBackgroundPressViewSpecImpl::javaobject()>();
+    jni::local_ref<JHybridCherryBackgroundPressViewSpec::JavaPart> javaPart = javaClassStatic()->newObject(constructorFn);
+    return javaPart->getJHybridCherryBackgroundPressViewSpec();
+  }
+};
 struct JHybridCherryMenuViewSpecImpl: public jni::JavaClass<JHybridCherryMenuViewSpecImpl, JHybridCherryMenuViewSpec::JavaPart> {
   static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/cherrystudio/ui/HybridCherryMenuView;";
   static std::shared_ptr<JHybridCherryMenuViewSpec> create() {
@@ -42,11 +53,20 @@ void registerAllNatives() {
   using namespace margelo::nitro::cherrystudio::ui;
 
   // Register native JNI methods
+  margelo::nitro::cherrystudio::ui::JHybridCherryBackgroundPressViewSpec::CxxPart::registerNatives();
+  margelo::nitro::cherrystudio::ui::JFunc_void_cxx::registerNatives();
+  margelo::nitro::cherrystudio::ui::views::JHybridCherryBackgroundPressViewStateUpdater::registerNatives();
   margelo::nitro::cherrystudio::ui::JHybridCherryMenuViewSpec::CxxPart::registerNatives();
   margelo::nitro::cherrystudio::ui::JFunc_void_std__string_cxx::registerNatives();
   margelo::nitro::cherrystudio::ui::views::JHybridCherryMenuViewStateUpdater::registerNatives();
 
   // Register Nitro Hybrid Objects
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "CherryBackgroundPressView",
+    []() -> std::shared_ptr<HybridObject> {
+      return JHybridCherryBackgroundPressViewSpecImpl::create();
+    }
+  );
   HybridObjectRegistry::registerHybridObjectConstructor(
     "CherryMenuView",
     []() -> std::shared_ptr<HybridObject> {

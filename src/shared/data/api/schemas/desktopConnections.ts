@@ -1,3 +1,4 @@
+import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
 import * as z from 'zod';
 
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
@@ -25,20 +26,41 @@ function isIpAddress(value: string): boolean {
   );
 }
 
+export const DesktopRemoteAgentSchema = z.object({
+  protocolVersion: z.number().int().positive(),
+  instanceId: z.string().uuid(),
+  port: z.number().int().min(1).max(65_535),
+  path: z.string().regex(/^\/(?!\/)[^?#\s]*$/),
+  serverPublicKey: z.string().regex(/^[A-Za-z0-9+/]{43}=$/),
+});
+export type DesktopRemoteAgent = z.infer<typeof DesktopRemoteAgentSchema>;
+
 export const DesktopPairingQrSchema = z.object({
-  code: z.string().regex(/^[a-f\d]{32}$/i),
-  ips: z.array(z.string().refine(isIpAddress, 'Invalid IP address')).min(1),
+  desktopIdentity: z.string().min(1).max(256),
+  invitationId: z.string().min(1).max(256),
+  invitationSecret: z.string().min(1).max(256),
+  ips: z.array(z.string().refine(isIpAddress, 'Invalid IP address')).min(1).max(16),
   name: z.string().min(1).max(128),
   port: z.number().int().min(1).max(65_535),
+  protocolVersions: z.array(z.number().int().positive()).min(1).max(16),
   t: z.literal('cherry-studio-pair'),
-  v: z.literal(1),
+  v: z.literal(2),
 });
 export type DesktopPairingQr = z.infer<typeof DesktopPairingQrSchema>;
 
+/** Mirrors `remoteCapabilitiesSchema`; the protocol package stays off the app's startup path. */
 export const PairDesktopConnectionSchema = DesktopPairingQrSchema.extend({
+  capabilities: z
+    .array(z.enum(['configuration', 'agent']))
+    .min(1)
+    .max(2)
+    .refine((values) => new Set(values).size === values.length, 'Capabilities must be unique'),
   connectionId: z.string().uuid().optional(),
 });
 export type PairDesktopConnectionDto = z.infer<typeof PairDesktopConnectionSchema>;
+
+/** Shown while the desktop user approves the claim; the code must match the desktop's. */
+export type DesktopPairingClaim = { expiresAt: string; verificationCode: string };
 
 const ApiKeySchema = z.looseObject({
   id: z.string().min(1),
@@ -333,5 +355,10 @@ export type DesktopConnectionSchemas = {
   };
   '/desktop-connections/:id': {
     GET: { params: { id: string }; response: DesktopConnection };
+    PATCH: {
+      params: { id: string };
+      body: { configuredEndpoints: DirectEndpoint[] };
+      response: DesktopConnection;
+    };
   };
 };

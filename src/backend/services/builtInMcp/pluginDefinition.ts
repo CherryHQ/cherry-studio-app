@@ -1,4 +1,4 @@
-import type { CallToolResult, MCPClient } from '@ai-sdk/mcp';
+import type { CallToolResult, ListToolsResult, MCPClient } from '@ai-sdk/mcp';
 
 import type {
   PluginCatalogEntry,
@@ -25,6 +25,13 @@ export interface PluginClient extends Pick<MCPClient, 'serverInfo' | 'listTools'
     options?: { abortSignal?: AbortSignal };
   }): Promise<CallToolResult>;
 }
+
+/** Credential-free discovery result reusable after the validated grant is committed. */
+export type PluginToolCatalog = {
+  tools: ListToolsResult['tools'];
+  discoveryWarnings: readonly string[];
+  serverInfo: PluginClient['serverInfo'];
+};
 
 export type PluginRequestAuthorization = {
   apply(

@@ -1,9 +1,35 @@
 import type { AgentMessageView, JsonValue } from '@/shared/contracts/agent';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import { toRuntimeHistory, toRuntimeInputParts } from '../turnRuntimeInput';
 
 const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
+const MODEL_ID = createUniqueModelId('provider-1', 'vision-model');
+const OTHER_MODEL_ID = createUniqueModelId('provider-1', 'other-model');
+
+function answer(
+  id: string,
+  turnId: string,
+  contextTokens: number | undefined,
+  modelId = MODEL_ID,
+): AgentMessageView {
+  return {
+    id,
+    sessionId: 'session-1',
+    turnId,
+    role: 'assistant',
+    status: 'success',
+    parts: [{ id: `${id}-text`, type: 'text', text: 'Answer.', state: 'done' }],
+    // Summed across every request of the turn: never a context size.
+    usage: { inputTokens: 400_000, outputTokens: 8, totalTokens: 400_008 },
+    modelId,
+    inferenceSnapshot: null,
+    stats: contextTokens === undefined ? null : { contextTokens },
+    createdAt: TIMESTAMP,
+    updatedAt: TIMESTAMP,
+  };
+}
 
 describe('Turn Runtime input assembly', () => {
   test('timeline compaction markers never enter model history', () => {
@@ -343,34 +369,26 @@ describe('Turn Runtime input assembly', () => {
     ]);
   });
 
-  test('projects persisted assistant usage for Pi context estimation', () => {
-    const message: AgentMessageView = {
-      id: 'assistant-message',
-      sessionId: 'session-1',
-      turnId: 'turn-1',
-      role: 'assistant',
-      status: 'success',
-      parts: [{ id: 'text-1', type: 'text', text: 'Answer.', state: 'done' }],
-      usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
-      modelId: null,
-      inferenceSnapshot: null,
-      stats: null,
-      createdAt: TIMESTAMP,
-      updatedAt: TIMESTAMP,
-    };
+  test('anchors only the newest answer on its measured context, never on summed usage', () => {
+    const older = answer('assistant-old', 'turn-1', 50_000);
+    const newest = answer('assistant-new', 'turn-2', 90_000);
 
-    expect(toRuntimeHistory([message])).toEqual([
-      {
-        turnId: 'turn-1',
-        messages: [
-          {
-            role: 'assistant',
-            parts: [{ type: 'text', text: 'Answer.' }],
-            usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
-          },
-        ],
-      },
+    const history = toRuntimeHistory([older, newest], new Map(), MODEL_ID);
+
+    expect(history.map((turn) => turn.messages[0])).toEqual([
+      { role: 'assistant', parts: [{ type: 'text', text: 'Answer.' }] },
+      { role: 'assistant', parts: [{ type: 'text', text: 'Answer.' }], contextTokens: 90_000 },
     ]);
+  });
+
+  test.each([
+    ['another model measured it', answer('a', 't', 90_000, OTHER_MODEL_ID), MODEL_ID],
+    ['the newest answer has no measurement', answer('a', 't', undefined), MODEL_ID],
+    ['no turn model is known', answer('a', 't', 90_000), undefined],
+  ])('estimates by content when %s', (_, message, modelId) => {
+    expect(toRuntimeHistory([message], new Map(), modelId)[0]?.messages[0]).not.toHaveProperty(
+      'contextTokens',
+    );
   });
 
   test('omits a dangling tool call instead of producing unpaired Runtime history', () => {

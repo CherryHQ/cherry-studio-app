@@ -205,6 +205,7 @@ const harness: RuntimeConformanceHarness = {
           input: toolInput,
           signal: controller.signal,
           toolCallId,
+          turnId: controller.turnId,
         });
         controller.emit({
           type: 'part.replace',

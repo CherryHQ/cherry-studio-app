@@ -1,5 +1,6 @@
 import type { LucideIconComponent } from '@cherrystudio/app-icons';
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
+import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import CalendarIcon from '@cherrystudio/app-icons/icons/calendar';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
@@ -15,6 +16,8 @@ import { type DevicePermissionScope, summarizeDevicePermissions } from '@/shared
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import { getAgentCapabilityAvailability } from '@/shared/data/types/builtInTool';
 
+import { setAgentCapabilityEnabled } from '../agentForm';
+
 type AgentCapabilitiesSectionProps = {
   disabledCapabilities: readonly AgentCapability[];
   onChange: (disabledCapabilities: AgentCapability[]) => void;
@@ -25,9 +28,11 @@ type CapabilityRow = {
   permissionScopes: readonly DevicePermissionScope[];
 };
 
+// App-owned groups first, then device groups that also need an OS permission.
 const CAPABILITY_DISPLAY_ORDER = [
   'web',
   'image',
+  'agents',
   'calendar',
   'reminders',
   'health',
@@ -35,6 +40,7 @@ const CAPABILITY_DISPLAY_ORDER = [
 ] as const satisfies readonly AgentCapability[];
 
 const CAPABILITY_ICONS = {
+  agents: BotIcon,
   calendar: CalendarIcon,
   health: HeartPulseIcon,
   image: ImageIcon,
@@ -70,11 +76,7 @@ export function AgentCapabilitiesSection({
   );
 
   const handleToggle = (row: CapabilityRow, enabled: boolean) => {
-    onChange(
-      enabled
-        ? disabledCapabilities.filter((capability) => capability !== row.capability)
-        : [...new Set([...disabledCapabilities, row.capability])],
-    );
+    onChange(setAgentCapabilityEnabled(disabledCapabilities, row.capability, enabled));
     // This changes the Agent's intent only. System access is requested for the
     // actual operation, after the in-chat approval, or explicitly in Settings.
   };

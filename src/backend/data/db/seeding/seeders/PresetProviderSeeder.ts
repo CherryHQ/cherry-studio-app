@@ -5,7 +5,7 @@ import {
   isRecommendedPresetProvider,
 } from '@/backend/data/services/presetProviders';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
-import { providerService } from '@/backend/data/services/ProviderService';
+import { batchUpsertProviders } from '@/backend/data/services/ProviderService';
 
 import { appStateTable } from '../../schemas/appState';
 import { userProviderTable } from '../../schemas/userProvider';
@@ -50,6 +50,6 @@ export class PresetProviderSeeder implements DatabaseSeeder {
           return preset ? [{ ...createPresetProviderInput(preset), providerId }] : [];
         });
 
-    await providerService.batchUpsert(rows);
+    await dbService.withWriteTx((tx) => batchUpsertProviders(tx, rows));
   }
 }

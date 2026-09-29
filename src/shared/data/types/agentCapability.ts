@@ -10,6 +10,7 @@ import * as z from 'zod';
  * gates that resolve per turn.
  */
 export const AGENT_CAPABILITIES = [
+  'agents',
   'calendar',
   'health',
   'image',
@@ -22,12 +23,13 @@ export const AgentCapabilitySchema = z.enum(AGENT_CAPABILITIES);
 export type AgentCapability = z.infer<typeof AgentCapabilitySchema>;
 
 /**
- * Editor prefill for a newly created Agent: sensitive device groups start
- * disabled and are opted in deliberately. This is form seeding only — storage
- * keeps whatever the editor saves, and an Agent row created without the editor
- * (empty deny-list) has every capability enabled.
+ * Editor and conversation-tool defaults for a newly created Agent: sensitive device groups and
+ * Agent management start disabled and are opted in deliberately. This is creation-input seeding
+ * only — storage keeps whatever the editor saves, and an Agent row created without the editor
+ * (empty deny-list, such as the seeded default Agent) has every capability enabled.
  */
 export const DEFAULT_DISABLED_AGENT_CAPABILITIES: readonly AgentCapability[] = [
+  'agents',
   'calendar',
   'health',
   'location',

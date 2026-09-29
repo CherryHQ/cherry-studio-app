@@ -34,6 +34,7 @@ function setup(statuses: PermissionStatuses, requested: PermissionStatuses = {})
         input: { ...callInput, metrics },
         signal: new AbortController().signal,
         toolCallId: 'health-1',
+        turnId: 'turn-1',
       }),
   };
 }

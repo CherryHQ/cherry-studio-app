@@ -11,6 +11,7 @@ import type {
   AgentStartSessionInput,
   AgentSubmitMessageInput,
 } from './inputs';
+import type { AgentRespondQuestionInput } from './userQuestion';
 import type { AgentErrorView, AgentSessionStatus, AgentSessionView } from './views';
 
 /**
@@ -58,6 +59,8 @@ export interface AgentProtocol {
   ): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>;
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>;
+
+  respondQuestion(input: AgentRespondQuestionInput): Promise<void>;
 
   respondApproval(input: {
     sessionId: string;

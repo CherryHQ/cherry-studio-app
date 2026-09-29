@@ -103,3 +103,50 @@ describe('native Markdown code-block divider patch', () => {
     expect(patch).toContain('+    val y = headerH - dividerPaint.strokeWidth / 2f');
   });
 });
+
+describe('native Markdown streaming work patch', () => {
+  const streamingPatch = patch.split(
+    '+++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt',
+  )[1];
+
+  test('coalesces native work before submitting another full render', () => {
+    expect(streamingPatch).toContain('+      if (renderInFlight) {');
+    expect(streamingPatch).toContain('+        renderRequested = true');
+    expect(streamingPatch).toContain('+        return');
+    expect(streamingPatch).toContain('+            if (renderRequested) scheduleRender()');
+    expect(streamingPatch).toContain('+      disposed = true');
+  });
+
+  test('allows repaired suffix changes within the native view generation', () => {
+    expect(streamingPatch).toContain('+              isStreaming && streamingAnimation &&');
+    expect(streamingPatch).not.toContain('currentMarkdown.startsWith(markdown)');
+    expect(streamingPatch).toContain(
+      '+            if (generation == streamingGeneration && (renderId == currentRenderId || compatibleStream)) {',
+    );
+    expect(streamingPatch).toContain('+      val flags = md4cFlags');
+  });
+
+  test('schedules and remeasures status-only finalization while invalidating old jobs', () => {
+    expect(streamingPatch).toContain('+        streamingGeneration++');
+    expect(streamingPatch).toContain('+        dirtyFlags += DirtyFlag.FORCE_HEIGHT');
+    expect(streamingPatch).toContain('+        renderPending = true');
+    expect(streamingPatch).toContain('+      val generation = streamingGeneration');
+    expect(streamingPatch).toContain('+      if (forceHeight) {');
+    expect(streamingPatch).toContain('+        MeasurementStore.invalidate(id)');
+    expect(streamingPatch).toContain(
+      '+          state.putInt("forceHeightRecalculationCounter", ++forceHeightRecalculationCounter)',
+    );
+    expect(streamingPatch).toContain('+          wrapper.updateState(state)');
+  });
+
+  test('limits animation without disabling native streaming parsing', () => {
+    expect(streamingPatch).toContain(
+      '+      private const val MAX_ANIMATED_CONTENT_LENGTH = 64 * 1024',
+    );
+    expect(streamingPatch).toContain(
+      '+      get() = streamingAnimation && currentMarkdown.length <= MAX_ANIMATED_CONTENT_LENGTH',
+    );
+    expect(streamingPatch).toContain('+      if (!shouldAnimateStreaming) return');
+    expect(streamingPatch).not.toContain('+      streamingAnimation = false');
+  });
+});

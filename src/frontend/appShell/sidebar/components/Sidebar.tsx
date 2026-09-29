@@ -1,9 +1,9 @@
 import { useRouter } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
-import { type ReactNode, useMemo } from 'react';
+import { useMemo } from 'react';
 import { View } from 'react-native';
 
-import { useStartNewChat } from '@/frontend/appShell/navigation/chat';
+import { useChatSource, useStartNewChat } from '@/frontend/appShell/navigation/chat';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import { useSessionSearch } from '../hooks/useSessionSearch';
@@ -12,30 +12,31 @@ import { SidebarFooter } from './SidebarFooter';
 import { SidebarHeader } from './SidebarHeader';
 
 type SidebarProps = {
-  children?: ReactNode;
   navigation: DrawerContentComponentProps['navigation'];
 };
 
-/**
- * Drawer sidebar as a compound component: `Sidebar.Header` / `Sidebar.Body` /
- * `Sidebar.Footer` under a root that owns the drawer-scoped actions. Header and
- * footer float transparently over the body, which scrolls underneath them.
- * Without children it renders the standard composition, so the drawer layout
- * can stay a thin adapter.
- */
-function SidebarRoot({ children, navigation }: SidebarProps) {
+/** Drawer sidebar whose root owns the drawer-scoped actions. */
+export function Sidebar({ navigation }: SidebarProps) {
   const router = useRouter();
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
+  const { source, setViewMode, startRemoteChat } = useChatSource();
 
   const actions = useMemo<SidebarActions>(
     () => ({
       closeDrawer: () => navigation.closeDrawer(),
-      openSearch: () => {
-        navigation.closeDrawer();
-        openSessionSearch();
-      },
+      openSearch:
+        source === 'local'
+          ? () => {
+              navigation.closeDrawer();
+              openSessionSearch();
+            }
+          : undefined,
       navigateAgents: () => {
+        if (source === 'remote') {
+          setViewMode('agents');
+          return;
+        }
         navigation.closeDrawer();
         router.push('/agents');
       },
@@ -57,31 +58,20 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
       },
       startNewChat: () => {
         navigation.closeDrawer();
-        void startNewChat();
+        if (source === 'remote') startRemoteChat();
+        else void startNewChat();
       },
     }),
-    [navigation, openSessionSearch, router, startNewChat],
+    [navigation, openSessionSearch, router, source, setViewMode, startRemoteChat, startNewChat],
   );
 
   return (
     <SidebarActionsContext value={actions}>
       <View className="flex-1" testID="sidebar">
-        {children ?? (
-          <>
-            <SidebarBody />
-            <SidebarHeader />
-            <SidebarFooter />
-          </>
-        )}
+        <SidebarBody />
+        <SidebarHeader />
+        <SidebarFooter />
       </View>
     </SidebarActionsContext>
   );
 }
-
-SidebarRoot.displayName = 'Sidebar';
-
-export const Sidebar = Object.assign(SidebarRoot, {
-  Body: SidebarBody,
-  Footer: SidebarFooter,
-  Header: SidebarHeader,
-});

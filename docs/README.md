@@ -14,7 +14,7 @@ Guides are task-oriented procedures for changing or extending the application.
 | [Internationalization](./guides/internationalization.md) | Supported languages, shared resolution, translation resources, and PR checks |
 | [GitHub Plugin Authorization](./guides/github-plugin-authorization.md) | Publisher OAuth App configuration, in-app browser authorization, token renewal, and acceptance prerequisites |
 | [Local EAS Builds](./guides/local-builds.md) | Local installation packages, Sentry environment variables, and build profiles |
-| [Cloud Releases](./guides/cloud-releases.md) | EAS production builds, GitHub/GitCode APK releases, TestFlight uploads, and retry procedures |
+| [Cloud Releases](./guides/cloud-releases.md) | EAS production builds, GitHub/GitCode APK releases, Google Play AAB builds, TestFlight uploads, and retry procedures |
 | [Parallel Device Testing](./guides/parallel-device-testing.md) | Agent self-test preparation design, configuration and development-client reuse, Conductor device isolation, and cleanup |
 | [Testing And CI](./guides/testing-and-ci.md) | Focused checks, test value, local PR gates, and remote CI |
 | [UI Development](./guides/ui-development.md) | CherryUI ownership and reusable React component composition |
@@ -49,9 +49,10 @@ They are the source of truth for how the repository works today.
 | [Built-In MCP Integrations](./references/agent/built-in-mcp-design.md) | As-built GitHub, Amap and Feishu cloud MCP connectors, GitHub and Feishu browser authorization, the plugin registry and the six-platform scope |
 | [Built-In MCP Roadmap](./references/agent/built-in-mcp-roadmap.md) | Implemented authorization decisions and future multi-account, HTTP reuse, direct-API transport and instruction-resource designs |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Pi Agent provider resolution and non-conversation AI SDK generation |
-| [Backend AI Target Architecture](./references/ai/target-architecture.md) | As-built local AI structure and the planned PC Agent Controller boundary |
-| [Desktop AI Package Reuse](./references/ai/desktop-package-reuse.md) | Selective semantic ports, provider admission, Pi boundaries, and image-runtime reuse |
+| [Backend AI Target Architecture](./references/ai/target-architecture.md) | As-built local AI structure and the PC Agent Controller boundary |
+| [Desktop AI Package Reuse](./references/ai/desktop-package-reuse.md) | Published AI packages, provider admission, Pi boundaries, and image-runtime reuse |
 | [Provider Serving Boundaries](./references/ai/provider-serving-boundaries.md) | Shared Provider connection facts and capability-specific language and image execution boundaries |
+| [Background Activity Presentation](./references/background-activity-presentation.md) | Live Activity and notification presentation windows, settled-surface retirement, and per-destination limits |
 | [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Agent Session streaming, message windows, persistence, and rendering boundaries |
 | [Chat Input Interaction](./references/chat/input-interaction.md) | Scoped keyboard and selection rules that preserve existing composer design and animations; native acceptance pending |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
@@ -62,6 +63,7 @@ They are the source of truth for how the repository works today.
 | [Job Runtime](./references/job-runtime.md) | Durable job ledger, dispatch, cancellation, recovery, and painting generation |
 | [Lifecycle](./references/lifecycle/README.md) | Service host, startup phases, teardown, and resource-scope coordination |
 | [Storage Engine](./references/data/storage-engine.md) | Current SQLite engine, workarounds, and migration criteria |
+| [Remote Access](./references/remote-access/README.md) | Plan for pairing, configuration sync, and Agent access over the desktop's encrypted channel |
 | [Web Search](./references/web-search.md) | External search providers and provider-native web search |
 
 ## Documentation Governance

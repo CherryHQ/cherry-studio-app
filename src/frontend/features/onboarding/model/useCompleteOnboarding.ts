@@ -112,7 +112,10 @@ export function useCompleteOnboarding() {
       } else {
         agent = await createAgent({
           avatar: CHERRY_AGENT_AVATAR,
-          disabledCapabilities: [...DEFAULT_DISABLED_AGENT_CAPABILITIES],
+          // The default Agent can manage Agents; other new Agents opt in from the editor.
+          disabledCapabilities: DEFAULT_DISABLED_AGENT_CAPABILITIES.filter(
+            (capability) => capability !== 'agents',
+          ),
           modelId,
           name: t('agent.default.name'),
         });
