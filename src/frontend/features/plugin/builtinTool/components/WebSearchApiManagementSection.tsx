@@ -19,7 +19,6 @@ import {
 import { getWebSearchProviderDetailSections } from '../utils/providerSettings';
 
 type WebSearchApiManagementSectionProps = {
-  afterItems?: React.ReactNode;
   capability: WebSearchCapability;
   children: React.ReactNode;
   onProviderOverrideChange: (
@@ -31,7 +30,6 @@ type WebSearchApiManagementSectionProps = {
 };
 
 export function WebSearchApiManagementSection({
-  afterItems,
   capability,
   children,
   onProviderOverrideChange,
@@ -78,7 +76,6 @@ export function WebSearchApiManagementSection({
         {sections.map((section) => (
           <WebSearchApiServiceFieldGroup key={section.type} section={section} />
         ))}
-        {afterItems}
       </Section>
     </WebSearchApiManagementContext>
   );

@@ -8,7 +8,7 @@ This page tree owns the settings home and every page reached beneath `/settings`
 - Reusable model selection lives in `src/frontend/components/ModelPicker`; settings screens consume
   that module instead of owning it.
 - The page shell shared by settings child pages lives in `components/SettingsScrollPage`.
-- Provider and MCP share the settings-local row from `components/SettingsServiceRow`.
+- Provider pages use the settings-local row from `components/SettingsServiceRow`.
 - The option shape shared by settings child pages lives in `settingOption.ts`.
 - Generic rows, selectors, pickers, chips, buttons, and selection marks come from CherryUI. Provider,
   model, profile, and Agent visual identity comes from `src/frontend/components/Avatar`.
@@ -25,5 +25,5 @@ This page tree owns the settings home and every page reached beneath `/settings`
   direct child page.
 - `appearance/` is presented as General settings and owns theme, app language, font size, and Share
   watermark settings. It retains the existing `/settings/appearance` route.
-- `model/`, `mcp/`, `provider/`, and `webSearch/` remain under `settings/` because they implement
-  `/settings/*` page flows. Their own nested routes continue as child directories.
+- `model/` and `provider/` remain under `settings/` because they implement `/settings/*` page flows.
+  Their own nested routes continue as child directories.

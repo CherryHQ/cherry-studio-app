@@ -11,6 +11,13 @@ owns their navigation flow instead of being promoted into flat domain modules.
 
 ```text
 features/
+  plugin/
+    PluginListScreen.tsx
+    builtinTool/
+      BuiltinToolScreen.tsx
+    mcpServer/
+      McpServerScreen.tsx
+      components/
   settings/
     SettingsScreen.tsx
     components/
@@ -18,11 +25,6 @@ features/
     appearance/
       AppearanceSettingsScreen.tsx
       components/
-    mcp/
-      McpScreen.tsx
-      server/
-        McpServerScreen.tsx
-        components/
     provider/
       ProviderListScreen.tsx
       catalog/
@@ -60,10 +62,13 @@ The implementation name may use repository `camelCase` conventions even when the
 - `library/`: file library page.
 - `onboarding/`: onboarding page.
 - `paintings/`: painting composer plus `viewer/` and `viewer/conversation/` child pages.
+- `plugin/`: the Plugins page, grouping plugins, user-added MCP servers, and built-in tools, plus
+  plugin detail, connection, MCP server (`mcpServer/`), and built-in tool (`builtinTool/`) child
+  pages.
 - `search/`: transient search result page; its cross-page request session lives in
   `appShell/search`.
-- `settings/`: settings home and all settings child pages, including provider, model, MCP, and web
-  search configuration.
+- `settings/`: settings home and all settings child pages, including provider and model
+  configuration.
 
 `src/frontend/features` is intentionally page-shaped. It must not become a flat collection of product
 domains or a home for non-page application infrastructure.

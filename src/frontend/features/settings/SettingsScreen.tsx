@@ -5,17 +5,14 @@ import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
 import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import PackageIcon from '@cherrystudio/app-icons/icons/package';
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import ShieldIcon from '@cherrystudio/app-icons/icons/shield';
-import { Image, Section } from '@cherrystudio/ui/components';
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
+import { Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePreference } from '@/frontend/data/hooks';
@@ -28,10 +25,8 @@ export default function SettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { theme } = useUniwind();
   const [userName] = usePreference('app.user.name');
   const { openProviderList, prepareProviderList } = useProviderListNavigation();
-  const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
 
   const openProfileSettings = useCallback(() => {
     router.push('/settings/profile');
@@ -63,25 +58,6 @@ export default function SettingsScreen() {
             />
           </Section>
           <Section>
-            <Section.Item
-              label={t('settings.items.webSearch')}
-              leading={<SearchIcon className="size-4 text-foreground" />}
-              onPress={() => router.push('/settings/websearch')}
-            />
-            <Section.Item
-              label={t('settings.items.mcp')}
-              leading={
-                mcpIcon ? (
-                  <Image
-                    cachePolicy="memory-disk"
-                    className="size-4"
-                    contentFit="contain"
-                    source={mcpIcon}
-                  />
-                ) : null
-              }
-              onPress={() => router.push('/settings/mcp')}
-            />
             <DocumentParserSetting />
           </Section>
           <Section>

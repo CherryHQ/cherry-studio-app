@@ -12,8 +12,9 @@ import type {
   WebSearchProviderOverride,
 } from '@/shared/data/types/webSearch';
 
-import type { SettingOption } from '../../settingOption';
 import { mergeWebSearchProviderOverride } from '../utils/providerSettings';
+
+type SettingOption<TValue extends string> = { label: string; value: TValue };
 
 const preferenceMapping = {
   compressionCutoffLimit: 'chat.web_search.compression.cutoff_limit',

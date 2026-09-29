@@ -14,8 +14,13 @@
 
 ## Plugins
 
-The chat drawer's **Plugins** page manages connected accounts and authorization. Connecting a plugin
-makes its permitted tools available to every Agent without further configuration. To explicitly
+The chat drawer's **Plugins** page is the single entry for what Agents can reach. It has three
+groups: plugins; MCP, which lists user-added servers (each opening its editor at
+`/plugins/mcp/[serverId]`) and ends with a **Custom** entry that creates one; and built-in tools. Web
+search and URL fetch are built-in tools with their own pages under `/plugins/tools/*`, laid out like
+a plugin's page. Grouping changes no availability rule. The page manages plugin connected accounts
+and authorization. Connecting a plugin makes its permitted tools available to every Agent without
+further configuration. To explicitly
 request a plugin for one message, choose **+ > Plugins** in the composer. The add menu closes before
 a compact plugin list appears above the input, keeping the keyboard and draft available. The list
 has no title, search field, or

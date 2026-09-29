@@ -151,12 +151,9 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           headers: dto.value.headers,
         });
         const name = serverInfo.title?.trim() || serverInfo.name.trim() || dto.value.name;
-        const createdServer = await createServer({ ...dto.value, isEnabled: true, name });
-        setIsEditing(false);
-        router.replace({
-          params: { serverId: createdServer.id },
-          pathname: '/settings/mcp/[serverId]',
-        });
+        await createServer({ ...dto.value, isEnabled: true, name });
+        // The new server joins the Plugins page's MCP group; opening it from there edits it.
+        router.back();
       }
     } catch (error) {
       logger.error('Failed to save MCP server', error as Error);
