@@ -20,12 +20,8 @@ import {
   getAccountCapabilities,
   type ProviderAccountDefinition,
 } from './providerAccountDefinition';
-import {
-  providerAccountStorage,
-  type StoredProviderAccount,
-  type PendingProviderAuthorization,
-} from './providerAccountStorage';
-import { providerAccountError } from './providerOauth';
+import { providerAccountStorage, type StoredProviderAccount } from './providerAccountStorage';
+import { providerAccountError, type ProviderOauthApplication } from './providerOauth';
 
 const SIGNED_OUT: ProviderAccountStatus = {
   signedIn: false,
@@ -35,6 +31,16 @@ const SIGNED_OUT: ProviderAccountStatus = {
   updatedAt: null,
 };
 type AccountProvider = Awaited<ReturnType<ProviderAccountService['get']>>;
+/** Held in memory only: if the app is killed during sign-in, the user signs in again. */
+type PendingAuthorization = {
+  definitionId: string;
+  application: ProviderOauthApplication;
+  state: string;
+  verifier: string;
+  providerId: string;
+  providerCreatedAt: number;
+  expiresAt: number;
+};
 function accountStatus(account: StoredProviderAccount | null): ProviderAccountStatus {
   return account?.authorized
     ? {
@@ -58,6 +64,7 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
   private stopped = false;
   private tail: Promise<unknown> = Promise.resolve();
   private active: AbortController | undefined;
+  private pending: PendingAuthorization | undefined;
   private readonly callbacks = new Map<string, Promise<string | null>>();
   private readonly refreshes = new Map<string, Promise<ProviderAccountStatus>>();
 
@@ -86,10 +93,10 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
   begin(providerId: string) {
     return this.run(async (signal) => {
       const { provider, definition } = await this.requireProvider(providerId);
-      const application = definition.getApplication();
+      const { application } = definition;
       const challenge = await definition.oauth.challenge(application);
       signal.throwIfAborted();
-      await providerAccountStorage.writePending({
+      this.pending = {
         definitionId: definition.id,
         application,
         providerId,
@@ -97,7 +104,7 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
         state: challenge.state,
         verifier: challenge.verifier,
         expiresAt: Date.now() + 10 * 60_000,
-      });
+      };
       this.callbacks.clear();
       return {
         attemptId: challenge.state,
@@ -109,8 +116,7 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
 
   cancel(attemptId: string) {
     return this.run(async () => {
-      const pending = await providerAccountStorage.readPending();
-      if (pending?.state === attemptId) await providerAccountStorage.writePending(null);
+      if (this.pending?.state === attemptId) this.pending = undefined;
     });
   }
 
@@ -126,9 +132,6 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
       !state ||
       !/^[\w-]{43}$/.test(state) ||
       url.searchParams.getAll('state').length !== 1 ||
-      !['cherrystudio:', 'cherrystudio-dev:', 'cherrystudio-preview:'].includes(url.protocol) ||
-      url.host !== 'oauth' ||
-      url.pathname !== '/callback' ||
       url.username ||
       url.password ||
       url.hash ||
@@ -140,17 +143,20 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
     const previous = this.callbacks.get(url.href);
     if (previous) return previous;
     const completion = this.run(async (signal) => {
-      const pending = await providerAccountStorage.readPending();
+      const { pending } = this;
       if (!pending || pending.state !== state) throw new ProviderAccountError('callback');
-      if (url.protocol !== new URL(pending.application.redirectUrl).protocol)
+      // Each provider owns its registered callback; another provider's route cannot complete it.
+      const expected = new URL(pending.application.redirectUrl);
+      if (
+        url.protocol !== expected.protocol ||
+        url.host !== expected.host ||
+        url.pathname !== expected.pathname
+      )
         throw new ProviderAccountError('callback');
-      if (pending.expiresAt < Date.now()) {
-        await providerAccountStorage.writePending(null);
-        throw new ProviderAccountError('callback');
-      }
+      this.pending = undefined;
+      if (pending.expiresAt < Date.now()) throw new ProviderAccountError('callback');
       const code = url.searchParams.get('code');
       const error = url.searchParams.get('error');
-      await providerAccountStorage.writePending(null);
       if (error === 'access_denied' && !code) return null;
       if (!code || error || code.length > 16_384) throw new ProviderAccountError('callback');
       await this.completeLogin(pending, code, signal);
@@ -262,8 +268,7 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
   }
 
   private async clearAccount(providerId: string, account: StoredProviderAccount | null) {
-    const pending = await providerAccountStorage.readPending();
-    if (pending?.providerId === providerId) await providerAccountStorage.writePending(null);
+    if (this.pending?.providerId === providerId) this.pending = undefined;
     if (!account) return;
     await providerAccountStorage.writeAccount(providerId, null);
     try {
@@ -286,11 +291,7 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
     return account;
   }
 
-  private async completeLogin(
-    pending: PendingProviderAuthorization,
-    code: string,
-    signal: AbortSignal,
-  ) {
+  private async completeLogin(pending: PendingAuthorization, code: string, signal: AbortSignal) {
     const { provider, definition } = await this.requireProvider(pending.providerId);
     if (provider.createdAt !== pending.providerCreatedAt || definition.id !== pending.definitionId)
       throw new ProviderAccountError('callback');
@@ -342,6 +343,7 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
     this.stopped = true;
     this.active?.abort();
     await this.tail;
+    this.pending = undefined;
     this.callbacks.clear();
     this.refreshes.clear();
   }

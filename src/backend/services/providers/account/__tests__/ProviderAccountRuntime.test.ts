@@ -2,11 +2,7 @@ import { ProviderAccountError } from '@/shared/contracts';
 
 import type { ProviderAccountDefinition } from '../providerAccountDefinition';
 import { ProviderAccountRuntime } from '../ProviderAccountRuntime';
-import {
-  providerAccountStorage,
-  type StoredProviderAccount,
-  type PendingProviderAuthorization,
-} from '../providerAccountStorage';
+import { providerAccountStorage, type StoredProviderAccount } from '../providerAccountStorage';
 
 jest.mock('@/backend/services/http', () => ({
   createHttpClient: () => ({}),
@@ -16,22 +12,13 @@ jest.mock('../providerAccountStorage', () => ({
   providerAccountStorage: {
     readAccount: jest.fn(),
     writeAccount: jest.fn(),
-    readPending: jest.fn(),
-    writePending: jest.fn(),
   },
-}));
-jest.mock('expo-constants', () => ({
-  __esModule: true,
-  default: { expoConfig: { scheme: 'cherrystudio-dev' } },
 }));
 const oauth = { challenge: jest.fn(), exchange: jest.fn(), refresh: jest.fn(), revoke: jest.fn() };
 const definition = {
   id: 'fixture',
   oauth,
-  getApplication: () => ({
-    clientId: 'public-client',
-    redirectUrl: 'cherrystudio-dev://oauth/callback' as const,
-  }),
+  application: { clientId: 'public-client', redirectUrl: 'cherrystudio://oauth/callback' },
   getApiKeys: jest.fn(),
   getBalance: jest.fn(),
   getProfile: jest.fn(),
@@ -39,23 +26,17 @@ const definition = {
 
 const providerId = 'installed-provider';
 const state = 'a'.repeat(43);
-const callback = `cherrystudio-dev://oauth/callback?state=${state}&code=one-use-code`;
-let pending: PendingProviderAuthorization | null;
+const callback = `cherrystudio://oauth/callback?state=${state}&code=one-use-code`;
 let account: StoredProviderAccount | null;
 let runtime: ProviderAccountRuntime;
 let store: { get: jest.Mock; replaceKeys: jest.Mock };
 
 beforeEach(() => {
   jest.resetAllMocks();
-  pending = null;
   account = null;
   jest.mocked(providerAccountStorage.readAccount).mockImplementation(async () => account);
   jest.mocked(providerAccountStorage.writeAccount).mockImplementation(async (_id, value) => {
     account = value;
-  });
-  jest.mocked(providerAccountStorage.readPending).mockImplementation(async () => pending);
-  jest.mocked(providerAccountStorage.writePending).mockImplementation(async (value) => {
-    pending = value;
   });
   jest.mocked(oauth.challenge).mockResolvedValue({
     state,
@@ -89,33 +70,39 @@ beforeEach(() => {
 });
 afterEach(async () => {
   await runtime._doStop();
+  jest.restoreAllMocks();
 });
 
-it('rejects wrong state, profile scheme and duplicate codes without consuming a legitimate attempt', async () => {
+it('rejects wrong state, another callback and duplicate codes without consuming a legitimate attempt', async () => {
   await runtime.begin(providerId);
   for (const url of [
     callback.replace(state, 'b'.repeat(43)),
-    callback.replace('cherrystudio-dev:', 'cherrystudio:'),
+    callback.replace('cherrystudio:', 'cherrystudio-dev:'),
+    callback.replace('oauth/callback', 'oauth/other'),
     `${callback}&code=second`,
   ]) {
     await expect(runtime.receiveRedirect(url)).rejects.toMatchObject({ reason: 'callback' });
   }
   expect(oauth.exchange).not.toHaveBeenCalled();
-  expect(pending?.state).toBe(state);
   await expect(runtime.receiveRedirect(callback)).resolves.toBe(providerId);
 });
 
-it('completes a persisted cold-start attempt once when browser and router both deliver it', async () => {
+it('completes an attempt once when browser and router both deliver it', async () => {
   await runtime.begin(providerId);
-  const coldRuntime = new ProviderAccountRuntime();
-  coldRuntime.configure(store, [definition]);
-  const first = coldRuntime.receiveRedirect(callback);
-  expect(coldRuntime.receiveRedirect(callback)).toBe(first);
+  const first = runtime.receiveRedirect(callback);
+  expect(runtime.receiveRedirect(callback)).toBe(first);
   await expect(first).resolves.toBe(providerId);
   expect(oauth.exchange).toHaveBeenCalledTimes(1);
-  expect(pending).toBeNull();
-  expect(await coldRuntime.getStatus(providerId)).toMatchObject({ signedIn: true });
-  await coldRuntime._doStop();
+  expect(await runtime.getStatus(providerId)).toMatchObject({ signedIn: true });
+});
+
+it('does not complete an attempt started before the app restarted', async () => {
+  await runtime.begin(providerId);
+  const restarted = new ProviderAccountRuntime();
+  restarted.configure(store, [definition]);
+  await expect(restarted.receiveRedirect(callback)).rejects.toMatchObject({ reason: 'callback' });
+  expect(oauth.exchange).not.toHaveBeenCalled();
+  await restarted._doStop();
 });
 
 it('keeps the previous account when model key retrieval or the database write fails', async () => {
@@ -193,9 +180,13 @@ it('prevents an in-flight login from restoring an account after logout', async (
 
 it('discards expired or cancelled attempts without exchanging a code', async () => {
   const attempt = await runtime.begin(providerId);
-  pending!.expiresAt = Date.now() - 1;
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 10 * 60_000 + 1);
   await expect(runtime.receiveRedirect(callback)).rejects.toMatchObject({ reason: 'callback' });
-  expect(pending).toBeNull();
+  clock.mockRestore();
+  await expect(runtime.receiveRedirect(`${callback}&iss=retry`)).rejects.toMatchObject({
+    reason: 'callback',
+  });
   await runtime.begin(providerId);
   await runtime.cancel(attempt.attemptId);
   await expect(runtime.receiveRedirect(callback)).rejects.toMatchObject({ reason: 'callback' });

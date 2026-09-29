@@ -4,10 +4,9 @@ import { createHttpClient } from '@/backend/services/http';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 
 import type { ProviderAccountDefinition } from '../providerAccountDefinition';
-import { createProviderOauthClient, getProviderOauthApplication } from '../providerOauth';
+import { createProviderOauthClient } from '../providerOauth';
 
 const ACCOUNT_HOST = 'https://open.cherryin.ai';
-const CLIENT_ID = '2a348c87-bae1-4756-a62f-b2e97200fd6d';
 const http = createHttpClient({ baseUrl: ACCOUNT_HOST, timeoutMs: 15_000 });
 const key = z.string().min(1).max(16_384).regex(/^\S+$/);
 const ApiKeySchema = z
@@ -47,7 +46,10 @@ async function request(path: string, token: string, signal: AbortSignal) {
 
 export const cherryInAccountDefinition = {
   id: 'cherryin',
-  getApplication: () => getProviderOauthApplication(CLIENT_ID),
+  application: {
+    clientId: '2a348c87-bae1-4756-a62f-b2e97200fd6d',
+    redirectUrl: 'cherrystudio://oauth/callback',
+  },
   oauth: createProviderOauthClient({
     authorizationUrl: `${ACCOUNT_HOST}/oauth2/auth`,
     tokenUrl: `${ACCOUNT_HOST}/oauth2/token`,

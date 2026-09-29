@@ -17,7 +17,7 @@ jest.mock('expo-crypto', () => ({
 const values = new Map<string, string>();
 const account: StoredProviderAccount = {
   definitionId: 'fixture',
-  application: { clientId: 'public-client', redirectUrl: 'cherrystudio-dev://oauth/callback' },
+  application: { clientId: 'public-client', redirectUrl: 'cherrystudio://oauth/callback' },
   tokens: { accessToken: 'account-access', refreshToken: 'account-refresh' },
   providerCreatedAt: 100,
   ownedKeys: [{ id: 'key', key: 'model-key', isEnabled: true }],
@@ -39,23 +39,12 @@ beforeEach(() => {
   });
 });
 
-it('round-trips account grants per provider and persists PKCE attempts for cold-start completion', async () => {
+it('round-trips account grants per provider', async () => {
   await providerAccountStorage.writeAccount('provider', account);
   await providerAccountStorage.writeAccount('provider-copy', {
     ...account,
     balance: { amount: 2.5, currency: 'USD' },
   });
-  const pending = {
-    definitionId: account.definitionId,
-    application: account.application,
-    providerId: 'provider',
-    providerCreatedAt: 100,
-    state: 'state',
-    verifier: 'verifier',
-    expiresAt: 600000,
-  };
-  await providerAccountStorage.writePending(pending);
-  expect(await providerAccountStorage.readPending()).toEqual(pending);
   expect(await providerAccountStorage.readAccount('provider')).toEqual(account);
   expect(SecureStore.setItemAsync).toHaveBeenCalledWith(expect.any(String), expect.any(String), {
     keychainAccessible: 'device-only',

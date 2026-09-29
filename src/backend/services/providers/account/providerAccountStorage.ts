@@ -7,7 +7,6 @@ import { ProviderAccountError } from '@/shared/contracts';
 import { ProviderOauthApplicationSchema, ProviderOauthTokensSchema } from './providerOauth';
 
 const OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
-const PENDING_KEY = 'provider-authorization-pending';
 const KeySchema = z.object({
   id: z.string(),
   key: z.string(),
@@ -30,17 +29,6 @@ export const StoredProviderAccountSchema = z.object({
   updatedAt: z.number().nullable(),
 });
 export type StoredProviderAccount = z.infer<typeof StoredProviderAccountSchema>;
-
-const PendingSchema = z.object({
-  definitionId: z.string().min(1),
-  application: ProviderOauthApplicationSchema,
-  state: z.string(),
-  verifier: z.string(),
-  providerId: z.string(),
-  providerCreatedAt: z.number(),
-  expiresAt: z.number(),
-});
-export type PendingProviderAuthorization = z.infer<typeof PendingSchema>;
 
 async function accountKey(providerId: string) {
   return `provider-account.${await digestStringAsync(CryptoDigestAlgorithm.SHA256, providerId)}`;
@@ -71,6 +59,4 @@ export const providerAccountStorage = {
   async writeAccount(providerId: string, account: StoredProviderAccount | null) {
     await write(await accountKey(providerId), account);
   },
-  readPending: () => read(PENDING_KEY, PendingSchema),
-  writePending: (pending: PendingProviderAuthorization | null) => write(PENDING_KEY, pending),
 };

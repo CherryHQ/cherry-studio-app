@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import {
   CryptoDigestAlgorithm,
   CryptoEncoding,
@@ -11,14 +10,9 @@ import { createHttpClient, isHttpError } from '@/backend/services/http';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 
 const secret = z.string().min(1).max(16_384).regex(/^\S+$/);
-const NativeSchemeSchema = z.enum(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview']);
 export const ProviderOauthApplicationSchema = z.object({
   clientId: z.string().min(1).max(256).regex(/^\S+$/),
-  redirectUrl: z.enum([
-    'cherrystudio://oauth/callback',
-    'cherrystudio-dev://oauth/callback',
-    'cherrystudio-preview://oauth/callback',
-  ]),
+  redirectUrl: z.string().min(1).max(2048).regex(/^\S+$/),
 });
 export type ProviderOauthApplication = z.infer<typeof ProviderOauthApplicationSchema>;
 export const ProviderOauthTokensSchema = z.object({
@@ -53,24 +47,6 @@ export function providerAccountError(error: unknown, signal?: AbortSignal): Prov
     );
   }
   return new ProviderAccountError('request');
-}
-
-function nativeScheme() {
-  const configured = Constants.expoConfig?.scheme;
-  const parsed = NativeSchemeSchema.safeParse(
-    Array.isArray(configured) ? configured[0] : configured,
-  );
-  if (!parsed.success) throw new ProviderAccountError('configuration');
-  return parsed.data;
-}
-
-export function getProviderOauthApplication(clientId: string): ProviderOauthApplication {
-  const parsed = ProviderOauthApplicationSchema.safeParse({
-    clientId,
-    redirectUrl: `${nativeScheme()}://oauth/callback`,
-  });
-  if (!parsed.success) throw new ProviderAccountError('configuration');
-  return parsed.data;
 }
 
 const base64Url = (value: string) =>

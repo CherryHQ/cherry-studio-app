@@ -1,15 +1,9 @@
 import { createHash } from 'node:crypto';
 
-import Constants from 'expo-constants';
-
 import { HttpError } from '@/backend/services/http/HttpError';
 
-import { createProviderOauthClient, getProviderOauthApplication } from '../providerOauth';
+import { createProviderOauthClient } from '../providerOauth';
 
-jest.mock('expo-constants', () => ({
-  __esModule: true,
-  default: { expoConfig: { scheme: 'cherrystudio-dev' } },
-}));
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
   createHttpClient: ({ baseUrl }: { baseUrl: string }) => ({
@@ -27,7 +21,7 @@ jest.mock('expo-crypto', () => ({
 }));
 const application = {
   clientId: 'public-client',
-  redirectUrl: 'cherrystudio-dev://oauth/callback' as const,
+  redirectUrl: 'cherrystudio://oauth/callback',
 };
 const oauth = createProviderOauthClient({
   authorizationUrl: 'https://auth.provider.test/authorize',
@@ -42,10 +36,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-it('uses fresh S256 proofs with the active build callback and no verifier in the browser URL', async () => {
-  expect(getProviderOauthApplication(application.clientId).redirectUrl).toBe(
-    application.redirectUrl,
-  );
+it('uses fresh S256 proofs with the registered callback and no verifier in the browser URL', async () => {
   const first = await oauth.challenge(application);
   const second = await oauth.challenge(application);
   const url = new URL(first.authorizationUrl);
@@ -57,12 +48,6 @@ it('uses fresh S256 proofs with the active build callback and no verifier in the
   expect(url.searchParams.get('code_challenge_method')).toBe('S256');
   expect(first.state).not.toBe(second.state);
   expect(first.authorizationUrl).not.toContain(first.verifier);
-  jest.replaceProperty(Constants, 'expoConfig', {
-    name: 'Cherry',
-    slug: 'cherry',
-    scheme: 'unregistered',
-  });
-  expect(() => getProviderOauthApplication(application.clientId)).toThrow();
 });
 
 it('exchanges form-encoded PKCE credentials only with the fixed token endpoint', async () => {

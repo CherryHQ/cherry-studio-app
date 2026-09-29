@@ -10,7 +10,8 @@ export type ProviderAccountDefinition = {
   /** Registry preset identity; installed copies resolve through presetProviderId. */
   id: string;
   oauth: ProviderOauthClient;
-  getApplication(): ProviderOauthApplication;
+  /** The desktop app's registered client and callback; development builds cannot complete sign-in. */
+  application: ProviderOauthApplication;
   getApiKeys?(token: string, signal: AbortSignal): Promise<string[]>;
   getBalance?(token: string, signal: AbortSignal): Promise<ProviderAccountBalance>;
   getProfile?(
