@@ -21,9 +21,8 @@ The sidebar owns conversation browsing, rename, and individual deletion. There i
 Session history/management route or chat-header history action.
 
 The recent-list menu switches between a flat conversation list and conversations grouped by Agent.
-Only the current chat's Agent starts expanded, falling back to the first Agent when no chat is
-selected. Tapping an Agent's header toggles its conversations without navigating; multiple groups
-can stay open, and explicit toggles take precedence over the default. Only expanded groups query
+Every Agent group starts collapsed, including the current chat's. Tapping an Agent's header toggles
+its conversations without navigating; multiple groups can stay open. Only expanded groups query
 Sessions by their Agent id, show ten initially, and own independent "Load more" actions.
 Conversation rows share selection and navigation; status, rename and deletion are supplied by the
 source preview contract. Local previews retain these capabilities without opening transcripts.

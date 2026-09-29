@@ -19,7 +19,6 @@ import {
   useConversationSource,
   useConversationSourceState,
   useConversationPreview,
-  useConversationSummary,
 } from '@/frontend/appShell/conversation';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/appShell/navigation';
 import { conversationHref, useConversationTarget } from '@/frontend/appShell/navigation/chat';
@@ -83,14 +82,7 @@ function SidebarCatalog({
 
 function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
   const { t } = useTranslation();
-  const source = useConversationSource();
-  const navigation = useConversationTarget(source.ref);
-  const selected = useConversationSummary(navigation.sessionId);
   const query = useConversationAgents();
-  const currentAgentId =
-    navigation.agentId ??
-    selected.data?.agentId ??
-    (navigation.sessionId && selected.isPending ? undefined : query.items[0]?.id);
   if (query.isPending)
     return showLoading ? (
       <View className="py-4">
@@ -115,12 +107,7 @@ function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
   return (
     <View className="gap-2">
       {query.items.map((agent) => (
-        <SidebarAgentGroup
-          key={agent.id}
-          agent={agent}
-          isDefaultExpanded={agent.id === currentAgentId}
-          showLoading={showLoading}
-        />
+        <SidebarAgentGroup key={agent.id} agent={agent} showLoading={showLoading} />
       ))}
       {query.isError ? (
         <View className="px-2">
@@ -138,17 +125,9 @@ function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
   );
 }
 
-function SidebarAgentGroup({
-  agent,
-  isDefaultExpanded,
-  showLoading,
-}: {
-  agent: AgentSummary;
-  isDefaultExpanded: boolean;
-  showLoading: boolean;
-}) {
-  const [override, setOverride] = useState<boolean>();
-  const expanded = override ?? isDefaultExpanded;
+/** Every group starts collapsed; only the user's toggle expands one. */
+function SidebarAgentGroup({ agent, showLoading }: { agent: AgentSummary; showLoading: boolean }) {
+  const [expanded, setExpanded] = useState(false);
   return (
     <View testID={`sidebar-agent-group-${agent.id}`}>
       <View className="px-2">
@@ -157,7 +136,7 @@ function SidebarAgentGroup({
           accessibilityLabel={agent.name}
           accessibilityState={{ expanded }}
           testID={`sidebar-agent-${agent.id}`}
-          onPress={() => setOverride((value) => !(value ?? isDefaultExpanded))}
+          onPress={() => setExpanded((value) => !value)}
         >
           {({ pressed }) => (
             <SidebarRowContent
