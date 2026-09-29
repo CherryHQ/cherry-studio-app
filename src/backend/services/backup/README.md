@@ -28,6 +28,9 @@ wait or cancel. Capture refuses active chat/job execution, and a freeze keeps ne
 background jobs from starting while the SQLite backup API snapshots the database (including WAL
 data) and managed resources are copied. Jobs resume before compression. Missing original files fail
 export rather than silently producing an incomplete full backup.
+A finished export stays in the `exported` phase, carrying the archive URI and content counts,
+until `cancel()` dismisses it. Dismissing deletes the archive, as does starting the next export;
+the user keeps only copies saved or shared from it.
 
 Hashing is native and streaming; ZIP processing uses bounded chunks. Limits are 1 GiB compressed,
 1 GiB expanded and 10,000 payload entries, with a 4 MiB manifest. Free space is checked while copying
