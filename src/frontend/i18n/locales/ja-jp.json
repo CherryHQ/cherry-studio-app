@@ -1648,7 +1648,6 @@
   "settings.provider.models.detail.invalidFields": "変更されたモデル制限の表示名と正の整数を入力します。",
   "settings.provider.models.detail.maxInputTokens": "最大入力トークン",
   "settings.provider.models.detail.maxOutputTokens": "最大出力トークン",
-  "settings.provider.models.detail.modelId": "モデルID",
   "settings.provider.models.detail.name": "表示名",
   "settings.provider.models.detail.notes": "メモ",
   "settings.provider.models.detail.otherPurpose": "その他",

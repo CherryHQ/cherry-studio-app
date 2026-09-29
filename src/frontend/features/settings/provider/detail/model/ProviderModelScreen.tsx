@@ -1,9 +1,8 @@
-import CopyIcon from '@cherrystudio/app-icons/icons/copy';
-import { Button, Section, useToast } from '@cherrystudio/ui/components';
+import { Section, useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import type { Model } from '@/shared/data/types/model';
@@ -58,32 +57,29 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
       headerProps={{ title: t('settings.provider.models.detail.title') }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="gap-5 px-1">
+      <View className="gap-4 px-1">
         <View className="flex-row items-center gap-4">
           <ModelAvatar model={model} provider={provider} size={56} />
           <View className="min-w-0 flex-1 gap-1">
             <Text accessibilityRole="header" className="font-semibold text-foreground text-2xl">
               {model.name}
             </Text>
+            {model.modelId !== model.name ? (
+              <Pressable
+                accessibilityHint={t('settings.provider.models.detail.copyId')}
+                accessibilityRole="button"
+                className="self-start active:opacity-60"
+                hitSlop={8}
+                onPress={() => void copyModelId()}
+                testID="model-id-copy"
+              >
+                <Text className="font-mono text-muted-foreground text-sm">{model.modelId}</Text>
+              </Pressable>
+            ) : null}
             <Text className="text-muted-foreground text-sm">
               {provider.name} · {purpose}
             </Text>
           </View>
-        </View>
-        <View className="flex-row items-center gap-2 rounded-xl bg-secondary py-1 pr-1 pl-4">
-          <View className="min-w-0 flex-1 gap-1 py-2">
-            <Text className="text-muted-foreground text-xs">
-              {t('settings.provider.models.detail.modelId')}
-            </Text>
-            <Text className="font-mono text-foreground text-sm">{model.modelId}</Text>
-          </View>
-          <Button
-            accessibilityLabel={t('settings.provider.models.detail.copyId')}
-            icon={<CopyIcon />}
-            onPress={() => void copyModelId()}
-            size="lg"
-            variant="ghost"
-          />
         </View>
         {model.description?.trim() ? (
           <Text className="text-muted-foreground text-sm">{model.description}</Text>

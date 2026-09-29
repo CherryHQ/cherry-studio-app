@@ -1657,7 +1657,6 @@
   "settings.provider.models.detail.invalidFields": "Εισαγάγετε ένα εμφανιζόμενο όνομα και θετικούς ακέραιους αριθμούς για αλλαγμένα όρια μοντέλου.",
   "settings.provider.models.detail.maxInputTokens": "Μέγιστα διακριτικά εισόδου",
   "settings.provider.models.detail.maxOutputTokens": "Μέγιστα διακριτικά εξόδου",
-  "settings.provider.models.detail.modelId": "Αναγνωριστικό μοντέλου",
   "settings.provider.models.detail.name": "Εμφανιζόμενο όνομα",
   "settings.provider.models.detail.notes": "Σημειώσεις",
   "settings.provider.models.detail.otherPurpose": "Άλλο",

@@ -1657,7 +1657,6 @@
   "settings.provider.models.detail.invalidFields": "Enter a display name and positive whole numbers for changed model limits.",
   "settings.provider.models.detail.maxInputTokens": "Maximum input tokens",
   "settings.provider.models.detail.maxOutputTokens": "Maximum output tokens",
-  "settings.provider.models.detail.modelId": "Model ID",
   "settings.provider.models.detail.name": "Display name",
   "settings.provider.models.detail.notes": "Notes",
   "settings.provider.models.detail.otherPurpose": "Other",

@@ -1648,7 +1648,6 @@
   "settings.provider.models.detail.invalidFields": "Nhập tên hiển thị và số nguyên dương cho các giới hạn mẫu đã thay đổi.",
   "settings.provider.models.detail.maxInputTokens": "Mã thông báo đầu vào tối đa",
   "settings.provider.models.detail.maxOutputTokens": "Mã thông báo đầu ra tối đa",
-  "settings.provider.models.detail.modelId": "ID mô hình",
   "settings.provider.models.detail.name": "Tên hiển thị",
   "settings.provider.models.detail.notes": "Ghi chú",
   "settings.provider.models.detail.otherPurpose": "Khác",

@@ -1666,7 +1666,6 @@
   "settings.provider.models.detail.invalidFields": "Entrez un nom d'affichage et des nombres entiers positifs pour les limites de modèle modifiées.",
   "settings.provider.models.detail.maxInputTokens": "Nombre maximal de jetons d'entrée",
   "settings.provider.models.detail.maxOutputTokens": "Jetons de sortie maximum",
-  "settings.provider.models.detail.modelId": "ID du modèle",
   "settings.provider.models.detail.name": "Nom d'affichage",
   "settings.provider.models.detail.notes": "Remarques",
   "settings.provider.models.detail.otherPurpose": "Autre",

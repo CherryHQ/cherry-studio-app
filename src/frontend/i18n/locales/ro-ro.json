@@ -1666,7 +1666,6 @@
   "settings.provider.models.detail.invalidFields": "Introduceți un nume afișat și numere întregi pozitive pentru limitele de model modificate.",
   "settings.provider.models.detail.maxInputTokens": "Jetoane de intrare maxime",
   "settings.provider.models.detail.maxOutputTokens": "Jetoane de ieșire maxime",
-  "settings.provider.models.detail.modelId": "ID model",
   "settings.provider.models.detail.name": "Nume afișat",
   "settings.provider.models.detail.notes": "Note",
   "settings.provider.models.detail.otherPurpose": "Altele",

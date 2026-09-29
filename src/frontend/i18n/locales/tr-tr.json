@@ -1657,7 +1657,6 @@
   "settings.provider.models.detail.invalidFields": "Değiştirilen model sınırları için bir görünen ad ve pozitif tam sayılar girin.",
   "settings.provider.models.detail.maxInputTokens": "Maksimum giriş belirteçleri",
   "settings.provider.models.detail.maxOutputTokens": "Maksimum çıktı jetonları",
-  "settings.provider.models.detail.modelId": "Model Kimliği",
   "settings.provider.models.detail.name": "Görünen ad",
   "settings.provider.models.detail.notes": "Notlar",
   "settings.provider.models.detail.otherPurpose": "Diğer",

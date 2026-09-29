@@ -1657,7 +1657,6 @@
   "settings.provider.models.detail.invalidFields": "Geben Sie einen Anzeigenamen und positive ganze Zahlen für geänderte Modellgrenzen ein.",
   "settings.provider.models.detail.maxInputTokens": "Maximale Eingabe-Tokens",
   "settings.provider.models.detail.maxOutputTokens": "Maximale Ausgabe-Tokens",
-  "settings.provider.models.detail.modelId": "Modell-ID",
   "settings.provider.models.detail.name": "Anzeigename",
   "settings.provider.models.detail.notes": "Notizen",
   "settings.provider.models.detail.otherPurpose": "Sonstiges",

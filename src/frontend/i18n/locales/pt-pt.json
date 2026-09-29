@@ -1666,7 +1666,6 @@
   "settings.provider.models.detail.invalidFields": "Introduza um nome de visualização e números inteiros positivos para os limites de modelo alterados.",
   "settings.provider.models.detail.maxInputTokens": "Máximo de tokens de entrada",
   "settings.provider.models.detail.maxOutputTokens": "Máximo de tokens de saída",
-  "settings.provider.models.detail.modelId": "ID do modelo",
   "settings.provider.models.detail.name": "Nome de visualização",
   "settings.provider.models.detail.notes": "Notas",
   "settings.provider.models.detail.otherPurpose": "Outro",

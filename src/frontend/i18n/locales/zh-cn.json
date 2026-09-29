@@ -1648,7 +1648,6 @@
   "settings.provider.models.detail.invalidFields": "请输入显示名称，并将修改的模型上限填写为正整数。",
   "settings.provider.models.detail.maxInputTokens": "最大输入词元数",
   "settings.provider.models.detail.maxOutputTokens": "最大输出词元数",
-  "settings.provider.models.detail.modelId": "模型 ID",
   "settings.provider.models.detail.name": "显示名称",
   "settings.provider.models.detail.notes": "备注",
   "settings.provider.models.detail.otherPurpose": "其他用途",
