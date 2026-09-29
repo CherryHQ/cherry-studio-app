@@ -1303,6 +1303,7 @@
   "settings.documentParser.builtinDescription": "Extrait le texte uniquement, adapté aux résumés et aux questions-réponses pour les documents axés sur le texte. Utilisation réduite des jetons.",
   "settings.documentParser.saveFailed": "Impossible d'enregistrer l'analyseur de documents",
   "settings.documentParser.title": "Analyseur de documents",
+  "settings.exportWatermark.description": "Ajoute une marque Cherry Studio et l’heure en bas des images et documents que vous partagez ou exportez.",
   "settings.exportWatermark.saveFailed": "Impossible d’enregistrer le réglage du filigrane",
   "settings.exportWatermark.title": "Filigrane de partage",
   "settings.fontSize.level.extraLarge": "Très grand",

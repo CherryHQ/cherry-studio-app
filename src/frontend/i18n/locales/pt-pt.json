@@ -1303,6 +1303,7 @@
   "settings.documentParser.builtinDescription": "Apenas extrai texto, adequado para resumos e perguntas e respostas para documentos focados em texto. Menor utilização de token.",
   "settings.documentParser.saveFailed": "Não foi possível guardar o analisador do documento",
   "settings.documentParser.title": "Analisador de documentos",
+  "settings.exportWatermark.description": "Adiciona uma marca Cherry Studio e a hora na parte inferior das imagens e documentos que partilha ou exporta.",
   "settings.exportWatermark.saveFailed": "Não foi possível guardar a definição da marca de água",
   "settings.exportWatermark.title": "Marca de água na partilha",
   "settings.fontSize.level.extraLarge": "Extra grande",

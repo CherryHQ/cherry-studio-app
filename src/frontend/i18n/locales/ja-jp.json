@@ -1285,6 +1285,7 @@
   "settings.documentParser.builtinDescription": "テキストのみを抽出し、テキスト中心の文書の要約や Q&A に適しています。トークンの使用量が少なくなります。",
   "settings.documentParser.saveFailed": "ドキュメント パーサーを保存できませんでした",
   "settings.documentParser.title": "ドキュメントパーサー",
+  "settings.exportWatermark.description": "共有またはエクスポートする画像や文書の下部に、Cherry Studio のマークと時刻を追加します。",
   "settings.exportWatermark.saveFailed": "透かしの設定を保存できませんでした",
   "settings.exportWatermark.title": "共有時の透かし",
   "settings.fontSize.level.extraLarge": "特大",

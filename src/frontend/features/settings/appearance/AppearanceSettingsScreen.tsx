@@ -64,13 +64,13 @@ export default function AppearanceSettingsScreen() {
                 <Text className="text-right text-base text-foreground">
                   {t(FONT_SIZE_STEP_LABEL_KEYS[normalizedFontSizeStep])}
                 </Text>
-                <ChevronRightIcon className="size-5 text-foreground" />
+                <ChevronRightIcon className="size-5 text-muted-foreground" />
               </View>
             }
           />
         </Section>
 
-        <Section>
+        <Section footer={t('settings.exportWatermark.description')}>
           <Section.SwitchItem
             label={t('settings.exportWatermark.title')}
             onValueChange={changeWatermark}
