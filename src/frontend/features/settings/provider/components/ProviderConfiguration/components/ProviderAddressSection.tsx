@@ -174,10 +174,7 @@ function CustomAddressRows({
   const hiddenCount = CHAT_ENDPOINT_TYPES.length - endpoints.length;
 
   return (
-    <Section
-      footer={t('settings.provider.apiService.baseUrlHelp')}
-      title={t('settings.provider.config.apiAddress')}
-    >
+    <Section title={t('settings.provider.config.apiAddress')}>
       {endpoints.map((endpoint) => {
         const label = t(CUSTOM_ENDPOINT_LABEL_KEYS[endpoint as CustomProviderTextEndpoint]);
         const url = address.endpointUrls[endpoint]?.trim() ?? '';

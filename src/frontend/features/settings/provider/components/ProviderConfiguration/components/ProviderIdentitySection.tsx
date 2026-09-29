@@ -37,7 +37,8 @@ export function ProviderIdentitySection({ value }: { value: ProviderConfiguratio
 
   return (
     <>
-      <View className="flex-row items-center gap-4 px-1">
+      {/* Bottom-aligned so the name's underline meets the avatar's lower edge. */}
+      <View className="flex-row items-end gap-4 px-1">
         <AvatarImagePicker
           accessibilityLabel={t('settings.provider.add.setAvatar')}
           onBeforeOpen={Keyboard.dismiss}
@@ -68,7 +69,8 @@ export function ProviderIdentitySection({ value }: { value: ProviderConfiguratio
         <Pressable
           accessibilityHint={t('common.rename')}
           accessibilityRole="button"
-          className="min-w-0 flex-1 border-border-strong border-b py-1.5 active:opacity-70"
+          // Sized to the name rather than the row, so a short name keeps a short underline.
+          className="min-w-0 shrink border-border-strong border-b pb-1.5 active:opacity-70"
           disabled={value.isBusy}
           onPress={openRename}
           testID="provider-rename"
