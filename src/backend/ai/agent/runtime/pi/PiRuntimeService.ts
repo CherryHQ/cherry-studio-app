@@ -37,8 +37,6 @@ export class PiRuntimeService extends BaseService implements AgentRuntime, Langu
     this.runtime = new PiRuntime(
       createPiModelResolver({
         resolveAuth: (provider, signal) => this.providerAccounts.resolveAuth(provider, signal),
-        resolveCopilotAuto: (provider, sessionId, request, signal) =>
-          this.providerAccounts.resolveCopilotAuto(provider, sessionId, request, signal),
       }),
     );
   }

@@ -170,14 +170,7 @@ boundary. Streaming model requests keep the existing Expo fetch path.
 The Pi request binding retains canonical provider IDs and all resolved `apiKey`, `headers`, and
 `baseUrl` fields while usage attribution keeps the app instance ID. Five selective official model
 catalogs supply API/compatibility metadata; Copilot filters them by the account's available model
-IDs. Copilot also exposes the logical `auto` selection, including when no fixed models are available.
-The dedicated Copilot path calls `POST /auto` with the question and vision requirement, then reuses
-the selected model and `Copilot-Session-Token` within the conversation until expiry or incompatible
-vision needs. It reuses the existing Pi catalog's protocol/compatibility metadata and applies live
-token limits. Unknown models or incompatible protocols fail explicitly. The bounded in-memory cache
-is account-scoped and cleared on sign-out; tokens are redacted and never persisted. Credential
-resolution remains separate from routing. See the [official Auto routing implementation](https://github.com/microsoft/vscode/blob/main/extensions/copilot/src/platform/endpoint/node/autoV2Fetcher.ts).
-OpenRouter keeps ordinary API-key model discovery. Codex uses its dedicated Responses API over
+IDs. OpenRouter keeps ordinary API-key model discovery. Codex uses its dedicated Responses API over
 SSE. These account credentials currently serve conversation models; non-conversation AI SDK
 features retain their existing credential path.
 

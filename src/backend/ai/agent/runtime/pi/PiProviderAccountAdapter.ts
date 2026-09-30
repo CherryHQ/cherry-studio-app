@@ -31,13 +31,6 @@ import {
 } from '@/shared/contracts/providerAccounts';
 import { getPiOAuthProviderId, type PiOAuthProviderId } from '@/shared/data/providerOAuth';
 
-import type { RuntimeExecutionRequest } from '../types';
-import {
-  resolvePiCopilotAuto,
-  toPiCopilotAutoInput,
-  type PiCopilotAutoModel,
-} from './piCopilotAuto';
-
 const FLOWS: Record<PiOAuthProviderId, OAuthAuth> = {
   'github-copilot': githubCopilotOAuth,
   'kimi-coding': kimiCodingOAuth,
@@ -55,11 +48,10 @@ const SIGNED_OUT: ProviderAccountStatus = {
 };
 type AccountProvider = Awaited<ReturnType<ProviderAccountService['get']>>;
 
-const accountFetch = createProviderAccountFetch();
 const base64Url = (value: string) =>
   value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 configureOAuthPlatform({
-  fetch: accountFetch,
+  fetch: createProviderAccountFetch(),
   async generatePKCE() {
     const verifier = base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
     const challenge = base64Url(
@@ -76,15 +68,6 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
   private readonly tails = new Map<string, Promise<unknown>>();
   private readonly operations = new Map<string, Set<AbortController>>();
   private readonly work = new Set<Promise<unknown>>();
-  private readonly copilotModels = new Map<
-    string,
-    {
-      providerId: string;
-      providerCreatedAt: number;
-      apiKey?: string;
-      model: PiCopilotAutoModel;
-    }
-  >();
   private stopped = false;
 
   private providers: Pick<ProviderAccountService, 'get'> | undefined;
@@ -189,53 +172,6 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
     });
   }
 
-  async resolveCopilotAuto(
-    provider: ProviderAccountIdentity,
-    sessionId: string,
-    request: Pick<RuntimeExecutionRequest, 'input' | 'history'>,
-    signal?: AbortSignal,
-  ) {
-    return this.operation(provider.id, signal, async (operationSignal) => {
-      const identity = await this.providers!.get(provider.id);
-      const oauth = await this.resolveAuth(identity, operationSignal);
-      if (oauth?.id !== 'github-copilot') throw new ProviderAccountError('authorization');
-      const input = toPiCopilotAutoInput(request);
-      const key = JSON.stringify([provider.id, sessionId]);
-      const cached = this.copilotModels.get(key);
-      if (
-        cached?.providerCreatedAt === identity.createdAt &&
-        cached.apiKey === oauth.auth.apiKey &&
-        cached.model.expiresAt > Date.now() + 60_000 &&
-        (!input.hasImage || cached.model.model.input.includes('image'))
-      ) {
-        operationSignal.throwIfAborted();
-        return { oauth, autoModel: cached.model };
-      }
-      const autoModel = await resolvePiCopilotAuto(
-        oauth.auth,
-        input,
-        accountFetch,
-        operationSignal,
-      );
-      operationSignal.throwIfAborted();
-      if ((await this.providers!.get(provider.id)).createdAt !== identity.createdAt) {
-        throw new ProviderAccountError('cancelled');
-      }
-      operationSignal.throwIfAborted();
-      // Bound in-memory conversation tokens; account replacement/sign-out clears this provider.
-      if (this.copilotModels.size >= 64) {
-        this.copilotModels.delete(this.copilotModels.keys().next().value!);
-      }
-      this.copilotModels.set(key, {
-        providerId: provider.id,
-        providerCreatedAt: identity.createdAt,
-        apiKey: oauth.auth.apiKey,
-        model: autoModel,
-      });
-      return { oauth, autoModel };
-    });
-  }
-
   async refresh(providerId: string) {
     const provider = await this.providers!.get(providerId);
     await this.resolveAuth(provider);
@@ -250,7 +186,6 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
   async stop() {
     this.stopped = true;
     for (const id of this.operations.keys()) this.abort(id);
-    this.copilotModels.clear();
     await Promise.allSettled(this.work);
     await Promise.allSettled(this.tails.values());
   }
@@ -302,9 +237,6 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
 
   private abort(providerId: string) {
     for (const controller of this.operations.get(providerId) ?? []) controller.abort();
-    for (const [key, cached] of this.copilotModels) {
-      if (cached.providerId === providerId) this.copilotModels.delete(key);
-    }
   }
 
   private async operation<T>(
