@@ -146,6 +146,13 @@ The first five use the official device-code flows. OpenRouter uses official PKCE
 code/final-redirect-URL fallback; native apps do not create a loopback HTTP listener. Its browser
 opens externally so the final redirect URL can be copied.
 
+Copilot starts on `github.com` by default. Only the separate GitHub Enterprise action asks for a
+company domain. Codex chooses device-code login without exposing the upstream CLI method picker;
+Kimi Code, xAI/Grok, and Meta have no preliminary text input. OpenRouter retains the required manual
+authorization-result input with visible browser instructions. Catalog and saved-provider rows mark
+account sign-in support from `accounts.getCapabilities`, including preset-backed copies, rather
+than upstream catalog OAuth flags or the user's current signed-in state.
+
 `ProviderAccountRuntime` owns the public account workflow and teardown. `PiProviderAccountAdapter`
 is the native auth bridge inside the Pi zone: it adapts app HTTP/Expo crypto and supplies an
 instance-scoped `CredentialStore` backed by device-only SecureStore. OAuth credentials never become

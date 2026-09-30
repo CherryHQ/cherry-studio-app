@@ -101,6 +101,15 @@ export function ProviderAccountSection({
           trailing={busyIndicator}
         />
       )}
+      {!state.status.isPending && account.capabilities.enterpriseDomain ? (
+        <Section.Item
+          description={t('settings.provider.account.enterpriseLoginHint')}
+          disabled={state.busy}
+          label={t('settings.provider.account.enterpriseLogin')}
+          onPress={() => void state.login('enterprise')}
+          testID="provider-account-enterprise-login"
+        />
+      ) : null}
       {state.loginEvent?.type === 'device-code' ? (
         <Section.Item
           label={t('settings.provider.account.deviceCode')}

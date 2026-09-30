@@ -77,8 +77,15 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
   }
 
   getCapabilities(provider: ProviderAccountIdentity) {
-    return getPiOAuthProviderId(provider)
-      ? { signIn: true, apiKeys: false, balance: false, flow: 'interactive' as const }
+    const id = getPiOAuthProviderId(provider);
+    return id
+      ? {
+          signIn: true,
+          apiKeys: false,
+          balance: false,
+          flow: 'interactive' as const,
+          ...(id === 'github-copilot' ? { enterpriseDomain: true } : {}),
+        }
       : undefined;
   }
 

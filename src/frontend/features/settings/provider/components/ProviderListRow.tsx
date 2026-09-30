@@ -5,7 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { ProviderAvatar } from '@/frontend/components/Avatar';
+import { useBackendModule } from '@/frontend/data';
 import type { Provider } from '@/shared/data/types/provider';
+
+import { ProviderAccountBadge } from './ProviderAccountBadge';
 
 export const ProviderListRow = memo(function ProviderListRow({
   isEnabled,
@@ -21,18 +24,29 @@ export const ProviderListRow = memo(function ProviderListRow({
   provider: Provider;
 }) {
   const { t } = useTranslation();
+  const accounts = useBackendModule('providers').accounts;
+  const supportsSignIn = accounts.getCapabilities(provider).signIn;
   const statusLabel = t(
     isEnabled ? 'settings.provider.status.enabled' : 'settings.provider.status.disabled',
   );
 
   return (
     <Section.Item
-      accessibilityLabel={`${provider.name}, ${statusLabel}`}
+      accessibilityLabel={[
+        provider.name,
+        statusLabel,
+        supportsSignIn ? t('settings.provider.account.signInSupported') : undefined,
+      ]
+        .filter(Boolean)
+        .join(', ')}
       accessibilityState={{ busy: isPending }}
       label={
-        <Text className="text-base text-foreground" numberOfLines={1}>
-          {provider.name}
-        </Text>
+        <View className="min-w-0 flex-row items-center gap-2">
+          <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
+            {provider.name}
+          </Text>
+          {supportsSignIn ? <ProviderAccountBadge /> : null}
+        </View>
       }
       leading={
         <ProviderAvatar

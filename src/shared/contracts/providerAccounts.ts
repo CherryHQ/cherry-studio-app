@@ -8,6 +8,7 @@ export type ProviderAccountCapabilities = {
   apiKeys: boolean;
   balance: boolean;
   flow?: 'interactive';
+  enterpriseDomain?: boolean;
 };
 
 /** Credential-free interaction data; vendor protocol types stay inside the backend. */

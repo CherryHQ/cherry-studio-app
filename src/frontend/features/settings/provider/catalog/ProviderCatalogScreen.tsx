@@ -20,6 +20,7 @@ import type { ProviderCatalogEntry } from '@/shared/contracts';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { SettingsGroupedSeparator, SettingsServiceRow } from '../../components/SettingsServiceRow';
+import { ProviderAccountBadge } from '../components/ProviderAccountBadge';
 
 const CATALOG_ROW_ESTIMATED_HEIGHT = 56;
 const CUSTOM_PROVIDER_ITEM_ID = 'custom-provider' as const;
@@ -79,10 +80,21 @@ function ProviderCatalogRow({
   onChoose,
 }: ProviderCatalogRowProps) {
   const { t } = useTranslation();
+  const accounts = useBackendModule('providers').accounts;
+  const supportsSignIn = accounts.getCapabilities(entry).signIn;
   const onPress = onChoose ?? (entry.isInstalled ? onImport : undefined);
+  const statusLabel = entry.isEnabled ? t('settings.provider.status.enabled') : undefined;
+  const subtitle = onChoose ? entry.description : undefined;
 
   return (
     <SettingsServiceRow
+      accessibilityLabel={
+        supportsSignIn
+          ? [entry.name, statusLabel, subtitle, t('settings.provider.account.signInSupported')]
+              .filter(Boolean)
+              .join(', ')
+          : undefined
+      }
       avatar={
         <ProviderAvatar
           presetProviderId={entry.id}
@@ -93,10 +105,11 @@ function ProviderCatalogRow({
       id={entry.id}
       disabled={onPress ? importPending : undefined}
       name={entry.name}
+      nameAccessory={supportsSignIn ? <ProviderAccountBadge /> : undefined}
       onPress={onPress ? () => onPress(entry) : undefined}
-      statusLabel={entry.isEnabled ? t('settings.provider.status.enabled') : undefined}
+      statusLabel={statusLabel}
       statusTone="success"
-      subtitle={onChoose ? entry.description : undefined}
+      subtitle={subtitle}
       testID={`provider-catalog-entry-${entry.id}`}
       trailingAction={
         onChoose ? (
@@ -164,6 +177,7 @@ export default function ProviderCatalogScreen({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const providers = useBackendModule('providers');
+  const accounts = providers.accounts;
   const savedProviders = useDataQuery('/providers', { enabled: intent === 'chat' });
   const catalogQuery = useQuery({
     queryFn: providers.listCatalog,
@@ -285,32 +299,46 @@ export default function ProviderCatalogScreen({
       }));
   }, [intent, listedEntries, query, savedProviders.data, showsAllProviders, t]);
   const renderProviderRow = useCallback(
-    ({ item }: { item: ProviderCatalogItem }) => (
-      <CatalogCardSlice item={item}>
-        {item.type === 'custom' ? (
-          <CustomProviderCatalogRow onCreate={openCustomProvider} />
-        ) : item.type === 'saved' ? (
-          <SettingsServiceRow
-            avatar={<ProviderAvatar providerId={item.id} providerName={item.name} />}
-            disabled={importPending}
-            id={item.id}
-            name={item.name}
-            onPress={() => openProviderSetup(item)}
-            subtitle={t('onboarding.provider.continue')}
-            testID={`provider-catalog-entry-${item.id}`}
-          />
-        ) : (
-          <ProviderCatalogRow
-            entry={item}
-            importPending={importPending}
-            isPendingEntry={pendingProviderId === item.id}
-            onImport={handleImportProvider}
-            onChoose={intent === 'chat' ? handleImportProvider : undefined}
-          />
-        )}
-      </CatalogCardSlice>
-    ),
+    ({ item }: { item: ProviderCatalogItem }) => {
+      const supportsSavedSignIn = item.type === 'saved' && accounts.getCapabilities(item).signIn;
+      return (
+        <CatalogCardSlice item={item}>
+          {item.type === 'custom' ? (
+            <CustomProviderCatalogRow onCreate={openCustomProvider} />
+          ) : item.type === 'saved' ? (
+            <SettingsServiceRow
+              accessibilityLabel={
+                supportsSavedSignIn
+                  ? [
+                      item.name,
+                      t('onboarding.provider.continue'),
+                      t('settings.provider.account.signInSupported'),
+                    ].join(', ')
+                  : undefined
+              }
+              avatar={<ProviderAvatar providerId={item.id} providerName={item.name} />}
+              disabled={importPending}
+              id={item.id}
+              name={item.name}
+              nameAccessory={supportsSavedSignIn ? <ProviderAccountBadge /> : undefined}
+              onPress={() => openProviderSetup(item)}
+              subtitle={t('onboarding.provider.continue')}
+              testID={`provider-catalog-entry-${item.id}`}
+            />
+          ) : (
+            <ProviderCatalogRow
+              entry={item}
+              importPending={importPending}
+              isPendingEntry={pendingProviderId === item.id}
+              onImport={handleImportProvider}
+              onChoose={intent === 'chat' ? handleImportProvider : undefined}
+            />
+          )}
+        </CatalogCardSlice>
+      );
+    },
     [
+      accounts,
       handleImportProvider,
       importPending,
       intent,

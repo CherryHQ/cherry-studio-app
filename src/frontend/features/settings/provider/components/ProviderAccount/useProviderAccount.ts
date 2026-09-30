@@ -106,7 +106,7 @@ export function useProviderAccount(
     }
   }
 
-  const login = () =>
+  const login = (mode: 'default' | 'enterprise' = 'default') =>
     act(async () => {
       if (interactive) {
         const controller = new AbortController();
@@ -116,8 +116,10 @@ export function useProviderAccount(
           await accounts.signIn(providerId, {
             signal: controller.signal,
             notify: setLoginEvent,
-            prompt: (prompt) =>
-              new Promise((resolve, reject) => {
+            prompt: async (prompt) => {
+              // Ordinary Copilot accounts use github.com without an extra input step.
+              if (prompt.type === 'enterprise-domain' && mode === 'default') return '';
+              return new Promise<string>((resolve, reject) => {
                 const signal = prompt.signal ?? controller.signal;
                 const clear = () => {
                   signal.removeEventListener('abort', abort);
@@ -138,7 +140,8 @@ export function useProviderAccount(
                   resolve(value);
                 };
                 setLoginPrompt(prompt);
-              }),
+              });
+            },
           });
         } finally {
           loginController.current = null;

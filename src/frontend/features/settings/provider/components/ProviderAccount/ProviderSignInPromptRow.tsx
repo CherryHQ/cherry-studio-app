@@ -25,6 +25,11 @@ export function ProviderSignInPromptRow({
             : 'settings.provider.account.authorizationCode',
         )}
       </Text>
+      {!enterprise ? (
+        <Text className="text-sm text-muted-foreground">
+          {t('settings.provider.account.authorizationCodeHint')}
+        </Text>
+      ) : null}
       <Input
         accessibilityLabel={t(
           enterprise
@@ -34,14 +39,10 @@ export function ProviderSignInPromptRow({
         autoCapitalize="none"
         autoCorrect={false}
         onChangeText={setValue}
-        placeholder={t(
-          enterprise
-            ? 'settings.provider.account.enterpriseDomainHint'
-            : 'settings.provider.account.authorizationCodeHint',
-        )}
+        placeholder={enterprise ? t('settings.provider.account.enterpriseDomainHint') : undefined}
         value={value}
       />
-      <Button disabled={!enterprise && !value.trim()} onPress={() => onAnswer(value.trim())}>
+      <Button disabled={!value.trim()} onPress={() => onAnswer(value.trim())}>
         <Button.Label>{t('common.ok')}</Button.Label>
       </Button>
     </View>
