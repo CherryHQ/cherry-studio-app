@@ -212,7 +212,7 @@ function RemoteChatSession() {
               <ConversationStatus
                 availability={availability}
                 onRepair={() => router.push('/settings/device-connections')}
-                onEditAddresses={
+                onOpenDeviceSettings={
                   connectionId
                     ? () =>
                         router.push({

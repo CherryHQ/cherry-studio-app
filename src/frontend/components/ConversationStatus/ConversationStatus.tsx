@@ -16,17 +16,18 @@ const CONNECTION_MESSAGES: Partial<
 export function ConversationStatus({
   availability,
   onRepair,
-  onEditAddresses,
+  onOpenDeviceSettings,
 }: {
   availability: Availability;
   onRepair(): void;
-  onEditAddresses?: () => void;
+  onOpenDeviceSettings?: () => void;
 }) {
   const { t } = useTranslation();
   if (availability.state === 'enabled') return null;
   const repair = ['retired', 'needs-repair', 'not-authorized'].includes(availability.reason);
   const connectionMessage = CONNECTION_MESSAGES[availability.reason];
-  const editAddresses = onEditAddresses && (connectionMessage || availability.reason === 'offline');
+  const openDeviceSettings =
+    onOpenDeviceSettings && (connectionMessage || availability.reason === 'offline');
   return (
     <View className="flex-row items-center gap-2 px-4 py-2">
       <Text className="flex-1 text-sm text-muted-foreground">
@@ -46,9 +47,9 @@ export function ConversationStatus({
           {t('remoteAgent.repair')}
         </Button>
       ) : null}
-      {editAddresses ? (
-        <Button size="sm" variant="ghost" onPress={onEditAddresses}>
-          {t('settings.deviceConnections.location.edit')}
+      {openDeviceSettings ? (
+        <Button size="sm" variant="ghost" onPress={onOpenDeviceSettings}>
+          {t('settings.deviceConnections.title')}
         </Button>
       ) : null}
     </View>

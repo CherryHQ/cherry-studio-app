@@ -14,13 +14,10 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
-import type { DesktopConnectionsModule } from '@/shared/contracts';
+import type { DesktopConnectionsModule, DesktopPairingProgress } from '@/shared/contracts';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import {
   type DesktopImportSelectionsDto,
-  type DesktopPairingClaim,
-  type DesktopPairingQr,
-  DesktopPairingQrSchema,
   DesktopProvidersSnapshotSchema,
   type PairDesktopConnectionDto,
   PairDesktopConnectionSchema,
@@ -36,7 +33,14 @@ import {
 
 type ConnectionStore = Pick<
   DesktopConnectionService,
-  'getRow' | 'savePair' | 'remove' | 'updateStatus' | 'preview' | 'import'
+  | 'getRow'
+  | 'getById'
+  | 'savePair'
+  | 'remove'
+  | 'updateStatus'
+  | 'preview'
+  | 'import'
+  | 'addEndpoint'
 >;
 const EXCLUDED_PROVIDER_IDS = new Set([
   'cherryai',
@@ -96,16 +100,51 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   pair(
     input: PairDesktopConnectionDto,
     signal: AbortSignal,
-    onClaim?: (claim: DesktopPairingClaim) => void,
+    onProgress?: (progress: DesktopPairingProgress) => void,
   ) {
     return this.run('pair', signal, async (store, signal) => {
       const qr = PairDesktopConnectionSchema.parse(input);
       const id = qr.connectionId ?? Crypto.randomUUID();
-      if (qr.connectionId) await store.getRow(id);
+      const existing = qr.connectionId ? await store.getRow(id) : undefined;
+      if (existing && existing.desktopIdentity !== qr.desktopIdentity)
+        throw desktopError('identity-mismatch', 'This code belongs to a different desktop');
+      onProgress?.({ stage: 'connecting' });
       const session = await this.connect(qr, signal).catch((error: unknown) => {
         throw translate(error);
       });
       try {
+        if (existing) {
+          const authorization = await session
+            .authenticate(existing.deviceId, signal)
+            .catch((error) => {
+              if (error instanceof RemoteFailureError && error.reason === 'UNAUTHENTICATED')
+                return undefined;
+              throw error;
+            });
+          signal.throwIfAborted();
+          if (authorization) {
+            onProgress?.({ stage: 'saving' });
+            await store.updateStatus(
+              id,
+              { grants: authorization.grants, status: 'paired' },
+              signal,
+              existing,
+            );
+            this.connections!.invalidate(id);
+            this.connections!.seedLocation(
+              id,
+              qr.desktopIdentity,
+              qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
+            );
+            onProgress?.({ stage: 'syncing' });
+            await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
+            signal.throwIfAborted();
+            return store.getById(id);
+          }
+          await store.updateStatus(id, { status: 'needs-repair' }, signal, existing);
+          this.connections!.invalidate(id);
+        }
+        onProgress?.({ stage: 'requesting' });
         const claim = await session.request(
           'pairing.claim',
           {
@@ -117,10 +156,14 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           },
           signal,
         );
-        onClaim?.({ expiresAt: claim.expiresAt, verificationCode: claim.verificationCode });
+        onProgress?.({
+          stage: 'waiting',
+          claim: { expiresAt: claim.expiresAt, verificationCode: claim.verificationCode },
+        });
         for (;;) {
           const decision = await session.request('pairing.get', { claimId: claim.claimId }, signal);
           if (decision.status === 'approved') {
+            onProgress?.({ stage: 'saving' });
             const connection = await store.savePair(
               {
                 desktopIdentity: qr.desktopIdentity,
@@ -138,6 +181,8 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               qr.desktopIdentity,
               qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
             );
+            onProgress?.({ stage: 'syncing' });
+            await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
             return connection;
           }
           if (decision.status === 'rejected') {
@@ -159,18 +204,41 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     });
   }
 
-  updateLocation(id: string, input: DesktopPairingQr, signal: AbortSignal) {
-    return this.run('location', signal, async (store, signal) => {
-      const qr = DesktopPairingQrSchema.parse(input);
+  getEndpoints(id: string, signal: AbortSignal) {
+    return this.run('endpoints', signal, async (store, signal) => {
       const row = await store.getRow(id);
-      signal.throwIfAborted();
-      if (row.desktopIdentity !== qr.desktopIdentity)
-        throw desktopError('identity-mismatch', 'This code belongs to a different desktop');
-      this.connections!.seedLocation(
-        id,
-        row.desktopIdentity,
-        qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
-      );
+      const domain = row.grants[0]?.domain;
+      if (!domain) throw desktopError('auth-revoked', 'No approved capability');
+      const lease = await this.connections!.retain(id, domain, signal);
+      const readSignal = AbortSignal.any([signal, lease.signal]);
+      try {
+        const session = await lease.ready(readSignal);
+        const snapshot = await session.request('connection.endpoints', { domain }, readSignal);
+        if (snapshot.desktopIdentity !== row.desktopIdentity)
+          throw desktopError('identity-mismatch', 'The address belongs to a different desktop');
+        return snapshot.endpoints;
+      } catch (error) {
+        throw translate(error);
+      } finally {
+        lease.release();
+      }
+    });
+  }
+
+  saveEndpoint(id: string, input: DirectEndpoint, signal: AbortSignal) {
+    return this.run('save-endpoint', signal, async (store, signal) => {
+      const endpoint = directEndpointSchema.parse(input);
+      const row = await store.getRow(id);
+      if (row.status !== 'paired') throw desktopError('auth-revoked', 'Pairing needs repair');
+      try {
+        await this.connections!.verifyEndpoint(row, endpoint, signal);
+        signal.throwIfAborted();
+        await store.addEndpoint(id, endpoint, row, signal);
+        await this.connections!.refreshEndpoints(id);
+        return { endpoint, verifiedAt: Date.now() };
+      } catch (error) {
+        throw translate(error);
+      }
     });
   }
 

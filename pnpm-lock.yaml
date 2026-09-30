@@ -237,11 +237,11 @@ importers:
         specifier: workspace:*
         version: link:packages/provider-registry
       '@cherrystudio/remote-protocol':
-        specifier: 0.1.0
-        version: 0.1.0(zod@4.4.3)
+        specifier: 0.3.0
+        version: 0.3.0(zod@4.4.3)
       '@cherrystudio/remote-transport':
-        specifier: 0.1.0
-        version: 0.1.0(zod@4.4.3)
+        specifier: 0.1.2
+        version: 0.1.2(zod@4.4.3)
       '@cherrystudio/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -1722,13 +1722,13 @@ packages:
       typescript:
         optional: true
 
-  '@cherrystudio/remote-protocol@0.1.0':
-    resolution: {integrity: sha512-f0RA/cMJ1pY4V7YHo9WPyku93efDZBOpcAf+10bSuYD7Zty626Psq66cvtGiEU39JltKYZNRkD+cF/YEJiVHgA==}
+  '@cherrystudio/remote-protocol@0.3.0':
+    resolution: {integrity: sha512-dbMMXe5XcaIYED9cv+hgNlPnouIiXbGFvmw9lTd9QiaHujFw9ppxK3+M7d2D80pOih6g1VHMG91d40Pez1/v/A==}
     peerDependencies:
       zod: ^4.3.4
 
-  '@cherrystudio/remote-transport@0.1.0':
-    resolution: {integrity: sha512-9abiytiOk93D6T4TmPEclOm7AnrxX/atzVRShKMfGlBDgKM1wk/8d+evfI2ZwLsqIjJ1v/TnVVIi+yKLAlPfpw==}
+  '@cherrystudio/remote-transport@0.1.2':
+    resolution: {integrity: sha512-fsnFx2Z/mLxzvWuF08j7pn/E/YN3l5JvHC28ueqFyglkEhzb79kP0o2VgtdFYFFtLjWDLnuvfQ5Bo7KOPgHOXw==}
 
   '@dnsquery/dns-packet@6.1.1':
     resolution: {integrity: sha512-WXTuFvL3G+74SchFAtz3FgIYVOe196ycvGsMgvSH/8Goptb1qpIQtIuM4SOK9G9lhMWYpHxnXyy544ZhluFOew==}
@@ -11266,14 +11266,14 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.3
 
-  '@cherrystudio/remote-protocol@0.1.0(zod@4.4.3)':
+  '@cherrystudio/remote-protocol@0.3.0(zod@4.4.3)':
     dependencies:
       json-canonicalize: 3.0.1
       zod: 4.4.3
 
-  '@cherrystudio/remote-transport@0.1.0(zod@4.4.3)':
+  '@cherrystudio/remote-transport@0.1.2(zod@4.4.3)':
     dependencies:
-      '@cherrystudio/remote-protocol': 0.1.0(zod@4.4.3)
+      '@cherrystudio/remote-protocol': 0.3.0(zod@4.4.3)
       '@libp2p/crypto': 5.1.23
       '@libp2p/interface': 3.3.0
       '@libp2p/noise': 17.0.2

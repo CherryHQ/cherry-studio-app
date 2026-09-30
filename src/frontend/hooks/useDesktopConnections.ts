@@ -1,14 +1,8 @@
-import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useBackendModule, useQuery } from '@/frontend/data';
-import type {
-  DesktopImportSelectionsDto,
-  DesktopPairingClaim,
-  DesktopPairingQr,
-  PairDesktopConnectionDto,
-} from '@/shared/data/api/schemas/desktopConnections';
+import type { DesktopImportSelectionsDto } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
 const EMPTY_CONNECTIONS: readonly DesktopConnection[] = Object.freeze([]);
@@ -36,16 +30,14 @@ export function useDesktopConnection(id: string | undefined) {
   };
 }
 
-type Operation = 'location' | 'pair' | 'remove' | 'preview' | 'import' | 'test';
+type Operation = 'remove' | 'preview' | 'import';
 
 export function useDesktopConnectionActions() {
   const connections = useBackendModule('desktopConnections');
   const queryClient = useQueryClient();
   const mounted = useRef(false);
   const request = useRef<AbortController | null>(null);
-  const [pending, setPending] = useState<{ kind: Operation; endpoint?: DirectEndpoint } | null>(
-    null,
-  );
+  const [pending, setPending] = useState<Operation | null>(null);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -59,13 +51,12 @@ export function useDesktopConnectionActions() {
     async <T>(
       kind: Operation,
       operation: (signal: AbortSignal) => Promise<T>,
-      endpoint?: DirectEndpoint,
     ): Promise<T | undefined> => {
       // Scan callbacks and repeated taps may arrive before React updates loading state.
       if (!mounted.current || request.current) return undefined;
       const controller = new AbortController();
       request.current = controller;
-      setPending({ kind, endpoint });
+      setPending(kind);
       try {
         let result: T;
         try {
@@ -74,19 +65,16 @@ export function useDesktopConnectionActions() {
           // Authorization failures also change connection status. Import may have
           // committed immediately before unmount, so always invalidate affected reads.
           const roots =
-            kind === 'test'
-              ? []
-              : kind === 'import'
-                ? ['/desktop-connections', '/providers', '/models']
-                : ['/desktop-connections'];
-          if (roots.length)
-            await queryClient.invalidateQueries({
-              predicate: ({ queryKey }) =>
-                typeof queryKey[0] === 'string' &&
-                roots.some(
-                  (root) => queryKey[0] === root || (queryKey[0] as string).startsWith(root + '/'),
-                ),
-            });
+            kind === 'import'
+              ? ['/desktop-connections', '/providers', '/models']
+              : ['/desktop-connections'];
+          await queryClient.invalidateQueries({
+            predicate: ({ queryKey }) =>
+              typeof queryKey[0] === 'string' &&
+              roots.some(
+                (root) => queryKey[0] === root || (queryKey[0] as string).startsWith(root + '/'),
+              ),
+          });
         }
         return controller.signal.aborted ? undefined : result;
       } catch (error) {
@@ -102,19 +90,6 @@ export function useDesktopConnectionActions() {
     [queryClient],
   );
 
-  const pair = useCallback(
-    (input: PairDesktopConnectionDto, onClaim?: (claim: DesktopPairingClaim) => void) =>
-      run('pair', (signal) => connections.pair(input, signal, onClaim)),
-    [connections, run],
-  );
-  const updateLocation = useCallback(
-    (id: string, qr: DesktopPairingQr) =>
-      run('location', async (signal) => {
-        await connections.updateLocation(id, qr, signal);
-        return true;
-      }),
-    [connections, run],
-  );
   const remove = useCallback(
     (id: string) =>
       run('remove', async (signal) => {
@@ -133,28 +108,10 @@ export function useDesktopConnectionActions() {
     [connections, run],
   );
 
-  const testEndpoint = useCallback(
-    (id: string, endpoint: DirectEndpoint) =>
-      run(
-        'test',
-        async (signal) => {
-          await connections.testEndpoint(id, endpoint, signal);
-          return true;
-        },
-        endpoint,
-      ),
-    [connections, run],
-  );
-
   return {
-    isPairing: pending?.kind === 'pair' || pending?.kind === 'location',
-    updateLocation,
-    isRemoving: pending?.kind === 'remove',
-    isPreviewing: pending?.kind === 'preview',
-    isImporting: pending?.kind === 'import',
-    testingEndpoint: pending?.kind === 'test' ? pending.endpoint : undefined,
-    testEndpoint,
-    pair,
+    isRemoving: pending === 'remove',
+    isPreviewing: pending === 'preview',
+    isImporting: pending === 'import',
     remove,
     preview,
     importSelected,

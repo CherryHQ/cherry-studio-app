@@ -15,6 +15,13 @@
       "when": 1790057476804,
       "tag": "0001_hot_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790763054621,
+      "tag": "0002_orange_thunderbolt_ross",
+      "breakpoints": true
     }
   ]
 }
