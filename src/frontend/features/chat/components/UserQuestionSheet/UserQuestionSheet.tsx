@@ -47,53 +47,55 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       avoidKeyboard
       dismissible={false}
       footer={
-        // Remount on a variant change: switching the mounted button from secondary to default in
-        // place left its label invisible on iOS.
-        <Button
-          key={actionVariant}
-          disabled={form.locked || !form.canAct}
-          loading={form.busy}
-          onPress={advance}
-          testID="user-question-action"
-          variant={actionVariant}
-        >
-          <Button.Label>{actionLabel}</Button.Label>
-        </Button>
-      }
-      headerAction={
-        total > 1 ? (
-          // Browsing moves between questions without skipping; the footer action answers.
-          <View className="-mr-1.5 flex-row items-center">
+        <View className="flex-row items-center gap-3">
+          {total > 1 ? (
+            // Browsing moves between questions without skipping; the action answers.
+            <View className="-ml-1.5 flex-row items-center">
+              <Button
+                accessibilityLabel={t('chat.question.previous')}
+                disabled={form.locked || form.index === 0}
+                icon={<ChevronLeftIcon />}
+                onPress={() => form.navigate(form.index - 1)}
+                size="sm"
+                testID="user-question-previous"
+                variant="ghost"
+              />
+              <Text
+                accessibilityLabel={t('chat.question.progressLabel', {
+                  current: form.index + 1,
+                  total,
+                })}
+                accessibilityLiveRegion="polite"
+                className="text-foreground-tertiary text-sm tabular-nums"
+              >
+                {t('chat.question.progress', { current: form.index + 1, total })}
+              </Text>
+              <Button
+                accessibilityLabel={t('chat.question.next')}
+                disabled={form.locked || form.index === total - 1}
+                icon={<ChevronRightIcon />}
+                onPress={() => form.navigate(form.index + 1)}
+                size="sm"
+                testID="user-question-next"
+                variant="ghost"
+              />
+            </View>
+          ) : null}
+          <View className="flex-1">
+            {/* Remount on a variant change: switching the mounted button from secondary to
+                default in place left its label invisible on iOS. */}
             <Button
-              accessibilityLabel={t('chat.question.previous')}
-              disabled={form.locked || form.index === 0}
-              icon={<ChevronLeftIcon />}
-              onPress={() => form.navigate(form.index - 1)}
-              size="xs"
-              testID="user-question-previous"
-              variant="ghost"
-            />
-            <Text
-              accessibilityLabel={t('chat.question.progressLabel', {
-                current: form.index + 1,
-                total,
-              })}
-              accessibilityLiveRegion="polite"
-              className="text-foreground-tertiary text-sm"
+              key={actionVariant}
+              disabled={form.locked || !form.canAct}
+              loading={form.busy}
+              onPress={advance}
+              testID="user-question-action"
+              variant={actionVariant}
             >
-              {t('chat.question.progress', { current: form.index + 1, total })}
-            </Text>
-            <Button
-              accessibilityLabel={t('chat.question.next')}
-              disabled={form.locked || form.index === total - 1}
-              icon={<ChevronRightIcon />}
-              onPress={() => form.navigate(form.index + 1)}
-              size="xs"
-              testID="user-question-next"
-              variant="ghost"
-            />
+              <Button.Label>{actionLabel}</Button.Label>
+            </Button>
           </View>
-        ) : undefined
+        </View>
       }
       onClose={ignoreClose}
       open={open}
@@ -101,12 +103,12 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       testID="user-question-sheet"
       // The question is the sheet's subject, so it titles the sheet and is never truncated.
       title={form.question.question}
-      titleNumberOfLines={0}
+      titleVariant="prompt"
     >
       <ScrollView
         key={form.question.id}
         className="min-h-0 flex-1"
-        contentContainerClassName="gap-4 px-5 pt-2 pb-4"
+        contentContainerClassName="gap-4 px-5 pb-4"
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

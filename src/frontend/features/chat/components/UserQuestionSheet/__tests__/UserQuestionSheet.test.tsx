@@ -43,7 +43,7 @@ test('titles the sheet with the complete question without a line limit', () => {
   });
   const sheet = renderer.root.findByType(BottomSheet);
   expect(sheet.props.title).toBe(question);
-  expect(sheet.props.titleNumberOfLines).toBe(0);
+  expect(sheet.props.titleVariant).toBe('prompt');
 });
 
 test('browses questions from the header without skipping them', () => {
