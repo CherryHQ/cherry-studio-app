@@ -36,13 +36,12 @@ With Cherry watermarks, Markdown preview and saved text use the
 same separated brand/download footer without image bytes. The signature appears at the end of the
 document. PNG pages do not include page numbers or reserve space for an ordinal footer.
 
-The signature uses the same full-width white footer as painting and file image exports: the
-original Cherry logo, Cherry Studio name, localized tagline and download copy on the left, with an
-84-point QR area on the right and a Cherry red top rule. Shared geometry has a 120-point minimum
-height at 360 points wide and grows for wrapped text. Image footers scale with capture width;
-responsive HTML retains the base footer typography. Constant color tokens keep the signature white
-with black text. The embedded QR asset and download links point to
-`https://www.cherryai.com.cn/download?platform=mobile`. The complete footer stays together on one PNG page.
+The signature uses the same full-width white footer as painting and file image exports: one row
+under a Cherry red rule, with the original Cherry logo, Cherry Studio name and localized scan copy
+on the left and a 48-point download QR code on the right. Shared geometry is 66 points tall at 360
+points wide and grows for wrapped text. Image footers scale with capture width; responsive HTML
+retains the base footer typography. Constant color tokens keep the signature white with black text.
+The complete footer stays together on one PNG page.
 Active saving/delivery holds its current presentation until the share sheet finishes.
 
 ## Image Capture

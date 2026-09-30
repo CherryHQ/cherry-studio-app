@@ -8,9 +8,10 @@ export type ExportSignature = {
   brandColor: string;
   logoDataUrl: string;
   brandName: string;
-  tagline: string;
+  /** Accompanies the QR code in images and HTML. */
   downloadLabel: string;
-  qrCodeLabel: string;
+  /** Markdown has no QR code, so its link omits the scan instruction. */
+  downloadLinkLabel: string;
   downloadUrl: string;
   qrCodeDataUrl: string;
 };

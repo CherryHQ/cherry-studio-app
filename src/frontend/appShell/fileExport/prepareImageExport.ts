@@ -49,24 +49,16 @@ export async function prepareImageExport(
     keep(image);
     const style = EXPORT_SIGNATURE_STYLE;
     const columns = exportSignatureColumns(style.referenceWidth);
-    const brand = keep(
-      createParagraph(signature.brandName, signature, 'brand', columns.brandWidth),
-    );
-    const tagline = keep(
-      createParagraph(signature.tagline, signature, 'tagline', columns.leftWidth),
-    );
+    const brand = keep(createParagraph(signature.brandName, signature, true, columns.textWidth));
     const download = keep(
-      createParagraph(signature.downloadLabel, signature, 'secondary', columns.leftWidth),
+      createParagraph(signature.downloadLabel, signature, false, columns.textWidth),
     );
-    const identityHeight = Math.max(brand.getHeight(), style.logoSize);
-    const textHeight =
-      identityHeight + tagline.getHeight() + download.getHeight() + style.textGap * 2;
-    const footerHeight = Math.max(
-      style.minHeight,
-      Math.max(textHeight, style.qrCodeSize) + style.paddingY * 2 + style.ruleHeight,
-    );
-    const textY = style.ruleHeight + (footerHeight - style.ruleHeight - textHeight) / 2;
-    const qrCodeY = style.ruleHeight + (footerHeight - style.ruleHeight - style.qrCodeSize) / 2;
+    const textHeight = brand.getHeight() + download.getHeight();
+    const contentHeight = Math.max(textHeight, style.logoSize, style.qrCodeSize);
+    const footerHeight = contentHeight + style.paddingY * 2 + style.ruleHeight;
+    // Centers an item of the given height in the area below the rule.
+    const centerY = (height: number) =>
+      style.ruleHeight + (footerHeight - style.ruleHeight - height) / 2;
     const scale = image.width() / style.referenceWidth;
     const outputHeight = image.height() + Math.ceil(footerHeight * scale);
     // CPU rendering preserves the original pixel size without a GPU texture-size limit.
@@ -84,16 +76,12 @@ export async function prepareImageExport(
       Skia.XYWHRect(0, 0, style.referenceWidth, (outputHeight - image.height()) / scale),
       paint,
     );
-
     paint.setColor(Skia.Color(signature.brandColor));
     canvas.drawRect(Skia.XYWHRect(0, 0, style.referenceWidth, style.ruleHeight), paint);
-    brand.paint(canvas, columns.brandX, textY + (identityHeight - brand.getHeight()) / 2);
-    tagline.paint(canvas, style.paddingX, textY + identityHeight + style.textGap);
-    download.paint(
-      canvas,
-      style.paddingX,
-      textY + identityHeight + tagline.getHeight() + style.textGap * 2,
-    );
+
+    const textY = centerY(textHeight);
+    brand.paint(canvas, columns.textX, textY);
+    download.paint(canvas, columns.textX, textY + brand.getHeight());
 
     const logoData = keep(Skia.Data.fromBase64(signature.logoDataUrl.split(',')[1]));
     const logo = Skia.Image.MakeImageFromEncoded(logoData);
@@ -105,7 +93,7 @@ export async function prepareImageExport(
       Skia.XYWHRect(0, 0, logo.width(), logo.height()),
       Skia.XYWHRect(
         style.paddingX + (style.logoSize - logoWidth) / 2,
-        textY + (identityHeight - style.logoSize) / 2,
+        centerY(style.logoSize),
         logoWidth,
         style.logoSize,
       ),
@@ -113,52 +101,19 @@ export async function prepareImageExport(
       MipmapMode.None,
       paint,
     );
-    if (signature.qrCodeDataUrl) {
-      const qrCodeData = keep(Skia.Data.fromBase64(signature.qrCodeDataUrl.split(',')[1]));
-      const qrCode = Skia.Image.MakeImageFromEncoded(qrCodeData);
-      if (!qrCode) throw new Error('Cannot decode image export QR code');
-      keep(qrCode);
-      canvas.drawImageRectOptions(
-        qrCode,
-        Skia.XYWHRect(0, 0, qrCode.width(), qrCode.height()),
-        Skia.XYWHRect(columns.rightX, qrCodeY, style.qrCodeSize, style.qrCodeSize),
-        FilterMode.Nearest,
-        MipmapMode.None,
-        paint,
-      );
-    } else {
-      const placeholder = keep(
-        createParagraph(
-          signature.qrCodeLabel,
-          signature,
-          'placeholder',
-          style.qrCodeSize - (style.qrCodePadding + style.placeholderBorderWidth) * 2,
-        ),
-      );
-      const outline = Skia.Color(signature.foreground);
-      outline[3] *= style.secondaryOpacity;
-      paint.setColor(outline);
-      canvas.drawRect(
-        Skia.XYWHRect(columns.rightX, qrCodeY, style.qrCodeSize, style.qrCodeSize),
-        paint,
-      );
-      paint.setColor(Skia.Color(signature.background));
-      const inset = style.placeholderBorderWidth;
-      canvas.drawRect(
-        Skia.XYWHRect(
-          columns.rightX + inset,
-          qrCodeY + inset,
-          style.qrCodeSize - inset * 2,
-          style.qrCodeSize - inset * 2,
-        ),
-        paint,
-      );
-      placeholder.paint(
-        canvas,
-        columns.rightX + style.qrCodePadding + style.placeholderBorderWidth,
-        qrCodeY + (style.qrCodeSize - placeholder.getHeight()) / 2,
-      );
-    }
+    const qrCodeData = keep(Skia.Data.fromBase64(signature.qrCodeDataUrl.split(',')[1]));
+    const qrCode = Skia.Image.MakeImageFromEncoded(qrCodeData);
+    if (!qrCode) throw new Error('Cannot decode image export QR code');
+    keep(qrCode);
+    // Nearest sampling keeps module edges sharp for scanners.
+    canvas.drawImageRectOptions(
+      qrCode,
+      Skia.XYWHRect(0, 0, qrCode.width(), qrCode.height()),
+      Skia.XYWHRect(columns.qrCodeX, centerY(style.qrCodeSize), style.qrCodeSize, style.qrCodeSize),
+      FilterMode.Nearest,
+      MipmapMode.None,
+      paint,
+    );
     surface.flush();
     const snapshot = keep(surface.makeImageSnapshot());
     const bytes = snapshot.encodeToBytes(ImageFormat.PNG);
@@ -204,27 +159,20 @@ export async function prepareFileExport(
 function createParagraph(
   text: string,
   signature: ExportSignature,
-  role: 'brand' | 'tagline' | 'secondary' | 'placeholder',
+  isPrimary: boolean,
   width: number,
 ): SkParagraph {
   const style = EXPORT_SIGNATURE_STYLE;
-  const isSecondary = role === 'secondary' || role === 'placeholder';
   const color = Skia.Color(signature.foreground);
-  if (isSecondary) color[3] *= style.secondaryOpacity;
-  const fontSize =
-    role === 'brand' ? style.brandSize : isSecondary ? style.secondarySize : style.primarySize;
-  const lineHeight =
-    role === 'brand'
-      ? style.brandLineHeight
-      : isSecondary
-        ? style.secondaryLineHeight
-        : style.primaryLineHeight;
+  if (!isPrimary) color[3] *= style.secondaryOpacity;
+  const fontSize = isPrimary ? style.primarySize : style.secondarySize;
+  const lineHeight = isPrimary ? style.primaryLineHeight : style.secondaryLineHeight;
   const builder = Skia.ParagraphBuilder.Make({
-    textAlign: role === 'placeholder' ? TextAlign.Center : TextAlign.Left,
+    textAlign: TextAlign.Left,
     textStyle: {
       color,
       fontSize,
-      fontStyle: { weight: isSecondary ? FontWeight.Normal : FontWeight.SemiBold },
+      fontStyle: { weight: isPrimary ? FontWeight.SemiBold : FontWeight.Normal },
       heightMultiplier: lineHeight / fontSize,
       halfLeading: true,
     },

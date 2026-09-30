@@ -33,7 +33,10 @@ jest.mock('@/frontend/appShell/fileExport', () => ({
         ? { kind: 'none' }
         : {
             kind: 'cherry',
-            signature: { brandName: 'Cherry Studio', tagline: 'Your pocket AI assistant' },
+            signature: {
+              brandName: 'Cherry Studio',
+              downloadLabel: 'Scan to download the mobile app',
+            },
           },
   shareFile: (...args: unknown[]) => mockShare(...args),
   FileSharingError: class extends Error {},
@@ -124,7 +127,7 @@ test.each(['image', 'pptx'] as const)(
       kind: 'cherry',
       signature: expect.objectContaining({
         brandName: 'Cherry Studio',
-        timestamp: expect.any(String),
+        downloadLabel: expect.any(String),
       }),
     });
     expect(mockReadDimensions).toHaveBeenCalledWith(signed.uri);

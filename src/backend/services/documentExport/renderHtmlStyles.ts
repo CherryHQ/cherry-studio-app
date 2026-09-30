@@ -101,15 +101,14 @@ ${
 ${
   signature
     ? `
-.print-signature{display:flex;align-items:center;gap:${size(footer.columnGap)}px;min-height:${size(footer.minHeight)}px;padding:${size(footer.paddingY)}px ${size(footer.paddingX)}px;border-top:${size(footer.ruleHeight)}px solid ${signature.brandColor};background:${signature.background};color:${signature.foreground}}
-.print-copy{display:flex;flex-direction:column;gap:${size(footer.textGap)}px;min-width:0;flex:1}
-.print-identity{display:flex;align-items:center;gap:${size(footer.detailGap)}px;min-width:0}
-.print-brand{min-width:0;font-size:${size(footer.brandSize)}px;line-height:${size(footer.brandLineHeight)}px}
-.print-tagline{font-size:${size(footer.primarySize)}px;line-height:${size(footer.primaryLineHeight)}px}
-.print-download{color:inherit}
-img.print-logo{width:${size(footer.logoSize)}px;height:${size(footer.logoSize)}px;flex-shrink:0;border-radius:0;margin:0}
-.print-qr{width:${size(footer.qrCodeSize)}px;height:${size(footer.qrCodeSize)}px;flex-shrink:0;border-radius:0;margin:0;image-rendering:pixelated}
-.print-qr-placeholder{display:flex;align-items:center;justify-content:center;padding:${size(footer.qrCodePadding)}px;border:${size(footer.placeholderBorderWidth)}px solid currentColor;text-align:center}
+.print-signature{display:flex;align-items:center;gap:${size(footer.columnGap)}px;padding:${size(footer.paddingY)}px ${size(footer.paddingX)}px;border-top:${size(footer.ruleHeight)}px solid ${signature.brandColor};background:${signature.background};color:${signature.foreground}}
+.print-identity{display:flex;align-items:center;gap:${size(footer.detailGap)}px;min-width:0;flex:1}
+.print-copy{display:flex;flex-direction:column;min-width:0}
+.print-brand{font-size:${size(footer.primarySize)}px;line-height:${size(footer.primaryLineHeight)}px}
+.print-download{color:inherit;text-decoration:none}
+img.print-logo,img.print-qr{flex-shrink:0;border-radius:0;margin:0}
+img.print-logo{width:${size(footer.logoSize)}px;height:${size(footer.logoSize)}px}
+img.print-qr{width:${size(footer.qrCodeSize)}px;height:${size(footer.qrCodeSize)}px;image-rendering:pixelated}
 .print-secondary{font-size:${size(footer.secondarySize)}px;line-height:${size(footer.secondaryLineHeight)}px;opacity:${footer.secondaryOpacity}}
 `
     : ''

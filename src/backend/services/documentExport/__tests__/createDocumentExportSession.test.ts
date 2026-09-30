@@ -152,11 +152,10 @@ test('Markdown materialization preserves the signature and reuses only matching 
     signature: {
       brandName: 'Cherry Studio',
       brandColor: '#ff5757',
-      tagline: 'Your pocket AI assistant',
       downloadLabel: 'Scan to download the mobile app',
-      qrCodeLabel: 'Download QR code',
-      downloadUrl: '',
-      qrCodeDataUrl: '',
+      downloadLinkLabel: 'Download the mobile app',
+      downloadUrl: 'https://example.com/mobile',
+      qrCodeDataUrl: 'data:image/png;base64,AQ==',
       background: '#ffffff',
       foreground: '#000000',
       logoDataUrl: 'data:image/png;base64,AA==',
@@ -165,7 +164,7 @@ test('Markdown materialization preserves the signature and reuses only matching 
   const first = await session.render({ format: 'markdown', watermark });
   if (first.format !== 'markdown') throw new Error('Expected Markdown');
   expect(first.text).toBe(
-    'Content\n\n---\n\n**Cherry Studio**\n\nYour pocket AI assistant\n\nScan to download the mobile app\n',
+    'Content\n\n---\n\n**Cherry Studio** · [Download the mobile app](<https://example.com/mobile>)\n',
   );
   expect(mockFiles.get(first.file.uri)).toBe(first.text);
   expect(session.markdown).toBe('Content\n');
@@ -174,11 +173,11 @@ test('Markdown materialization preserves the signature and reuses only matching 
     format: 'markdown',
     watermark: {
       kind: 'cherry',
-      signature: { ...watermark.signature, tagline: 'AI wherever you go' },
+      signature: { ...watermark.signature, downloadLinkLabel: 'Get the app' },
     },
   });
   if (second.format !== 'markdown') throw new Error('Expected Markdown');
-  expect(second.text).toContain('AI wherever you go');
+  expect(second.text).toContain('Get the app');
   expect(mockFiles.get(second.file.uri)).toBe(second.text);
   expect(mockFiles.has(first.file.uri)).toBe(false);
   await session.dispose();
@@ -263,11 +262,10 @@ test('switching Markdown to none replaces the branded output with a plain file',
     signature: {
       brandName: 'Cherry Studio',
       brandColor: '#ff5757',
-      tagline: 'Your pocket AI assistant',
       downloadLabel: 'Scan to download the mobile app',
-      qrCodeLabel: 'Download QR code',
-      downloadUrl: '',
-      qrCodeDataUrl: '',
+      downloadLinkLabel: 'Download the mobile app',
+      downloadUrl: 'https://example.com/mobile',
+      qrCodeDataUrl: 'data:image/png;base64,AQ==',
       background: '#ffffff',
       foreground: '#000000',
       logoDataUrl: 'data:image/png;base64,AA==',

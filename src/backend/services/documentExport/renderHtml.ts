@@ -253,13 +253,7 @@ function createHtmlRenderer(
 }
 
 function renderSignature(signature: ExportSignature): string {
-  const qrCode = signature.qrCodeDataUrl
-    ? `<img class="print-qr" src="${signature.qrCodeDataUrl}" alt="${escapeHtml(signature.qrCodeLabel)}">`
-    : `<div class="print-qr print-qr-placeholder print-secondary"><span>${escapeHtml(signature.qrCodeLabel)}</span></div>`;
-  const download = signature.downloadUrl
-    ? `<a class="print-download print-secondary" href="${escapeHtml(signature.downloadUrl)}">${escapeHtml(signature.downloadLabel)}</a>`
-    : `<div class="print-download print-secondary">${escapeHtml(signature.downloadLabel)}</div>`;
-  return `<footer class="print-signature"><div class="print-copy"><div class="print-identity"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><strong class="print-brand">${escapeHtml(signature.brandName)}</strong></div><strong class="print-tagline">${escapeHtml(signature.tagline)}</strong>${download}</div>${qrCode}</footer>`;
+  return `<footer class="print-signature"><div class="print-identity"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><div class="print-copy"><strong class="print-brand">${escapeHtml(signature.brandName)}</strong><a class="print-download print-secondary" href="${escapeHtml(signature.downloadUrl)}">${escapeHtml(signature.downloadLabel)}</a></div></div><img class="print-qr" src="${signature.qrCodeDataUrl}" alt=""></footer>`;
 }
 
 function isEmbeddedImage(value: string) {

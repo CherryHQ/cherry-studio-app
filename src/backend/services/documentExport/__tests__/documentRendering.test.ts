@@ -156,51 +156,39 @@ test('HTML escapes authored markup, rejects executable links, renders tables and
   expect(result.issues).toEqual([]);
 });
 
-test.each([false, true])(
-  'image and HTML exports share one footer (download configured: %s)',
-  async (hasDownload) => {
-    const document = normalizeDocument({ kind: 'markdown', source: 'Complete answer.' });
-    const signature = {
-      background: '#ffffff',
-      foreground: '#000000',
-      brandName: 'Cherry Studio <brand>',
-      brandColor: '#ff5757',
-      tagline: 'Your pocket AI assistant',
-      downloadLabel: 'Scan to download the mobile app',
-      qrCodeLabel: 'Download QR code',
-      downloadUrl: hasDownload ? 'https://example.com/mobile' : '',
-      qrCodeDataUrl: hasDownload ? 'data:image/png;base64,AQ==' : '',
-      logoDataUrl: 'data:image/png;base64,AA==',
-    };
-    for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
-      const { html } = await renderHtml(
-        document,
-        { ...presentation, watermark: { kind: 'cherry', signature }, imageFrame },
-        new Map(),
-        jest.fn(),
-        new AbortController().signal,
-      );
-      expect(html.match(/<footer\b/g)).toHaveLength(1);
-      const footer = html.slice(html.indexOf('<footer'));
-      expect(footer).toContain('Cherry Studio &lt;brand&gt;');
-      expect(footer).toContain(signature.tagline);
-      expect(footer).toContain(signature.downloadLabel);
-      expect(footer).toContain(signature.qrCodeLabel);
-      if (hasDownload) {
-        expect(footer).toContain(`href="${signature.downloadUrl}"`);
-        expect(footer).toContain(`src="${signature.qrCodeDataUrl}"`);
-        expect(footer).not.toContain('print-qr-placeholder');
-      } else {
-        expect(footer).toContain('print-qr-placeholder');
-        expect(footer).not.toContain('href=');
-      }
-      expect(footer).not.toContain('<time');
-      expect(footer).not.toContain('<brand>');
-      expect(footer).not.toContain('AI-generated');
-      expect(html.indexOf('Complete answer.')).toBeLessThan(html.indexOf('<footer'));
-    }
-  },
-);
+test('image and HTML exports include one brand and download footer after the content', async () => {
+  const document = normalizeDocument({ kind: 'markdown', source: 'Complete answer.' });
+  const signature = {
+    background: '#ffffff',
+    foreground: '#000000',
+    brandName: 'Cherry Studio <brand>',
+    brandColor: '#ff5757',
+    downloadLabel: 'Scan to download the mobile app',
+    downloadLinkLabel: 'Download the mobile app',
+    downloadUrl: 'https://example.com/mobile?platform=mobile&channel=share',
+    qrCodeDataUrl: 'data:image/png;base64,AQ==',
+    logoDataUrl: 'data:image/png;base64,AA==',
+  };
+  for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
+    const { html } = await renderHtml(
+      document,
+      { ...presentation, watermark: { kind: 'cherry', signature }, imageFrame },
+      new Map(),
+      jest.fn(),
+      new AbortController().signal,
+    );
+    expect(html.match(/<footer\b/g)).toHaveLength(1);
+    const footer = html.slice(html.indexOf('<footer'));
+    expect(footer).toContain('Cherry Studio &lt;brand&gt;');
+    expect(footer).toContain(
+      `<a class="print-download print-secondary" href="https://example.com/mobile?platform=mobile&amp;channel=share">${signature.downloadLabel}</a>`,
+    );
+    expect(footer).toContain(`<img class="print-qr" src="${signature.qrCodeDataUrl}" alt="">`);
+    expect(footer).not.toContain('<brand>');
+    expect(footer).not.toContain('AI-generated');
+    expect(html.indexOf('Complete answer.')).toBeLessThan(html.indexOf('<footer'));
+  }
+});
 
 test('rejects invalid signature colors, copy, download links and QR images', async () => {
   const document = normalizeDocument({ kind: 'markdown', source: 'Answer.' });
@@ -209,21 +197,21 @@ test('rejects invalid signature colors, copy, download links and QR images', asy
     foreground: '#000000',
     brandName: 'Cherry Studio',
     brandColor: '#ff5757',
-    tagline: 'Your pocket AI assistant',
     downloadLabel: 'Scan to download the mobile app',
-    qrCodeLabel: 'Download QR code',
-    downloadUrl: '',
-    qrCodeDataUrl: '',
+    downloadLinkLabel: 'Download the mobile app',
+    downloadUrl: 'https://example.com/mobile',
+    qrCodeDataUrl: 'data:image/png;base64,AQ==',
     logoDataUrl: 'data:image/png;base64,AA==',
   };
   for (const invalid of [
     { ...signature, background: 'white;position:fixed' },
     { ...signature, brandColor: 'red;position:fixed' },
-    { ...signature, tagline: undefined },
+    { ...signature, downloadLinkLabel: undefined },
+    { ...signature, downloadUrl: '' },
     { ...signature, downloadUrl: 'javascript:alert(1)' },
     { ...signature, downloadUrl: 'https://example.com/\nmalformed' },
     { ...signature, qrCodeDataUrl: 'https://example.com/qr.png' },
-    { ...signature, qrCodeDataUrl: signature.logoDataUrl },
+    { ...signature, qrCodeDataUrl: '' },
   ]) {
     await expect(
       renderHtml(

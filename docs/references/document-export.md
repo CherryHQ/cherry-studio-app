@@ -103,18 +103,15 @@ HTML and image presentation share an optional resolved `watermark`. The applicat
 global Share watermark setting, enabled by default. Explicit `cherry` or `none` options override
 that preference; `none` omits the brand footer from every preview and output format.
 The Cherry variant contains a `signature` with resolved background/text/brand colors, the embedded
-Cherry logo, brand name, localized tagline/download copy and download QR data. The frontend supplies
-the shared white footer used by painting and file image exports: black brand/copy on the left,
-a QR area on the right and a Cherry red top rule. The download URL and matching embedded PNG point
-to `https://www.cherryai.com.cn/download?platform=mobile`. The QR PNG includes a four-module white
-quiet zone. Clearing the download configuration renders a labeled QR placeholder without a link;
-a configured URL must use HTTPS.
+Cherry logo, brand name, localized download copy, an HTTPS download URL and its embedded QR PNG. The
+frontend supplies the shared white footer used by painting and file image exports: one row under a
+Cherry red rule, with the brand and scan copy on the left and the QR code on the right.
 The renderer copies and validates
 the presentation, escapes its text and includes the signature after the content inside `main`.
 The image-only `imageFrame` uses the document background and supplies an accessible document label.
 Image content spans the output width with ordinary text padding, without a contrasting outer frame. Image-to-HTML fallbacks
-retain the watermark. Markdown uses the same resolved watermark's brand name and download copy in
-a separated text footer, with a link when configured; preview and saved text share its formatter.
+retain the watermark. Markdown uses the same resolved watermark's brand name and download link in
+a separated text footer; preview and saved text share its formatter.
 `session.markdown` remains the unbranded source. The signature ends the document and is not repeated
 on every PNG page. The complete footer is kept together on one page. PNG pages have no page numbers
 or reserved ordinal-footer space.

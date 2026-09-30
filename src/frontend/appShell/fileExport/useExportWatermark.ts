@@ -28,9 +28,8 @@ export function useExportWatermark(style?: ExportWatermarkStyle) {
             background,
             foreground,
             brandColor,
-            tagline: t('fileExport.watermark.tagline'),
             downloadLabel: t('fileExport.watermark.download'),
-            qrCodeLabel: t('fileExport.watermark.qrCode'),
+            downloadLinkLabel: t('fileExport.watermark.downloadLink'),
           },
         };
     }
