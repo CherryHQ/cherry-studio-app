@@ -23,8 +23,12 @@ export const amapPlugin: PluginDefinition = {
   tools: {
     maps_text_search: 'read',
     maps_around_search: 'read',
+    maps_search_detail: 'read',
     maps_geo: 'read',
     maps_regeocode: 'read',
+    maps_ip_location: 'read',
+    maps_distance: 'read',
+    maps_bicycling: 'read',
     maps_direction_driving: 'read',
     maps_direction_walking: 'read',
     maps_direction_transit_integrated: 'read',

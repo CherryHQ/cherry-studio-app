@@ -3,6 +3,7 @@ import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';
 import type { ResourceRead } from '../../contracts';
 import {
   remoteConversationFailure,
+  remoteAvailability,
   remoteMessage,
   remoteTranscriptMessage,
 } from '../remoteConversationViews';
@@ -12,6 +13,25 @@ const resource = (id: string): ResourceRead => ({
   key: id,
   read: async () => ({ kind: 'text', text: id, complete: true }),
 });
+
+it.each(['no-location', 'discovery-unavailable', 'unreachable'] as const)(
+  'preserves %s while offline and reconnecting, then clears it when connected',
+  (reason) => {
+    expect(remoteAvailability({ status: 'offline', reason }, false)).toEqual({
+      state: 'disabled',
+      reason,
+    });
+    expect(remoteAvailability({ status: 'connecting', reason }, false)).toEqual({
+      state: 'disabled',
+      reason,
+    });
+    expect(remoteAvailability({ status: 'ready', reason }, false)).toEqual({ state: 'enabled' });
+    expect(remoteAvailability({ status: 'offline', reason }, true)).toEqual({
+      state: 'disabled',
+      reason: 'retired',
+    });
+  },
+);
 
 it('keeps the same provider failure in message presentation and exported history without duplicating data parts', () => {
   const failure = {

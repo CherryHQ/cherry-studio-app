@@ -59,6 +59,11 @@ type BottomSheetBaseProps = {
   open: boolean;
   testID?: string;
   title: string;
+  /**
+   * `heading` (default) is a short name, truncated after two lines. `prompt` is a question or
+   * request the user must read in full: body-sized and never truncated.
+   */
+  titleVariant?: 'heading' | 'prompt';
 };
 
 export type BottomSheetProps = BottomSheetBaseProps &
@@ -102,6 +107,7 @@ export function BottomSheet(props: BottomSheetProps) {
     open,
     testID,
     title,
+    titleVariant = 'heading',
   } = props;
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -231,7 +237,8 @@ export function BottomSheet(props: BottomSheetProps) {
               testID={isDraggable ? 'bottom-sheet-handle' : undefined}
             />
           </View>
-          <View className="min-h-14 flex-row items-center px-5 py-1.5">
+          {/* Controls centre on the title's first line, so a wrapped title grows downward. */}
+          <View className="min-h-14 flex-row items-start px-5 py-1.5">
             {backAction ? (
               <Pressable
                 accessibilityLabel={backAction.accessibilityLabel}
@@ -259,17 +266,21 @@ export function BottomSheet(props: BottomSheetProps) {
             <Text
               accessibilityRole="header"
               className={cn(
-                'min-w-0 font-semibold text-foreground text-lg',
+                'min-w-0 font-semibold text-foreground',
+                // Both variants fill the 44-point first line that the header controls centre on.
+                titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
                 isCloseActionVisible ? 'shrink px-2 text-center' : 'flex-1',
               )}
-              numberOfLines={2}
+              numberOfLines={titleVariant === 'prompt' ? undefined : 2}
             >
               {title}
             </Text>
             {isCloseActionVisible ? (
-              <View className="min-w-11 flex-1 items-end">{headerAction}</View>
+              <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
+                {headerAction}
+              </View>
             ) : headerAction ? (
-              <View className="ml-2">{headerAction}</View>
+              <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
             ) : null}
           </View>
           <View

@@ -30,6 +30,7 @@ export class DesktopEndpointResolver {
 
   accept(event: DiscoveryEvent) {
     if (event.type === 'network') {
+      this.discoveryAvailable = true;
       this.services.clear();
       this.hints.clear();
       this.successes.clear();

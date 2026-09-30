@@ -1,8 +1,11 @@
+import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { BottomSheet, Button, Input, SelectionIndicator } from '@cherrystudio/ui/components';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
+import { useResolveClassNames } from 'uniwind';
 
 import { useComposerPresentationActions } from '@/frontend/components/Composer';
 
@@ -33,7 +36,10 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         ? 'chat.question.next'
         : 'chat.question.skip',
   );
-  const actionVariant = form.action === 'skip' ? 'secondary' : 'default';
+  // Skipping is the quiet way out; an answer turns the action into the filled next step.
+  const actionVariant = form.action === 'skip' ? 'tonal' : 'default';
+  // The free-text field matches the option cards it continues.
+  const fieldStyle = useResolveClassNames('min-h-13 rounded-xl px-4');
   const advance = () => {
     // Submitting ends typing at once rather than when the answered sheet closes.
     if (form.action === 'submit') void KeyboardController.dismiss();
@@ -45,17 +51,38 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       avoidKeyboard
       dismissible={false}
       footer={
-        <View className="flex-row gap-3">
+        <View className="flex-row items-center gap-3">
           {total > 1 ? (
-            <View className="flex-1">
+            // Browsing moves between questions without skipping; the action answers.
+            <View className="min-h-11 flex-row items-center rounded-xl bg-secondary">
               <Button
+                accessibilityLabel={t('chat.question.previous')}
                 disabled={form.locked || form.index === 0}
+                icon={<ChevronLeftIcon />}
                 onPress={() => form.navigate(form.index - 1)}
+                size="sm"
                 testID="user-question-previous"
-                variant="secondary"
+                variant="ghost"
+              />
+              <Text
+                accessibilityLabel={t('chat.question.progressLabel', {
+                  current: form.index + 1,
+                  total,
+                })}
+                accessibilityLiveRegion="polite"
+                className="font-medium text-foreground text-sm tabular-nums"
               >
-                <Button.Label>{t('chat.question.previous')}</Button.Label>
-              </Button>
+                {t('chat.question.progress', { current: form.index + 1, total })}
+              </Text>
+              <Button
+                accessibilityLabel={t('chat.question.next')}
+                disabled={form.locked || form.index === total - 1}
+                icon={<ChevronRightIcon />}
+                onPress={() => form.navigate(form.index + 1)}
+                size="sm"
+                testID="user-question-next"
+                variant="ghost"
+              />
             </View>
           ) : null}
           <View className="flex-1">
@@ -74,42 +101,24 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
           </View>
         </View>
       }
-      headerAction={
-        total > 1 ? (
-          <Text
-            accessibilityLabel={t('chat.question.progressLabel', {
-              current: form.index + 1,
-              total,
-            })}
-            accessibilityLiveRegion="polite"
-            className="text-foreground-tertiary text-sm"
-          >
-            {t('chat.question.progress', { current: form.index + 1, total })}
-          </Text>
-        ) : undefined
-      }
       onClose={ignoreClose}
       open={open}
       size="medium"
       testID="user-question-sheet"
-      title={t('chat.question.title')}
+      // The question is the sheet's subject, so it titles the sheet and is never truncated.
+      title={form.question.question}
+      titleVariant="prompt"
     >
       <ScrollView
         key={form.question.id}
         className="min-h-0 flex-1"
-        contentContainerClassName="gap-4 px-5 pt-2 pb-4"
+        contentContainerClassName="gap-4 px-5 pb-4"
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {form.question.header ? (
-          <Text className="text-foreground-tertiary text-sm">{form.question.header}</Text>
-        ) : null}
-        <Text accessibilityRole="header" className="font-semibold text-base text-foreground">
-          {form.question.question}
-        </Text>
         {form.question.options.length ? (
-          <View className="-mx-3 gap-1">
+          <View className="gap-2">
             {form.question.options.map((option) => {
               const selected = form.answer.selectedOptionIds.includes(option.id);
               return (
@@ -119,20 +128,20 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
                   accessibilityHint={option.description}
                   accessibilityRole={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
                   accessibilityState={{ checked: selected, disabled: form.locked }}
-                  className={`min-h-11 flex-row items-center gap-3 rounded-lg px-3 py-2 active:opacity-70 ${selected ? 'bg-secondary' : ''}`}
+                  className={`min-h-13 flex-row items-center gap-3 rounded-xl border bg-field px-4 py-3 active:opacity-70 ${selected ? 'border-foreground' : 'border-border'}`}
                   disabled={form.locked}
                   onPress={() => form.select(option.id)}
                 >
-                  <SelectionIndicator
-                    control={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
-                    selected={selected}
-                  />
                   <View className="min-w-0 flex-1 gap-0.5">
-                    <Text className="text-base text-foreground">{option.label}</Text>
+                    <Text className="font-medium text-base text-foreground">{option.label}</Text>
                     {option.description ? (
                       <Text className="text-foreground-tertiary text-sm">{option.description}</Text>
                     ) : null}
                   </View>
+                  <SelectionIndicator
+                    control={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
+                    selected={selected}
+                  />
                 </Pressable>
               );
             })}
@@ -157,6 +166,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
           onSubmitEditing={advance}
           placeholder={t('chat.question.custom')}
           returnKeyType={form.action === 'submit' ? 'done' : 'next'}
+          style={fieldStyle}
           testID="user-question-custom"
           value={form.answer.text}
         />

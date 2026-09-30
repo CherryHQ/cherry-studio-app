@@ -27,6 +27,12 @@ not preempt an ongoing handshake. Failed candidates rotate behind untried addres
 so the round budget cannot permanently starve a later route. A network change cancels an unfinished round and waits for its
 cleanup before starting another. A healthy socket survives the notification.
 
+An empty candidate set ends the round immediately when discovery is unavailable. Recovery then
+waits for an address edit, QR hint, discovery event or foreground transition. With discovery
+available, a round still allows bounded browsing. A network change resets the previous path's
+discovery-unavailable verdict so discovery can recover. Address failures remain visible during retries;
+the chat and sidebar offer a link to the affected device's connection addresses.
+
 Foreground path monitoring is shared by the manager. Active recovery rounds share one native
 browser. Successful recovery or the final release stops browsing. Releasing the final lease
 cancels an unfinished attempt immediately; an established channel keeps the existing three-second
@@ -43,6 +49,17 @@ Device details expose editable connection addresses and a separate **Update loca
 action. A location scan must match the stored desktop identity and updates memory only. It does not
 claim an invitation, request grants or re-pair; an expired invitation can still supply a location hint.
 Initial pairing seeds QR hints under the saved connection ID before provider sync can retain a lease.
+
+Saved addresses appear as standard settings rows. Each row opens a single-address sheet for
+editing, testing or deletion; the add row opens the same sheet with an empty draft. The sheet
+validates the address and rejects duplicates. Saving or deleting updates the configured routes,
+while dismissing discards the draft. An empty list uses automatic discovery only.
+
+Each valid address in the sheet can be tested before or after saving. A check opens only that
+address, pins the paired desktop identity and authenticates the saved phone device ID. It uses a
+separate temporary channel even when another route is connected, and closes on completion,
+cancellation or backgrounding. A successful check does not save addresses or replace the active
+channel. Saving reports persistence; testing reports reachability and pairing authentication.
 
 Migration `0001_hot_cammi` replaces the legacy HTTP connection table with the final Noise pairing
 schema, including `configured_endpoints` with an empty-array default. Legacy HTTP connections require

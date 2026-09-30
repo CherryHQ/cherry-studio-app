@@ -95,7 +95,11 @@ export function undeliveredMessage(
   };
 }
 export function remoteAvailability(source: RemoteSourceState, disposed: boolean): Availability {
-  if (!disposed && source.status !== 'retired' && source.reason === 'upgrade-required')
+  if (
+    !disposed &&
+    source.status !== 'retired' &&
+    (source.reason === 'upgrade-required' || source.reason === 'unsupported-version')
+  )
     return { state: 'disabled', reason: 'upgrade-required' };
   if (disposed || source.status === 'retired')
     return {
@@ -107,6 +111,14 @@ export function remoteAvailability(source: RemoteSourceState, disposed: boolean)
             ? 'not-authorized'
             : 'retired',
     };
+  if (source.status === 'offline' || source.status === 'connecting') {
+    switch (source.reason) {
+      case 'no-location':
+      case 'discovery-unavailable':
+      case 'unreachable':
+        return { state: 'disabled', reason: source.reason };
+    }
+  }
   return source.status === 'ready'
     ? { state: 'enabled' }
     : {

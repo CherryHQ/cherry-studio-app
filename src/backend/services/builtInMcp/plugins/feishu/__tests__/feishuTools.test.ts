@@ -90,6 +90,66 @@ it('uses task update_fields to distinguish clearing a date from preserving omitt
   });
 });
 
+it('preserves per-record batch patches and rejects ambiguous repeated targets', () => {
+  const base = { app_token: 'bascnResolved', table_id: 'tblRequirements' };
+  const records = [
+    { record_id: 'recOne', fields: { 状态: null } },
+    { record_id: 'recTwo', fields: { 需求: 'Updated requirement' } },
+  ];
+  expect(request('base_batch_update_records', { ...base, records })).toEqual({
+    method: 'POST',
+    path: '/open-apis/bitable/v1/apps/bascnResolved/tables/tblRequirements/records/batch_update',
+    query: { user_id_type: 'open_id' },
+    body: { records },
+  });
+  expect(() =>
+    request('base_batch_update_records', { ...base, records: [records[0], records[0]] }),
+  ).toThrow();
+  expect(() => request('base_batch_create_records', { ...base, records: [] })).toThrow();
+  expect(() =>
+    request('base_batch_create_records', {
+      ...base,
+      records: Array.from({ length: 101 }, () => ({ fields: { 需求: 'Requirement' } })),
+    }),
+  ).toThrow();
+  expect(
+    request('base_batch_create_records', {
+      ...base,
+      records: [{ fields: { 需求: 'Requirement' } }],
+      client_token: '00000000-0000-4000-8000-000000000001',
+    }),
+  ).toMatchObject({
+    query: { client_token: '00000000-0000-4000-8000-000000000001' },
+    body: { records: [{ fields: { 需求: 'Requirement' } }] },
+  });
+});
+
+it('separates event cancellation from a personal invitation reply and preserves search pagination', () => {
+  const event = { calendar_id: 'calOne', event_id: 'event_0' };
+  expect(request('calendar_delete_event', { ...event, need_notification: false })).toEqual({
+    method: 'DELETE',
+    path: '/open-apis/calendar/v4/calendars/calOne/events/event_0',
+    query: { need_notification: 'false' },
+  });
+  expect(request('calendar_reply_event', { ...event, rsvp_status: 'decline' })).toEqual({
+    method: 'POST',
+    path: '/open-apis/calendar/v4/calendars/calOne/events/event_0/reply',
+    body: { rsvp_status: 'decline' },
+  });
+  expect(
+    request('calendar_search_events', {
+      calendar_id: 'calOne',
+      query: 'Review',
+      page_token: 'next',
+    }),
+  ).toEqual({
+    method: 'POST',
+    path: '/open-apis/calendar/v4/calendars/calOne/events/search',
+    query: { page_size: 20, page_token: 'next', user_id_type: 'open_id' },
+    body: { query: 'Review' },
+  });
+});
+
 it('lists assigned tasks and requires explicit open-ID members for creation', () => {
   expect(request('task_list', { completed: false })).toMatchObject({
     query: { type: 'my_tasks', completed: false, user_id_type: 'open_id', page_size: 20 },
@@ -186,4 +246,24 @@ it('admits a partial grant by tool, without exposing unrelated or write-only ope
     'read',
   );
   expect(getFeishuToolPolicy('offline_access')).toEqual({});
+});
+
+it('requires each new business permission independently and keeps POST searches read-only', () => {
+  expect(getFeishuToolPolicy('base:record:create')).toEqual({
+    base_create_record: 'write',
+    base_batch_create_records: 'write',
+  });
+  const views = getFeishuToolPolicy('base:view:read');
+  expect(views).toEqual({ base_list_views: 'read', base_get_view: 'read' });
+  expect(getFeishuToolPolicy('wiki:space:retrieve')).toEqual({ wiki_list_spaces: 'read' });
+  expect(getFeishuToolPolicy('calendar:calendar.event:read')).toHaveProperty(
+    'calendar_search_events',
+    'read',
+  );
+  expect(getFeishuToolPolicy('calendar:calendar.event:read')).not.toHaveProperty(
+    'calendar_delete_event',
+  );
+  expect(getFeishuToolPolicy('calendar:calendar.event:reply')).toEqual({
+    calendar_reply_event: 'write',
+  });
 });

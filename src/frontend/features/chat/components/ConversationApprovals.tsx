@@ -20,14 +20,6 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
   const isOpen = Boolean(interaction) && !retired;
   const canRespond =
     isOpen && interaction?.respond?.availability.state === 'enabled' && input.isSuccess;
-  const cancellations = snapshot.executions.flatMap((execution) =>
-    execution.cancel?.availability.state === 'enabled' &&
-    (interaction?.execution
-      ? execution.id === interaction.execution
-      : snapshot.executions.length === 1)
-      ? [execution.cancel]
-      : [],
-  );
   const respond = async ({ approvalId, approved }: ToolApprovalRespondInput) => {
     if (!canRespond || interaction?.id !== approvalId) return;
     const result = await interaction.respond!.execute(
@@ -35,15 +27,6 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
     );
     if (result.state === 'rejected' || result.state === 'interrupted')
       toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
-  };
-  const cancel = async () => {
-    for (const action of cancellations) {
-      const result = await action.execute(undefined);
-      if (result.state === 'rejected' || result.state === 'interrupted') {
-        toast.show({ label: t('chat.input.stopFailed'), variant: 'danger' });
-        return;
-      }
-    }
   };
 
   return (
@@ -62,7 +45,6 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
       isOpen={isOpen}
       canRespond={canRespond}
       onRespond={respond}
-      onCancel={cancellations.length ? cancel : undefined}
     >
       {input.isPending && interaction ? (
         <ContentState.Loading title={t('remoteAgent.loading')} />

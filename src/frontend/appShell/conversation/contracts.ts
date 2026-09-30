@@ -48,6 +48,9 @@ export type Availability =
       state: 'disabled';
       reason:
         | 'offline'
+        | 'no-location'
+        | 'discovery-unavailable'
+        | 'unreachable'
         | 'suspended'
         | 'synchronizing'
         | 'busy'

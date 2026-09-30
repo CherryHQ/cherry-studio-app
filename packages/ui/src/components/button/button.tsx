@@ -19,7 +19,8 @@ export type ButtonVariant =
   | 'link'
   | 'outline'
   | 'secondary'
-  | 'text';
+  | 'text'
+  | 'tonal';
 export type ButtonShape = 'pill' | 'rounded';
 export type ButtonSize = 'default' | 'field' | 'inline' | 'lg' | 'sm' | 'xs';
 
@@ -118,6 +119,11 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
   text: {
     label: 'text-link',
     root: 'bg-transparent shadow-none active:opacity-70',
+  },
+  // A quiet filled action that still holds its shape beside a default button.
+  tonal: {
+    label: 'text-foreground',
+    root: 'bg-secondary shadow-none',
   },
 };
 
