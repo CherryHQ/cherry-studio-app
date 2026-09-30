@@ -2,7 +2,7 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 159
+ * Total icons: 160
  */
 
 import { resolveGeneralIcon } from '../general';
@@ -118,6 +118,10 @@ export const PROVIDER_ICONS = {
   cerebras: {
     light: require('./light/cerebras.webp'),
     dark: require('./dark/cerebras.webp'),
+  },
+  cheaperinference: {
+    light: require('./light/cheaperinference.webp'),
+    dark: require('./light/cheaperinference.webp'),
   },
   cherryin: {
     light: require('./light/cherryin.webp'),
