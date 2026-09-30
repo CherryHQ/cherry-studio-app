@@ -24,6 +24,10 @@ jest.mock('../ReadFileToolPart', () => ({
   ...mockCreateToolPart('ReadFileToolPart'),
   isReadFileToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'read_file',
 }));
+jest.mock('../RunJsToolPart', () => ({
+  ...mockCreateToolPart('RunJsToolPart'),
+  isRunJsToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'run_js',
+}));
 jest.mock('../UserQuestionPart', () => mockCreateToolPart('UserQuestionPart'));
 jest.mock('../WebSearchToolPart', () => mockCreateToolPart('WebSearchToolPart'));
 jest.mock('../WriteFileToolPart', () => ({
@@ -40,6 +44,7 @@ describe('ToolPartRenderer', () => {
     ['edit_file', 'EditFileToolPart'],
     ['read_file', 'ReadFileToolPart'],
     ['write_file', 'WriteFileToolPart'],
+    ['run_js', 'RunJsToolPart'],
     ['ask_user_question', 'UserQuestionPart'],
     ['agent_create', 'AgentManagementToolPart'],
     ['agent_update', 'AgentManagementToolPart'],

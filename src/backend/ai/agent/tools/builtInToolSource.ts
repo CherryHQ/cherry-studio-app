@@ -22,6 +22,7 @@ import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { fileContent } from '@/backend/services/file/fileContent';
+import { createJsSandbox, type JsSandbox } from '@/backend/services/jsSandbox';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
 import {
@@ -60,6 +61,7 @@ import {
   resolveConfiguredPaintingModel,
 } from './painting';
 import { createReadFileTool } from './readFileTool';
+import { createRunJsTool } from './runJsTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { createWriteFileTool } from './writeFileTool';
 
@@ -103,6 +105,8 @@ export type SystemCapabilitySource = {
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     agents: AgentManagementData;
+    /** Null on clients built without the native sandbox, which omits `run_js`. */
+    jsSandbox: JsSandbox | null;
     painting: PaintingToolDependencies;
     platform: string;
     preference: PaintingToolDependencies['preference'];
@@ -249,6 +253,7 @@ function createCatalog(
     ),
     createReadFileTool(managedFileResolver, resources, documentParserMode),
     createWriteFileTool(fileContent),
+    ...(deps.jsSandbox ? [createRunJsTool(deps.jsSandbox)] : []),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),
     ...createHealthTools(deviceDeps),
@@ -367,6 +372,7 @@ function resolveDependencies(
   return {
     agents: overrides.agents ?? agentService,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
+    jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),
     platform: overrides.platform ?? Platform.OS,
     preference: overrides.preference ?? services.preference,

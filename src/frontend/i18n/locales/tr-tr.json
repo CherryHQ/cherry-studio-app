@@ -205,6 +205,7 @@
   "chat.builtinTool.calendar.listCalendars": "Takvim listesini al",
   "chat.builtinTool.calendar.listEvents": "Takvim etkinliklerini bulun",
   "chat.builtinTool.calendar.updateEvent": "Takvim etkinliğini güncelle",
+  "chat.builtinTool.code.runJs": "JavaScript'i çalıştır",
   "chat.builtinTool.file.created": "Dosya oluşturuldu",
   "chat.builtinTool.file.edit": "Dosyayı düzenle",
   "chat.builtinTool.file.edited": "Dosya düzenlendi",

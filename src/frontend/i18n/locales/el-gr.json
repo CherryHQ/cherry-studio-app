@@ -205,6 +205,7 @@
   "chat.builtinTool.calendar.listCalendars": "Λήψη λίστας ημερολογίου",
   "chat.builtinTool.calendar.listEvents": "Εύρεση συμβάντων ημερολογίου",
   "chat.builtinTool.calendar.updateEvent": "Ενημέρωση συμβάντος ημερολογίου",
+  "chat.builtinTool.code.runJs": "Εκτέλεση JavaScript",
   "chat.builtinTool.file.created": "Δημιουργήθηκε το αρχείο",
   "chat.builtinTool.file.edit": "Επεξεργασία αρχείου",
   "chat.builtinTool.file.edited": "Το αρχείο επεξεργάστηκε",
