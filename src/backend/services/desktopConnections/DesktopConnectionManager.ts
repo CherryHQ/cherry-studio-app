@@ -644,7 +644,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     try {
       for (;;) {
         round.signal.throwIfAborted();
-        if (attempted.size >= 24) throw new DesktopUnreachableError(failures);
+        if (attempted.size >= 32) throw new DesktopUnreachableError(failures);
         const endpoint = candidates().find(
           (endpoint) => !attempted.has(directEndpointUrl(endpoint)),
         );

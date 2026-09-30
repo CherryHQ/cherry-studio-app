@@ -356,7 +356,7 @@ export class DesktopConnectionService {
   ): Promise<DirectEndpoint[]> {
     const learnedEndpoints = [
       ...new Map(
-        input.slice(0, 16).map((value) => {
+        input.slice(0, 32).map((value) => {
           const endpoint = directEndpointSchema.parse(value);
           return [directEndpointUrl(endpoint), endpoint] as const;
         }),

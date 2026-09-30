@@ -76,6 +76,17 @@ describe('DesktopConnectionService provider synchronization', () => {
     testDb.sqlite.close();
   });
 
+  it('persists all 32 addresses in a desktop snapshot', async () => {
+    const endpoints = Array.from({ length: 32 }, (_, i) => ({
+      host: `10.0.0.${i + 1}`,
+      port: 23333,
+      security: 'ws' as const,
+    }));
+    const row = await service.getRow(connectionId);
+    await service.updateLearnedEndpoints(connectionId, endpoints, row, signal());
+    expect((await service.getRow(connectionId)).learnedEndpoints).toEqual(endpoints);
+  });
+
   it('replaces synced routes without changing manual addresses or pairing', async () => {
     const original = await service.getRow(connectionId);
     const manual = { host: 'company.example.com', port: 443, security: 'wss' as const };

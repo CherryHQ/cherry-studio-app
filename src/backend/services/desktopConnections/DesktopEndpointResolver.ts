@@ -43,7 +43,7 @@ export class DesktopEndpointResolver {
       if (!txt.success || event.id.length > 512) return;
       this.prune();
       if (!this.services.has(event.id) && this.services.size >= 128) return;
-      const endpoints = event.hosts.slice(0, 16).flatMap((host) => {
+      const endpoints = event.hosts.slice(0, 32).flatMap((host) => {
         // Scoped link-local IPv6 is not portable across the RN WebSocket implementations.
         if (/^fe[89ab][0-9a-f]:/i.test(host) || host.includes('%')) return [];
         const parsed = directEndpointSchema.safeParse({ host, port: event.port, security: 'ws' });
@@ -65,7 +65,7 @@ export class DesktopEndpointResolver {
       this.hints.delete(this.hints.keys().next().value!);
     this.hints.set(id, {
       identity,
-      endpoints: endpoints.slice(0, 16).map((value) => directEndpointSchema.parse(value)),
+      endpoints: endpoints.slice(0, 32).map((value) => directEndpointSchema.parse(value)),
       expiresAt: Date.now() + 300_000,
     });
     for (const listener of this.listeners) listener(false);
@@ -77,11 +77,11 @@ export class DesktopEndpointResolver {
     const automatic = [...this.services.values()]
       .filter((record) => record.identity === identity)
       .flatMap((record) => record.endpoints)
-      .slice(0, 16);
+      .slice(0, 32);
     const candidates = [
       ...(hint?.identity === identity ? hint.endpoints : []),
       ...configured,
-      ...automatic.slice(0, 16 - (hint?.identity === identity ? hint.endpoints.length : 0)),
+      ...automatic.slice(0, 32 - (hint?.identity === identity ? hint.endpoints.length : 0)),
     ];
     const unique = [
       ...new Map(candidates.map((endpoint) => [directEndpointUrl(endpoint), endpoint])).values(),
@@ -101,7 +101,7 @@ export class DesktopEndpointResolver {
       this.failures.delete(this.failures.keys().next().value!);
     this.failures.set(
       id,
-      [...(this.failures.get(id) ?? []).filter((value) => value !== key), key].slice(-24),
+      [...(this.failures.get(id) ?? []).filter((value) => value !== key), key].slice(-32),
     );
     if (this.successes.get(id) === key) this.successes.delete(id);
   }
