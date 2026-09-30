@@ -384,13 +384,15 @@ test('chat exports keep user bubbles and answer rows while Markdown keeps portab
         id: 'two',
         heading: 'Assistant',
         presentation: 'message',
+        avatar: '🍒',
+        model: 'GPT <5>',
         blocks: [{ kind: 'markdown', source: 'Complete answer.' }],
       },
     ],
   };
   const markdown = renderMarkdown(document);
   expect(markdown).toContain('## You');
-  expect(markdown).toContain('## Assistant');
+  expect(markdown).toContain('## Assistant · GPT \\<5\\>');
   expect(markdown).toContain('\\# literal question');
   for (const imageFrame of [undefined, { background: '#ffffff', label: 'Conversation' }]) {
     const { html } = await renderHtml(
@@ -403,8 +405,10 @@ test('chat exports keep user bubbles and answer rows while Markdown keeps portab
     expect(html).toContain('<title>Export &lt;review&gt;</title>');
     expect(html).not.toContain('<h1 class="document-title">');
     expect(html).toContain('<section class="bubble-row" aria-label="You">');
-    expect(html).toContain('<h2 class="message-heading">Assistant</h2>');
-    expect(html.indexOf('aria-label="You"')).toBeLessThan(html.indexOf('>Assistant</h2>'));
+    expect(html).toContain(
+      '<h2 class="message-heading"><span class="message-avatar" aria-hidden="true">🍒</span><span class="message-name">Assistant</span><span class="message-model">GPT &lt;5&gt;</span></h2>',
+    );
+    expect(html.indexOf('aria-label="You"')).toBeLessThan(html.indexOf('>Assistant</span>'));
     expect(html).not.toContain('01 ·');
     expect(html).toContain('# literal question');
     expect(html).toContain('Complete answer.');

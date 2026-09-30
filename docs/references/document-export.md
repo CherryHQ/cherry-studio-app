@@ -53,7 +53,7 @@ or owns a native view reference.
 
 A document contains an optional title, ordered sections, headings/metadata and text, Markdown,
 image, attachment, detail or reference blocks. Optional bubble/message hints express source-owned
-hierarchy without exposing chat models. Assets refer to managed file IDs or eligible remote URLs.
+hierarchy; message sections may add an emoji avatar and a model display name to their heading. Assets refer to managed file IDs or eligible remote URLs.
 Markdown image references are discovered through parsed tokens so code examples never download
 resources. `{ kind: 'markdown', source, title?, labels? }` normalizes to the same model.
 The app-shell entry supplies localized content labels; programmatic callers may omit them for
@@ -139,7 +139,7 @@ navigation, file access, cookies and new windows, and waits for assets/fonts/lay
 Image preview contains actual PNGs, so it has no interactive links or disclosures.
 
 Chat HTML and images follow the message list: user attachments above right-aligned bubbles,
-assistant names above full-width answers, and ordinary message spacing without document numbering,
+the avatar, assistant name and model row above full-width answers, and ordinary message spacing without document numbering,
 section rules or a large conversation title. The title remains in file metadata and Markdown.
 HTML, images and Markdown preview share `renderHtmlStyles.ts`, accessibility typography and surface/code tokens.
 Markdown preview renders the actual complete output text, including title, resource notes and signature,

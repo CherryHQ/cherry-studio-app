@@ -236,7 +236,12 @@ function createHtmlRenderer(
           return `<section class="bubble-row" aria-label="${escapeHtml(section.heading ?? '')}"><div class="bubble-column">${attachments.length ? `<div class="attachments">${renderBlocks(attachments, references)}</div>` : ''}${content.length || metadata ? `<div class="bubble">${metadata}${renderBlocks(content, references)}</div>` : ''}</div></section>`;
         }
         const isMessage = section.presentation === 'message';
-        return `<section class="${isMessage ? 'message-row' : 'document-section'}">${section.heading ? `<h2 class="${isMessage ? 'message-heading' : 'section-heading'}">${escapeHtml(section.heading)}</h2>` : ''}<div class="message-content">${metadata}${renderBlocks(section.blocks, references)}</div></section>`;
+        const heading = !section.heading
+          ? ''
+          : isMessage
+            ? `<h2 class="message-heading">${section.avatar ? `<span class="message-avatar" aria-hidden="true">${escapeHtml(section.avatar)}</span>` : ''}<span class="message-name">${escapeHtml(section.heading)}</span>${section.model ? `<span class="message-model">${escapeHtml(section.model)}</span>` : ''}</h2>`
+            : `<h2 class="section-heading">${escapeHtml(section.heading)}</h2>`;
+        return `<section class="${isMessage ? 'message-row' : 'document-section'}">${heading}<div class="message-content">${metadata}${renderBlocks(section.blocks, references)}</div></section>`;
       })
       .join('\n');
     const signature = getExportSignature(presentation.watermark);

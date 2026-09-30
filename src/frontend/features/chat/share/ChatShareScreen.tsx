@@ -21,7 +21,10 @@ import { conversationRefFromRoute } from '@/frontend/appShell/navigation/chat';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
-import { createAgentMessageListProjectionCache } from '../runtime/agentMessageProjection';
+import {
+  createAgentMessageListProjectionCache,
+  resolveMessageModel,
+} from '../runtime/agentMessageProjection';
 import { projectLocalTranscriptMessage } from '../runtime/localConversationView';
 import { useAgentMessageHistoryWindow } from '../runtime/useAgentMessageHistoryWindow';
 import { chatShareMessagePreview } from './chatShareMessagePreview';
@@ -112,7 +115,10 @@ function LocalShareContent({ sessionId, messageId }: { sessionId: string; messag
         return {
           title: snapshot.session.title,
           assistantName: snapshot.assistantName,
-          messages: snapshot.messages,
+          messages: snapshot.messages.map((message) => ({
+            ...message,
+            modelName: resolveMessageModel(message)?.name,
+          })),
         };
       },
     }),

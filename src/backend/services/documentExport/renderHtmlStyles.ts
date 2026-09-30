@@ -22,7 +22,10 @@ main{width:100%;max-width:${width}px;margin:0 auto}
 .document-section+.document-section{border-top:1px solid ${colors.subtleBorder};padding-top:24px}
 .section-heading{font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;color:${colors.muted};margin:0}
 .message-row{min-width:0;display:flex;flex-direction:column;gap:10px}
-.message-heading{font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;color:${colors.foreground};margin:0}
+.message-heading{display:flex;align-items:center;gap:8px;min-width:0;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;color:${colors.foreground};margin:0}
+.message-avatar{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:24px;height:24px;border:1px solid ${colors.border};border-radius:50%;background:${colors.secondary};font-size:14px;line-height:1}
+.message-name,.message-model{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.message-model{margin-left:-2px;color:${colors.tertiary};font-weight:400}
 .bubble-row{display:flex;justify-content:flex-end;min-width:0}
 .bubble-column{width:88%;display:flex;align-items:flex-end;flex-direction:column;gap:8px;min-width:0}
 .bubble{max-width:100%;min-width:0;padding:10px 16px;border-radius:18px;background:${colors.bubble};line-height:${base.lineHeight}px}

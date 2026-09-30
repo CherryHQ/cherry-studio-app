@@ -39,8 +39,10 @@ standalone-image-reference filter: an invented preview URL ending in an image ID
 that message is omitted, while unrelated images and code examples stay intact. Non-image files
 collect after the answer. Images and HTML use
 the message-list hierarchy: attachments above right-aligned user bubbles and full-width answers
-under the assistant name. They omit article titles and message numbering. Markdown retains the
-conversation title and ordinary role headings. All preserve chronological order.
+under the message-list author row (a round 🍒 avatar, the assistant name and, for local chats, each
+answer's own model name). They omit article titles and message numbering. Markdown retains the
+conversation title and ordinary role headings, with the model after answer headings. All preserve
+chronological order.
 The export renderers own code, resource, source-list and table presentation and their format-specific
 fallbacks. Images and HTML show the opening code inside fixed 192-point panels; HTML retains full
 code with internal scrolling, and Markdown keeps the complete authored source. Images and HTML show
