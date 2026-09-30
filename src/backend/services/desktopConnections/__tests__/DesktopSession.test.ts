@@ -84,6 +84,29 @@ const options = (channels: Record<string, ReturnType<typeof fakeChannel>>) => {
 };
 
 describe('DesktopSession', () => {
+  it('adopts pairing approval so address sync does not authenticate an already authenticated channel', async () => {
+    const authorization = { grants: [{ domain: 'configuration', grantId: 'grant-1' }] };
+    const expiresAt = new Date(Date.now() + 600_000).toISOString();
+    const channel = fakeChannel({
+      ...hello,
+      'pairing.get': () => ({
+        status: 'approved',
+        deviceId: 'device-1',
+        authorization,
+        accessToken: 'token',
+        expiresAt,
+      }),
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    try {
+      expect(session.currentAuthorization).toBeUndefined();
+      await session.request('pairing.get', { claimId: 'claim' });
+      expect(session.currentAuthorization).toEqual(authorization);
+    } finally {
+      session.close();
+    }
+  });
+
   it('reads VPN addresses through the published address handoff contract', async () => {
     const snapshot = {
       desktopIdentity: '12D3KooWDesktop',

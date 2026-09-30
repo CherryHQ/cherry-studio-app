@@ -1,7 +1,7 @@
 import { ContentState, useToast } from '@cherrystudio/ui/components';
 import { CameraView } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteHeader } from '@/frontend/appShell/header';
 import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { useBackendModule } from '@/frontend/data';
-import { useDesktopConnectionActions } from '@/frontend/hooks/useDesktopConnections';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
 import {
@@ -17,16 +16,14 @@ import {
   DesktopPairingQrSchema,
 } from '@/shared/data/api/schemas/desktopConnections';
 
-import { desktopConnectionErrorMessage } from '../desktopConnectionError';
 import { useDesktopPairingInput } from './DesktopPairingProvider';
 import { useScannerPermissions } from './useScannerPermissions';
 
 export function DeviceConnectionScannerScreen({
   setupIntent,
 }: { setupIntent?: FirstUseSetupIntent } = {}) {
-  const params = useLocalSearchParams<{ connectionId?: string | string[]; purpose?: string }>();
+  const params = useLocalSearchParams<{ connectionId?: string | string[] }>();
   const connectionId = getSingleRouteParam(params.connectionId);
-  const updatingLocation = params.purpose === 'location' && Boolean(connectionId);
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
@@ -36,18 +33,9 @@ export function DeviceConnectionScannerScreen({
   const [hasScanned, setHasScanned] = useState(false);
   const [scanError, setScanError] = useState<string>();
   const scanInFlight = useRef(false);
-  const mounted = useRef(false);
-  const { isPairing, updateLocation } = useDesktopConnectionActions();
   const { setInput } = useDesktopPairingInput();
   const isReady = isActive && !isPreparing;
   const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
 
   const retryScan = () => {
     scanInFlight.current = false;
@@ -62,34 +50,19 @@ export function DeviceConnectionScannerScreen({
   };
 
   const submit = useCallback(
-    async (qr: DesktopPairingQr) => {
-      try {
-        if (updatingLocation && connectionId) {
-          const updated = await updateLocation(connectionId, qr);
-          if (updated && mounted.current)
-            router.replace({
-              params: { connectionId },
-              pathname: '/settings/device-connections/[connectionId]',
-            });
-          return;
-        }
-        setInput({
-          ...qr,
-          capabilities: ['configuration', 'agent'],
-          ...(connectionId ? { connectionId } : {}),
-        });
-        router.replace(
-          setupIntent === 'chat'
-            ? '/onboarding/device-connections/pair'
-            : '/settings/device-connections/pair',
-        );
-      } catch (error) {
-        if (mounted.current) {
-          setScanError(desktopConnectionErrorMessage(error, t));
-        }
-      }
+    (qr: DesktopPairingQr) => {
+      setInput({
+        ...qr,
+        capabilities: ['configuration', 'agent'],
+        ...(connectionId ? { connectionId } : {}),
+      });
+      router.replace(
+        setupIntent === 'chat'
+          ? '/onboarding/device-connections/pair'
+          : '/settings/device-connections/pair',
+      );
     },
-    [connectionId, router, setInput, setupIntent, t, updatingLocation, updateLocation],
+    [connectionId, router, setInput, setupIntent],
   );
 
   const parseAndSubmit = useCallback(
@@ -103,7 +76,7 @@ export function DeviceConnectionScannerScreen({
         if (!parsed.success) {
           throw new Error('invalid QR');
         }
-        void submit(parsed.data);
+        submit(parsed.data);
       } catch {
         setScanError(t('settings.deviceConnections.scan.invalidQr'));
       }
@@ -115,7 +88,7 @@ export function DeviceConnectionScannerScreen({
     <View className="flex-1 bg-grouped-background">
       <RouteHeader
         title={t(
-          updatingLocation
+          connectionId
             ? 'settings.deviceConnections.location.scan'
             : 'settings.deviceConnections.scan.title',
         )}
@@ -139,10 +112,10 @@ export function DeviceConnectionScannerScreen({
           ) : camera?.state === 'granted' ? (
             <>
               <CameraView
-                active={isReady && !hasScanned && !isPairing}
+                active={isReady && !hasScanned}
                 barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
                 onBarcodeScanned={
-                  !isReady || hasScanned || isPairing
+                  !isReady || hasScanned
                     ? undefined
                     : ({ data }) => {
                         parseAndSubmit(data);
@@ -181,7 +154,7 @@ export function DeviceConnectionScannerScreen({
         </View>
         <Text className="px-6 text-center text-sm text-muted-foreground">
           {t(
-            updatingLocation
+            connectionId
               ? 'settings.deviceConnections.location.scanHelp'
               : 'settings.deviceConnections.scan.guidance',
           )}

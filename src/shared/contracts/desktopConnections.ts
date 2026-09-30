@@ -3,7 +3,6 @@ import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
 import type {
   DesktopImportPreview,
   DesktopPairingClaim,
-  DesktopPairingQr,
   DesktopImportResult,
   DesktopImportSelectionsDto,
   PairDesktopConnectionDto,
@@ -27,7 +26,6 @@ export interface DesktopConnectionsModule {
     signal: AbortSignal,
     onProgress?: (progress: DesktopPairingProgress) => void,
   ): Promise<DesktopConnection>;
-  updateLocation(id: string, input: DesktopPairingQr, signal: AbortSignal): Promise<void>;
   remove(id: string, signal: AbortSignal): Promise<void>;
   preview(id: string, signal: AbortSignal): Promise<DesktopImportPreview>;
   import(

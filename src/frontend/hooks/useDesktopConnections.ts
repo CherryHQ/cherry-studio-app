@@ -2,10 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useBackendModule, useQuery } from '@/frontend/data';
-import type {
-  DesktopImportSelectionsDto,
-  DesktopPairingQr,
-} from '@/shared/data/api/schemas/desktopConnections';
+import type { DesktopImportSelectionsDto } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
 const EMPTY_CONNECTIONS: readonly DesktopConnection[] = Object.freeze([]);
@@ -33,7 +30,7 @@ export function useDesktopConnection(id: string | undefined) {
   };
 }
 
-type Operation = 'location' | 'remove' | 'preview' | 'import';
+type Operation = 'remove' | 'preview' | 'import';
 
 export function useDesktopConnectionActions() {
   const connections = useBackendModule('desktopConnections');
@@ -93,14 +90,6 @@ export function useDesktopConnectionActions() {
     [queryClient],
   );
 
-  const updateLocation = useCallback(
-    (id: string, qr: DesktopPairingQr) =>
-      run('location', async (signal) => {
-        await connections.updateLocation(id, qr, signal);
-        return true;
-      }),
-    [connections, run],
-  );
   const remove = useCallback(
     (id: string) =>
       run('remove', async (signal) => {
@@ -120,8 +109,6 @@ export function useDesktopConnectionActions() {
   );
 
   return {
-    isPairing: pending === 'location',
-    updateLocation,
     isRemoving: pending === 'remove',
     isPreviewing: pending === 'preview',
     isImporting: pending === 'import',

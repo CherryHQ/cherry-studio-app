@@ -160,7 +160,12 @@ export class DesktopSession {
         ),
         signal,
       );
-      return schema.result.parse(result) as DesktopResult<M>;
+      const parsed = schema.result.parse(result);
+      if (method === 'pairing.get') {
+        const decision = parsed as DesktopResult<'pairing.get'>;
+        if (decision.status === 'approved') this.adopt(decision.authorization, decision.expiresAt);
+      }
+      return parsed as DesktopResult<M>;
     } catch (error) {
       if (error instanceof JSONRPCErrorException) {
         const failure = remoteFailureSchema.safeParse(error.data);
