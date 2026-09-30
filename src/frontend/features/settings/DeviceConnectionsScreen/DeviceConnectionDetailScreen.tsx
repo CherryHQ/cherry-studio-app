@@ -1,6 +1,6 @@
 import { ContentState, Section, useAlert } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { type ReactNode, useCallback } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -20,6 +20,7 @@ export function DeviceConnectionDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const { connection, error, isLoading, refetch } = useDesktopConnection(connectionId);
   const { isRemoving, remove } = useDesktopConnectionActions();
 
@@ -119,17 +120,28 @@ export function DeviceConnectionDetailScreen() {
           }
         />
         <Section.Item
-          label={t('settings.deviceConnections.location.scan')}
-          onPress={() =>
-            router.push({
-              params: { connectionId: connection.id, purpose: 'location' },
-              pathname: '/settings/device-connections/scan',
-            })
-          }
+          accessibilityState={{ expanded: isAdvancedOpen }}
+          label={t('settings.deviceConnections.advanced')}
+          onPress={() => setIsAdvancedOpen((value) => !value)}
         />
       </Section>
 
-      <DesktopEndpointsEditor key={connection.id} connection={connection} />
+      {isAdvancedOpen ? (
+        <>
+          <Section>
+            <Section.Item
+              label={t('settings.deviceConnections.location.scan')}
+              onPress={() =>
+                router.push({
+                  params: { connectionId: connection.id, purpose: 'location' },
+                  pathname: '/settings/device-connections/scan',
+                })
+              }
+            />
+          </Section>
+          <DesktopEndpointsEditor key={connection.id} connection={connection} />
+        </>
+      ) : null}
 
       <Section>
         <Section.Item

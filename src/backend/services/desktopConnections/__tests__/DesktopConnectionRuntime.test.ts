@@ -33,6 +33,7 @@ const row = {
   name: 'Desktop',
   deviceId: 'device-1',
   desktopIdentity: '12D3KooWDesktop',
+  learnedEndpoints: [] as { host: string; port: number; security: 'ws' | 'wss' }[],
   configuredEndpoints: [{ host: '192.168.1.2', port: 23333, security: 'ws' as const }],
   addresses: ['192.168.1.2'],
   port: 23333,
@@ -74,12 +75,17 @@ function deferred<T>() {
 }
 
 function createStore() {
+  let currentRow = { ...row };
   return {
-    getRow: jest.fn(async () => row),
+    getRow: jest.fn(async () => currentRow),
     savePair: jest.fn(async () => connection),
     remove: jest.fn(async () => undefined),
     updateStatus: jest.fn(async () => undefined),
     addEndpoint: jest.fn(async () => undefined),
+    updateLearnedEndpoints: jest.fn(async (_id, endpoints) => {
+      currentRow = { ...currentRow, learnedEndpoints: endpoints };
+      return endpoints;
+    }),
     preview: jest.fn(async () => ({ providers: [] })),
     import: jest.fn(async () => ({
       providersAdded: 0,
@@ -89,7 +95,14 @@ function createStore() {
     })),
   } satisfies Pick<
     DesktopConnectionService,
-    'getRow' | 'savePair' | 'remove' | 'updateStatus' | 'preview' | 'import' | 'addEndpoint'
+    | 'getRow'
+    | 'savePair'
+    | 'remove'
+    | 'updateStatus'
+    | 'preview'
+    | 'import'
+    | 'addEndpoint'
+    | 'updateLearnedEndpoints'
   >;
 }
 
@@ -99,7 +112,7 @@ function createSession(handlers: Record<string, (params: any) => unknown>) {
   const session = {
     isOpen: true,
     done: closed.promise,
-    currentAuthorization: { grants },
+    currentAuthorization: { grants } as RemoteAuthorization | undefined,
     address: '192.168.1.2',
     onAuthorization: jest.fn(() => () => undefined),
     calls: [] as { method: string; params: unknown }[],
@@ -185,6 +198,61 @@ describe('DesktopConnectionRuntime', () => {
     await runtime._doDestroy();
     await manager._doStop();
     await manager._doDestroy();
+  });
+
+  it('saves authenticated desktop addresses before initial pairing completes', async () => {
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' };
+    const session = Object.assign(
+      createSession({
+        'pairing.claim': () => ({
+          claimId: 'claim',
+          verificationCode: '123456',
+          expiresAt: '2026-09-30T00:02:00Z',
+        }),
+        'pairing.get': () => ({
+          status: 'approved',
+          deviceId: row.deviceId,
+          authorization: { grants },
+        }),
+        'connection.authenticate': () => ({ authorization: { grants } }),
+        'connection.endpoints': () => ({ desktopIdentity: row.desktopIdentity, endpoints: [vpn] }),
+      }),
+      { connectionEndpointsVersion: 1, currentAuthorization: undefined },
+    );
+    connect.mockResolvedValueOnce(session as never);
+    await expect(runtime.pair(pairing, signal())).resolves.toEqual(connection);
+    expect((await store.getRow()).learnedEndpoints).toEqual([vpn]);
+    expect(session.calls.map((call) => call.method)).toEqual([
+      'pairing.claim',
+      'pairing.get',
+      'connection.endpoints',
+    ]);
+    expect(session.isOpen).toBe(false);
+  });
+
+  it('completes pairing even when automatic address sync is unavailable', async () => {
+    const session = Object.assign(
+      createSession({
+        'pairing.claim': () => ({
+          claimId: 'claim',
+          verificationCode: '123456',
+          expiresAt: '2026-09-30T00:02:00Z',
+        }),
+        'pairing.get': () => ({
+          status: 'approved',
+          deviceId: row.deviceId,
+          authorization: { grants },
+        }),
+        'connection.endpoints': () => {
+          throw new Error('Address query failed');
+        },
+      }),
+      { connectionEndpointsVersion: 1 },
+    );
+    connect.mockResolvedValueOnce(session as never);
+    await expect(runtime.pair(pairing, signal())).resolves.toEqual(connection);
+    expect((await store.getRow()).learnedEndpoints).toEqual([]);
+    expect(session.isOpen).toBe(false);
   });
 
   it('verifies exactly the selected address before saving, without exporting provider credentials', async () => {

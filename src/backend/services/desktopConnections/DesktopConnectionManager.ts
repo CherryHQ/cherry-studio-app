@@ -265,6 +265,39 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     );
   }
 
+  async syncEndpoints(row: DesktopConnectionRow, session: DesktopSession, signal: AbortSignal) {
+    if (session.connectionEndpointsVersion !== 1) return;
+    const syncSignal = AbortSignal.any([signal, AbortSignal.timeout(4000)]);
+    try {
+      const authorization =
+        session.currentAuthorization ?? (await session.authenticate(row.deviceId, syncSignal));
+      const grant = row.grants.find((candidate) =>
+        authorization.grants.some(
+          (current) => current.domain === candidate.domain && current.grantId === candidate.grantId,
+        ),
+      );
+      if (!grant) return;
+      const snapshot = await session.request(
+        'connection.endpoints',
+        { domain: grant.domain },
+        syncSignal,
+      );
+      if (snapshot.desktopIdentity !== row.desktopIdentity)
+        throw new Error('Desktop identity changed while syncing addresses');
+      const learnedEndpoints = await this.store!.updateLearnedEndpoints(
+        row.id,
+        snapshot.endpoints,
+        row,
+        syncSignal,
+      );
+      const entry = this.entries.get(row.id);
+      if (entry && fingerprint(entry.row) === fingerprint(row))
+        entry.row = { ...entry.row, learnedEndpoints };
+    } catch (error) {
+      if (!signal.aborted) logger.warn('Could not sync desktop addresses', { error });
+    }
+  }
+
   async verifyEndpoint(row: DesktopConnectionRow, endpoint: DirectEndpoint, signal: AbortSignal) {
     const session = await this.openTemporary([endpoint], row.desktopIdentity, signal, row.deviceId);
     try {
@@ -420,17 +453,20 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
             this.invalidate(id);
             throw new DOMException('Pairing replaced', 'AbortError');
           }
-          entry.row = { ...entry.row, configuredEndpoints: latest.configuredEndpoints };
+          entry.row = {
+            ...entry.row,
+            configuredEndpoints: latest.configuredEndpoints,
+            learnedEndpoints: latest.learnedEndpoints,
+          };
           this.refreshDiscoveryActivity();
           const stopBrowsing = this.discovery.browse();
           try {
             session = await this.connectCandidates(
               () =>
-                this.resolver.candidates(
-                  id,
-                  entry.row.desktopIdentity,
-                  entry.row.configuredEndpoints,
-                ),
+                this.resolver.candidates(id, entry.row.desktopIdentity, [
+                  ...entry.row.configuredEndpoints,
+                  ...entry.row.learnedEndpoints,
+                ]),
               entry.row.desktopIdentity,
               controller.signal,
               entry.row.deviceId,
@@ -455,8 +491,10 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
           });
           for (const lease of entry.leases) this.update(lease, { status: 'ready' });
           const connected = session;
+          void this.track(this.syncEndpoints(entry.row, connected, controller.signal));
           this.track(connected.done)
             .finally(() => {
+              controller.abort();
               if (entry.session !== connected) return;
               entry.session = undefined;
               for (const lease of entry.leases)

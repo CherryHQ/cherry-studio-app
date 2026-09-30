@@ -76,6 +76,63 @@ describe('DesktopConnectionService provider synchronization', () => {
     testDb.sqlite.close();
   });
 
+  it('replaces synced routes without changing manual addresses or pairing', async () => {
+    const original = await service.getRow(connectionId);
+    const manual = { host: 'company.example.com', port: 443, security: 'wss' as const };
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    await service.updateEndpoints(connectionId, [manual]);
+    await service.updateLearnedEndpoints(connectionId, [vpn, vpn], original, signal());
+    expect(await service.getRow(connectionId)).toMatchObject({
+      learnedEndpoints: [vpn],
+      configuredEndpoints: [manual],
+      grants: original.grants,
+    });
+    const updated = { ...vpn, host: 'fd7a:115c:a1e0::2' };
+    await service.updateLearnedEndpoints(connectionId, [updated], original, signal());
+    expect(await service.getRow(connectionId)).toMatchObject({
+      learnedEndpoints: [updated],
+      configuredEndpoints: [manual],
+      deviceId: original.deviceId,
+    });
+    await expect(
+      service.updateLearnedEndpoints(
+        connectionId,
+        [],
+        { ...original, deviceId: 'replaced' },
+        signal(),
+      ),
+    ).rejects.toMatchObject({ details: { reason: 'auth-revoked' } });
+    const cancelled = new AbortController();
+    cancelled.abort();
+    await expect(
+      service.updateLearnedEndpoints(connectionId, [], original, cancelled.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect((await service.getRow(connectionId)).learnedEndpoints).toEqual([updated]);
+    await service.updateEndpoints(connectionId, []);
+    expect((await service.getRow(connectionId)).learnedEndpoints).toEqual([updated]);
+  });
+
+  it('clears learned routes on re-pairing and rejects a late response from the previous binding', async () => {
+    const previous = await service.getRow(connectionId);
+    const endpoint = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    await service.updateEndpoints(connectionId, [endpoint]);
+    await service.updateLearnedEndpoints(connectionId, [endpoint], previous, signal());
+    const { id, name, desktopIdentity, grants } = previous;
+    await service.savePair(
+      { id, name, desktopIdentity, grants, deviceId: 'new-device' },
+      true,
+      signal(),
+    );
+    await expect(
+      service.updateLearnedEndpoints(connectionId, [endpoint], previous, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'auth-revoked' } });
+    expect(await service.getRow(connectionId)).toMatchObject({
+      deviceId: 'new-device',
+      learnedEndpoints: [],
+      configuredEndpoints: [endpoint],
+    });
+  });
+
   it('adds a verified address once while preserving existing addresses and pairing', async () => {
     const original = await service.getRow(connectionId);
     const manual = { host: 'company.example.com', port: 443, security: 'wss' as const };

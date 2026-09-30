@@ -138,6 +138,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               qr.desktopIdentity,
               qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
             );
+            await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
             return connection;
           }
           if (decision.status === 'rejected') {

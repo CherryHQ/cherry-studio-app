@@ -27,7 +27,10 @@ export interface DesktopDomainLease {
   ready(signal: AbortSignal): Promise<DesktopSession>;
   release(): void;
 }
-export type DesktopConnectionStore = Pick<DesktopConnectionService, 'getRow' | 'updateStatus'>;
+export type DesktopConnectionStore = Pick<
+  DesktopConnectionService,
+  'getRow' | 'updateStatus' | 'updateLearnedEndpoints'
+>;
 export type DesktopConnectionTarget = {
   desktopIdentity: string;
   addresses: string[];

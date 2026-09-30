@@ -1,6 +1,7 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
 import {
   configuredEndpointsSchema,
+  directEndpointSchema,
   directEndpointUrl,
   type DirectEndpoint,
 } from '@cherrystudio/remote-protocol';
@@ -320,7 +321,7 @@ export class DesktopConnectionService {
   ): Promise<DesktopConnection> {
     return this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
-      const values = { ...input, status: 'paired' as const };
+      const values = { ...input, learnedEndpoints: [], status: 'paired' as const };
       const [row] = await (replace
         ? tx
             .update(desktopConnectionTable)
@@ -344,6 +345,47 @@ export class DesktopConnectionService {
         .returning();
       if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
       return rowToConnection(row);
+    });
+  }
+
+  async updateLearnedEndpoints(
+    id: string,
+    input: DirectEndpoint[],
+    expected: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
+    signal: AbortSignal,
+  ): Promise<DirectEndpoint[]> {
+    const learnedEndpoints = [
+      ...new Map(
+        input.slice(0, 16).map((value) => {
+          const endpoint = directEndpointSchema.parse(value);
+          return [directEndpointUrl(endpoint), endpoint] as const;
+        }),
+      ).values(),
+    ].filter(
+      (endpoint) => !/^fe[89ab][0-9a-f]:/i.test(endpoint.host) && !endpoint.host.includes('%'),
+    );
+    return this.dbService.withWriteTx(async (tx) => {
+      signal.throwIfAborted();
+      const [row] = await tx
+        .select()
+        .from(desktopConnectionTable)
+        .where(eq(desktopConnectionTable.id, id))
+        .limit(1);
+      if (
+        !row ||
+        row.status !== 'paired' ||
+        row.deviceId !== expected.deviceId ||
+        row.desktopIdentity !== expected.desktopIdentity ||
+        JSON.stringify(row.grants) !== JSON.stringify(expected.grants)
+      )
+        throw desktopError('auth-revoked', 'Pairing changed while syncing addresses');
+      if (JSON.stringify(row.learnedEndpoints) !== JSON.stringify(learnedEndpoints))
+        await tx
+          .update(desktopConnectionTable)
+          .set({ learnedEndpoints })
+          .where(eq(desktopConnectionTable.id, id));
+      signal.throwIfAborted();
+      return learnedEndpoints;
     });
   }
 

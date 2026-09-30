@@ -40,6 +40,7 @@ const original: DesktopConnectionRow = {
   name: 'Desktop',
   deviceId: 'device-1',
   desktopIdentity: 'peer-1',
+  learnedEndpoints: [],
   configuredEndpoints: [{ host: '192.168.1.2', port: 23333, security: 'ws' as const }],
   grants,
   status: 'paired',
@@ -84,7 +85,7 @@ describe('DesktopConnectionManager ownership', () => {
   let row: DesktopConnectionRow;
   let appState: (state: AppStateStatus) => void;
   const connect = jest.mocked(DesktopSession.connect);
-  let store: { getRow: jest.Mock; updateStatus: jest.Mock };
+  let store: { getRow: jest.Mock; updateStatus: jest.Mock; updateLearnedEndpoints: jest.Mock };
   beforeEach(async () => {
     jest.resetAllMocks();
     jest.mocked(openWebSocketStream).mockImplementation(async () => ({ abort() {} }) as never);
@@ -97,6 +98,12 @@ describe('DesktopConnectionManager ownership', () => {
     row = { ...original, configuredEndpoints: [...original.configuredEndpoints] };
     store = {
       getRow: jest.fn(async () => row),
+      updateLearnedEndpoints: jest.fn(async (_id, endpoints, expected, signal) => {
+        signal.throwIfAborted();
+        if (row.deviceId !== expected.deviceId) throw new Error('Pairing replaced');
+        row = { ...row, learnedEndpoints: endpoints };
+        return endpoints;
+      }),
       updateStatus: jest.fn(async (_id, input, signal, expected) => {
         signal.throwIfAborted();
         if (
@@ -117,6 +124,92 @@ describe('DesktopConnectionManager ownership', () => {
     await manager._doStop();
     await manager._doDestroy();
     jest.useRealTimers();
+  });
+
+  it('reconnects over a synced VPN address after network changes clear QR hints', async () => {
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    row.configuredEndpoints = [];
+    manager.seedLocation(row.id, row.desktopIdentity, original.configuredEndpoints);
+    const first = Object.assign(session(), {
+      connectionEndpointsVersion: 1,
+      request: async () => ({ desktopIdentity: row.desktopIdentity, endpoints: [vpn] }),
+    });
+    connect.mockResolvedValueOnce(first as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).resolves.toBe(first);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(row.learnedEndpoints).toEqual([vpn]);
+    const next = session();
+    connect.mockResolvedValueOnce(next as never);
+    first.close();
+    await jest.advanceTimersByTimeAsync(0);
+    mockDiscoveryReceive({ type: 'network' });
+    await jest.advanceTimersByTimeAsync(0);
+    await expect(lease.ready(signal())).resolves.toBe(next);
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://192.168.1.2:23333/v1/remote/connect',
+      'ws://100.64.0.2:23333/v1/remote/connect',
+    ]);
+    expect(row.grants).toEqual(grants);
+  });
+
+  it('loads synced addresses on a fresh manager without discovery or another pairing', async () => {
+    const vpn = { host: 'fd7a:115c:a1e0::2', port: 23333, security: 'ws' as const };
+    row.configuredEndpoints = [];
+    row.learnedEndpoints = [vpn];
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://[fd7a:115c:a1e0::2]:23333/v1/remote/connect',
+    ]);
+    expect(row.learnedEndpoints).toEqual([vpn]);
+  });
+
+  it.each(['request failure', 'wrong identity'])(
+    'keeps a healthy connection and saved routes after sync %s',
+    async (failure) => {
+      const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+      row.learnedEndpoints = [vpn];
+      const channel = Object.assign(session(), {
+        connectionEndpointsVersion: 1,
+        request: async () => {
+          if (failure === 'request failure') throw new Error('Address query failed');
+          return { desktopIdentity: 'other-desktop', endpoints: [] };
+        },
+      });
+      connect.mockResolvedValueOnce(channel as never);
+      const lease = await manager.retain(row.id, 'agent', signal());
+      await expect(lease.ready(signal())).resolves.toBe(channel);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(channel.isOpen).toBe(true);
+      expect(lease.getSnapshot().status).toBe('ready');
+      expect(row.learnedEndpoints).toEqual([vpn]);
+      expect(row.status).toBe('paired');
+    },
+  );
+
+  it('does not save an address response from a closed session', async () => {
+    const reply = deferred<{
+      desktopIdentity: string;
+      endpoints: typeof original.configuredEndpoints;
+    }>();
+    const channel = Object.assign(session(), {
+      connectionEndpointsVersion: 1,
+      request: () => reply.promise,
+    });
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await lease.ready(signal());
+    channel.close();
+    await jest.advanceTimersByTimeAsync(0);
+    reply.resolve({
+      desktopIdentity: row.desktopIdentity,
+      endpoints: original.configuredEndpoints,
+    });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(row.learnedEndpoints).toEqual([]);
   });
 
   it('continues past a wrong Noise peer without changing grants or retiring the stable lease', async () => {
