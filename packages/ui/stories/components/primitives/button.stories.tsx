@@ -22,6 +22,7 @@ const variants: ButtonVariant[] = [
   'outline',
   'secondary',
   'ghost',
+  'tonal',
   'link',
   'text',
 ];
