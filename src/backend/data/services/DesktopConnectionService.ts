@@ -1,5 +1,9 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
-import { configuredEndpointsSchema, type DirectEndpoint } from '@cherrystudio/remote-protocol';
+import {
+  configuredEndpointsSchema,
+  directEndpointUrl,
+  type DirectEndpoint,
+} from '@cherrystudio/remote-protocol';
 import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'expo-crypto';
 
@@ -340,6 +344,47 @@ export class DesktopConnectionService {
         .returning();
       if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
       return rowToConnection(row);
+    });
+  }
+
+  async addEndpoint(
+    id: string,
+    endpoint: DirectEndpoint,
+    expected: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
+    signal: AbortSignal,
+  ): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      signal.throwIfAborted();
+      const [row] = await tx
+        .select()
+        .from(desktopConnectionTable)
+        .where(eq(desktopConnectionTable.id, id))
+        .limit(1);
+      if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
+      if (
+        row.status !== 'paired' ||
+        row.deviceId !== expected.deviceId ||
+        row.desktopIdentity !== expected.desktopIdentity ||
+        JSON.stringify(row.grants) !== JSON.stringify(expected.grants)
+      )
+        throw desktopError('auth-revoked', 'Pairing changed while verifying the address');
+      if (
+        row.configuredEndpoints.some(
+          (item) => directEndpointUrl(item) === directEndpointUrl(endpoint),
+        )
+      )
+        return;
+      if (row.configuredEndpoints.length >= 8)
+        throw desktopError('endpoint-limit', 'Remove an address before adding another');
+      const configuredEndpoints = configuredEndpointsSchema.parse([
+        ...row.configuredEndpoints,
+        endpoint,
+      ]);
+      await tx
+        .update(desktopConnectionTable)
+        .set({ configuredEndpoints })
+        .where(eq(desktopConnectionTable.id, id));
+      signal.throwIfAborted();
     });
   }
 

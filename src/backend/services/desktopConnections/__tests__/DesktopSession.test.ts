@@ -84,6 +84,46 @@ const options = (channels: Record<string, ReturnType<typeof fakeChannel>>) => {
 };
 
 describe('DesktopSession', () => {
+  it('reads VPN addresses through the published address handoff contract', async () => {
+    const snapshot = {
+      desktopIdentity: '12D3KooWDesktop',
+      endpoints: [
+        { host: '100.64.0.2', port: 23335, security: 'ws' },
+        { host: 'fd7a:115c:a1e0::2', port: 23335, security: 'ws' },
+      ],
+    };
+    const channel = fakeChannel({
+      'connection.hello': () => ({ ...hello['connection.hello'](), connectionEndpointsVersion: 1 }),
+      'connection.endpoints': (params) => {
+        expect(params).toEqual({ domain: 'agent' });
+        return snapshot;
+      },
+    });
+    const session = await DesktopSession.connect(options({ '100.64.0.2': channel }));
+    try {
+      await expect(session.request('connection.endpoints', { domain: 'agent' })).resolves.toEqual(
+        snapshot,
+      );
+    } finally {
+      session.close();
+    }
+  });
+
+  it('keeps old desktops connected while requiring an upgrade only for address handoff', async () => {
+    const channel = fakeChannel({
+      ...hello,
+      'connection.ping': ({ nonce }: any) => ({ nonce, serverTime: '2026-09-29T00:00:00Z' }),
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    await expect(
+      session.request('connection.endpoints', { domain: 'agent' }),
+    ).rejects.toMatchObject({ reason: 'UPGRADE_REQUIRED' });
+    await expect(
+      session.request('connection.ping', { nonce: 'still-connected' }),
+    ).resolves.toMatchObject({ nonce: 'still-connected' });
+    expect(session.isOpen).toBe(true);
+    session.close();
+  });
   it('blocks unsupported Agent contracts without disconnecting configuration access', async () => {
     const channel = fakeChannel({
       ...hello,

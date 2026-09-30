@@ -69,3 +69,25 @@ explicit addresses and a fresh location QR remain usable. Discovery, migration, 
 connection management must ship together. Native compilation and unit tests do not establish
 real-device permission, VPN, Wi-Fi-change or suspend/resume acceptance. Keychain authorization on
 the desktop is independent; this change never regenerates identities to avoid a prompt.
+
+## Verified address handoff
+
+The paired computer's connection settings can request candidate addresses over its existing
+capability lease. `connection.hello.connectionEndpointsVersion: 1` advertises the shared
+`connection.endpoints` method. Older computers keep their normal connections and show the existing
+upgrade message only when this new operation is requested.
+
+Suggestions remain ephemeral. **Save and verify** opens a manager-owned diagnostic channel against
+exactly one selected endpoint, pins the existing desktop identity, authenticates the existing device,
+and performs a capability-scoped address read. It creates no business subscriptions, exports no
+provider keys, and does not fall back to another address. An existing Agent channel is retained.
+After success the data service appends the endpoint in a transaction, preserving other addresses,
+deduplicating retries and rejecting a full list or changed pairing. Cancellation before commit
+leaves the saved addresses unchanged. The result records the address and verification time for the
+current network; it does not claim other networks were tested.
+
+Mobile consumes the published `@cherrystudio/remote-protocol@0.3.0` and
+`@cherrystudio/remote-transport@0.1.2` packages, pinned in the dependency manifest and lockfile.
+The address handoff uses the published contract without a local package substitution. Saved
+addresses remain available after network changes; QR and discovery hints remain temporary.
+Physical-device and real VPN acceptance of this Mobile build remain pending.

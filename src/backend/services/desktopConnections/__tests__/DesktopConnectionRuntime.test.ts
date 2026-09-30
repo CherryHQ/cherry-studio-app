@@ -79,6 +79,7 @@ function createStore() {
     savePair: jest.fn(async () => connection),
     remove: jest.fn(async () => undefined),
     updateStatus: jest.fn(async () => undefined),
+    addEndpoint: jest.fn(async () => undefined),
     preview: jest.fn(async () => ({ providers: [] })),
     import: jest.fn(async () => ({
       providersAdded: 0,
@@ -88,7 +89,7 @@ function createStore() {
     })),
   } satisfies Pick<
     DesktopConnectionService,
-    'getRow' | 'savePair' | 'remove' | 'updateStatus' | 'preview' | 'import'
+    'getRow' | 'savePair' | 'remove' | 'updateStatus' | 'preview' | 'import' | 'addEndpoint'
   >;
 }
 
@@ -184,6 +185,95 @@ describe('DesktopConnectionRuntime', () => {
     await runtime._doDestroy();
     await manager._doStop();
     await manager._doDestroy();
+  });
+
+  it('verifies exactly the selected address before saving, without exporting provider credentials', async () => {
+    const endpoint = { host: '100.64.0.2', port: 24444, security: 'ws' as const };
+    const session = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+      'connection.endpoints': () => ({
+        desktopIdentity: row.desktopIdentity,
+        endpoints: [endpoint],
+      }),
+    });
+    connect.mockResolvedValueOnce(session as never);
+    await expect(runtime.saveEndpoint(id, endpoint, signal())).resolves.toMatchObject({
+      endpoint,
+      verifiedAt: expect.any(Number),
+    });
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://100.64.0.2:24444/v1/remote/connect',
+    ]);
+    expect(session.calls).toEqual([
+      { method: 'connection.endpoints', params: { domain: 'configuration' } },
+    ]);
+    expect(store.addEndpoint).toHaveBeenCalledWith(id, endpoint, row, expect.any(AbortSignal));
+    expect(session.isOpen).toBe(false);
+  });
+
+  it('does not fall back to a LAN address or save when the selected address fails', async () => {
+    jest.mocked(openWebSocketStream).mockRejectedValueOnce(new Error('unreachable'));
+    await expect(
+      runtime.saveEndpoint(id, { host: '100.64.0.2', port: 24444, security: 'ws' }, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'unreachable' } });
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://100.64.0.2:24444/v1/remote/connect',
+    ]);
+    expect(store.addEndpoint).not.toHaveBeenCalled();
+    expect(store.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('keeps suggestions ephemeral until the user requests saving', async () => {
+    const endpoints = [{ host: '100.64.0.2', port: 23333, security: 'ws' }];
+    connect.mockResolvedValueOnce(
+      createSession({
+        'connection.authenticate': () => ({ authorization: { grants } }),
+        'connection.endpoints': () => ({ desktopIdentity: row.desktopIdentity, endpoints }),
+      }) as never,
+    );
+    await expect(runtime.getEndpoints(id, signal())).resolves.toEqual(endpoints);
+    expect(store.addEndpoint).not.toHaveBeenCalled();
+  });
+
+  it('does not save a verification result that arrives after cancellation', async () => {
+    const requested = deferred<void>();
+    const reply = deferred<unknown>();
+    const session = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+      'connection.endpoints': () => {
+        requested.resolve();
+        return reply.promise;
+      },
+    });
+    connect.mockResolvedValueOnce(session as never);
+    const controller = new AbortController();
+    const pending = runtime.saveEndpoint(
+      id,
+      { host: '100.64.0.2', port: 23333, security: 'ws' },
+      controller.signal,
+    );
+    await requested.promise;
+    controller.abort();
+    reply.resolve({ desktopIdentity: row.desktopIdentity, endpoints: [] });
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(store.addEndpoint).not.toHaveBeenCalled();
+    expect(session.isOpen).toBe(false);
+  });
+
+  it('does not save or invalidate the pairing when an older desktop cannot verify addresses', async () => {
+    connect.mockResolvedValueOnce(
+      createSession({
+        'connection.authenticate': () => ({ authorization: { grants } }),
+        'connection.endpoints': () => {
+          throw new RemoteFailureError({ reason: 'UPGRADE_REQUIRED', message: 'Older desktop' });
+        },
+      }) as never,
+    );
+    await expect(
+      runtime.saveEndpoint(id, { host: '100.64.0.2', port: 23333, security: 'ws' }, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'unsupported-version' } });
+    expect(store.addEndpoint).not.toHaveBeenCalled();
+    expect(store.updateStatus).not.toHaveBeenCalled();
   });
 
   it('retires connection consumers only after removal succeeds', async () => {

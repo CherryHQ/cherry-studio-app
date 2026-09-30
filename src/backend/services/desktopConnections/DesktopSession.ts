@@ -69,6 +69,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 /** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
   agentFailureVersion?: number;
+  connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
     let session: DesktopSession | undefined;
     try {
@@ -88,6 +89,7 @@ export class DesktopSession {
         options.signal,
       );
       session.agentFailureVersion = hello.agentFailureVersion;
+      session.connectionEndpointsVersion = hello.connectionEndpointsVersion;
       options.signal.throwIfAborted();
       return session;
     } catch (error) {
@@ -133,6 +135,11 @@ export class DesktopSession {
   ): Promise<DesktopResult<M>> {
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
     signal?.throwIfAborted();
+    if (method === 'connection.endpoints' && this.connectionEndpointsVersion !== 1)
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop connection settings are not supported',
+      });
     if (method.startsWith('agent.') && this.agentFailureVersion !== 1)
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',

@@ -1,3 +1,4 @@
+import { directEndpointSchema, type DirectEndpoint } from '@cherrystudio/remote-protocol';
 import { loggerService } from '@logger';
 import { sha256 } from '@noble/hashes/sha2.js';
 import * as Crypto from 'expo-crypto';
@@ -35,7 +36,7 @@ import {
 
 type ConnectionStore = Pick<
   DesktopConnectionService,
-  'getRow' | 'savePair' | 'remove' | 'updateStatus' | 'preview' | 'import'
+  'getRow' | 'savePair' | 'remove' | 'updateStatus' | 'preview' | 'import' | 'addEndpoint'
 >;
 const EXCLUDED_PROVIDER_IDS = new Set([
   'cherryai',
@@ -170,6 +171,44 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
         row.desktopIdentity,
         qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
       );
+    });
+  }
+
+  getEndpoints(id: string, signal: AbortSignal) {
+    return this.run('endpoints', signal, async (store, signal) => {
+      const row = await store.getRow(id);
+      const domain = row.grants[0]?.domain;
+      if (!domain) throw desktopError('auth-revoked', 'No approved capability');
+      const lease = await this.connections!.retain(id, domain, signal);
+      const readSignal = AbortSignal.any([signal, lease.signal]);
+      try {
+        const session = await lease.ready(readSignal);
+        const snapshot = await session.request('connection.endpoints', { domain }, readSignal);
+        if (snapshot.desktopIdentity !== row.desktopIdentity)
+          throw desktopError('identity-mismatch', 'The address belongs to a different desktop');
+        return snapshot.endpoints;
+      } catch (error) {
+        throw translate(error);
+      } finally {
+        lease.release();
+      }
+    });
+  }
+
+  saveEndpoint(id: string, input: DirectEndpoint, signal: AbortSignal) {
+    return this.run('save-endpoint', signal, async (store, signal) => {
+      const endpoint = directEndpointSchema.parse(input);
+      const row = await store.getRow(id);
+      if (row.status !== 'paired') throw desktopError('auth-revoked', 'Pairing needs repair');
+      try {
+        await this.connections!.verifyEndpoint(row, endpoint, signal);
+        signal.throwIfAborted();
+        await store.addEndpoint(id, endpoint, row, signal);
+        await this.connections!.refreshEndpoints(id);
+        return { endpoint, verifiedAt: Date.now() };
+      } catch (error) {
+        throw translate(error);
+      }
     });
   }
 

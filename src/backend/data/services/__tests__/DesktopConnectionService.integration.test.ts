@@ -76,6 +76,39 @@ describe('DesktopConnectionService provider synchronization', () => {
     testDb.sqlite.close();
   });
 
+  it('adds a verified address once while preserving existing addresses and pairing', async () => {
+    const original = await service.getRow(connectionId);
+    const manual = { host: 'company.example.com', port: 443, security: 'wss' as const };
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    await service.updateEndpoints(connectionId, [manual]);
+    await service.addEndpoint(connectionId, vpn, original, signal());
+    await service.addEndpoint(connectionId, vpn, original, signal());
+    expect(await service.getRow(connectionId)).toMatchObject({
+      deviceId: original.deviceId,
+      desktopIdentity: original.desktopIdentity,
+      grants: original.grants,
+      configuredEndpoints: [manual, vpn],
+    });
+  });
+
+  it('rejects a late verification after re-pairing and does not overwrite a full address list', async () => {
+    const original = await service.getRow(connectionId);
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    await expect(
+      service.addEndpoint(connectionId, vpn, { ...original, deviceId: 'replaced' }, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'auth-revoked' } });
+    const full = Array.from({ length: 8 }, (_, index) => ({
+      host: `host-${index}.example.com`,
+      port: 23333,
+      security: 'ws' as const,
+    }));
+    await service.updateEndpoints(connectionId, full);
+    await expect(service.addEndpoint(connectionId, vpn, original, signal())).rejects.toMatchObject({
+      details: { reason: 'endpoint-limit' },
+    });
+    expect((await service.getRow(connectionId)).configuredEndpoints).toEqual(full);
+  });
+
   function importSnapshot(data: DesktopProvidersSnapshot, requestSignal = signal()) {
     return service.import(
       connectionId,

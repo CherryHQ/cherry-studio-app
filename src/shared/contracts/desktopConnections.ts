@@ -1,3 +1,5 @@
+import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
+
 import type {
   DesktopImportPreview,
   DesktopPairingClaim,
@@ -10,6 +12,12 @@ import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
 /** Sync enabled PC provider configuration; add missing enabled models and preserve existing models. */
 export interface DesktopConnectionsModule {
+  getEndpoints(id: string, signal: AbortSignal): Promise<DirectEndpoint[]>;
+  saveEndpoint(
+    id: string,
+    endpoint: DirectEndpoint,
+    signal: AbortSignal,
+  ): Promise<{ endpoint: DirectEndpoint; verifiedAt: number }>;
   pair(
     input: PairDesktopConnectionDto,
     signal: AbortSignal,

@@ -1,3 +1,4 @@
+import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -35,7 +36,14 @@ export function useDesktopConnection(id: string | undefined) {
   };
 }
 
-type Operation = 'location' | 'pair' | 'remove' | 'preview' | 'import';
+type Operation =
+  | 'location'
+  | 'pair'
+  | 'remove'
+  | 'preview'
+  | 'import'
+  | 'endpoints'
+  | 'save-endpoint';
 
 export function useDesktopConnectionActions() {
   const connections = useBackendModule('desktopConnections');
@@ -127,6 +135,12 @@ export function useDesktopConnectionActions() {
   );
 
   return {
+    isCheckingEndpoints: pending === 'endpoints',
+    isSavingEndpoint: pending === 'save-endpoint',
+    getEndpoints: (id: string) =>
+      run('endpoints', (signal) => connections.getEndpoints(id, signal)),
+    saveEndpoint: (id: string, endpoint: DirectEndpoint) =>
+      run('save-endpoint', (signal) => connections.saveEndpoint(id, endpoint, signal)),
     isPairing: pending === 'pair' || pending === 'location',
     updateLocation,
     isRemoving: pending === 'remove',

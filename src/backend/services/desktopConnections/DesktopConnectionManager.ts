@@ -258,6 +258,47 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     target: DesktopConnectionTarget,
     signal: AbortSignal,
   ): Promise<DesktopSession> {
+    return this.openTemporary(
+      target.addresses.map((host) => ({ host, port: target.port, security: 'ws' })),
+      target.desktopIdentity,
+      signal,
+    );
+  }
+
+  async verifyEndpoint(row: DesktopConnectionRow, endpoint: DirectEndpoint, signal: AbortSignal) {
+    const session = await this.openTemporary([endpoint], row.desktopIdentity, signal, row.deviceId);
+    try {
+      const grant = row.grants.find((candidate) =>
+        session.currentAuthorization?.grants.some(
+          (current) => current.domain === candidate.domain && current.grantId === candidate.grantId,
+        ),
+      );
+      if (!grant)
+        throw new RemoteFailureError({
+          reason: 'GRANT_REVOKED',
+          message: 'No approved capability',
+        });
+      const snapshot = await session.request(
+        'connection.endpoints',
+        { domain: grant.domain },
+        signal,
+      );
+      if (snapshot.desktopIdentity !== row.desktopIdentity)
+        throw new RemoteFailureError({
+          reason: 'UNAUTHENTICATED',
+          message: 'Desktop identity changed',
+        });
+    } finally {
+      session.close();
+    }
+  }
+
+  private async openTemporary(
+    endpoints: DirectEndpoint[],
+    desktopIdentity: string,
+    signal: AbortSignal,
+    deviceId?: string,
+  ): Promise<DesktopSession> {
     this.assertAvailable();
     if (!this.foreground) throw new DesktopUnreachableError(['suspended']);
     const controller = new AbortController();
@@ -269,12 +310,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     try {
       this.refreshDiscoveryActivity();
       session = await this.track(
-        this.connectCandidates(
-          () =>
-            target.addresses.map((host) => ({ host, port: target.port, security: 'ws' as const })),
-          target.desktopIdentity,
-          controller.signal,
-        ),
+        this.connectCandidates(() => endpoints, desktopIdentity, controller.signal, deviceId),
       );
       controller.signal.throwIfAborted();
       const connected = session;
