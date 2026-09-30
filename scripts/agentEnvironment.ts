@@ -17,15 +17,17 @@ const HELP = `Agent self-test environments (local macOS)
 
   status                              Read worktrees, devices and persistent resource records
   reconcile [--dry-run]               Release retired workspaces' resources and expire artifacts
-  adopt --platform ios|android --device <stable-id>   Register the platform's test device
+  adopt --platform ios|android --device <stable-id>   Register the platform's resident device
   fingerprint --platform ios|android  Compute native compatibility; never build
   build --platform ios|android [--source <checkout>]  Explicit local DEVELOPMENT build/cache
   start --platform ios|android [--session <task>] [--reset-data]  Lease, Metro, boot/install/open
-  release [--session <task>]          Close task session, stop its Metro and release device
+  release [--session <task>]          Close task session, stop its Metro, release/delete device
   archive                             Mark current workspace retired and release its resources
 
-All output is JSON. No command downloads SDK images or creates devices. Only build compiles
-native code. start requires task authorization for device actions and keeps app data unless
+All output is JSON. No command downloads SDK images. Only build compiles native code. start
+requires task authorization for device actions. It takes over the resident device when its lease
+has been idle for 60 minutes, and creates a temporary device only while another task is actively
+using it; release or idle expiry deletes temporary devices. App data is kept unless
 --reset-data reinstalls the development client. Session defaults to CONDUCTOR_SESSION_ID,
 CODEX_THREAD_ID or CLAUDE_CODE_SESSION_ID. See the device testing guide.
 `;

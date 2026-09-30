@@ -35,6 +35,8 @@ const DeviceSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   avdPath: z.string().startsWith('/').optional(),
+  // Created only while the resident device's lease is live; deleted when its own lease ends.
+  temporary: z.boolean().default(false),
   installedArtifact: z.string().optional(),
   lease: LeaseSchema.optional(),
   dataWorkspaceId: z.string().optional(),
@@ -71,7 +73,7 @@ export const StateSchema = z.object({
 });
 export type State = z.infer<typeof StateSchema>;
 
-// A lease without device activity for this long no longer blocks another task.
+// Without device activity for this long, a lease lets another task take over the device.
 export const LEASE_IDLE_MS = 60 * 60_000;
 
 export function readState(directory: string, repository: string): State {
@@ -89,8 +91,13 @@ export function readState(directory: string, repository: string): State {
   const state = StateSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
   if (state.repository !== repository)
     throw new Error('Environment registry belongs to another repository.');
-  if (new Set(state.devices.map((d) => d.platform)).size !== state.devices.length)
-    throw new Error('Multiple test devices for one platform in environment registry.');
+  const resident = state.devices.filter((d) => !d.temporary).map((d) => d.platform);
+  if (new Set(resident).size !== resident.length)
+    throw new Error('Multiple resident devices for one platform in environment registry.');
+  if (new Set(state.devices.map((d) => `${d.platform}:${d.id}`)).size !== state.devices.length)
+    throw new Error('Duplicate device identities in environment registry.');
+  if (state.devices.some((d) => d.temporary && !d.lease))
+    throw new Error('Temporary device without an owning lease in environment registry.');
   if (state.devices.some((d) => d.platform === 'android' && !d.avdPath))
     throw new Error('Registered Android device has no AVD path.');
   return state;
@@ -169,18 +176,24 @@ export function leaseExpired(lease: Lease, lastActivity: number | undefined, now
   return now - Math.max(Date.parse(lease.acquiredAt), lastActivity ?? 0) > LEASE_IDLE_MS;
 }
 
-export function assertLease(
-  device: Device,
+// The task's own device first, then the resident device when free or its lease expired.
+// Undefined means another task is actively using the resident device: create a temporary one.
+export function selectDevice(
+  state: State,
+  platform: Platform,
   workspaceId: string,
   session: string,
-  lastActivity: number | undefined,
-) {
-  if (
-    device.lease &&
-    (device.lease.workspaceId !== workspaceId || device.lease.session !== session) &&
-    !leaseExpired(device.lease, lastActivity)
-  )
-    throw new Error(
-      `Device is busy: ${device.lease.workspaceId}/${device.lease.session}. Wait; do not create another device.`,
-    );
+  expired: (lease: Lease) => boolean,
+): Device | undefined {
+  const own = state.devices.find(
+    (d) =>
+      d.platform === platform &&
+      d.lease?.workspaceId === workspaceId &&
+      d.lease.session === session,
+  );
+  if (own) return own;
+  const resident = state.devices.find((d) => d.platform === platform && !d.temporary);
+  if (!resident)
+    throw new Error(`No resident ${platform} test device. Inspect status and adopt one.`);
+  return resident.lease && !expired(resident.lease) ? undefined : resident;
 }

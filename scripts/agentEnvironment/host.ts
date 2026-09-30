@@ -268,3 +268,27 @@ export function closeDevice(device: Device) {
   if (matchDevice(device)?.booted)
     throw new Error('Device shutdown is not complete; ownership retained.');
 }
+
+// Same device type and installed runtime/system image as the resident device; no data is copied.
+export function createDevice(template: ObservedDevice, name: string): string {
+  if (template.platform === 'ios')
+    return run('xcrun', ['simctl', 'create', name, template.type!, template.runtime!]);
+  if (!template.image?.startsWith('system-images;'))
+    throw new Error('Resident AVD has no supported installed Android system image.');
+  const result = spawnSync(
+    'avdmanager',
+    ['create', 'avd', '--name', name, '--package', template.image],
+    { encoding: 'utf8', input: 'no\n', timeout: 60_000 },
+  );
+  if (result.status !== 0) throw new Error('Temporary AVD creation failed.');
+  return name;
+}
+
+export function deleteDevice(device: Device) {
+  const found = matchDevice(device);
+  if (!found) return;
+  if (found.booted) throw new Error('Device must be stopped before deletion.');
+  if (device.platform === 'ios') run('xcrun', ['simctl', 'delete', device.id]);
+  else run('avdmanager', ['delete', 'avd', '--name', device.id]);
+  if (matchDevice(device)) throw new Error('Device deletion was not confirmed.');
+}

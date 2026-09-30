@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, openSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -7,6 +8,8 @@ import {
   assertNoOtherSession,
   closeDevice,
   closeSession,
+  createDevice,
+  deleteDevice,
   discover,
   matchDevice,
   portListeners,
@@ -23,9 +26,9 @@ import {
 } from './host';
 import { APP_IDS, fingerprint, installPath, verifyArtifact } from './native';
 import {
-  assertLease,
   leaseExpired,
   saveState,
+  selectDevice,
   workspaceStatus,
   type Device,
   type Platform,
@@ -43,18 +46,6 @@ export function inventory(ctx: Context, state: State) {
       warnings.push(`${platform}: ${(error as Error).message}`);
     }
   }
-  const registered = state.devices.map((device) => {
-    if (!device.lease) return device;
-    try {
-      return {
-        ...device,
-        leaseExpired: leaseExpired(device.lease, sessionActivity(device.lease.session)),
-      };
-    } catch (error) {
-      warnings.push((error as Error).message);
-      return device;
-    }
-  });
   return {
     worktrees: paths,
     workspaces: state.workspaces.map((w) => ({
@@ -62,7 +53,7 @@ export function inventory(ctx: Context, state: State) {
       status: workspaceStatus(w, paths, existsSync(w.gitDir)),
     })),
     devices,
-    registered,
+    registered: state.devices,
     artifacts: state.artifacts,
     warnings,
   };
@@ -102,8 +93,13 @@ export async function release(ctx: Context, state: State, workspaceId: string, s
     const ownedSession = device.lease!.session;
     try {
       closeDevice(device);
-      device.lease = undefined;
-      device.lastUsedAt = new Date().toISOString();
+      if (device.temporary) {
+        deleteDevice(device);
+        state.devices = state.devices.filter((d) => d !== device);
+      } else {
+        device.lease = undefined;
+        device.lastUsedAt = new Date().toISOString();
+      }
       saveState(ctx.directory, state);
     } catch (error) {
       blocked.add(ownedSession);
@@ -159,6 +155,20 @@ export async function reconcile(ctx: Context, state: State, dryRun = false) {
     state.workspaces = state.workspaces.filter((w) => w.id !== id);
     saveState(ctx.directory, state);
   }
+  // An abandoned temporary device is not taken over by anyone; reclaim it.
+  for (const device of state.devices.filter((d) => d.temporary)) {
+    try {
+      if (!leaseExpired(device.lease!, sessionActivity(device.lease!.session))) continue;
+      actions.push(`Delete idle temporary device ${device.name}`);
+      if (dryRun) continue;
+      closeDevice(device);
+      deleteDevice(device);
+      state.devices = state.devices.filter((d) => d !== device);
+      saveState(ctx.directory, state);
+    } catch (error) {
+      warnings.push((error as Error).message);
+    }
+  }
   return {
     actions,
     warnings,
@@ -168,9 +178,11 @@ export async function reconcile(ctx: Context, state: State, dryRun = false) {
 }
 
 export function adopt(ctx: Context, state: State, platform: Platform, id: string) {
-  const previous = state.devices.find((d) => d.platform === platform);
+  const previous = state.devices.find((d) => d.platform === platform && !d.temporary);
   if (previous?.lease)
-    throw new Error(`The registered ${platform} test device is leased; release it first.`);
+    throw new Error(`The resident ${platform} test device is leased; release it first.`);
+  if (state.devices.some((d) => d.platform === platform && d.id === id && d.temporary))
+    throw new Error('A temporary device cannot become the resident device.');
   const found = discover(platform).find((d) => d.id === id);
   if (!found?.available) throw new Error('Selected device is unavailable.');
   assertNoOtherSession(found);
@@ -179,6 +191,7 @@ export function adopt(ctx: Context, state: State, platform: Platform, id: string
     id,
     name: found.name,
     avdPath: found.avdPath,
+    temporary: false,
     lastUsedAt: new Date().toISOString(),
   };
   state.devices = [...state.devices.filter((d) => d !== previous), device];
@@ -245,6 +258,40 @@ async function ensureMetro(ctx: Context, state: State, session: string, port: nu
     throw new Error(`Port ${port} is served by a process outside this workspace; launch stopped.`);
 }
 
+// Another task is actively using the resident device: create a device owned by this lease.
+function createTemporary(
+  ctx: Context,
+  state: State,
+  platform: Platform,
+  lease: NonNullable<Device['lease']>,
+): Device {
+  const resident = state.devices.find((d) => d.platform === platform && !d.temporary)!;
+  const template = matchDevice(resident);
+  if (!template?.available) throw new Error('Resident device is missing/unavailable.');
+  const suffix = createHash('sha256')
+    .update(`${lease.workspaceId}:${lease.session}`)
+    .digest('hex')
+    .slice(0, 10);
+  const name = `Cherry_temp_${platform}_${suffix}`;
+  if (discover(platform).some((d) => d.id === name || d.name === name))
+    throw new Error(`Unregistered device ${name} already exists; delete it manually.`);
+  const id = createDevice(template, name);
+  const found = discover(platform).find((d) => d.id === id);
+  if (!found) throw new Error(`Created device ${name} was not found; delete it manually.`);
+  const device: Device = {
+    platform,
+    id,
+    name: found.name,
+    avdPath: found.avdPath,
+    temporary: true,
+    lease,
+    lastUsedAt: lease.acquiredAt,
+  };
+  state.devices.push(device);
+  saveState(ctx.directory, state);
+  return device;
+}
+
 export async function start(
   ctx: Context,
   state: State,
@@ -255,11 +302,6 @@ export async function start(
   const cleanup = await reconcile(ctx, state);
   if (cleanup.warnings.length)
     throw new Error(`Resolve cleanup blockers first: ${cleanup.warnings.join('; ')}`);
-  const device = state.devices.find((d) => d.platform === platform);
-  if (!device)
-    throw new Error(`No registered ${platform} test device. Inspect status and adopt one.`);
-  const stale = device.lease;
-  assertLease(device, ctx.workspace.id, session, stale && sessionActivity(stale.session));
   const hash = fingerprint(ctx.cwd, platform);
   const artifact = state.artifacts.findLast(
     (a) => a.platform === platform && a.fingerprint === hash,
@@ -269,13 +311,21 @@ export async function start(
       'A matching development artifact is required. Run the explicit build command under build authorization; start never builds.',
     );
   await verifyArtifact(ctx, artifact);
+  const lease = { workspaceId: ctx.workspace.id, session, acquiredAt: new Date().toISOString() };
+  const expired = (l: typeof lease) => leaseExpired(l, sessionActivity(l.session));
+  const device =
+    selectDevice(state, platform, ctx.workspace.id, session, expired) ??
+    createTemporary(ctx, state, platform, lease);
   let found = matchDevice(device);
   if (!found?.available)
     throw new Error('Registered device is missing/unavailable; inspect its record.');
-  if (stale && (stale.workspaceId !== ctx.workspace.id || stale.session !== session))
+  const stale = device.lease;
+  if (stale && (stale.workspaceId !== ctx.workspace.id || stale.session !== session)) {
     closeSession(found, stale.session); // Expired: its owner left the device idle.
+    device.lease = lease;
+  }
   assertNoOtherSession(found, session);
-  device.lease = { workspaceId: ctx.workspace.id, session, acquiredAt: new Date().toISOString() };
+  device.lease ??= lease;
   saveState(ctx.directory, state);
 
   const port = Number(process.env.CONDUCTOR_PORT);

@@ -36,7 +36,7 @@ Otherwise, keep both changes in the same PR. See [UI Development](./ui-developme
    `gh stack submit --auto`.
 3. After successful PR or stack creation, release the self-test device lease with
    `pnpm agent:env release` (see [Parallel Device Testing](./parallel-device-testing.md)). The
-   test device is kept for the next task; PR creation never allocates or deletes a device.
+   resident device is kept for the next task; a temporary device is deleted.
 4. Rerun local gates after later draft changes, then mark the final head ready for review.
 5. Treat remote CI as the PR-suite gate, with local-only exceptions in [Testing And CI](./testing-and-ci.md).
 

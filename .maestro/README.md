@@ -11,7 +11,7 @@ state.
 - Install the Maestro CLI and select the intended device explicitly when more than one is running.
 
 Follow [Parallel Device Testing](../docs/guides/parallel-device-testing.md) when running flows from a
-Conductor workspace. Start through `pnpm agent:env start` to lease the platform's test device; do
+Conductor workspace. Start through `pnpm agent:env start` to lease a test device; do
 not interfere with another task's session or Metro process.
 
 ## Run
@@ -39,8 +39,8 @@ maestro --device "$DEVICE_ID" test \
 
 Run one flow by passing its file path instead of the directory. Both current flows clear application
 state, then reconnect the development client through `DEV_CLIENT_URL`. They delete data in the
-selected test installation and must never target a primary user installation. The test device's
-data is shared across workspaces; these flows intentionally reset it.
+selected test installation and must never target a primary user installation. The resident
+device's data is shared across workspaces; these flows intentionally reset it.
 
 ## Scope
 

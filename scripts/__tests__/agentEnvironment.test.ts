@@ -2,14 +2,21 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { closeDevice, processGroupRunning, sameProcess, worktrees } from '../agentEnvironment/host';
+import {
+  closeDevice,
+  deleteDevice,
+  processGroupRunning,
+  sameProcess,
+  sessionActivity,
+  worktrees,
+} from '../agentEnvironment/host';
 import { reconcile, release } from '../agentEnvironment/pool';
 import {
-  assertLease,
   LEASE_IDLE_MS,
   leaseExpired,
   readState,
   saveState,
+  selectDevice,
   StateSchema,
   workspaceStatus,
   type Device,
@@ -18,8 +25,10 @@ import {
 
 jest.mock('../agentEnvironment/host', () => ({
   closeDevice: jest.fn(),
+  deleteDevice: jest.fn(),
   processGroupRunning: jest.fn(),
   sameProcess: jest.fn(),
+  sessionActivity: jest.fn(),
   worktrees: jest.fn(),
 }));
 
@@ -40,6 +49,7 @@ function device(overrides: Partial<Device> = {}): Device {
     platform: 'ios',
     id: 'sim-id',
     name: 'Cherry Test',
+    temporary: false,
     lastUsedAt: now,
     ...overrides,
   };
@@ -89,21 +99,41 @@ describe('workspace retirement evidence', () => {
   });
 });
 
-describe('device lease', () => {
-  const lease = { workspaceId: 'workspace-a', session: 'agent-1', acquiredAt: now };
-  const start = Date.parse(now);
-  test('two agent sessions cannot share the device while its lease is live', () => {
-    const d = device({ lease });
-    const recent = Date.now();
-    expect(() => assertLease(d, 'workspace-a', 'agent-1', recent)).not.toThrow();
-    expect(() => assertLease(d, 'workspace-a', 'agent-2', recent)).toThrow('busy');
-    expect(() => assertLease(d, 'workspace-b', 'agent-1', recent)).toThrow('busy');
+describe('device selection', () => {
+  const lease = (session: string) => ({ workspaceId: 'workspace-a', session, acquiredAt: now });
+  const live = () => false;
+  const idle = () => true;
+  test('a free resident device is shared by every task', () => {
+    const s = state();
+    s.devices.push(device());
+    expect(selectDevice(s, 'ios', 'workspace-b', 'agent-2', live)).toBe(s.devices[0]);
   });
-  test('an abandoned lease expires only after its device session has been idle', () => {
-    expect(leaseExpired(lease, undefined, start + LEASE_IDLE_MS - 1)).toBe(false);
-    expect(leaseExpired(lease, undefined, start + LEASE_IDLE_MS + 1)).toBe(true);
-    expect(leaseExpired(lease, start + 1000, start + LEASE_IDLE_MS + 1)).toBe(false);
-    expect(() => assertLease(device({ lease }), 'workspace-b', 'agent-2', undefined)).not.toThrow();
+  test('an actively used resident device sends a parallel task to a temporary device', () => {
+    const s = state();
+    s.devices.push(device({ lease: lease('agent-1') }));
+    expect(selectDevice(s, 'ios', 'workspace-a', 'agent-1', live)).toBe(s.devices[0]);
+    expect(selectDevice(s, 'ios', 'workspace-a', 'agent-2', live)).toBeUndefined();
+  });
+  test('an idle lease lets another task take over the resident device', () => {
+    const s = state();
+    s.devices.push(device({ lease: lease('agent-1') }));
+    expect(selectDevice(s, 'ios', 'workspace-a', 'agent-2', idle)).toBe(s.devices[0]);
+  });
+  test('a task keeps reusing its own temporary device', () => {
+    const s = state();
+    const temporary = device({ id: 'temp', temporary: true, lease: lease('agent-2') });
+    s.devices.push(device({ lease: lease('agent-1') }), temporary);
+    expect(selectDevice(s, 'ios', 'workspace-a', 'agent-2', live)).toBe(temporary);
+  });
+  test('without a resident device nothing is created', () => {
+    expect(() => selectDevice(state(), 'ios', 'workspace-a', 'agent-1', live)).toThrow('adopt');
+  });
+  test('a lease expires only after its device session has been idle', () => {
+    const start = Date.parse(now);
+    const l = lease('agent-1');
+    expect(leaseExpired(l, undefined, start + LEASE_IDLE_MS - 1)).toBe(false);
+    expect(leaseExpired(l, undefined, start + LEASE_IDLE_MS + 1)).toBe(true);
+    expect(leaseExpired(l, start + 1000, start + LEASE_IDLE_MS + 1)).toBe(false);
   });
 });
 
@@ -118,6 +148,37 @@ describe('cleanup authorization and retry', () => {
     });
     expect(await release(context(), s, 'workspace-a', 'task')).toEqual(['foreign session']);
     expect(s.devices[0].lease?.session).toBe('task');
+  });
+  test('releasing keeps the resident device but deletes a temporary one', async () => {
+    const s = state();
+    const owner = { workspaceId: 'workspace-a', session: 'task', acquiredAt: now };
+    s.devices.push(device({ lease: owner }), device({ id: 'temp', temporary: true, lease: owner }));
+    expect(await release(context(), s, 'workspace-a', 'task')).toEqual([]);
+    expect(s.devices).toEqual([expect.objectContaining({ id: 'sim-id', lease: undefined })]);
+    expect(deleteDevice).toHaveBeenCalledTimes(1);
+  });
+  test('a failed temporary deletion keeps its record and lease for retry', async () => {
+    const s = state();
+    const owner = { workspaceId: 'workspace-a', session: 'task', acquiredAt: now };
+    s.devices.push(device({ id: 'temp', temporary: true, lease: owner }));
+    jest.mocked(deleteDevice).mockImplementationOnce(() => {
+      throw new Error('deletion not confirmed');
+    });
+    expect(await release(context(), s, 'workspace-a', 'task')).toEqual(['deletion not confirmed']);
+    expect(s.devices[0].lease).toEqual(owner);
+  });
+  test('an idle temporary device is deleted; one in use is kept', async () => {
+    const s = state();
+    const owner = { workspaceId: 'workspace-a', session: 'task', acquiredAt: now };
+    s.workspaces.push(context().workspace);
+    s.devices.push(device({ id: 'temp', temporary: true, lease: owner }));
+    jest.mocked(sessionActivity).mockReturnValue(Date.now());
+    await reconcile(context(), s);
+    expect(s.devices).toHaveLength(1);
+    jest.mocked(sessionActivity).mockReturnValue(Date.now() - LEASE_IDLE_MS - 1);
+    await reconcile(context(), s);
+    expect(deleteDevice).toHaveBeenCalledTimes(1);
+    expect(s.devices).toHaveLength(0);
   });
   test('a failed release keeps the retired workspace record, and a later retry forgets it', async () => {
     const s = state();
@@ -202,7 +263,7 @@ describe('persistent resource registry', () => {
     writeFileSync(file, JSON.stringify({ ...state(), version: 2 }));
     expect(() => readState(directory, '/repo/.git')).toThrow();
   });
-  test('rejects artifact path traversal and a second device per platform', () => {
+  test('rejects artifact path traversal, a second resident device and an unowned temporary one', () => {
     const owner = { pid: 1, startedAt: 'x' };
     expect(() =>
       StateSchema.parse({ ...state(), staging: [{ name: 'building-../../primary', owner }] }),
@@ -210,6 +271,10 @@ describe('persistent resource registry', () => {
     const s = state();
     s.devices.push(device(), device({ id: 'another-sim' }));
     saveState(directory, s);
-    expect(() => readState(directory, '/repo/.git')).toThrow('Multiple test devices');
+    expect(() => readState(directory, '/repo/.git')).toThrow('Multiple resident devices');
+    const t = state();
+    t.devices.push(device(), device({ id: 'temp', temporary: true }));
+    saveState(directory, t);
+    expect(() => readState(directory, '/repo/.git')).toThrow('without an owning lease');
   });
 });

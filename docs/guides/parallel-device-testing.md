@@ -1,8 +1,10 @@
 # Parallel Device Testing
 
-This guide owns local coding-agent self-test environments. Each platform has one registered test
-device that every workspace reuses under an exclusive lease. Native differences between branches are
-handled by reinstalling a cached development client, not by creating more devices. Physical devices
+This guide owns local coding-agent self-test environments. Each platform has one resident test
+device that every workspace reuses under an exclusive lease. Only a task that needs a device while
+another task is actively using the resident one gets a temporary device, deleted when its lease
+ends. Native differences
+between branches are handled by reinstalling a cached development client, not by creating devices. Physical devices
 and the primary user installation are never self-test targets.
 
 > Status: host lifecycle implemented; device acceptance not run.
@@ -12,13 +14,13 @@ and the primary user installation are never self-test targets.
 > design below.
 
 Apply the user's active authorization. `build` and `start` require the corresponding task
-authorization; no command creates, downloads or deletes a device. Never invoke `build` or `start`
-merely to verify this tooling.
+authorization. Apart from temporary devices, no command creates or deletes a device, and none
+downloads SDK images. Never invoke `build` or `start` merely to verify this tooling.
 
 ## Registry And Lock
 
 Ownership lives at `$CONDUCTOR_ROOT_PATH/.local/agent-self-testing/state.json`, outside disposable
-worktrees: workspaces, the test device per platform, its lease and installed artifact, Metro
+worktrees: workspaces, resident and temporary devices with their leases and installed artifacts, Metro
 processes started by the tool, and cached artifacts under `artifacts/`. Workspace logs live under
 `.context/agent-self-testing/`. Do not store credentials in the registry.
 
@@ -28,7 +30,8 @@ publishing registry entries, never during compilation.
 
 ## Test Devices
 
-Create or pick a simulator/emulator yourself, then register it by stable iOS UDID or Android AVD ID:
+Create or pick a simulator/emulator yourself, then register it as the resident device by stable iOS
+UDID or Android AVD ID:
 
 ```bash
 pnpm agent:env status
@@ -39,11 +42,17 @@ Registering again for the same platform replaces the unleased previous registrat
 is left untouched. Never register a daily-use installation. Unregistered devices are ignored: they
 are neither used nor stopped, and running ones do not block a launch.
 
-A lease is held by one task session (default `CONDUCTOR_SESSION_ID`). Another session gets a busy
-error and waits; it never creates another device. A lease expires after 60 minutes without
-`agent-device` requests from its session, measured from the session's request records, or from the
-last `start` when no session exists. The next `start` then closes the stale session and takes over.
-Coding agents can continue code work while waiting.
+The resident device is never deleted. A lease is held by one task session (default
+`CONDUCTOR_SESSION_ID`) until `release`, workspace retirement, or 60 minutes without `agent-device`
+requests from that session (measured from the session's request records, or from the last `start`
+when no session exists). After that idle period, the next `start` closes the stale session and
+takes over the resident device.
+
+When `start` finds the resident device under another task's live lease, it creates a temporary device named
+`Cherry_temp_<platform>_<hash>` with the resident device's type and installed runtime (iOS) or system
+image (Android). It starts with empty app data. The task keeps reusing it; `release`, retirement of
+its workspace, or its own idle expiry deletes it. An interrupted creation can leave an unregistered
+`Cherry_temp_` device; delete it manually.
 
 ## Native Compatibility And Development Builds
 
@@ -90,14 +99,14 @@ pnpm agent:env archive
 pnpm agent:env reconcile [--dry-run]
 ```
 
-- `release` closes the task's session, shuts down the test device and stops the Metro process the
-  tool started. Call it after self-testing and before waiting for review. A failed shutdown keeps
-  the lease and reports a blocker.
+- `release` closes the task's session, shuts down its device and stops the Metro process the tool
+  started. The resident device is kept; a temporary device is deleted. Call it after self-testing
+  and before waiting for review. A failed shutdown or deletion keeps the lease and reports a blocker.
 - `archive` marks the current workspace retired and reconciles. The shared
   `.conductor/settings.toml` runs it from Conductor's archive hook; machine-local overrides can take
   precedence.
-- `reconcile` runs inside `start` and `archive`. It releases leases and Metro processes of retired
-  workspaces, forgets their records, reclaims dead build staging, and removes artifacts older than
+- `reconcile` runs inside `start` and `archive`. It releases leases, temporary devices and Metro
+  processes of retired workspaces, deletes idle temporary devices, forgets their records, reclaims dead build staging, and removes artifacts older than
   seven days that are neither installed nor among the latest two per platform.
 
 Retirement requires either `archive` or both a Git worktree listing without the workspace and the
