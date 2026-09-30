@@ -93,7 +93,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
   protected onInit() {
     this.registerAppStateListener((state) => this.setForeground(state === 'active'));
-    this.refreshDiscoveryActivity();
+    // Construction precedes database initialization; a foreground transition may happen meanwhile.
+    this.setForeground(AppState.currentState === 'active');
     this.registerDisposable(
       this.resolver.subscribe((changed) => {
         if (!changed) return;

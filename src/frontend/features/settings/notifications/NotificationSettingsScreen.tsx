@@ -1,4 +1,3 @@
-import RadioIcon from '@cherrystudio/app-icons/icons/radio';
 import { Section, useToast } from '@cherrystudio/ui/components';
 import Constants from 'expo-constants';
 import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
@@ -94,6 +93,11 @@ export default function NotificationSettingsScreen() {
     });
   };
 
+  // iOS offers its recovery row beside the switch it affects; Android always
+  // shows its own notification settings entry below.
+  const isSystemNotificationBlocked =
+    Platform.OS === 'ios' && isCompletionNotificationEnabled && isNotificationPermissionBlocked;
+
   return (
     <SettingsScrollPage
       contentClassName="gap-6"
@@ -112,34 +116,34 @@ export default function NotificationSettingsScreen() {
               ? 'notifications.android.title'
               : 'settings.notifications.liveActivity.title',
           )}
-          leading={<RadioIcon className="size-5 text-foreground" />}
           onValueChange={setLiveActivityPreference}
           value={isLiveActivityEnabled}
         />
       </Section>
-      <Section footer={t('settings.notifications.completion.description')}>
+      <Section
+        footer={t(
+          isSystemNotificationBlocked
+            ? 'settings.notifications.completion.permissionDenied'
+            : 'settings.notifications.completion.description',
+        )}
+      >
         <Section.SwitchItem
           label={t('settings.notifications.completion.title')}
-          leading={<RadioIcon className="size-5 text-foreground" />}
           onValueChange={setCompletionNotificationPreference}
           value={isCompletionNotificationEnabled}
         />
+        {isSystemNotificationBlocked ? (
+          <Section.Item
+            label={t('settings.notifications.completion.systemSettings')}
+            onPress={openSystemSettings}
+          />
+        ) : null}
       </Section>
       {Platform.OS === 'android' ? (
         <Section footer={t('notifications.android.systemDescription')}>
           <Section.Item
             label={t('notifications.android.systemSettings')}
             onPress={openNotificationSettings}
-          />
-        </Section>
-      ) : null}
-      {Platform.OS === 'ios' &&
-      isCompletionNotificationEnabled &&
-      isNotificationPermissionBlocked ? (
-        <Section footer={t('settings.notifications.completion.permissionDenied')}>
-          <Section.Item
-            label={t('settings.notifications.completion.systemSettings')}
-            onPress={openSystemSettings}
           />
         </Section>
       ) : null}

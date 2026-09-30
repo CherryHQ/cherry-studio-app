@@ -82,7 +82,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
   createBackup = (): Promise<{ uri: string; filename: string }> =>
     this.run('capturing', async (signal) => {
       this.discardCandidate();
-      if (this.exported?.exists) this.exported.delete();
+      this.discardExport();
       const work = this.workDirectory('export');
       let completed = false;
       try {
@@ -141,7 +141,19 @@ export class BackupRuntime extends BaseService implements BackupModule {
         );
         this.exported = work;
         completed = true;
-        this.publish({ phase: 'idle', completed: 0, total: 0 });
+        this.publish({
+          phase: 'exported',
+          completed: 0,
+          total: 0,
+          exported: {
+            uri: output.uri,
+            filename,
+            sessions: manifest.counts.sessions,
+            messages: manifest.counts.messages,
+            files: manifest.counts.files,
+            bytes: output.size,
+          },
+        });
         return { uri: output.uri, filename };
       } finally {
         if (!completed && work.exists) work.delete();
@@ -180,7 +192,8 @@ export class BackupRuntime extends BaseService implements BackupModule {
             appVersion: manifest.appVersion,
             platform: manifest.platform,
             ...manifest.counts,
-            bytes: manifest.entries.reduce((sum, entry) => sum + entry.size, 0),
+            // The archive size, matching the export summary and what the Files app shows.
+            bytes: source.size,
           },
         });
       } finally {
@@ -258,6 +271,8 @@ export class BackupRuntime extends BaseService implements BackupModule {
     if (this.operation) this.operation.abort();
     else {
       this.discardCandidate();
+      // A dismissed export was never saved or shared by the user; nothing else can reach it.
+      if (this.backupState.phase === 'exported') this.discardExport();
       this.publish({ phase: 'idle', completed: 0, total: 0 });
     }
   };
@@ -308,6 +323,12 @@ export class BackupRuntime extends BaseService implements BackupModule {
     );
     directory.create({ intermediates: true });
     return directory;
+  }
+
+  private discardExport(): void {
+    const exported = this.exported;
+    this.exported = undefined;
+    if (exported?.exists) exported.delete();
   }
 
   private discardCandidate(): void {

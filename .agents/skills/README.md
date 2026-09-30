@@ -7,8 +7,7 @@ incompatible generic examples.
 ## Project Usage
 
 Keep upstream skill directories unchanged, including entry points, metadata, references, and
-templates. Maintain project-specific usage rules here. Project-owned skills such as
-[sync-cherry-desktop](sync-cherry-desktop/SKILL.md) evolve with the repository's architecture.
+templates. Maintain project-specific usage rules here.
 
 Skill activation does not expand the active task's permissions for implementation, tests, device
 actions, downloads, delegation, or external writes. Follow the user's instructions and

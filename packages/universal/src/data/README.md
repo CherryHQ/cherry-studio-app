@@ -19,8 +19,7 @@ package-side consumers:
 - `types/aiUsageRecord.ts`
 - `types/mcpServer.ts`
 
-They are mobile-owned all the same — the desktop-sync audit does not track them, and each follows
-"mobile persists what mobile reads".
+They are mobile-owned all the same, and each follows "mobile persists what mobile reads".
 
 `assistant.ts` remains only because portable provider-policy helpers still consume the desktop
 shape; removing that package dependency belongs to provider coverage work. `message.ts` contains

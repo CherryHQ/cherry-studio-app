@@ -119,6 +119,44 @@ describe('DesktopConnectionManager ownership', () => {
     jest.useRealTimers();
   });
 
+  it.each(['inactive', 'background', 'unknown'] as const)(
+    'connects after becoming active between construction in %s and initialization',
+    async (initialState) => {
+      await manager._doStop();
+      await manager._doDestroy();
+      AppState.currentState = initialState;
+      manager = new DesktopConnectionManager();
+      manager.configure(store);
+      // Native AppState updates before the manager subscribes, without a later change event.
+      AppState.currentState = 'active';
+      await manager._doInit();
+
+      const channel = session();
+      connect.mockResolvedValueOnce(channel as never);
+      const lease = await manager.retain(row.id, 'agent', signal());
+      await expect(lease.ready(signal())).resolves.toBe(channel);
+      expect(lease.getSnapshot().status).toBe('ready');
+    },
+  );
+
+  it('waits for foreground when backgrounded between construction and initialization', async () => {
+    await manager._doStop();
+    await manager._doDestroy();
+    manager = new DesktopConnectionManager();
+    manager.configure(store);
+    AppState.currentState = 'background';
+    await manager._doInit();
+
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    expect(lease.getSnapshot().status).toBe('suspended');
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(connect).not.toHaveBeenCalled();
+    appState('active');
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+  });
+
   it('continues past a wrong Noise peer without changing grants or retiring the stable lease', async () => {
     row.configuredEndpoints.push({ host: '192.168.1.3', port: 24444, security: 'ws' });
     connect.mockRejectedValueOnce(

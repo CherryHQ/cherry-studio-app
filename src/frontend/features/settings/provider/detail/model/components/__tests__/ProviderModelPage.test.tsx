@@ -33,7 +33,7 @@ function Draft({ model }: { model: Model }) {
 }
 
 function Page() {
-  return <ProviderModelPage>{(model) => <Draft model={model} />}</ProviderModelPage>;
+  return <ProviderModelPage title="Model">{(model) => <Draft model={model} />}</ProviderModelPage>;
 }
 
 describe('ProviderModelPage draft lifetime', () => {

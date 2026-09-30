@@ -15,10 +15,26 @@ import { ProviderModelManualForm } from './components/ProviderModelManualForm';
 import { ProviderModelSyncTask } from './components/ProviderModelSyncTask';
 
 export default function ProviderModelAddScreen() {
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
   return (
-    <ModelRegistryGate>
+    <ModelRegistryGate
+      header={<ProviderModelAddHeader task={mode === 'sync' ? 'sync' : 'manual'} />}
+    >
       <ProviderModelAddScreenContent />
     </ModelRegistryGate>
+  );
+}
+
+function ProviderModelAddHeader({ task }: { task: 'manual' | 'sync' }) {
+  const { t } = useTranslation();
+  return (
+    <RouteHeader
+      title={t(
+        task === 'sync'
+          ? 'settings.provider.models.syncTitle'
+          : 'settings.provider.models.addTitle',
+      )}
+    />
   );
 }
 
@@ -51,13 +67,7 @@ function ProviderModelAddScreenContent() {
   if (!provider) {
     return (
       <>
-        <RouteHeader
-          title={t(
-            task === 'sync'
-              ? 'settings.provider.models.syncTitle'
-              : 'settings.provider.models.addTitle',
-          )}
-        />
+        <ProviderModelAddHeader task={task} />
         <View className="flex-1 justify-center px-6 py-10">
           <ContentState.Loading title={t('settings.provider.loading')} />
         </View>

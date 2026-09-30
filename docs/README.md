@@ -15,7 +15,7 @@ Guides are task-oriented procedures for changing or extending the application.
 | [GitHub Plugin Authorization](./guides/github-plugin-authorization.md) | Publisher OAuth App configuration, in-app browser authorization, token renewal, and acceptance prerequisites |
 | [Local EAS Builds](./guides/local-builds.md) | Local installation packages, Sentry environment variables, and build profiles |
 | [Cloud Releases](./guides/cloud-releases.md) | EAS production builds, GitHub/GitCode APK releases, Google Play AAB builds, TestFlight uploads, and retry procedures |
-| [Parallel Device Testing](./guides/parallel-device-testing.md) | Agent self-test preparation design, configuration and development-client reuse, Conductor device isolation, and cleanup |
+| [Parallel Device Testing](./guides/parallel-device-testing.md) | Agent self-test preparation design, shared resident and temporary devices, development-client reuse, and cleanup |
 | [Testing And CI](./guides/testing-and-ci.md) | Focused checks, test value, local PR gates, and remote CI |
 | [UI Development](./guides/ui-development.md) | CherryUI ownership and reusable React component composition |
 
@@ -33,7 +33,7 @@ They are the source of truth for how the repository works today.
 | [Domain Language](./references/domain-language.md) | Shared product and architecture terminology |
 | [Naming Conventions](./references/naming-conventions.md) | File, directory, identifier, and documentation naming rules |
 | [Runtime Ownership](./references/runtime-ownership.md) | Bootstrap, app runtimes, caller-owned sessions, cleanup, and post-ready work |
-| [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync |
+| [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, and aliasing |
 | [Navigation And Insets](./references/navigation-and-insets.md) | Router structure, native gestures, sheets, safe areas, and edge-to-edge layout |
 | [Interaction And Gesture Arbitration](./references/interaction-and-gesture-arbitration.md) | Target contract for tap, long press, scroll, app-defined pan, and native text selection (`Status: design`) |
 | [Splash Screen And Startup Animation](./references/splash-screen-and-startup-animation.md) | Native launch constraints, animated handoff, and onboarding boundaries |

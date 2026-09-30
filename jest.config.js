@@ -22,10 +22,8 @@ module.exports = {
     '/packages/ai-runtime/',
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
-    // The desktop-sync audits spawn hundreds of real git subprocesses against
-    // fixture repos in tmpdir (~13s of the run). They guard against desktop
-    // drift, which is a local-sync concern rather than a per-PR one, so PR CI
-    // skips tooling suites except the architecture rules that protect every PR.
+    // Tooling suites guard local-only tools, so PR CI skips them except the
+    // architecture rules that protect every PR.
     ...(process.env.PRCI ? ['/scripts/__tests__/(?!architectureBoundaries\\.test\\.ts$)'] : []),
   ],
   // Local build/export artifacts can contain copied workspace packages. Keep
