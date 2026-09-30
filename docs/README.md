@@ -33,7 +33,7 @@ They are the source of truth for how the repository works today.
 | [Domain Language](./references/domain-language.md) | Shared product and architecture terminology |
 | [Naming Conventions](./references/naming-conventions.md) | File, directory, identifier, and documentation naming rules |
 | [Runtime Ownership](./references/runtime-ownership.md) | Bootstrap, app runtimes, caller-owned sessions, cleanup, and post-ready work |
-| [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync |
+| [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, and aliasing |
 | [Navigation And Insets](./references/navigation-and-insets.md) | Router structure, native gestures, sheets, safe areas, and edge-to-edge layout |
 | [Interaction And Gesture Arbitration](./references/interaction-and-gesture-arbitration.md) | Target contract for tap, long press, scroll, app-defined pan, and native text selection (`Status: design`) |
 | [Splash Screen And Startup Animation](./references/splash-screen-and-startup-animation.md) | Native launch constraints, animated handoff, and onboarding boundaries |

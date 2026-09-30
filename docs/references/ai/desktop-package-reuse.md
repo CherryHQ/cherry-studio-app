@@ -98,8 +98,12 @@ check, platform exports, and device acceptance before the registry compatibility
 | Endpoint dialect and actual-cost reporting | Partially implemented | Cost trust is shared; stream usage and reasoning summary are AI SDK concerns |
 | Server tools and model eligibility | Intentionally unsupported by the current Mobile product path | Must be ignored explicitly; Mobile's application Web Search remains independent |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
-| Full catalog compatibility review | Outstanding | Blocks compatibility-version and synchronization-manifest advancement |
+| Full catalog compatibility review | Outstanding | Blocks compatibility-version advancement |
 | Mobile-only `github` preset | Retained as a product extension | Its bundled provider-model namespace replaces any remote `github` rows |
+
+Last reviewed Desktop commit for `packages/provider-registry`:
+`55feedb21473daf04792962db81ca66ab53e58a0`. The reviewed commit records which Desktop changes have
+been assessed; it does not advance the registry compatibility line.
 
 ### Remote catalog policy
 
@@ -152,12 +156,13 @@ OAuth, timeout, logging, and translation enter through Mobile-owned adapters.
 
 ## Synchronization Procedure
 
-Use the project [sync-cherry-desktop skill](../../../.agents/skills/sync-cherry-desktop/SKILL.md)
-and `pnpm desktop:sync:audit` for scoped review. The legacy Port Bot workflow is retired; blanket
-copying into the former `src/aiCore` layout is not a supported synchronization path.
+Desktop changes are reviewed by hand against this document. Blanket copying into the former
+`src/aiCore` layout is not a supported synchronization path.
 
-1. Record the Desktop commit being assessed; never record a local absolute checkout path.
-2. Inventory the candidate behavior's Mobile callers and classify it as Pi conversation behavior,
+1. In a clean Desktop checkout, list the unreviewed changes with
+   `git log <last reviewed commit>..HEAD -- packages/provider-registry`, adding any other path this
+   document admits for the behavior under review. Never record a local absolute checkout path.
+2. Inventory each candidate behavior's Mobile callers and classify it as Pi conversation behavior,
    non-conversation `AiService` behavior, or shared provider data.
 3. Reject behavior outside that consumer closure. In particular, do not route Desktop context,
    host, persistence, lifecycle, or tool-loop code into the Pi path.
@@ -169,9 +174,10 @@ copying into the former `src/aiCore` layout is not a supported synchronization p
    regenerate the lockfile with `pnpm@12.2.1`.
 7. Run the owning package tests, `pnpm typecheck`, `pnpm lint`, and `pnpm format:check`, followed by
    the required production platform exports and device acceptance.
-8. Advance a registry compatibility manifest only after all consumed required semantics are
+8. Advance the registry compatibility version only after all consumed required semantics are
    implemented, unsupported optional semantics are explicitly classified, and every required gate
    passes.
+9. After the port passes its gates, update the last reviewed Desktop commit recorded above.
 
 ## Published Package Admission
 
