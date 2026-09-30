@@ -234,20 +234,6 @@ export function measurePiContext(input: {
     estimate.lastUsageIndex === null
       ? input.messages
       : input.messages.slice(estimate.lastUsageIndex + 1);
-  const addedToolNames = new Set(
-    unmeasuredMessages.flatMap((message) =>
-      // Retain compatibility with replay artifacts written before Pi 0.99.
-      message.role === 'toolResult' &&
-      'addedToolNames' in message &&
-      Array.isArray(message.addedToolNames)
-        ? message.addedToolNames.filter((name): name is string => typeof name === 'string')
-        : [],
-    ),
-  );
-  const addedTools = new Map(getCurrentTools(unmeasuredMessages).map((tool) => [tool.name, tool]));
-  for (const tool of input.tools) {
-    if (addedToolNames.has(tool.name)) addedTools.set(tool.name, tool);
-  }
   const fixedCosts = estimatePiNonMessageContextCosts({
     api: input.api,
     imageMessages: unmeasuredMessages,
@@ -257,7 +243,7 @@ export function measurePiContext(input: {
       estimate.lastUsageIndex === null
         ? input.systemPrompt
         : getCurrentSystemPrompt(unmeasuredMessages),
-    tools: estimate.lastUsageIndex === null ? input.tools : [...addedTools.values()],
+    tools: estimate.lastUsageIndex === null ? input.tools : getCurrentTools(unmeasuredMessages),
   });
 
   return {

@@ -474,21 +474,6 @@ describe('Pi live context accounting', () => {
     expect(after.inputTokens - before.inputTokens).toBe(1_000);
   });
 
-  test('keeps budgeting discovery fields in older replay artifacts', () => {
-    const legacyResult: ToolResultMessage & { addedToolNames: string[] } = {
-      role: 'toolResult',
-      toolCallId: 'discover',
-      toolName: 'discover',
-      content: [],
-      isError: false,
-      timestamp: 3,
-      addedToolNames: ['search'],
-    };
-    const before = measurePiContext({ ...context, messages: [measured] });
-    const after = measurePiContext({ ...context, messages: [measured, legacyResult] });
-    expect(after.inputTokens - before.inputTokens).toBeGreaterThanOrEqual(10_000);
-  });
-
   test('includes system and tool costs when no provider usage is available', () => {
     const empty = { ...context, messages: [response()] };
     const withoutPrefix = estimatePiLoopContextHeadroomTokens({

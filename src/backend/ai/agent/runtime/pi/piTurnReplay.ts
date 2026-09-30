@@ -67,7 +67,6 @@ const ReplayMessageSchema = z.discriminatedUnion('role', [
     // Mobile tools return text. Unsupported future media use the existing managed-file path.
     content: z.array(TextSchema),
     details: z.custom<JsonValue>().optional(),
-    addedToolNames: z.array(z.string()).optional(),
     isError: z.boolean(),
     timestamp: z.number(),
   }),
@@ -143,9 +142,7 @@ export function createPiTurnReplay(messages: readonly Message[]): RuntimeTurnRep
     }
     if (message.role === 'toolResult') {
       const { role, toolCallId, toolName, content, details, isError, timestamp } = message;
-      // Older replay artifacts still carry Pi's pre-system-delta discovery field.
-      const addedToolNames = 'addedToolNames' in message ? message.addedToolNames : undefined;
-      return { role, toolCallId, toolName, content, details, addedToolNames, isError, timestamp };
+      return { role, toolCallId, toolName, content, details, isError, timestamp };
     }
     return message;
   });
