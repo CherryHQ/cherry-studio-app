@@ -1646,7 +1646,6 @@
   "settings.provider.models.classification.image": "Generare de imagini",
   "settings.provider.models.classification.imageInputRequired": "Imagine (obligatoriu)",
   "settings.provider.models.classification.inputModalities": "Intrări acceptate",
-  "settings.provider.models.classification.managementOnly": "Nu este disponibil pentru chat",
   "settings.provider.models.classification.reasoning": "Raționament",
   "settings.provider.models.classification.rerank": "Reranking",
   "settings.provider.models.classification.text": "Text",

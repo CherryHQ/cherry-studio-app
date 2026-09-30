@@ -1646,7 +1646,6 @@
   "settings.provider.models.classification.image": "Geração de imagens",
   "settings.provider.models.classification.imageInputRequired": "Imagem (obrigatório)",
   "settings.provider.models.classification.inputModalities": "Entradas suportadas",
-  "settings.provider.models.classification.managementOnly": "Não disponível para chat",
   "settings.provider.models.classification.reasoning": "Raciocínio",
   "settings.provider.models.classification.rerank": "Reordenar",
   "settings.provider.models.classification.text": "Texto",

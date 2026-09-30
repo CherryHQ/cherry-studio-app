@@ -31,8 +31,8 @@ An empty directory also offers manual creation. Removal results report protected
 The manual form and synchronization task mount independently under `detail/modelAdd/components/`;
 the synchronization preview lives with that task, while the legacy pull page only redirects.
 
-Manual creation and editing expose text/image/embedding/rerank classification, reasoning and tool
-capabilities, image/audio/video inputs, group, streaming support metadata, and pricing. Existing list
+Manual creation and editing offer text/image classification (embedding and rerank models cannot
+be used in chat, so they are only shown, never offered), reasoning and tool capabilities, image/audio/video inputs, group, streaming support metadata, and pricing. Existing list
 rules derive chat/drawing groups and keep unsupported types out of chat selection. This is model
 configuration, not admission of new execution paths: Pi still controls conversation protocols and
 supported media, and the streaming flag remains a model capability declaration.

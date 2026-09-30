@@ -1628,7 +1628,6 @@
   "settings.provider.models.classification.image": "影像產生",
   "settings.provider.models.classification.imageInputRequired": "圖片（必選）",
   "settings.provider.models.classification.inputModalities": "支持的輸入",
-  "settings.provider.models.classification.managementOnly": "暫不支持聊天",
   "settings.provider.models.classification.reasoning": "推理",
   "settings.provider.models.classification.rerank": "重新排序",
   "settings.provider.models.classification.text": "文本",

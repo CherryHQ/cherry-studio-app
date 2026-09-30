@@ -1628,7 +1628,6 @@
   "settings.provider.models.classification.image": "画像生成",
   "settings.provider.models.classification.imageInputRequired": "画像 (必須)",
   "settings.provider.models.classification.inputModalities": "サポートされている入力",
-  "settings.provider.models.classification.managementOnly": "チャットには使用できません",
   "settings.provider.models.classification.reasoning": "推理",
   "settings.provider.models.classification.rerank": "リランク",
   "settings.provider.models.classification.text": "テキスト",

@@ -1637,7 +1637,6 @@
   "settings.provider.models.classification.image": "Δημιουργία εικόνων",
   "settings.provider.models.classification.imageInputRequired": "Εικόνα (απαιτείται)",
   "settings.provider.models.classification.inputModalities": "Υποστηριζόμενες είσοδοι",
-  "settings.provider.models.classification.managementOnly": "Μη διαθέσιμο για συνομιλία",
   "settings.provider.models.classification.reasoning": "Συλλογισμός",
   "settings.provider.models.classification.rerank": "Ανατάξεις",
   "settings.provider.models.classification.text": "Κείμενο",

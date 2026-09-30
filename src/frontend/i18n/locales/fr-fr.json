@@ -1646,7 +1646,6 @@
   "settings.provider.models.classification.image": "Génération d'images",
   "settings.provider.models.classification.imageInputRequired": "Image (obligatoire)",
   "settings.provider.models.classification.inputModalities": "Entrées prises en charge",
-  "settings.provider.models.classification.managementOnly": "Non disponible pour le chat",
   "settings.provider.models.classification.reasoning": "Raisonnement",
   "settings.provider.models.classification.rerank": "Réorganiser",
   "settings.provider.models.classification.text": "Texte",

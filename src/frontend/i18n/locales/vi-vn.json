@@ -1628,7 +1628,6 @@
   "settings.provider.models.classification.image": "Tạo hình ảnh",
   "settings.provider.models.classification.imageInputRequired": "Hình ảnh (bắt buộc)",
   "settings.provider.models.classification.inputModalities": "Đầu vào được hỗ trợ",
-  "settings.provider.models.classification.managementOnly": "Không có sẵn để trò chuyện",
   "settings.provider.models.classification.reasoning": "Lý luận",
   "settings.provider.models.classification.rerank": "Sắp xếp lại",
   "settings.provider.models.classification.text": "Văn bản",

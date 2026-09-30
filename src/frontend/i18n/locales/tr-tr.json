@@ -1637,7 +1637,6 @@
   "settings.provider.models.classification.image": "Görüntü oluşturma",
   "settings.provider.models.classification.imageInputRequired": "Resim (gerekli)",
   "settings.provider.models.classification.inputModalities": "Desteklenen girişler",
-  "settings.provider.models.classification.managementOnly": "Sohbet için uygun değil",
   "settings.provider.models.classification.reasoning": "Muhakeme",
   "settings.provider.models.classification.rerank": "Yeniden Sıralama",
   "settings.provider.models.classification.text": "Metin",

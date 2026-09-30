@@ -20,13 +20,11 @@ export function ProviderModelTypeField({
   const valueLabel = value
     ? t(`settings.provider.models.classification.${value}`)
     : t('settings.provider.models.detail.unknown');
-  const options = (['text', 'image', 'embedding', 'rerank'] as const).map((type) => ({
+  // Embedding and rerank models cannot be used in chat, so they are not offered; a model that
+  // already is one still shows its type.
+  const options = (['text', 'image'] as const).map((type) => ({
     value: type,
     label: t(`settings.provider.models.classification.${type}`),
-    description:
-      type === 'embedding' || type === 'rerank'
-        ? t('settings.provider.models.classification.managementOnly')
-        : undefined,
   }));
   return (
     <>

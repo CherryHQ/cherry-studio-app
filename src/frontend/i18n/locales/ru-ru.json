@@ -1655,7 +1655,6 @@
   "settings.provider.models.classification.image": "Генерация изображений",
   "settings.provider.models.classification.imageInputRequired": "Изображение (обязательно)",
   "settings.provider.models.classification.inputModalities": "Поддерживаемые входы",
-  "settings.provider.models.classification.managementOnly": "Недоступно для чата",
   "settings.provider.models.classification.reasoning": "Рассуждение",
   "settings.provider.models.classification.rerank": "Реранжирование",
   "settings.provider.models.classification.text": "Текст",

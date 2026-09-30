@@ -1628,7 +1628,6 @@
   "settings.provider.models.classification.image": "图像生成",
   "settings.provider.models.classification.imageInputRequired": "图片（必选）",
   "settings.provider.models.classification.inputModalities": "支持的输入",
-  "settings.provider.models.classification.managementOnly": "暂不支持聊天",
   "settings.provider.models.classification.reasoning": "推理",
   "settings.provider.models.classification.rerank": "重排",
   "settings.provider.models.classification.text": "文本",
