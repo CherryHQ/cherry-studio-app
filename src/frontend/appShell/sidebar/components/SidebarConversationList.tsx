@@ -51,7 +51,7 @@ export function SidebarConversationList({
       <ConversationStatus
         availability={availability}
         onRepair={() => router.push('/settings/device-connections')}
-        onEditAddresses={
+        onOpenDeviceSettings={
           connectionId
             ? () =>
                 router.push({
