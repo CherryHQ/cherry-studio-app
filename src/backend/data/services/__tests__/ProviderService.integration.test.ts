@@ -23,7 +23,7 @@ describe('ProviderService integration', () => {
     insertProvider('enabled-b', true, 'a');
     insertProvider('disabled-a', false, 'b');
     insertProvider('enabled-a', true, 'a');
-    insertProvider('unsupported', true, '0', 'openai-codex');
+    insertProvider('unsupported', true, '0', 'grok-cli');
 
     const first = await service.listPage({ limit: 2 });
     const second = await service.listPage({ cursor: first.nextCursor, limit: 2 });

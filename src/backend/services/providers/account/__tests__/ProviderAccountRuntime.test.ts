@@ -1,5 +1,6 @@
 import { ProviderAccountError } from '@/shared/contracts';
 
+import type { ProviderAccountAdapter } from '../providerAccountAdapter';
 import type { ProviderAccountDefinition } from '../providerAccountDefinition';
 import { ProviderAccountRuntime } from '../ProviderAccountRuntime';
 import { providerAccountStorage, type StoredProviderAccount } from '../providerAccountStorage';
@@ -137,6 +138,42 @@ it('persists rotated credentials before a balance failure and coalesces concurre
     balance: { amount: 12.5, currency: 'EUR' },
   });
   expect(oauth.refresh).toHaveBeenCalledTimes(1);
+});
+
+it('coalesces adapter refreshes and allows a retry after failure', async () => {
+  const status = {
+    signedIn: true,
+    balance: null,
+    displayName: null,
+    email: null,
+    updatedAt: 100,
+  };
+  const adapter = {
+    configure: jest.fn(),
+    getCapabilities: () => ({
+      signIn: true,
+      apiKeys: false,
+      balance: false,
+      flow: 'interactive' as const,
+    }),
+    getStatus: jest.fn(),
+    signIn: jest.fn(),
+    refresh: jest
+      .fn()
+      .mockRejectedValueOnce(new ProviderAccountError('network'))
+      .mockResolvedValue(status),
+    logout: jest.fn(),
+    stop: jest.fn(),
+  } satisfies ProviderAccountAdapter;
+  runtime.configure(store, [], adapter);
+
+  const first = runtime.refresh(providerId);
+  expect(runtime.refresh(providerId)).toBe(first);
+  await expect(first).rejects.toMatchObject({ reason: 'network' });
+  expect(adapter.refresh).toHaveBeenCalledTimes(1);
+
+  await expect(runtime.refresh(providerId)).resolves.toEqual(status);
+  expect(adapter.refresh).toHaveBeenCalledTimes(2);
 });
 
 it('retries an unauthorized balance once, then requires sign-in without retrying a rejected grant forever', async () => {

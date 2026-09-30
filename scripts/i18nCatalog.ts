@@ -97,7 +97,8 @@ export function checkCatalog(
     if (!translation.trim()) errors.push(`${key}: empty translation`);
     if (/\[to be translated\]/i.test(translation)) errors.push(`${key}: unfinished translation`);
 
-    const fold = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    // Preserve separators so "to authorize" does not become the protected name "OAuth".
+    const fold = (text: string) => text.toLowerCase().replace(/\s+/gu, ' ');
     for (const term of protectedTerms) {
       if (fold(source).includes(fold(term)) && !fold(translation).includes(fold(term))) {
         errors.push(`${key}: missing protected term ${term}`);

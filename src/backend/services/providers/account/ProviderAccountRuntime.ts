@@ -182,13 +182,14 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
     return completion;
   }
 
-  async refresh(providerId: string): Promise<ProviderAccountStatus> {
-    const provider = await this.store!.get(providerId);
-    if (this.adapter?.getCapabilities(provider)) return this.adapter.refresh(providerId);
+  refresh(providerId: string): Promise<ProviderAccountStatus> {
     const previous = this.refreshes.get(providerId);
     if (previous) return previous;
     const result = this.run(async (signal) => {
-      const { provider, definition } = await this.requireProvider(providerId);
+      const provider = await this.store!.get(providerId);
+      if (this.adapter?.getCapabilities(provider)) return this.adapter.refresh(providerId);
+      const definition = this.definitions.get(provider.presetProviderId ?? provider.id);
+      if (!definition) throw new ProviderAccountError('unsupported');
       let account = await this.readAccount(provider, definition.id);
       if (!account?.authorized) return { ...SIGNED_OUT };
       if (!definition.getBalance && !definition.getProfile) return accountStatus(account);
