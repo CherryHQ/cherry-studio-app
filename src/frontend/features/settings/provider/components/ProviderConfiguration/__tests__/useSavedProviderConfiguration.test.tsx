@@ -1,4 +1,5 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -47,6 +48,7 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 jest.mock('@/frontend/data', () => ({
+  queryKeys: jest.requireActual('@/frontend/data/queryKeys').queryKeys,
   useBackendModule: () => ({
     accounts: { getCapabilities: () => ({ apiKeys: false, balance: false, signIn: false }) },
   }),
@@ -69,17 +71,26 @@ jest.mock('@/frontend/hooks/useProviderAvatar', () => ({
 }));
 
 describe('saved provider configuration writes each change', () => {
+  let queryClient: QueryClient;
   let renderer: ReactTestRenderer;
   let configuration: ReturnType<typeof useSavedProviderConfiguration>;
-  function Probe() {
+  function ConfigurationProbe() {
     configuration = useSavedProviderConfiguration('custom');
     return null;
+  }
+  function Probe() {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <ConfigurationProbe />
+      </QueryClientProvider>
+    );
   }
   const actions = () => {
     if (!configuration.value) throw new Error('configuration did not load');
     return configuration.value.actions;
   };
   beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     jest.clearAllMocks();
     mockModels = [followingModel];
     mockApiKeys = [{ id: 'key', isEnabled: true, key: 'sk-test' }];
@@ -90,6 +101,7 @@ describe('saved provider configuration writes each change', () => {
   });
   afterEach(() => {
     act(() => renderer.unmount());
+    queryClient.clear();
   });
 
   it('asks before moving the default endpoint that existing models follow', async () => {
