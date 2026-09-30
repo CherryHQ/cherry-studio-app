@@ -139,8 +139,37 @@ CherryAI:
 
 CherryIN uses the normal endpoint configuration and API-key path.
 
-Mobile has no provider OAuth sign-in. Registry `authMethods` still mirrors the desktop catalog, but
-OAuth-only preset providers are projected out by `MobileRegistryLoader.isProviderExcluded`.
+Mobile provider account sign-in has two bindings: CherryIN retains its account-to-API-key flow;
+Pi supplies GitHub Copilot, OpenAI Codex, Kimi Code, xAI/Grok, Meta, and OpenRouter through a
+runtime-owned `ProviderAccountAdapter`. Registry OAuth flags alone do not enable a login flow.
+The first five use the official device-code flows. OpenRouter uses official PKCE with the manual
+code/final-redirect-URL fallback; native apps do not create a loopback HTTP listener. Its browser
+opens externally so the final redirect URL can be copied.
+
+`ProviderAccountRuntime` owns the public account workflow and teardown. `PiProviderAccountAdapter`
+is the native auth bridge inside the Pi zone: it adapts Expo fetch/crypto and supplies an
+instance-scoped `CredentialStore` backed by device-only SecureStore. OAuth credentials never become
+user-provider API keys or enter backups. Pi resolves and refreshes credentials under per-instance
+locks, preserving vendor fields and preventing ambient API-key fallback after refresh failure.
+Deleting a provider or signing out cancels attempts and removes its local credential. Upstream
+logout has no remote revocation operation; OpenRouter keys remain manageable in the provider console.
+
+The Pi request binding retains canonical provider IDs and all resolved `apiKey`, `headers`, and
+`baseUrl` fields while usage attribution keeps the app instance ID. Five selective official model
+catalogs supply API/compatibility metadata; Copilot filters them by the account's available model
+IDs. OpenRouter keeps ordinary API-key model discovery. Codex uses its dedicated Responses API over
+SSE. These account credentials currently serve conversation models; non-conversation AI SDK
+features retain their existing credential path.
+
+Anthropic account login is not enabled. The newer OpenAI ChatGPT OAuth route still requires a fixed
+loopback callback and additional identity-validation/platform integration. Radius has no Mobile
+provider preset or `pi-messages` binding. `grok-cli` still requires an external CLI and remains
+excluded. Supporting the xAI subscription flow on the `grok` preset does not enable `grok-cli`.
+
+The versioned Pi 0.99.1 patch exposes `native-oauth`, injects native fetch/PKCE primitives, and adds a
+native manual-callback adapter. Metro honors this package's browser file map. OAuth protocol polling,
+refresh, token parsing, and request-auth derivation remain upstream implementations. Update this
+patch and the native module-graph regression coverage together when upgrading Pi.
 
 Azure provider configuration handles OpenAI, Responses, and Anthropic variants. `iam-azure` auth
 configuration and API-version settings influence the generated provider settings.

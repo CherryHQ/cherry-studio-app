@@ -7,7 +7,12 @@ import type {
   ReconcileModelsInput,
   ReconcileModelsResult,
 } from '@/shared/contracts';
-import { ModelPullError, ModelPullTimeoutError, ProviderSetupError } from '@/shared/contracts';
+import {
+  ModelPullError,
+  ModelPullTimeoutError,
+  ProviderSetupError,
+  ProviderAccountError,
+} from '@/shared/contracts';
 import type { AddModelInput, ModelListQuery } from '@/shared/data/api/schemas/models';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
@@ -55,6 +60,7 @@ export type ModelsModuleDependencies = {
   models: ModelWorkflowData;
   providers: ProviderWorkflowData;
   pullTimeoutMs?: number;
+  isOAuthSignedIn?(provider: Provider): Promise<boolean>;
 };
 
 export function createModelsModule(dependencies: ModelsModuleDependencies): ModelsModule {
@@ -138,7 +144,12 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
         dependencies.providers.keys(providerId),
         dependencies.providers.auth(providerId),
       ]);
-      const issue = getProviderConfigurationIssue(provider, keys, auth);
+      const issue = getProviderConfigurationIssue(
+        provider,
+        keys,
+        auth,
+        await dependencies.isOAuthSignedIn?.(provider),
+      );
       if (issue) throw new ProviderSetupError(issue);
     }
     throwIfAborted(signal);
@@ -276,6 +287,10 @@ function errorMessage(error: unknown): string {
 }
 
 function classifyPullFailure(error: unknown): ModelPullError['reason'] {
+  if (error instanceof ProviderAccountError) {
+    if (error.reason === 'authorization') return 'authentication';
+    if (error.reason === 'network') return 'network';
+  }
   if (error && typeof error === 'object') {
     const status = 'statusCode' in error ? error.statusCode : undefined;
     if (status === 401 || status === 403) return 'authentication';

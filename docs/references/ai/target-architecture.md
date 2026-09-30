@@ -82,10 +82,12 @@ New module and directory names are chosen at implementation time following
 ## Seam Rules
 
 1. **Pi isolation.** Outside `agent/runtime/pi/`, no file imports Pi symbols or
-   `@earendil-works/*`. Enforced by lint, not convention. Within the zone, only
-   `piModelResolver.ts` may reach the Data API and Expo — it is the bridge from Provider and Model
-   records to a Pi model, and lint scopes that exemption to the same file the conformance harness
-   leaves out of its purity list.
+   `@earendil-works/*`. Enforced by lint, not convention. Two native bridges inside the zone may
+   reach app persistence and Expo: `piModelResolver.ts` materializes Provider and Model records as
+   Pi models; `PiProviderAccountAdapter.ts` adapts credential storage, fetch, crypto, and login
+   interaction. The public account module sees only the runtime-agnostic `ProviderAccountAdapter`
+   contract. Lint scopes these exceptions to the bridges; the conformance harness covers the
+   independent execution implementation.
 2. **Contract purity.** `agent/runtime/types.ts` depends on no `packages/*` port. The usage report
    uses a neutral shape defined in the contract; the Pi resolver maps into it.
 3. **One binding point.** The composition root creates and registers the Runtime. Replacing the

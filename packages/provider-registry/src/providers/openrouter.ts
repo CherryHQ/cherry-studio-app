@@ -2,6 +2,7 @@ import { CURRENCY } from '../schemas/enums';
 import { defineProvider } from './types';
 
 export default defineProvider({
+  authMethods: ['api-key', 'oauth'],
   id: 'openrouter',
   name: 'OpenRouter',
   // OpenRouter's usage response carries the actual billed amount, so the cost

@@ -1,6 +1,7 @@
 import { defineProvider } from './types';
 
 export default defineProvider({
+  authMethods: ['api-key', 'oauth'],
   id: 'grok',
   name: 'Grok',
   defaultChatEndpoint: 'openai-responses',

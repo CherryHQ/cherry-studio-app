@@ -26,9 +26,11 @@ import p_grok_cli from './grok-cli';
 import p_groq from './groq';
 import p_huggingface from './huggingface';
 import p_jina from './jina';
+import p_kimi_coding from './kimi-coding';
 import p_lanyun from './lanyun';
 import p_lmstudio from './lmstudio';
 import p_longcat from './longcat';
+import p_meta from './meta';
 import p_mimo from './mimo';
 import p_minimax from './minimax';
 import p_minimax_global from './minimax-global';
@@ -100,6 +102,7 @@ export const PROVIDERS: Provider[] = [
   p_github,
   p_copilot,
   p_moonshot,
+  p_kimi_coding,
   p_baichuan,
   p_dashscope,
   p_stepfun,
@@ -110,6 +113,7 @@ export const PROVIDERS: Provider[] = [
   p_fireworks,
   p_nvidia,
   p_grok,
+  p_meta,
   p_mistral,
   p_jina,
   p_perplexity,

@@ -1,5 +1,17 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
+
+function nativeBrowserRedirect(file: string): string {
+  for (let directory = dirname(file); ; directory = dirname(directory)) {
+    const packageJson = join(directory, 'package.json');
+    if (existsSync(packageJson)) {
+      const browser = JSON.parse(readFileSync(packageJson, 'utf8')).browser;
+      const replacement = browser?.[`./${relative(directory, file)}`];
+      return typeof replacement === 'string' ? join(directory, replacement) : file;
+    }
+    if (directory === dirname(directory)) return file;
+  }
+}
 
 /** Resolve an Earendil package specifier from `origin` as Metro selects its import entry. */
 function resolveEarendilModule(specifier: string, origin: string): string | undefined {
@@ -42,7 +54,7 @@ function readModuleGraph(entries: string[]): Map<string, string> {
       const dependency = specifier.startsWith('.')
         ? resolve(dirname(file), specifier)
         : resolveEarendilModule(specifier, dirname(file));
-      if (dependency && existsSync(dependency)) pending.push(dependency);
+      if (dependency && existsSync(dependency)) pending.push(nativeBrowserRedirect(dependency));
     }
   }
 
@@ -59,6 +71,7 @@ describe('Pi React Native patches', () => {
       '@earendil-works/pi-ai/api/google-generative-ai',
       '@earendil-works/pi-ai/api/openai-completions',
       '@earendil-works/pi-ai/api/openai-responses',
+      '@earendil-works/pi-ai/api/openai-codex-responses',
       '@earendil-works/pi-ai/api/simple-options',
       '@earendil-works/pi-ai/utils/event-stream',
       '@earendil-works/pi-ai/utils/transcript',
@@ -78,6 +91,26 @@ describe('Pi React Native patches', () => {
       expect({ file, dynamicImport: /\bimport\((?!\s*["'])/.test(source) }).toEqual({
         file,
         dynamicImport: false,
+      });
+    }
+  });
+
+  test('bundles only the selected native OAuth flows without Node callback listeners or computed imports', () => {
+    const graph = readModuleGraph(['@earendil-works/pi-ai/native-oauth']);
+    const paths = [...graph.keys()];
+    expect(paths.some((file) => file.endsWith('callback-server.native.js'))).toBe(true);
+    expect(paths.some((file) => /\/(models|index)\.js$/.test(file))).toBe(false);
+    expect(paths.some((file) => /\/(anthropic|radius|openai-chatgpt|load)\.js$/.test(file))).toBe(
+      false,
+    );
+    for (const [file, source] of graph) {
+      expect({
+        file,
+        nodeImport: /(?:from\s+|require\(|import\()\s*["']node:/.test(source),
+      }).toEqual({ file, nodeImport: false });
+      expect({ file, computedImport: /\bimport\((?!\s*["'])/.test(source) }).toEqual({
+        file,
+        computedImport: false,
       });
     }
   });

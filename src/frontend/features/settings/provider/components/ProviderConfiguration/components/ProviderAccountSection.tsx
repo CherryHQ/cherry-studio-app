@@ -1,8 +1,10 @@
+import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Button, Section, Spinner } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { ProviderSignInPromptRow } from '../../ProviderAccount/ProviderSignInPromptRow';
 import { useProviderAccount } from '../../ProviderAccount/useProviderAccount';
 import type { ProviderConfigurationAccount } from '../types';
 
@@ -20,7 +22,13 @@ export function ProviderAccountSection({
   providerName: string;
 }) {
   const { t, i18n } = useTranslation();
-  const state = useProviderAccount(providerId, account.onKeysChanged, account.onBusyChange);
+  const interactive = account.capabilities.flow === 'interactive';
+  const state = useProviderAccount(
+    providerId,
+    account.onKeysChanged,
+    account.onBusyChange,
+    interactive,
+  );
   const status = state.status.data;
   const busyIndicator = state.busy ? (
     <Spinner accessibilityLabel={t('settings.provider.loading')} size="sm" />
@@ -71,6 +79,13 @@ export function ProviderAccountSection({
             showChevron={false}
             trailing={busyIndicator}
           />
+          {interactive ? (
+            <Section.Item
+              disabled={state.busy}
+              label={t('settings.provider.account.login', { name: providerName })}
+              onPress={() => void state.login()}
+            />
+          ) : null}
         </>
       ) : (
         <Section.Item
@@ -86,6 +101,42 @@ export function ProviderAccountSection({
           trailing={busyIndicator}
         />
       )}
+      {state.loginEvent?.type === 'device-code' ? (
+        <Section.Item
+          label={t('settings.provider.account.deviceCode')}
+          description={t('settings.provider.account.deviceCodeHint')}
+          trailing={
+            <View className="flex-row items-center gap-1">
+              <Text selectable className="text-base font-semibold text-foreground">
+                {state.loginEvent.code}
+              </Text>
+              <Button
+                accessibilityLabel={t('common.copy')}
+                icon={<CopyIcon />}
+                onPress={() => void state.copyLoginCode()}
+                size="sm"
+                variant="ghost"
+              />
+            </View>
+          }
+        />
+      ) : null}
+      {state.loginEvent?.type === 'device-code' || state.loginEvent?.type === 'browser' ? (
+        <Section.Item
+          label={t('settings.provider.account.openBrowser')}
+          onPress={() => void state.openLoginBrowser()}
+        />
+      ) : null}
+      {state.loginPrompt ? (
+        <ProviderSignInPromptRow
+          key={state.loginPrompt.type}
+          prompt={state.loginPrompt}
+          onAnswer={state.answerPrompt}
+        />
+      ) : null}
+      {state.loginEvent && interactive ? (
+        <Section.Item label={t('common.cancel')} onPress={state.cancelLogin} showChevron={false} />
+      ) : null}
     </Section>
   );
 }

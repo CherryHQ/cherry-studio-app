@@ -7,6 +7,22 @@ export type ProviderAccountCapabilities = {
   signIn: boolean;
   apiKeys: boolean;
   balance: boolean;
+  flow?: 'interactive';
+};
+
+/** Credential-free interaction data; vendor protocol types stay inside the backend. */
+export type ProviderSignInEvent =
+  | { type: 'device-code'; code: string; url: string }
+  | { type: 'browser'; url: string }
+  | { type: 'progress' };
+export type ProviderSignInPrompt = {
+  type: 'enterprise-domain' | 'authorization-code';
+  signal?: AbortSignal;
+};
+export type ProviderSignInInteraction = {
+  signal: AbortSignal;
+  notify(event: ProviderSignInEvent): void;
+  prompt(prompt: ProviderSignInPrompt): Promise<string>;
 };
 
 export type ProviderAccountErrorReason =
@@ -46,6 +62,7 @@ export interface ProviderAccountsModule {
   getCapabilities(provider: ProviderAccountIdentity): ProviderAccountCapabilities;
   getStatus(providerId: string): Promise<ProviderAccountStatus>;
   begin(providerId: string): Promise<ProviderAuthorizationRequest>;
+  signIn(providerId: string, interaction: ProviderSignInInteraction): Promise<void>;
   cancel(attemptId: string): Promise<void>;
   receiveRedirect(url: string): Promise<string | null>;
   refresh(providerId: string): Promise<ProviderAccountStatus>;
