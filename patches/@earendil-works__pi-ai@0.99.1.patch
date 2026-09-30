@@ -1,0 +1,423 @@
+diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+index 501971b2a57af4332783fa18457b8821e23b7570..b1b1ff1b7faf7bdc01a55b1c3b9a4ca470075e15 100644
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -1,6 +1,7 @@
+ import Anthropic from "@anthropic-ai/sdk";
+-import { calculateCost } from "../models.js";
+-import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
++import { calculateCost } from "../utils/model-runtime.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
++import { normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+ import { parseJsonWithRepair, parseStreamingJson } from "../utils/json-parse.js";
+@@ -306,7 +307,14 @@ async function* iterateAnthropicEvents(response, signal) {
+     let sawMessageEnd = false;
+     for await (const sse of iterateSseMessages(response.body, signal)) {
+         if (sse.event === "error") {
+-            throw new Error(sse.data);
++            let body;
++            try {
++                body = JSON.parse(sse.data);
++            }
++            catch {
++                // Preserve malformed provider errors without guessing their type.
++            }
++            throw Object.assign(new Error(sse.data), { error: body, code: body?.error?.code, type: body?.error?.type ?? body?.type });
+         }
+         if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
+             continue;
+@@ -638,6 +646,12 @@ export const stream = (model, context, options) => {
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+             output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
++            const normalizedError = normalizeProviderError(error);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-responses.js
+index dc2d8f9be2f47dc73dde758c630fe12dd7749d5d..2f7606c643e553d3c44a22cf824cbccdf8cd1b14 100644
+--- a/dist/api/azure-openai-responses.js
++++ b/dist/api/azure-openai-responses.js
+@@ -1,5 +1,6 @@
+ import { AzureOpenAI } from "openai";
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+@@ -115,7 +116,13 @@ export const stream = (model, context, options) => {
+                 delete block.customInput;
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
++            const normalizedError = normalizeProviderError(error);
+             output.errorMessage = formatAzureOpenAIError(error);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+diff --git a/dist/api/bedrock-converse-stream.js b/dist/api/bedrock-converse-stream.js
+index a7f6d9cbe66546d5d418450809e92cf7289ce4a3..e27a283d42a62ac2c3e5119dff7d914aa5d88f0b 100644
+--- a/dist/api/bedrock-converse-stream.js
++++ b/dist/api/bedrock-converse-stream.js
+@@ -2,7 +2,7 @@ import { BedrockRuntimeClient, BedrockRuntimeServiceException, StopReason as Bed
+ import { NodeHttpHandler } from "@smithy/node-http-handler";
+ import { HttpProxyAgent } from "http-proxy-agent";
+ import { HttpsProxyAgent } from "https-proxy-agent";
+-import { calculateCost } from "../models.js";
++import { calculateCost } from "../utils/model-runtime.js";
+ import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
+index a413006c758079d3b589d9425b33a947c4adbc47..34c484514eb90815b303c2ff42d8124dae16502a 100644
+--- a/dist/api/google-generative-ai.js
++++ b/dist/api/google-generative-ai.js
+@@ -1,5 +1,6 @@
+ import { GoogleGenAI, } from "@google/genai";
+-import { calculateCost, clampThinkingLevel } from "../models.js";
++import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { providerHeadersToRecord } from "../utils/headers.js";
+@@ -226,7 +227,13 @@ export const stream = (model, context, options) => {
+                 }
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+-            output.errorMessage = formatProviderError(normalizeProviderError(error));
++            const normalizedError = normalizeProviderError(error);
++            output.errorMessage = formatProviderError(normalizedError);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+diff --git a/dist/api/google-shared.js b/dist/api/google-shared.js
+index 478c2c387b3a9c781c04a2268677c62a26093d42..095d71786ba84f8524a43bd47981f09cbf2bf04d 100644
+--- a/dist/api/google-shared.js
++++ b/dist/api/google-shared.js
+@@ -2,7 +2,7 @@
+  * Shared utilities for Google Generative AI and Google Vertex providers.
+  */
+ import { FinishReason, FunctionCallingConfigMode, ThinkingLevel as GoogleSdkThinkingLevel, } from "@google/genai";
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
+ import { retryProviderRequest } from "../utils/provider-retry.js";
+ import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+ import { collapseSystemMessages, withoutInitialSystemMessage } from "../utils/transcript.js";
+diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
+index b51f64e88b2d7b5eb7a921f2fa6da246b6f3a084..5bdb4f02789d7b5d27e31884370c920485814ae2 100644
+--- a/dist/api/google-vertex.js
++++ b/dist/api/google-vertex.js
+@@ -1,5 +1,5 @@
+ import { GoogleGenAI, ResourceScope, } from "@google/genai";
+-import { calculateCost, clampThinkingLevel } from "../models.js";
++import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { providerHeadersToRecord } from "../utils/headers.js";
+diff --git a/dist/api/mistral-conversations.js b/dist/api/mistral-conversations.js
+index fbcc5e25ee6752a9c5461b41fa8544a090a17b3f..33541af1c62785d3f5df22899abe67eabd38be1d 100644
+--- a/dist/api/mistral-conversations.js
++++ b/dist/api/mistral-conversations.js
+@@ -1,4 +1,4 @@
+-import { calculateCost, clampThinkingLevel } from "../models.js";
++import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { shortHash } from "../utils/hash.js";
+ import { headersToRecord } from "../utils/headers.js";
+diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-responses.js
+index 40014b3b7eacb3a8e5e43daac2cec6446e8810c2..f1aed0ad4e06188640d67ee3a8d9b29e13d65a87 100644
+--- a/dist/api/openai-codex-responses.js
++++ b/dist/api/openai-codex-responses.js
+@@ -1,4 +1,4 @@
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
+ import { registerSessionResourceCleanup } from "../session-resources.js";
+ import { combineAbortSignals } from "../utils/abort-signals.js";
+ import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic, formatThrownValue, } from "../utils/diagnostics.js";
+diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
+index eecd83c753e3b758b8e44628f560b862f8252839..4137ddf52535f047736f20da64eb607040df59c2 100644
+--- a/dist/api/openai-completions.js
++++ b/dist/api/openai-completions.js
+@@ -1,5 +1,6 @@
+ import OpenAI from "openai";
+-import { calculateCost, clampThinkingLevel } from "../models.js";
++import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { shortHash } from "../utils/hash.js";
+@@ -500,7 +501,13 @@ export const stream = (model, context, options) => {
+                 delete block.streamIndex;
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+-            output.errorMessage = formatProviderError(normalizeProviderError(error));
++            const normalizedError = normalizeProviderError(error);
++            output.errorMessage = formatProviderError(normalizedError);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             // Some providers via OpenRouter give additional information in this field.
+             // normalizeProviderError already stringifies the parsed body (error.error)
+             // into errorMessage, so only append the raw metadata when it is not already
+diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
+index 3e3b48a9ebea2c4af2fdac58b860380118be73bd..3d404b698f7e28a3473d7472fe983593b4545ce1 100644
+--- a/dist/api/openai-responses-shared.js
++++ b/dist/api/openai-responses-shared.js
+@@ -1,4 +1,4 @@
+-import { calculateCost } from "../models.js";
++import { calculateCost } from "../utils/model-runtime.js";
+ import { shortHash } from "../utils/hash.js";
+ import { parseStreamingJson } from "../utils/json-parse.js";
+ import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+@@ -639,7 +639,10 @@ export async function processResponsesStream(openaiStream, output, stream, model
+             finalizeResponse(event.response);
+         }
+         else if (event.type === "error") {
+-            throw new Error(`Error Code ${event.code}: ${event.message}` || "Unknown error");
++            throw Object.assign(new Error(`Error Code ${event.code}: ${event.message}` || "Unknown error"), {
++                code: event.code,
++                error: event,
++            });
+         }
+         else if (event.type === "response.failed") {
+             sawTerminalResponseEvent = true;
+@@ -651,7 +654,7 @@ export async function processResponsesStream(openaiStream, output, stream, model
+                 : details?.reason
+                     ? `incomplete: ${details.reason}`
+                     : "Unknown error (no error details in response)";
+-            throw new Error(msg);
++            throw Object.assign(new Error(msg), { code: error?.code, error });
+         }
+     }
+     if (!sawTerminalResponseEvent) {
+diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
+index 4d58c9772b49f0d40e31d42c251a6d993a4a673f..ca1553a661fa4377ede4c8a6d54ecc0a79334d2b 100644
+--- a/dist/api/openai-responses.js
++++ b/dist/api/openai-responses.js
+@@ -1,6 +1,7 @@
+ import OpenAI from "openai";
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+ import { getPiUserAgent } from "../utils/pi-user-agent.js";
+@@ -165,9 +166,15 @@ export const stream = (model, context, options) => {
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+             const errorMessage = formatProviderError(normalizeProviderError(error), `${model.provider === "openai" ? "OpenAI" : model.provider} API error`);
+             // Sign in with ChatGPT shares the subscription's usage limit with other apps.
++            const normalizedError = normalizeProviderError(error);
+             output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
+                 ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
+                 : errorMessage;
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+diff --git a/dist/api/system-one-shared.js b/dist/api/system-one-shared.js
+index 5735aee8c487e5b11f94abf8db6b18c4f71184e2..cdb3ec85f39100f13cf4f6830783947fac789f50 100644
+--- a/dist/api/system-one-shared.js
++++ b/dist/api/system-one-shared.js
+@@ -1,4 +1,4 @@
+-import { calculateCost } from "../models.js";
++import { calculateCost } from "../utils/model-runtime.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { headersToRecord, providerHeadersToRecord } from "../utils/headers.js";
+ import { retryProviderRequest } from "../utils/provider-retry.js";
+diff --git a/dist/utils/diagnostics.js b/dist/utils/diagnostics.js
+index 4c207b278438337ff61736ca388c317719ad2203..010b9b0dc2a81ca027252394a3b2d2997bd0ffc7 100644
+--- a/dist/utils/diagnostics.js
++++ b/dist/utils/diagnostics.js
+@@ -8,7 +8,7 @@ export function formatThrownValue(value) {
+ export function extractDiagnosticError(error) {
+     if (!(error instanceof Error))
+         return { name: "ThrownValue", message: formatThrownValue(error) };
+-    const code = error.code;
++    const code = error.code ?? error.type;
+     return {
+         name: error.name || undefined,
+         message: error.message || error.name,
+diff --git a/dist/utils/error-body.js b/dist/utils/error-body.js
+index f44c3c47c2ec6178836f6c56aaba24e5a9d79a1d..861195829bdf495ecb9e6b63486619f05e9250e5 100644
+--- a/dist/utils/error-body.js
++++ b/dist/utils/error-body.js
+@@ -20,14 +20,23 @@ export function normalizeProviderError(error) {
+     const sdkError = error;
+     const status = extractStatus(sdkError);
+     const body = extractBody(sdkError);
++    const retryable = extractRetryable(sdkError);
+     const messageCarriesBody = body === undefined || error.message.includes(body);
+     return {
+         status,
+         body,
++        retryable,
+         message: error.message,
+         messageCarriesBody,
+     };
+ }
++function extractRetryable(error) {
++    if (typeof error.isRetryable === "boolean")
++        return error.isRetryable;
++    if (typeof error.retryable === "boolean")
++        return error.retryable;
++    return undefined;
++}
+ /**
+  * Probe the HTTP status, first numeric hit wins, in SDK-field order:
+  * `statusCode` (Mistral) → `status` (`openai`, `@google/genai`) →
+diff --git a/dist/utils/json-parse.js b/dist/utils/json-parse.js
+index 82e105cb676a2f4be16167023243aa73dd8cb2e4..00c08b0a8720c6766dee7d77bc2412617930d16c 100644
+--- a/dist/utils/json-parse.js
++++ b/dist/utils/json-parse.js
+@@ -91,6 +91,24 @@ export function parseStreamingJson(partialJson) {
+     if (!partialJson || partialJson.trim() === "") {
+         return {};
+     }
++    // File tools usually stream a string value in a root object. Let the native
++    // JSON parser close that value before scanning/rebuilding its growing body in JS.
++    const trimmed = partialJson.trim();
++    if (trimmed.startsWith("{")) {
++        try {
++            return JSON.parse(trimmed + '"}');
++        }
++        catch {
++            // A chunk can stop inside a string escape; partial-json omits it too.
++            const completeEscapePrefix = trimmed.replace(/\\(?:u[0-9a-fA-F]{0,3})?$/, "");
++            if (completeEscapePrefix !== trimmed) {
++                try {
++                    return JSON.parse(completeEscapePrefix + '"}');
++                }
++                catch {}
++            }
++        }
++    }
+     try {
+         return parseJsonWithRepair(partialJson);
+     }
+diff --git adist/utils/model-runtime.js b/dist/utils/model-runtime.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4eb056d97de3c83db96ba38254159f3f5b299bb8
+--- /dev/null
++++ b/dist/utils/model-runtime.js
+@@ -0,0 +1,53 @@
++// Runtime-only helpers keep provider adapters independent from the Node-oriented
++// model catalog and authentication graph.
++export function calculateCost(model, usage) {
++    const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
++    let rates = model.cost;
++    let matchedThreshold = -1;
++    for (const tier of model.cost.tiers ?? []) {
++        if (inputTokens > tier.inputTokensAbove && tier.inputTokensAbove > matchedThreshold) {
++            rates = tier;
++            matchedThreshold = tier.inputTokensAbove;
++        }
++    }
++    const longWrite = usage.cacheWrite1h ?? 0;
++    const shortWrite = usage.cacheWrite - longWrite;
++    usage.cost.input = (rates.input / 1000000) * usage.input;
++    usage.cost.output = (rates.output / 1000000) * usage.output;
++    usage.cost.cacheRead = (rates.cacheRead / 1000000) * usage.cacheRead;
++    usage.cost.cacheWrite = (rates.cacheWrite * shortWrite + rates.input * 2 * longWrite) / 1000000;
++    usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
++    return usage.cost;
++}
++const EXTENDED_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
++function getSupportedThinkingLevels(model) {
++    if (!model.reasoning)
++        return ["off"];
++    return EXTENDED_THINKING_LEVELS.filter((level) => {
++        const mapped = model.thinkingLevelMap?.[level];
++        if (mapped === null)
++            return false;
++        if (level === "xhigh" || level === "max")
++            return mapped !== undefined;
++        return true;
++    });
++}
++export function clampThinkingLevel(model, level) {
++    const availableLevels = getSupportedThinkingLevels(model);
++    if (availableLevels.includes(level))
++        return level;
++    const requestedIndex = EXTENDED_THINKING_LEVELS.indexOf(level);
++    if (requestedIndex === -1)
++        return availableLevels[0] ?? "off";
++    for (let i = requestedIndex; i < EXTENDED_THINKING_LEVELS.length; i++) {
++        const candidate = EXTENDED_THINKING_LEVELS[i];
++        if (availableLevels.includes(candidate))
++            return candidate;
++    }
++    for (let i = requestedIndex - 1; i >= 0; i--) {
++        const candidate = EXTENDED_THINKING_LEVELS[i];
++        if (availableLevels.includes(candidate))
++            return candidate;
++    }
++    return availableLevels[0] ?? "off";
++}
+diff --git a/dist/utils/provider-env.js b/dist/utils/provider-env.js
+index c50f7d233be7a6470a9e98bf4c85fa062065bf12..3acac0a828b93e8ddaccd93bb7be19ca4a2bb717 100644
+--- a/dist/utils/provider-env.js
++++ b/dist/utils/provider-env.js
+@@ -1,35 +1,9 @@
+-let procEnvCache = null;
+ /**
+- * Fallback for https://github.com/oven-sh/bun/issues/27802.
+- * Bun compiled binaries can expose an empty process.env inside Linux sandboxes
+- * even though /proc/self/environ contains the environment.
+- *
+- * This intentionally duplicates restoreSandboxEnv() in
+- * packages/coding-agent/src/bun/restore-sandbox-env.ts. The ai package can be
+- * used directly, without going through that entrypoint, so provider env lookup
+- * must not depend on process.env having been patched.
++ * React Native receives provider credentials explicitly from Cherry Studio.
++ * Node-only Bun sandbox environment discovery is intentionally disabled.
+  */
+-function getBunSandboxEnvValue(name) {
+-    if (typeof process === "undefined" || !process.versions?.bun || Object.keys(process.env).length > 0) {
+-        return undefined;
+-    }
+-    if (procEnvCache === null) {
+-        procEnvCache = new Map();
+-        try {
+-            const { readFileSync } = require("node:fs");
+-            const data = readFileSync("/proc/self/environ", "utf-8");
+-            for (const entry of data.split("\0")) {
+-                const idx = entry.indexOf("=");
+-                if (idx > 0) {
+-                    procEnvCache.set(entry.slice(0, idx), entry.slice(idx + 1));
+-                }
+-            }
+-        }
+-        catch {
+-            // /proc/self/environ may not exist or may not be readable.
+-        }
+-    }
+-    return procEnvCache.get(name);
++function getBunSandboxEnvValue(_name) {
++    return undefined;
+ }
+ /**
+  * Resolve a provider env value from scoped overrides, normal process.env, then

@@ -1,0 +1,174 @@
+diff --git a/dist/agent-loop.js b/dist/agent-loop.js
+index edcfba73a4e8f548f19a17bdaf8982bd528c76bd..c121b14a73f1acb1470d190bf38bc465273a6aeb 100644
+--- a/dist/agent-loop.js
++++ b/dist/agent-loop.js
+@@ -2,7 +2,9 @@
+  * Agent loop that works with AgentMessage throughout.
+  * Transforms to Message[] only at the LLM call boundary.
+  */
+-import { EventStream, getCurrentTools, getToolStateChanges, normalizeContext, toToolDeclaration, validateToolArguments, } from "@earendil-works/pi-ai";
++import { EventStream } from "@earendil-works/pi-ai/utils/event-stream";
++import { getCurrentTools, getToolStateChanges, normalizeContext, toToolDeclaration } from "@earendil-works/pi-ai/utils/transcript";
++import { validateToolArguments } from "@earendil-works/pi-ai/utils/validation";
+ import { getDefaultStreamFn } from "./stream-fn.js";
+ /**
+  * Start an agent loop with a new prompt message.
+diff --git a/dist/agent.js b/dist/agent.js
+index a8ccfc0bd9bd84895b5f158c9dfa328e65f200ca..b269161f93cd6f9248b8bc4a8b72e138a17c00d6 100644
+--- a/dist/agent.js
++++ b/dist/agent.js
+@@ -1,4 +1,4 @@
+-import { createInitialSystemMessage, getCurrentSystemMessage, getCurrentSystemPrompt, toToolDeclaration, } from "@earendil-works/pi-ai";
++import { createInitialSystemMessage, getCurrentSystemMessage, getCurrentSystemPrompt, toToolDeclaration } from "@earendil-works/pi-ai/utils/transcript";
+ import { runAgentLoop, runAgentLoopContinue } from "./agent-loop.js";
+ import { getDefaultStreamFn } from "./stream-fn.js";
+ function defaultConvertToLlm(messages) {
+diff --git a/dist/harness/compaction/branch-summarization.js b/dist/harness/compaction/branch-summarization.js
+index 8d18925fe224c49a38067fdac777296209469f88..a29ddca46c2b7fa5dfd9cbef1261b11612dda408 100644
+--- a/dist/harness/compaction/branch-summarization.js
++++ b/dist/harness/compaction/branch-summarization.js
+@@ -1,4 +1,4 @@
+-import { contentText, } from "@earendil-works/pi-ai";
++import { contentText } from "@earendil-works/pi-ai/utils/text";
+ import { convertToLlm, createBranchSummaryMessage, createCompactionSummaryMessage } from "../messages.js";
+ import { BranchSummaryError, err, ok } from "../types.js";
+ import { completeSimpleWithRetries, createSummaryRequestOptions, estimateTokens, SUMMARIZATION_SYSTEM_PROMPT, } from "./compaction.js";
+diff --git a/dist/harness/compaction/compaction.js b/dist/harness/compaction/compaction.js
+index d430a3f966cc9624cc2e78638fd207a83a75b312..d77ae3c80782cdfd3b50561ecf3f49a562027ba9 100644
+--- a/dist/harness/compaction/compaction.js
++++ b/dist/harness/compaction/compaction.js
+@@ -1,4 +1,6 @@
+-import { contentText, retryAssistantCall, uuidv7, } from "@earendil-works/pi-ai";
++import { contentText } from "@earendil-works/pi-ai/utils/text";
++import { retryAssistantCall } from "@earendil-works/pi-ai/utils/retry";
++import { uuidv7 } from "@earendil-works/pi-ai/utils/uuid";
+ import { getTelemetryContext } from "../context.js";
+ import { convertToLlm, createBranchSummaryMessage, createCompactionSummaryMessage } from "../messages.js";
+ import { buildContextEntries, sessionEntryToContextMessages } from "../session/context.js";
+diff --git a/dist/harness/compaction/utils.js b/dist/harness/compaction/utils.js
+index f7c6a26ac39539cfb578d79c79c071bfd9fbdcd9..5ff78b2061aba0a4dca70bc8e08f88a9a9d710eb 100644
+--- a/dist/harness/compaction/utils.js
++++ b/dist/harness/compaction/utils.js
+@@ -1,4 +1,4 @@
+-import { contentText } from "@earendil-works/pi-ai";
++import { contentText } from "@earendil-works/pi-ai/utils/text";
+ /** Create an empty file-operation accumulator. */
+ export function createFileOps() {
+     return {
+diff --git a/dist/harness/config.js b/dist/harness/config.js
+index eed1590d2c92aec3295e697b8faeeaa0dd1265d9..b33aaed6d8ae924c027aa12dd7fa3965267bf05b 100644
+--- a/dist/harness/config.js
++++ b/dist/harness/config.js
+@@ -1,4 +1,4 @@
+-import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } from "@earendil-works/pi-ai";
++import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } from "@earendil-works/pi-ai/utils/retry";
+ export const DEFAULT_RETRY_POLICY = {
+     enabled: true,
+     maxRetries: 3,
+diff --git a/dist/harness/execution/tools.js b/dist/harness/execution/tools.js
+index 1248c2e0659f298882773972e9c1370dce4916f2..732930ad0fd9ea0ca34b1db4cd072d00b747f8b0 100644
+--- a/dist/harness/execution/tools.js
++++ b/dist/harness/execution/tools.js
+@@ -1,4 +1,4 @@
+-import { validateToolArguments } from "@earendil-works/pi-ai";
++import { validateToolArguments } from "@earendil-works/pi-ai/utils/validation";
+ import { withAbortSignal } from "../context.js";
+ function createErrorToolResult(message) {
+     return {
+diff --git a/dist/harness/pico3/kinds/generation.js b/dist/harness/pico3/kinds/generation.js
+index 01ffaa587dbf91bce9a8ade5fb5ed09e174267e3..02ce8aead6d6e0c8d15aad906b91b3d72867e2ad 100644
+--- a/dist/harness/pico3/kinds/generation.js
++++ b/dist/harness/pico3/kinds/generation.js
+@@ -1,4 +1,5 @@
+-import { AssistantMessageFrameEncoder, isRetryableAssistantError } from "@earendil-works/pi-ai";
++import { AssistantMessageFrameEncoder } from "@earendil-works/pi-ai/utils/assistant-message-frame";
++import { isRetryableAssistantError } from "@earendil-works/pi-ai/utils/retry";
+ import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
+ import { planManagedEntry, prepareDraft, sameSnapshot, takeSnapshot } from "../system.js";
+ import { toStored, } from "../types.js";
+diff --git a/dist/harness/runtime/drive/boundary.js b/dist/harness/runtime/drive/boundary.js
+index 1b2c04f09e87a1f3e81c39bf64f829de45489cf8..c96f0342a7fc563000fd829b56d416ffa333e202 100644
+--- a/dist/harness/runtime/drive/boundary.js
++++ b/dist/harness/runtime/drive/boundary.js
+@@ -1,4 +1,4 @@
+-import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } from "@earendil-works/pi-ai";
++import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } from "@earendil-works/pi-ai/utils/retry";
+ import { insertEntry } from "../../session/commit.js";
+ import { SessionInvariantError } from "../../session/session.js";
+ import { branchTip, deleteValue, pendingEntry, setValue } from "../../session/values.js";
+diff --git a/dist/harness/runtime/drive/recovery.js b/dist/harness/runtime/drive/recovery.js
+index 68c0fd6ce15f28e41efe752d8bd5d0f2a5ce8904..77f3a56972091fd44d204c2b1929994103fdf5c2 100644
+--- a/dist/harness/runtime/drive/recovery.js
++++ b/dist/harness/runtime/drive/recovery.js
+@@ -1,4 +1,4 @@
+-import { reduceAssistantMessageFrames } from "@earendil-works/pi-ai";
++import { reduceAssistantMessageFrames } from "@earendil-works/pi-ai/utils/assistant-message-frame";
+ import { readAssistantFrames } from "../progress.js";
+ import { publishResponse } from "./response.js";
+ const ZERO_USAGE = {
+diff --git a/dist/harness/runtime/drive/response.js b/dist/harness/runtime/drive/response.js
+index 1eba5bc6a1810742894a27ac35af27c9c30973f2..acc30765f51088501f45eeaffb61c2b3dcb888a7 100644
+--- a/dist/harness/runtime/drive/response.js
++++ b/dist/harness/runtime/drive/response.js
+@@ -1,4 +1,6 @@
+-import { AssistantMessageFrameEncoder, isContextOverflow, isRecoverableLength, isRetryableAssistantError, retryDelayMs, } from "@earendil-works/pi-ai";
++import { AssistantMessageFrameEncoder } from "@earendil-works/pi-ai/utils/assistant-message-frame";
++import { isContextOverflow, isRecoverableLength } from "@earendil-works/pi-ai/utils/overflow";
++import { isRetryableAssistantError, retryDelayMs } from "@earendil-works/pi-ai/utils/retry";
+ import { insertEntry, insertUsage } from "../../session/commit.js";
+ import { SessionInvariantError } from "../../session/session.js";
+ import { operationScopeOf, } from "../../session/types.js";
+diff --git a/dist/harness/runtime/drive/retry.js b/dist/harness/runtime/drive/retry.js
+index 9144b5898051a470291490956c1579202ba1fe4b..222593b75eafef1cd895e9902f4e15979565a19b 100644
+--- a/dist/harness/runtime/drive/retry.js
++++ b/dist/harness/runtime/drive/retry.js
+@@ -1,4 +1,4 @@
+-import { retryDelayMs } from "@earendil-works/pi-ai";
++import { retryDelayMs } from "@earendil-works/pi-ai/utils/retry";
+ export function retryNotBefore(policy, attempt, now = Date.now()) {
+     const sum = now + retryDelayMs(policy, attempt);
+     return Number.isSafeInteger(sum) ? sum : Number.MAX_SAFE_INTEGER;
+diff --git a/dist/harness/runtime/drive/structural.js b/dist/harness/runtime/drive/structural.js
+index d325781a9747fdf6427c64ff54be390fa95e16d2..8fb501796710c19f8f33f36a41c50b291000d6c3 100644
+--- a/dist/harness/runtime/drive/structural.js
++++ b/dist/harness/runtime/drive/structural.js
+@@ -1,4 +1,4 @@
+-import { isRetryableAssistantError, retryDelayMs, } from "@earendil-works/pi-ai";
++import { isRetryableAssistantError, retryDelayMs } from "@earendil-works/pi-ai/utils/retry";
+ import { generateBranchSummaryWithRequest } from "../../compaction/branch-summarization.js";
+ import { compactWithRequest, prepareCompaction, shouldCompact } from "../../compaction/compaction.js";
+ import { getTelemetryContext, withAbortSignal } from "../../context.js";
+diff --git a/dist/harness/runtime/lane.js b/dist/harness/runtime/lane.js
+index 5f825ef82e091cf09cfe2ce4e123320be367dfbb..38af4219ca7b62db9120ba21de5c0a0fc73081fe 100644
+--- a/dist/harness/runtime/lane.js
++++ b/dist/harness/runtime/lane.js
+@@ -1,4 +1,4 @@
+-import { reduceAssistantMessageFrames, } from "@earendil-works/pi-ai";
++import { reduceAssistantMessageFrames } from "@earendil-works/pi-ai/utils/assistant-message-frame";
+ import { prepareBranchEntries } from "../compaction/branch-summarization.js";
+ import { prepareCompaction } from "../compaction/compaction.js";
+ import { awaitWithContext } from "../context.js";
+diff --git a/dist/index.js b/dist/index.js
+index 4ed6eaac17c132869296876f5302b1f135edb404..98658a3b5405f29f2441d0590a2eea62da5e8afc 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,4 +1,4 @@
+-export { uuidv7 } from "@earendil-works/pi-ai";
++export { uuidv7 } from "@earendil-works/pi-ai/utils/uuid";
+ export { createTypedSpanStarter, defineTelemetrySchema, InMemoryTelemetryContext, NOOP_TELEMETRY_CONTEXT, } from "@earendil-works/pi-telemetry";
+ export * from "./agent.js";
+ export * from "./agent-loop.js";
+diff --git a/dist/proxy.js b/dist/proxy.js
+index 3a02ed9dbcac9096fc3cb1986855349244770710..fd1c8c62617899c46d43d0008814bcc09427a91d 100644
+--- a/dist/proxy.js
++++ b/dist/proxy.js
+@@ -3,7 +3,8 @@
+  * The server manages auth and proxies requests to LLM providers.
+  */
+ // Internal import for JSON parsing utility
+-import { EventStream, parseStreamingJson, } from "@earendil-works/pi-ai";
++import { EventStream } from "@earendil-works/pi-ai/utils/event-stream";
++import { parseStreamingJson } from "@earendil-works/pi-ai/utils/json-parse";
+ // Create stream class matching ProxyMessageEventStream
+ class ProxyMessageEventStream extends EventStream {
+     constructor() {

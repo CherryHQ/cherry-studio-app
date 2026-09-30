@@ -49,7 +49,11 @@ const signature: ExportSignature = {
   background: '#ffffff',
   foreground: '#000000',
   brandName: 'Cherry Studio',
-  timestamp: '2026.09.16 18:00',
+  brandColor: '#ff5757',
+  downloadLabel: 'Scan to download the mobile app',
+  downloadLinkLabel: 'Download the mobile app',
+  downloadUrl: 'https://example.com/mobile',
+  qrCodeDataUrl: 'data:image/png;base64,AQ==',
   logoDataUrl: 'data:image/png;base64,AA==',
 };
 

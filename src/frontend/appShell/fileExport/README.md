@@ -14,10 +14,19 @@ every offered format. `useHtmlConversion(options)` also uses it for PNG and PPTX
 footer only to the final captured slide, without adding a slide.
 
 `useExportWatermark` resolves the selected style into an `ExportWatermark` once per operation.
-The `cherry` variant carries the original artwork, constant white/black colors, brand and a frozen
-timestamp; `none` carries no rendering data. New styles extend the closed style/variant contract and
-its renderers, rather than adding booleans to feature pages. `shared/utils/exportSignature.ts`
-owns Cherry footer geometry and time formatting. Markdown renders only the brand and timestamp.
+The `cherry` variant carries the original artwork, constant white/black colors, Cherry brand color,
+localized download copy and the download QR code; `none` carries no rendering data.
+`shared/utils/exportSignature.ts` owns validation and footer geometry: one white row under a Cherry
+red rule, with the logo, brand and scan copy on the left and a 48-point QR code on the right. At 360
+points wide it is 66 points tall; wrapped copy can increase the height. New styles extend the closed
+style/variant contract and its renderers, rather than adding booleans to feature pages. Markdown
+renders the brand and a download link without image bytes.
+
+`exportBrand.ts` owns `downloadUrl` and its matching embedded PNG `qrCodeDataUrl`, pointing to
+`https://www.cherryai.com.cn/download?platform=mobile`. The recipient, not the sender, scans the
+code, so the sender's install channel cannot choose the store; the website owns per-device routing.
+The QR asset includes a four-module white quiet zone, is embedded for offline export and is sampled
+without smoothing. Regenerate the PNG when changing the URL.
 
 ## Source And Finalized Files
 

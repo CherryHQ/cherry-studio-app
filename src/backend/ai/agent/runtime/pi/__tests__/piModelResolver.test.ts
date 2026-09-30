@@ -7,6 +7,7 @@ import {
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
@@ -282,7 +283,10 @@ describe('Pi model resolver', () => {
       ['a', 'matched'],
       ['b', 'explicit'],
     ]) {
-      const stream = await resolution.streamFn(resolution.model, { messages: [] });
+      const stream = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({ messages: [] }),
+      );
       expect((await stream.result()).content).toEqual([{ type: 'text', text: 'ok' }]);
       expect(resolution.usageContext.credentialReceipt).toMatchObject({
         attribution,
@@ -342,7 +346,10 @@ describe('Pi model resolver', () => {
       );
 
       const resolution = await resolve(resolver);
-      const stream = await resolution.streamFn(resolution.model, { messages: [] });
+      const stream = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({ messages: [] }),
+      );
       await jest.advanceTimersByTimeAsync(120_000);
 
       expect(await stream.result()).toMatchObject({
@@ -427,7 +434,10 @@ describe('Pi model resolver', () => {
           stream.push({ type: 'error', reason: 'error', error: failure });
           return stream;
         });
-        const stream = await resolution.streamFn(resolution.model, { messages: [] });
+        const stream = await resolution.streamFn(
+          resolution.model,
+          normalizeContext({ messages: [] }),
+        );
         expect(await stream.result()).toBe(failure);
       }
       expect(mockBoundStreamFn).toHaveBeenCalledTimes(2);
@@ -647,7 +657,10 @@ describe('Pi model resolver', () => {
       };
       source.push({ type: 'done', reason: 'stop', message: response });
       mockBoundStreamFn.mockReturnValueOnce(source);
-      const stream = await resolution.streamFn(resolution.model, { messages: [] });
+      const stream = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({ messages: [] }),
+      );
       expect(await stream.result()).toMatchObject({
         stopReason: 'toolUse',
         content: [
@@ -706,12 +719,18 @@ describe('Pi model resolver', () => {
       expect.anything(),
       expect.objectContaining({ maxTokens: 500_000 }),
     );
-    const shortRequest = buildBaseOptions(resolution.model, {
-      messages: [{ role: 'user', content: '测试', timestamp: 1 }],
-    });
-    const longerRequest = buildBaseOptions(resolution.model, {
-      messages: [{ role: 'user', content: 'x'.repeat(100_000), timestamp: 1 }],
-    });
+    const shortRequest = buildBaseOptions(
+      resolution.model,
+      normalizeContext({
+        messages: [{ role: 'user', content: '测试', timestamp: 1 }],
+      }),
+    );
+    const longerRequest = buildBaseOptions(
+      resolution.model,
+      normalizeContext({
+        messages: [{ role: 'user', content: 'x'.repeat(100_000), timestamp: 1 }],
+      }),
+    );
     expect(shortRequest.maxTokens).toBeGreaterThan(16_384);
     expect(shortRequest.maxTokens).toBeLessThan(500_000);
     expect(longerRequest.maxTokens).toBeLessThan(shortRequest.maxTokens!);

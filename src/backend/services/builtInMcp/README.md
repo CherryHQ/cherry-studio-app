@@ -267,12 +267,20 @@ The initial database schema stores `pluginId` and `authMethod` as open, nonempty
 Keep IDs stable and version objects inside each method.
 
 The current version supports one connection per bundled provider. Feishu combines nine hosted
-document/people tools with nineteen curated wiki, Base, task and calendar operations. Existing
+document/people tools with 31 curated wiki, Base, task and calendar operations. Base supports metadata,
+view inspection, table creation, individual records and bounded batch creation/updates. Wiki supports
+space discovery; calendar supports keyword search, cancellation and personal invitation replies. Existing
 grants retain permitted tools; adding permissions requires reauthorization. See [Feishu Business Tools](../../../../docs/references/agent/built-in-mcp-design.md#feishu-business-tools)
 for names, pagination, time/patch semantics and size limits. Feishu attachment transfer is outside
 the product scope. Broader API coverage, multiple accounts and other providers' OAuth remain future slices. Write requests
 are never replayed; an uncertain write outcome tells the caller to inspect the service before
-retrying. All Amap coordinates use GCJ-02 longitude,latitude.
+retrying. GitHub admits 29 official tools, including code search, branch/history and release reads,
+PR review/update/merge and Actions inspection. Fine-grained tokens may need `contents:write` and
+`actions:read` for the added capabilities. Amap admits 12 official tools, adding place details, IP
+location, distance measurement and cycling. All Amap coordinates use GCJ-02 longitude,latitude.
+File transfer, field editing, Sheets and multi-step workflows remain deferred. Amap capabilities
+without an official hosted equivalent also remain deferred in this expansion;
+no OpenConnector runtime dependency is bundled.
 
 Only bundled registrations can execute. Unknown plugin records remain visible and disconnectable;
 unknown auth methods require reconnecting before requests can be sent. The registry is not a

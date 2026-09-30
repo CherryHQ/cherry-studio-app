@@ -30,7 +30,6 @@ const mockToast = jest.fn();
 let sheet: {
   canRespond: boolean;
   onRespond(input: ToolApprovalRespondInput): Promise<void>;
-  onCancel?(): Promise<void>;
   approvals: { approvalId: string; input: unknown }[];
 };
 let errorSheetOpen = false;
@@ -90,7 +89,6 @@ function fixture() {
   };
   return {
     respond,
-    cancel,
     read,
     get snapshot() {
       return snapshot;
@@ -137,8 +135,6 @@ it('responds only to the bound loaded decision and treats an accepted pending re
   await act(async () => sheet.onRespond({ approvalId: 'decision', approved: true }));
   expect(test.respond).toHaveBeenCalledWith({ kind: 'approve' });
   expect(mockToast).not.toHaveBeenCalled();
-  await act(async () => sheet.onCancel!());
-  expect(test.cancel).toHaveBeenCalledWith(undefined);
 });
 
 it('retirement removes sensitive resource values and cancels outstanding reads', async () => {
@@ -179,30 +175,6 @@ it('cannot approve before the full input is read and aborts that read on release
   await act(async () => renderer.unmount());
   renderer = undefined!;
   expect(signal.aborted).toBe(true);
-});
-
-it('cancels only the execution bound to the displayed approval', async () => {
-  const test = fixture();
-  const otherCancel = jest.fn();
-  test.update({
-    ...test.snapshot,
-    interactions: test.snapshot.interactions.map((item) => ({
-      ...item,
-      execution: 'execution',
-    })),
-    executions: [
-      ...test.snapshot.executions,
-      {
-        id: 'other',
-        state: 'running',
-        cancel: { availability: { state: 'enabled' }, execute: otherCancel },
-      },
-    ],
-  });
-  await render(test);
-  await act(async () => sheet.onCancel!());
-  expect(test.cancel).toHaveBeenCalledTimes(1);
-  expect(otherCancel).not.toHaveBeenCalled();
 });
 
 it('presents a desktop question form in the sheet and returns text-keyed answers', async () => {

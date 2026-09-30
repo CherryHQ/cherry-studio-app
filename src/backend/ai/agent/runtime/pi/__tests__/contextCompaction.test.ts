@@ -4,9 +4,15 @@ import type {
   ImageContent,
   Model,
   Models,
+  SystemMessage,
   ToolResultMessage,
 } from '@earendil-works/pi-ai';
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
+import {
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  normalizeContext,
+} from '@earendil-works/pi-ai/utils/transcript';
 
 import {
   convertPiMessagesToLlm,
@@ -214,10 +220,13 @@ describe('Pi context admission and compaction', () => {
 
     expect(result.ok).toBe(true);
     expect(
-      buildBaseOptions(model, {
-        systemPrompt: admitted.systemPrompt,
-        messages: [admitted.prompt],
-      }).maxTokens,
+      buildBaseOptions(
+        model,
+        normalizeContext({
+          systemPrompt: admitted.systemPrompt,
+          messages: [admitted.prompt],
+        }),
+      ).maxTokens,
     ).toBeGreaterThanOrEqual(1_024);
     expect(await plan({ conversation: rejected })).toMatchObject({
       ok: false,
@@ -440,10 +449,29 @@ describe('Pi live context accounting', () => {
     });
     const after = estimatePiLoopContextHeadroomTokens({
       ...context,
-      messages: [measured, { ...result, addedToolNames: ['search'] }],
+      messages: [
+        measured,
+        result,
+        { role: 'system', content: '', toolsAdded: context.tools, timestamp: 3 },
+      ],
     });
 
     expect(before - after).toBeGreaterThanOrEqual(10_000);
+  });
+
+  test('counts system updates after measured usage without charging the initial prompt twice', () => {
+    const initial: SystemMessage = {
+      role: 'system',
+      content: context.systemPrompt,
+      toolsAdded: context.tools,
+      timestamp: 0,
+    };
+    const before = measurePiContext({ ...context, messages: [initial, measured] });
+    const update: SystemMessage = { role: 'system', content: 'x'.repeat(4_000), timestamp: 3 };
+    const after = measurePiContext({ ...context, messages: [initial, measured, update] });
+
+    expect(before.inputTokens).toBe(50_000);
+    expect(after.inputTokens - before.inputTokens).toBe(1_000);
   });
 
   test('includes system and tool costs when no provider usage is available', () => {
@@ -572,6 +600,49 @@ describe('Pi tool-loop compaction', () => {
     expect(JSON.stringify(request[0])).toContain('<summary>');
   });
 
+  test('preserves current instructions and tool declarations across loop compaction', async () => {
+    const tool = {
+      name: 'lookup',
+      description: 'Look up the answer.',
+      parameters: { type: 'object' } as never,
+    };
+    const original: AgentMessage[] = [
+      { role: 'system', content: 'INITIAL_INSTRUCTIONS', toolsAdded: [tool], timestamp: 0 },
+      ...messages(),
+      {
+        role: 'system',
+        content: 'FINAL_INSTRUCTIONS',
+        sections: { policy: 'CURRENT_POLICY' },
+        timestamp: 4,
+      },
+    ];
+    const requests: string[] = [];
+    const result = await loop(original, {
+      systemPrompt: getCurrentSystemPrompt(original),
+      tools: [tool],
+      models: {
+        completeSimple: async (_model, context) => {
+          requests.push(JSON.stringify(context));
+          return response();
+        },
+      },
+    });
+    if (!result.ok) throw new Error(result.message);
+    const request = convertPiMessagesToLlm(result.messages);
+
+    expect(request.map((message) => message.role)).toEqual([
+      'system',
+      'user',
+      'assistant',
+      'toolResult',
+    ]);
+    expect(getCurrentSystemPrompt(request)).toContain('INITIAL_INSTRUCTIONS');
+    expect(getCurrentSystemPrompt(request)).toContain('FINAL_INSTRUCTIONS');
+    expect(getCurrentSystemPrompt(request)).toContain('CURRENT_POLICY');
+    expect(getCurrentTools(request)).toEqual([tool]);
+    expect(requests.join('')).not.toContain('FINAL_INSTRUCTIONS');
+  });
+
   test('does not pay for a summary when the newest tool batch alone overflows', async () => {
     const completeSimple = jest.fn(async () => response());
     const updates: unknown[] = [];
@@ -604,8 +675,10 @@ describe('Pi tool-loop compaction', () => {
       loop(messages(), {
         signal: controller.signal,
         models: {
-          completeSimple: async () => {
+          completeSimple: async (_model, _context, options) => {
+            expect(options?.signal?.aborted).toBe(false);
             controller.abort(new Error('Cancelled'));
+            expect(options?.signal?.aborted).toBe(true);
             return response();
           },
         },

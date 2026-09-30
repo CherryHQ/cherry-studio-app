@@ -63,10 +63,8 @@ export const providerModelAddEndpointOptions = [
   { id: ENDPOINT_TYPE.OPENAI_RESPONSES, labelKey: 'endpoint_type.openai-response' },
   { id: ENDPOINT_TYPE.ANTHROPIC_MESSAGES, labelKey: 'endpoint_type.anthropic' },
   { id: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, labelKey: 'endpoint_type.gemini' },
-  { id: ENDPOINT_TYPE.OPENAI_EMBEDDINGS, labelKey: 'endpoint_type.openai-embeddings' },
   { id: ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION, labelKey: 'endpoint_type.image-generation' },
   { id: ENDPOINT_TYPE.OPENAI_IMAGE_EDIT, labelKey: 'endpoint_type.image-edit' },
-  { id: ENDPOINT_TYPE.JINA_RERANK, labelKey: 'endpoint_type.jina-rerank' },
 ] as const satisfies readonly { id: EndpointType; labelKey: string }[];
 
 export function createInitialProviderModelAddFormState(): ProviderModelAddFormState {
@@ -241,14 +239,6 @@ export function changeProviderModelPrimaryType(
   ) {
     endpointType = getProviderChatEndpointTypes(provider)[0] ?? 'auto';
   }
-  if (type === 'embedding') endpointType = ENDPOINT_TYPE.OPENAI_EMBEDDINGS;
-  else if (type === 'rerank') endpointType = ENDPOINT_TYPE.JINA_RERANK;
-  else if (
-    endpointType === ENDPOINT_TYPE.OPENAI_EMBEDDINGS ||
-    endpointType === ENDPOINT_TYPE.JINA_RERANK
-  ) {
-    endpointType = getProviderChatEndpointTypes(provider)[0] ?? 'auto';
-  }
   if (
     type === 'image' &&
     !endpoints?.some(isProviderModelImageEndpoint) &&
@@ -286,14 +276,6 @@ export function changeProviderModelEndpoint(
     if (inherited.rerank) capabilities.rerank = false;
     else delete capabilities.rerank;
     primaryType = undefined;
-  } else if (
-    endpointType === ENDPOINT_TYPE.OPENAI_EMBEDDINGS ||
-    endpointType === ENDPOINT_TYPE.JINA_RERANK
-  ) {
-    capabilities.drawing = false;
-    capabilities.embedding = endpointType === ENDPOINT_TYPE.OPENAI_EMBEDDINGS;
-    capabilities.rerank = endpointType === ENDPOINT_TYPE.JINA_RERANK;
-    primaryType = capabilities.embedding ? 'embedding' : 'rerank';
   }
   return { ...form, capabilities, endpointType, primaryType };
 }

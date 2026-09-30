@@ -89,4 +89,14 @@ describe('desktop location hints', () => {
     expect(resolver.candidates('device', 'peer1', [endpoint])).toHaveLength(33);
     expect(resolver.candidates('device', 'peer1', [endpoint])[0]).toEqual(endpoint);
   });
+
+  it('retries discovery on a new network without dropping manual routes', () => {
+    const resolver = new DesktopEndpointResolver();
+    resolver.accept({ type: 'unavailable' });
+    expect(resolver.discoveryAvailable).toBe(false);
+    expect(resolver.candidates('device', 'peer1', [endpoint])).toEqual([endpoint]);
+    resolver.accept({ type: 'network' });
+    expect(resolver.discoveryAvailable).toBe(true);
+    expect(resolver.candidates('device', 'peer1', [endpoint])).toEqual([endpoint]);
+  });
 });

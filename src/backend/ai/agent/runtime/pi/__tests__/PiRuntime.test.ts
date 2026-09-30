@@ -1,10 +1,11 @@
 import path from 'node:path';
 
-import type {
-  AgentContext as PiAgentContext,
-  AgentEvent as PiAgentEvent,
+import {
+  Agent,
+  type AgentContext as PiAgentContext,
+  type AgentEvent as PiAgentEvent,
+  type AgentOptions,
 } from '@earendil-works/pi-agent-core';
-import { Agent, type AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type {
   AssistantMessage,
   Message as PiMessage,
@@ -13,6 +14,11 @@ import type {
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import {
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  normalizeContext,
+} from '@earendil-works/pi-ai/utils/transcript';
 
 import { createWebTools } from '../../../tools/web/webTools';
 import {
@@ -267,8 +273,11 @@ async function prepareTestNextTurn(
   message: AssistantMessage,
   toolResults: ToolResultMessage[],
   previousContext: PiAgentContext = {
-    messages: [context.prompt],
-    systemPrompt: context.options.initialState?.systemPrompt ?? '',
+    messages: normalizeContext({
+      messages: [context.prompt],
+      systemPrompt: context.options.initialState?.systemPrompt,
+      tools: context.options.initialState?.tools,
+    }).messages,
     tools: context.options.initialState?.tools,
   },
 ) {
@@ -281,14 +290,12 @@ async function prepareTestNextTurn(
     newMessages: [message, ...toolResults],
     toolResults,
   };
-  // Match Pi's hook order: the replacement context is applied before the stop decision.
+  // Pi decides whether to end the run before preparing another request.
+  const decision = await context.options.finishTurn?.(turnContext, context.signal);
+  if (decision?.action === 'end') return { context: turnContext.context, shouldStop: true };
   const update = await context.options.prepareNextTurnWithContext?.(turnContext);
   const nextContext = update?.context ?? turnContext.context;
-  const shouldStop = await context.options.shouldStopAfterTurn?.({
-    ...turnContext,
-    context: nextContext,
-  });
-  return { context: nextContext, shouldStop };
+  return { context: nextContext, shouldStop: false };
 }
 
 function baseRequest(
@@ -531,10 +538,13 @@ describe('Pi invocation capture', () => {
     const runtime = createTestRuntime();
     let outputCap: number | undefined;
     const holder = arrange(runtime, async (context) => {
-      const stream = await context.options.streamFn(holder.resolution.model, {
-        systemPrompt: context.options.initialState?.systemPrompt,
-        messages: [context.prompt],
-      });
+      const stream = await context.options.streamFn(
+        holder.resolution.model,
+        normalizeContext({
+          systemPrompt: context.options.initialState?.systemPrompt,
+          messages: [context.prompt],
+        }),
+      );
       await stream.result();
       await emitText(context, 'Done.');
     });
@@ -604,7 +614,10 @@ describe('Pi invocation capture', () => {
         markResponseReady = resolve;
       });
       const holder = arrange(runtime, async ({ options, signal }) => {
-        const responseStream = await options.streamFn(holder.resolution.model, { messages: [] });
+        const responseStream = await options.streamFn(
+          holder.resolution.model,
+          normalizeContext({ messages: [] }),
+        );
         await responseStream.result();
         markResponseReady();
         await new Promise<void>((resolve) => {
@@ -653,13 +666,19 @@ describe('Pi invocation capture', () => {
       assistantMessage({ timestamp: 1, responseModel: 'served-model' }),
     ];
     const holder = arrange(runtime, async (context) => {
-      const firstStream = await context.options.streamFn(holder.resolution.model, { messages: [] });
+      const firstStream = await context.options.streamFn(
+        holder.resolution.model,
+        normalizeContext({ messages: [] }),
+      );
       const first = await firstStream.result();
       await context.emit({ type: 'message_end', message: first });
       await context.emit({ type: 'message_end', message: first });
-      const secondStream = await context.options.streamFn(holder.resolution.model, {
-        messages: [],
-      });
+      const secondStream = await context.options.streamFn(
+        holder.resolution.model,
+        normalizeContext({
+          messages: [],
+        }),
+      );
       const second = await secondStream.result();
       await context.emit({ type: 'message_end', message: second });
       await context.emit({ type: 'turn_end', message: second, toolResults: [] });
@@ -687,9 +706,12 @@ describe('Pi invocation capture', () => {
       const stream = new AssistantMessageEventStream();
       stream.end(assistantMessage({ stopReason }));
       const holder = arrange(runtime, async (context) => {
-        const responseStream = await context.options.streamFn(holder.resolution.model, {
-          messages: [],
-        });
+        const responseStream = await context.options.streamFn(
+          holder.resolution.model,
+          normalizeContext({
+            messages: [],
+          }),
+        );
         const response = await responseStream.result();
         await context.emit({ type: 'message_end', message: response });
         await context.emit({ type: 'turn_end', message: response, toolResults: [] });
@@ -707,7 +729,10 @@ describe('Pi invocation capture', () => {
     const stream = new AssistantMessageEventStream();
     jest.spyOn(stream, 'result').mockRejectedValue(new Error('Provider stream failed.'));
     const holder = arrange(runtime, async ({ options }) => {
-      const responseStream = await options.streamFn(holder.resolution.model, { messages: [] });
+      const responseStream = await options.streamFn(
+        holder.resolution.model,
+        normalizeContext({ messages: [] }),
+      );
       await responseStream.result();
     });
     holder.resolution.streamFn = () => stream;
@@ -1781,9 +1806,10 @@ describe('PiRuntime mapping', () => {
     ).toEqual(['lookup-1', 'lookup-2']);
     expect(execute).toHaveBeenCalledTimes(2);
     expect(requests).toHaveLength(3);
-    // Providers reject a request that opens with an assistant message.
-    expect(requests[2][0].role).toBe('user');
-    expect(JSON.stringify(requests[2][0])).toContain('Condensed prior result.');
+    expect(requests[2][0].role).toBe('system');
+    expect(getCurrentSystemPrompt(requests[2])).toContain('Be helpful.');
+    expect(requests[2][1].role).toBe('user');
+    expect(JSON.stringify(requests[2][1])).toContain('Condensed prior result.');
     expect(
       requests[2]
         .filter((message) => message.role === 'toolResult')
@@ -1836,7 +1862,17 @@ describe('PiRuntime mapping', () => {
         };
         await context.emit({ type: 'turn_end', message: toolMessage, toolResults: [toolResult] });
         const next = await prepareTestNextTurn(context, toolMessage, [toolResult]);
-        expect(next.shouldStop).toBe(true);
+        expect(next.shouldStop).toBe(false);
+        const failedStream = await context.options.streamFn(
+          holder.resolution.model,
+          normalizeContext({
+            messages: next.context.messages as PiMessage[],
+          }),
+        );
+        expect(await failedStream.result()).toMatchObject({
+          stopReason: 'error',
+          diagnostics: [{ error: { code: 'context_window_exceeded' } }],
+        });
       });
       const session = await runtime.open();
 
@@ -2522,7 +2558,9 @@ describe('PiRuntime mapping', () => {
       const streamFn = holder.lastOptions?.streamFn;
       if (!streamFn) throw new Error('Pi stream function was not installed.');
 
-      streamFn(holder.resolution.model, { messages: [] }, { signal: upstream.signal } as never);
+      streamFn(holder.resolution.model, normalizeContext({ messages: [] }), {
+        signal: upstream.signal,
+      } as never);
       expect(providerSignal?.aborted).toBe(false);
 
       const cancelling = session.cancel('turn-stuck-cancel');
@@ -3389,7 +3427,8 @@ describe('PiRuntime mapping', () => {
         | { tool_choice?: unknown }
         | undefined;
       seenToolChoices.push(payload?.tool_choice);
-      seenTools.push((context.tools ?? []).map((tool) => tool.name));
+      const tools = getCurrentTools(context.messages);
+      seenTools.push(tools.map((tool) => tool.name));
       seenErrors.push(
         ...context.messages
           .filter((message) => message.role === 'toolResult')
@@ -3400,7 +3439,7 @@ describe('PiRuntime mapping', () => {
       const nextTool =
         payload?.tool_choice === 'none'
           ? undefined
-          : (context.tools?.find((tool) => tool.name === 'web_fetch') ?? context.tools?.[0]);
+          : (tools.find((tool) => tool.name === 'web_fetch') ?? tools[0]);
       const canCall = nextTool !== undefined;
       const message = assistantMessage({
         content: nextTool
@@ -3599,7 +3638,7 @@ describe('PiRuntime mapping', () => {
           arguments: {},
         };
         const result = await piTool.execute('first', {}, context.signal);
-        const agentContext = { systemPrompt: '', messages: [], tools: [piTool, otherTool] };
+        const agentContext = { messages: [], tools: [piTool, otherTool] };
         const marked = await context.options.afterToolCall?.({
           assistantMessage: assistantMessage(),
           toolCall,
@@ -3790,7 +3829,7 @@ describe('PiRuntime mapping', () => {
           ...(payload as Record<string, unknown>),
           metadata: { trace: 'preserved' },
         }));
-        await context.options.streamFn(model, { messages: [] }, { onPayload });
+        await context.options.streamFn(model, normalizeContext({ messages: [] }), { onPayload });
         expect(providerStream.mock.lastCall?.[2]?.onPayload).toBe(onPayload);
         const calls = Array.from({ length: requests }, (_, index) => ({
           type: 'toolCall' as const,
@@ -3822,12 +3861,18 @@ describe('PiRuntime mapping', () => {
         const next = await prepareTestNextTurn(context, message, toolResults);
         expect(next.shouldStop).toBe(false);
         expect(next.context.tools).toEqual([piTool]);
-        expect(next.context.messages).toEqual([context.prompt, message, ...toolResults]);
-        expect(next.context.systemPrompt).toContain('remaining uncertainty or unfinished work');
+        expect(next.context.messages.filter((item) => item.role !== 'system')).toEqual([
+          context.prompt,
+          message,
+          ...toolResults,
+        ]);
+        expect(getCurrentSystemPrompt(next.context.messages)).toContain(
+          'remaining uncertainty or unfinished work',
+        );
         expect(context.options.initialState?.tools).toHaveLength(1);
         await context.options.streamFn(
           model,
-          { ...next.context, messages: next.context.messages as PiMessage[] },
+          normalizeContext({ messages: next.context.messages as PiMessage[] }),
           { onPayload },
         );
         const payload = { tools: [{ name: piTool.name }], input: ['collected results'] };

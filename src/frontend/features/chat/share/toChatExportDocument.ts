@@ -10,6 +10,7 @@ import {
   type ExportBlock,
   type ExportDocument,
 } from '@/shared/contracts/documentExport';
+import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 export type ChatExportOptions = {
@@ -132,6 +133,10 @@ export function toChatExportDocument(
       id: message.id,
       heading: message.role === 'user' ? options.labels.user : options.labels.assistant,
       presentation: message.role === 'user' ? ('bubble' as const) : ('message' as const),
+      ...(message.role === 'assistant' && {
+        avatar: CHERRY_AGENT_AVATAR,
+        ...(message.modelName && { model: message.modelName }),
+      }),
       metadata,
       blocks,
     };

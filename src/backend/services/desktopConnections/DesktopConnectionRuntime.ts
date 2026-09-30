@@ -242,6 +242,16 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     });
   }
 
+  testEndpoint(id: string, endpoint: DirectEndpoint, signal: AbortSignal): Promise<void> {
+    return this.run('test-endpoint', signal, async (_store, signal) => {
+      try {
+        await this.connections!.testEndpoint(id, directEndpointSchema.parse(endpoint), signal);
+      } catch (error) {
+        throw translate(error);
+      }
+    });
+  }
+
   remove(id: string, signal: AbortSignal) {
     return this.run('remove', signal, async (store, signal) => {
       signal.throwIfAborted();

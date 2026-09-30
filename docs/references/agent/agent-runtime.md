@@ -69,9 +69,27 @@ deny-list with the Agent's persisted, currently executable MCP bindings. It also
 managed images for registry-declared image-capable models supported by the selected Pi endpoint
 adapter, plus bounded UTF-8 managed text as untrusted user content.
 
-The repository patches expose `pi-agent-core/compaction` and its exact RN-safe Pi AI utility
-subpaths. Short conversations retain the complete-history path. Long conversations reuse or
+The Runtime uses the official `pi-agent-core` exports and Pi AI utility subpaths, pinned together
+at `0.99.1`. Short conversations retain the complete-history path. Long conversations reuse or
 incrementally update a Runtime checkpoint before the first provider turn.
+
+Pi system messages carry instructions and tool declaration changes. The adapter uses Pi's
+transcript helpers to resolve their current values, includes unmeasured changes in request budgets,
+and retains the effective system message when compacting a live loop. `finishTurn` decides whether
+to end before next-turn preparation; reaching the tool budget still allows one final answer.
+Compaction cancellation passes through Pi's execution Context.
+
+When following an upstream release, update both exact package pins, review the upstream changelogs
+and public message/hook/compaction contracts, and rebase both Pi patches onto the published packages.
+The upstream `pi-ai` entry and model catalog reach authentication code with a computed dynamic
+import, which Metro rejects. The `pi-agent-core` patch therefore imports Pi AI through its utility
+subpaths, and the `pi-ai` patch gives the endpoint adapters a local model-runtime module. The `pi-ai`
+patch also disables Bun's Node filesystem fallback, retains structured provider failures, and
+accelerates partial JSON parsing. Jest runs these modules in Node and cannot detect a Metro failure,
+so the patch guard walks the Runtime's Pi module graph. Before removing any remaining patch, review
+that guard and the Runtime regression suites, then bundle the app for a release. Mobile continues to own provider bindings, transport, approvals, application
+budgets, and persistence; adopting upstream releases does not require sharing desktop filesystem
+paths or changing application database fields.
 
 ## Descriptor and lifecycle
 

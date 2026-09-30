@@ -1,4 +1,10 @@
-import type { AssistantMessage, Message, ToolResultMessage } from '@earendil-works/pi-ai';
+import type {
+  AssistantMessage,
+  JsonObject,
+  JsonValue,
+  Message,
+  ToolResultMessage,
+} from '@earendil-works/pi-ai';
 import { z } from 'zod';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -33,7 +39,9 @@ const AssistantContentSchema = z.discriminatedUnion('type', [
     type: z.literal('toolCall'),
     id: z.string().min(1),
     name: z.string().min(1),
-    arguments: z.record(z.string(), z.unknown()),
+    arguments: z.custom<JsonObject>(
+      (value) => value !== null && typeof value === 'object' && !Array.isArray(value),
+    ),
     thoughtSignature: z.string().optional(),
     namespace: z.string().optional(),
   }),
@@ -58,8 +66,7 @@ const ReplayMessageSchema = z.discriminatedUnion('role', [
     toolName: z.string(),
     // Mobile tools return text. Unsupported future media use the existing managed-file path.
     content: z.array(TextSchema),
-    details: z.unknown().optional(),
-    addedToolNames: z.array(z.string()).optional(),
+    details: z.custom<JsonValue>().optional(),
     isError: z.boolean(),
     timestamp: z.number(),
   }),
@@ -134,9 +141,8 @@ export function createPiTurnReplay(messages: readonly Message[]): RuntimeTurnRep
       };
     }
     if (message.role === 'toolResult') {
-      const { role, toolCallId, toolName, content, details, addedToolNames, isError, timestamp } =
-        message;
-      return { role, toolCallId, toolName, content, details, addedToolNames, isError, timestamp };
+      const { role, toolCallId, toolName, content, details, isError, timestamp } = message;
+      return { role, toolCallId, toolName, content, details, isError, timestamp };
     }
     return message;
   });

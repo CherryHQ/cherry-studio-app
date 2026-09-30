@@ -10,7 +10,8 @@ import {
   type ExportDocument,
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
-import { getExportSignature } from '@/shared/contracts/fileExport';
+import { getExportSignature, type ExportSignature } from '@/shared/contracts/fileExport';
+import { validateExportSignature } from '@/shared/utils/exportSignature';
 
 import { DEFAULT_CONTENT_LABELS, exportFileType } from './contentPresentation';
 import { escapeHtml, safeExportUrl } from './normalizeDocument';
@@ -235,7 +236,12 @@ function createHtmlRenderer(
           return `<section class="bubble-row" aria-label="${escapeHtml(section.heading ?? '')}"><div class="bubble-column">${attachments.length ? `<div class="attachments">${renderBlocks(attachments, references)}</div>` : ''}${content.length || metadata ? `<div class="bubble">${metadata}${renderBlocks(content, references)}</div>` : ''}</div></section>`;
         }
         const isMessage = section.presentation === 'message';
-        return `<section class="${isMessage ? 'message-row' : 'document-section'}">${section.heading ? `<h2 class="${isMessage ? 'message-heading' : 'section-heading'}">${escapeHtml(section.heading)}</h2>` : ''}<div class="message-content">${metadata}${renderBlocks(section.blocks, references)}</div></section>`;
+        const heading = !section.heading
+          ? ''
+          : isMessage
+            ? `<h2 class="message-heading">${section.avatar ? `<span class="message-avatar" aria-hidden="true">${escapeHtml(section.avatar)}</span>` : ''}<span class="message-name">${escapeHtml(section.heading)}</span>${section.model ? `<span class="message-model">${escapeHtml(section.model)}</span>` : ''}</h2>`
+            : `<h2 class="section-heading">${escapeHtml(section.heading)}</h2>`;
+        return `<section class="${isMessage ? 'message-row' : 'document-section'}">${heading}<div class="message-content">${metadata}${renderBlocks(section.blocks, references)}</div></section>`;
       })
       .join('\n');
     const signature = getExportSignature(presentation.watermark);
@@ -245,12 +251,14 @@ function createHtmlRenderer(
         ? `<h1 class="document-title">${escapeHtml(document.title)}</h1>`
         : '';
     const content = `<article class="document-content${isConversation ? ' conversation' : ''}"${presentation.imageFrame ? ` aria-label="${escapeHtml(presentation.imageFrame.label)}"` : ''}>${title}${body}</article>`;
-    const footer = signature
-      ? `<footer class="print-signature"><div class="print-identity"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><strong class="print-brand">${escapeHtml(signature.brandName)}</strong></div><time class="print-timestamp print-secondary">${escapeHtml(signature.timestamp)}</time></footer>`
-      : '';
+    const footer = signature ? renderSignature(signature) : '';
     const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>${renderHtmlStyles(presentation)}</style></head><body><main class="${isImage ? 'image-print' : 'html-document'}">${content}${footer}</main></body></html>`;
     return { html, issues };
   }
+}
+
+function renderSignature(signature: ExportSignature): string {
+  return `<footer class="print-signature"><div class="print-identity"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><div class="print-copy"><strong class="print-brand">${escapeHtml(signature.brandName)}</strong><a class="print-download print-secondary" href="${escapeHtml(signature.downloadUrl)}">${escapeHtml(signature.downloadLabel)}</a></div></div><img class="print-qr" src="${signature.qrCodeDataUrl}" alt=""></footer>`;
 }
 
 function isEmbeddedImage(value: string) {
@@ -262,7 +270,7 @@ function validatePresentation(value: ExportPresentation) {
   const signature = getExportSignature(value.watermark);
   const colors = Object.values(value.colors);
   if (frame) colors.push(frame.background);
-  if (signature) colors.push(signature.background, signature.foreground);
+  if (signature) validateExportSignature(signature);
   if (
     !Number.isFinite(value.width) ||
     value.width < 280 ||
@@ -280,14 +288,7 @@ function validatePresentation(value: ExportPresentation) {
       );
     }) ||
     colors.some((color) => !/^(#[a-f\d]{3,8}|rgba?\([\d\s.,%]+\))$/i.test(color)) ||
-    (frame && (typeof frame.label !== 'string' || frame.label.length > 256)) ||
-    (signature &&
-      ([signature.brandName, signature.timestamp].some(
-        (text) => typeof text !== 'string' || text.length > 256,
-      ) ||
-        typeof signature.logoDataUrl !== 'string' ||
-        signature.logoDataUrl.length > 32_768 ||
-        !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(signature.logoDataUrl)))
+    (frame && (typeof frame.label !== 'string' || frame.label.length > 256))
   )
     throw new DocumentExportError('invalid-input');
 }

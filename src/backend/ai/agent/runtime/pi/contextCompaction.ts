@@ -1,13 +1,16 @@
-import type { AgentMessage, AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
 import {
+  BACKGROUND_CONTEXT,
   compact,
   estimateContextTokens,
   estimateTokens,
   prepareCompaction,
   shouldCompact,
+  withAbortSignal,
+  type AgentMessage,
+  type AgentTool as PiAgentTool,
   type CompactionPreparation,
   type CompactionSettings,
-} from '@earendil-works/pi-agent-core/compaction';
+} from '@earendil-works/pi-agent-core';
 import type {
   Api as PiApi,
   ImageContent,
@@ -16,6 +19,11 @@ import type {
   Models,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
+import {
+  getCurrentSystemMessage,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+} from '@earendil-works/pi-ai/utils/transcript';
 
 import type { RuntimeContextCheckpoint, RuntimeContextCompaction } from '../types';
 import type { PiConversation, PiHistoryTurn } from './modelMessages';
@@ -67,7 +75,7 @@ type PiContextPlanInput = {
   options?: PiContextCompactionOptions;
   redactSummary: (summary: string) => string;
   signal: AbortSignal;
-  thinkingLevel: Parameters<typeof compact>[5];
+  thinkingLevel: Parameters<typeof compact>[4];
   tools: readonly PiToolSchema[];
   onCompaction?: (update: PiCompactionUpdate) => void;
 };
@@ -178,6 +186,8 @@ function estimatePiContextTokens(messages: AgentMessage[]) {
 
 /** Content only, even if an assistant message carries usage for an entire request. */
 export function estimatePiMessageTokens(message: AgentMessage): number {
+  // Instructions and tool declarations are accounted for separately from history.
+  if (message.role === 'system') return 0;
   let reserve = 0;
   if (message.role === 'compactionSummary' || message.role === 'branchSummary') {
     reserve = nonAsciiTokenReserve(message.summary);
@@ -224,21 +234,16 @@ export function measurePiContext(input: {
     estimate.lastUsageIndex === null
       ? input.messages
       : input.messages.slice(estimate.lastUsageIndex + 1);
-  const addedToolNames = new Set(
-    unmeasuredMessages.flatMap((message) =>
-      message.role === 'toolResult' ? (message.addedToolNames ?? []) : [],
-    ),
-  );
   const fixedCosts = estimatePiNonMessageContextCosts({
     api: input.api,
     imageMessages: unmeasuredMessages,
     outputReserveTokens: input.outputReserveTokens,
     // Live usage already covers the system prompt, tool definitions, and old images.
-    systemPrompt: estimate.lastUsageIndex === null ? input.systemPrompt : '',
-    tools:
+    systemPrompt:
       estimate.lastUsageIndex === null
-        ? input.tools
-        : input.tools.filter((tool) => addedToolNames.has(tool.name)),
+        ? input.systemPrompt
+        : getCurrentSystemPrompt(unmeasuredMessages),
+    tools: estimate.lastUsageIndex === null ? input.tools : getCurrentTools(unmeasuredMessages),
   });
 
   return {
@@ -315,7 +320,10 @@ export async function planPiLoopContext(
     systemPrompt: string;
   },
 ): Promise<PiContextPlan> {
-  const entries: CompactionEntries = input.messages.map((message, index) => ({
+  // System deltas configure the live request; they are not summary candidates.
+  const systemMessage = getCurrentSystemMessage(input.messages);
+  const messages = input.messages.filter((message) => message.role !== 'system');
+  const entries: CompactionEntries = messages.map((message, index) => ({
     id: `live:${index}`,
     parentId: index === 0 ? null : `live:${index - 1}`,
     seq: index,
@@ -326,14 +334,25 @@ export async function planPiLoopContext(
           summary: message.summary,
           tokensBefore: message.tokensBefore,
           retainedTail: [],
+          fromHook: false,
         }
       : { type: 'message' as const, message }),
   }));
-  return planProjectedContext({
+  const result = await planProjectedContext({
     ...input,
     projected: { checkpoint: null, entries, messages: input.messages, metadata: new WeakMap() },
     historyTurns: [],
   });
+  if (!result.ok) return result;
+  return {
+    ...result,
+    messages:
+      result.messages === input.messages
+        ? input.messages
+        : systemMessage
+          ? [systemMessage, ...result.messages]
+          : result.messages,
+  };
 }
 
 async function planProjectedContext(
@@ -423,12 +442,14 @@ async function planProjectedContext(
     return canSendWithoutCompaction ? unchanged : overflow;
   }
 
-  const lastCallIndex = projected.messages.findLastIndex((message) => message.role === 'assistant');
+  // System deltas are not compaction entries, so they do not end the newest batch.
+  const history = projected.messages.filter((message) => message.role !== 'system');
+  const lastCallIndex = history.findLastIndex((message) => message.role === 'assistant');
   // A cut inside the newest result has no following assistant boundary. Keep
   // that whole batch so Pi can cut before it instead of retaining all history.
   const newestBatchTokens =
-    projected.messages.at(-1)?.role === 'toolResult' && lastCallIndex >= 0
-      ? projected.messages
+    history.at(-1)?.role === 'toolResult' && lastCallIndex >= 0
+      ? history
           .slice(lastCallIndex)
           .reduce((total, message) => total + estimateTokens(message), 0) + 1
       : 0;
@@ -495,8 +516,10 @@ async function planProjectedContext(
       input.models as Models,
       input.model,
       CHERRY_COMPACTION_INSTRUCTIONS,
-      input.signal,
       input.thinkingLevel,
+      undefined,
+      undefined,
+      withAbortSignal(input.signal, BACKGROUND_CONTEXT),
     );
   } catch (error) {
     report(
@@ -597,6 +620,7 @@ function projectContext(
       summary: payload.summary,
       retainedTail: [],
       tokensBefore: payload.tokensBefore,
+      fromHook: false,
     });
     parentId = entryId;
     messages.push(createCompactionSummary(payload.summary, payload.tokensBefore));
@@ -788,6 +812,7 @@ export function convertPiMessagesToLlm(messages: AgentMessage[]): PiLlmMessage[]
             timestamp: message.timestamp,
           },
         ];
+      case 'system':
       case 'user':
       case 'assistant':
       case 'toolResult':

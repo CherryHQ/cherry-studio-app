@@ -48,6 +48,9 @@ export type Availability =
       state: 'disabled';
       reason:
         | 'offline'
+        | 'no-location'
+        | 'discovery-unavailable'
+        | 'unreachable'
         | 'suspended'
         | 'synchronizing'
         | 'busy'
@@ -122,6 +125,8 @@ export type TranscriptMessage = Pick<AgentMessageView, 'id' | 'role' | 'status' 
   )[];
   createdAt?: string;
   attachments?: readonly { name: string; mediaType?: string }[];
+  /** Display name of the model that produced an assistant message. */
+  modelName?: string;
 };
 export type ConversationImageResult = {
   id: string;

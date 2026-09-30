@@ -7,11 +7,13 @@ import {
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type {
   AssistantMessage,
+  JsonObject,
   TextContent,
   ThinkingContent,
   ToolCall,
 } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { getCurrentTools, normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { emptyAssistantMessage, providerErrorEvent } from './piStreamEvents';
 
@@ -27,6 +29,7 @@ type ContentState = {
 /** Normalize before Pi commits the assistant message and decides which tools to execute. */
 export function withPiDeepseekDsml(streamFn: StreamFn): StreamFn {
   return (model, context, options) => {
+    const tools = getCurrentTools(normalizeContext(context).messages);
     const stream = new AssistantMessageEventStream();
     const content: AssistantMessage['content'] = [];
     const states = new Map<number, ContentState>();
@@ -50,7 +53,7 @@ export function withPiDeepseekDsml(streamFn: StreamFn): StreamFn {
         state = {
           index: content.length,
           block: block.type === 'text' ? { ...block, text: '' } : { ...block, thinking: '' },
-          parser: createDeepseekDsmlParser(context.tools),
+          parser: createDeepseekDsmlParser(tools),
           receivedLength: 0,
           ended: false,
           calls: [],
@@ -131,7 +134,7 @@ export function withPiDeepseekDsml(streamFn: StreamFn): StreamFn {
           type: 'toolCall',
           id: call.toolCallId,
           name: call.toolName,
-          arguments: call.input,
+          arguments: call.input as JsonObject,
         });
         extracted = true;
       }

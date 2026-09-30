@@ -54,6 +54,8 @@ const documentSchema = z.strictObject({
         id: text,
         heading: text.optional(),
         presentation: z.enum(['bubble', 'message']).optional(),
+        avatar: z.string().max(16).optional(),
+        model: z.string().max(256).optional(),
         metadata: z
           .array(z.strictObject({ label: text, value: text }))
           .max(16)

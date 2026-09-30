@@ -48,8 +48,7 @@ package scripts select their package test runner. The published AI and remote pa
 covered by their upstream suites; Mobile tests cover its adapters and consumed behavior.
 
 Run only the specialized contract checks triggered by the change. Examples include
-`pnpm docs:check-links`, `pnpm skills:check`, `pnpm design:check`, database migration checks, and
-desktop synchronization guards.
+`pnpm docs:check-links`, `pnpm skills:check`, `pnpm design:check`, and database migration checks.
 
 For translation or language changes, use `pnpm i18n:check` as described in
 [Internationalization](./internationalization.md). PR CI runs the same read-only check;
@@ -117,8 +116,8 @@ link checks for non-draft PRs targeting `main`.
 - Root Jest includes `provider-registry` suites through `vitestJestShim.ts`. There is no root
   `test:provider-registry` script; use the owning package filter for a focused local run.
 - With `PRCI` set, Jest includes `scripts/__tests__/architectureBoundaries.test.ts` to protect
-  dependency rules on every PR. Other `scripts/__tests__/` suites, including desktop-sync audit
-  fixtures and instruction-tooling regressions, remain excluded. Run the affected tooling suites
+  dependency rules on every PR. Other `scripts/__tests__/` suites, including instruction-tooling
+  regressions, remain excluded. Run the affected tooling suites
   locally without `PRCI` when changing those tools; remote success does not cover them.
 - `skills:check` checks public skill entry points, whitelist files, and Claude symlinks.
   `docs:check-links` checks relative file links in project docs, the

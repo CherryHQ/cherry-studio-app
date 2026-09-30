@@ -26,6 +26,7 @@ export interface DesktopConnectionsModule {
     signal: AbortSignal,
     onProgress?: (progress: DesktopPairingProgress) => void,
   ): Promise<DesktopConnection>;
+  testEndpoint(id: string, endpoint: DirectEndpoint, signal: AbortSignal): Promise<void>;
   remove(id: string, signal: AbortSignal): Promise<void>;
   preview(id: string, signal: AbortSignal): Promise<DesktopImportPreview>;
   import(

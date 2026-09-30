@@ -30,7 +30,6 @@ import type {
 } from '@/shared/contracts/documentExport';
 import type { ExportWatermarkStyle } from '@/shared/contracts/fileExport';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
-import { formatExportTimestamp } from '@/shared/utils/exportSignature';
 
 import { DocumentExportImagePreview } from './components/DocumentExportImagePreview';
 import { useDocumentExportHtmlCapture } from './hooks/useDocumentExportHtmlCapture';
@@ -155,11 +154,10 @@ function DocumentExportBody({
       typography: { base, sm, lg, xl },
     };
   });
-  const [timestamp] = useState(() => formatExportTimestamp(new Date()));
   const presentation = useMemo(
     () => ({
       ...layout,
-      watermark: createWatermark(timestamp),
+      watermark: createWatermark(),
       colors: {
         background,
         foreground,
@@ -190,7 +188,6 @@ function DocumentExportBody({
       codeBlock,
       inlineCode,
       inlineCodeForeground,
-      timestamp,
     ],
   );
   const imagePresentations = useMemo(() => {

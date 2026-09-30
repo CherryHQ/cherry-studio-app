@@ -3,9 +3,8 @@
  *
  * Despite living in the design-tokens package, this no longer touches a single
  * token: values *and* names are mobile-owned since the Vercel Brand Guidelines
- * fork (see the tombstones under src/styles). It stays here because
- * `desktop-sync-manifest.json` delegates its `design` fingerprint to
- * src/sync-manifest.json, which this script writes.
+ * fork (see the tombstones under src/styles). It stays here because it writes
+ * src/sync-manifest.json, which records the provenance of the mirrored icons.
  */
 
 import { spawnSync } from 'node:child_process';

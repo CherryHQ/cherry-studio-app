@@ -45,7 +45,8 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
         var range=document.createRange();range.selectNodeContents(node);
         Array.from(range.getClientRects()).forEach(function(rect){if(rect.width&&rect.height)ink.push(bounds(rect));});
       }
-      main.querySelectorAll('img,math,svg,tr,.code-block').forEach(function(element){
+      // Keep the complete brand/QR footer on one page, including its padding and rule.
+      main.querySelectorAll('img,math,svg,tr,.code-block,.print-signature').forEach(function(element){
         var rect=element.getBoundingClientRect();
         if(!rect.width||!rect.height)return;
         if(element.matches('tr,.code-block')){

@@ -45,11 +45,21 @@ export function SidebarConversationList({
   const source = useConversationSource();
   const { availability } = useConversationSourceState();
   const router = useRouter();
+  const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   return (
     <>
       <ConversationStatus
         availability={availability}
         onRepair={() => router.push('/settings/device-connections')}
+        onEditAddresses={
+          connectionId
+            ? () =>
+                router.push({
+                  pathname: '/settings/device-connections/[connectionId]',
+                  params: { connectionId },
+                })
+            : undefined
+        }
       />
       <SidebarCatalog
         key={source.scope}
@@ -84,7 +94,7 @@ function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
   const { t } = useTranslation();
   const query = useConversationAgents();
   if (query.isPending)
-    return showLoading ? (
+    return showLoading && query.isLoading ? (
       <View className="py-4">
         <ContentState.Loading title={t('agent.list.loading')} />
       </View>
@@ -200,7 +210,7 @@ function SidebarSessions({
     return () => registerEndReachedHandler?.();
   }, [loadMore, registerEndReachedHandler, showAll]);
   if (query.isPending)
-    return showLoading ? (
+    return showLoading && query.isLoading ? (
       <View className="py-4">
         <ContentState.Loading title={t('session.list.loading')} />
       </View>

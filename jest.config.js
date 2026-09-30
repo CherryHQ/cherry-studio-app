@@ -1,3 +1,8 @@
+const { dirname, join } = require('node:path');
+
+const piAgentDirectory = dirname(require.resolve('@earendil-works/pi-agent-core/package.json'));
+const piDependencyFile = (name, file) => join(piAgentDirectory, '..', name, 'dist', file);
+
 module.exports = {
   preset: 'jest-expo',
   testEnvironment: 'node',
@@ -22,10 +27,8 @@ module.exports = {
     '/packages/ai-runtime/',
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
-    // The desktop-sync audits spawn hundreds of real git subprocesses against
-    // fixture repos in tmpdir (~13s of the run). They guard against desktop
-    // drift, which is a local-sync concern rather than a per-PR one, so PR CI
-    // skips tooling suites except the architecture rules that protect every PR.
+    // Tooling suites guard local-only tools, so PR CI skips them except the
+    // architecture rules that protect every PR.
     ...(process.env.PRCI ? ['/scripts/__tests__/(?!architectureBoundaries\\.test\\.ts$)'] : []),
   ],
   // Local build/export artifacts can contain copied workspace packages. Keep
@@ -44,13 +47,15 @@ module.exports = {
     // remend only exports an import entry, which Jest's CommonJS resolver cannot
     // select even when a test mocks it. Resolve the published file directly.
     '^remend$': '<rootDir>/node_modules/remend/dist/index.js',
-    // These patched Pi subpaths intentionally expose ESM through import-only
+    // Pi's official entries expose ESM through import-only
     // conditions. Jest resolves the app tests as CommonJS, so point it at the
     // same published files directly and let babel-jest transform them below.
-    '^@earendil-works/pi-agent-core/agent$':
-      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/agent.js',
-    '^@earendil-works/pi-agent-core/compaction$':
-      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js',
+    '^@earendil-works/pi-agent-core$':
+      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/index.js',
+    '^@earendil-works/chord$': piDependencyFile('chord', 'index.js'),
+    '^@earendil-works/chord/(context|delta)$': piDependencyFile('chord', '$1/index.js'),
+    '^@earendil-works/pi-telemetry$': piDependencyFile('pi-telemetry', 'index.js'),
+    '^@earendil-works/pi-ai$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/index.js',
     '^@earendil-works/pi-ai/api/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-ai/dist/api/$1.js',
     '^@earendil-works/pi-ai/utils/(.*)$':

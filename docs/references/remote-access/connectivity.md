@@ -11,7 +11,7 @@ participate in the binding fingerprint or Agent scope. The location implementati
   separately. Hostnames are retained for system DNS resolution, including over an existing VPN.
 - `_cherry-remote._tcp` records carry `v=1` and the public desktop `identity` in TXT. SRV supplies
   the actual shared Gateway port. Matching TXT is a filter, never proof: Noise pins the desktop.
-- Each desktop has at most eight configured routes, sixteen synced routes, and sixteen QR/discovery routes. The host
+- Each desktop has at most eight configured routes, thirty-two synced routes, and thirty-two QR/discovery routes. The host
   accepts at most 128 service records. QR hints expire after five minutes; discoveries are locally
   revalidated after sixty seconds at most. Network changes discard automatic hints and successful
   route preferences, without deleting configuration or authorization.
@@ -27,6 +27,13 @@ not preempt an ongoing handshake. Failed candidates rotate behind untried addres
 so the round budget cannot permanently starve a later route. A network change cancels an unfinished round and waits for its
 cleanup before starting another. A healthy socket survives the notification.
 
+An empty candidate set ends the round immediately when discovery is unavailable. Recovery then
+waits for a QR hint, discovery event or foreground transition. Saved and synced routes continue
+retrying even when discovery is unavailable. With discovery
+available, a round still allows bounded browsing. A network change resets the previous path's
+discovery-unavailable verdict so discovery can recover. Address failures remain visible during retries;
+the chat and sidebar offer a link to the affected device's settings.
+
 Foreground path monitoring is shared by the manager. Active recovery rounds share one native
 browser. Successful recovery or the final release stops browsing. Releasing the final lease
 cancels an unfinished attempt immediately; an established channel keeps the existing three-second
@@ -39,12 +46,19 @@ The current channel and lease scope are independent of candidate expiry.
 
 ## Settings and migration
 
-Device details keep editable connection addresses, single-address verification, and **Update location
-from QR code** under collapsed **Advanced settings**. A location scan must match the stored desktop identity and updates memory only. It does not
-claim an invitation, request grants or re-pair; an expired invitation can still supply a location hint.
-Initial pairing seeds QR hints under the saved connection ID, authenticates the approved device on
-the pairing channel, and syncs desktop addresses before returning. No additional connection is
-opened for this handoff.
+Device details group **Use desktop Agents** and **Sync provider configuration** below the device
+status, showing only approved capabilities. A single **Scan to reconnect** action replaces separate
+location-update and re-pairing actions. Address editing is not exposed in settings.
+
+Scanning validates the QR payload and immediately opens the connection progress page. For an
+existing connection, the desktop identity must match the stored binding before any connection
+attempt. The phone authenticates its existing device ID first: valid authorization refreshes the
+binding and automatically syncs addresses without claiming a new invitation. Only an explicit
+`UNAUTHENTICATED` response requests pairing again; network failures leave the binding intact.
+
+Initial or renewed pairing shows the desktop verification code and waits for approval before saving.
+`DesktopSession` adopts authorization from the approved pairing response, so address synchronization
+uses the already authenticated channel without a second authentication or connection.
 
 Migration `0001_hot_cammi` replaces the legacy HTTP connection table with the final Noise pairing
 schema, including `configured_endpoints` with an empty-array default. Legacy HTTP connections require

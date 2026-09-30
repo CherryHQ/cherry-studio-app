@@ -262,7 +262,7 @@ function toDisplayParts(
   };
 }
 
-function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
+export function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
   if (message.inferenceSnapshot?.status !== 'supported') {
     return undefined;
   }

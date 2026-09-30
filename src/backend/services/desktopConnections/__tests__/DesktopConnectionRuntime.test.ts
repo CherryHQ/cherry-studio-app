@@ -370,6 +370,21 @@ describe('DesktopConnectionRuntime', () => {
     expect(store.updateStatus).not.toHaveBeenCalled();
   });
 
+  it('translates an endpoint authentication failure without saving or re-pairing', async () => {
+    const checked = createSession({
+      'connection.authenticate': () => {
+        throw new RemoteFailureError({ reason: 'UNAUTHENTICATED', message: 'Unknown phone' });
+      },
+    });
+    connect.mockResolvedValueOnce(checked as never);
+    await expect(
+      runtime.testEndpoint(id, row.configuredEndpoints[0], signal()),
+    ).rejects.toMatchObject({ details: { reason: 'auth-revoked' } });
+    expect(checked.close).toHaveBeenCalled();
+    expect(store.savePair).not.toHaveBeenCalled();
+    expect(store.updateStatus).not.toHaveBeenCalled();
+  });
+
   it('retires connection consumers only after removal succeeds', async () => {
     const invalidate = jest.spyOn(manager, 'invalidate');
     store.remove.mockRejectedValueOnce(new Error('database busy'));
