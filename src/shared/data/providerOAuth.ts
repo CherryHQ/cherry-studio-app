@@ -6,7 +6,6 @@ const PI_OAUTH_PROVIDERS = {
   'openai-codex': 'openai-codex',
   'kimi-coding': 'kimi-coding',
   grok: 'xai',
-  meta: 'meta',
   openrouter: 'openrouter',
 } as const;
 

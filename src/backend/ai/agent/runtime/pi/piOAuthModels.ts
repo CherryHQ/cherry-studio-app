@@ -28,8 +28,6 @@ async function catalog(id: PiOAuthProviderId): Promise<Record<string, PiModel<Su
         .KIMI_CODING_MODELS;
     case 'xai':
       return (await import('@earendil-works/pi-ai/providers/xai.models')).XAI_MODELS;
-    case 'meta':
-      return (await import('@earendil-works/pi-ai/providers/meta.models')).META_MODELS;
     case 'openrouter':
       return {};
   }
@@ -129,7 +127,6 @@ export function requireOAuthEndpoint(provider: Provider, id: PiOAuthProviderId, 
     'openai-codex': ['chatgpt.com'],
     'kimi-coding': ['api.kimi.com'],
     xai: ['api.x.ai'],
-    meta: ['api.meta.ai'],
     openrouter: ['openrouter.ai'],
   };
   const urls = baseUrl

@@ -13,9 +13,11 @@ it('requires a registered OAuth login and accepts it without database API keys',
   } as Provider;
   expect(getProviderConfigurationIssue(oauthProvider, [])).toBe('missing-oauth');
   expect(getProviderConfigurationIssue(oauthProvider, [], null, true)).toBeNull();
-  expect(
-    getProviderConfigurationIssue({ ...oauthProvider, presetProviderId: 'grok-cli' }, []),
-  ).toBe('unsupported-auth');
+  for (const presetProviderId of ['grok-cli', 'meta']) {
+    expect(getProviderConfigurationIssue({ ...oauthProvider, presetProviderId }, [])).toBe(
+      'unsupported-auth',
+    );
+  }
 });
 
 const provider = {

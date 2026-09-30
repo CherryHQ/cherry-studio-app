@@ -2,7 +2,6 @@ import {
   configureOAuthPlatform,
   githubCopilotOAuth,
   kimiCodingOAuth,
-  metaOAuth,
   ModelsError,
   openaiCodexOAuth,
   openRouterOAuth,
@@ -34,7 +33,6 @@ import { getPiOAuthProviderId, type PiOAuthProviderId } from '@/shared/data/prov
 const FLOWS: Record<PiOAuthProviderId, OAuthAuth> = {
   'github-copilot': githubCopilotOAuth,
   'kimi-coding': kimiCodingOAuth,
-  meta: metaOAuth,
   xai: xaiOAuth,
   'openai-codex': openaiCodexOAuth,
   openrouter: openRouterOAuth,

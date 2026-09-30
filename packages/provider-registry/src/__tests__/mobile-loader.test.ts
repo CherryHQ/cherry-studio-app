@@ -182,7 +182,7 @@ describe('MobileRegistryLoader', () => {
       expect(overrides.some((override) => override.providerId === providerId)).toBe(true);
       expect(loader.getOverridesForProvider(providerId).length).toBeGreaterThan(0);
     }
-    for (const providerId of ['copilot', 'openai-codex', 'kimi-coding', 'meta']) {
+    for (const providerId of ['copilot', 'openai-codex', 'kimi-coding']) {
       expect(loader.isProviderExcludedFromCatalog(providerId)).toBe(false);
       expect(loader.isProviderExcluded(providerId)).toBe(false);
       expect(loader.findProvider(providerId)?.authMethods).toContain('oauth');
@@ -205,6 +205,7 @@ describe('MobileRegistryLoader', () => {
     const loader = downloadedLoader();
 
     for (const providerId of [
+      'meta',
       'claude-code',
       'lmstudio',
       'ollama',
