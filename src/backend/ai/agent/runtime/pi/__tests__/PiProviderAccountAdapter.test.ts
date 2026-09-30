@@ -1,5 +1,6 @@
 import { xaiOAuth, type OAuthCredential } from '@earendil-works/pi-ai/native-oauth';
 
+import { HttpError } from '@/backend/services/http';
 import {
   providerAccountStorage,
   type StoredPiAccount,
@@ -107,6 +108,26 @@ it('preserves stored credentials and hides upstream secrets when refresh fails',
     .mockRejectedValueOnce(new Error('invalid_grant secret-server-response'));
   await expect(adapter.resolveAuth({ id: 'first', presetProviderId: 'grok' })).rejects.toEqual(
     new ProviderAccountError('authorization'),
+  );
+  expect(accounts.get('first')?.credential.refresh).toBe('refresh-fixture');
+});
+
+it.each([
+  ['network', 'network'],
+  ['timeout', 'network'],
+  ['invalid_response', 'request'],
+  ['internal', 'configuration'],
+] as const)('maps an app HTTP %s failure without exposing credentials', async (kind, reason) => {
+  await login('first');
+  accounts.get('first')!.credential.expires = 0;
+  jest.mocked(xaiOAuth.refresh).mockRejectedValueOnce(
+    new HttpError('private-response access-fixture', {
+      kind,
+      code: 'fixture',
+    }),
+  );
+  await expect(adapter.resolveAuth({ id: 'first', presetProviderId: 'grok' })).rejects.toEqual(
+    new ProviderAccountError(reason),
   );
   expect(accounts.get('first')?.credential.refresh).toBe('refresh-fixture');
 });

@@ -8,7 +8,7 @@ import {
 import { z } from 'zod';
 
 import { __testing } from '../createHttpClient';
-import type { HttpInterceptor, HttpRequest } from '../HttpClient';
+import type { HttpInterceptor, HttpRequest, HttpResponse } from '../HttpClient';
 import { HttpError } from '../HttpError';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
@@ -64,6 +64,64 @@ function mockAdapter(
 }
 
 describe('createHttpClient', () => {
+  it('preserves protocol response statuses only for routes that explicitly accept them', async () => {
+    const adapter = mockAdapter(async (config) => {
+      const data = '{"error":"authorization_pending"}';
+      if (!config.validateStatus?.(400)) throw responseError(config, 400, data);
+      return response(config, 400, data, new AxiosHeaders({ 'Retry-After': '5' }));
+    });
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+    const onResponse = jest.fn((value: HttpResponse<unknown>) => value);
+    const protocolClient = createClient({
+      baseUrl: 'https://auth.x.ai',
+      statusPolicy: 'all',
+      interceptors: [{ onResponse }],
+    });
+    await expect(
+      protocolClient.request({ method: 'POST', path: '/oauth2/token', responseType: 'text' }),
+    ).resolves.toEqual({
+      data: '{"error":"authorization_pending"}',
+      headers: { 'retry-after': '5' },
+      status: 400,
+    });
+    expect(onResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 400 }),
+      expect.anything(),
+    );
+    await expect(
+      createClient({ baseUrl: 'https://auth.x.ai' }).request({
+        method: 'POST',
+        path: '/oauth2/token',
+      }),
+    ).rejects.toMatchObject({ kind: 'http', status: 400 });
+    expect(adapter).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects an invalid route status policy before creating a client', () => {
+    const createClient = __testing.createHttpClientFactoryWithAdapter(
+      mockAdapter(async (config) => response(config, 200, {})),
+    );
+    expect(() =>
+      createClient({ baseUrl: 'https://auth.x.ai', statusPolicy: 'invalid' as never }),
+    ).toThrow(expect.objectContaining({ code: 'INVALID_STATUS_POLICY', kind: 'internal' }));
+  });
+
+  it('keeps transport failures as safe errors even when the route accepts every status', async () => {
+    const adapter = mockAdapter(async (config) => {
+      throw new AxiosError('private-timeout-message', AxiosError.ETIMEDOUT, config);
+    });
+    const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
+      baseUrl: 'https://auth.x.ai',
+      statusPolicy: 'all',
+    });
+    await expect(client.request({ method: 'POST', path: '/oauth2/token' })).rejects.toMatchObject({
+      code: 'REQUEST_TIMEOUT',
+      kind: 'timeout',
+      message: 'HTTP request timed out.',
+    });
+    expect(adapter).toHaveBeenCalledTimes(1);
+  });
+
   it('passes redirect rejection through the fetch adapter for secret-bearing requests', async () => {
     const adapter = mockAdapter(async (config) => {
       expect(config.fetchOptions?.redirect).toBe('error');

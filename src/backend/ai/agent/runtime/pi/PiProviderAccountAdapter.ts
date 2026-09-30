@@ -17,10 +17,11 @@ import {
   digestStringAsync,
   getRandomBytes,
 } from 'expo-crypto';
-import { fetch as expoFetch } from 'expo/fetch';
 
 import type { ProviderAccountService } from '@/backend/data/services/ProviderAccountService';
+import { isHttpError } from '@/backend/services/http';
 import type { ProviderAccountAdapter } from '@/backend/services/providers/account/providerAccountAdapter';
+import { createProviderAccountFetch } from '@/backend/services/providers/account/providerAccountFetch';
 import { providerAccountStorage } from '@/backend/services/providers/account/providerAccountStorage';
 import {
   ProviderAccountError,
@@ -50,7 +51,7 @@ type AccountProvider = Awaited<ReturnType<ProviderAccountService['get']>>;
 const base64Url = (value: string) =>
   value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 configureOAuthPlatform({
-  fetch: expoFetch as unknown as typeof globalThis.fetch,
+  fetch: createProviderAccountFetch(),
   async generatePKCE() {
     const verifier = base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
     const challenge = base64Url(
@@ -259,6 +260,17 @@ export class PiProviderAccountAdapter implements ProviderAccountAdapter {
       let cause: unknown = error;
       for (let depth = 0; depth < 4; depth++) {
         if (cause instanceof ProviderAccountError) throw cause;
+        if (isHttpError(cause)) {
+          throw new ProviderAccountError(
+            cause.kind === 'cancelled'
+              ? 'cancelled'
+              : cause.kind === 'network' || cause.kind === 'timeout'
+                ? 'network'
+                : cause.kind === 'internal'
+                  ? 'configuration'
+                  : 'request',
+          );
+        }
         if (cause instanceof TypeError) throw new ProviderAccountError('network');
         if (!(cause instanceof Error) || !cause.cause) break;
         cause = cause.cause;

@@ -147,12 +147,18 @@ code/final-redirect-URL fallback; native apps do not create a loopback HTTP list
 opens externally so the final redirect URL can be copied.
 
 `ProviderAccountRuntime` owns the public account workflow and teardown. `PiProviderAccountAdapter`
-is the native auth bridge inside the Pi zone: it adapts Expo fetch/crypto and supplies an
+is the native auth bridge inside the Pi zone: it adapts app HTTP/Expo crypto and supplies an
 instance-scoped `CredentialStore` backed by device-only SecureStore. OAuth credentials never become
 user-provider API keys or enter backups. Pi resolves and refreshes credentials under per-instance
 locks, preserving vendor fields and preventing ambient API-key fallback after refresh failure.
 Deleting a provider or signing out cancels attempts and removes its local credential. Upstream
 logout has no remote revocation operation; OpenRouter keys remain manageable in the provider console.
+
+OAuth network exchanges go through `providerAccountFetch` and the shared app HTTP transport, with
+one immutable route per HTTPS origin, request-local credentials, bounded text responses, and no
+redirects. `statusPolicy: 'all'` preserves non-2xx protocol responses for Pi to handle pending,
+slow-down, and rate-limit decisions. Transport failures retain the app's safe error/diagnostic
+boundary. Streaming model requests keep the existing Expo fetch path.
 
 The Pi request binding retains canonical provider IDs and all resolved `apiKey`, `headers`, and
 `baseUrl` fields while usage attribution keeps the app instance ID. Five selective official model
@@ -166,7 +172,7 @@ loopback callback and additional identity-validation/platform integration. Radiu
 provider preset or `pi-messages` binding. `grok-cli` still requires an external CLI and remains
 excluded. Supporting the xAI subscription flow on the `grok` preset does not enable `grok-cli`.
 
-The versioned Pi 0.99.1 patch exposes `native-oauth`, injects native fetch/PKCE primitives, and adds a
+The versioned Pi 0.99.1 patch exposes `native-oauth`, injects app HTTP/PKCE primitives, and adds a
 native manual-callback adapter. Metro honors this package's browser file map. OAuth protocol polling,
 refresh, token parsing, and request-auth derivation remain upstream implementations. Update this
 patch and the native module-graph regression coverage together when upgrading Pi.
