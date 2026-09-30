@@ -92,7 +92,9 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       open={open}
       size="medium"
       testID="user-question-sheet"
-      title={t('chat.question.title')}
+      // The question is the sheet's subject, so it titles the sheet and is never truncated.
+      title={form.question.question}
+      titleNumberOfLines={0}
     >
       <ScrollView
         key={form.question.id}
@@ -102,12 +104,6 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {form.question.header ? (
-          <Text className="text-foreground-tertiary text-sm">{form.question.header}</Text>
-        ) : null}
-        <Text accessibilityRole="header" className="font-semibold text-base text-foreground">
-          {form.question.question}
-        </Text>
         {form.question.options.length ? (
           <View className="-mx-3 gap-1">
             {form.question.options.map((option) => {

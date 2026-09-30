@@ -25,13 +25,19 @@ jest.mock('@cherrystudio/ui/components', () => {
   function MockBottomSheet({
     children,
     footer,
+    headerAction,
+    title,
     ...props
   }: {
     children?: ReactNode;
     footer?: ReactNode;
+    headerAction?: ReactNode;
+    title: string;
   }) {
     return (
       <MockView {...props}>
+        <MockText>{title}</MockText>
+        {headerAction}
         {children}
         {footer}
       </MockView>

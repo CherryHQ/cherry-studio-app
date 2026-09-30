@@ -1,5 +1,5 @@
+import { BottomSheet } from '@cherrystudio/ui/components';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { ScrollView, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { UserQuestionSheet } from '../UserQuestionSheet';
@@ -24,7 +24,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 let renderer: ReactTestRenderer;
 afterEach(() => act(() => renderer?.unmount()));
 
-test('keeps the complete question readable in the scrolling body without a line limit', () => {
+test('titles the sheet with the complete question without a line limit', () => {
   const question = 'Describe the tradeoffs between the available deployment options. '.repeat(4);
   act(() => {
     renderer = create(
@@ -37,10 +37,7 @@ test('keeps the complete question readable in the scrolling body without a line 
       />,
     );
   });
-  const prompt = renderer.root
-    .findByType(ScrollView)
-    .findAllByType(Text)
-    .find((node) => node.props.children === question);
-  expect(prompt).toBeDefined();
-  expect(prompt!.props.numberOfLines).toBeUndefined();
+  const sheet = renderer.root.findByType(BottomSheet);
+  expect(sheet.props.title).toBe(question);
+  expect(sheet.props.titleNumberOfLines).toBe(0);
 });

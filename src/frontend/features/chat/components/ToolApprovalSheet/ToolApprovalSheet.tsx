@@ -82,9 +82,16 @@ export function ToolApprovalSheet({
         />
       }
       onClose={ignoreClose}
+      headerAction={
+        approvals.length > 1 ? (
+          <Text className="text-foreground-tertiary text-sm">
+            {t('chat.tool.approval.pendingCount', { count: approvals.length })}
+          </Text>
+        ) : undefined
+      }
       open={isOpen}
       size="medium"
-      title={t('chat.tool.approval.title')}
+      title={approval.displayName}
     >
       <ScrollView
         key={approval.approvalId}
@@ -93,19 +100,6 @@ export function ToolApprovalSheet({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-1">
-          <Text className="text-foreground-tertiary text-sm">
-            {t('chat.tool.approval.description')}
-          </Text>
-          <Text className="font-semibold text-base text-foreground" selectable>
-            {approval.displayName}
-          </Text>
-          {approvals.length > 1 ? (
-            <Text className="text-foreground-tertiary text-xs">
-              {t('chat.tool.approval.pendingCount', { count: approvals.length })}
-            </Text>
-          ) : null}
-        </View>
         <MessagePart.ValueSection title={t('chat.tool.arguments')} value={approval.input} />
         {children}
       </ScrollView>
