@@ -7,9 +7,14 @@ import {
 } from '@/backend/services/providers/account/providerAccountStorage';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 
+import { resolvePiCopilotAuto, type PiCopilotAutoModel } from '../piCopilotAuto';
 import { PiProviderAccountAdapter } from '../PiProviderAccountAdapter';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
+jest.mock('../piCopilotAuto', () => ({
+  ...jest.requireActual('../piCopilotAuto'),
+  resolvePiCopilotAuto: jest.fn(),
+}));
 jest.mock('@/backend/services/providers/account/providerAccountStorage', () => ({
   providerAccountStorage: { readPiAccount: jest.fn(), writePiAccount: jest.fn() },
 }));
@@ -21,7 +26,7 @@ jest.mock('@earendil-works/pi-ai/native-oauth', () => {
     refresh: jest.fn(),
     toAuth: async (credential: OAuthCredential) => ({ apiKey: credential.access }),
   };
-  return { ...actual, configureOAuthPlatform: jest.fn(), xaiOAuth: flow };
+  return { ...actual, configureOAuthPlatform: jest.fn(), xaiOAuth: flow, githubCopilotOAuth: flow };
 });
 
 function deferred<T>() {
@@ -174,4 +179,76 @@ it('discards credentials after a provider row is recreated with the same id', as
   createdAt = 101;
   expect((await adapter.getStatus('first')).signedIn).toBe(false);
   expect(accounts.has('first')).toBe(false);
+});
+
+it('cancels Auto resolution on logout and discards its late session token', async () => {
+  adapter.configure({
+    get: async (id) => ({ id, presetProviderId: 'copilot', name: id, createdAt }),
+  });
+  await login('first');
+  const started = deferred<void>();
+  const finish = deferred<PiCopilotAutoModel>();
+  jest
+    .mocked(resolvePiCopilotAuto)
+    .mockImplementationOnce(async (_auth, _input, _fetch, signal) => {
+      started.resolve();
+      const result = await finish.promise;
+      expect(signal.aborted).toBe(true);
+      return result;
+    });
+  const request = adapter
+    .resolveCopilotAuto({ id: 'first', presetProviderId: 'copilot' }, 'session-1', {
+      input: [{ type: 'text', text: 'Hello' }],
+      history: [],
+    })
+    .catch((error: unknown) => error);
+  await started.promise;
+  const logout = adapter.logout('first');
+  finish.resolve({} as PiCopilotAutoModel);
+  expect(await request).toEqual(new ProviderAccountError('cancelled'));
+  await logout;
+  expect(accounts.has('first')).toBe(false);
+});
+
+it('reuses Auto within a conversation and clears it when the account changes', async () => {
+  adapter.configure({
+    get: async (id) => ({ id, presetProviderId: 'copilot', name: id, createdAt }),
+  });
+  await login('first');
+  const autoModel: PiCopilotAutoModel = {
+    expiresAt: Date.now() + 3600000,
+    supportsTools: true,
+    model: {
+      id: 'served-model',
+      name: 'Served model',
+      api: 'openai-completions',
+      provider: 'github-copilot',
+      baseUrl: 'https://api.individual.githubcopilot.com',
+      input: ['text'],
+      contextWindow: 128000,
+      maxTokens: 8192,
+      reasoning: false,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      headers: { 'Copilot-Session-Token': 'auto-token' },
+    },
+  };
+  jest.mocked(resolvePiCopilotAuto).mockResolvedValue(autoModel);
+  const provider = { id: 'first', presetProviderId: 'copilot' };
+  const request = { input: [{ type: 'text' as const, text: 'Hello' }], history: [] };
+  await adapter.resolveCopilotAuto(provider, 'session-1', request);
+  await adapter.resolveCopilotAuto(provider, 'session-1', request);
+  expect(resolvePiCopilotAuto).toHaveBeenCalledTimes(1);
+  await adapter.resolveCopilotAuto(provider, 'session-2', request);
+  expect(resolvePiCopilotAuto).toHaveBeenCalledTimes(2);
+  autoModel.expiresAt = 0;
+  jest.mocked(resolvePiCopilotAuto).mockResolvedValueOnce({
+    ...autoModel,
+    expiresAt: Date.now() + 3600000,
+  });
+  await adapter.resolveCopilotAuto(provider, 'session-1', request);
+  expect(resolvePiCopilotAuto).toHaveBeenCalledTimes(3);
+  autoModel.expiresAt = Date.now() + 3600000;
+  await login('first');
+  await adapter.resolveCopilotAuto(provider, 'session-1', request);
+  expect(resolvePiCopilotAuto).toHaveBeenCalledTimes(4);
 });

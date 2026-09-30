@@ -173,6 +173,92 @@ describe('Pi model resolver', () => {
     expect(mockResolveApiKey).not.toHaveBeenCalled();
   });
 
+  test('dispatches Auto with the routed protocol, limits and secret while retaining the selection', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      'https://api.githubcopilot.com',
+      'github-copilot-openai-compatible',
+    );
+    provider.presetProviderId = 'copilot';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, {
+        apiModelId: 'auto',
+        modelId: 'auto',
+        name: 'GitHub Copilot Auto',
+        contextWindow: 32000,
+        maxInputTokens: 24000,
+        maxOutputTokens: 4096,
+        reasoning: undefined,
+      }),
+    );
+    const resolveAuth = jest.fn();
+    const resolveCopilotAuto = jest.fn().mockResolvedValue({
+      oauth: {
+        id: 'github-copilot',
+        auth: { apiKey: 'copilot-access', baseUrl: 'https://api.individual.githubcopilot.com' },
+        availableModelIds: [],
+      },
+      autoModel: {
+        expiresAt: Date.now() + 3600000,
+        maxInputTokens: 100000,
+        supportsTools: true,
+        model: {
+          id: 'routed-model',
+          name: 'Routed model',
+          api: 'anthropic-messages',
+          provider: 'github-copilot',
+          baseUrl: 'https://api.individual.githubcopilot.com',
+          contextWindow: 128000,
+          maxTokens: 16000,
+          input: ['text', 'image'],
+          reasoning: true,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          headers: { 'Copilot-Session-Token': 'auto-session-secret' },
+        },
+      },
+    });
+    resolver = createPiModelResolver({ resolveAuth, resolveCopilotAuto });
+    const signal = new AbortController().signal;
+    const request = {
+      input: [{ type: 'text' as const, text: 'Explain this picture' }],
+      history: [],
+    };
+    const resolution = await resolver.resolveModel(
+      { modelId: 'auto', providerId: provider.id },
+      {},
+      'session-1',
+      undefined,
+      signal,
+      request,
+    );
+    expect(resolveCopilotAuto).toHaveBeenCalledWith(provider, 'session-1', request, signal);
+    expect(resolveAuth).not.toHaveBeenCalled();
+    expect(resolution).toMatchObject({
+      defaultThinkingLevel: 'medium',
+      maxInputTokens: 100000,
+      supportsTools: true,
+      model: {
+        id: 'routed-model',
+        api: 'anthropic-messages',
+        contextWindow: 128000,
+        maxTokens: 16000,
+      },
+      usageContext: { modelId: 'auto', modelName: 'GitHub Copilot Auto', providerId: provider.id },
+    });
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.objectContaining({ api: 'anthropic-messages' }),
+      expect.objectContaining({
+        apiKey: 'copilot-access',
+        headers: expect.objectContaining({ 'Copilot-Session-Token': 'auto-session-secret' }),
+        maxTokens: 16000,
+      }),
+    );
+    expect(resolution.redactionValues).toContain('auto-session-secret');
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
   test('never falls back to manual API keys after a stored OAuth refresh fails', async () => {
     mockGetProviderById.mockResolvedValue(
       makeProvider(ENDPOINT_TYPE.OPENAI_RESPONSES, 'https://api.x.ai/v1', 'xai-responses'),

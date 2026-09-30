@@ -8,6 +8,7 @@ import type { Model, ReasoningEffort } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import type { SupportedPiApi } from './piApiAdapters';
+import { COPILOT_AUTO_MODEL_ID } from './piCopilotAuto';
 import type { PiProviderAccountAdapter } from './PiProviderAccountAdapter';
 
 export type ResolvedPiOAuth = NonNullable<
@@ -67,7 +68,7 @@ export async function listPiOAuthModels(
   }
   const models = Object.values(await catalog(auth.id));
   signal.throwIfAborted();
-  return models
+  const discovered: Partial<Model>[] = models
     .filter((model) => !auth.availableModelIds || auth.availableModelIds.includes(model.id))
     .map((model) => ({
       modelId: model.id,
@@ -88,9 +89,24 @@ export async function listPiOAuthModels(
       presetModelId: model.id,
       reasoning: model.reasoning ? modelReasoning(model) : undefined,
     }));
+  if (auth.id === 'github-copilot') {
+    // Auto is a logical selection; each turn resolves its real limits and protocol before dispatch.
+    discovered.unshift({
+      modelId: COPILOT_AUTO_MODEL_ID,
+      apiModelId: COPILOT_AUTO_MODEL_ID,
+      name: 'GitHub Copilot Auto',
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.IMAGE_RECOGNITION],
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+      supportsStreaming: true,
+      isEnabled: true,
+    });
+  }
+  return discovered;
 }
 
-function modelReasoning(model: PiModel<SupportedPiApi>): NonNullable<Model['reasoning']> {
+export function modelReasoning(model: PiModel<SupportedPiApi>): NonNullable<Model['reasoning']> {
   const levels = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
   const efforts: ReasoningEffort[] = levels.filter(
     (level) =>

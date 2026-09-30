@@ -13,6 +13,7 @@ import {
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
+import { getPiOAuthProviderId } from '@/shared/data/providerOAuth';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import { resolveEndpointDialect } from '@/shared/data/types/provider';
 import type { Provider } from '@/shared/data/types/provider';
@@ -24,10 +25,12 @@ import {
 import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '..';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
 import { withPiApiKeyFallback } from './piApiKeyFallback';
+import { COPILOT_AUTO_MODEL_ID, type PiCopilotAutoModel } from './piCopilotAuto';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import {
   endpointForPiApi,
+  modelReasoning,
   requireOAuthEndpoint,
   resolveOAuthPiModel,
   type ResolvedPiOAuth,
@@ -49,6 +52,12 @@ class PiModelResolutionError extends Error {
 
 export function createPiModelResolver(accounts?: {
   resolveAuth(provider: Provider, signal?: AbortSignal): Promise<ResolvedPiOAuth | undefined>;
+  resolveCopilotAuto?(
+    provider: Provider,
+    sessionId: string,
+    request: NonNullable<Parameters<PiRuntimeDependencies['resolveModel']>[5]>,
+    signal?: AbortSignal,
+  ): Promise<{ oauth: ResolvedPiOAuth; autoModel: PiCopilotAutoModel }>;
 }): PiRuntimeDependencies {
   return {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
@@ -60,6 +69,7 @@ export function createPiModelResolver(accounts?: {
       sessionId,
       apiKeyOverride,
       signal,
+      request,
     ): Promise<PiModelResolution> {
       const {
         adapter: configuredAdapter,
@@ -69,12 +79,24 @@ export function createPiModelResolver(accounts?: {
         provider,
       } = await resolveConfiguredPiModel(runtimeModel);
 
+      const isCopilotAuto =
+        getPiOAuthProviderId(provider) === 'github-copilot' &&
+        connection.wireModelId === COPILOT_AUTO_MODEL_ID;
+      let auto: { oauth: ResolvedPiOAuth; autoModel: PiCopilotAutoModel } | undefined;
+      if (isCopilotAuto) {
+        if (!accounts?.resolveCopilotAuto || !request || apiKeyOverride !== undefined) {
+          throw new ProviderAccountError('configuration');
+        }
+        requireOAuthEndpoint(provider, 'github-copilot', connection.baseUrl);
+        auto = await accounts.resolveCopilotAuto(provider, sessionId, request, signal);
+      }
       const oauth =
-        apiKeyOverride === undefined ? await accounts?.resolveAuth(provider, signal) : undefined;
+        auto?.oauth ??
+        (apiKeyOverride === undefined ? await accounts?.resolveAuth(provider, signal) : undefined);
       if (oauth) requireOAuthEndpoint(provider, oauth.id, connection.baseUrl);
-      const oauthModel = oauth
-        ? await resolveOAuthPiModel(oauth, connection.wireModelId)
-        : undefined;
+      const oauthModel =
+        auto?.autoModel.model ??
+        (oauth ? await resolveOAuthPiModel(oauth, connection.wireModelId) : undefined);
       if (
         !oauth &&
         provider.authMethods?.includes('oauth') &&
@@ -200,9 +222,11 @@ export function createPiModelResolver(accounts?: {
                 ? { supportsDeveloperRole: false }
                 : {}),
             },
-            baseUrl: oauth?.auth.baseUrl ?? oauthModel.baseUrl,
+            baseUrl: auto ? oauthModel.baseUrl : (oauth?.auth.baseUrl ?? oauthModel.baseUrl),
             headers,
-            maxTokens: Math.min(preflight.maxOutputTokens, oauthModel.maxTokens),
+            maxTokens: auto
+              ? oauthModel.maxTokens
+              : Math.min(preflight.maxOutputTokens, oauthModel.maxTokens),
           }
         : configuredPiModel;
       const streamBinding: Parameters<typeof bindPiStream>[1] = {
@@ -294,8 +318,12 @@ export function createPiModelResolver(accounts?: {
 
       const timedStream = withPiStreamIdleTimeout(streamFn);
       return {
-        defaultThinkingLevel: resolveDefaultThinkingLevel(invocationModel),
-        maxInputTokens: model.maxInputTokens,
+        defaultThinkingLevel: auto
+          ? resolveDefaultThinkingLevel({
+              reasoning: piModel.reasoning ? modelReasoning(piModel) : undefined,
+            })
+          : resolveDefaultThinkingLevel(invocationModel),
+        maxInputTokens: auto ? auto.autoModel.maxInputTokens : model.maxInputTokens,
         model: piModel,
         redactionValues: [
           ...collectRedactionValues(selectedApiKey.value, headers),
@@ -309,7 +337,7 @@ export function createPiModelResolver(accounts?: {
           ...fallbackKeys.map((key) => key.key),
         ],
         streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(timedStream) : timedStream,
-        supportsTools: preflight.supportsTools,
+        supportsTools: auto ? auto.autoModel.supportsTools : preflight.supportsTools,
         usageContext,
       };
     },
@@ -379,7 +407,7 @@ function isOpenRouterUrl(baseUrl: string): boolean {
   }
 }
 
-function resolveDefaultThinkingLevel(model: Model): ModelThinkingLevel {
+function resolveDefaultThinkingLevel(model: Pick<Model, 'reasoning'>): ModelThinkingLevel {
   if (!model.reasoning) return 'off';
   const effort = model.reasoning.defaultEffort ?? 'medium';
   if (effort === 'none') return 'off';

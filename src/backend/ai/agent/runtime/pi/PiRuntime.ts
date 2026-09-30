@@ -104,6 +104,7 @@ export interface PiRuntimeDependencies {
     sessionId: string,
     apiKeyOverride?: string,
     signal?: AbortSignal,
+    request?: Pick<RuntimeExecutionRequest, 'input' | 'history'>,
   ): PiModelResolution | Promise<PiModelResolution>;
 }
 
@@ -693,6 +694,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           request.sessionId,
           request.apiKeyOverride,
           turn.abortController.signal,
+          request,
         ),
         turn.abortController.signal,
       );
