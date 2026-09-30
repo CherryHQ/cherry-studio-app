@@ -1660,6 +1660,7 @@
   "settings.provider.models.detail.modelId": "Model ID",
   "settings.provider.models.detail.name": "Display name",
   "settings.provider.models.detail.notes": "Notes",
+  "settings.provider.models.detail.otherPurpose": "Other",
   "settings.provider.models.detail.provider": "Provider",
   "settings.provider.models.detail.purpose": "Purpose",
   "settings.provider.models.detail.saveFailed": "Could not save the model. Your changes are retained. Try again.",

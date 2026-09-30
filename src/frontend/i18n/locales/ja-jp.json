@@ -1651,6 +1651,7 @@
   "settings.provider.models.detail.modelId": "モデルID",
   "settings.provider.models.detail.name": "表示名",
   "settings.provider.models.detail.notes": "メモ",
+  "settings.provider.models.detail.otherPurpose": "その他",
   "settings.provider.models.detail.provider": "プロバイダー",
   "settings.provider.models.detail.purpose": "目的",
   "settings.provider.models.detail.saveFailed": "モデルを保存できませんでした。変更は保持されます。もう一度やり直してください。",

@@ -1660,6 +1660,7 @@
   "settings.provider.models.detail.modelId": "Model Kimliği",
   "settings.provider.models.detail.name": "Görünen ad",
   "settings.provider.models.detail.notes": "Notlar",
+  "settings.provider.models.detail.otherPurpose": "Diğer",
   "settings.provider.models.detail.provider": "Sağlayıcı",
   "settings.provider.models.detail.purpose": "Amaç",
   "settings.provider.models.detail.saveFailed": "Model kaydedilemedi. Değişiklikleriniz korunur. Tekrar deneyin.",

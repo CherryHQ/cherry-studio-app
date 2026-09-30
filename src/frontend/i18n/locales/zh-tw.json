@@ -1651,6 +1651,7 @@
   "settings.provider.models.detail.modelId": "模型 ID",
   "settings.provider.models.detail.name": "顯示名稱",
   "settings.provider.models.detail.notes": "筆記",
+  "settings.provider.models.detail.otherPurpose": "其他",
   "settings.provider.models.detail.provider": "供應商",
   "settings.provider.models.detail.purpose": "用途",
   "settings.provider.models.detail.saveFailed": "模型儲存失敗，修改已保留，請重試。",

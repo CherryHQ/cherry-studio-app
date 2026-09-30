@@ -1651,6 +1651,7 @@
   "settings.provider.models.detail.modelId": "ID mô hình",
   "settings.provider.models.detail.name": "Tên hiển thị",
   "settings.provider.models.detail.notes": "Ghi chú",
+  "settings.provider.models.detail.otherPurpose": "Khác",
   "settings.provider.models.detail.provider": "Nhà cung cấp",
   "settings.provider.models.detail.purpose": "Mục đích",
   "settings.provider.models.detail.saveFailed": "Không thể lưu mô hình. Những thay đổi của bạn được giữ lại. Hãy thử lại.",

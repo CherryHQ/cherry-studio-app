@@ -1678,6 +1678,7 @@
   "settings.provider.models.detail.modelId": "Идентификатор модели",
   "settings.provider.models.detail.name": "Отображаемое имя",
   "settings.provider.models.detail.notes": "Примечания",
+  "settings.provider.models.detail.otherPurpose": "Другое",
   "settings.provider.models.detail.provider": "Поставщик",
   "settings.provider.models.detail.purpose": "Цель",
   "settings.provider.models.detail.saveFailed": "Не удалось сохранить модель. Ваши изменения сохраняются. Попробуйте еще раз.",

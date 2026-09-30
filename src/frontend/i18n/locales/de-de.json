@@ -1660,6 +1660,7 @@
   "settings.provider.models.detail.modelId": "Modell-ID",
   "settings.provider.models.detail.name": "Anzeigename",
   "settings.provider.models.detail.notes": "Notizen",
+  "settings.provider.models.detail.otherPurpose": "Sonstiges",
   "settings.provider.models.detail.provider": "Anbieter",
   "settings.provider.models.detail.purpose": "Zweck",
   "settings.provider.models.detail.saveFailed": "Das Modell konnte nicht gespeichert werden. Ihre Änderungen bleiben erhalten. Versuchen Sie es erneut.",

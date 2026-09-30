@@ -1669,6 +1669,7 @@
   "settings.provider.models.detail.modelId": "ID do modelo",
   "settings.provider.models.detail.name": "Nome de visualização",
   "settings.provider.models.detail.notes": "Notas",
+  "settings.provider.models.detail.otherPurpose": "Outro",
   "settings.provider.models.detail.provider": "Fornecedor",
   "settings.provider.models.detail.purpose": "Finalidade",
   "settings.provider.models.detail.saveFailed": "Não foi possível guardar o modelo. As suas alterações serão mantidas. Tente novamente.",

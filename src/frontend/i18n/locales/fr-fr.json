@@ -1669,6 +1669,7 @@
   "settings.provider.models.detail.modelId": "ID du modèle",
   "settings.provider.models.detail.name": "Nom d'affichage",
   "settings.provider.models.detail.notes": "Remarques",
+  "settings.provider.models.detail.otherPurpose": "Autre",
   "settings.provider.models.detail.provider": "Fournisseur",
   "settings.provider.models.detail.purpose": "Objectif",
   "settings.provider.models.detail.saveFailed": "Impossible d'enregistrer le modèle. Vos modifications sont conservées. Essayer à nouveau.",

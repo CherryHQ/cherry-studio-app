@@ -1660,6 +1660,7 @@
   "settings.provider.models.detail.modelId": "Αναγνωριστικό μοντέλου",
   "settings.provider.models.detail.name": "Εμφανιζόμενο όνομα",
   "settings.provider.models.detail.notes": "Σημειώσεις",
+  "settings.provider.models.detail.otherPurpose": "Άλλο",
   "settings.provider.models.detail.provider": "Πάροχος",
   "settings.provider.models.detail.purpose": "Σκοπός",
   "settings.provider.models.detail.saveFailed": "Δεν ήταν δυνατή η αποθήκευση του μοντέλου. Οι αλλαγές σας διατηρούνται. Προσπαθήστε ξανά.",
