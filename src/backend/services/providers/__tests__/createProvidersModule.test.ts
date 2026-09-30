@@ -18,6 +18,7 @@ function subject() {
     accounts: {
       getStatus: jest.fn(),
       begin: jest.fn(),
+      signIn: jest.fn(),
       cancel: jest.fn(),
       receiveRedirect: jest.fn(),
       refresh: jest.fn(),

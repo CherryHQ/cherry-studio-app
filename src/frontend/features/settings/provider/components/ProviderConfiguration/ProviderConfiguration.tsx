@@ -64,9 +64,10 @@ export function ProviderConfiguration({
             {value.apiKeys ? (
               <ProviderApiKeysSection apiKeys={value.apiKeys} value={value} />
             ) : null}
-            {value.models && value.apiKeys ? (
+            {value.models && (value.apiKeys || value.account?.signedIn) ? (
               <ProviderConnectionTestSection
-                apiKeys={value.apiKeys}
+                apiKeys={value.account?.signedIn ? [] : (value.apiKeys ?? [])}
+                signedIn={value.account?.signedIn}
                 disabled={value.isBusy}
                 models={value.models}
                 providerId={value.providerId}

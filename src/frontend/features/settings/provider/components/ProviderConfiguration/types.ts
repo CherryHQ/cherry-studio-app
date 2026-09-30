@@ -29,6 +29,7 @@ export type ProviderConfigurationActions = {
 };
 
 export type ProviderConfigurationAccount = {
+  signedIn?: boolean;
   capabilities: ProviderAccountCapabilities;
   onBusyChange: (busy: boolean) => void;
   onKeysChanged: () => Promise<void>;

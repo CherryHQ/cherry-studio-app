@@ -94,18 +94,16 @@ export type MobileRemoteRegistrySnapshot = {
 
 /**
  * OAuth-only presets excluded from runtime reads, including saved providers.
- * Mobile has no OAuth sign-in. Keep temporary setup or product limitations
+ * These flows still require an external CLI. Keep temporary setup or product limitations
  * in the catalog-only exclusions below so existing
  * records remain readable. Provider definitions remain bundled in both cases.
  */
-const MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
-  'copilot',
-  'grok-cli',
-  'openai-codex',
-]);
+const MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set(['grok-cli']);
 
 /** Presets hidden from new-provider setup while Mobile lacks the required support. */
 const MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
+  // Subscription credentials are restricted to the official Muse Code client.
+  'meta',
   // Local-server presets are hidden from Mobile setup.
   'lmstudio',
   'ollama',

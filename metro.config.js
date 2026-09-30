@@ -12,7 +12,9 @@ config.watchFolders.push(path.resolve(__dirname, 'packages'));
 // libp2p packages pick their Node or browser entry through the legacy package.json `browser`
 // file map, which Metro ignores once a package declares `exports`. Apply that map for relative
 // imports inside those packages so the pure-JS entries win (node:os, node:crypto never bundle).
-const legacyBrowserMapPackages = /\/node_modules\/(@libp2p|@chainsafe|@multiformats)\/[^/]+\//;
+// Pi uses the same map to select its native manual OAuth callback adapter.
+const legacyBrowserMapPackages =
+  /\/node_modules\/(@libp2p|@chainsafe|@multiformats|@earendil-works)\/[^/]+\//;
 const browserRedirect = (context, moduleName) => {
   if (!moduleName.startsWith('.')) return null;
   const match = legacyBrowserMapPackages.exec(context.originModulePath);

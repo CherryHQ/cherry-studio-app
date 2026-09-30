@@ -56,6 +56,10 @@ module.exports = {
     '^@earendil-works/chord/(context|delta)$': piDependencyFile('chord', '$1/index.js'),
     '^@earendil-works/pi-telemetry$': piDependencyFile('pi-telemetry', 'index.js'),
     '^@earendil-works/pi-ai$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/index.js',
+    '^@earendil-works/pi-ai/native-oauth$':
+      '<rootDir>/node_modules/@earendil-works/pi-ai/dist/native-oauth.js',
+    '^@earendil-works/pi-ai/providers/(.*)$':
+      '<rootDir>/node_modules/@earendil-works/pi-ai/dist/providers/$1.js',
     '^@earendil-works/pi-ai/api/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-ai/dist/api/$1.js',
     '^@earendil-works/pi-ai/utils/(.*)$':

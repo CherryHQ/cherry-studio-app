@@ -434,16 +434,19 @@ module.exports = defineConfig([
     ignores: [
       'src/backend/ai/agent/runtime/pi/__tests__/**/*.{ts,tsx}',
       'src/backend/ai/agent/runtime/pi/piModelResolver.ts',
+      'src/backend/ai/agent/runtime/pi/PiProviderAccountAdapter.ts',
     ],
     rules: restrictedImportRules([backendLayer, runtimeContractLayer, sharedPlatformIndependence]),
   },
-  // `piModelResolver.ts` is the Pi zone's one bridge from app entities to Pi: it
+  // `piModelResolver.ts` bridges app model records to Pi; `PiProviderAccountAdapter`
+  // bridges native account storage, fetch, and crypto. The model resolver
   // reads Provider and Model records and materializes an Expo-backed fetch,
   // which is precisely what the contract layer may not do. Pi runtime tests
-  // arrange fixtures with node builtins. Both keep only the backend layer rule.
+  // arrange fixtures with node builtins. These files keep only the backend layer rule.
   restrictedImports(
     [
       'src/backend/ai/agent/runtime/pi/piModelResolver.ts',
+      'src/backend/ai/agent/runtime/pi/PiProviderAccountAdapter.ts',
       'src/backend/ai/agent/runtime/pi/__tests__/**/*.{ts,tsx}',
     ],
     [backendLayer],

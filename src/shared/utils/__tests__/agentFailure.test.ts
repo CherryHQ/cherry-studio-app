@@ -4,6 +4,19 @@ describe('classifyAgentFailureReason', () => {
   test.each([
     [{ code: 'tool_step_limit_exceeded', message: 'generic failure' }, 'tool_limit'],
     [{ message: 'OpenAI API error (403): access denied' }, 'permission'],
+    [{ code: 'model_not_supported', message: 'generic failure' }, 'model_not_found'],
+    [
+      {
+        code: 'invalid_request_error',
+        message: '400 status code',
+        responseBody:
+          '{"error":{"message":"The requested model is not supported.","code":"model_not_supported","param":"model","type":"invalid_request_error"}}',
+        statusCode: 400,
+      },
+      'model_not_found',
+    ],
+    [{ message: 'The requested model is not supported.', statusCode: 400 }, 'model_not_found'],
+    [{ code: 'invalid_request_error', message: 'Invalid request', statusCode: 400 }, 'unknown'],
     [{ message: 'HTTP 429', responseBody: '{"type":"insufficient_quota"}' }, 'quota'],
     [
       {

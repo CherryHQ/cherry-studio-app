@@ -28,6 +28,7 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   mcp_error: 'mcp',
   missing_terminal_event: 'internal',
   model_not_found: 'model_not_found',
+  model_not_supported: 'model_not_found',
   permission_denied: 'permission',
   payload_too_large: 'payload_too_large',
   provider_unavailable: 'provider_unavailable',
@@ -110,7 +111,13 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   }
   if (
     resolvedStatusCode === 404 ||
-    includesAny(text, ['model_not_found', 'model not found', 'model does not exist']) ||
+    includesAny(text, [
+      'model_not_found',
+      'model_not_supported',
+      'model not found',
+      'model does not exist',
+      'requested model is not supported',
+    ]) ||
     (text.includes('model with id') && text.includes('not found'))
   ) {
     return 'model_not_found';

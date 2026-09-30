@@ -11,6 +11,7 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
@@ -103,6 +104,87 @@ describe('Pi model resolver', () => {
     });
     mockBindPiStream.mockResolvedValue(mockBoundStreamFn);
     resolver = createPiModelResolver();
+  });
+
+  test('retains canonical Copilot identity, model API, and credential-specific base URL', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      'https://api.githubcopilot.com',
+      'github-copilot-openai-compatible',
+    );
+    provider.presetProviderId = 'copilot';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, { apiModelId: 'claude-sonnet-4.6' }),
+    );
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'github-copilot',
+        auth: { apiKey: 'copilot-access', baseUrl: 'https://api.business.githubcopilot.com' },
+        availableModelIds: ['claude-sonnet-4.6'],
+      }),
+    });
+    const resolution = await resolve(resolver);
+    expect(resolution.model).toMatchObject({
+      provider: 'github-copilot',
+      api: 'anthropic-messages',
+      baseUrl: 'https://api.business.githubcopilot.com',
+    });
+    expect(resolution.usageContext).toMatchObject({
+      providerId: 'test-provider',
+      credentialReceipt: { attribution: 'unknown' },
+    });
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test('preserves header-owned Kimi authentication and redacts the raw bearer token', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      'https://api.kimi.com/coding',
+      'anthropic',
+    );
+    provider.presetProviderId = 'kimi-coding';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES, { apiModelId: 'kimi-for-coding' }),
+    );
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'kimi-coding',
+        auth: { headers: { Authorization: 'Bearer kimi-access' } },
+        availableModelIds: undefined,
+      }),
+    });
+    const resolution = await resolve(resolver);
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        apiKey: undefined,
+        headers: expect.objectContaining({ Authorization: 'Bearer kimi-access' }),
+      }),
+    );
+    expect(resolution.model).toMatchObject({
+      provider: 'kimi-coding',
+      compat: { forceAdaptiveThinking: true },
+    });
+    expect(resolution.redactionValues).toContain('kimi-access');
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test('never falls back to manual API keys after a stored OAuth refresh fails', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(ENDPOINT_TYPE.OPENAI_RESPONSES, 'https://api.x.ai/v1', 'xai-responses'),
+    );
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
+    resolver = createPiModelResolver({
+      resolveAuth: async () => {
+        throw new ProviderAccountError('authorization');
+      },
+    });
+    await expect(resolve(resolver)).rejects.toEqual(new ProviderAccountError('authorization'));
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
   });
 
   test.each([

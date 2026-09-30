@@ -30,8 +30,13 @@ pairing and configuration import.
   reading and also counts streamed bytes when the server omits or misreports that header.
 - Responses expose app-owned `data`, `status`, and lowercase `headers`. Cancellation, timeout,
   network, HTTP status, unreadable response, and invalid input leave the module as `HttpError`.
-  Raw Axios errors, configs, credentials, and unvalidated response bodies do not cross the public
-  boundary.
+  Raw Axios errors, configs, credentials, and unvalidated error bodies do not escape through
+  `HttpError`.
+- Routes default to `statusPolicy: 'success'`, rejecting non-2xx responses. Protocol bridges may
+  explicitly use `statusPolicy: 'all'` to receive every HTTP response through the response
+  interceptor chain. They own status/body interpretation; transport failures still produce
+  `HttpError`. Provider account OAuth uses this to preserve pending/slow-down responses for Pi;
+  those protocol bodies remain internal to the account binding.
 - Neither the transport nor its interceptors retry or replay by default. In particular, a `401`
   remains one failed request unless a domain explicitly owns a safe refresh-and-retry policy.
 - Secret-bearing exchanges can specify `redirect: 'error'`. The fetch adapter rejects redirects
@@ -56,6 +61,10 @@ Current production consumers include the provider-registry updater's separate Gi
 routes, plus the non-streaming Web Search JSON adapter. Web Search drivers continue to own provider
 request/response schemas and credentials; the adapter owns URL routing, query serialization, safe
 HTTP error decoding, and the shared transport call.
+
+Provider account OAuth uses origin-scoped routes through `providerAccountFetch`, with bounded text
+responses and rejected redirects. Pi retains account protocol polling and refresh; credentials
+remain on individual requests and never become shared route defaults.
 
 ## Interceptors
 
@@ -146,6 +155,7 @@ not logged.
   retry. This transport does not recreate that layer or add a second retry policy.
 - AI model generation, Pi, MCP, and remote Agent SSE, NDJSON, WebSocket, or `ReadableStream`
   data-plane traffic continue to use `expo/fetch` or a specialized streaming client. Ordinary
-  non-streaming Web Search provider APIs may use this transport through their domain adapter.
+  non-streaming Web Search provider APIs and provider account OAuth use this transport through
+  their domain adapters.
 - Device discovery such as mDNS or UDP, raw TCP, platform local-network permissions, cleartext HTTP
   policy, and certificate trust remain outside this module.

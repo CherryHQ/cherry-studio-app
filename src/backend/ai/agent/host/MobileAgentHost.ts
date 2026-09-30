@@ -1411,10 +1411,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       logFailure('Agent turn reached a failed terminal state', {
         assistantMessageId: finalized.id,
         durationMs: Math.max(0, runtimeTiming.completedAt - runtimeTiming.startedAt),
+        errorMessage: error.message,
         hasUsage: state.usage !== null,
         modelId: error.failure?.context?.modelId ?? state.agent.model.modelId,
         providerId: error.failure?.context?.providerId ?? state.agent.model.providerId,
         reasonCode: error.failure?.reasonCode ?? 'unknown',
+        responseBody: error.failure?.context?.responseBody,
         retryable: error.retryable,
         sessionId,
         sourceCode: error.failure?.source.code,

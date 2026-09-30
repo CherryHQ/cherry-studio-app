@@ -1,6 +1,7 @@
 import { getProviderBaseUrlIssue } from '@cherrystudio/ai-runtime/provider';
 
 import type { ProviderConfigurationIssue } from '@/shared/contracts/providers';
+import { getPiOAuthProviderId } from '@/shared/data/providerOAuth';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 
 /** Validate stored connection facts without probing the network or rejecting configured cloud auth. */
@@ -8,8 +9,17 @@ export function getProviderConfigurationIssue(
   provider: Provider,
   keys: readonly ApiKeyEntry[],
   auth?: AuthConfig | null,
+  oauthSignedIn = false,
 ): ProviderConfigurationIssue | null {
-  if (provider.authMethods?.length && !provider.authMethods.includes('api-key'))
+  const supportsOAuth = Boolean(getPiOAuthProviderId(provider));
+  if (
+    supportsOAuth &&
+    !oauthSignedIn &&
+    provider.authMethods?.length &&
+    !provider.authMethods.includes('api-key')
+  )
+    return 'missing-oauth';
+  if (!supportsOAuth && provider.authMethods?.length && !provider.authMethods.includes('api-key'))
     return 'unsupported-auth';
   switch (provider.authType) {
     case 'iam-aws':
@@ -35,7 +45,7 @@ export function getProviderConfigurationIssue(
       break;
   }
 
-  if (!provider.authOptional) {
+  if (!provider.authOptional && !oauthSignedIn) {
     const configuredKeys = keys.filter((entry) => entry.key.trim());
     if (configuredKeys.length === 0) return 'missing-api-key';
     if (!configuredKeys.some((entry) => entry.isEnabled)) return 'disabled-api-keys';

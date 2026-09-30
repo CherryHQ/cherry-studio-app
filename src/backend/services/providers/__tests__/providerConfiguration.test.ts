@@ -2,6 +2,24 @@ import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
 import { getProviderConfigurationIssue } from '../providerConfiguration';
 
+it('requires a registered OAuth login and accepts it without database API keys', () => {
+  const oauthProvider = {
+    id: 'account-instance',
+    presetProviderId: 'copilot',
+    authType: 'api-key',
+    authMethods: ['oauth'],
+    defaultChatEndpoint: 'openai-chat-completions',
+    endpointConfigs: { 'openai-chat-completions': { baseUrl: 'https://api.githubcopilot.com' } },
+  } as Provider;
+  expect(getProviderConfigurationIssue(oauthProvider, [])).toBe('missing-oauth');
+  expect(getProviderConfigurationIssue(oauthProvider, [], null, true)).toBeNull();
+  for (const presetProviderId of ['grok-cli', 'meta']) {
+    expect(getProviderConfigurationIssue({ ...oauthProvider, presetProviderId }, [])).toBe(
+      'unsupported-auth',
+    );
+  }
+});
+
 const provider = {
   authType: 'api-key',
   defaultChatEndpoint: 'openai-chat-completions',

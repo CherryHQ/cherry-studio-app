@@ -19,6 +19,7 @@ export type ProviderRegistryUpdateEvent = {
 export type ProviderRegistryUpdateResult = { status: 'current' | 'updated' };
 
 export type ProviderConfigurationIssue =
+  | 'missing-oauth'
   | 'missing-api-key'
   | 'disabled-api-keys'
   | 'invalid-endpoint'

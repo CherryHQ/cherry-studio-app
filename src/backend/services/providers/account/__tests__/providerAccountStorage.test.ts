@@ -56,6 +56,28 @@ it('round-trips account grants per provider', async () => {
   });
 });
 
+it('keeps Pi credentials separate and retains vendor fields needed for request auth', async () => {
+  const piAccount = {
+    definitionId: 'github-copilot',
+    providerCreatedAt: 100,
+    updatedAt: 200,
+    credential: {
+      type: 'oauth' as const,
+      access: 'copilot-access',
+      refresh: 'github-token',
+      expires: 1000,
+      enterpriseUrl: 'company.ghe.com',
+      availableModelIds: ['claude-sonnet-4.6'],
+      accountId: 'vendor-account',
+    },
+  };
+  await providerAccountStorage.writeAccount('provider', account);
+  await providerAccountStorage.writePiAccount('provider', piAccount);
+  expect(await providerAccountStorage.readPiAccount('provider')).toEqual(piAccount);
+  await providerAccountStorage.writePiAccount('provider', null);
+  expect(await providerAccountStorage.readAccount('provider')).toEqual(account);
+});
+
 it('reports corrupt stored credentials without exposing their contents', async () => {
   jest
     .mocked(SecureStore.getItemAsync)

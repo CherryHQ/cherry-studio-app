@@ -89,9 +89,11 @@ export function createBackend(
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
-  infrastructure.providerAccounts.configure(new ProviderAccountService(dbService), [
-    cherryInAccountDefinition,
-  ]);
+  infrastructure.providerAccounts.configure(
+    new ProviderAccountService(dbService),
+    [cherryInAccountDefinition],
+    infrastructure.languageServing.providerAccounts,
+  );
   // Capture this host's database; late work never resolves a replacement host.
   const exportFiles = new FileEntryService(dbService);
   infrastructure.remoteAgent.configure({
@@ -116,7 +118,19 @@ export function createBackend(
       filterModelsSupportedBySystem(candidateModels, await services.provider.list()),
   };
   const models = createModelsModule({
-    ai: services.ai,
+    ai: {
+      listModels: async (input) => {
+        const provider = await services.provider.getByProviderId(input.providerId);
+        const models = await infrastructure.languageServing.listAuthenticatedModels?.(
+          provider,
+          input.requestOptions.signal,
+        );
+        return models ?? services.ai.listModels(input);
+      },
+    },
+    isOAuthSignedIn: async (provider) =>
+      infrastructure.providerAccounts.getCapabilities(provider).flow === 'interactive' &&
+      (await infrastructure.providerAccounts.getStatus(provider.id)).signedIn,
     checkChatModel: (model, options) =>
       checkChatModel(infrastructure.languageServing, model, {
         ...options,

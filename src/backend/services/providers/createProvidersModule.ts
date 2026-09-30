@@ -60,7 +60,11 @@ export function createProvidersModule({
       providers.keys(providerId),
       providers.auth(providerId),
     ]);
-    const issue = getProviderConfigurationIssue(provider, keys, auth);
+    const signedIn =
+      accounts.getCapabilities(provider).flow === 'interactive'
+        ? (await accounts.getStatus(providerId)).signedIn
+        : false;
+    const issue = getProviderConfigurationIssue(provider, keys, auth, signedIn);
     return { provider, issue, hasModels: !issue && (await hasAvailableModels(provider)) };
   };
   return {
