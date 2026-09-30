@@ -1,10 +1,10 @@
 # Built-In MCP Integrations
 
-> Status (2026-09-10): as-built reference for GitHub, Amap and Feishu. All three connect directly
+> Status (2026-09-30): as-built reference for GitHub, Amap and Feishu. All three connect directly
 > to official hosted MCP services; no self-hosting is required. GitHub supports publisher-configured
 > OAuth App authorization with an in-app system authentication session, account confirmation and
 > token renewal. Feishu supports browser-based user authorization with a newly registered or an
-> existing application and user-token renewal for nine hosted tools and nineteen curated Base,
+> existing application and user-token renewal for nine hosted tools and 31 curated wiki, Base,
 > task and calendar operations. Updated authorization and tool
 > regression suites have not been run; GitHub and Feishu browser flows still require device and
 > live-account acceptance. Canva, Gmail, Yuque, multiple
@@ -48,9 +48,9 @@ Plugin references and popover interactions still require device acceptance on bo
 
 | Integration | Implemented authorization | Implemented tools |
 | --- | --- | --- |
-| GitHub | Publisher-configured OAuth App authorization with account confirmation, or a personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
-| Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
-| Feishu | Browser-confirmed user authorization with a new or existing application. Setup checks account identity and discovery of at least one authorized tool without a business-tool call | Nine hosted document/people tools and nineteen curated wiki, Base, task and calendar operations; see [Feishu Business Tools](#feishu-business-tools) |
+| GitHub | Publisher-configured OAuth App authorization with account confirmation, or a personal access token; read-only `get_me` validation | 29 official tools for account context, repository/code search, files, branches, commits, tags/releases, issues, PR reads/reviews/updates/merges and Actions inspection |
+| Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_search_detail`, `maps_geo`, `maps_regeocode`, `maps_ip_location`, `maps_distance`, `maps_bicycling`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
+| Feishu | Browser-confirmed user authorization with a new or existing application. Setup checks account identity and discovery of at least one authorized tool without a business-tool call | Nine hosted document/people tools and 31 curated wiki, Base, task and calendar operations; see [Feishu Business Tools](#feishu-business-tools) |
 | WeCom | Confirmation inside WeCom followed by signed CLI token exchange; discovery-only setup | Dynamically discovered official service schemas; see [WeCom Official API](#wecom-official-api) |
 
 ### Official Cloud Coverage
@@ -77,12 +77,19 @@ OpenAPI routes through the app's HTTP service, with a Bearer user token and no r
 | Amap address/coordinate conversion | `maps_geo`, `maps_regeocode` | Upstream schemas and result shapes |
 | Amap driving, walking and transit | `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated` | Longitude-first GCJ-02 coordinates |
 | Amap weather | `maps_weather` | Forecast-oriented; no promise of the former live/forecast switch |
+| Amap place details, IP location, cycling and distances | `maps_search_detail`, `maps_ip_location`, `maps_bicycling`, `maps_distance` | IP location is approximate; distance mode matters; cycling does not imply electric-bike routing |
 | Amap administrative districts | None in the documented cloud catalog | Removed; no local REST fallback |
 
-This covers GitHub's previous workflows and eight of Amap's nine capability categories. The official
-catalogs own business behavior; Cherry does not translate old calls or duplicate their schemas.
+The official catalogs own business behavior; Cherry does not translate old calls or duplicate their schemas.
 Newly published GitHub and Amap tools require an explicit code admission decision. A missing or incompatible
 tool is unavailable, not an invitation to fall back to the deleted local implementation.
+
+The September 30 expansion admits GitHub code search, branch/commit and tag/release reads, branch
+creation, PR updates, reviews, branch updates and merges, plus Actions/workflow/job inspection.
+All use official remote schemas. Fine-grained tokens need `contents:write` for branch changes/merges,
+`pull_requests:write` for PR writes and `actions:read` for workflow inspection; existing narrower
+tokens may continue to use permitted reads. File uploads, workflow execution and release publication
+are deferred. No extra OAuth scope or transport is introduced.
 
 The plugin detail page explains that connected plugins are available globally and composer selection
 expresses an explicit request for one message.
@@ -249,9 +256,10 @@ not an installable physical-device IPA.
 | Domain | Admitted tools | Boundary |
 | --- | --- | --- |
 | Hosted documents and people | `fetch-doc`, `list-docs`, `get-comments`, `create-doc`, `update-doc`, `add-comments`, `search-doc`, `search-user`, `get-user` | Official names and schemas; document search covers doc/docx |
-| Wiki and Base | `wiki_get_node`, `base_list_tables`, `base_list_fields`, `base_search_records`, `base_create_record`, `base_update_record` | Resolve `/wiki/` links to `obj_token`; inspect fields, then query or write existing tables |
+| Wiki | `wiki_get_node`, `wiki_list_spaces`, `wiki_get_space` | Resolve `/wiki/` links to `obj_token`; use hosted `list-docs` for document browsing |
+| Base | `base_get`, `base_list_tables`, `base_create_table`, `base_list_fields`, `base_list_views`, `base_get_view`, `base_search_records`, `base_get_record`, `base_create_record`, `base_update_record`, `base_batch_create_records`, `base_batch_update_records` | Inspect fields/views and actual target records; table creation does not expose custom field definitions |
 | Tasks | `task_list`, `task_get`, `task_create`, `task_update`, `task_add_members` | List tasks assigned to the user; explicit member open IDs; complete/reopen the whole task |
-| Calendars | `calendar_list`, `calendar_get_primary`, `calendar_list_events`, `calendar_get_event`, `calendar_create_event`, `calendar_update_event`, `calendar_get_freebusy`, `calendar_add_attendees` | Explicit calendar/event IDs; people invitations only; recurring instances use their own IDs |
+| Calendars | `calendar_list`, `calendar_get_primary`, `calendar_list_events`, `calendar_search_events`, `calendar_get_event`, `calendar_create_event`, `calendar_update_event`, `calendar_delete_event`, `calendar_reply_event`, `calendar_get_freebusy`, `calendar_add_attendees` | Explicit calendar/event IDs; cancellation and personal invitation replies are separate writes; recurring instances use their own IDs |
 
 `plugins/feishu/feishuTools.ts` owns the combined policy and scope union. Each domain declaration
 owns its description, input schema, read/write classification, required scopes and fixed request
@@ -278,17 +286,26 @@ Task patches distinguish omitted fields from explicit date clearing. Event time 
 both start and end. Create operations expose the provider's optional idempotency key; there is no
 automatic retry, including after a rejected token or an uncertain write result.
 
+Base batch creation and updates are single requests, capped at 100 records and the existing byte
+limit. Updates reject duplicate record IDs, preserve omitted fields and allow null to clear values.
+Batch creation accepts the provider's idempotency UUID. Inspect returned IDs and actual records
+before retrying an uncertain outcome. Wiki space and keyword event searches return bounded pages.
+
 Requests are capped at 256 KiB and OpenAPI responses at 120 KiB to leave space inside the runtime's
 256 KiB JSON result limit. Request fewer fields, a smaller page or a shorter calendar window when
 needed. Attachment transfer, including the official `fetch-file` tool, is outside the Feishu
-plugin's product scope. Schema editing, batch writes, deletion, messaging and room booking are
-outside this curated slice. User-owned live
+plugin's product scope. Field/schema editing, record deletion, Sheets, messaging, room booking,
+file transfer and multi-step/asynchronous workflows are deferred. User-owned live
 authorization and business-flow acceptance remain pending; the regression suites were added or
 updated without running them.
 
 Protocol references: [hosted tools](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server),
+[official SDK request definitions](https://github.com/larksuite/node-sdk),
 [Base search](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/bitable-v1/app-table-record/search),
+[Base batch updates](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/bitable-v1/app-table-record/batch_update),
+[Wiki spaces](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space/list),
 [task updates](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/task-v2/task/patch),
+[calendar replies](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar-event/reply),
 [calendar instances](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar-event/instance_view),
 [common error codes](https://open.feishu.cn/document/ukTMukTMukTM/ugjM14COyUjL4ITN).
 

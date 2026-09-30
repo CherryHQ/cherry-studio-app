@@ -1,7 +1,7 @@
 import type { PluginGuideDefinition } from '../../pluginGuide';
 
 export const feishuGuide = {
-  revision: 3,
+  revision: 4,
   sections: [
     {
       requiredTools: [],
@@ -59,6 +59,50 @@ options in the existing table.`,
 
 Read \`base_list_fields\`, locate the record with \`base_search_records\`, then use
 \`feishu base_update_record\` for the requested fields of that record.`,
+    },
+    {
+      requiredTools: ['wiki_list_spaces', 'list-docs'],
+      content: `## Browse knowledge spaces
+
+Use \`wiki_list_spaces\` to find the intended space, then the official \`feishu list-docs\` to browse
+its documents. Continue pagination; a space listing is not a listing of every document in it.`,
+    },
+    {
+      requiredTools: ['base_list_views', 'base_get_view'],
+      content: `## Inspect a Base view
+
+Use \`base_list_views\` to locate the view and \`feishu base_get_view\` for its filter and hidden
+fields. Preserve the original table and view when reading a shared link.`,
+    },
+    {
+      requiredTools: ['base_list_fields', 'base_batch_create_records'],
+      content: `## Create records in a batch
+
+Inspect \`base_list_fields\`, then use \`feishu base_batch_create_records\` for at most 100 records
+per call. Keep each batch within the request size limit and retain the returned record IDs.
+Reuse client_token only for the same intended creation; do not blindly replay uncertain writes.`,
+    },
+    {
+      requiredTools: ['base_list_fields', 'base_get_record', 'base_batch_update_records'],
+      content: `## Update records in a batch
+
+Inspect field definitions and each target record, then use \`feishu base_batch_update_records\`
+with distinct record IDs and only the requested fields. Omitted fields stay unchanged; null clears
+a value. Check every returned record and inspect uncertain outcomes before retrying.`,
+    },
+    {
+      requiredTools: ['calendar_get_event', 'calendar_delete_event'],
+      content: `## Cancel an event
+
+Read \`calendar_get_event\` and confirm the intended occurrence or series before using
+\`feishu calendar_delete_event\`. Cancellation can notify every attendee.`,
+    },
+    {
+      requiredTools: ['calendar_get_event', 'calendar_reply_event'],
+      content: `## Respond to an invitation
+
+Read \`calendar_get_event\`, then use \`feishu calendar_reply_event\` to accept, decline or tentatively
+accept as the connected user. Declining an invitation does not cancel the organizer's event.`,
     },
     {
       requiredTools: ['task_get', 'task_update'],

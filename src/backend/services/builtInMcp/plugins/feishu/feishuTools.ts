@@ -3,6 +3,7 @@ import type { FeishuToolAccess } from './feishuApiTool';
 import { feishuBaseTools } from './feishuBaseTools';
 import { feishuCalendarTools } from './feishuCalendarTools';
 import { feishuTaskTools } from './feishuTaskTools';
+import { feishuWikiTools } from './feishuWikiTools';
 
 const documentWriteScopes = [
   'docx:document:create',
@@ -38,10 +39,9 @@ export const FEISHU_REMOTE_TOOLS = {
 } as const satisfies Record<string, { access: FeishuToolAccess; scopes: readonly string[] }>;
 
 export const FEISHU_API_TOOLS = new Map(
-  [...feishuBaseTools, ...feishuTaskTools, ...feishuCalendarTools].map((tool) => [
-    tool.definition.name,
-    tool,
-  ]),
+  [...feishuBaseTools, ...feishuWikiTools, ...feishuTaskTools, ...feishuCalendarTools].map(
+    (tool) => [tool.definition.name, tool],
+  ),
 );
 export const FEISHU_REMOTE_TOOL_POLICY: PluginToolPolicy = Object.fromEntries(
   Object.entries(FEISHU_REMOTE_TOOLS).map(([name, tool]) => [name, tool.access]),

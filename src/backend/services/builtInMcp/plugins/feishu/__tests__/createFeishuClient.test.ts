@@ -4,7 +4,7 @@ import { PluginError } from '@/shared/contracts/plugins';
 import type { PluginClient, PluginClientContext } from '../../../pluginDefinition';
 import { createOfficialMcpClient } from '../../../transport/createOfficialMcpClient';
 import { createFeishuClient } from '../createFeishuClient';
-import { FEISHU_REQUESTED_TOOL_SCOPES, FEISHU_TOOL_POLICY } from '../feishuTools';
+import { FEISHU_API_TOOLS, FEISHU_REQUESTED_TOOL_SCOPES, FEISHU_TOOL_POLICY } from '../feishuTools';
 
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
@@ -305,6 +305,26 @@ it('treats a read-only POST failure as a read and an unreadable write result as 
   expect(mockRequest).toHaveBeenCalledTimes(2);
 });
 
+it.each([
+  {
+    name: 'base_batch_update_records',
+    args: {
+      app_token: 'bascnOne',
+      table_id: 'tblOne',
+      records: [{ record_id: 'recOne', fields: { title: 'Updated' } }],
+    },
+  },
+  {
+    name: 'calendar_delete_event',
+    args: { calendar_id: 'calOne', event_id: 'event_0' },
+  },
+])('never replays an uncertain $name write', async (input) => {
+  mockRequest.mockRejectedValue(new HttpError('private-access', { kind: 'network' }));
+  await expect(client.callTool(input)).rejects.toMatchObject({ reason: 'unknown-write' });
+  expect(mockRequest).toHaveBeenCalledTimes(1);
+  expect(mockRemote.callTool).not.toHaveBeenCalled();
+});
+
 it('loads only the granted calendar tools and rechecks scope changes on later discovery and calls', async () => {
   expect(createOfficialMcpClient).not.toHaveBeenCalled();
   jest.mocked(context.getCredential).mockResolvedValue({
@@ -346,7 +366,7 @@ it.each(['initialization', 'listing'] as const)(
       jest.mocked(createOfficialMcpClient).mockRejectedValueOnce(failure);
     else mockRemote.listTools.mockRejectedValueOnce(failure);
     const catalog = await client.listTools();
-    expect(catalog.tools).toHaveLength(19);
+    expect(catalog.tools).toHaveLength(FEISHU_API_TOOLS.size);
     expect(catalog.tools.some((tool) => tool.name === 'calendar_get_primary')).toBe(true);
     expect(catalog.tools.some((tool) => tool.name === 'search-doc')).toBe(false);
     expect(client.discoveryWarnings).toEqual([expect.stringContaining('document tools')]);
@@ -372,7 +392,7 @@ it('bounds hosted discovery without cancelling the independent local catalog', a
     const pending = client.listTools();
     await jest.advanceTimersByTimeAsync(5_000);
     const catalog = await pending;
-    expect(catalog.tools).toHaveLength(19);
+    expect(catalog.tools).toHaveLength(FEISHU_API_TOOLS.size);
     expect(client.discoveryWarnings).toEqual([expect.stringContaining('timeout')]);
     await client.callTool({ name: 'calendar_get_primary', args: {} });
     expect(mockRequest.mock.calls[0][1].signal.aborted).toBe(false);
