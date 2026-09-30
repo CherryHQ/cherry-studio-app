@@ -2,20 +2,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import {
-  closeDevice,
-  deleteDevice,
-  processGroupRunning,
-  sameProcess,
-  worktrees,
-} from '../agentEnvironment/host';
+import { closeDevice, processGroupRunning, sameProcess, worktrees } from '../agentEnvironment/host';
 import { reconcile, release } from '../agentEnvironment/pool';
 import {
   assertLease,
-  collectableDevice,
+  LEASE_IDLE_MS,
+  leaseExpired,
   readState,
   saveState,
-  selectDevice,
   StateSchema,
   workspaceStatus,
   type Device,
@@ -24,7 +18,6 @@ import {
 
 jest.mock('../agentEnvironment/host', () => ({
   closeDevice: jest.fn(),
-  deleteDevice: jest.fn(),
   processGroupRunning: jest.fn(),
   sameProcess: jest.fn(),
   worktrees: jest.fn(),
@@ -39,20 +32,14 @@ function state(): State {
     workspaces: [],
     devices: [],
     artifacts: [],
-    baselines: {},
     processes: [],
-    provisioning: [],
   });
 }
 function device(overrides: Partial<Device> = {}): Device {
   return {
-    key: 'ff12fb34-3333-4333-8333-0123456789ab',
     platform: 'ios',
     id: 'sim-id',
-    name: 'Cherry Shared',
-    role: 'shared',
-    disposable: false,
-    workspaces: ['workspace-a'],
+    name: 'Cherry Test',
     lastUsedAt: now,
     ...overrides,
   };
@@ -102,61 +89,25 @@ describe('workspace retirement evidence', () => {
   });
 });
 
-describe('shared pool admission', () => {
-  test('unchanged native inputs select the common device even when its installed binary is old', () => {
-    const s = state();
-    s.baselines.ios = { commit: 'main', fingerprint: 'new-native' };
-    const shared = device({ fingerprint: 'old-native' });
-    s.devices.push(shared);
-    expect(selectDevice(s, 'ios', 'new-native')).toBe(shared);
+describe('device lease', () => {
+  const lease = { workspaceId: 'workspace-a', session: 'agent-1', acquiredAt: now };
+  const start = Date.parse(now);
+  test('two agent sessions cannot share the device while its lease is live', () => {
+    const d = device({ lease });
+    const recent = Date.now();
+    expect(() => assertLease(d, 'workspace-a', 'agent-1', recent)).not.toThrow();
+    expect(() => assertLease(d, 'workspace-a', 'agent-2', recent)).toThrow('busy');
+    expect(() => assertLease(d, 'workspace-b', 'agent-1', recent)).toThrow('busy');
   });
-  test('a native branch reuses only its matching dedicated device, never the primary', () => {
-    const s = state();
-    s.baselines.ios = { commit: 'main', fingerprint: 'main-native' };
-    const native = device({
-      id: 'native',
-      role: 'native',
-      fingerprint: 'branch-native',
-      disposable: true,
-    });
-    s.devices.push(device({ role: 'primary', fingerprint: 'branch-native' }), native);
-    expect(selectDevice(s, 'ios', 'branch-native')).toBe(native);
-    expect(selectDevice(s, 'ios', 'different-native')).toBeUndefined();
-  });
-  test('two agent sessions in the same workspace cannot share a device concurrently', () => {
-    const d = device({
-      lease: { workspaceId: 'workspace-a', session: 'agent-1', acquiredAt: now },
-    });
-    expect(() => assertLease(d, 'workspace-a', 'agent-1')).not.toThrow();
-    expect(() => assertLease(d, 'workspace-a', 'agent-2')).toThrow('busy');
-    expect(() => assertLease(d, 'workspace-b', 'agent-1')).toThrow('busy');
-    expect(() => assertLease(device({ role: 'primary' }), 'workspace-a', 'agent-1')).toThrow(
-      'Primary',
-    );
+  test('an abandoned lease expires only after its device session has been idle', () => {
+    expect(leaseExpired(lease, undefined, start + LEASE_IDLE_MS - 1)).toBe(false);
+    expect(leaseExpired(lease, undefined, start + LEASE_IDLE_MS + 1)).toBe(true);
+    expect(leaseExpired(lease, start + 1000, start + LEASE_IDLE_MS + 1)).toBe(false);
+    expect(() => assertLease(device({ lease }), 'workspace-b', 'agent-2', undefined)).not.toThrow();
   });
 });
 
 describe('cleanup authorization and retry', () => {
-  test('primary/shared devices and unadopted native devices never become deletable', () => {
-    const retired = new Set(['workspace-a']);
-    expect(collectableDevice(device(), retired)).toBe(false);
-    expect(collectableDevice(device({ role: 'primary' }), retired)).toBe(false);
-    expect(collectableDevice(device({ role: 'native', disposable: false }), retired)).toBe(false);
-    expect(
-      collectableDevice(device({ role: 'native', disposable: true, workspaces: [] }), retired),
-    ).toBe(false);
-  });
-  test('a second live consumer or lease prevents dedicated device deletion', () => {
-    const d = device({
-      role: 'native',
-      disposable: true,
-      workspaces: ['workspace-a', 'workspace-b'],
-    });
-    expect(collectableDevice(d, new Set(['workspace-a']))).toBe(false);
-    expect(collectableDevice(d, new Set(d.workspaces))).toBe(true);
-    d.lease = { workspaceId: 'workspace-b', session: 'active', acquiredAt: now };
-    expect(collectableDevice(d, new Set(d.workspaces))).toBe(false);
-  });
   test('failed shutdown retains the claim and reports a blocker', async () => {
     const s = state();
     s.devices.push(
@@ -168,19 +119,34 @@ describe('cleanup authorization and retry', () => {
     expect(await release(context(), s, 'workspace-a', 'task')).toEqual(['foreign session']);
     expect(s.devices[0].lease?.session).toBe('task');
   });
-  test('a failed deletion keeps the durable record, and a later successful retry removes it', async () => {
+  test('a failed release keeps the retired workspace record, and a later retry forgets it', async () => {
     const s = state();
     s.workspaces.push({ ...context().workspace, archived: true });
-    s.devices.push(device({ role: 'native', disposable: true }));
-    jest.mocked(deleteDevice).mockImplementationOnce(() => {
+    s.devices.push(
+      device({ lease: { workspaceId: 'workspace-a', session: 'task', acquiredAt: now } }),
+    );
+    jest.mocked(closeDevice).mockImplementationOnce(() => {
       throw new Error('identity mismatch');
     });
     expect((await reconcile(context(), s)).warnings).toEqual(['identity mismatch']);
-    expect(s.devices).toHaveLength(1);
+    expect(s.workspaces).toHaveLength(1);
     expect((await reconcile(context(), s)).warnings).toEqual([]);
-    expect(s.devices).toHaveLength(0);
+    expect(s.devices[0].lease).toBeUndefined();
+    expect(s.workspaces).toHaveLength(0);
+  });
+  test('staging of a live build survives reconciliation; a dead owner is reclaimed', async () => {
+    const s = state();
+    const entry = {
+      name: 'building-0f0f0f0f-1111-4111-8111-222222222222',
+      owner: { pid: 4321, startedAt: 'build-start' },
+    };
+    s.staging.push(entry);
+    jest.mocked(sameProcess).mockReturnValue(true);
     await reconcile(context(), s);
-    expect(deleteDevice).toHaveBeenCalledTimes(2);
+    expect(s.staging).toEqual([entry]);
+    jest.mocked(sameProcess).mockReturnValue(false);
+    await reconcile(context(), s);
+    expect(s.staging).toEqual([]);
   });
   test('worktree inventory failure aborts cleanup without touching devices', async () => {
     jest.mocked(worktrees).mockImplementation(() => {
@@ -188,7 +154,6 @@ describe('cleanup authorization and retry', () => {
     });
     await expect(reconcile(context(), state())).rejects.toThrow('git unavailable');
     expect(closeDevice).not.toHaveBeenCalled();
-    expect(deleteDevice).not.toHaveBeenCalled();
   });
   test('a surviving process group is retained when its original leader is gone', async () => {
     const s = state();
@@ -209,14 +174,16 @@ describe('cleanup authorization and retry', () => {
     expect(await release(context(), s, 'workspace-a', 'task')).toEqual([]);
     expect(s.processes).toHaveLength(0);
   });
-  test('dry-run does not release or delete a retired device', async () => {
+  test('dry-run does not release a retired workspace lease', async () => {
     const s = state();
     s.workspaces.push({ ...context().workspace, archived: true });
-    s.devices.push(device({ role: 'native', disposable: true }));
+    s.devices.push(
+      device({ lease: { workspaceId: 'workspace-a', session: 'task', acquiredAt: now } }),
+    );
     expect((await reconcile(context(), s, true)).actions.length).toBeGreaterThan(0);
     expect(closeDevice).not.toHaveBeenCalled();
-    expect(deleteDevice).not.toHaveBeenCalled();
-    expect(s.devices).toHaveLength(1);
+    expect(s.devices[0].lease).toBeDefined();
+    expect(s.workspaces).toHaveLength(1);
   });
 });
 
@@ -235,11 +202,14 @@ describe('persistent resource registry', () => {
     writeFileSync(file, JSON.stringify({ ...state(), version: 2 }));
     expect(() => readState(directory, '/repo/.git')).toThrow();
   });
-  test('rejects artifact path traversal and disposable shared devices', () => {
-    expect(() => StateSchema.parse({ ...state(), staging: ['building-../../primary'] })).toThrow();
+  test('rejects artifact path traversal and a second device per platform', () => {
+    const owner = { pid: 1, startedAt: 'x' };
+    expect(() =>
+      StateSchema.parse({ ...state(), staging: [{ name: 'building-../../primary', owner }] }),
+    ).toThrow();
     const s = state();
-    s.devices.push(device({ disposable: true }));
+    s.devices.push(device(), device({ id: 'another-sim' }));
     saveState(directory, s);
-    expect(() => readState(directory, '/repo/.git')).toThrow('deletion policy');
+    expect(() => readState(directory, '/repo/.git')).toThrow('Multiple test devices');
   });
 });

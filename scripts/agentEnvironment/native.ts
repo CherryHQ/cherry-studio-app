@@ -3,8 +3,15 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { git, run, type Context } from './host';
-import { saveState, type Artifact, type Platform, type State } from './state';
+import { git, processIdentity, run, type Context } from './host';
+import {
+  readState,
+  registerWorkspace,
+  saveState,
+  withLock,
+  type Artifact,
+  type Platform,
+} from './state';
 
 export const APP_IDS = {
   ios: 'com.cherryai.cherrystudio-app.dev',
@@ -53,27 +60,6 @@ export function fingerprint(source: string, platform: Platform): string {
   return hash;
 }
 
-export function baseline(ctx: Context, state: State, platform: Platform, source = ctx.root) {
-  const commit = git(ctx.root, 'rev-parse', 'origin/main');
-  if (
-    git(source, 'rev-parse', '--path-format=absolute', '--git-common-dir') !== ctx.common ||
-    git(source, 'rev-parse', 'HEAD') !== commit ||
-    git(source, 'status', '--porcelain').length
-  )
-    throw new Error(
-      'A clean checkout at origin/main is required to refresh the shared native baseline. No checkout is changed automatically.',
-    );
-  state.baselines[platform] = { commit, fingerprint: fingerprint(source, platform), source };
-  saveState(ctx.directory, state);
-  return state.baselines[platform]!;
-}
-
-export function ensureBaseline(ctx: Context, state: State, platform: Platform) {
-  // Config environment and resolved dependencies can change without a new commit.
-  // Recompute from the explicit clean baseline source before classifying a branch.
-  return baseline(ctx, state, platform, state.baselines[platform]?.source ?? ctx.root);
-}
-
 export async function checksum(file: string) {
   const hash = createHash('sha256');
   for await (const chunk of createReadStream(file)) hash.update(chunk);
@@ -89,31 +75,35 @@ export async function verifyArtifact(ctx: Context, artifact: Artifact) {
   return file;
 }
 
-export async function build(ctx: Context, state: State, platform: Platform, source: string) {
+export async function build(ctx: Context, platform: Platform, source: string) {
   if (git(source, 'rev-parse', '--path-format=absolute', '--git-common-dir') !== ctx.common)
     throw new Error('Build source must belong to this repository.');
   const before = fingerprint(source, platform);
-  const existing = state.artifacts.findLast(
-    (a) => a.platform === platform && a.fingerprint === before,
-  );
-  if (existing) {
-    try {
-      await verifyArtifact(ctx, existing);
-      return existing;
-    } catch {
-      /* An explicit build repairs a missing/corrupt cache entry. */
+  const owner = processIdentity(process.pid)!;
+  const stagingName = `building-${randomUUID()}`;
+  // Only registry changes take the lock; other tasks keep working during the build.
+  const cached = await withLock(ctx.directory, async () => {
+    const state = readState(ctx.directory, ctx.common);
+    registerWorkspace(ctx, state);
+    const existing = state.artifacts.findLast(
+      (a) => a.platform === platform && a.fingerprint === before,
+    );
+    if (existing) {
+      try {
+        await verifyArtifact(ctx, existing);
+        return existing;
+      } catch {
+        /* An explicit build repairs a missing/corrupt cache entry. */
+      }
     }
-  }
-  const temporary = join(ctx.directory, 'artifacts', `building-${randomUUID()}`);
-  const stagingName = temporary.split('/').at(-1)!;
-  state.staging.push(stagingName);
-  saveState(ctx.directory, state);
+    state.staging.push({ name: stagingName, owner });
+    saveState(ctx.directory, state);
+  });
+  if (cached) return cached;
+  const temporary = join(ctx.directory, 'artifacts', stagingName);
   mkdirSync(temporary, { recursive: true, mode: 0o700 });
   const file = platform === 'ios' ? 'client.tar.gz' : 'client.apk';
   try {
-    const lockFd = Number(process.env.CHERRY_AGENT_ENVIRONMENT_LOCK_FD);
-    if (!Number.isInteger(lockFd) || lockFd < 3)
-      throw new Error('Build must run through the locked agent:env command.');
     const result = spawnSync(
       'pnpm',
       [
@@ -125,13 +115,7 @@ export async function build(ctx: Context, state: State, platform: Platform, sour
         '--output',
         join(temporary, file),
       ],
-      {
-        cwd: source,
-        // Keep the kernel lock in pnpm while it waits for EAS. If the controller
-        // exits, startup must not reclaim staging underneath an ongoing build.
-        stdio: ['inherit', 'inherit', 'inherit', lockFd],
-        env: { ...process.env, PROFILE: 'development' },
-      },
+      { cwd: source, stdio: 'inherit', env: { ...process.env, PROFILE: 'development' } },
     );
     if (result.status !== 0)
       throw new Error('Development build failed; no cache entry was published.');
@@ -147,17 +131,26 @@ export async function build(ctx: Context, state: State, platform: Platform, sour
       file,
       createdAt: new Date().toISOString(),
     };
-    const destination = join(ctx.directory, 'artifacts', key);
-    if (existsSync(destination)) rmSync(destination, { recursive: true, force: true });
-    renameSync(temporary, destination);
-    state.artifacts = state.artifacts.filter((a) => a.key !== key);
-    state.artifacts.push(artifact);
-    saveState(ctx.directory, state);
+    await withLock(ctx.directory, async () => {
+      const state = readState(ctx.directory, ctx.common);
+      const destination = join(ctx.directory, 'artifacts', key);
+      if (existsSync(destination)) rmSync(destination, { recursive: true, force: true });
+      renameSync(temporary, destination);
+      state.artifacts = state.artifacts.filter((a) => a.key !== key);
+      state.artifacts.push(artifact);
+      state.staging = state.staging.filter((s) => s.name !== stagingName);
+      saveState(ctx.directory, state);
+    });
     return artifact;
-  } finally {
+  } catch (error) {
+    // If this cleanup cannot lock, the record's owner is dead after exit; reconcile removes it.
     rmSync(temporary, { recursive: true, force: true });
-    state.staging = state.staging.filter((name) => name !== stagingName);
-    saveState(ctx.directory, state);
+    await withLock(ctx.directory, async () => {
+      const state = readState(ctx.directory, ctx.common);
+      state.staging = state.staging.filter((s) => s.name !== stagingName);
+      saveState(ctx.directory, state);
+    }).catch(() => undefined);
+    throw error;
   }
 }
 

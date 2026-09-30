@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import {
   closeSync,
   existsSync,
@@ -28,18 +29,13 @@ const LeaseSchema = z.object({
   session: z.string().min(1),
   acquiredAt: z.string().datetime(),
 });
+export type Lease = z.infer<typeof LeaseSchema>;
 const DeviceSchema = z.object({
-  key: z.string().uuid(),
   platform: PlatformSchema,
   id: z.string().min(1),
   name: z.string().min(1),
   avdPath: z.string().startsWith('/').optional(),
-  role: z.enum(['primary', 'shared', 'native']),
-  // Adoption is explicit; discovery never grants deletion rights.
-  disposable: z.boolean(),
-  fingerprint: z.string().optional(),
   installedArtifact: z.string().optional(),
-  workspaces: z.array(z.string()),
   lease: LeaseSchema.optional(),
   dataWorkspaceId: z.string().optional(),
   lastUsedAt: z.string().datetime(),
@@ -54,18 +50,12 @@ const ArtifactSchema = z.object({
   createdAt: z.string().datetime(),
 });
 export type Artifact = z.infer<typeof ArtifactSchema>;
-const BaselineSchema = z.object({
-  commit: z.string(),
-  fingerprint: z.string(),
-  source: z.string().optional(),
-});
 export const StateSchema = z.object({
   version: z.literal(1),
   repository: z.string().startsWith('/'),
   workspaces: z.array(WorkspaceSchema),
   devices: z.array(DeviceSchema),
   artifacts: z.array(ArtifactSchema),
-  baselines: z.object({ ios: BaselineSchema.optional(), android: BaselineSchema.optional() }),
   processes: z.array(
     z.object({
       workspaceId: z.string(),
@@ -74,13 +64,15 @@ export const StateSchema = z.object({
       port: z.number().int().min(1024).max(65535),
     }),
   ),
-  // Persisted before provisioning; interrupted creates are reported, never guessed/adopted.
-  provisioning: z.array(
-    z.object({ platform: PlatformSchema, name: z.string(), workspaceId: z.string() }),
-  ),
-  staging: z.array(z.string().regex(/^building-[a-f0-9-]{36}$/)).default([]),
+  // Builds run outside the registry lock; the owner identity keeps a live build's staging.
+  staging: z
+    .array(z.object({ name: z.string().regex(/^building-[a-f0-9-]{36}$/), owner: IdentitySchema }))
+    .default([]),
 });
 export type State = z.infer<typeof StateSchema>;
+
+// A lease without device activity for this long no longer blocks another task.
+export const LEASE_IDLE_MS = 60 * 60_000;
 
 export function readState(directory: string, repository: string): State {
   const file = join(directory, 'state.json');
@@ -91,29 +83,16 @@ export function readState(directory: string, repository: string): State {
       workspaces: [],
       devices: [],
       artifacts: [],
-      baselines: {},
       processes: [],
-      provisioning: [],
       staging: [],
     };
   const state = StateSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
   if (state.repository !== repository)
     throw new Error('Environment registry belongs to another repository.');
-  if (new Set(state.devices.map((d) => `${d.platform}:${d.id}`)).size !== state.devices.length)
-    throw new Error('Duplicate device identities in environment registry.');
-  if (
-    state.devices.some(
-      (d) =>
-        (d.role !== 'native' && d.disposable) ||
-        (d.role === 'primary' && d.lease) ||
-        (d.platform === 'android' && !d.avdPath),
-    )
-  )
-    throw new Error('Invalid device ownership/deletion policy in environment registry.');
-  for (const platform of ['ios', 'android']) {
-    if (state.devices.filter((d) => d.platform === platform && d.role === 'shared').length > 1)
-      throw new Error(`Multiple shared ${platform} devices in environment registry.`);
-  }
+  if (new Set(state.devices.map((d) => d.platform)).size !== state.devices.length)
+    throw new Error('Multiple test devices for one platform in environment registry.');
+  if (state.devices.some((d) => d.platform === 'android' && !d.avdPath))
+    throw new Error('Registered Android device has no AVD path.');
   return state;
 }
 
@@ -131,6 +110,52 @@ export function saveState(directory: string, state: State) {
   renameSync(temporary, join(directory, 'state.json'));
 }
 
+// Kernel flock held by a helper whose stdin is this process: a crash closes the pipe and
+// releases the lock. No age-based stale lock deletion.
+const LOCK_SCRIPT = `import fcntl, os, sys
+fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o600)
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    sys.exit(2)
+print('locked', flush=True)
+sys.stdin.read()
+`;
+
+export async function withLock<T>(directory: string, operation: () => Promise<T>): Promise<T> {
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const holder = spawn('/usr/bin/python3', ['-c', LOCK_SCRIPT, join(directory, 'operation.lock')], {
+    stdio: ['pipe', 'pipe', 'inherit'],
+  });
+  const locked = await new Promise<boolean>((resolve, reject) => {
+    holder.once('error', reject);
+    holder.stdout.once('data', (data) => resolve(String(data).trim() === 'locked'));
+    holder.once('exit', () => resolve(false));
+  });
+  if (!locked) {
+    holder.kill();
+    throw new Error('Another environment operation is running; retry when it finishes.');
+  }
+  try {
+    return await operation();
+  } finally {
+    holder.stdin.end();
+  }
+}
+
+export function registerWorkspace(ctx: { directory: string; workspace: Workspace }, state: State) {
+  if (!process.env.CONDUCTOR_WORKSPACE_ID) {
+    const registered = state.workspaces.find((w) => w.gitDir === ctx.workspace.gitDir);
+    if (registered) ctx.workspace.id = registered.id;
+  }
+  const previous = state.workspaces.find((w) => w.id === ctx.workspace.id);
+  if (previous && previous.gitDir !== ctx.workspace.gitDir)
+    throw new Error('Workspace identity changed; inspect the registry.');
+  if (previous) Object.assign(previous, ctx.workspace);
+  else state.workspaces.push(ctx.workspace);
+  saveState(ctx.directory, state);
+}
+
 export function workspaceStatus(workspace: Workspace, worktrees: string[], gitDirExists: boolean) {
   if (workspace.archived) return 'retired';
   if (worktrees.includes(workspace.path)) return 'active';
@@ -139,38 +164,23 @@ export function workspaceStatus(workspace: Workspace, worktrees: string[], gitDi
   return gitDirExists ? 'unknown' : 'retired';
 }
 
-export function selectDevice(
-  state: State,
-  platform: Platform,
-  fingerprint: string,
-): Device | undefined {
-  const role = state.baselines[platform]?.fingerprint === fingerprint ? 'shared' : 'native';
-  return state.devices.find(
-    (device) =>
-      device.platform === platform &&
-      device.role === role &&
-      (role === 'shared' || device.fingerprint === fingerprint),
-  );
+// Device activity is the latest agent-device request of the lease's session, if any.
+export function leaseExpired(lease: Lease, lastActivity: number | undefined, now = Date.now()) {
+  return now - Math.max(Date.parse(lease.acquiredAt), lastActivity ?? 0) > LEASE_IDLE_MS;
 }
 
-export function assertLease(device: Device, workspaceId: string, session: string) {
-  if (device.role === 'primary')
-    throw new Error('Primary installations cannot be used for self-testing.');
+export function assertLease(
+  device: Device,
+  workspaceId: string,
+  session: string,
+  lastActivity: number | undefined,
+) {
   if (
     device.lease &&
-    (device.lease.workspaceId !== workspaceId || device.lease.session !== session)
+    (device.lease.workspaceId !== workspaceId || device.lease.session !== session) &&
+    !leaseExpired(device.lease, lastActivity)
   )
     throw new Error(
       `Device is busy: ${device.lease.workspaceId}/${device.lease.session}. Wait; do not create another device.`,
     );
-}
-
-export function collectableDevice(device: Device, retired: Set<string>) {
-  return (
-    device.role === 'native' &&
-    device.disposable &&
-    !device.lease &&
-    device.workspaces.length > 0 &&
-    device.workspaces.every((id) => retired.has(id))
-  );
 }

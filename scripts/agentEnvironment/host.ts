@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
@@ -66,6 +66,22 @@ export function processGroupRunning(group: number) {
   return run('ps', ['-axo', 'pgid='])
     .split('\n')
     .some((value) => Number(value.trim()) === group);
+}
+
+export function processCwd(pid: number) {
+  return run('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'])
+    .split('\n')
+    .find((line) => line.startsWith('n'))
+    ?.slice(1);
+}
+
+export function portListeners(port: number): number[] {
+  const result = spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], {
+    encoding: 'utf8',
+  });
+  if (result.error || ![0, 1].includes(result.status ?? -1))
+    throw new Error('Metro port cannot be inspected; no process was touched.');
+  return result.stdout.split('\n').filter(Boolean).map(Number);
 }
 
 export type ObservedDevice = {
@@ -179,7 +195,9 @@ export function matchDevice(device: Device): ObservedDevice | undefined {
   return found;
 }
 
-export function sessions(): { name: string; platform: string; deviceId: string }[] {
+type Session = { name: string; platform: string; deviceId: string; stateDir?: string };
+
+export function sessions(): Session[] {
   const result = JSON.parse(run('agent-device', ['session', 'list', '--json']));
   if (!result.success || !Array.isArray(result.data?.sessions))
     throw new Error('Cannot inspect agent-device sessions.');
@@ -191,8 +209,19 @@ export function sessions(): { name: string; platform: string; deviceId: string }
     const deviceId = s.device_udid ?? s.id;
     if (typeof name !== 'string' || typeof platform !== 'string' || typeof deviceId !== 'string')
       throw new Error('Unknown agent-device session format; inspect it before changing devices.');
-    return { name, platform, deviceId };
+    const stateDir = typeof s.sessionStateDir === 'string' ? s.sessionStateDir : undefined;
+    return { name, platform, deviceId, stateDir };
   });
+}
+
+// agent-device writes one request record per command under the session state directory.
+export function sessionActivity(name: string): number | undefined {
+  const stateDir = sessions().find((s) => s.name === name)?.stateDir;
+  if (!stateDir) return undefined;
+  const times = [stateDir, join(stateDir, 'requests')]
+    .filter((path) => existsSync(path))
+    .map((path) => statSync(path).mtimeMs);
+  return times.length ? Math.max(...times) : undefined;
 }
 
 export function routing(device: ObservedDevice): string[] {
@@ -220,23 +249,22 @@ export function assertNoOtherSession(device: ObservedDevice, ownSession?: string
   if (conflict) throw new Error(`Device is used by agent-device session ${conflict.name}.`);
 }
 
+export function uninstallApp(device: ObservedDevice, appId: string) {
+  if (device.platform === 'ios') run('xcrun', ['simctl', 'uninstall', device.id, appId]);
+  else run('adb', ['-s', device.serial!, 'uninstall', appId]);
+}
+
+export function closeSession(device: ObservedDevice, session: string) {
+  if (sessions().some((s) => s.name === session))
+    run('agent-device', ['close', '--session', session, ...routing(device)]);
+}
+
 export function closeDevice(device: Device) {
   const found = matchDevice(device);
   if (!found) return;
   assertNoOtherSession(found, device.lease?.session);
-  if (device.lease && sessions().some((s) => s.name === device.lease!.session))
-    run('agent-device', ['close', '--session', device.lease.session, ...routing(found)]);
+  if (device.lease) closeSession(found, device.lease.session);
   if (found.booted) run('agent-device', ['shutdown', ...routing(found)]);
   if (matchDevice(device)?.booted)
     throw new Error('Device shutdown is not complete; ownership retained.');
-}
-
-export function deleteDevice(device: Device) {
-  const found = matchDevice(device);
-  if (!found) return;
-  assertNoOtherSession(found);
-  if (found.booted) throw new Error('Device must be stopped before deletion.');
-  if (device.platform === 'ios') run('xcrun', ['simctl', 'delete', device.id]);
-  else run('avdmanager', ['delete', 'avd', '--name', device.id]);
-  if (matchDevice(device)) throw new Error('Device deletion was not confirmed.');
 }

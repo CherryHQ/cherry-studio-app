@@ -12,11 +12,6 @@ configuration, not in repository rules.
 
 - Before using a project skill, read [Project Skills](.agents/skills/README.md) for repository usage
   rules and required dependencies. Keep upstream skill files unchanged.
-- At the start of a local macOS coding-agent session, run `pnpm agent:env reconcile` to recover
-  registered self-test resources left by retired workspaces. Read
-  [Parallel Device Testing](docs/guides/parallel-device-testing.md) for ownership and recovery rules.
-  Report unavailable prerequisites and uncertain ownership; do not auto-install tools, adopt legacy
-  devices, build or boot a device during startup. Prefer the shared device; never allocate per PR.
 - When naming or renaming files, directories, identifiers, or documentation, read
   [Naming Conventions](docs/references/naming-conventions.md).
 - When adding, moving, or exposing modules, read
