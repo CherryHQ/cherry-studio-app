@@ -84,7 +84,7 @@ function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
   const { t } = useTranslation();
   const query = useConversationAgents();
   if (query.isPending)
-    return showLoading ? (
+    return showLoading && query.isLoading ? (
       <View className="py-4">
         <ContentState.Loading title={t('agent.list.loading')} />
       </View>
@@ -200,7 +200,7 @@ function SidebarSessions({
     return () => registerEndReachedHandler?.();
   }, [loadMore, registerEndReachedHandler, showAll]);
   if (query.isPending)
-    return showLoading ? (
+    return showLoading && query.isLoading ? (
       <View className="py-4">
         <ContentState.Loading title={t('session.list.loading')} />
       </View>
