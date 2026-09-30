@@ -81,11 +81,11 @@ try {
 
 `render` accepts an abort signal and semantic progress, including the current image ordinal and
 total. HTML/image targets receive validated logical width, resolved typography and semantic colors.
-The page freezes typography/time at opening. Images always use a 360-logical-pixel width; HTML
+The page freezes typography at opening. Images always use a 360-logical-pixel width; HTML
 uses a responsive reading column capped at 720 logical pixels. Theme changes regenerate the preview
 except during delivery.
-Image output uses the message-list hierarchy, theme surfaces, Cherry branding and the local
-`YYYY.MM.DD HH:mm` timestamp inside the captured document.
+Image output uses the message-list hierarchy, theme surfaces and the shared Cherry brand/download
+footer inside the captured document.
 
 Markdown/HTML artifacts hold one file and source text. Image artifacts hold a layout (`pages` or
 `single`) and ordered `pages`, each containing its PNG descriptor, width and height. Artifacts,
@@ -102,16 +102,22 @@ the signature, matches.
 HTML and image presentation share an optional resolved `watermark`. The application follows the
 global Share watermark setting, enabled by default. Explicit `cherry` or `none` options override
 that preference; `none` omits the brand footer from every preview and output format.
-The Cherry variant contains a `signature` with resolved background/text colors, the embedded Cherry
-logo, brand name and frozen timestamp. The frontend supplies the shared white
-footer with black text used by painting and file image exports. The renderer copies and validates
+The Cherry variant contains a `signature` with resolved background/text/brand colors, the embedded
+Cherry logo, brand name, localized tagline/download copy and download QR data. The frontend supplies
+the shared white footer used by painting and file image exports: black brand/copy on the left,
+a QR area on the right and a Cherry red top rule. The download URL and matching embedded PNG point
+to `https://www.cherryai.com.cn/download?platform=mobile`. The QR PNG includes a four-module white
+quiet zone. Clearing the download configuration renders a labeled QR placeholder without a link;
+a configured URL must use HTTPS.
+The renderer copies and validates
 the presentation, escapes its text and includes the signature after the content inside `main`.
 The image-only `imageFrame` uses the document background and supplies an accessible document label.
 Image content spans the output width with ordinary text padding, without a contrasting outer frame. Image-to-HTML fallbacks
-retain the watermark. Markdown uses the same resolved watermark's brand name and timestamp in a
-separated text footer; preview and saved text share its formatter.
+retain the watermark. Markdown uses the same resolved watermark's brand name and download copy in
+a separated text footer, with a link when configured; preview and saved text share its formatter.
 `session.markdown` remains the unbranded source. The signature ends the document and is not repeated
-on every PNG page. PNG pages have no page numbers or reserved ordinal-footer space.
+on every PNG page. The complete footer is kept together on one page. PNG pages have no page numbers
+or reserved ordinal-footer space.
 
 ## Content Behavior
 

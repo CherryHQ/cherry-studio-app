@@ -33,7 +33,7 @@ jest.mock('@/frontend/appShell/fileExport', () => ({
         ? { kind: 'none' }
         : {
             kind: 'cherry',
-            signature: { brandName: 'Cherry Studio', timestamp: '2026.09.17 12:00' },
+            signature: { brandName: 'Cherry Studio', tagline: 'Your pocket AI assistant' },
           },
   shareFile: (...args: unknown[]) => mockShare(...args),
   FileSharingError: class extends Error {},

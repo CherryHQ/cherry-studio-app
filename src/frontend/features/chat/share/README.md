@@ -47,7 +47,7 @@ code with internal scrolling, and Markdown keeps the complete authored source. I
 one compact source-count row with a single Globe icon and the same localized count as the chat,
 plus quiet superscript citations, without individual source cards.
 Inline code stays visible in every format. All formats follow the global Share watermark setting. Images and HTML share the white
-Cherry footer; Markdown uses the matching brand/time text row.
+Cherry brand/download footer with its QR area; Markdown uses the matching brand and download copy.
 
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
 `chat.process.duration` and `chat.reasoningStatus.thought` translations, and elapsed time uses the

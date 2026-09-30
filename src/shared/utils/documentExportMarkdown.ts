@@ -1,16 +1,15 @@
-import { DocumentExportError } from '@/shared/contracts/documentExport';
 import { getExportSignature, type ExportWatermark } from '@/shared/contracts/fileExport';
+
+import { validateExportSignature } from './exportSignature';
 
 export function renderMarkdownSignature(watermark?: ExportWatermark): string {
   const signature = getExportSignature(watermark);
   if (!signature) return '';
-  if (
-    [signature.brandName, signature.timestamp].some(
-      (text) => typeof text !== 'string' || text.length > 256,
-    )
-  )
-    throw new DocumentExportError('invalid-input');
-  return `\n---\n\n**${escapeMarkdown(signature.brandName)}** · ${escapeMarkdown(signature.timestamp)}\n`;
+  validateExportSignature(signature);
+  const download = signature.downloadUrl
+    ? `[${escapeMarkdown(signature.downloadLabel)}](<${signature.downloadUrl}>)`
+    : escapeMarkdown(signature.downloadLabel);
+  return `\n---\n\n**${escapeMarkdown(signature.brandName)}**\n\n${escapeMarkdown(signature.tagline)}\n\n${download}\n`;
 }
 
 export function escapeMarkdown(value: string): string {

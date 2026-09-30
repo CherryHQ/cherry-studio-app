@@ -156,45 +156,74 @@ test('HTML escapes authored markup, rejects executable links, renders tables and
   expect(result.issues).toEqual([]);
 });
 
-test('image and HTML exports include one brand signature after the complete content', async () => {
-  const document = normalizeDocument({ kind: 'markdown', source: 'Complete answer.' });
-  const signature = {
-    background: '#ffffff',
-    foreground: '#000000',
-    brandName: 'Cherry Studio <brand>',
-    timestamp: '2026.09.16 18:00',
-    logoDataUrl: 'data:image/png;base64,AA==',
-  };
-  for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
-    const { html } = await renderHtml(
-      document,
-      { ...presentation, watermark: { kind: 'cherry', signature }, imageFrame },
-      new Map(),
-      jest.fn(),
-      new AbortController().signal,
-    );
-    expect(html.match(/<footer\b/g)).toHaveLength(1);
-    const footer = html.slice(html.indexOf('<footer'));
-    expect(footer).toContain('Cherry Studio &lt;brand&gt;');
-    expect(footer).toContain(signature.timestamp);
-    expect(footer).not.toContain('<brand>');
-    expect(footer).not.toContain('AI-generated');
-    expect(html.indexOf('Complete answer.')).toBeLessThan(html.indexOf('<footer'));
-  }
-});
+test.each([false, true])(
+  'image and HTML exports share one footer (download configured: %s)',
+  async (hasDownload) => {
+    const document = normalizeDocument({ kind: 'markdown', source: 'Complete answer.' });
+    const signature = {
+      background: '#ffffff',
+      foreground: '#000000',
+      brandName: 'Cherry Studio <brand>',
+      brandColor: '#ff5757',
+      tagline: 'Your pocket AI assistant',
+      downloadLabel: 'Scan to download the mobile app',
+      qrCodeLabel: 'Download QR code',
+      downloadUrl: hasDownload ? 'https://example.com/mobile' : '',
+      qrCodeDataUrl: hasDownload ? 'data:image/png;base64,AQ==' : '',
+      logoDataUrl: 'data:image/png;base64,AA==',
+    };
+    for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
+      const { html } = await renderHtml(
+        document,
+        { ...presentation, watermark: { kind: 'cherry', signature }, imageFrame },
+        new Map(),
+        jest.fn(),
+        new AbortController().signal,
+      );
+      expect(html.match(/<footer\b/g)).toHaveLength(1);
+      const footer = html.slice(html.indexOf('<footer'));
+      expect(footer).toContain('Cherry Studio &lt;brand&gt;');
+      expect(footer).toContain(signature.tagline);
+      expect(footer).toContain(signature.downloadLabel);
+      expect(footer).toContain(signature.qrCodeLabel);
+      if (hasDownload) {
+        expect(footer).toContain(`href="${signature.downloadUrl}"`);
+        expect(footer).toContain(`src="${signature.qrCodeDataUrl}"`);
+        expect(footer).not.toContain('print-qr-placeholder');
+      } else {
+        expect(footer).toContain('print-qr-placeholder');
+        expect(footer).not.toContain('href=');
+      }
+      expect(footer).not.toContain('<time');
+      expect(footer).not.toContain('<brand>');
+      expect(footer).not.toContain('AI-generated');
+      expect(html.indexOf('Complete answer.')).toBeLessThan(html.indexOf('<footer'));
+    }
+  },
+);
 
-test('rejects invalid signature colors and missing timestamp instead of rendering unsafe markup', async () => {
+test('rejects invalid signature colors, copy, download links and QR images', async () => {
   const document = normalizeDocument({ kind: 'markdown', source: 'Answer.' });
   const signature = {
     background: '#ffffff',
     foreground: '#000000',
     brandName: 'Cherry Studio',
-    timestamp: '2026.09.16 18:00',
+    brandColor: '#ff5757',
+    tagline: 'Your pocket AI assistant',
+    downloadLabel: 'Scan to download the mobile app',
+    qrCodeLabel: 'Download QR code',
+    downloadUrl: '',
+    qrCodeDataUrl: '',
     logoDataUrl: 'data:image/png;base64,AA==',
   };
   for (const invalid of [
     { ...signature, background: 'white;position:fixed' },
-    { ...signature, timestamp: undefined },
+    { ...signature, brandColor: 'red;position:fixed' },
+    { ...signature, tagline: undefined },
+    { ...signature, downloadUrl: 'javascript:alert(1)' },
+    { ...signature, downloadUrl: 'https://example.com/\nmalformed' },
+    { ...signature, qrCodeDataUrl: 'https://example.com/qr.png' },
+    { ...signature, qrCodeDataUrl: signature.logoDataUrl },
   ]) {
     await expect(
       renderHtml(

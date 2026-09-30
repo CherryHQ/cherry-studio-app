@@ -151,7 +151,12 @@ test('Markdown materialization preserves the signature and reuses only matching 
     kind: 'cherry',
     signature: {
       brandName: 'Cherry Studio',
-      timestamp: '2026/09/15 12:00',
+      brandColor: '#ff5757',
+      tagline: 'Your pocket AI assistant',
+      downloadLabel: 'Scan to download the mobile app',
+      qrCodeLabel: 'Download QR code',
+      downloadUrl: '',
+      qrCodeDataUrl: '',
       background: '#ffffff',
       foreground: '#000000',
       logoDataUrl: 'data:image/png;base64,AA==',
@@ -159,7 +164,9 @@ test('Markdown materialization preserves the signature and reuses only matching 
   };
   const first = await session.render({ format: 'markdown', watermark });
   if (first.format !== 'markdown') throw new Error('Expected Markdown');
-  expect(first.text).toBe('Content\n\n---\n\n**Cherry Studio** · 2026/09/15 12:00\n');
+  expect(first.text).toBe(
+    'Content\n\n---\n\n**Cherry Studio**\n\nYour pocket AI assistant\n\nScan to download the mobile app\n',
+  );
   expect(mockFiles.get(first.file.uri)).toBe(first.text);
   expect(session.markdown).toBe('Content\n');
   await expect(session.render({ format: 'markdown', watermark })).resolves.toBe(first);
@@ -167,11 +174,11 @@ test('Markdown materialization preserves the signature and reuses only matching 
     format: 'markdown',
     watermark: {
       kind: 'cherry',
-      signature: { ...watermark.signature, timestamp: '2026/09/15 12:01' },
+      signature: { ...watermark.signature, tagline: 'AI wherever you go' },
     },
   });
   if (second.format !== 'markdown') throw new Error('Expected Markdown');
-  expect(second.text).toContain('2026/09/15 12:01');
+  expect(second.text).toContain('AI wherever you go');
   expect(mockFiles.get(second.file.uri)).toBe(second.text);
   expect(mockFiles.has(first.file.uri)).toBe(false);
   await session.dispose();
@@ -255,7 +262,12 @@ test('switching Markdown to none replaces the branded output with a plain file',
     kind: 'cherry',
     signature: {
       brandName: 'Cherry Studio',
-      timestamp: '2026.09.17 12:00',
+      brandColor: '#ff5757',
+      tagline: 'Your pocket AI assistant',
+      downloadLabel: 'Scan to download the mobile app',
+      qrCodeLabel: 'Download QR code',
+      downloadUrl: '',
+      qrCodeDataUrl: '',
       background: '#ffffff',
       foreground: '#000000',
       logoDataUrl: 'data:image/png;base64,AA==',

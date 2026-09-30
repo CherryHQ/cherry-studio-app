@@ -10,7 +10,8 @@ import {
   type ExportDocument,
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
-import { getExportSignature } from '@/shared/contracts/fileExport';
+import { getExportSignature, type ExportSignature } from '@/shared/contracts/fileExport';
+import { validateExportSignature } from '@/shared/utils/exportSignature';
 
 import { DEFAULT_CONTENT_LABELS, exportFileType } from './contentPresentation';
 import { escapeHtml, safeExportUrl } from './normalizeDocument';
@@ -245,12 +246,20 @@ function createHtmlRenderer(
         ? `<h1 class="document-title">${escapeHtml(document.title)}</h1>`
         : '';
     const content = `<article class="document-content${isConversation ? ' conversation' : ''}"${presentation.imageFrame ? ` aria-label="${escapeHtml(presentation.imageFrame.label)}"` : ''}>${title}${body}</article>`;
-    const footer = signature
-      ? `<footer class="print-signature"><div class="print-identity"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><strong class="print-brand">${escapeHtml(signature.brandName)}</strong></div><time class="print-timestamp print-secondary">${escapeHtml(signature.timestamp)}</time></footer>`
-      : '';
+    const footer = signature ? renderSignature(signature) : '';
     const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>${renderHtmlStyles(presentation)}</style></head><body><main class="${isImage ? 'image-print' : 'html-document'}">${content}${footer}</main></body></html>`;
     return { html, issues };
   }
+}
+
+function renderSignature(signature: ExportSignature): string {
+  const qrCode = signature.qrCodeDataUrl
+    ? `<img class="print-qr" src="${signature.qrCodeDataUrl}" alt="${escapeHtml(signature.qrCodeLabel)}">`
+    : `<div class="print-qr print-qr-placeholder print-secondary"><span>${escapeHtml(signature.qrCodeLabel)}</span></div>`;
+  const download = signature.downloadUrl
+    ? `<a class="print-download print-secondary" href="${escapeHtml(signature.downloadUrl)}">${escapeHtml(signature.downloadLabel)}</a>`
+    : `<div class="print-download print-secondary">${escapeHtml(signature.downloadLabel)}</div>`;
+  return `<footer class="print-signature"><div class="print-copy"><div class="print-identity"><img class="print-logo" src="${signature.logoDataUrl}" alt=""><strong class="print-brand">${escapeHtml(signature.brandName)}</strong></div><strong class="print-tagline">${escapeHtml(signature.tagline)}</strong>${download}</div>${qrCode}</footer>`;
 }
 
 function isEmbeddedImage(value: string) {
@@ -262,7 +271,7 @@ function validatePresentation(value: ExportPresentation) {
   const signature = getExportSignature(value.watermark);
   const colors = Object.values(value.colors);
   if (frame) colors.push(frame.background);
-  if (signature) colors.push(signature.background, signature.foreground);
+  if (signature) validateExportSignature(signature);
   if (
     !Number.isFinite(value.width) ||
     value.width < 280 ||
@@ -280,14 +289,7 @@ function validatePresentation(value: ExportPresentation) {
       );
     }) ||
     colors.some((color) => !/^(#[a-f\d]{3,8}|rgba?\([\d\s.,%]+\))$/i.test(color)) ||
-    (frame && (typeof frame.label !== 'string' || frame.label.length > 256)) ||
-    (signature &&
-      ([signature.brandName, signature.timestamp].some(
-        (text) => typeof text !== 'string' || text.length > 256,
-      ) ||
-        typeof signature.logoDataUrl !== 'string' ||
-        signature.logoDataUrl.length > 32_768 ||
-        !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(signature.logoDataUrl)))
+    (frame && (typeof frame.label !== 'string' || frame.label.length > 256))
   )
     throw new DocumentExportError('invalid-input');
 }

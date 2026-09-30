@@ -5,9 +5,14 @@ export type FileExportOptions = { watermark?: ExportWatermarkStyle };
 export type ExportSignature = {
   background: string;
   foreground: string;
+  brandColor: string;
   logoDataUrl: string;
   brandName: string;
-  timestamp: string;
+  tagline: string;
+  downloadLabel: string;
+  qrCodeLabel: string;
+  downloadUrl: string;
+  qrCodeDataUrl: string;
 };
 
 /** Resolved once per export, so previews and delivered bytes use the same treatment. */

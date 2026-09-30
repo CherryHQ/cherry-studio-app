@@ -37,11 +37,11 @@ jest.mock('expo-file-system', () => ({
   },
 }));
 jest.mock('@shopify/react-native-skia', () => ({
-  FilterMode: { Linear: 1 },
+  FilterMode: { Linear: 1, Nearest: 0 },
   FontWeight: { SemiBold: 600, Normal: 400 },
   ImageFormat: { PNG: 0 },
   MipmapMode: { None: 0 },
-  TextAlign: { Left: 0, Right: 1 },
+  TextAlign: { Left: 0, Center: 1 },
   Skia: {
     Color: () => new Float32Array([0, 0, 0, 1]),
     XYWHRect: (x: number, y: number, width: number, height: number) => ({ x, y, width, height }),
@@ -96,7 +96,12 @@ const signature: ExportSignature = {
   background: '#ffffff',
   foreground: '#000000',
   brandName: 'Cherry Studio',
-  timestamp: '2026.09.16 18:00',
+  brandColor: '#ff5757',
+  tagline: 'Your pocket AI assistant',
+  downloadLabel: 'Scan to download the mobile app',
+  qrCodeLabel: 'Download QR code',
+  downloadUrl: '',
+  qrCodeDataUrl: '',
   logoDataUrl: 'data:image/png;base64,AA==',
 };
 
@@ -123,8 +128,13 @@ test.each(['native', 'web'])(
     expect(exported).toMatchObject({ filename: 'photo.png', mediaType: 'image/png' });
     expect(exported.uri).not.toBe(uri);
     expect(mockFiles.get(exported.uri)).toEqual(mockEncodedImage);
-    expect(mockText.mock.calls).toEqual([[signature.brandName], [signature.timestamp]]);
-    expect(mockBuilderDispose).toHaveBeenCalledTimes(platform === 'web' ? 2 : 0);
+    expect(mockText.mock.calls).toEqual([
+      [signature.brandName],
+      [signature.tagline],
+      [signature.downloadLabel],
+      [signature.qrCodeLabel],
+    ]);
+    expect(mockBuilderDispose).toHaveBeenCalledTimes(platform === 'web' ? 4 : 0);
     for (const resource of mockResources) expect(resource.dispose).toHaveBeenCalledTimes(1);
     exported.release();
     expect(mockFiles.has(exported.uri)).toBe(false);
