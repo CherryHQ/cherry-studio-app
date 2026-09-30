@@ -37,7 +37,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         : 'chat.question.skip',
   );
   // Skipping is the quiet way out; an answer turns the action into the filled next step.
-  const actionVariant = form.action === 'skip' ? 'ghost' : 'default';
+  const actionVariant = form.action === 'skip' ? 'tonal' : 'default';
   // The free-text field matches the option cards it continues.
   const fieldStyle = useResolveClassNames('min-h-13 rounded-xl px-4');
   const advance = () => {
@@ -54,7 +54,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         <View className="flex-row items-center gap-3">
           {total > 1 ? (
             // Browsing moves between questions without skipping; the action answers.
-            <View className="-ml-1.5 flex-row items-center">
+            <View className="min-h-11 flex-row items-center rounded-xl bg-secondary">
               <Button
                 accessibilityLabel={t('chat.question.previous')}
                 disabled={form.locked || form.index === 0}
@@ -70,7 +70,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
                   total,
                 })}
                 accessibilityLiveRegion="polite"
-                className="text-foreground-tertiary text-sm tabular-nums"
+                className="font-medium text-foreground text-sm tabular-nums"
               >
                 {t('chat.question.progress', { current: form.index + 1, total })}
               </Text>
