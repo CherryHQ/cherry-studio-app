@@ -1,6 +1,7 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
@@ -93,9 +94,10 @@ describe('Pi stream idle timeout', () => {
 
   test('fails a request that produces no data and aborts the provider request', async () => {
     const source = controlledSource();
-    const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(MODEL, {
-      messages: [],
-    });
+    const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(
+      MODEL,
+      normalizeContext({ messages: [] }),
+    );
 
     await jest.advanceTimersByTimeAsync(IDLE_MS);
     const { result } = await collect(stream);
@@ -121,7 +123,7 @@ describe('Pi stream idle timeout', () => {
     const stream = await withPiStreamIdleTimeout((_model, _context, options) => {
       signal = options?.signal;
       return pendingSource;
-    })(MODEL, { messages: [] });
+    })(MODEL, normalizeContext({ messages: [] }));
 
     await jest.advanceTimersByTimeAsync(IDLE_MS);
     const result = await stream.result();
@@ -139,7 +141,10 @@ describe('Pi stream idle timeout', () => {
 
   test('does not restart the first-response timer for a start event', async () => {
     const source = controlledSource();
-    const stream = await withPiStreamIdleTimeout(source.streamFn)(MODEL, { messages: [] });
+    const stream = await withPiStreamIdleTimeout(source.streamFn)(
+      MODEL,
+      normalizeContext({ messages: [] }),
+    );
 
     await jest.advanceTimersByTimeAsync(IDLE_MS - 1);
     source.stream.push({ type: 'start', partial: message() });
@@ -162,13 +167,13 @@ describe('Pi stream idle timeout', () => {
       const single = controlledSource();
       const ringSource = controlledSource();
       const streams = [
-        await withPiStreamIdleTimeout(single.streamFn)(MODEL, { messages: [] }),
+        await withPiStreamIdleTimeout(single.streamFn)(MODEL, normalizeContext({ messages: [] })),
         await withPiStreamIdleTimeout(
           withPiApiKeyFallback([
             async () => ringSource.streamFn,
             async () => controlledSource().streamFn,
           ]),
-        )(MODEL, { messages: [] }),
+        )(MODEL, normalizeContext({ messages: [] })),
       ];
 
       await jest.advanceTimersByTimeAsync(IDLE_MS - 1);
@@ -187,9 +192,10 @@ describe('Pi stream idle timeout', () => {
 
   test('keeps a long response alive while data keeps arriving', async () => {
     const source = controlledSource();
-    const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(MODEL, {
-      messages: [],
-    });
+    const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(
+      MODEL,
+      normalizeContext({ messages: [] }),
+    );
 
     for (const chunk of ['a', 'ab', 'abc']) {
       await jest.advanceTimersByTimeAsync(IDLE_MS - 1);
@@ -205,9 +211,10 @@ describe('Pi stream idle timeout', () => {
 
   test('keeps generated content when the stream stalls midway', async () => {
     const source = controlledSource();
-    const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(MODEL, {
-      messages: [],
-    });
+    const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(
+      MODEL,
+      normalizeContext({ messages: [] }),
+    );
 
     source.text('partial answer');
     await jest.advanceTimersByTimeAsync(IDLE_MS);
@@ -224,7 +231,7 @@ describe('Pi stream idle timeout', () => {
     const controller = new AbortController();
     const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(
       MODEL,
-      { messages: [] },
+      normalizeContext({ messages: [] }),
       { signal: controller.signal },
     );
 
@@ -242,7 +249,7 @@ describe('Pi stream idle timeout', () => {
     const stream = await withPiStreamIdleTimeout((_model, _context, options) => {
       signal = options?.signal;
       return source;
-    })(MODEL, { messages: [] }, { signal: controller.signal });
+    })(MODEL, normalizeContext({ messages: [] }), { signal: controller.signal });
     source.push({
       type: 'text_delta',
       contentIndex: 0,
@@ -271,7 +278,7 @@ describe('Pi stream idle timeout', () => {
     const source = jest.fn(() => new AssistantMessageEventStream());
     const stream = await withPiStreamIdleTimeout(source)(
       MODEL,
-      { messages: [] },
+      normalizeContext({ messages: [] }),
       { signal: controller.signal },
     );
 
@@ -285,7 +292,7 @@ describe('Pi stream idle timeout', () => {
     const stream = await withPiStreamIdleTimeout(() => {
       if (mode === 'reject') return Promise.reject(error);
       throw error;
-    })(MODEL, { messages: [] });
+    })(MODEL, normalizeContext({ messages: [] }));
 
     const { events, result } = await collect(stream);
     expect(events.map((event) => event.type)).toEqual(['error']);
@@ -299,7 +306,10 @@ describe('Pi stream idle timeout', () => {
 
   test('terminalizes a stream that closes without a terminal event', async () => {
     const source = controlledSource();
-    const stream = await withPiStreamIdleTimeout(source.streamFn)(MODEL, { messages: [] });
+    const stream = await withPiStreamIdleTimeout(source.streamFn)(
+      MODEL,
+      normalizeContext({ messages: [] }),
+    );
     source.text('partial');
     source.stream.end();
 
@@ -319,7 +329,10 @@ describe('Pi stream idle timeout', () => {
       yield { type: 'text_delta', contentIndex: 0, delta: 'partial', partial: message('partial') };
       throw new Error('Read failed');
     });
-    const stream = await withPiStreamIdleTimeout(() => source)(MODEL, { messages: [] });
+    const stream = await withPiStreamIdleTimeout(() => source)(
+      MODEL,
+      normalizeContext({ messages: [] }),
+    );
 
     expect((await collect(stream)).result).toMatchObject({
       stopReason: 'error',
@@ -335,7 +348,7 @@ describe('Pi stream idle timeout', () => {
     const unused = jest.fn(async () => controlledSource().streamFn);
     const stream = await withPiStreamIdleTimeout(
       withPiApiKeyFallback([async () => first.streamFn, async () => second.streamFn, unused]),
-    )(MODEL, { messages: [] });
+    )(MODEL, normalizeContext({ messages: [] }));
 
     await jest.advanceTimersByTimeAsync(60_000);
     first.fail(503);
@@ -356,7 +369,7 @@ describe('Pi stream idle timeout', () => {
     const second = controlledSource();
     const stream = await withPiStreamIdleTimeout(
       withPiApiKeyFallback([async () => first.streamFn, async () => second.streamFn]),
-    )(MODEL, { messages: [] });
+    )(MODEL, normalizeContext({ messages: [] }));
 
     await jest.advanceTimersByTimeAsync(60_000);
     first.fail(401);

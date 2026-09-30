@@ -1,3 +1,8 @@
+const { dirname, join } = require('node:path');
+
+const piAgentDirectory = dirname(require.resolve('@earendil-works/pi-agent-core/package.json'));
+const piDependencyFile = (name, file) => join(piAgentDirectory, '..', name, 'dist', file);
+
 module.exports = {
   preset: 'jest-expo',
   testEnvironment: 'node',
@@ -42,13 +47,15 @@ module.exports = {
     // remend only exports an import entry, which Jest's CommonJS resolver cannot
     // select even when a test mocks it. Resolve the published file directly.
     '^remend$': '<rootDir>/node_modules/remend/dist/index.js',
-    // These patched Pi subpaths intentionally expose ESM through import-only
+    // Pi's official entries expose ESM through import-only
     // conditions. Jest resolves the app tests as CommonJS, so point it at the
     // same published files directly and let babel-jest transform them below.
-    '^@earendil-works/pi-agent-core/agent$':
-      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/agent.js',
-    '^@earendil-works/pi-agent-core/compaction$':
-      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js',
+    '^@earendil-works/pi-agent-core$':
+      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/index.js',
+    '^@earendil-works/chord$': piDependencyFile('chord', 'index.js'),
+    '^@earendil-works/chord/(context|delta)$': piDependencyFile('chord', '$1/index.js'),
+    '^@earendil-works/pi-telemetry$': piDependencyFile('pi-telemetry', 'index.js'),
+    '^@earendil-works/pi-ai$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/index.js',
     '^@earendil-works/pi-ai/api/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-ai/dist/api/$1.js',
     '^@earendil-works/pi-ai/utils/(.*)$':

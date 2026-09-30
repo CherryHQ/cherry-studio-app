@@ -6,6 +6,7 @@ import type {
   SimpleStreamOptions,
   StreamFunction,
 } from '@earendil-works/pi-ai';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { SupportedPiApi } from '../piApiAdapters';
 import { disablePiToolCalls } from '../piToolChoice';
@@ -137,7 +138,7 @@ describe('Pi final response tool choice', () => {
         ],
       };
       let captured: unknown;
-      const stream = streamSimple(model, context, {
+      const stream = streamSimple(model, normalizeContext(context), {
         apiKey: 'test-key',
         onPayload: (payload) => {
           captured = disablePiToolCalls(payload, api);

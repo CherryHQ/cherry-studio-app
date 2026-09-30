@@ -24,38 +24,26 @@ function readLocalModuleGraph(entry: string): string {
 }
 
 describe('Pi React Native patches', () => {
-  test('exposes the Agent and compaction entries used by Metro', () => {
-    const packageJson = JSON.parse(
-      readFileSync(
-        `${process.cwd()}/node_modules/@earendil-works/pi-agent-core/package.json`,
-        'utf8',
-      ),
-    ) as { exports?: Record<string, unknown> };
-
-    expect(packageJson.exports?.['./agent']).toEqual({
-      import: './dist/agent.js',
-      types: './dist/agent.d.ts',
-    });
-    expect(packageJson.exports?.['./compaction']).toEqual({
-      import: './dist/harness/compaction/compaction.js',
-      types: './dist/harness/compaction/compaction.d.ts',
-    });
-
-    const agentLoop = readFileSync(
-      `${process.cwd()}/node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js`,
-      'utf8',
+  test('uses the official portable Agent and AI exports', () => {
+    const packageRoot = `${process.cwd()}/node_modules/@earendil-works`;
+    const corePackage = JSON.parse(
+      readFileSync(`${packageRoot}/pi-agent-core/package.json`, 'utf8'),
     );
-    expect(agentLoop).not.toContain('from "@earendil-works/pi-ai"');
-    expect(agentLoop).toContain('from "@earendil-works/pi-ai/utils/event-stream"');
-    expect(agentLoop).toContain('from "@earendil-works/pi-ai/utils/validation"');
+    const aiPackage = JSON.parse(readFileSync(`${packageRoot}/pi-ai/package.json`, 'utf8'));
 
-    const compactionPath = `${process.cwd()}/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js`;
-    const compactionGraph = readLocalModuleGraph(compactionPath);
-    expect(compactionGraph).not.toContain('from "node:');
-    expect(compactionGraph).not.toContain('from "@earendil-works/pi-ai"');
-    expect(compactionGraph).toContain('from "@earendil-works/pi-ai/utils/retry"');
-    expect(compactionGraph).toContain('from "@earendil-works/pi-ai/utils/text"');
-    expect(compactionGraph).toContain('from "@earendil-works/pi-ai/utils/uuid"');
+    expect(corePackage.exports['.']).toEqual({
+      import: './dist/index.js',
+      types: './dist/index.d.ts',
+    });
+    expect(aiPackage.exports['./utils/*']).toEqual({
+      import: './dist/utils/*.js',
+      types: './dist/utils/*.d.ts',
+    });
+    for (const name of ['pi-agent-core', 'pi-ai']) {
+      const graph = readLocalModuleGraph(`${packageRoot}/${name}/dist/index.js`);
+      expect(graph).not.toMatch(/(?:from\s+|require\()["']node:/);
+      expect(graph).not.toContain('from "./node.js"');
+    }
   });
 
   test('does not leave the Bun node:fs fallback in the Pi AI bundle', () => {
@@ -68,10 +56,7 @@ describe('Pi React Native patches', () => {
     expect(providerEnv).toContain('function getBunSandboxEnvValue(_name)');
   });
 
-  test('keeps supported Pi adapters out of the Pi model and auth graph', () => {
-    const packageJson = JSON.parse(
-      readFileSync(`${process.cwd()}/node_modules/@earendil-works/pi-ai/package.json`, 'utf8'),
-    ) as { exports?: Record<string, unknown> };
+  test('retains structured errors in the supported Pi adapters', () => {
     const responses = readFileSync(
       `${process.cwd()}/node_modules/@earendil-works/pi-ai/dist/api/openai-responses.js`,
       'utf8',
@@ -95,41 +80,13 @@ describe('Pi React Native patches', () => {
       ),
     );
 
-    expect(packageJson.exports).toMatchObject({
-      './utils/event-stream': {
-        import: './dist/utils/event-stream.js',
-        types: './dist/utils/event-stream.d.ts',
-      },
-      './utils/retry': {
-        import: './dist/utils/retry.js',
-        types: './dist/utils/retry.d.ts',
-      },
-      './utils/text': {
-        import: './dist/utils/text.js',
-        types: './dist/utils/text.d.ts',
-      },
-      './utils/uuid': {
-        import: './dist/utils/uuid.js',
-        types: './dist/utils/uuid.d.ts',
-      },
-      './utils/validation': {
-        import: './dist/utils/validation.js',
-        types: './dist/utils/validation.d.ts',
-      },
-    });
-    expect(responses).not.toContain('from "../models.js"');
-    expect(responsesShared).not.toContain('from "../models.js"');
-    expect(responses).toContain('from "../utils/model-runtime.js"');
-    expect(responsesShared).toContain('from "../utils/model-runtime.js"');
     for (const adapter of [responses, azureResponses, ...additionalAdapters]) {
       expect(adapter).toContain('createAssistantMessageDiagnostic("provider_response_failure"');
       expect(adapter).toContain('status: normalizedError.status');
       expect(adapter).toContain('body: normalizedError.body');
       expect(adapter).toContain('retryable: normalizedError.retryable');
     }
-    for (const adapter of [azureResponses, ...additionalAdapters]) {
-      expect(adapter).not.toContain('from "../models.js"');
-      expect(adapter).toContain('from "../utils/model-runtime.js"');
-    }
+    expect(responsesShared).toContain('code: event.code');
+    expect(responsesShared).toContain('error: event');
   });
 });

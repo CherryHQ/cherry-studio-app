@@ -1,18 +1,16 @@
 diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
-index 591beb84b1be68d77c920fa65a25af1267ce97c2..eaf407db9d93e5e40e5acd95cb0c7c13919ee689 100644
 --- a/dist/api/anthropic-messages.js
 +++ b/dist/api/anthropic-messages.js
-@@ -1,6 +1,8 @@
+@@ -1,6 +1,7 @@
  import Anthropic from "@anthropic-ai/sdk";
--import { calculateCost } from "../models.js";
-+import { calculateCost } from "../utils/model-runtime.js";
- import { splitDeferredTools } from "../utils/deferred-tools.js";
+ import { calculateCost } from "../models.js";
+-import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
 +import { normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
  import { parseJsonWithRepair, parseStreamingJson } from "../utils/json-parse.js";
-@@ -304,7 +306,14 @@ async function* iterateAnthropicEvents(response, signal) {
+@@ -306,7 +307,14 @@
      let sawMessageEnd = false;
      for await (const sse of iterateSseMessages(response.body, signal)) {
          if (sse.event === "error") {
@@ -28,7 +26,7 @@ index 591beb84b1be68d77c920fa65a25af1267ce97c2..eaf407db9d93e5e40e5acd95cb0c7c13
          }
          if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
              continue;
-@@ -595,6 +604,12 @@ export const stream = (model, context, options) => {
+@@ -638,6 +646,12 @@
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
              output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
@@ -41,19 +39,41 @@ index 591beb84b1be68d77c920fa65a25af1267ce97c2..eaf407db9d93e5e40e5acd95cb0c7c13
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
+diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-responses.js
+--- a/dist/api/azure-openai-responses.js
++++ b/dist/api/azure-openai-responses.js
+@@ -1,5 +1,6 @@
+ import { AzureOpenAI } from "openai";
+ import { clampThinkingLevel } from "../models.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+@@ -115,7 +116,13 @@
+                 delete block.customInput;
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
++            const normalizedError = normalizeProviderError(error);
+             output.errorMessage = formatAzureOpenAIError(error);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
 diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
-index fcde0df111e38b875a2d4af9836e356891fa7dd3..2ff74b22ecd4367aa82ea263a51ad9cb96aa92d7 100644
 --- a/dist/api/google-generative-ai.js
 +++ b/dist/api/google-generative-ai.js
 @@ -1,5 +1,6 @@
  import { GoogleGenAI, } from "@google/genai";
--import { calculateCost, clampThinkingLevel } from "../models.js";
-+import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
+ import { calculateCost, clampThinkingLevel } from "../models.js";
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { providerHeadersToRecord } from "../utils/headers.js";
-@@ -221,7 +222,13 @@ export const stream = (model, context, options) => {
+@@ -226,7 +227,13 @@
                  }
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -69,18 +89,16 @@ index fcde0df111e38b875a2d4af9836e356891fa7dd3..2ff74b22ecd4367aa82ea263a51ad9cb
              stream.end();
          }
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
-index c5a9f5da3f822a601091bb2ee8d2a30db41dd422..4c15d7d4b42b361681820b0a9a253d4a70491daa 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
 @@ -1,5 +1,6 @@
  import OpenAI from "openai";
--import { calculateCost, clampThinkingLevel } from "../models.js";
-+import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
+ import { calculateCost, clampThinkingLevel } from "../models.js";
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { shortHash } from "../utils/hash.js";
-@@ -451,7 +452,13 @@ export const stream = (model, context, options) => {
+@@ -500,7 +501,13 @@
                  delete block.streamIndex;
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -96,16 +114,9 @@ index c5a9f5da3f822a601091bb2ee8d2a30db41dd422..4c15d7d4b42b361681820b0a9a253d4a
              // normalizeProviderError already stringifies the parsed body (error.error)
              // into errorMessage, so only append the raw metadata when it is not already
 diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
-index c35771dcc9b2173d0b459d13c6d86e622de45e9a..2af5f5445ce585ccd222f4562258b7824c8ab0b0 100644
 --- a/dist/api/openai-responses-shared.js
 +++ b/dist/api/openai-responses-shared.js
-@@ -1,4 +1,4 @@
--import { calculateCost } from "../models.js";
-+import { calculateCost } from "../utils/model-runtime.js";
- import { shortHash } from "../utils/hash.js";
- import { parseStreamingJson } from "../utils/json-parse.js";
- import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
-@@ -635,7 +635,10 @@ export async function processResponsesStream(openaiStream, output, stream, model
+@@ -639,7 +639,10 @@
              finalizeResponse(event.response);
          }
          else if (event.type === "error") {
@@ -117,7 +128,7 @@ index c35771dcc9b2173d0b459d13c6d86e622de45e9a..2af5f5445ce585ccd222f4562258b782
          }
          else if (event.type === "response.failed") {
              sawTerminalResponseEvent = true;
-@@ -647,7 +650,7 @@ export async function processResponsesStream(openaiStream, output, stream, model
+@@ -651,7 +654,7 @@
                  : details?.reason
                      ? `incomplete: ${details.reason}`
                      : "Unknown error (no error details in response)";
@@ -127,24 +138,24 @@ index c35771dcc9b2173d0b459d13c6d86e622de45e9a..2af5f5445ce585ccd222f4562258b782
      }
      if (!sawTerminalResponseEvent) {
 diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
-index 1023156b9c97e07d355914a641e39091a84bf229..214ed8f710e5d43de67df5dab22478553af1377f 100644
 --- a/dist/api/openai-responses.js
 +++ b/dist/api/openai-responses.js
 @@ -1,6 +1,7 @@
  import OpenAI from "openai";
--import { clampThinkingLevel } from "../models.js";
-+import { clampThinkingLevel } from "../utils/model-runtime.js";
- import { splitDeferredTools } from "../utils/deferred-tools.js";
-+import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { clampThinkingLevel } from "../models.js";
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
-@@ -139,7 +140,13 @@ export const stream = (model, context, options) => {
-                 delete block.customInput;
-             }
+ import { getPiUserAgent } from "../utils/pi-user-agent.js";
+@@ -165,9 +166,15 @@
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+             const errorMessage = formatProviderError(normalizeProviderError(error), `${model.provider === "openai" ? "OpenAI" : model.provider} API error`);
+             // Sign in with ChatGPT shares the subscription's usage limit with other apps.
 +            const normalizedError = normalizeProviderError(error);
-             output.errorMessage = formatOpenAIResponsesError(error);
+             output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
+                 ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
+                 : errorMessage;
 +            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
 +                status: normalizedError.status,
 +                body: normalizedError.body,
@@ -166,10 +177,9 @@ diff --git a/dist/utils/diagnostics.js b/dist/utils/diagnostics.js
          name: error.name || undefined,
          message: error.message || error.name,
 diff --git a/dist/utils/error-body.js b/dist/utils/error-body.js
-index f44c3c47c2ec6178836f6c56aaba24e5a9d79a1d..410238237ec83f4e461f89b8937700788a977d38 100644
 --- a/dist/utils/error-body.js
 +++ b/dist/utils/error-body.js
-@@ -20,14 +20,23 @@ export function normalizeProviderError(error) {
+@@ -20,13 +20,22 @@
      const sdkError = error;
      const status = extractStatus(sdkError);
      const body = extractBody(sdkError);
@@ -182,22 +192,20 @@ index f44c3c47c2ec6178836f6c56aaba24e5a9d79a1d..410238237ec83f4e461f89b893770078
          message: error.message,
          messageCarriesBody,
      };
- }
++}
 +function extractRetryable(error) {
 +    if (typeof error.isRetryable === "boolean")
 +        return error.isRetryable;
 +    if (typeof error.retryable === "boolean")
 +        return error.retryable;
 +    return undefined;
-+}
+ }
  /**
   * Probe the HTTP status, first numeric hit wins, in SDK-field order:
-  * `statusCode` (Mistral) → `status` (`openai`, `@google/genai`) →
 diff --git a/dist/utils/json-parse.js b/dist/utils/json-parse.js
-index 82e105cb676a2f4be16167023243aa73dd8cb2e4..00c08b0a8720c6766dee7d77bc2412617930d16c 100644
 --- a/dist/utils/json-parse.js
 +++ b/dist/utils/json-parse.js
-@@ -91,6 +91,24 @@ export function parseStreamingJson(partialJson) {
+@@ -91,6 +91,24 @@
      if (!partialJson || partialJson.trim() === "") {
          return {};
      }
@@ -222,67 +230,7 @@ index 82e105cb676a2f4be16167023243aa73dd8cb2e4..00c08b0a8720c6766dee7d77bc241261
      try {
          return parseJsonWithRepair(partialJson);
      }
-diff --git a/dist/utils/model-runtime.js b/dist/utils/model-runtime.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..4eb056d97de3c83db96ba38254159f3f5b299bb8
---- /dev/null
-+++ b/dist/utils/model-runtime.js
-@@ -0,0 +1,53 @@
-+// Runtime-only helpers keep provider adapters independent from the Node-oriented
-+// model catalog and authentication graph.
-+export function calculateCost(model, usage) {
-+    const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
-+    let rates = model.cost;
-+    let matchedThreshold = -1;
-+    for (const tier of model.cost.tiers ?? []) {
-+        if (inputTokens > tier.inputTokensAbove && tier.inputTokensAbove > matchedThreshold) {
-+            rates = tier;
-+            matchedThreshold = tier.inputTokensAbove;
-+        }
-+    }
-+    const longWrite = usage.cacheWrite1h ?? 0;
-+    const shortWrite = usage.cacheWrite - longWrite;
-+    usage.cost.input = (rates.input / 1000000) * usage.input;
-+    usage.cost.output = (rates.output / 1000000) * usage.output;
-+    usage.cost.cacheRead = (rates.cacheRead / 1000000) * usage.cacheRead;
-+    usage.cost.cacheWrite = (rates.cacheWrite * shortWrite + rates.input * 2 * longWrite) / 1000000;
-+    usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
-+    return usage.cost;
-+}
-+const EXTENDED_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-+function getSupportedThinkingLevels(model) {
-+    if (!model.reasoning)
-+        return ["off"];
-+    return EXTENDED_THINKING_LEVELS.filter((level) => {
-+        const mapped = model.thinkingLevelMap?.[level];
-+        if (mapped === null)
-+            return false;
-+        if (level === "xhigh" || level === "max")
-+            return mapped !== undefined;
-+        return true;
-+    });
-+}
-+export function clampThinkingLevel(model, level) {
-+    const availableLevels = getSupportedThinkingLevels(model);
-+    if (availableLevels.includes(level))
-+        return level;
-+    const requestedIndex = EXTENDED_THINKING_LEVELS.indexOf(level);
-+    if (requestedIndex === -1)
-+        return availableLevels[0] ?? "off";
-+    for (let i = requestedIndex; i < EXTENDED_THINKING_LEVELS.length; i++) {
-+        const candidate = EXTENDED_THINKING_LEVELS[i];
-+        if (availableLevels.includes(candidate))
-+            return candidate;
-+    }
-+    for (let i = requestedIndex - 1; i >= 0; i--) {
-+        const candidate = EXTENDED_THINKING_LEVELS[i];
-+        if (availableLevels.includes(candidate))
-+            return candidate;
-+    }
-+    return availableLevels[0] ?? "off";
-+}
 diff --git a/dist/utils/provider-env.js b/dist/utils/provider-env.js
-index c50f7d233be7a6470a9e98bf4c85fa062065bf12..3acac0a828b93e8ddaccd93bb7be19ca4a2bb717 100644
 --- a/dist/utils/provider-env.js
 +++ b/dist/utils/provider-env.js
 @@ -1,35 +1,9 @@
@@ -325,53 +273,3 @@ index c50f7d233be7a6470a9e98bf4c85fa062065bf12..3acac0a828b93e8ddaccd93bb7be19ca
  }
  /**
   * Resolve a provider env value from scoped overrides, normal process.env, then
-diff --git a/package.json b/package.json
-index fe1f336d89b4cdb500956b9431ed4306c3182d49..4e9d42f588626f21d7258a35cf23080adbdf3fa4 100644
---- a/package.json
-+++ b/package.json
-@@ -30,0 +31,20 @@
-+		"./utils/event-stream": {
-+			"types": "./dist/utils/event-stream.d.ts",
-+			"import": "./dist/utils/event-stream.js"
-+		},
-+		"./utils/retry": {
-+			"types": "./dist/utils/retry.d.ts",
-+			"import": "./dist/utils/retry.js"
-+		},
-+		"./utils/text": {
-+			"types": "./dist/utils/text.d.ts",
-+			"import": "./dist/utils/text.js"
-+		},
-+		"./utils/uuid": {
-+			"types": "./dist/utils/uuid.d.ts",
-+			"import": "./dist/utils/uuid.js"
-+		},
-+		"./utils/validation": {
-+			"types": "./dist/utils/validation.d.ts",
-+			"import": "./dist/utils/validation.js"
-+		},
-diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-responses.js
---- a/dist/api/azure-openai-responses.js
-+++ b/dist/api/azure-openai-responses.js
-@@ -1,5 +1,6 @@
- import { AzureOpenAI } from "openai";
--import { clampThinkingLevel } from "../models.js";
-+import { clampThinkingLevel } from "../utils/model-runtime.js";
-+import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
- import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
- import { AssistantMessageEventStream } from "../utils/event-stream.js";
- import { headersToRecord } from "../utils/headers.js";
-@@ -109,7 +110,13 @@
-                 delete block.customInput;
-             }
-             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-+            const normalizedError = normalizeProviderError(error);
-             output.errorMessage = formatAzureOpenAIError(error);
-+            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
-+                status: normalizedError.status,
-+                body: normalizedError.body,
-+                retryable: normalizedError.retryable,
-+            }));
-             stream.push({ type: "error", reason: output.stopReason, error: output });
-             stream.end();
-         }

@@ -1,5 +1,6 @@
 import type { AssistantMessage, Message, Model, ToolResultMessage } from '@earendil-works/pi-ai';
 import { stream } from '@earendil-works/pi-ai/api/anthropic-messages';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import {
   MAX_RUNTIME_TURN_REPLAY_BYTES,
@@ -110,19 +111,15 @@ async function payload(messages: Message[]) {
   const fetch = jest.fn(() => {
     throw new Error('Unexpected HTTP request');
   });
-  await stream(
-    model,
-    { systemPrompt: 'Be helpful.', messages },
-    {
-      apiKey: 'test-only-key',
-      cacheRetention: 'short',
-      fetch,
-      onPayload(value) {
-        captured = value;
-        throw new Error('Captured before transport');
-      },
+  await stream(model, normalizeContext({ systemPrompt: 'Be helpful.', messages }), {
+    apiKey: 'test-only-key',
+    cacheRetention: 'short',
+    fetch,
+    onPayload(value) {
+      captured = value;
+      throw new Error('Captured before transport');
     },
-  ).result();
+  }).result();
   expect(fetch).not.toHaveBeenCalled();
   expect(captured).toBeDefined();
   return JSON.parse(

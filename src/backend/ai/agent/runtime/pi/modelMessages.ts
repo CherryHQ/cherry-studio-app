@@ -2,6 +2,7 @@ import type {
   Api as PiApi,
   AssistantMessage,
   ImageContent,
+  JsonObject,
   Message as PiMessage,
   Model as PiModel,
   TextContent,
@@ -13,7 +14,6 @@ import type {
 import type {
   RuntimeDocumentAttachmentPart,
   RuntimeExecutionRequest,
-  RuntimeJsonValue,
   RuntimeMessagePart,
   RuntimeTextAttachmentPart,
 } from '../types';
@@ -281,12 +281,12 @@ function appendAssistantHistory(
           arguments:
             part.toolRef.source === 'mcp'
               ? { name: part.providerName, params: part.input }
-              : (part.input as Record<string, unknown>),
+              : (part.input as JsonObject),
         });
         break;
       case 'tool-result': {
         flushAssistant();
-        const result: ToolResultMessage<RuntimeJsonValue> = {
+        const result: ToolResultMessage = {
           role: 'toolResult',
           toolCallId: part.toolCallId,
           toolName: providerNamesByCallId.get(part.toolCallId) ?? 'unknown',

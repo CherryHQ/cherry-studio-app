@@ -1,6 +1,12 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
+import type {
+  AssistantMessage,
+  AssistantMessageEvent,
+  JsonObject,
+  Model,
+} from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
 
@@ -68,14 +74,14 @@ function failure(details: Record<string, unknown>, code?: string | number): Assi
       type: 'provider_response_failure',
       timestamp: 1,
       error: { message: 'Provider failure', code },
-      details,
+      details: details as JsonObject,
     },
   ];
   return result;
 }
 
 async function collect(streamFn: StreamFn, signal?: AbortSignal) {
-  const stream = await streamFn(MODEL, { messages: [] }, { signal });
+  const stream = await streamFn(MODEL, normalizeContext({ messages: [] }), { signal });
   const events: AssistantMessageEvent[] = [];
   for await (const event of stream) events.push(event);
   return { events, result: await stream.result() };

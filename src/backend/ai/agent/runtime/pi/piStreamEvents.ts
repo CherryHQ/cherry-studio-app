@@ -1,4 +1,10 @@
-import type { AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
+import type {
+  AssistantMessage,
+  AssistantMessageEvent,
+  JsonObject,
+  JsonValue,
+  Model,
+} from '@earendil-works/pi-ai';
 
 export type PiStreamErrorEvent = Extract<AssistantMessageEvent, { type: 'error' }>;
 
@@ -51,6 +57,20 @@ export function isEmptyContentEvent(event: AssistantMessageEvent): boolean {
   }
 }
 
+/** Diagnostics are JSON; drop absent fields and detach provider objects. */
+function jsonDetails(values: Record<string, unknown>): JsonObject {
+  const details: JsonObject = {};
+  for (const [key, value] of Object.entries(values)) {
+    try {
+      const serialized = JSON.stringify(value);
+      if (serialized !== undefined) details[key] = JSON.parse(serialized) as JsonValue;
+    } catch {
+      details[key] = String(value);
+    }
+  }
+  return details;
+}
+
 export function errorRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object'
     ? (value as Record<string, unknown>)
@@ -84,11 +104,11 @@ export function providerErrorEvent(
             message,
             ...(typeof code === 'string' || typeof code === 'number' ? { code } : {}),
           },
-          details: {
+          details: jsonDetails({
             status: record?.statusCode ?? record?.status,
             body: record?.error ?? record?.body,
             retryable: record?.retryable,
-          },
+          }),
         },
       ],
     },

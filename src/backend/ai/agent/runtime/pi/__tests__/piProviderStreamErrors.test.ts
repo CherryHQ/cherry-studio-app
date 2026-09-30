@@ -5,6 +5,7 @@ import { stream as streamAzure } from '@earendil-works/pi-ai/api/azure-openai-re
 import { stream as streamCompletions } from '@earendil-works/pi-ai/api/openai-completions';
 import { stream as streamResponses } from '@earendil-works/pi-ai/api/openai-responses';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
 
@@ -127,7 +128,7 @@ describe('Pi provider stream errors', () => {
     const fallback = jest.fn(async () => success);
     const stream = await withPiApiKeyFallback([async () => primary, fallback])(
       model(testCase.api),
-      { messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] },
+      normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
       {},
     );
     const events: AssistantMessageEvent[] = [];

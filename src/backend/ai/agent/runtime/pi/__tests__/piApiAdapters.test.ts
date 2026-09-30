@@ -3,8 +3,9 @@ import {
   REASONING_FORMAT_PROFILES,
   selectFormatWire,
 } from '@cherrystudio/provider-registry';
-import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
-import type { Context, FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
+import type { AgentOptions } from '@earendil-works/pi-agent-core';
+import type { FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { Model } from '@/shared/data/types/model';
 
@@ -23,7 +24,7 @@ const mockAzureResponsesStreamSimple = jest.fn();
 
 const mockStreamResult = { id: 'stream' };
 const mockFetch = jest.fn() as unknown as FetchFunction;
-const context: Context = { messages: [] };
+const context = normalizeContext({ messages: [] });
 
 const CASES: {
   api: SupportedPiApi;

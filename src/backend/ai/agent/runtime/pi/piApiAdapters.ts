@@ -1,7 +1,8 @@
 import { formatApiHost, withoutTrailingApiVersion } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
+import type { AgentOptions } from '@earendil-works/pi-agent-core';
 import type { CacheRetention, FetchFunction } from '@earendil-works/pi-ai';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
 
@@ -140,6 +141,6 @@ export async function bindPiStream(
       signal: options?.signal,
       temperature,
     } as Parameters<PiStreamFn>[2];
-    return streamSimple(model, context, streamOptions);
+    return streamSimple(model, normalizeContext(context), streamOptions);
   };
 }
