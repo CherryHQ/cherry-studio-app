@@ -70,7 +70,10 @@ export function ProviderModelManualForm({
                 invalid={Boolean(add.fieldErrors.modelId)}
                 required
               >
-                <TextField.Label>{t('settings.provider.models.addModelIdLabel')}</TextField.Label>
+                {/* Inset to the same 12pt as the section titles below, so the page reads as one column. */}
+                <View className="px-3">
+                  <TextField.Label>{t('settings.provider.models.addModelIdLabel')}</TextField.Label>
+                </View>
                 <Input
                   accessibilityLabel={t('settings.provider.models.addModelIdLabel')}
                   autoCapitalize="none"
