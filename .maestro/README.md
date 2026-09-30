@@ -11,12 +11,12 @@ state.
 - Install the Maestro CLI and select the intended device explicitly when more than one is running.
 
 Follow [Parallel Device Testing](../docs/guides/parallel-device-testing.md) when running flows from a
-Conductor workspace. Start through `pnpm agent:env start` to lease a test device; do
-not interfere with another task's session or Metro process.
+Conductor workspace. Use the resident test device only when no other session is active on it;
+otherwise use this workspace's temporary device.
 
 ## Run
 
-Set `DEVICE_ID` to the leased simulator UDID or current emulator serial. Set `DEV_CLIENT_URL` to the
+Set `DEVICE_ID` to the selected simulator UDID or emulator serial. Set `DEV_CLIENT_URL` to the
 exact URL printed by this workspace's Metro process; keep it quoted because it contains URL query
 characters. For a newly installed development client, include Expo's `disableOnboarding=1` query
 parameter so its own launcher onboarding does not hide the product onboarding under test.
@@ -39,8 +39,8 @@ maestro --device "$DEVICE_ID" test \
 
 Run one flow by passing its file path instead of the directory. Both current flows clear application
 state, then reconnect the development client through `DEV_CLIENT_URL`. They delete data in the
-selected test installation and must never target a primary user installation. The resident
-device's data is shared across workspaces; these flows intentionally reset it.
+selected test installation and must never target a primary user installation. On the resident
+device they also discard configuration other tasks reuse; prefer a temporary device for them.
 
 ## Scope
 

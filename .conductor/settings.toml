@@ -3,7 +3,14 @@
 [scripts]
 setup = "pnpm install --frozen-lockfile"
 run_mode = "concurrent"
-archive = 'if [ "$CONDUCTOR_IS_LOCAL" = "1" ] && [ -f scripts/agentEnvironment.ts ]; then pnpm agent:env archive; fi'
+# Fallback for docs/guides/parallel-device-testing.md cleanup: delete only this workspace's temporary devices.
+archive = '''
+[ "$CONDUCTOR_IS_LOCAL" = "1" ] || exit 0
+xcrun simctl shutdown "Cherry Temp ($CONDUCTOR_WORKSPACE_NAME)" >/dev/null 2>&1
+xcrun simctl delete "Cherry Temp ($CONDUCTOR_WORKSPACE_NAME)" >/dev/null 2>&1
+avdmanager delete avd -n "Cherry_Temp_$CONDUCTOR_WORKSPACE_NAME" >/dev/null 2>&1
+exit 0
+'''
 
 [scripts.run.metro]
 available_in = ["local"]

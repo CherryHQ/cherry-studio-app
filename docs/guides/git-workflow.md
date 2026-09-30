@@ -34,9 +34,8 @@ Otherwise, keep both changes in the same PR. See [UI Development](./ui-developme
 1. Run the local gates in [Testing And CI](./testing-and-ci.md).
 2. Create a normal PR as a draft. For a user-requested stack, submit all layers with
    `gh stack submit --auto`.
-3. After successful PR or stack creation, release the self-test device lease with
-   `pnpm agent:env release` (see [Parallel Device Testing](./parallel-device-testing.md)). The
-   resident device is kept for the next task; a temporary device is deleted.
+3. After successful PR or stack creation, close device sessions, stop this workspace's Metro, and
+   delete its temporary device using [Parallel Device Testing](./parallel-device-testing.md#cleanup).
 4. Rerun local gates after later draft changes, then mark the final head ready for review.
 5. Treat remote CI as the PR-suite gate, with local-only exceptions in [Testing And CI](./testing-and-ci.md).
 

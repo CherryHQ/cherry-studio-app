@@ -1,134 +1,24 @@
 # Parallel Device Testing
 
-This guide owns local coding-agent self-test environments. Each platform has one resident test
-device that every workspace reuses under an exclusive lease. Only a task that needs a device while
-another task is actively using the resident one gets a temporary device, deleted when its lease
-ends. Native differences
-between branches are handled by reinstalling a cached development client, not by creating devices. Physical devices
-and the primary user installation are never self-test targets.
+This guide is the repository's execution standard for coding-agent device acceptance in local
+Conductor workspaces. It covers configuration preparation, shared iOS simulators and Android emulators,
+development-client reuse, Metro sessions, and cleanup. Physical devices are outside this
+workflow. [Testing And CI](./testing-and-ci.md) owns test selection and repository gates.
 
-> Status: host lifecycle implemented; device acceptance not run.
->
-> `pnpm agent:env` owns test-device registration, leases, native fingerprints, development-artifact
-> caching, launch, release, archival and reconciliation. Configuration snapshot/import remains
-> design below.
-
-Apply the user's active authorization. `build` and `start` require the corresponding task
-authorization. Apart from temporary devices, no command creates or deletes a device, and none
-downloads SDK images. Never invoke `build` or `start` merely to verify this tooling.
-
-## Registry And Lock
-
-Ownership lives at `$CONDUCTOR_ROOT_PATH/.local/agent-self-testing/state.json`, outside disposable
-worktrees: workspaces, resident and temporary devices with their leases and installed artifacts, Metro
-processes started by the tool, and cached artifacts under `artifacts/`. Workspace logs live under
-`.context/agent-self-testing/`. Do not store credentials in the registry.
-
-A kernel-held, nonblocking lock serializes registry changes across agents; a busy operation reports
-a retryable error and a crashed process releases it. `build` holds the lock only while reading and
-publishing registry entries, never during compilation.
-
-## Test Devices
-
-Create or pick a simulator/emulator yourself, then register it as the resident device by stable iOS
-UDID or Android AVD ID:
-
-```bash
-pnpm agent:env status
-pnpm agent:env adopt --platform ios --device <udid>
-```
-
-Registering again for the same platform replaces the unleased previous registration; the old device
-is left untouched. Never register a daily-use installation. Unregistered devices are ignored: they
-are neither used nor stopped, and running ones do not block a launch.
-
-The resident device is never deleted. A lease is held by one task session (default
-`CONDUCTOR_SESSION_ID`) until `release`, workspace retirement, or 60 minutes without `agent-device`
-requests from that session (measured from the session's request records, or from the last `start`
-when no session exists). After that idle period, the next `start` closes the stale session and
-takes over the resident device.
-
-When `start` finds the resident device under another task's live lease, it creates a temporary device named
-`Cherry_temp_<platform>_<hash>` with the resident device's type and installed runtime (iOS) or system
-image (Android). It starts with empty app data. The task keeps reusing it; `release`, retirement of
-its workspace, or its own idle expiry deletes it. An interrupted creation can leave an unregistered
-`Cherry_temp_` device; delete it manually.
-
-## Native Compatibility And Development Builds
-
-`fingerprint` uses the installed `expo/fingerprint` API under the development profile, with the
-platform, architecture, native dependency/module inputs, evaluated Expo config and explicit local
-config-plugin inputs. Package scripts, Git ignore files and generated root `ios/`/`android/`
-directories are excluded, consistent with the local EAS source archive. Keep additions to build
-inputs covered in [`native.ts`](../../scripts/agentEnvironment/native.ts).
-
-```bash
-pnpm agent:env fingerprint --platform ios
-pnpm agent:env build --platform ios [--source <checkout>]
-```
-
-`build` is an explicit local EAS development build (`development-simulator` on iOS, `development`
-on Android); it never produces a release build. A verified cache hit returns immediately. New
-artifacts are checksummed and published only after a successful build with an unchanged
-fingerprint. Staging left by a dead build is reclaimed by the next reconciliation.
-
-## Start And App Data
-
-```bash
-pnpm agent:env start --platform ios [--reset-data]
-```
-
-`start` reconciles, takes the lease, reuses the Metro process already serving this workspace on
-`CONDUCTOR_PORT` (for example Conductor's Run script) or starts one, boots the device, installs the
-artifact matching this workspace's fingerprint when a different one is installed, and relaunches the
-development client against this Metro's exact Expo URL. It reports a missing artifact instead of
-building. A port served by another workspace stops the launch; no process is killed.
-
-Reinstalling a development client keeps the app's data. When the output reports `dataFromWorkspace`,
-the data was last used by another workspace and may carry a newer database schema; use
-`--reset-data` to reinstall with empty data when that matters or when the scenario needs a first
-run. Output from `start` includes the `agent-device` session name; keep commands serial and target
-the leased device explicitly. An app opening is not a successful model/tool call or completed
-scenario.
-
-## Release, Archive And Reconciliation
-
-```bash
-pnpm agent:env release
-pnpm agent:env archive
-pnpm agent:env reconcile [--dry-run]
-```
-
-- `release` closes the task's session, shuts down its device and stops the Metro process the tool
-  started. The resident device is kept; a temporary device is deleted. Call it after self-testing
-  and before waiting for review. A failed shutdown or deletion keeps the lease and reports a blocker.
-- `archive` marks the current workspace retired and reconciles. The shared
-  `.conductor/settings.toml` runs it from Conductor's archive hook; machine-local overrides can take
-  precedence.
-- `reconcile` runs inside `start` and `archive`. It releases leases, temporary devices and Metro
-  processes of retired workspaces, deletes idle temporary devices, forgets their records, reclaims dead build staging, and removes artifacts older than
-  seven days that are neither installed nor among the latest two per platform.
-
-Retirement requires either `archive` or both a Git worktree listing without the workspace and the
-absence of its Git administration directory; elapsed time, names or ports alone are not proof. Before
-signalling a Metro group, reconciliation verifies PID/start time, process group, working directory
-and launch command; a group surviving its leader is preserved and reported. Records are removed only
-after confirmed completion.
-
-Evidence in `.context/agent-self-testing/` disappears with the workspace; preserve what is needed
-before archival. Conductor setup installs dependencies only, and its Metro command uses `pnpm dev`,
-not `dev:clear`.
+Apply the user's active authorization before execution. Designing this workflow does not authorize
+builds, device creation/startup, tests, or model/tool calls. Follow authorization already given for
+the task without asking again; this standard does not enable automatic acceptance after every edit.
 
 ## Self-Test Preparation
 
 > Status: design
 >
-> The following configuration preparation contract is accepted. Configuration export/import,
-> primary-source registration and automatic scenario-data handoff are not implemented.
-> The host lifecycle commands above are implemented separately; they do not satisfy this preparation contract.
+> The following preparation contract is accepted. Configuration export/import and source
+> registration are not implemented. The device, development-client and session workflow later in
+> this guide already exists.
 
 An ordinary configured self-test reuses a compatible development client, copies the primary
-environment's user configuration into an independent scenario database on the exclusively leased test device, and creates conversation
+environment's user configuration into an independent workspace database, and creates conversation
 or file data only as its scenario requires. An explicit first-run scenario instead uses fresh app
 defaults and requires no primary registration, configuration snapshot, or import. Device ownership,
 artifact compatibility, authorization, and reporting rules apply to both.
@@ -159,11 +49,11 @@ Planned storage ownership:
 
 | Location | Contents |
 | --- | --- |
-| `$CONDUCTOR_ROOT_PATH/.local/agent-self-testing/` | Implemented resource registry/artifact cache; planned source registration and configuration snapshots |
+| `$CONDUCTOR_ROOT_PATH/.local/agent-self-testing/` | Source registration, immutable configuration snapshots, and compatible development artifacts shared by this repository's workspaces |
 | Workspace `.context/agent-self-testing/` | Preparation receipt, scenario evidence, timing, and temporary transfers |
-| Leased test device's app container | Writable scenario database/assets; shared by workspaces until reset or a future import replaces it |
+| Workspace device's app container | Independent writable database, configuration assets, and locally created scenario content |
 
-Planned configuration snapshots intentionally contain credentials. Keep them and temporary backups private to the local
+Snapshots intentionally contain credentials. Keep them and temporary backups private to the local
 user, outside version control and logs. Export actual credentials, not redacted UI projections.
 Publish shared snapshots/artifacts atomically and immutably. Remove temporary full-database backups
 after extracting configuration; retain only the allowed configuration payload and its assets.
@@ -188,11 +78,6 @@ The [schema registry](../../src/backend/data/db/schemas/index.ts) and
 [preference schema](../../src/shared/data/preference/preferenceSchema.ts) own these fields. New
 tables/preferences require classification before inclusion; do not copy unknown domains wholesale
 or silently drop unsupported configuration fields.
-
-Plugin authorization metadata and native SecureStore credentials need a dedicated transfer or
-reauthorization contract; copying SQLite references does not copy credentials. Desktop pairing and
-device identity remain target-owned. The existing full backup deliberately excludes these secrets
-and includes conversation history, so it is not a configuration-only self-test import.
 
 Initialize installation state separately: `app.onboarding.status` is `completed` for configured
 acceptance and `unseen` for an explicit first-run scenario. Device permission grants remain
@@ -252,7 +137,7 @@ Database migration acceptance uses a separate explicit scenario, not this config
 
 ### Reuse And Refresh
 
-Successful preparation pins the snapshot identity. Re-running preparation validates the exclusive device lease,
+Successful preparation pins the snapshot identity. Re-running preparation validates the device,
 app, and receipt and reuses existing data; it must not duplicate imports, reset scenario content, or
 overwrite workspace configuration edits. A newer primary snapshot does not automatically change an
 already prepared workspace.
@@ -267,6 +152,151 @@ would orphan existing conversations, invalidate required references, or collide 
 created configuration. Keep the target usable on rejection. A clean reset is separate and requires
 authorization to discard that workspace's scenario data; routine preparation never resets it.
 
+### Development Client Reuse
+
+Development clients are shared through the fingerprint-named artifacts in
+[Development Client](#development-client); only native input changes require a new build.
+
+### Coding Agent Procedure And Evidence
+
+1. Identify behavior, platform, scenario baseline, dependencies, and existing authorization. Use
+   [Testing And CI](./testing-and-ci.md) for code-level checks.
+2. Resolve [workspace resources](#workspace-resources) and artifact compatibility; configured
+   acceptance also resolves the primary source and snapshot. Reuse a valid preparation receipt.
+3. Install only when required and import only for a new configured target or explicit refresh.
+   Keep source data separate from all target mutation/cleanup paths.
+4. Open the explicit [workspace session](#metro-and-app-session). Fully relaunch after import and
+   before persistence acceptance following Fast Refresh.
+5. Exercise the requested behavior. Create only the local conversation, attachment, or fixture the
+   scenario needs. Do not import primary conversation/file history to populate a screen. Missing
+   configuration, invalid credentials, inaccessible services, or unsupported device capabilities
+   block the dependent scenario; continue independent work where useful. Never silently substitute
+   a model, mock provider, tool server, or shared device and claim the original scenario passed.
+6. Report preparation separately from scenario results. An app opening proves neither valid
+   credentials nor a successful model/tool call. For actual calls, record Agent/model/MCP identities
+   and observed outcomes. Importing credentials does not authorize external tool actions or bypass
+   product approval behavior; do not require an extra real call for a UI-only scenario.
+7. Retain device/data for continued workspace work. At the cleanup point in
+   [Git Workflow](./git-workflow.md), follow [Cleanup](#cleanup), remove temporary secret-bearing
+   workspace transfers, and preserve the primary source and shared repository cache.
+
+Receipts record baseline, workspace/device/app identity, artifact identity, snapshot/import version
+when applicable, target schema, Metro port, and reuse decisions. Evidence records expected versus
+observed behavior, omissions/blockers, and durations for startup, build/install, import, Metro
+readiness, and scenario execution. Never log secret values or claim unmeasured timing guarantees.
+
+### Implementation Boundaries And Acceptance
+
+Host orchestration belongs under `scripts`; format validation and import belong to the backend data
+owner, with image handling delegated to existing profile, Agent, and provider image owners. Keep any
+runtime import entry development-only and separate from normal startup/seeding and product Data API
+routes. This workflow does not introduce a shared production database or a general remote backend.
+
+Before marking preparation implemented, demonstrate these outcomes with authorized checks:
+
+- Fresh configured target: six configuration domains and required assets restored; relationships
+  resolve; excluded content is empty.
+- Repeated/concurrent preparation: no duplicate imports, content resets, unnecessary native builds,
+  cache clearing, or cross-workspace writes.
+- Refresh: source changes stay pinned until requested; local conflicts are reported; failure leaves
+  existing target data usable.
+- Interruption/schema mismatch: no partial import or source mutation; recovery is repeatable.
+- Native changes: incompatible artifacts rejected and build authorization respected.
+- Missing prerequisites and first-run scenarios: outcomes and chosen baselines reported accurately.
+- Cleanup/retry: only owned resources removed; primary source and shared inputs preserved.
+
+These are future implementation acceptance criteria, not evidence that checks have run. Update the
+status as capabilities land. No preparation command or machine-local setting is installed by this
+design.
+
+## Workspace Resources
+
+Conductor assigns each workspace ten ports: `$CONDUCTOR_PORT` through
+`$((CONDUCTOR_PORT + 9))`. Use the base port for Metro and only that reserved range for companion
+services. A Conductor device test must not use a fixed port such as `8081` or `8084`.
+
+### Resident And Temporary Devices
+
+Each platform has one resident test device that every workspace reuses:
+
+| Platform | Resident device | Temporary device |
+| --- | --- | --- |
+| iOS | Simulator `Cherry Test` | `Cherry Temp ($CONDUCTOR_WORKSPACE_NAME)` |
+| Android | AVD `Cherry_Test` | `Cherry_Temp_$CONDUCTOR_WORKSPACE_NAME` |
+
+The resident device keeps its app data and configuration across tasks and is never deleted. If it
+does not exist, report it; create it only with device-creation authorization. Never use a physical
+device or the user's primary installation.
+
+The device is occupied while another `agent-device` session is bound to it. Before using the
+resident device, inspect sessions:
+
+```bash
+agent-device session list --json
+```
+
+- No other session on it: use it with session `$CONDUCTOR_WORKSPACE_NAME` (iOS) or
+  `${CONDUCTOR_WORKSPACE_NAME}-android`.
+- Another session on it with no activity for 60 minutes: close that session with
+  `agent-device close --session <name>` and take over. Activity is the modification time of the
+  `requests` directory under that session's `sessionStateDir`.
+- Another session active within 60 minutes: do not wait and do not take it over. Create this
+  workspace's temporary device with the resident device's device type (iOS) or system image
+  (Android, `image.sysdir.1` in the resident AVD's `config.ini`):
+
+```bash
+xcrun simctl create "Cherry Temp ($CONDUCTOR_WORKSPACE_NAME)" "<resident device type>"
+avdmanager create avd -n "Cherry_Temp_$CONDUCTOR_WORKSPACE_NAME" -k "<system-images;...>"
+```
+
+A temporary device starts with empty app data. Reuse it for the rest of the task, and delete it at
+[cleanup](#cleanup). Leave other devices, including unrecognized ones, untouched.
+
+### Development Client
+
+Reuse an installed development client until native inputs change. The native fingerprint decides
+compatibility:
+
+```bash
+PROFILE=development pnpm exec fingerprint fingerprint:generate --platform ios | jq -r .hash
+```
+
+Shared artifacts live in `$CONDUCTOR_ROOT_PATH/.local/dev-clients/` as `ios-<hash>.tar.gz` or
+`android-<hash>.apk`. Install the one matching this workspace's hash; reinstalling keeps app data.
+If none matches, report it, or with build authorization build it straight to that path:
+
+```bash
+pnpm build:local --platform ios --profile development-simulator --output "$CONDUCTOR_ROOT_PATH/.local/dev-clients/ios-<hash>.tar.gz"
+pnpm build:local --platform android --output "$CONDUCTOR_ROOT_PATH/.local/dev-clients/android-<hash>.apk"
+```
+
+Extract the iOS archive and install its `.app` with `agent-device install`. iOS simulator and
+physical-device builds are not interchangeable.
+
+## Metro And App Session
+
+Keep Metro running across ordinary iterations and preserve its cache. `dev:clear` is for explicit
+cache troubleshooting, not the default self-test startup. Conductor's Run script starts Metro on the
+base port; otherwise start it yourself:
+
+```bash
+pnpm dev --port "$CONDUCTOR_PORT"
+```
+
+Relaunch the development client on the selected device, then open the exact development-client URL
+printed by this workspace's Metro process. Do not derive or reuse a URL from another workspace.
+
+```bash
+agent-device open com.cherryai.cherrystudio-app.dev --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "<selected device>" --relaunch
+agent-device open "$DEV_CLIENT_URL" --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "<selected device>"
+```
+
+On Android use `com.cherryai.cherrystudio_app.dev`, session `${CONDUCTOR_WORKSPACE_NAME}-android` and
+`--serial` of the running emulator. Keep commands for one session serial.
+
+The resident device's data may have been left by another workspace's branch, including a newer
+database schema. Uninstall and reinstall the development client only when the scenario needs empty
+data; tell the user when that discards configuration they set up.
 
 ## Persistence Failures After Fast Refresh
 
@@ -279,7 +309,8 @@ connection reports no active transaction. The same app process may then hold two
 Before changing UI or persistence code in response to this failure:
 
 1. Capture the app log and confirm that the failure occurs at `BEGIN IMMEDIATE`.
-2. Fully relaunch the app with the leased-device `agent-device open ... --relaunch` command. A Metro reload is not a valid control experiment for this failure.
+2. Fully relaunch the app with the `agent-device open ... --relaunch` command
+   above. A Metro reload is not a valid control experiment for this failure.
 3. Repeat the exact save action. If it succeeds, classify the failure as a stale development
    runtime connection and remove any temporary diagnostic logging before committing.
 4. If it still fails after the full relaunch, investigate transaction ownership and competing
@@ -289,3 +320,18 @@ Before changing UI or persistence code in response to this failure:
 Always perform persistence acceptance from a fully relaunched app after using Fast Refresh. Do not
 delete the simulator database to clear this symptom; that destroys the state needed to reproduce a
 real transaction-lifecycle bug.
+
+## Cleanup
+
+After self-testing, and before waiting for review or at PR creation:
+
+1. Close the session and shut the device down:
+   `agent-device close --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --shutdown` (Android:
+   the `-android` session).
+2. Stop the Metro process you started, if any; stop listeners only in this workspace's port range.
+3. Delete this workspace's temporary device, if one was created:
+   `xcrun simctl delete "Cherry Temp ($CONDUCTOR_WORKSPACE_NAME)"` or
+   `avdmanager delete avd -n "Cherry_Temp_$CONDUCTOR_WORKSPACE_NAME"`.
+
+Never delete the resident device. The repository `.conductor/settings.toml` repeats step 3 on
+workspace archive as a fallback; machine-local Conductor settings can override it.
