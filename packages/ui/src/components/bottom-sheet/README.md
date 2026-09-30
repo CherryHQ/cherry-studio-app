@@ -20,7 +20,8 @@ content. Picker content measures its own available region instead of using the w
 
 The API is intentionally small: `open`, `onClose`, `title`, `children`, exactly one of `size`,
 `height`, or a non-empty `sizes` list; optional `testID`, optional `dismissible`, and an optional
-`headerAction` for one compact control beside the title. An optional `footer` stays fixed below the
+`headerAction` for one compact control beside the title. The title wraps to two lines; when it is the
+content itself, such as a question the user must read in full, pass `titleNumberOfLines={0}`. An optional `footer` stays fixed below the
 flexible body and owns its divider, horizontal action inset, and bottom safe-area spacing; callers
 provide only the footer control. `size` accepts `compact`, `medium`, or `large`, resolving to 40%,
 60%, or 80% of the available screen height, plus `full` for all available height below the top safe

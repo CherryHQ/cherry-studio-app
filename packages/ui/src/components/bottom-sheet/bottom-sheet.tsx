@@ -59,6 +59,8 @@ type BottomSheetBaseProps = {
   open: boolean;
   testID?: string;
   title: string;
+  /** Lines the title may wrap to before truncating; `0` shows it in full. Defaults to 2. */
+  titleNumberOfLines?: number;
 };
 
 export type BottomSheetProps = BottomSheetBaseProps &
@@ -102,6 +104,7 @@ export function BottomSheet(props: BottomSheetProps) {
     open,
     testID,
     title,
+    titleNumberOfLines = 2,
   } = props;
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -231,7 +234,8 @@ export function BottomSheet(props: BottomSheetProps) {
               testID={isDraggable ? 'bottom-sheet-handle' : undefined}
             />
           </View>
-          <View className="min-h-14 flex-row items-center px-5 py-1.5">
+          {/* Controls centre on the title's first line, so a wrapped title grows downward. */}
+          <View className="min-h-14 flex-row items-start px-5 py-1.5">
             {backAction ? (
               <Pressable
                 accessibilityLabel={backAction.accessibilityLabel}
@@ -259,17 +263,19 @@ export function BottomSheet(props: BottomSheetProps) {
             <Text
               accessibilityRole="header"
               className={cn(
-                'min-w-0 font-semibold text-foreground text-lg',
+                'min-w-0 py-2 font-semibold text-foreground text-lg',
                 isCloseActionVisible ? 'shrink px-2 text-center' : 'flex-1',
               )}
-              numberOfLines={2}
+              numberOfLines={titleNumberOfLines}
             >
               {title}
             </Text>
             {isCloseActionVisible ? (
-              <View className="min-w-11 flex-1 items-end">{headerAction}</View>
+              <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
+                {headerAction}
+              </View>
             ) : headerAction ? (
-              <View className="ml-2">{headerAction}</View>
+              <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
             ) : null}
           </View>
           <View
