@@ -59,8 +59,11 @@ type BottomSheetBaseProps = {
   open: boolean;
   testID?: string;
   title: string;
-  /** Lines the title may wrap to before truncating; `0` shows it in full. Defaults to 2. */
-  titleNumberOfLines?: number;
+  /**
+   * `heading` (default) is a short name, truncated after two lines. `prompt` is a question or
+   * request the user must read in full: body-sized and never truncated.
+   */
+  titleVariant?: 'heading' | 'prompt';
 };
 
 export type BottomSheetProps = BottomSheetBaseProps &
@@ -104,7 +107,7 @@ export function BottomSheet(props: BottomSheetProps) {
     open,
     testID,
     title,
-    titleNumberOfLines = 2,
+    titleVariant = 'heading',
   } = props;
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
@@ -263,10 +266,12 @@ export function BottomSheet(props: BottomSheetProps) {
             <Text
               accessibilityRole="header"
               className={cn(
-                'min-w-0 py-2 font-semibold text-foreground text-lg',
+                'min-w-0 font-semibold text-foreground',
+                // Both variants fill the 44-point first line that the header controls centre on.
+                titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
                 isCloseActionVisible ? 'shrink px-2 text-center' : 'flex-1',
               )}
-              numberOfLines={titleNumberOfLines}
+              numberOfLines={titleVariant === 'prompt' ? undefined : 2}
             >
               {title}
             </Text>
