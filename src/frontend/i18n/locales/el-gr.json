@@ -572,6 +572,8 @@
   "endpoint_type.openai": "OpenAI Συνομιλία",
   "endpoint_type.openai-embeddings": "OpenAI Ενσωματώσεις",
   "endpoint_type.openai-response": "Απαντήσεις OpenAI",
+  "fileExport.watermark.download": "Σκάναρε για λήψη της εφαρμογής για κινητά",
+  "fileExport.watermark.downloadLink": "Λήψη της εφαρμογής για κινητά",
   "filePreview.document": "Έγγραφο",
   "filePreview.openFailed": "Καμία εφαρμογή δεν μπορούσε να ανοίξει αυτό το αρχείο.",
   "filePreview.openWith": "Άνοιγμα αρχείου με",

@@ -581,6 +581,8 @@
   "endpoint_type.openai": "OpenAI Charla",
   "endpoint_type.openai-embeddings": "OpenAI Incrustaciones",
   "endpoint_type.openai-response": "Respuestas de OpenAI",
+  "fileExport.watermark.download": "Escanea para descargar la app móvil",
+  "fileExport.watermark.downloadLink": "Descargar la app móvil",
   "filePreview.document": "Documento",
   "filePreview.openFailed": "Ninguna aplicación pudo abrir este archivo.",
   "filePreview.openWith": "Abrir archivo con",

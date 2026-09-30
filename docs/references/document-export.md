@@ -53,7 +53,7 @@ or owns a native view reference.
 
 A document contains an optional title, ordered sections, headings/metadata and text, Markdown,
 image, attachment, detail or reference blocks. Optional bubble/message hints express source-owned
-hierarchy without exposing chat models. Assets refer to managed file IDs or eligible remote URLs.
+hierarchy; message sections may add an emoji avatar and a model display name to their heading. Assets refer to managed file IDs or eligible remote URLs.
 Markdown image references are discovered through parsed tokens so code examples never download
 resources. `{ kind: 'markdown', source, title?, labels? }` normalizes to the same model.
 The app-shell entry supplies localized content labels; programmatic callers may omit them for
@@ -81,11 +81,11 @@ try {
 
 `render` accepts an abort signal and semantic progress, including the current image ordinal and
 total. HTML/image targets receive validated logical width, resolved typography and semantic colors.
-The page freezes typography/time at opening. Images always use a 360-logical-pixel width; HTML
+The page freezes typography at opening. Images always use a 360-logical-pixel width; HTML
 uses a responsive reading column capped at 720 logical pixels. Theme changes regenerate the preview
 except during delivery.
-Image output uses the message-list hierarchy, theme surfaces, Cherry branding and the local
-`YYYY.MM.DD HH:mm` timestamp inside the captured document.
+Image output uses the message-list hierarchy, theme surfaces and the shared Cherry brand/download
+footer inside the captured document.
 
 Markdown/HTML artifacts hold one file and source text. Image artifacts hold a layout (`pages` or
 `single`) and ordered `pages`, each containing its PNG descriptor, width and height. Artifacts,
@@ -102,16 +102,19 @@ the signature, matches.
 HTML and image presentation share an optional resolved `watermark`. The application follows the
 global Share watermark setting, enabled by default. Explicit `cherry` or `none` options override
 that preference; `none` omits the brand footer from every preview and output format.
-The Cherry variant contains a `signature` with resolved background/text colors, the embedded Cherry
-logo, brand name and frozen timestamp. The frontend supplies the shared white
-footer with black text used by painting and file image exports. The renderer copies and validates
+The Cherry variant contains a `signature` with resolved background/text/brand colors, the embedded
+Cherry logo, brand name, localized download copy, an HTTPS download URL and its embedded QR PNG. The
+frontend supplies the shared white footer used by painting and file image exports: one row under a
+Cherry red rule, with the brand and scan copy on the left and the QR code on the right.
+The renderer copies and validates
 the presentation, escapes its text and includes the signature after the content inside `main`.
 The image-only `imageFrame` uses the document background and supplies an accessible document label.
 Image content spans the output width with ordinary text padding, without a contrasting outer frame. Image-to-HTML fallbacks
-retain the watermark. Markdown uses the same resolved watermark's brand name and timestamp in a
-separated text footer; preview and saved text share its formatter.
+retain the watermark. Markdown uses the same resolved watermark's brand name and download link in
+a separated text footer; preview and saved text share its formatter.
 `session.markdown` remains the unbranded source. The signature ends the document and is not repeated
-on every PNG page. PNG pages have no page numbers or reserved ordinal-footer space.
+on every PNG page. The complete footer is kept together on one page. PNG pages have no page numbers
+or reserved ordinal-footer space.
 
 ## Content Behavior
 
@@ -136,7 +139,7 @@ navigation, file access, cookies and new windows, and waits for assets/fonts/lay
 Image preview contains actual PNGs, so it has no interactive links or disclosures.
 
 Chat HTML and images follow the message list: user attachments above right-aligned bubbles,
-assistant names above full-width answers, and ordinary message spacing without document numbering,
+the avatar, assistant name and model row above full-width answers, and ordinary message spacing without document numbering,
 section rules or a large conversation title. The title remains in file metadata and Markdown.
 HTML, images and Markdown preview share `renderHtmlStyles.ts`, accessibility typography and surface/code tokens.
 Markdown preview renders the actual complete output text, including title, resource notes and signature,

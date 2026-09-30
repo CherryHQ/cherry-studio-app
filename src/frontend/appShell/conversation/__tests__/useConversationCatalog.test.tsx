@@ -73,6 +73,36 @@ describe('catalog consumer ownership', () => {
       </QueryClientProvider>
     );
   }
+  it.each(['synchronizing', 'offline', 'suspended'] as const)(
+    'waits without loading while the source is %s, then loads after connecting',
+    async (reason) => {
+      state.set({ availability: { state: 'disabled', reason } });
+      await act(async () => {
+        tree = create(render(false));
+      });
+      expect(requests).toHaveLength(0);
+      expect(results.get('b')?.isLoading).toBe(false);
+
+      await act(async () => state.set({ availability: { state: 'enabled' } }));
+      expect(requests).toHaveLength(1);
+      expect(results.get('b')?.isLoading).toBe(true);
+      await act(async () => {
+        requests[0].resolve({ items: [] });
+        await tick();
+      });
+      await waitForCatalog('b');
+      expect(results.get('b')?.isLoading).toBe(false);
+    },
+  );
+  it('stops reporting loading when the source disconnects before a read settles', async () => {
+    await act(async () => {
+      tree = create(render(false));
+    });
+    expect(results.get('b')?.isLoading).toBe(true);
+    await act(async () => state.set({ availability: { state: 'disabled', reason: 'offline' } }));
+    expect(results.get('b')?.isLoading).toBe(false);
+    expect(results.get('b')?.items).toEqual([]);
+  });
   it('shares one request and keeps it alive when one reader exits', async () => {
     await act(async () => {
       tree = create(render());

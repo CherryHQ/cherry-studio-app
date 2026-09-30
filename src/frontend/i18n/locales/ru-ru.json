@@ -590,6 +590,8 @@
   "endpoint_type.openai": "OpenAI Чат",
   "endpoint_type.openai-embeddings": "OpenAI Вложения",
   "endpoint_type.openai-response": "Ответы OpenAI",
+  "fileExport.watermark.download": "Сканируй, чтобы скачать мобильное приложение",
+  "fileExport.watermark.downloadLink": "Скачать мобильное приложение",
   "filePreview.document": "Документ",
   "filePreview.openFailed": "Ни одно приложение не может открыть этот файл.",
   "filePreview.openWith": "Открыть файл с помощью",

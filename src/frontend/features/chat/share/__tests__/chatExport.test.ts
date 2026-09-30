@@ -80,6 +80,17 @@ test('disabling process includes the final answer and files but excludes earlier
   });
 });
 
+test('answers carry the Cherry avatar and their own model; questions stay plain bubbles', () => {
+  const document = toChatExportDocument(
+    [question, { ...answer, modelName: 'GPT-5' }, { ...answer, id: 'c' }],
+    options,
+  );
+  expect(document.sections[0]).not.toHaveProperty('avatar');
+  expect(document.sections[1]).toMatchObject({ avatar: '🍒', model: 'GPT-5' });
+  expect(document.sections[2]).toMatchObject({ avatar: '🍒' });
+  expect(document.sections[2]).not.toHaveProperty('model');
+});
+
 test('process includes the visible reasoning and intermediate text without timestamps', () => {
   const document = toChatExportDocument([answer], {
     ...options,

@@ -14,7 +14,7 @@ artifact. An optional unchecked source toggle selects an alternate immutable doc
 Images use a fixed 360-logical-pixel layout and 3x output density, independent of the device window.
 Typography follows the frozen accessibility step; semantic colors follow the theme until delivery
 starts. Chat images use right-aligned user bubbles, full-width answers and fixed-height code previews,
-without document titles or message numbering. The Cherry signature and frozen timestamp remain.
+without document titles or message numbering. The shared Cherry brand/download footer remains.
 HTML uses the same chat layout in a responsive column capped at 720 points, with full code content
 scrolling inside 192-point panels. Images show the opening code viewport. Sources use a compact
 count row with a single inline Globe icon and localized count; inline citations use gray superscripts.
@@ -33,14 +33,15 @@ explicitly selects `cherry` or `none`. `none` omits the brand footer from both t
 output, including Markdown. The image-only `imageFrame` uses the document background
 and accessible label. Image content spans the output width with ordinary text padding and no decorative outer frame.
 With Cherry watermarks, Markdown preview and saved text use the
-same separated brand/time footer without logo bytes. The signature appears at the end of the
+same separated brand/download footer without image bytes. The signature appears at the end of the
 document. PNG pages do not include page numbers or reserve space for an ordinal footer.
 
-The signature uses the same full-width white footer as painting and file image exports: the
-original Cherry logo and Cherry Studio name on the left, with the time aligned to the right.
-Shared geometry has a 48-point minimum height at 360 points wide and grows for wrapped text.
-Image footers scale with capture width; responsive HTML retains the base footer typography. The timestamp uses `YYYY.MM.DD HH:mm` and stays frozen across format,
-theme and thinking-option changes. Constant color tokens keep the signature white with black text.
+The signature uses the same full-width white footer as painting and file image exports: one row
+under a Cherry red rule, with the original Cherry logo, Cherry Studio name and localized scan copy
+on the left and a 48-point download QR code on the right. Shared geometry is 66 points tall at 360
+points wide and grows for wrapped text. Image footers scale with capture width; responsive HTML
+retains the base footer typography. Constant color tokens keep the signature white with black text.
+The complete footer stays together on one PNG page.
 Active saving/delivery holds its current presentation until the share sheet finishes.
 
 ## Image Capture

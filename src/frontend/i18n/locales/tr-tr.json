@@ -572,6 +572,8 @@
   "endpoint_type.openai": "OpenAI Sohbet",
   "endpoint_type.openai-embeddings": "OpenAI Yerleştirmeler",
   "endpoint_type.openai-response": "OpenAI Responses",
+  "fileExport.watermark.download": "Mobil uygulamayı indirmek için tara",
+  "fileExport.watermark.downloadLink": "Mobil uygulamayı indir",
   "filePreview.document": "Belge",
   "filePreview.openFailed": "Hiçbir uygulama bu dosyayı açamadı.",
   "filePreview.openWith": "Dosyayı şununla aç:",

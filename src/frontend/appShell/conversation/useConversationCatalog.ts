@@ -29,12 +29,13 @@ function useCatalog<T>(
   const retired =
     availability.state === 'disabled' &&
     ['retired', 'needs-repair', 'not-authorized'].includes(availability.reason);
+  const active = enabled && availability.state === 'enabled';
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as CatalogCursor | undefined,
     queryFn: ({ pageParam, signal }) => read(pageParam, signal),
     getNextPageParam: (page) => page.next,
-    enabled: enabled && availability.state === 'enabled',
+    enabled: active,
     retry: false,
     gcTime: shared ? 5 * 60_000 : 0,
     staleTime: shared ? 30_000 : 0,
@@ -76,6 +77,8 @@ function useCatalog<T>(
   }, [source, kind, queryClient, serializedKey]);
   return {
     ...query,
+    // A disabled source can still have an unsettled read, but cannot report active loading.
+    isLoading: active && query.isLoading,
     data: retired ? undefined : query.data,
     items: retired ? [] : (query.data?.pages.flatMap((page) => page.items) ?? []),
   };

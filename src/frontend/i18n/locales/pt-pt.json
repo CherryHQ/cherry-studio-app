@@ -581,6 +581,8 @@
   "endpoint_type.openai": "OpenAI Chat",
   "endpoint_type.openai-embeddings": "OpenAI Incorporações",
   "endpoint_type.openai-response": "Respostas da OpenAI",
+  "fileExport.watermark.download": "Lê o código para transferir a app móvel",
+  "fileExport.watermark.downloadLink": "Transferir a app móvel",
   "filePreview.document": "Documento",
   "filePreview.openFailed": "Nenhuma aplicação conseguiu abrir este ficheiro.",
   "filePreview.openWith": "Abrir ficheiro com",

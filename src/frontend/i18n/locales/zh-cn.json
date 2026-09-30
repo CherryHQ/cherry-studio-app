@@ -563,6 +563,8 @@
   "endpoint_type.openai": "OpenAI Chat",
   "endpoint_type.openai-embeddings": "OpenAI 嵌入",
   "endpoint_type.openai-response": "OpenAI Responses",
+  "fileExport.watermark.download": "扫码下载移动端",
+  "fileExport.watermark.downloadLink": "下载移动端",
   "filePreview.document": "文档",
   "filePreview.openFailed": "没有可用于打开此文件的应用。",
   "filePreview.openWith": "打开文件",

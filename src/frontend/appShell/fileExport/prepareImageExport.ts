@@ -18,7 +18,11 @@ import {
   type ExportWatermark,
 } from '@/shared/contracts/fileExport';
 import type { FileEntryProvenance } from '@/shared/data/types/file';
-import { EXPORT_SIGNATURE_STYLE, exportSignatureColumns } from '@/shared/utils/exportSignature';
+import {
+  EXPORT_SIGNATURE_STYLE,
+  exportSignatureColumns,
+  validateExportSignature,
+} from '@/shared/utils/exportSignature';
 
 type PreparedImage = { uri: string; release(): void };
 
@@ -30,6 +34,7 @@ export async function prepareImageExport(
   const signature = getExportSignature(watermark);
   if (source.provenance === 'document-export' || !signature)
     return { uri: source.uri, release() {} };
+  validateExportSignature(signature);
 
   const resources: { dispose(): void }[] = [];
   const keep = <T extends { dispose(): void }>(resource: T): T => {
@@ -44,14 +49,16 @@ export async function prepareImageExport(
     keep(image);
     const style = EXPORT_SIGNATURE_STYLE;
     const columns = exportSignatureColumns(style.referenceWidth);
-    const brand = keep(createParagraph(signature.brandName, signature, true, columns.brandWidth));
-    const timestamp = keep(
-      createParagraph(signature.timestamp, signature, false, columns.rightWidth),
+    const brand = keep(createParagraph(signature.brandName, signature, true, columns.textWidth));
+    const download = keep(
+      createParagraph(signature.downloadLabel, signature, false, columns.textWidth),
     );
-    const footerHeight = Math.max(
-      style.minHeight,
-      Math.max(brand.getHeight(), timestamp.getHeight(), style.logoSize) + style.paddingY * 2,
-    );
+    const textHeight = brand.getHeight() + download.getHeight();
+    const contentHeight = Math.max(textHeight, style.logoSize, style.qrCodeSize);
+    const footerHeight = contentHeight + style.paddingY * 2 + style.ruleHeight;
+    // Centers an item of the given height in the area below the rule.
+    const centerY = (height: number) =>
+      style.ruleHeight + (footerHeight - style.ruleHeight - height) / 2;
     const scale = image.width() / style.referenceWidth;
     const outputHeight = image.height() + Math.ceil(footerHeight * scale);
     // CPU rendering preserves the original pixel size without a GPU texture-size limit.
@@ -69,9 +76,12 @@ export async function prepareImageExport(
       Skia.XYWHRect(0, 0, style.referenceWidth, (outputHeight - image.height()) / scale),
       paint,
     );
+    paint.setColor(Skia.Color(signature.brandColor));
+    canvas.drawRect(Skia.XYWHRect(0, 0, style.referenceWidth, style.ruleHeight), paint);
 
-    brand.paint(canvas, columns.brandX, (footerHeight - brand.getHeight()) / 2);
-    timestamp.paint(canvas, columns.rightX, (footerHeight - timestamp.getHeight()) / 2);
+    const textY = centerY(textHeight);
+    brand.paint(canvas, columns.textX, textY);
+    download.paint(canvas, columns.textX, textY + brand.getHeight());
 
     const logoData = keep(Skia.Data.fromBase64(signature.logoDataUrl.split(',')[1]));
     const logo = Skia.Image.MakeImageFromEncoded(logoData);
@@ -83,11 +93,24 @@ export async function prepareImageExport(
       Skia.XYWHRect(0, 0, logo.width(), logo.height()),
       Skia.XYWHRect(
         style.paddingX + (style.logoSize - logoWidth) / 2,
-        (footerHeight - style.logoSize) / 2,
+        centerY(style.logoSize),
         logoWidth,
         style.logoSize,
       ),
       FilterMode.Linear,
+      MipmapMode.None,
+      paint,
+    );
+    const qrCodeData = keep(Skia.Data.fromBase64(signature.qrCodeDataUrl.split(',')[1]));
+    const qrCode = Skia.Image.MakeImageFromEncoded(qrCodeData);
+    if (!qrCode) throw new Error('Cannot decode image export QR code');
+    keep(qrCode);
+    // Nearest sampling keeps module edges sharp for scanners.
+    canvas.drawImageRectOptions(
+      qrCode,
+      Skia.XYWHRect(0, 0, qrCode.width(), qrCode.height()),
+      Skia.XYWHRect(columns.qrCodeX, centerY(style.qrCodeSize), style.qrCodeSize, style.qrCodeSize),
+      FilterMode.Nearest,
       MipmapMode.None,
       paint,
     );
@@ -145,7 +168,7 @@ function createParagraph(
   const fontSize = isPrimary ? style.primarySize : style.secondarySize;
   const lineHeight = isPrimary ? style.primaryLineHeight : style.secondaryLineHeight;
   const builder = Skia.ParagraphBuilder.Make({
-    textAlign: isPrimary ? TextAlign.Left : TextAlign.Right,
+    textAlign: TextAlign.Left,
     textStyle: {
       color,
       fontSize,
