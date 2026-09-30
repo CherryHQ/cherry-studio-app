@@ -1,3 +1,5 @@
+import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { BottomSheet, Button, Input, SelectionIndicator } from '@cherrystudio/ui/components';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,47 +47,52 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       avoidKeyboard
       dismissible={false}
       footer={
-        <View className="flex-row gap-3">
-          {total > 1 ? (
-            <View className="flex-1">
-              <Button
-                disabled={form.locked || form.index === 0}
-                onPress={() => form.navigate(form.index - 1)}
-                testID="user-question-previous"
-                variant="secondary"
-              >
-                <Button.Label>{t('chat.question.previous')}</Button.Label>
-              </Button>
-            </View>
-          ) : null}
-          <View className="flex-1">
-            {/* Remount on a variant change: switching the mounted button from secondary to
-                default in place left its label invisible on iOS. */}
-            <Button
-              key={actionVariant}
-              disabled={form.locked || !form.canAct}
-              loading={form.busy}
-              onPress={advance}
-              testID="user-question-action"
-              variant={actionVariant}
-            >
-              <Button.Label>{actionLabel}</Button.Label>
-            </Button>
-          </View>
-        </View>
+        // Remount on a variant change: switching the mounted button from secondary to default in
+        // place left its label invisible on iOS.
+        <Button
+          key={actionVariant}
+          disabled={form.locked || !form.canAct}
+          loading={form.busy}
+          onPress={advance}
+          testID="user-question-action"
+          variant={actionVariant}
+        >
+          <Button.Label>{actionLabel}</Button.Label>
+        </Button>
       }
       headerAction={
         total > 1 ? (
-          <Text
-            accessibilityLabel={t('chat.question.progressLabel', {
-              current: form.index + 1,
-              total,
-            })}
-            accessibilityLiveRegion="polite"
-            className="text-foreground-tertiary text-sm"
-          >
-            {t('chat.question.progress', { current: form.index + 1, total })}
-          </Text>
+          // Browsing moves between questions without skipping; the footer action answers.
+          <View className="-mr-1.5 flex-row items-center">
+            <Button
+              accessibilityLabel={t('chat.question.previous')}
+              disabled={form.locked || form.index === 0}
+              icon={<ChevronLeftIcon />}
+              onPress={() => form.navigate(form.index - 1)}
+              size="xs"
+              testID="user-question-previous"
+              variant="ghost"
+            />
+            <Text
+              accessibilityLabel={t('chat.question.progressLabel', {
+                current: form.index + 1,
+                total,
+              })}
+              accessibilityLiveRegion="polite"
+              className="text-foreground-tertiary text-sm"
+            >
+              {t('chat.question.progress', { current: form.index + 1, total })}
+            </Text>
+            <Button
+              accessibilityLabel={t('chat.question.next')}
+              disabled={form.locked || form.index === total - 1}
+              icon={<ChevronRightIcon />}
+              onPress={() => form.navigate(form.index + 1)}
+              size="xs"
+              testID="user-question-next"
+              variant="ghost"
+            />
+          </View>
         ) : undefined
       }
       onClose={ignoreClose}
