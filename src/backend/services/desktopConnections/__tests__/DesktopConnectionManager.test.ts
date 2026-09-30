@@ -39,7 +39,7 @@ const original: DesktopConnectionRow = {
   id: 'desktop-1',
   name: 'Desktop',
   deviceId: 'device-1',
-  desktopIdentity: 'peer-1',
+  desktopIdentity: 'peer1',
   configuredEndpoints: [{ host: '192.168.1.2', port: 23333, security: 'ws' as const }],
   grants,
   status: 'paired',
