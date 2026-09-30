@@ -80,11 +80,14 @@ to end before next-turn preparation; reaching the tool budget still allows one f
 Compaction cancellation passes through Pi's execution Context.
 
 When following an upstream release, update both exact package pins, review the upstream changelogs
-and public message/hook/compaction contracts, and rebase the `pi-ai` patch onto the published package.
-The remaining patch disables Bun's Node filesystem fallback, retains structured provider failures,
-and accelerates partial JSON parsing. Portable model utilities and package exports come directly
-from upstream. Review the Pi patch guards and Runtime regression suites before removing any
-remaining patch. Mobile continues to own provider bindings, transport, approvals, application
+and public message/hook/compaction contracts, and rebase both Pi patches onto the published packages.
+The upstream `pi-ai` entry and model catalog reach authentication code with a computed dynamic
+import, which Metro rejects. The `pi-agent-core` patch therefore imports Pi AI through its utility
+subpaths, and the `pi-ai` patch gives the endpoint adapters a local model-runtime module. The `pi-ai`
+patch also disables Bun's Node filesystem fallback, retains structured provider failures, and
+accelerates partial JSON parsing. Jest runs these modules in Node and cannot detect a Metro failure,
+so the patch guard walks the Runtime's Pi module graph. Before removing any remaining patch, review
+that guard and the Runtime regression suites, then bundle the app for a release. Mobile continues to own provider bindings, transport, approvals, application
 budgets, and persistence; adopting upstream releases does not require sharing desktop filesystem
 paths or changing application database fields.
 

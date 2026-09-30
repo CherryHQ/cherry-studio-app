@@ -1,48 +1,84 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
-function readLocalModuleGraph(entry: string): string {
-  const pending = [entry];
-  const visited = new Set<string>();
-  const sources: string[] = [];
+/** Resolve an Earendil package specifier from `origin` as Metro selects its import entry. */
+function resolveEarendilModule(specifier: string, origin: string): string | undefined {
+  const match = /^@earendil-works\/([^/]+)(?:\/(.+))?$/.exec(specifier);
+  if (!match?.[1]) return undefined;
+  let packageDirectory: string | undefined;
+  for (let directory = origin; !packageDirectory; directory = dirname(directory)) {
+    const candidate = join(directory, 'node_modules/@earendil-works', match[1]);
+    if (existsSync(join(candidate, 'package.json'))) packageDirectory = realpathSync(candidate);
+    else if (directory === dirname(directory)) return undefined;
+  }
+  const exportsMap = JSON.parse(readFileSync(join(packageDirectory, 'package.json'), 'utf8'))
+    .exports as Record<string, { import?: string }>;
+  const subpath = match[2] ? `./${match[2]}` : '.';
+  const exact = exportsMap[subpath]?.import;
+  if (exact) return join(packageDirectory, exact);
+  for (const [key, value] of Object.entries(exportsMap)) {
+    const [prefix, suffix = ''] = key.split('*');
+    if (!key.includes('*') || !value.import || !subpath.startsWith(prefix ?? '')) continue;
+    if (!subpath.endsWith(suffix)) continue;
+    const middle = subpath.slice(prefix?.length ?? 0, subpath.length - suffix.length);
+    return join(packageDirectory, value.import.replace('*', middle));
+  }
+  return undefined;
+}
+
+/** Every Earendil module Metro reaches from the entries the app imports. */
+function readModuleGraph(entries: string[]): Map<string, string> {
+  const pending = entries.map((entry) => resolveEarendilModule(entry, process.cwd()) ?? entry);
+  const modules = new Map<string, string>();
 
   while (pending.length > 0) {
     const file = pending.pop();
-    if (!file || visited.has(file)) continue;
-    visited.add(file);
+    if (!file || modules.has(file)) continue;
     const source = readFileSync(file, 'utf8');
-    sources.push(source);
-    for (const match of source.matchAll(/from\s+["']([^"']+)["']/g)) {
+    modules.set(file, source);
+    for (const match of source.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
       const specifier = match[1];
-      if (!specifier?.startsWith('.')) continue;
-      const dependency = resolve(dirname(file), specifier);
-      if (existsSync(dependency)) pending.push(dependency);
+      if (!specifier) continue;
+      const dependency = specifier.startsWith('.')
+        ? resolve(dirname(file), specifier)
+        : resolveEarendilModule(specifier, dirname(file));
+      if (dependency && existsSync(dependency)) pending.push(dependency);
     }
   }
 
-  return sources.join('\n');
+  return modules;
 }
 
 describe('Pi React Native patches', () => {
-  test('uses the official portable Agent and AI exports', () => {
-    const packageRoot = `${process.cwd()}/node_modules/@earendil-works`;
-    const corePackage = JSON.parse(
-      readFileSync(`${packageRoot}/pi-agent-core/package.json`, 'utf8'),
-    );
-    const aiPackage = JSON.parse(readFileSync(`${packageRoot}/pi-ai/package.json`, 'utf8'));
+  test('keeps the Runtime graph out of the Pi model catalog and Node-only modules', () => {
+    // Keep in sync with the Pi value imports under src/backend/ai/agent/runtime/pi.
+    const graph = readModuleGraph([
+      '@earendil-works/pi-agent-core',
+      '@earendil-works/pi-ai/api/anthropic-messages',
+      '@earendil-works/pi-ai/api/azure-openai-responses',
+      '@earendil-works/pi-ai/api/google-generative-ai',
+      '@earendil-works/pi-ai/api/openai-completions',
+      '@earendil-works/pi-ai/api/openai-responses',
+      '@earendil-works/pi-ai/api/simple-options',
+      '@earendil-works/pi-ai/utils/event-stream',
+      '@earendil-works/pi-ai/utils/transcript',
+    ]);
+    const aiDist = `${realpathSync(`${process.cwd()}/node_modules/@earendil-works/pi-ai`)}/dist`;
 
-    expect(corePackage.exports['.']).toEqual({
-      import: './dist/index.js',
-      types: './dist/index.d.ts',
-    });
-    expect(aiPackage.exports['./utils/*']).toEqual({
-      import: './dist/utils/*.js',
-      types: './dist/utils/*.d.ts',
-    });
-    for (const name of ['pi-agent-core', 'pi-ai']) {
-      const graph = readLocalModuleGraph(`${packageRoot}/${name}/dist/index.js`);
-      expect(graph).not.toMatch(/(?:from\s+|require\()["']node:/);
-      expect(graph).not.toContain('from "./node.js"');
+    // The pi-ai entry and model catalog reach auth modules that Metro cannot bundle.
+    expect([...graph.keys()]).not.toContain(`${aiDist}/index.js`);
+    expect([...graph.keys()]).not.toContain(`${aiDist}/models.js`);
+    expect([...graph.keys()].filter((file) => file.startsWith(`${aiDist}/auth/`))).toEqual([]);
+    for (const [file, source] of graph) {
+      expect({ file, nodeImport: /(?:from\s+|require\()["']node:/.test(source) }).toEqual({
+        file,
+        nodeImport: false,
+      });
+      // Metro rejects import() with a computed specifier.
+      expect({ file, dynamicImport: /\bimport\((?!\s*["'])/.test(source) }).toEqual({
+        file,
+        dynamicImport: false,
+      });
     }
   });
 
