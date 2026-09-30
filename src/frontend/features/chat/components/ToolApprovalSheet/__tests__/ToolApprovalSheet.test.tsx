@@ -41,12 +41,16 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     BottomSheet: MockBottomSheet,
     Button: MockButton,
+    MessagePart: {
+      ValueSection: ({ value }: { value: unknown }) => (
+        <MockText>{value === undefined ? null : JSON.stringify(value)}</MockText>
+      ),
+    },
   };
 });
 
 const allowLabel = 'chat.tool.approval.allow';
 const denyLabel = 'chat.tool.approval.deny';
-const stopLabel = 'chat.input.action.stopGenerating';
 
 function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingToolApproval {
   return {
@@ -68,18 +72,15 @@ describe('ToolApprovalSheet', () => {
     overrides: {
       approvals?: readonly PendingToolApproval[];
       canRespond?: boolean;
-      onCancel?: () => Promise<void>;
       onRespond?: () => Promise<void>;
     } = {},
   ) {
-    const onCancel = jest.fn(overrides.onCancel ?? (async () => undefined));
     const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
     const element = (approvals: readonly PendingToolApproval[]) => (
       <ToolApprovalSheet
         approvals={approvals}
         canRespond={overrides.canRespond}
         isOpen
-        onCancel={onCancel}
         onRespond={onRespond}
       />
     );
@@ -89,7 +90,6 @@ describe('ToolApprovalSheet', () => {
     });
 
     return {
-      onCancel,
       onRespond,
       rerender: (approvals: readonly PendingToolApproval[]) =>
         act(() => {
@@ -140,14 +140,7 @@ describe('ToolApprovalSheet', () => {
 
   test('does not mount a sheet before an approval exists', () => {
     act(() => {
-      renderer = create(
-        <ToolApprovalSheet
-          approvals={[]}
-          isOpen={false}
-          onCancel={jest.fn()}
-          onRespond={jest.fn()}
-        />,
-      );
+      renderer = create(<ToolApprovalSheet approvals={[]} isOpen={false} onRespond={jest.fn()} />);
     });
 
     expect(renderer.root.findAllByType(BottomSheet)).toHaveLength(0);
@@ -172,19 +165,10 @@ describe('ToolApprovalSheet', () => {
     });
   });
 
-  test('stops the turn without approving or denying the tool', async () => {
-    const { onCancel, onRespond } = render();
-
-    await press(stopLabel);
-
-    expect(onCancel).toHaveBeenCalledTimes(1);
-    expect(onRespond).not.toHaveBeenCalled();
-  });
-
-  test('uses a solid danger action for denial', () => {
+  test('keeps denial neutral and allow as the primary action', () => {
     render();
 
-    expect(findButton(denyLabel)?.props.variant).toBe('destructive');
+    expect(findButton(denyLabel)?.props.variant).toBe('secondary');
     expect(findButton(allowLabel)?.props.variant).toBe('default');
   });
 
@@ -292,22 +276,20 @@ describe('ToolApprovalSheet', () => {
     expect(renderedTexts()).not.toContain('location_get_current');
   });
 
-  test('blocks unavailable decisions while allowing the turn to be stopped', async () => {
-    const { onCancel, onRespond } = render({ canRespond: false });
+  test('blocks unavailable decisions', async () => {
+    const { onRespond } = render({ canRespond: false });
 
     expect(findButton(allowLabel)?.props.disabled).toBe(true);
     expect(findButton(denyLabel)?.props.disabled).toBe(true);
     await press(allowLabel);
     await press(denyLabel);
     expect(onRespond).not.toHaveBeenCalled();
-    await press(stopLabel);
-    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   test('retains asynchronously loaded arguments during the close animation', () => {
     const { rerender } = render({ approvals: [makeApproval({ input: undefined })] });
     rerender([makeApproval({ input: { command: 'ls' } })]);
     rerender([]);
-    expect(renderedTexts()).toContain(JSON.stringify({ command: 'ls' }, null, 2));
+    expect(renderedTexts()).toContain(JSON.stringify({ command: 'ls' }));
   });
 });

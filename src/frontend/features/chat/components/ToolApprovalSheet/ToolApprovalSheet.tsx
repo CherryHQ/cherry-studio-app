@@ -1,4 +1,4 @@
-import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, MessagePart } from '@cherrystudio/ui/components';
 import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -21,7 +21,6 @@ type ToolApprovalSheetProps = {
   isOpen: boolean;
   canRespond?: boolean;
   children?: ReactNode;
-  onCancel?: () => Promise<void>;
   onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
 };
 
@@ -31,7 +30,6 @@ export function ToolApprovalSheet({
   isOpen,
   canRespond = true,
   children,
-  onCancel,
   onRespond,
 }: ToolApprovalSheetProps) {
   const { t } = useTranslation();
@@ -56,23 +54,15 @@ export function ToolApprovalSheet({
 
   const isCurrent = isOpen && approvals[0]?.approvalId === approval.approvalId;
   const canDecide = isCurrent && canRespond && !response.isSubmitting;
-  const submit = async (action: 'allow' | 'deny' | 'stop') => {
+  const submit = async (approved: boolean) => {
     const { approvalId } = approval;
-    if (
-      !isCurrent ||
-      submitting.current.has(approvalId) ||
-      (action === 'stop' ? !onCancel : !canDecide)
-    ) {
+    if (!canDecide || submitting.current.has(approvalId)) {
       return;
     }
     submitting.current.add(approvalId);
     setResponse((current) => ({ ...current, isSubmitting: true }));
     try {
-      if (action === 'stop') {
-        await onCancel?.();
-      } else {
-        await onRespond({ approvalId, approved: action === 'allow' });
-      }
+      await onRespond({ approvalId, approved });
     } finally {
       submitting.current.delete(approvalId);
       setResponse((current) =>
@@ -88,8 +78,7 @@ export function ToolApprovalSheet({
         <ToolApprovalSheetActions
           canRespond={canDecide}
           isSubmitting={response.isSubmitting}
-          onCancel={onCancel && isCurrent ? () => void submit('stop') : undefined}
-          onRespond={(approved) => void submit(approved ? 'allow' : 'deny')}
+          onRespond={(approved) => void submit(approved)}
         />
       }
       onClose={ignoreClose}
@@ -100,7 +89,7 @@ export function ToolApprovalSheet({
       <ScrollView
         key={approval.approvalId}
         className="min-h-0 flex-1"
-        contentContainerClassName="gap-4 px-6 pt-2 pb-4"
+        contentContainerClassName="gap-4 px-5 pt-2 pb-4"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -117,7 +106,7 @@ export function ToolApprovalSheet({
             </Text>
           ) : null}
         </View>
-        <ApprovalArgumentsPreview input={approval.input} />
+        <MessagePart.ValueSection title={t('chat.tool.arguments')} value={approval.input} />
         {children}
       </ScrollView>
     </BottomSheet>
@@ -127,72 +116,31 @@ export function ToolApprovalSheet({
 function ToolApprovalSheetActions({
   canRespond,
   isSubmitting,
-  onCancel,
   onRespond,
 }: {
   canRespond: boolean;
   isSubmitting: boolean;
-  onCancel?: () => void;
   onRespond: (approved: boolean) => void;
 }) {
   const { t } = useTranslation();
 
   return (
-    <View className="gap-4">
-      {onCancel ? (
-        <Button disabled={isSubmitting} onPress={onCancel} variant="secondary">
-          <Button.Label>{t('chat.input.action.stopGenerating')}</Button.Label>
+    <View className="flex-row gap-3">
+      <View className="flex-1">
+        <Button disabled={!canRespond} onPress={() => onRespond(false)} variant="secondary">
+          <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
         </Button>
-      ) : null}
-      <View className="flex-row gap-3">
-        <View className="flex-1">
-          <Button disabled={!canRespond} onPress={() => onRespond(false)} variant="destructive">
-            <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
-          </Button>
-        </View>
-        <View className="flex-1">
-          <Button
-            disabled={!canRespond}
-            loading={isSubmitting}
-            onPress={() => onRespond(true)}
-            variant="default"
-          >
-            <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
-          </Button>
-        </View>
+      </View>
+      <View className="flex-1">
+        <Button
+          disabled={!canRespond}
+          loading={isSubmitting}
+          onPress={() => onRespond(true)}
+          variant="default"
+        >
+          <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
+        </Button>
       </View>
     </View>
   );
-}
-
-function ApprovalArgumentsPreview({ input }: { input: unknown }) {
-  const { t } = useTranslation();
-  const preview = formatApprovalInput(input);
-
-  if (!preview) {
-    return null;
-  }
-
-  return (
-    <View className="gap-1">
-      <Text className="text-foreground-tertiary text-xs">{t('chat.tool.arguments')}</Text>
-      <View className="rounded-md bg-secondary">
-        <Text className="p-2 font-mono text-foreground text-xs" selectable>
-          {preview}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function formatApprovalInput(input: unknown): string {
-  if (input === undefined || input === null) {
-    return '';
-  }
-
-  try {
-    return JSON.stringify(input, null, 2);
-  } catch {
-    return String(input);
-  }
 }
