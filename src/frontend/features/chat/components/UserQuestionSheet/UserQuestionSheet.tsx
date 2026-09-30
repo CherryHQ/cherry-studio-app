@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
+import { useResolveClassNames } from 'uniwind';
 
 import { useComposerPresentationActions } from '@/frontend/components/Composer';
 
@@ -35,7 +36,10 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         ? 'chat.question.next'
         : 'chat.question.skip',
   );
-  const actionVariant = form.action === 'skip' ? 'secondary' : 'default';
+  // Skipping is the quiet way out; an answer turns the action into the filled next step.
+  const actionVariant = form.action === 'skip' ? 'ghost' : 'default';
+  // The free-text field matches the option cards it continues.
+  const fieldStyle = useResolveClassNames('min-h-13 rounded-xl px-4');
   const advance = () => {
     // Submitting ends typing at once rather than when the answered sheet closes.
     if (form.action === 'submit') void KeyboardController.dismiss();
@@ -114,7 +118,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         showsVerticalScrollIndicator={false}
       >
         {form.question.options.length ? (
-          <View className="-mx-3 gap-1">
+          <View className="gap-2">
             {form.question.options.map((option) => {
               const selected = form.answer.selectedOptionIds.includes(option.id);
               return (
@@ -124,20 +128,20 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
                   accessibilityHint={option.description}
                   accessibilityRole={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
                   accessibilityState={{ checked: selected, disabled: form.locked }}
-                  className={`min-h-11 flex-row items-center gap-3 rounded-lg px-3 py-2 active:opacity-70 ${selected ? 'bg-secondary' : ''}`}
+                  className={`min-h-13 flex-row items-center gap-3 rounded-xl border bg-field px-4 py-3 active:opacity-70 ${selected ? 'border-foreground' : 'border-border'}`}
                   disabled={form.locked}
                   onPress={() => form.select(option.id)}
                 >
-                  <SelectionIndicator
-                    control={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
-                    selected={selected}
-                  />
                   <View className="min-w-0 flex-1 gap-0.5">
-                    <Text className="text-base text-foreground">{option.label}</Text>
+                    <Text className="font-medium text-base text-foreground">{option.label}</Text>
                     {option.description ? (
                       <Text className="text-foreground-tertiary text-sm">{option.description}</Text>
                     ) : null}
                   </View>
+                  <SelectionIndicator
+                    control={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
+                    selected={selected}
+                  />
                 </Pressable>
               );
             })}
@@ -162,6 +166,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
           onSubmitEditing={advance}
           placeholder={t('chat.question.custom')}
           returnKeyType={form.action === 'submit' ? 'done' : 'next'}
+          style={fieldStyle}
           testID="user-question-custom"
           value={form.answer.text}
         />
