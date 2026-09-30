@@ -14,11 +14,10 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
-import type { DesktopConnectionsModule } from '@/shared/contracts';
+import type { DesktopConnectionsModule, DesktopPairingProgress } from '@/shared/contracts';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import {
   type DesktopImportSelectionsDto,
-  type DesktopPairingClaim,
   type DesktopPairingQr,
   DesktopPairingQrSchema,
   DesktopProvidersSnapshotSchema,
@@ -96,16 +95,18 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   pair(
     input: PairDesktopConnectionDto,
     signal: AbortSignal,
-    onClaim?: (claim: DesktopPairingClaim) => void,
+    onProgress?: (progress: DesktopPairingProgress) => void,
   ) {
     return this.run('pair', signal, async (store, signal) => {
       const qr = PairDesktopConnectionSchema.parse(input);
       const id = qr.connectionId ?? Crypto.randomUUID();
       if (qr.connectionId) await store.getRow(id);
+      onProgress?.({ stage: 'connecting' });
       const session = await this.connect(qr, signal).catch((error: unknown) => {
         throw translate(error);
       });
       try {
+        onProgress?.({ stage: 'requesting' });
         const claim = await session.request(
           'pairing.claim',
           {
@@ -117,10 +118,14 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
           },
           signal,
         );
-        onClaim?.({ expiresAt: claim.expiresAt, verificationCode: claim.verificationCode });
+        onProgress?.({
+          stage: 'waiting',
+          claim: { expiresAt: claim.expiresAt, verificationCode: claim.verificationCode },
+        });
         for (;;) {
           const decision = await session.request('pairing.get', { claimId: claim.claimId }, signal);
           if (decision.status === 'approved') {
+            onProgress?.({ stage: 'saving' });
             const connection = await store.savePair(
               {
                 desktopIdentity: qr.desktopIdentity,
@@ -138,6 +143,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               qr.desktopIdentity,
               qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
             );
+            onProgress?.({ stage: 'syncing' });
             await this.connections!.syncEndpoints(await store.getRow(id), session, signal);
             return connection;
           }

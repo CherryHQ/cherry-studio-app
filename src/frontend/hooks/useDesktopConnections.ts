@@ -1,13 +1,10 @@
-import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useBackendModule, useQuery } from '@/frontend/data';
 import type {
   DesktopImportSelectionsDto,
-  DesktopPairingClaim,
   DesktopPairingQr,
-  PairDesktopConnectionDto,
 } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
@@ -36,14 +33,7 @@ export function useDesktopConnection(id: string | undefined) {
   };
 }
 
-type Operation =
-  | 'location'
-  | 'pair'
-  | 'remove'
-  | 'preview'
-  | 'import'
-  | 'endpoints'
-  | 'save-endpoint';
+type Operation = 'location' | 'remove' | 'preview' | 'import';
 
 export function useDesktopConnectionActions() {
   const connections = useBackendModule('desktopConnections');
@@ -103,11 +93,6 @@ export function useDesktopConnectionActions() {
     [queryClient],
   );
 
-  const pair = useCallback(
-    (input: PairDesktopConnectionDto, onClaim?: (claim: DesktopPairingClaim) => void) =>
-      run('pair', (signal) => connections.pair(input, signal, onClaim)),
-    [connections, run],
-  );
   const updateLocation = useCallback(
     (id: string, qr: DesktopPairingQr) =>
       run('location', async (signal) => {
@@ -135,18 +120,11 @@ export function useDesktopConnectionActions() {
   );
 
   return {
-    isCheckingEndpoints: pending === 'endpoints',
-    isSavingEndpoint: pending === 'save-endpoint',
-    getEndpoints: (id: string) =>
-      run('endpoints', (signal) => connections.getEndpoints(id, signal)),
-    saveEndpoint: (id: string, endpoint: DirectEndpoint) =>
-      run('save-endpoint', (signal) => connections.saveEndpoint(id, endpoint, signal)),
-    isPairing: pending === 'pair' || pending === 'location',
+    isPairing: pending === 'location',
     updateLocation,
     isRemoving: pending === 'remove',
     isPreviewing: pending === 'preview',
     isImporting: pending === 'import',
-    pair,
     remove,
     preview,
     importSelected,

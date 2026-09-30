@@ -10,6 +10,10 @@ import type {
 } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
+export type DesktopPairingProgress =
+  | { stage: 'connecting' | 'requesting' | 'saving' | 'syncing' }
+  | { stage: 'waiting'; claim: DesktopPairingClaim };
+
 /** Sync enabled PC provider configuration; add missing enabled models and preserve existing models. */
 export interface DesktopConnectionsModule {
   getEndpoints(id: string, signal: AbortSignal): Promise<DirectEndpoint[]>;
@@ -21,7 +25,7 @@ export interface DesktopConnectionsModule {
   pair(
     input: PairDesktopConnectionDto,
     signal: AbortSignal,
-    onClaim?: (claim: DesktopPairingClaim) => void,
+    onProgress?: (progress: DesktopPairingProgress) => void,
   ): Promise<DesktopConnection>;
   updateLocation(id: string, input: DesktopPairingQr, signal: AbortSignal): Promise<void>;
   remove(id: string, signal: AbortSignal): Promise<void>;

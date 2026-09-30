@@ -353,6 +353,41 @@ describe('DesktopConnectionRuntime', () => {
     expect(invalidate).toHaveBeenCalledWith(id, 'removed');
   });
 
+  it('reports connection progress before the desktop responds and never advances ahead of approval', async () => {
+    const transport = deferred<ReturnType<typeof createSession>>();
+    const approval = deferred<unknown>();
+    const saving = deferred<typeof connection>();
+    const waiting = deferred<void>();
+    const saveStarted = deferred<void>();
+    const connecting = deferred<void>();
+    const events: string[] = [];
+    const session = createSession({
+      'pairing.claim': () => ({ claimId: 'claim', verificationCode: '123456', expiresAt: 'later' }),
+      'pairing.get': () => approval.promise,
+    });
+    connect.mockImplementationOnce(() => transport.promise as never);
+    store.savePair.mockImplementationOnce(() => saving.promise);
+    const result = runtime.pair(pairing, signal(), (event) => {
+      events.push(event.stage);
+      if (event.stage === 'connecting') connecting.resolve();
+      if (event.stage === 'waiting') waiting.resolve();
+      if (event.stage === 'saving') saveStarted.resolve();
+    });
+    await connecting.promise;
+    expect(events).toEqual(['connecting']);
+    transport.resolve(session);
+    await waiting.promise;
+    expect(events).toEqual(['connecting', 'requesting', 'waiting']);
+    expect(store.savePair).not.toHaveBeenCalled();
+    approval.resolve({ status: 'approved', deviceId: row.deviceId, authorization: { grants } });
+    await saveStarted.promise;
+    expect(events.at(-1)).toBe('saving');
+    expect(events).not.toContain('syncing');
+    saving.resolve(connection);
+    await expect(result).resolves.toEqual(connection);
+    expect(events.at(-1)).toBe('syncing');
+  });
+
   it('claims the invitation, reports the verification code, then stores the approved grants', async () => {
     let polls = 0;
     const session = createSession({
@@ -373,16 +408,22 @@ describe('DesktopConnectionRuntime', () => {
             },
     });
     connect.mockResolvedValue(session as never);
-    const onClaim = jest.fn();
+    const onProgress = jest.fn();
     const invalidate = jest.spyOn(manager, 'invalidate');
 
-    await expect(runtime.pair(pairing, signal(), onClaim)).resolves.toEqual(connection);
+    await expect(runtime.pair(pairing, signal(), onProgress)).resolves.toEqual(connection);
 
     expect(invalidate).toHaveBeenCalledWith(id);
-    expect(onClaim).toHaveBeenCalledWith({
-      verificationCode: '123456',
-      expiresAt: '2026-09-22T00:02:00.000Z',
-    });
+    expect(onProgress.mock.calls.map(([event]) => event)).toEqual([
+      { stage: 'connecting' },
+      { stage: 'requesting' },
+      {
+        stage: 'waiting',
+        claim: { verificationCode: '123456', expiresAt: '2026-09-22T00:02:00.000Z' },
+      },
+      { stage: 'saving' },
+      { stage: 'syncing' },
+    ]);
     expect(session.calls[0]).toMatchObject({
       method: 'pairing.claim',
       params: { invitationId: 'invitation', capabilities: ['configuration', 'agent'] },
@@ -415,7 +456,11 @@ describe('DesktopConnectionRuntime', () => {
     });
     connect.mockResolvedValue(session as never);
 
-    await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({ details: { reason } });
+    const events: string[] = [];
+    await expect(
+      runtime.pair(pairing, signal(), (event) => events.push(event.stage)),
+    ).rejects.toMatchObject({ details: { reason } });
+    expect(events).toEqual(['connecting', 'requesting', 'waiting']);
     expect(store.savePair).not.toHaveBeenCalled();
     expect(session.close).toHaveBeenCalled();
   });

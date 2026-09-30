@@ -1,6 +1,6 @@
 import { ContentState, Section, useAlert } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useState } from 'react';
+import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -13,14 +13,12 @@ import {
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { describeCapabilities } from '../describeCapabilities';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
-import { DesktopEndpointsEditor } from './DesktopEndpointsEditor';
 
 export function DeviceConnectionDetailScreen() {
   const { connectionId } = useLocalSearchParams<{ connectionId?: string }>();
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const { connection, error, isLoading, refetch } = useDesktopConnection(connectionId);
   const { isRemoving, remove } = useDesktopConnectionActions();
 
@@ -120,28 +118,15 @@ export function DeviceConnectionDetailScreen() {
           }
         />
         <Section.Item
-          accessibilityState={{ expanded: isAdvancedOpen }}
-          label={t('settings.deviceConnections.advanced')}
-          onPress={() => setIsAdvancedOpen((value) => !value)}
+          label={t('settings.deviceConnections.location.scan')}
+          onPress={() =>
+            router.push({
+              params: { connectionId: connection.id, purpose: 'location' },
+              pathname: '/settings/device-connections/scan',
+            })
+          }
         />
       </Section>
-
-      {isAdvancedOpen ? (
-        <>
-          <Section>
-            <Section.Item
-              label={t('settings.deviceConnections.location.scan')}
-              onPress={() =>
-                router.push({
-                  params: { connectionId: connection.id, purpose: 'location' },
-                  pathname: '/settings/device-connections/scan',
-                })
-              }
-            />
-          </Section>
-          <DesktopEndpointsEditor key={connection.id} connection={connection} />
-        </>
-      ) : null}
 
       <Section>
         <Section.Item
