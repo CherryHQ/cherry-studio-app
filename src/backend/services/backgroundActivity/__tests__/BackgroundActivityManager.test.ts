@@ -12,7 +12,13 @@ type TestProps = BackgroundActivityBaseProps & { detail: string };
 
 function createMockPresenter(
   capabilities: Partial<
-    Pick<BackgroundActivityPresenter<TestProps>, 'presentWhile' | 'shouldHoldLeaseUntilDelivery'>
+    Pick<
+      BackgroundActivityPresenter<TestProps>,
+      | 'presentWhile'
+      | 'requiresForegroundStart'
+      | 'requiresPredecessorRetirement'
+      | 'shouldHoldLeaseUntilDelivery'
+    >
   > = {},
 ) {
   const handles: { dismiss: jest.Mock; end: jest.Mock; isActive: jest.Mock; update: jest.Mock }[] =
@@ -120,6 +126,85 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
       expect.objectContaining({ finishedAtEpochMs: expect.any(Number) }),
       expect.objectContaining({ phaseStartedInBackground: expect.any(Boolean) }),
     );
+    await manager._doStop();
+  });
+
+  test('waits for foreground admission, then retains the same activity through visibility changes', async () => {
+    const { handles, presenter } = createMockPresenter({ requiresForegroundStart: true });
+    const manager = await createManager([presenter]);
+    appStateListener?.('background');
+    const session = manager.startSession({
+      keepAlive: true,
+      presenter,
+      props: makeProps('one'),
+      tag: 'chat.pending',
+    });
+    session.update(makeProps('two'), { urgent: true });
+    await flushOperations();
+    expect(presenter.start).not.toHaveBeenCalled();
+    expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+    appStateListener?.('active');
+    expect(presenter.start).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: 'two' }),
+      undefined,
+    );
+    appStateListener?.('inactive');
+    appStateListener?.('background');
+    appStateListener?.('active');
+    await flushOperations();
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    expect(handles[0]!.end).not.toHaveBeenCalled();
+    session.cancel();
+    await flushOperations();
+    await manager._doStop();
+  });
+
+  test('retries a refused foreground-only card once on foreground return without releasing execution', async () => {
+    const { presenter } = createMockPresenter({ requiresForegroundStart: true });
+    presenter.start.mockImplementationOnce(() => {
+      throw new Error('Activities disabled');
+    });
+    const manager = await createManager([presenter]);
+    const session = manager.startSession({
+      keepAlive: true,
+      presenter,
+      props: makeProps('running'),
+      tag: 'chat.refused',
+    });
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    appStateListener?.('background');
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    appStateListener?.('active');
+    expect(presenter.start).toHaveBeenCalledTimes(2);
+    expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+    session.cancel();
+    await flushOperations();
+    await manager._doStop();
+  });
+
+  test('ends before dismissing a result whose destination is already visible', async () => {
+    const { handles, presenter } = createMockPresenter({ shouldHoldLeaseUntilDelivery: true });
+    const manager = await createManager([presenter]);
+    const url = 'cherrystudio:///?sessionId=visible';
+    visibleTaskListener?.(url);
+    const session = manager.startSession({
+      keepAlive: true,
+      deepLinkUrl: url,
+      presenter,
+      props: makeProps('running'),
+      tag: 'chat.visible',
+    });
+    const order: string[] = [];
+    handles[0]!.end.mockImplementation(async () => {
+      order.push('end');
+    });
+    handles[0]!.dismiss.mockImplementation(async () => {
+      order.push('dismiss');
+    });
+    await session.finish(makeProps('completed'));
+    await manager.dismissTask(url);
+    expect(order).toEqual(['end', 'dismiss']);
+    expect(mockLeases[0]!.release).toHaveBeenCalledTimes(1);
     await manager._doStop();
   });
 
@@ -360,6 +445,85 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     visibleTaskListener?.(deepLinkUrl);
     await flushMicrotasks();
     expect(handles[1]?.dismiss).not.toHaveBeenCalled();
+    await manager._doStop();
+  });
+
+  test('awaits predecessor retirement and foreground admission before creating the next native identity', async () => {
+    const { handles, presenter } = createMockPresenter({
+      requiresForegroundStart: true,
+      requiresPredecessorRetirement: true,
+      shouldHoldLeaseUntilDelivery: true,
+    });
+    const manager = await createManager([presenter]);
+    const deepLinkUrl = 'cherrystudio:///?sessionId=session-1';
+    const first = manager.startSession({
+      deepLinkUrl,
+      keepAlive: true,
+      presenter,
+      props: makeProps('first'),
+      tag: 'chat.first',
+    });
+    await first.finish(makeProps('completed'));
+    let retire!: () => void;
+    const retirement = new Promise<void>((resolve) => {
+      retire = resolve;
+    });
+    handles[0]!.dismiss.mockImplementation(() => retirement);
+    const next = manager.startSession({
+      deepLinkUrl,
+      keepAlive: true,
+      presenter,
+      props: makeProps('second'),
+      tag: 'chat.second',
+    });
+    next.update(makeProps('latest'), { urgent: true });
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    appStateListener?.('background');
+    retire();
+    await flushOperations();
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    expect(mockLeases[1]!.release).not.toHaveBeenCalled();
+    appStateListener?.('active');
+    expect(presenter.start).toHaveBeenCalledTimes(2);
+    expect(presenter.start).toHaveBeenLastCalledWith(
+      expect.objectContaining({ detail: 'latest' }),
+      deepLinkUrl,
+    );
+    next.cancel();
+    await flushOperations();
+    await manager._doStop();
+  });
+
+  test('rapid cancel and resend cannot allocate a successor before the old activity ends', async () => {
+    const { handles, presenter } = createMockPresenter({ requiresPredecessorRetirement: true });
+    const manager = await createManager([presenter]);
+    const deepLinkUrl = 'cherrystudio:///?sessionId=session-1';
+    const first = manager.startSession({
+      deepLinkUrl,
+      keepAlive: true,
+      presenter,
+      props: makeProps('first'),
+      tag: 'chat.first',
+    });
+    let retire!: () => void;
+    const retirement = new Promise<void>((resolve) => {
+      retire = resolve;
+    });
+    handles[0]!.end.mockImplementation(() => retirement);
+    first.cancel();
+    const next = manager.startSession({
+      deepLinkUrl,
+      keepAlive: true,
+      presenter,
+      props: makeProps('second'),
+      tag: 'chat.second',
+    });
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    retire();
+    await flushOperations();
+    expect(presenter.start).toHaveBeenCalledTimes(2);
+    next.cancel();
+    await flushOperations();
     await manager._doStop();
   });
 

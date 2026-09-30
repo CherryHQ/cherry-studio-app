@@ -120,6 +120,7 @@ const noOpNaming: NamingOverride = {
   maybeRenameFromFirstUserMessage: async () => null,
 };
 const backgroundReplyTurn = {
+  updateContent: jest.fn(),
   awaitApproval: jest.fn(),
   finish: jest.fn(),
   update: jest.fn(),

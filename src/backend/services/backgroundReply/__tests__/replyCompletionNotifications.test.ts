@@ -80,6 +80,50 @@ describe('createReplyCompletionNotifier', () => {
     );
   });
 
+  it('awaits retirement of the activity before delivering its replacement', async () => {
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+    });
+    let retired!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const retirement = new Promise<void>((resolve) => {
+      retired = resolve;
+    });
+    const delivery = notifier.notifyTurnFinished(
+      event({
+        beforeDelivery: async () => {
+          entered();
+          await retirement;
+        },
+      }),
+    );
+    await started;
+    expect(notices).not.toHaveBeenCalled();
+    retired();
+    await expect(delivery).resolves.toBe(true);
+  });
+
+  it('does not deliver a predecessor after a new turn takes over during retirement', async () => {
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+    });
+    let current = true;
+    await expect(
+      notifier.notifyTurnFinished(
+        event({
+          isCurrent: () => current,
+          beforeDelivery: async () => {
+            current = false;
+          },
+        }),
+      ),
+    ).resolves.toBe(false);
+    expect(notices).not.toHaveBeenCalled();
+  });
+
   it('stays silent for cancellations, foreground endings, and a disabled preference', async () => {
     const notifier = createReplyCompletionNotifier({
       isReplyCompletionNotificationEnabled: enabled,

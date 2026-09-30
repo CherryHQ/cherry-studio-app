@@ -25,4 +25,25 @@ export interface SystemIntegrationNativeModule {
   claimNextEntry(): Promise<NativeSystemEntry | null>;
   releaseEntry(id: string): Promise<void>;
   completeEntry(id: string): Promise<void>;
+  getBackgroundRunSettings?(): Promise<{
+    batteryOptimizationExempt: boolean | null;
+    lowPowerMode: boolean;
+    liveActivitiesEnabled: boolean | null;
+    manufacturer: string;
+  }>;
+  openBackgroundRunSettings?(): Promise<void>;
+  /** Android-only notification transport, sharing IDs with the foreground service. */
+  getBackgroundTaskNotificationId?(key: string): number;
+  showBackgroundTaskNotification?(
+    id: number,
+    title: string,
+    body: string,
+    url: string | null,
+    ongoing: boolean,
+    alert: boolean,
+    channelName: string,
+  ): Promise<void>;
+  dismissBackgroundTaskNotification?(id: number): Promise<void>;
+  dismissCompletedBackgroundTaskNotification?(key: string): Promise<void>;
+  clearBackgroundTaskNotifications?(): Promise<void>;
 }

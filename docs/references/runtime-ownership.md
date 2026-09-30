@@ -37,7 +37,9 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
   bootstrap remains the composition and installation boundary.
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
-- Backgrounding is not a reliable execution window for chat or painting generation.
+- Every admitted unfinished conversation holds execution demand in foreground and background,
+  including questions, approvals, persistence, and final delivery. Stored history does not.
+  Platform protection remains subject to OS limits and process death.
 - `KeepAliveCoordinator` is the only execution-lease facade that business services and the
   background-activity manager use. It selects one registered platform source when constructed:
   `AudioKeepAliveSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
@@ -164,7 +166,8 @@ resource-deletion contract.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, request cancellation, and fallback to bundled data; the host stops it.
 - `AudioKeepAliveSource` owns the iOS silent audio session; `AndroidBackgroundActivityRuntime`
-  owns the Android foreground service, local notifications, and background budget. The host stops
+  owns Android execution demand, reused task notifications, protection status, and background budget.
+  SystemIntegration shares notification IDs with the patched background-actions service. The host stops
   both after their lease consumers have released.
 - Backend `CacheService` owns Provider API-key rotation state and backend-only MMKV persistence;
   the host initializes and stops it.

@@ -13,12 +13,17 @@ import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
+import type {
+  BackgroundReplyLifecycle,
+  BackgroundReplyTurn,
+} from '@/backend/services/backgroundReply';
 import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/desktopConnections';
 import type { DesktopSession } from '@/backend/services/desktopConnections/DesktopSession';
 import {
   RemoteFailureError,
   RemoteTransportError,
 } from '@/backend/services/desktopConnections/remoteErrors';
+import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type {
   RemoteAgentSource,
   RemoteSessionSnapshot,
@@ -40,7 +45,19 @@ import { RemoteReadCoordinator } from './RemoteReadCoordinator';
 import type { RemoteSessionReadCache } from './RemoteSessionReadCache';
 import { SessionSync } from './SessionSync';
 
+export type RemoteBackgroundExecution = {
+  replies: BackgroundReplyLifecycle;
+  keepAlive: KeepAliveSource;
+  translate(key: string): string;
+};
+
 type Observation = {
+  tracking?: boolean;
+  awaitingCheckpoint?: boolean;
+  pendingSubmission?: boolean;
+  pendingCommandId?: string;
+  reply?: BackgroundReplyTurn;
+  executionId?: string;
   listeners: Set<(snapshot: RemoteSessionSnapshot) => void>;
   sync?: SessionSync;
   snapshot?: RemoteSessionSnapshot;
@@ -94,12 +111,20 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private readonly actions: RemoteAgentActions;
   private readonly unsubscribe: () => void;
   private stopped = false;
+  private preparing = 0;
+  private backgroundBlocked = false;
+  private pendingCommandLease?: ReturnType<KeepAliveSource['acquire']>;
+  private readonly pendingStarts = new Set<string>();
+  private readonly pendingSends = new Set<string>();
+  private readonly unoperations: () => void;
+  private readonly executionListeners = new Set<() => void>();
   private recoveryTimer?: ReturnType<typeof setTimeout>;
   constructor(
     private readonly lease: DesktopDomainLease,
     private readonly connections: DesktopConnections,
     journal: RemoteAgentCommandJournal,
     private readonly readCache: RemoteSessionReadCache,
+    private readonly background?: RemoteBackgroundExecution,
   ) {
     this.scope = `${lease.scope}:${randomUUID()}`;
     this.draftScope = lease.scope;
@@ -114,9 +139,91 @@ export class RemoteAgentScope implements RemoteAgentSource {
       },
       () => this.scheduleRecovery(),
     );
+    this.unoperations = this.actions.subscribe(() => {
+      for (const [id, observation] of this.observations) {
+        if (!observation.pendingCommandId) continue;
+        const command = this.actions
+          .get()
+          .find((command) => command.id === observation.pendingCommandId);
+        if (command?.status === 'pending') continue;
+        observation.pendingCommandId = undefined;
+        observation.pendingSubmission = false;
+        if (command?.status === 'applied') this.refreshExecutionCheckpoint(id);
+        else this.settleUnadmittedSend(id, observation);
+      }
+      this.reconcileCommandProtection();
+    });
+    this.reconcileCommandProtection();
     this.unsubscribe = lease.subscribe(() => this.onConnectionChanged());
     if (this.state.status === 'ready') void this.actions.recover();
   }
+  hasPendingExecution = () =>
+    this.preparing > 0 ||
+    this.hasPendingCommands() ||
+    [...this.observations.values()].some((observation) => observation.tracking);
+  subscribeExecution = (listener: () => void) => {
+    this.executionListeners.add(listener);
+    return () => {
+      this.executionListeners.delete(listener);
+    };
+  };
+  private hasPendingCommands(): boolean {
+    return (
+      this.actions.get().some((command) => command.status === 'pending') ||
+      this.actions.getStarts().some((start) => start.status === 'pending')
+    );
+  }
+  private reconcileCommandProtection(): void {
+    for (const command of this.actions.get()) {
+      if (command.kind !== 'send' || !command.sessionId) continue;
+      if (command.status === 'pending') this.pendingSends.add(command.id);
+      else if (
+        this.pendingSends.delete(command.id) &&
+        command.status === 'applied' &&
+        !this.observations.get(command.sessionId)?.tracking
+      )
+        this.refreshExecutionCheckpoint(command.sessionId);
+    }
+    // Recovery may confirm the first send after its route has gone away. Hand
+    // protection to the session before releasing the uncertain-command lease.
+    for (const start of this.actions.getStarts()) {
+      if (start.status === 'pending') this.pendingStarts.add(start.id);
+      else if (
+        this.pendingStarts.delete(start.id) &&
+        start.status === 'applied' &&
+        start.sessionId &&
+        !this.observations.get(start.sessionId)?.tracking
+      )
+        this.refreshExecutionCheckpoint(start.sessionId);
+    }
+    if (this.hasPendingCommands() && !this.pendingCommandLease && !this.backgroundBlocked) {
+      this.pendingCommandLease = this.background?.keepAlive.acquire('remote.chat.command', () => {
+        this.backgroundBlocked = true;
+        this.pendingCommandLease = undefined;
+        this.publishExecution();
+      });
+    } else if (!this.hasPendingCommands() || this.backgroundBlocked) {
+      this.pendingCommandLease?.release();
+      this.pendingCommandLease = undefined;
+    }
+    this.publishExecution();
+  }
+  private releaseBackgroundProtection(): void {
+    this.backgroundBlocked = true;
+    this.pendingCommandLease?.release();
+    this.pendingCommandLease = undefined;
+    // The desktop still owns execution. Retire only the phone's surfaces.
+    for (const observation of this.observations.values()) {
+      observation.reply?.finish('cancelled');
+      observation.reply = undefined;
+    }
+    this.publishExecution();
+  }
+  private publishExecution(): void {
+    this.lease.setBackgroundRequired?.(this.hasPendingExecution() && !this.backgroundBlocked);
+    for (const listener of this.executionListeners) listener();
+  }
+
   getState = () => this.state;
   subscribeState = (listener: () => void) => {
     this.stateListeners.add(listener);
@@ -144,7 +251,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
     clearTimeout(this.recoveryTimer);
     if (this.state.status === 'retired') this.actions.stop();
     for (const listener of this.stateListeners) listener();
+    // The connection manager suspends background demand once the desktop stays
+    // unreachable. Protection ends with it; foreground readiness resumes tracking.
+    if (this.state.status === 'suspended' && !this.backgroundBlocked && this.hasPendingExecution())
+      this.releaseBackgroundProtection();
     if (this.state.status === 'ready') {
+      this.backgroundBlocked = false;
+      this.reconcileCommandProtection();
       for (const [id, observation] of this.observations) this.startObservation(id, observation);
       void this.actions.recover();
     }
@@ -185,6 +298,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
       this.issueResource,
       this.messageViews,
     );
+    if (current && observation.reply)
+      this.background?.replies.updateSessionTitle(
+        sessionId,
+        session.title,
+        this.lease.connectionId,
+      );
+    this.updateExecution(sessionId, observation);
     for (const listener of observation.listeners) listener(observation.snapshot);
   }
   /**
@@ -530,12 +650,153 @@ export class RemoteAgentScope implements RemoteAgentSource {
     return () => {
       releaseCache();
       retained.listeners.delete(listener);
-      if (!retained.listeners.size) {
+      if (!retained.listeners.size && !retained.tracking) {
         this.stopObservation(retained);
         if (this.observations.get(sessionId) === retained) this.observations.delete(sessionId);
       }
     };
   }
+  private trackExecution(sessionId: string): Observation {
+    let observation = this.observations.get(sessionId);
+    if (!observation) {
+      observation = { listeners: new Set() };
+      this.observations.set(sessionId, observation);
+    }
+    observation.tracking = true;
+    observation.awaitingCheckpoint = true;
+    if (!observation.reply && this.background && !this.backgroundBlocked) {
+      observation.reply = this.background.replies.startTurn({
+        connectionId: this.lease.connectionId,
+        agentId: observation.snapshot?.session.agentId ?? '',
+        agentName: '',
+        sessionId,
+        sessionTitle: observation.snapshot?.session.title ?? '',
+        onInterrupt: () => {
+          this.backgroundBlocked = true;
+          // The desktop still owns execution. Retire only the phone's surface.
+          observation!.reply?.finish('cancelled');
+          observation!.reply = undefined;
+          this.publishExecution();
+        },
+      });
+    }
+    this.publishExecution();
+    return observation;
+  }
+
+  private updateExecution(sessionId: string, observation: Observation): void {
+    const snapshot = observation.snapshot;
+    if (!snapshot?.current || this.backgroundBlocked) return;
+    const execution = snapshot.executions.find((execution) =>
+      ['running', 'awaiting-approval', 'finalizing'].includes(execution.state),
+    );
+    if (execution) {
+      if (observation.executionId && observation.executionId !== execution.id) {
+        observation.reply?.finish('completed');
+        observation.reply = undefined;
+      }
+      if (!observation.tracking || !observation.reply) this.trackExecution(sessionId);
+      observation.awaitingCheckpoint = false;
+      observation.executionId = execution.id;
+      const message = snapshot.messages.find((message) => message.id === execution.messageId);
+      const pending = snapshot.interactions.find((interaction) => interaction.state === 'pending');
+      const tool = message?.parts.find(
+        (part) => part.kind === 'tool' && ['streaming', 'input-ready'].includes(part.state),
+      );
+      const text = message?.parts
+        .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
+        .join('\n');
+      const phase =
+        pending || execution.state === 'awaiting-approval'
+          ? 'awaiting-approval'
+          : tool
+            ? 'using-tool'
+            : text
+              ? 'responding'
+              : 'thinking';
+      const detail =
+        this.background?.translate(
+          execution.state === 'finalizing'
+            ? 'remoteAgent.finalizing'
+            : pending?.kind === 'question'
+              ? 'chat.question.waiting'
+              : `chat.backgroundReply.${phase === 'awaiting-approval' ? 'awaitingApproval' : phase === 'using-tool' ? 'tool.generic' : phase}`,
+        ) ?? '';
+      observation.reply?.updateContent({
+        phase,
+        detail,
+        ...(text ? { preview: text.slice(-160) } : {}),
+      });
+      this.publishExecution();
+    } else if (
+      observation.tracking &&
+      !observation.awaitingCheckpoint &&
+      !observation.pendingSubmission
+    ) {
+      const terminal =
+        snapshot.executions.find((execution) => execution.id === observation.executionId) ??
+        snapshot.executions.at(-1);
+      this.endTracking(
+        sessionId,
+        observation,
+        terminal?.state === 'cancelled'
+          ? 'cancelled'
+          : terminal?.state === 'failed' ||
+              terminal?.state === 'interrupted' ||
+              terminal?.persistenceFailure
+            ? 'failed'
+            : 'completed',
+      );
+    }
+  }
+
+  /** A send the desktop never admitted must not settle as the previous turn's outcome. */
+  private settleUnadmittedSend(sessionId: string, observation: Observation): void {
+    observation.awaitingCheckpoint = false;
+    if (observation.tracking && !observation.executionId && !observation.pendingSubmission)
+      this.endTracking(sessionId, observation, 'failed');
+    else this.updateExecution(sessionId, observation);
+  }
+
+  private endTracking(
+    sessionId: string,
+    observation: Observation,
+    outcome: 'completed' | 'failed' | 'cancelled',
+  ): void {
+    observation.reply?.finish(outcome);
+    observation.reply = undefined;
+    observation.tracking = false;
+    observation.awaitingCheckpoint = false;
+    observation.executionId = undefined;
+    this.publishExecution();
+    if (!observation.listeners.size) {
+      this.stopObservation(observation);
+      if (this.observations.get(sessionId) === observation) this.observations.delete(sessionId);
+    }
+  }
+
+  private async withPreparation<T>(work: () => Promise<T>): Promise<T> {
+    this.preparing++;
+    const lease = this.background?.keepAlive.acquire('remote.chat.preparation', () => {
+      this.backgroundBlocked = true;
+      this.publishExecution();
+    });
+    this.publishExecution();
+    try {
+      return await work();
+    } finally {
+      this.preparing--;
+      lease?.release();
+      this.publishExecution();
+    }
+  }
+
+  private refreshExecutionCheckpoint(sessionId: string): void {
+    const observation = this.trackExecution(sessionId);
+    this.stopObservation(observation);
+    this.startObservation(sessionId, observation);
+  }
+
   private startObservation(sessionId: string, observation: Observation) {
     if (this.stopped || observation.sync || this.state.status !== 'ready') return;
     this.track(
@@ -558,11 +819,23 @@ export class RemoteAgentScope implements RemoteAgentSource {
           (projection, current) => {
             if (this.lease.signal.aborted || observation.sync !== sync) return;
             if (current) observation.retries = 0;
+            if (current) observation.awaitingCheckpoint = false;
             this.publishObservation(sessionId, observation, projection, current);
           },
-          () => {
+          (error) => {
             if (observation.sync !== sync) return;
             this.stopObservation(observation);
+            // A deleted or forbidden session cannot report its execution again;
+            // stop holding background demand for it.
+            if (
+              observation.tracking &&
+              error instanceof RemoteAgentError &&
+              !error.retryable &&
+              error.code !== 'CLOSED'
+            ) {
+              this.endTracking(sessionId, observation, 'failed');
+              if (!observation.listeners.size) return;
+            }
             if (observation.snapshot) {
               observation.snapshot = {
                 ...observation.snapshot,
@@ -625,21 +898,40 @@ export class RemoteAgentScope implements RemoteAgentSource {
   }
   start(input: Parameters<RemoteAgentSource['start']>[0]) {
     this.assertActive();
-    return this.track(this.actions.start(input));
+    return this.track(this.withPreparation(() => this.actions.start(input)));
   }
   send(target: string, text: string) {
     const params = this.target(target, 'send');
     agentMethods['agent.messages.send'].params.parse({ ...params, commandId: 'validation', text });
+    const observation = this.trackExecution(params.sessionId);
+    observation.pendingSubmission = true;
     return this.track(
-      this.actions
-        .create('send', 'agent.messages.send', { ...params, text }, text)
-        .then((command) => {
-          if (command.status === 'rejected' && command.error === 'CONFLICT')
-            void this.resync(params.sessionId).catch(() => undefined);
+      this.withPreparation(async () => {
+        try {
+          const command = await this.actions.create(
+            'send',
+            'agent.messages.send',
+            { ...params, text },
+            text,
+          );
+          if (command.status === 'pending') observation.pendingCommandId = command.id;
+          else observation.pendingSubmission = false;
+          if (command.status === 'applied') this.refreshExecutionCheckpoint(params.sessionId);
+          else if (command.status === 'rejected' || command.status === 'interrupted') {
+            this.settleUnadmittedSend(params.sessionId, observation);
+            if (command.error === 'CONFLICT')
+              void this.resync(params.sessionId).catch(() => undefined);
+          }
           return command;
-        }),
+        } catch (error) {
+          observation.pendingSubmission = false;
+          this.settleUnadmittedSend(params.sessionId, observation);
+          throw error;
+        }
+      }),
     );
   }
+
   cancel(target: string) {
     return this.track(
       this.actions.create('cancel', 'agent.executions.cancel', this.target(target, 'cancel')),
@@ -679,8 +971,15 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.stopped = true;
     clearTimeout(this.recoveryTimer);
     this.unsubscribe();
+    this.unoperations();
+    this.pendingCommandLease?.release();
+    this.pendingCommandLease = undefined;
     this.actions.stop();
-    for (const observation of this.observations.values()) this.stopObservation(observation);
+    for (const observation of this.observations.values()) {
+      observation.reply?.finish('cancelled');
+      this.stopObservation(observation);
+    }
+    this.lease.setBackgroundRequired?.(false);
     this.observations.clear();
     this.resources.clear();
     this.lease.release();

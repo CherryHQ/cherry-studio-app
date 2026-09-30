@@ -56,10 +56,11 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
-import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -77,6 +78,8 @@ export type BackendComposition = {
 export function createBackend(
   services: BackendServices,
   infrastructure: {
+    backgroundExecution: BackgroundExecutionModule;
+    remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
     providerAccounts: ProviderAccountRuntime;
     backup: BackupRuntime;
@@ -98,6 +101,7 @@ export function createBackend(
   const exportFiles = new FileEntryService(dbService);
   infrastructure.remoteAgent.configure({
     connections: infrastructure.desktopConnectionManager,
+    background: infrastructure.remoteBackground,
     journal: new RemoteAgentCommandJournal(createMMKV({ id: 'cherry-remote-agent-commands' })),
   });
   infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
@@ -247,6 +251,7 @@ export function createBackend(
     disposeSystemEntry: systemEntry.dispose,
     backend: {
       appUpdate: createAppUpdateModule(),
+      backgroundExecution: infrastructure.backgroundExecution,
       backup: infrastructure.backup,
       systemEntry: systemEntry.module,
       agent: services.agent,

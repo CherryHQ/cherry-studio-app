@@ -4,11 +4,13 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useDrawerStatus } from 'expo-router/drawer';
 import { type RefObject, createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import {
   ConversationSourceBoundary,
   useConversationSourceState,
@@ -127,6 +129,7 @@ function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
 }
 const ignorePending = () => {};
 function RemoteChatSession() {
+  const drawerStatus = useDrawerStatus();
   const source = useRemoteConversationSource();
   const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   const { availability } = useConversationSourceState();
@@ -138,6 +141,12 @@ function RemoteChatSession() {
   const opened = useConversation(
     target.sessionId ? { source: source.ref, sessionId: target.sessionId } : undefined,
     source,
+  );
+  useBackgroundTaskNotifications(
+    connectionId && target.sessionId
+      ? { kind: 'remote-chat', connectionId, sessionId: target.sessionId }
+      : undefined,
+    drawerStatus !== 'open',
   );
   const snapshot = useConversationSnapshot(opened.session);
   const history = useConversationHistory(opened.session, snapshot.historyVersion);

@@ -11,20 +11,23 @@ import type { DesktopConnections } from '@/backend/services/desktopConnections';
 import type { RemoteAgentModule, RemoteAgentSource } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentError } from './RemoteAgentError';
-import { RemoteAgentScope } from './RemoteAgentScope';
+import { RemoteAgentScope, type RemoteBackgroundExecution } from './RemoteAgentScope';
 import { RemoteSessionReadCache } from './RemoteSessionReadCache';
 
 type Entry = { scope: RemoteAgentScope; users: number; unwatch: () => void };
 type Opening = { promise: Promise<Entry>; waiters: number };
 
 @Injectable('RemoteAgentRuntime')
-@DependsOn(['DesktopConnectionManager'])
+// The lifecycle graph brings execution protection into Gate before routes can
+// open a desktop source; a recovered checkpoint must not receive a no-op turn.
+@DependsOn(['DesktopConnectionManager', 'BackgroundReplyRuntime'])
 @ServicePhase(Phase.Gate)
 @AppStatePolicy('continue')
 export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule {
   private dependencies?: {
     connections: DesktopConnections;
     journal: RemoteAgentCommandJournal;
+    background?: RemoteBackgroundExecution;
   };
   private readonly readCache = new RemoteSessionReadCache();
   private uninvalidate?: () => void;
@@ -67,6 +70,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
                   dependencies.connections,
                   dependencies.journal,
                   this.readCache,
+                  dependencies.background,
                 );
                 const created: Entry = { scope, users: 0, unwatch: () => undefined };
                 // Route disposal does not interrupt admitted commands; release demand once they settle.
@@ -75,9 +79,11 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
                 };
                 const unoperations = scope.subscribeOperations(releaseUnused);
                 const unstate = scope.subscribeState(releaseUnused);
+                const unexecution = scope.subscribeExecution(releaseUnused);
                 created.unwatch = () => {
                   unoperations();
                   unstate();
+                  unexecution();
                 };
                 this.sources.set(id, created);
                 return created;
@@ -209,11 +215,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
       this.close(id, entry);
       return;
     }
-    if (
-      entry.scope.getCommands().some((action) => action.status === 'pending') ||
-      entry.scope.getStarts().some((start) => start.status === 'pending')
-    )
-      return;
+    if (entry.scope.hasPendingExecution()) return;
     this.close(id, entry);
   }
   private close(id: string, entry: Entry) {

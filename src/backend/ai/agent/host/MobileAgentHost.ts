@@ -150,6 +150,7 @@ const INTERRUPTED_ERROR: AgentErrorView = {
 };
 
 const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
+  updateContent: () => {},
   awaitApproval: () => {},
   finish: () => {},
   update: () => {},

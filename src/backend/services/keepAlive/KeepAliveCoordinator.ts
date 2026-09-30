@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import {
   AppStatePolicy,
@@ -8,6 +8,13 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import type {
+  BackgroundExecutionModule,
+  BackgroundExecutionStatus,
+  BackgroundRunSettings,
+} from '@/shared/contracts/backgroundExecution';
+
+import { getSystemIntegration } from '../../../../modules/system-integration';
 
 export type KeepAliveLease = {
   /** Idempotent; the last release across all holders stops the platform mechanism. */
@@ -15,6 +22,8 @@ export type KeepAliveLease = {
 };
 
 export type KeepAliveSource = {
+  getStatus?(): BackgroundExecutionStatus;
+  subscribe?(listener: () => void): () => void;
   /**
    * Holds background execution for the caller. `onInterrupt` fires when the
    * platform revokes execution before release; sources that cannot be revoked
@@ -35,7 +44,7 @@ export type KeepAliveSource = {
 @ServicePhase(Phase.PostReady)
 @DependsOn(['AudioKeepAliveSource', 'AndroidBackgroundActivityRuntime'])
 @AppStatePolicy('not-applicable')
-export class KeepAliveCoordinator extends BaseService {
+export class KeepAliveCoordinator extends BaseService implements BackgroundExecutionModule {
   private disposed = false;
   private readonly source: KeepAliveSource;
 
@@ -48,6 +57,20 @@ export class KeepAliveCoordinator extends BaseService {
     if (this.disposed) return noOpLease;
     return this.source.acquire(tag, onInterrupt);
   }
+
+  getStatus = (): BackgroundExecutionStatus => this.source.getStatus?.() ?? 'idle';
+
+  subscribe = (listener: () => void): (() => void) =>
+    this.source.subscribe?.(listener) ?? (() => {});
+
+  getSettings = async (): Promise<BackgroundRunSettings | null> =>
+    (await getSystemIntegration()?.getBackgroundRunSettings?.()) ?? null;
+
+  openSettings = async (): Promise<void> => {
+    const native = getSystemIntegration();
+    if (native?.openBackgroundRunSettings) await native.openBackgroundRunSettings();
+    else await Linking.openSettings();
+  };
 
   protected onStop(): void {
     this.disposed = true;

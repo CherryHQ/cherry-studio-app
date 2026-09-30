@@ -1,5 +1,7 @@
 import ExpoModulesCore
 import Foundation
+import ActivityKit
+import UIKit
 
 public class SystemIntegrationModule: Module {
   private var observers: [NSObjectProtocol] = []
@@ -16,5 +18,16 @@ public class SystemIntegrationModule: Module {
     AsyncFunction("claimNextEntry") { try SystemEntryStore.claimNext() }
     AsyncFunction("releaseEntry") { (id: String) in SystemEntryStore.release(id) }
     AsyncFunction("completeEntry") { (id: String) in try SystemEntryStore.complete(id) }
+    AsyncFunction("getBackgroundRunSettings") { () -> [String: Any] in
+      ["batteryOptimizationExempt": NSNull(),
+       "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,
+       "liveActivitiesEnabled": ActivityAuthorizationInfo().areActivitiesEnabled,
+       "manufacturer": "Apple"]
+    }
+    AsyncFunction("openBackgroundRunSettings") {
+      await MainActor.run {
+        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+      }
+    }
   }
 }
