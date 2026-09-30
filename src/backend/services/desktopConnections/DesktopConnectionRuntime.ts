@@ -1,3 +1,4 @@
+import { directEndpointSchema, type DirectEndpoint } from '@cherrystudio/remote-protocol';
 import { loggerService } from '@logger';
 import { sha256 } from '@noble/hashes/sha2.js';
 import * as Crypto from 'expo-crypto';
@@ -170,6 +171,16 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
         row.desktopIdentity,
         qr.ips.map((host) => ({ host, port: qr.port, security: 'ws' })),
       );
+    });
+  }
+
+  testEndpoint(id: string, endpoint: DirectEndpoint, signal: AbortSignal): Promise<void> {
+    return this.run('test-endpoint', signal, async (_store, signal) => {
+      try {
+        await this.connections!.testEndpoint(id, directEndpointSchema.parse(endpoint), signal);
+      } catch (error) {
+        throw translate(error);
+      }
     });
   }
 

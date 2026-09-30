@@ -1,11 +1,11 @@
-import type { RemoteAuthorization } from '@cherrystudio/remote-protocol';
+import { directEndpointUrl, type RemoteAuthorization } from '@cherrystudio/remote-protocol';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import type { DesktopConnectionRow } from '@/backend/data/db/schemas';
 
 import { DesktopConnectionManager } from '../DesktopConnectionManager';
 import type { DiscoveryEvent } from '../DesktopEndpointResolver';
-import { DesktopSession } from '../DesktopSession';
+import { DesktopSession, RemoteFailureError } from '../DesktopSession';
 import { openWebSocketStream } from '../remoteSocket';
 
 let mockDiscoveryReceive: (event: DiscoveryEvent) => void;
@@ -117,6 +117,167 @@ describe('DesktopConnectionManager ownership', () => {
     await manager._doStop();
     await manager._doDestroy();
     jest.useRealTimers();
+  });
+
+  it('reports missing addresses immediately when discovery is unavailable and waits for a new route', async () => {
+    row.configuredEndpoints = [];
+    mockDiscoveryReceive({ type: 'unavailable' });
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).rejects.toMatchObject({ reason: 'discovery-unavailable' });
+    expect(lease.getSnapshot()).toEqual({ status: 'offline', reason: 'discovery-unavailable' });
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(lease.getSnapshot()).toEqual({ status: 'offline', reason: 'discovery-unavailable' });
+    expect(openWebSocketStream).not.toHaveBeenCalled();
+
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    row.configuredEndpoints = [{ host: '100.64.0.2', port: 23333, security: 'ws' }];
+    await manager.refreshEndpoints(row.id);
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+    expect(openWebSocketStream).toHaveBeenCalledWith(
+      directEndpointUrl(row.configuredEndpoints[0]),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('retains a missing-address reason during bounded discovery retries and recovers from a new hint', async () => {
+    row.configuredEndpoints = [];
+    const lease = await manager.retain(row.id, 'agent', signal());
+    const ready = expect(lease.ready(signal())).rejects.toMatchObject({ reason: 'no-location' });
+    await jest.advanceTimersByTimeAsync(15_000);
+    await ready;
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(lease.getSnapshot()).toEqual({ status: 'connecting', reason: 'no-location' });
+
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    manager.seedLocation(row.id, row.desktopIdentity, [original.configuredEndpoints[0]]);
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+  });
+
+  it('wakes a missing-address connection when automatic discovery recovers', async () => {
+    row.configuredEndpoints = [];
+    mockDiscoveryReceive({ type: 'unavailable' });
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).rejects.toMatchObject({ reason: 'discovery-unavailable' });
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    mockDiscoveryReceive({
+      type: 'service',
+      id: 'desktop.local',
+      txt: { v: '1', identity: row.desktopIdentity },
+      hosts: ['10.0.0.2'],
+      port: 23333,
+    });
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+  });
+
+  it('allows bounded discovery again after a foreground transition from an unavailable network', async () => {
+    row.configuredEndpoints = [];
+    mockDiscoveryReceive({ type: 'unavailable' });
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).rejects.toMatchObject({ reason: 'discovery-unavailable' });
+    appState('background');
+    appState('active');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(lease.getSnapshot().status).toBe('connecting');
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    mockDiscoveryReceive({
+      type: 'service',
+      id: 'desktop.local',
+      txt: { v: '1', identity: row.desktopIdentity },
+      hosts: ['10.0.0.2'],
+      port: 23333,
+    });
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+  });
+
+  it.each([
+    { host: '100.64.0.2', port: 24444, security: 'ws' as const },
+    { host: 'fd00::2', port: 24444, security: 'ws' as const },
+    { host: 'desktop.example', port: 443, security: 'wss' as const },
+  ])(
+    'tests $host independently of a healthy channel and authenticates the paired identity',
+    async (endpoint) => {
+      const active = session();
+      const checked = session();
+      connect.mockResolvedValueOnce(active as never).mockResolvedValueOnce(checked as never);
+      const lease = await manager.retain(row.id, 'agent', signal());
+      await lease.ready(signal());
+      await manager.testEndpoint(row.id, endpoint, signal());
+      expect(openWebSocketStream).toHaveBeenLastCalledWith(
+        directEndpointUrl(endpoint),
+        expect.any(AbortSignal),
+      );
+      expect(connect).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          address: endpoint.host,
+          desktopIdentity: row.desktopIdentity,
+        }),
+      );
+      expect(checked.authenticate).toHaveBeenCalledWith(row.deviceId, expect.any(AbortSignal));
+      expect(checked.close).toHaveBeenCalled();
+      expect(active.close).not.toHaveBeenCalled();
+      expect(lease.getSnapshot().status).toBe('ready');
+      expect(row.configuredEndpoints).toEqual(original.configuredEndpoints);
+    },
+  );
+
+  it('does not report a tested address as connected when pairing authentication fails', async () => {
+    const checked = session();
+    checked.authenticate.mockRejectedValueOnce(
+      new RemoteFailureError({ reason: 'UNAUTHENTICATED', message: 'Unknown phone' }),
+    );
+    connect.mockResolvedValueOnce(checked as never);
+    await expect(
+      manager.testEndpoint(row.id, original.configuredEndpoints[0], signal()),
+    ).rejects.toMatchObject({ reason: 'UNAUTHENTICATED' });
+    expect(checked.close).toHaveBeenCalled();
+    expect(store.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('bounds an endpoint check that never completes its handshake', async () => {
+    connect.mockImplementationOnce(
+      ({ signal }) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    );
+    const failed = expect(
+      manager.testEndpoint(row.id, original.configuredEndpoints[0], signal()),
+    ).rejects.toMatchObject({ reason: 'unreachable' });
+    await jest.advanceTimersByTimeAsync(6_000);
+    await failed;
+  });
+
+  it('does not reuse a healthy route when the requested address fails to open', async () => {
+    const active = session();
+    connect.mockResolvedValueOnce(active as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await lease.ready(signal());
+    jest.mocked(openWebSocketStream).mockRejectedValueOnce(new Error('Address unreachable'));
+    await expect(
+      manager.testEndpoint(row.id, { host: '100.64.0.2', port: 24444, security: 'ws' }, signal()),
+    ).rejects.toMatchObject({ reason: 'unreachable' });
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(active.close).not.toHaveBeenCalled();
+    expect(lease.getSnapshot().status).toBe('ready');
+  });
+
+  it('rejects a check closed by backgrounding before its final pairing read completes', async () => {
+    const checked = session();
+    const latest = deferred<DesktopConnectionRow>();
+    store.getRow.mockResolvedValueOnce(row).mockImplementationOnce(() => latest.promise);
+    connect.mockResolvedValueOnce(checked as never);
+    const failed = expect(
+      manager.testEndpoint(row.id, original.configuredEndpoints[0], signal()),
+    ).rejects.toMatchObject({ reason: 'unreachable' });
+    await jest.advanceTimersByTimeAsync(0);
+    appState('background');
+    latest.resolve(row);
+    await failed;
+    expect(checked.close).toHaveBeenCalled();
   });
 
   it.each(['inactive', 'background', 'unknown'] as const)(
@@ -337,8 +498,10 @@ describe('DesktopConnectionManager ownership', () => {
     const first = session();
     const next = session();
     connect.mockResolvedValueOnce(first as never).mockResolvedValueOnce(next as never);
+    mockDiscoveryReceive({ type: 'unavailable' });
     const agent = await manager.retain(row.id, 'agent', signal());
     await agent.ready(signal());
+    await jest.advanceTimersByTimeAsync(300_000);
     appState('background');
     expect(first.close).toHaveBeenCalled();
     expect(agent.getSnapshot().status).toBe('suspended');
@@ -347,6 +510,10 @@ describe('DesktopConnectionManager ownership', () => {
     appState('active');
     expect(await agent.ready(signal())).toBe(next);
     expect(connect).toHaveBeenCalledTimes(2);
+    expect(openWebSocketStream).toHaveBeenLastCalledWith(
+      directEndpointUrl(original.configuredEndpoints[0]),
+      expect.any(AbortSignal),
+    );
   });
 
   it('does not let a dial arriving after pairing replacement overwrite the new credentials', async () => {

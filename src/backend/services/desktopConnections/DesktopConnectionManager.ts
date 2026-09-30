@@ -97,11 +97,14 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     this.setForeground(AppState.currentState === 'active');
     this.registerDisposable(
       this.resolver.subscribe((changed) => {
-        if (!changed) return;
         for (const [id, entry] of this.entries) {
           if (entry.session?.isOpen) continue;
-          entry.dial?.abort();
-          void entry.pending?.finally(() => this.ensureConnected(id, entry)).catch(() => undefined);
+          if (changed) {
+            entry.dial?.abort();
+            void entry.pending
+              ?.finally(() => this.ensureConnected(id, entry))
+              .catch(() => undefined);
+          }
           if (!entry.pending) this.ensureConnected(id, entry);
         }
       }),
@@ -255,9 +258,38 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     };
   }
   /** Pairing channels are also registered with app lifetime, including a dial still in flight. */
-  async connectTemporary(
-    target: DesktopConnectionTarget,
+  connectTemporary(target: DesktopConnectionTarget, signal: AbortSignal): Promise<DesktopSession> {
+    return this.openTemporary(
+      target.addresses.map((host) => ({ host, port: target.port, security: 'ws' })),
+      target.desktopIdentity,
+      signal,
+    );
+  }
+
+  /** Checks only the requested route, without reusing or replacing a retained channel. */
+  async testEndpoint(id: string, endpoint: DirectEndpoint, signal: AbortSignal): Promise<void> {
+    this.assertAvailable();
+    const row = await this.store!.getRow(id);
+    signal.throwIfAborted();
+    if (row.status === 'needs-repair')
+      throw new RemoteFailureError({ reason: 'UNAUTHENTICATED', message: 'Pairing needs repair' });
+    const session = await this.openTemporary([endpoint], row.desktopIdentity, signal, row.deviceId);
+    try {
+      const latest = await this.store!.getRow(id);
+      signal.throwIfAborted();
+      if (!session.isOpen) throw new DesktopUnreachableError(['closed']);
+      if (fingerprint(latest) !== fingerprint(row) || latest.status !== 'paired')
+        throw new DOMException('Pairing replaced', 'AbortError');
+    } finally {
+      session.close();
+    }
+  }
+
+  private async openTemporary(
+    endpoints: DirectEndpoint[],
+    desktopIdentity: string,
     signal: AbortSignal,
+    deviceId?: string,
   ): Promise<DesktopSession> {
     this.assertAvailable();
     if (!this.foreground) throw new DesktopUnreachableError(['suspended']);
@@ -270,12 +302,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     try {
       this.refreshDiscoveryActivity();
       session = await this.track(
-        this.connectCandidates(
-          () =>
-            target.addresses.map((host) => ({ host, port: target.port, security: 'ws' as const })),
-          target.desktopIdentity,
-          controller.signal,
-        ),
+        this.connectCandidates(() => endpoints, desktopIdentity, controller.signal, deviceId),
       );
       controller.signal.throwIfAborted();
       const connected = session;
@@ -374,7 +401,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     clearTimeout(entry.retryTimer);
     const controller = new AbortController();
     entry.dial = controller;
-    for (const lease of entry.leases) this.update(lease, { status: 'connecting' });
+    for (const lease of entry.leases)
+      this.update(lease, { status: 'connecting', reason: lease.state.reason });
     const promise = this.track(
       Promise.resolve().then(async () => {
         let session: DesktopSession | undefined;
@@ -441,12 +469,17 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
                 controller.signal,
                 entry.row,
               );
-            } else
+            } else {
+              logger.debug('Desktop connection unavailable', {
+                connectionId: id,
+                reason: error instanceof DesktopUnreachableError ? error.reason : 'unreachable',
+              });
               for (const lease of entry.leases)
                 this.update(lease, {
                   status: this.foreground ? 'offline' : 'suspended',
                   reason: error instanceof DesktopUnreachableError ? error.reason : 'unreachable',
                 });
+            }
           }
         } finally {
           if (entry.pending === promise) entry.pending = undefined;
@@ -496,6 +529,11 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     )
       return;
     clearTimeout(entry.retryTimer);
+    if (
+      !this.resolver.discoveryAvailable &&
+      !this.resolver.candidates(id, entry.row.desktopIdentity, entry.row.configuredEndpoints).length
+    )
+      return;
     entry.retryTimer = setTimeout(
       () => this.ensureConnected(id, entry),
       Math.min(20_000, 1000 * 2 ** Math.min(entry.retry++, 5)) * (0.8 + Math.random() * 0.2),
@@ -576,7 +614,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
           (endpoint) => !attempted.has(directEndpointUrl(endpoint)),
         );
         if (!endpoint) {
-          if (!id) throw new DesktopUnreachableError(failures);
+          if (!id || !this.resolver.discoveryAvailable) throw new DesktopUnreachableError(failures);
           await new Promise<void>((resolve, reject) => {
             const cleanup = () => {
               unsubscribe();

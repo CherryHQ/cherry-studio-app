@@ -128,6 +128,7 @@ function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
 const ignorePending = () => {};
 function RemoteChatSession() {
   const source = useRemoteConversationSource();
+  const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   const { availability } = useConversationSourceState();
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
@@ -211,6 +212,15 @@ function RemoteChatSession() {
               <ConversationStatus
                 availability={availability}
                 onRepair={() => router.push('/settings/device-connections')}
+                onEditAddresses={
+                  connectionId
+                    ? () =>
+                        router.push({
+                          pathname: '/settings/device-connections/[connectionId]',
+                          params: { connectionId },
+                        })
+                    : undefined
+                }
               />
               {!target.sessionId && agents.isError ? (
                 <ContentState.Error

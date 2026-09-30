@@ -45,11 +45,21 @@ export function SidebarConversationList({
   const source = useConversationSource();
   const { availability } = useConversationSourceState();
   const router = useRouter();
+  const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   return (
     <>
       <ConversationStatus
         availability={availability}
         onRepair={() => router.push('/settings/device-connections')}
+        onEditAddresses={
+          connectionId
+            ? () =>
+                router.push({
+                  pathname: '/settings/device-connections/[connectionId]',
+                  params: { connectionId },
+                })
+            : undefined
+        }
       />
       <SidebarCatalog
         key={source.scope}
