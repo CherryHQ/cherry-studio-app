@@ -87,7 +87,11 @@ test('ignores unrelated notifications and consumes invalid owned destinations wi
   expect(mockClear).toHaveBeenCalledTimes(1);
 });
 
-function response(url: string, owner = BACKGROUND_NOTIFICATION_OWNER): NotificationResponse {
+function response(
+  url: string,
+  owner = BACKGROUND_NOTIFICATION_OWNER,
+  terminal = true,
+): NotificationResponse {
   return {
     actionIdentifier: 'default',
     notification: {
@@ -101,9 +105,19 @@ function response(url: string, owner = BACKGROUND_NOTIFICATION_OWNER): Notificat
           body: null,
           categoryIdentifier: null,
           sound: null,
-          data: { owner, url },
+          data: { owner, url, terminal },
         },
       },
     },
   };
 }
+
+test('opens ongoing work without clearing its execution notification', async () => {
+  mockResponse = response('cherrystudio:///?sessionId=s', BACKGROUND_NOTIFICATION_OWNER, false);
+  await act(async () => {
+    renderer = create(<Probe />);
+  });
+  expect(mockRouter.navigate).toHaveBeenCalled();
+  expect(mockClear).toHaveBeenCalled();
+  expect(mockDismiss).not.toHaveBeenCalled();
+});

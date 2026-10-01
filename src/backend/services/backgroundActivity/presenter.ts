@@ -43,6 +43,10 @@ export type BackgroundActivityPresentationWindow = 'always' | 'app-hidden';
 export type BackgroundActivityPresenter<Props extends BackgroundActivityBaseProps> = {
   /** The window during which this surface may exist. */
   readonly presentWhile: BackgroundActivityPresentationWindow;
+  /** ActivityKit must admit a new card while the application is visible. */
+  readonly requiresForegroundStart?: boolean;
+  /** Native activities need their predecessor removed before allocating a new identity. */
+  readonly requiresPredecessorRetirement?: boolean;
   /** Keep the session's existing lease until its latest update/end has settled. */
   readonly shouldHoldLeaseUntilDelivery: boolean;
   /** Ends every surface a previous process left behind; returns the count. */

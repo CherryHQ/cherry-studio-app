@@ -315,9 +315,13 @@ projection:
   `streaming`, including any text already produced. The Host coalesces requests: the event loop
   does not wait on the store, one snapshot write is in flight at a time, and requests that arrive
   during a write collapse into one further write. A failed snapshot write is logged and execution
-  continues. Text-only events and non-terminal tool states do not request writes, `interrupted`
-  parts do not either because the terminal write always follows them, and there is no periodic
-  flush. A pending tool may be included in another tool or file's snapshot, but its intermediate
+  continues. Unfinished text and reasoning request a snapshot after a one-second batching window,
+  so a text-only stream has a durable prefix before its part finishes. This timer is scheduled only
+  after a delta, stops at finalization, and cannot write for a replaced or aborted turn. A slow or
+  failing store can leave a larger uncommitted suffix; the interval is not a durability guarantee.
+  Non-terminal tool states and input previews do not request writes; `interrupted` parts do not
+  either because the terminal write follows them. A pending tool may be included in another
+  part's snapshot, but its intermediate
   states are not guaranteed to survive a restart. Finalization remains authoritative: it drains
   the in-flight snapshot before the terminal write, and a late snapshot cannot reopen a settled
   row. On restart, reconciliation keeps saved parts, closes streaming text, and interrupts

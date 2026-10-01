@@ -150,6 +150,7 @@ const INTERRUPTED_ERROR: AgentErrorView = {
 };
 
 const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
+  updateContent: () => {},
   awaitApproval: () => {},
   finish: () => {},
   update: () => {},
@@ -169,6 +170,7 @@ const MESSAGE_SURFACE_EVENTS: ReadonlySet<RuntimeEvent['type']> = new Set([
 ]);
 
 const TERMINAL_PERSISTENCE_RETRY_DELAYS_MS = [0, 50, 200] as const;
+const STREAMING_SNAPSHOT_INTERVAL_MS = 1_000;
 
 export type MobileAgentHostNaming = Pick<
   AgentSessionNaming,
@@ -223,6 +225,8 @@ type ActiveTurnState = {
   snapshotDirty: boolean;
   /** The single in-flight snapshot writer, or null when none is running. */
   snapshotFlush: Promise<void> | null;
+  /** Batches unfinished text so process death loses at most the recent uncommitted suffix. */
+  streamingSnapshotTimer?: ReturnType<typeof setTimeout>;
   /** Turn aggregate for the in-memory view and fallback when no usage projection was persisted. */
   usage: RuntimeUsage | null;
   recordedInvocations: Set<string>;
@@ -1219,6 +1223,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         const part = state.assistantMessage.parts.find((entry) => entry.id === event.partId);
         if (part && (part.type === 'text' || part.type === 'reasoning')) {
           part.text += event.text;
+          this.scheduleStreamingSnapshot(sessionId, state);
         }
         this.publish(sessionId, {
           type: 'message.delta',
@@ -1345,6 +1350,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     contextTokens?: number,
     replay?: RuntimeTurnReplay,
   ): Promise<void> {
+    clearTimeout(state.streamingSnapshotTimer);
+    state.streamingSnapshotTimer = undefined;
     const interruption: unknown = state.abortController.signal.reason;
     if (interruption instanceof KeepAliveInterruptionError) {
       outcome = 'failed';
@@ -1445,6 +1452,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       outcome,
       initialNamePromise ? { waitFor: initialNamePromise } : undefined,
     );
+  }
+
+  private scheduleStreamingSnapshot(sessionId: string, state: ActiveTurnState): void {
+    if (state.streamingSnapshotTimer !== undefined) return;
+    state.streamingSnapshotTimer = setTimeout(() => {
+      state.streamingSnapshotTimer = undefined;
+      if (this.activeTurns.get(sessionId) === state && !state.abortController.signal.aborted) {
+        this.requestSnapshot(sessionId, state);
+      }
+    }, STREAMING_SNAPSHOT_INTERVAL_MS);
   }
 
   /**

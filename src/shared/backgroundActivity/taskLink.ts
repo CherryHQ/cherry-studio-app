@@ -5,7 +5,8 @@
  */
 export type BackgroundTaskLink =
   | { kind: 'chat'; sessionId: string }
-  | { kind: 'painting'; paintingId: string };
+  | { kind: 'painting'; paintingId: string }
+  | { kind: 'remote-chat'; connectionId: string; sessionId: string };
 
 const PAINTINGS_SEGMENT = 'paintings';
 
@@ -14,6 +15,8 @@ export function createBackgroundTaskUrl(scheme: string, link: BackgroundTaskLink
   switch (link.kind) {
     case 'chat':
       return `${scheme}:///?sessionId=${encodeURIComponent(link.sessionId)}`;
+    case 'remote-chat':
+      return `${scheme}://remote?connectionId=${encodeURIComponent(link.connectionId)}&sessionId=${encodeURIComponent(link.sessionId)}`;
     case 'painting':
       return `${scheme}://${PAINTINGS_SEGMENT}?paintingId=${encodeURIComponent(link.paintingId)}`;
   }
@@ -36,6 +39,14 @@ export function parseBackgroundTaskUrl(
       // Older notifications also carry agentId; the persisted session owns it.
       return sessionId ? { kind: 'chat', sessionId } : undefined;
     }
+    if (segments.length === 1 && segments[0] === 'remote') {
+      const params = parseQuery(query);
+      const connectionId = params.get('connectionId');
+      const sessionId = params.get('sessionId');
+      return connectionId && sessionId
+        ? { kind: 'remote-chat', connectionId, sessionId }
+        : undefined;
+    }
     if (segments.length === 2 && segments[0] === PAINTINGS_SEGMENT) {
       // Legacy task links pointed to the image viewer without an image id.
       const paintingId = decodeURIComponent(segments[1] ?? '');
@@ -56,6 +67,8 @@ export function isSameBackgroundTask(
   right: BackgroundTaskLink | undefined,
 ): boolean {
   if (!left || !right || left.kind !== right.kind) return false;
+  if (left.kind === 'remote-chat' && right.kind === 'remote-chat')
+    return left.connectionId === right.connectionId && left.sessionId === right.sessionId;
   return left.kind === 'chat' && right.kind === 'chat'
     ? left.sessionId === right.sessionId
     : left.kind === 'painting' && right.kind === 'painting' && left.paintingId === right.paintingId;

@@ -34,6 +34,7 @@ import { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
 import { openWebSocketStream } from './remoteSocket';
 
 type LeaseEntry = {
+  backgroundRequired: boolean;
   domain: DesktopDomain;
   grantId: string;
   controller: AbortController;
@@ -48,6 +49,9 @@ type ConnectionEntry = {
   dial?: AbortController;
   idleTimer?: ReturnType<typeof setTimeout>;
   retryTimer?: ReturnType<typeof setTimeout>;
+  /** Background demand ends after the desktop stays unreachable this long, until foreground. */
+  backgroundLossTimer?: ReturnType<typeof setTimeout>;
+  backgroundExpired?: boolean;
   retry: number;
   updates: Promise<void>;
   revoked: Set<string>;
@@ -57,6 +61,7 @@ class DesktopAuthorizationError extends RemoteFailureError {}
 
 const logger = loggerService.withContext('DesktopConnectionManager');
 const IDLE_GRACE_MS = 3000;
+const BACKGROUND_UNREACHABLE_MS = 60_000;
 const fingerprint = (row: DesktopConnectionRow) =>
   JSON.stringify([row.desktopIdentity, row.deviceId]);
 const scopeFor = (row: DesktopConnectionRow, domain: DesktopDomain, grantId: string) =>
@@ -160,6 +165,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     const retained = entry;
     clearTimeout(entry.idleTimer);
     const lease: LeaseEntry = {
+      backgroundRequired: false,
       domain,
       grantId: grant.grantId,
       controller: new AbortController(),
@@ -175,6 +181,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       released = true;
       signal.removeEventListener('abort', release);
       retained.leases.delete(lease);
+      this.reconcileVisibility(id, retained);
       this.retire(lease, 'stopped');
       if (!retained.leases.size) {
         if (!retained.session?.isOpen) retained.dial?.abort();
@@ -253,6 +260,12 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
           if (caller.aborted) abort();
           else check();
         });
+      },
+      setBackgroundRequired: (required) => {
+        if (released || lease.backgroundRequired === required) return;
+        lease.backgroundRequired = required;
+        this.reconcileVisibility(id, retained);
+        this.refreshDiscoveryActivity();
       },
       release,
     };
@@ -443,16 +456,49 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       }
     }
     for (const [id, entry] of this.entries) {
-      if (!foreground) {
-        this.close(entry);
-        for (const lease of entry.leases) this.update(lease, { status: 'suspended' });
-      } else this.ensureConnected(id, entry);
+      if (foreground) entry.backgroundExpired = false;
+      this.reconcileVisibility(id, entry);
     }
   }
+  private canConnect(entry: ConnectionEntry): boolean {
+    return (
+      this.foreground ||
+      (!entry.backgroundExpired &&
+        [...entry.leases].some(
+          (lease) => lease.backgroundRequired && !lease.controller.signal.aborted,
+        ))
+    );
+  }
+
+  /** Hidden reconnect attempts against an unreachable desktop only drain the battery. */
+  private watchBackgroundLoss(id: string, entry: ConnectionEntry): void {
+    if (this.foreground || entry.session?.isOpen || !this.canConnect(entry)) {
+      clearTimeout(entry.backgroundLossTimer);
+      entry.backgroundLossTimer = undefined;
+      return;
+    }
+    entry.backgroundLossTimer ??= setTimeout(() => {
+      entry.backgroundLossTimer = undefined;
+      if (this.foreground || entry.session?.isOpen || this.entries.get(id) !== entry) return;
+      entry.backgroundExpired = true;
+      this.reconcileVisibility(id, entry);
+      this.refreshDiscoveryActivity();
+    }, BACKGROUND_UNREACHABLE_MS);
+  }
+
+  private reconcileVisibility(id: string, entry: ConnectionEntry): void {
+    this.watchBackgroundLoss(id, entry);
+    if (this.canConnect(entry)) this.ensureConnected(id, entry);
+    else {
+      this.close(entry);
+      for (const lease of entry.leases) this.update(lease, { status: 'suspended' });
+    }
+  }
+
   private ensureConnected(id: string, entry: ConnectionEntry) {
     if (
       this.stopped ||
-      !this.foreground ||
+      !this.canConnect(entry) ||
       entry.pending ||
       entry.session?.isOpen ||
       this.entries.get(id) !== entry ||
@@ -511,6 +557,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
             ).catch(() => session?.close());
           });
           for (const lease of entry.leases) this.update(lease, { status: 'ready' });
+          this.watchBackgroundLoss(id, entry);
           const connected = session;
           void this.track(this.syncEndpoints(entry.row, connected, controller.signal));
           this.track(connected.done)
@@ -519,7 +566,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
               if (entry.session !== connected) return;
               entry.session = undefined;
               for (const lease of entry.leases)
-                this.update(lease, { status: this.foreground ? 'offline' : 'suspended' });
+                this.update(lease, { status: this.canConnect(entry) ? 'offline' : 'suspended' });
+              this.watchBackgroundLoss(id, entry);
               this.scheduleReconnect(id, entry);
             })
             .catch(() => undefined);
@@ -542,7 +590,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
               });
               for (const lease of entry.leases)
                 this.update(lease, {
-                  status: this.foreground ? 'offline' : 'suspended',
+                  status: this.canConnect(entry) ? 'offline' : 'suspended',
                   reason: error instanceof DesktopUnreachableError ? error.reason : 'unreachable',
                 });
             }
@@ -587,7 +635,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   private scheduleReconnect(id: string, entry: ConnectionEntry) {
     if (
       this.stopped ||
-      !this.foreground ||
+      !this.canConnect(entry) ||
       entry.session?.isOpen ||
       entry.pending ||
       this.entries.get(id) !== entry ||
@@ -632,6 +680,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   private close(entry: ConnectionEntry) {
     clearTimeout(entry.retryTimer);
     clearTimeout(entry.idleTimer);
+    clearTimeout(entry.backgroundLossTimer);
+    entry.backgroundLossTimer = undefined;
     entry.dial?.abort();
     entry.session?.close();
     entry.session = undefined;
@@ -655,7 +705,10 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
 
   private refreshDiscoveryActivity() {
-    this.discovery.setActive(!this.stopped && this.foreground);
+    this.discovery.setActive(
+      !this.stopped &&
+        (this.foreground || [...this.entries.values()].some((entry) => this.canConnect(entry))),
+    );
   }
 
   private async connectCandidates(

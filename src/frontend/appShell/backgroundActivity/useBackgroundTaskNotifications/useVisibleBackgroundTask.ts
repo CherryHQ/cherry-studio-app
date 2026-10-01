@@ -13,15 +13,18 @@ import { registerVisibleBackgroundTask } from '../foregroundActivityAttention';
  */
 export function useVisibleBackgroundTask(task: BackgroundTaskLink | undefined, enabled: boolean) {
   const taskKind = task?.kind;
-  const taskId = task?.kind === 'chat' ? task.sessionId : task?.paintingId;
+  const taskId = task?.kind === 'painting' ? task.paintingId : task?.sessionId;
+  const connectionId = task?.kind === 'remote-chat' ? task.connectionId : undefined;
 
   useFocusEffect(
     useCallback(() => {
       if (!enabled || !taskKind || !taskId) return;
       const target: BackgroundTaskLink =
-        taskKind === 'chat'
-          ? { kind: taskKind, sessionId: taskId }
-          : { kind: taskKind, paintingId: taskId };
+        taskKind === 'remote-chat'
+          ? { kind: taskKind, connectionId: connectionId!, sessionId: taskId }
+          : taskKind === 'chat'
+            ? { kind: taskKind, sessionId: taskId }
+            : { kind: taskKind, paintingId: taskId };
       let release: (() => void) | undefined;
       const sync = () => {
         release?.();
@@ -34,6 +37,6 @@ export function useVisibleBackgroundTask(task: BackgroundTaskLink | undefined, e
         release?.();
         appState.remove();
       };
-    }, [enabled, taskId, taskKind]),
+    }, [connectionId, enabled, taskId, taskKind]),
   );
 }

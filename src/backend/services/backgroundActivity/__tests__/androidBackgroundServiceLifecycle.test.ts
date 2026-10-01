@@ -3,8 +3,8 @@ import type { BackgroundTaskOptions } from 'react-native-background-actions';
 
 const mockNativeStart = jest.fn<Promise<void>, [BackgroundTaskOptions]>();
 const mockNativeStop = jest.fn(async () => {});
-const mockNativeUpdate = jest.fn(async () => {});
-const mockNativeListeners = new Map<string, (taskName: string) => void>();
+const mockNativeUpdate = jest.fn(async (_options: BackgroundTaskOptions) => {});
+const mockNativeListeners = new Map<string, (event: any) => void>();
 const mockHeadlessFactories = new Map<string, () => () => Promise<void>>();
 const mockHeadlessTasks = new Map<string, Promise<void>>();
 let background: typeof BackgroundService;
@@ -21,10 +21,10 @@ jest.mock('react-native-background-actions/src/RNBackgroundActionsModule', () =>
   RNBackgroundActions: {
     start: (options: BackgroundTaskOptions) => mockNativeStart(options),
     stop: () => mockNativeStop(),
-    updateNotification: () => mockNativeUpdate(),
+    updateNotification: (options: BackgroundTaskOptions) => mockNativeUpdate(options),
   },
   nativeEventEmitter: {
-    addListener: (name: string, listener: (taskName: string) => void) => {
+    addListener: (name: string, listener: (event: any) => void) => {
       mockNativeListeners.set(name, listener);
     },
   },
@@ -116,4 +116,29 @@ test('a previously running task finishing late cannot stop its replacement', asy
   await Promise.resolve();
   expect(background.isRunning()).toBe(true);
   expect(mockNativeStop).toHaveBeenCalledTimes(1);
+});
+
+test('preserves notification identity and admitted task generation on content updates', async () => {
+  await background.start(hold, { ...options, notificationId: 100_000, taskOngoing: true });
+  const admitted = mockNativeStart.mock.calls[0]![0];
+  await background.updateNotification({ taskTitle: 'Done', taskOngoing: false });
+  expect(mockNativeUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      taskName: admitted.taskName,
+      notificationId: 100_000,
+      taskOngoing: false,
+    }),
+  );
+});
+
+test('uses native protection proof and ignores events from a retired generation', async () => {
+  await background.start(hold, options);
+  const oldName = mockNativeStart.mock.calls[0]![0].taskName;
+  expect(background.isProtected()).toBe(false);
+  mockNativeListeners.get('protectionChanged')?.({ taskName: oldName, protected: true });
+  expect(background.isProtected()).toBe(true);
+  await background.stop();
+  await background.start(hold, options);
+  mockNativeListeners.get('protectionChanged')?.({ taskName: oldName, protected: true });
+  expect(background.isProtected()).toBe(false);
 });

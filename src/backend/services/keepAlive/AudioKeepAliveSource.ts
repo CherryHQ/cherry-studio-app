@@ -8,6 +8,7 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import type { BackgroundExecutionStatus } from '@/shared/contracts/backgroundExecution';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { KeepAliveLease, KeepAliveSource } from './KeepAliveCoordinator';
@@ -23,20 +24,37 @@ const logger = loggerService.withContext('AudioKeepAlive');
  * audio session keeps Hermes scheduled after the app is backgrounded (the
  * OpenMinis approach). Reference counting and start retries live here.
  * `KeepAliveCoordinator` selects this source on iOS, so the class carries no
- * platform branch of its own. Audio never revokes a lease, so `onInterrupt`
- * is not used.
+ * platform branch of its own. Playback interruptions are retried, but the
+ * audio API exposes no execution-expiration callback; `onInterrupt` is not used.
+ * Status remains limited even during playback, since iOS can suspend or kill
+ * the process without delivering a JavaScript callback.
  */
 @Injectable('AudioKeepAliveSource')
 @ServicePhase(Phase.PostReady)
 @AppStatePolicy('background-presentation')
 export class AudioKeepAliveSource extends BaseService implements KeepAliveSource {
   private disposed = false;
+  private readonly statusListeners = new Set<() => void>();
   private holderCount = 0;
   private operationTail: Promise<void> = Promise.resolve();
   private player?: AudioPlayer;
   private playerStatusSubscription?: { remove: () => void };
   private retryDelayMs = KEEP_ALIVE_RETRY_BASE_MS;
   private retryTimer?: ReturnType<typeof setTimeout>;
+
+  getStatus = (): BackgroundExecutionStatus =>
+    this.holderCount === 0 ? 'idle' : this.player || this.retryTimer ? 'limited' : 'starting';
+
+  subscribe = (listener: () => void) => {
+    this.statusListeners.add(listener);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  };
+
+  private publishStatus(): void {
+    for (const listener of this.statusListeners) listener();
+  }
 
   protected onInit(): void {
     // A failed session start (audio hardware busy) must retry once the app is
@@ -49,6 +67,7 @@ export class AudioKeepAliveSource extends BaseService implements KeepAliveSource
 
     let released = false;
     this.holderCount += 1;
+    this.publishStatus();
     void this.enqueue(() => this.reconcile());
 
     return {
@@ -56,6 +75,7 @@ export class AudioKeepAliveSource extends BaseService implements KeepAliveSource
         if (released || this.disposed) return;
         released = true;
         this.holderCount -= 1;
+        this.publishStatus();
         void this.enqueue(() => this.reconcile());
       },
     };
@@ -65,6 +85,7 @@ export class AudioKeepAliveSource extends BaseService implements KeepAliveSource
     if (this.disposed) return;
     this.disposed = true;
     this.holderCount = 0;
+    this.publishStatus();
     this.clearRetryTimer();
     await this.enqueue(() => this.stopAudio());
   }
@@ -111,6 +132,7 @@ export class AudioKeepAliveSource extends BaseService implements KeepAliveSource
       activePlayer.volume = KEEP_ALIVE_VOLUME;
       activePlayer.play();
       this.player = activePlayer;
+      this.publishStatus();
       this.playerStatusSubscription = activePlayer.addListener(
         'playbackStatusUpdate',
         (status: AudioStatus) => this.handlePlayerStatusUpdate(activePlayer, status),
@@ -122,6 +144,7 @@ export class AudioKeepAliveSource extends BaseService implements KeepAliveSource
       logger.error('Background audio failed to start', error as Error, {
         holderCount: this.holderCount,
       });
+      this.publishStatus();
       this.scheduleRetry();
     }
   }
@@ -130,6 +153,7 @@ export class AudioKeepAliveSource extends BaseService implements KeepAliveSource
     const player = this.player;
     if (!player) return;
     this.player = undefined;
+    this.publishStatus();
     const subscription = this.playerStatusSubscription;
     this.playerStatusSubscription = undefined;
 
@@ -167,6 +191,10 @@ export class AudioKeepAliveSource extends BaseService implements KeepAliveSource
       logger.info('Background audio resumed after interruption');
     } catch (error) {
       logger.error('Background audio failed to resume after interruption', error as Error);
+      // An invalidated native player cannot protect held leases. Remove it so
+      // reconciliation can create a new session, rather than treating it as live.
+      this.releasePlayer(player);
+      this.scheduleRetry();
     }
   }
 
@@ -194,6 +222,7 @@ export class AudioKeepAliveSource extends BaseService implements KeepAliveSource
       this.retryTimer = undefined;
       void this.enqueue(() => this.reconcile());
     }, delayMs);
+    this.publishStatus();
     logger.warn('Scheduling background audio retry', { delayMs, holderCount: this.holderCount });
   }
 

@@ -12,6 +12,8 @@ type Notifications = typeof import('expo-notifications');
 
 /** One logical terminal event of a reply turn. */
 export type ReplyCompletionNotificationEvent = {
+  beforeDelivery?: () => Promise<void>;
+  isCurrent?: () => boolean;
   deepLinkUrl: string;
   detail: string;
   /** Captured when the turn reached its terminal phase. */
@@ -95,6 +97,10 @@ export function createReplyCompletionNotifier(
     // must not alert once the user is back.
     if (!event.occurredInBackground || AppState.currentState !== 'background') return false;
     if (!isNotificationAllowed(await loadNotifications().getPermissionsAsync())) return false;
+    if (event.isCurrent?.() === false || AppState.currentState !== 'background') return false;
+    // Retire the existing activity before posting its replacement, never stack both.
+    await event.beforeDelivery?.();
+    if (event.isCurrent?.() === false || AppState.currentState !== 'background') return false;
     // One destination holds one completion notice.
     dismissDestination(event.deepLinkUrl);
     const identifier = notificationId(event.deepLinkUrl);

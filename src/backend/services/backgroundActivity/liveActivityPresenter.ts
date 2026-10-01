@@ -19,11 +19,11 @@ export function createLiveActivityPresenter<Props extends BackgroundActivityBase
   if (!factory) return noopBackgroundActivityPresenter();
 
   return {
-    // A Live Activity speaks for the time the user cannot see the app; ActivityKit
-    // also refuses to create one from the background, so the manager's hidden
-    // window (the app resigning active) is the only moment it can be requested.
-    presentWhile: 'app-hidden',
-    shouldHoldLeaseUntilDelivery: false,
+    // Request while visible, then keep the same activity through app transitions.
+    presentWhile: 'always',
+    requiresForegroundStart: true,
+    requiresPredecessorRetirement: true,
+    shouldHoldLeaseUntilDelivery: true,
     clearOrphans: async () => {
       const activities = factory.getInstances();
       await Promise.all(activities.map((activity) => activity.end('immediate')));

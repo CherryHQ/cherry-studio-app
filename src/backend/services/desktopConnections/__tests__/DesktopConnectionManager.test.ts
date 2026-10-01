@@ -604,6 +604,48 @@ describe('DesktopConnectionManager ownership', () => {
     expect(await config.ready(signal())).toBe(channel);
   });
 
+  it('keeps active conversation demand connected in the background and suspends after it settles', async () => {
+    const first = session();
+    const next = session();
+    connect.mockResolvedValueOnce(first as never).mockResolvedValueOnce(next as never);
+    const agent = await manager.retain(row.id, 'agent', signal());
+    await agent.ready(signal());
+    agent.setBackgroundRequired?.(true);
+    appState('background');
+    expect(first.close).not.toHaveBeenCalled();
+    expect(agent.getSnapshot().status).toBe('ready');
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(connect).toHaveBeenCalledTimes(1);
+    agent.setBackgroundRequired?.(false);
+    expect(first.close).toHaveBeenCalled();
+    expect(agent.getSnapshot().status).toBe('suspended');
+    appState('active');
+    expect(await agent.ready(signal())).toBe(next);
+  });
+
+  it('ends background demand after the desktop stays unreachable for a minute', async () => {
+    const first = session();
+    const next = session();
+    connect.mockResolvedValueOnce(first as never);
+    const agent = await manager.retain(row.id, 'agent', signal());
+    await agent.ready(signal());
+    agent.setBackgroundRequired?.(true);
+    appState('background');
+    connect.mockRejectedValue(new Error('Desktop unreachable'));
+    first.close();
+    await jest.advanceTimersByTimeAsync(59_000);
+    expect(agent.getSnapshot().status).not.toBe('suspended');
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(agent.getSnapshot().status).toBe('suspended');
+    const attempts = connect.mock.calls.length;
+    await jest.advanceTimersByTimeAsync(120_000);
+    expect(connect).toHaveBeenCalledTimes(attempts);
+    connect.mockReset();
+    connect.mockResolvedValueOnce(next as never);
+    appState('active');
+    expect(await agent.ready(signal())).toBe(next);
+  });
+
   it('suspends all physical channels and reconnects retained consumers on foreground', async () => {
     const first = session();
     const next = session();

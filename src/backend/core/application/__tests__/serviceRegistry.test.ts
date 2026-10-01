@@ -7,6 +7,7 @@ import {
   isInjectable,
 } from '@/backend/core/lifecycle/decorators';
 import { DependencyResolver } from '@/backend/core/lifecycle/DependencyResolver';
+import { LifecycleManager } from '@/backend/core/lifecycle/LifecycleManager';
 import { ServiceContainer } from '@/backend/core/lifecycle/ServiceContainer';
 import { Phase, type ServiceConstructor } from '@/backend/core/lifecycle/types';
 
@@ -79,6 +80,19 @@ describe('service registry', () => {
       }
     },
   );
+
+  test('initializes conversation protection before desktop routes can recover active execution', () => {
+    const container = new ServiceContainer();
+    container.registerAll(serviceList);
+    new LifecycleManager(container).validatePhases();
+    const layers = new DependencyResolver().resolveLayered(
+      container.buildDependencyGraph(Phase.Gate),
+    );
+    const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
+    expect(layerOf('BackgroundReplyRuntime')).toBeGreaterThanOrEqual(0);
+    expect(layerOf('BackgroundReplyRuntime')).toBeLessThan(layerOf('RemoteAgentRuntime'));
+    expect(layerOf('KeepAliveCoordinator')).toBeLessThan(layerOf('BackgroundReplyRuntime'));
+  });
 
   test('the gate boots cache, then database, then preferences', () => {
     const container = new ServiceContainer();

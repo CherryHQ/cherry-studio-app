@@ -138,6 +138,56 @@ describe('AudioKeepAliveSource', () => {
     await source._doStop();
   });
 
+  test('recreates protection after an interrupted player can no longer resume', async () => {
+    jest.useFakeTimers();
+    const source = new AudioKeepAliveSource();
+    await source._doInit();
+    const lease = source.acquire('chat');
+    await flushMicrotasks();
+    const staleListener = mockPlaybackStatusListener;
+    mockPlayer.play.mockImplementationOnce(() => {
+      throw new Error('audio session invalidated');
+    });
+
+    staleListener?.({ isBuffering: false, isLoaded: true, playing: false });
+    expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
+    expect(mockPlayerStatusRemove).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(1);
+
+    const replacement = { ...mockPlayer, play: jest.fn(), remove: jest.fn() };
+    mockCreateAudioPlayer.mockReturnValueOnce(replacement);
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(replacement.play).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(0);
+    staleListener?.({ isBuffering: false, isLoaded: true, playing: false });
+    expect(mockPlayer.play).toHaveBeenCalledTimes(2);
+
+    lease.release();
+    await flushMicrotasks();
+    expect(replacement.remove).toHaveBeenCalledTimes(1);
+    await source._doStop();
+  });
+
+  test('does not restart interrupted audio after the last lease is released', async () => {
+    jest.useFakeTimers();
+    const source = new AudioKeepAliveSource();
+    await source._doInit();
+    const lease = source.acquire('chat');
+    await flushMicrotasks();
+    mockPlayer.play.mockImplementationOnce(() => {
+      throw new Error('audio session invalidated');
+    });
+    mockPlaybackStatusListener?.({ isBuffering: false, isLoaded: true, playing: false });
+
+    lease.release();
+    await flushMicrotasks();
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
+    expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(0);
+    await source._doStop();
+  });
+
   test('retries one failed start at a time with capped exponential backoff', async () => {
     jest.useFakeTimers();
     mockSetAudioModeAsync.mockRejectedValue(new Error('audio session busy'));

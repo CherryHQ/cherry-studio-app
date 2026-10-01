@@ -35,6 +35,8 @@ const mockProviderAccounts = { kind: 'provider-accounts' };
 const mockProviderRegistryUpdater = { kind: 'provider-registry-updater' };
 const mockWebSearch = { kind: 'web-search' };
 const mockBackgroundActivityEnvironment = { configure: jest.fn() };
+const mockKeepAlive = { acquire: jest.fn() };
+const mockBackgroundReply = { startTurn: jest.fn() };
 const mockServices = {
   ai: mockAi,
   cache: mockCache,
@@ -118,6 +120,11 @@ const createRuntime = () =>
     AiService: mockAi,
     TraceStorageService: mockTraces,
     BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
+    BackgroundReplyRuntime: mockBackgroundReply,
+    KeepAliveCoordinator: mockKeepAlive,
+    BackgroundActivityManager: {} as never,
+    AudioKeepAliveSource: {} as never,
+    AndroidBackgroundActivityRuntime: {} as never,
     CacheService: mockCache,
     DbService: mockDb,
     BackupRuntime: mockBackup,
@@ -230,6 +237,12 @@ describe('createAppBootstrapRuntime', () => {
       translate: expect.any(Function),
     });
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
+      backgroundExecution: mockKeepAlive,
+      remoteBackground: {
+        replies: mockBackgroundReply,
+        keepAlive: mockKeepAlive,
+        translate: expect.any(Function),
+      },
       backup: mockBackup,
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
