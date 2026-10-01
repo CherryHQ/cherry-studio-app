@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "Vẫn bị giới hạn bởi tối ưu hóa pin",
   "backgroundRun.android.unrestricted": "Đã cho phép miễn tối ưu hóa pin",
   "backgroundRun.android.vendor": "Cài đặt chạy nền của nhà sản xuất",
-  "backgroundRun.android.vendorHint": "Cần xác nhận thủ công tính năng tự khởi động, hoạt động nền và khóa trong ứng dụng gần đây trên {{manufacturer}}.",
+  "backgroundRun.android.vendorHint": "Kiểm tra tính năng tự khởi động, hoạt động nền và khóa trong danh sách ứng dụng gần đây trong cài đặt hệ thống.",
   "backgroundRun.description": "Các cuộc hội thoại chưa kết thúc tiếp tục yêu cầu bảo vệ quá trình thực thi, kể cả khi chờ bạn nhập.",
   "backgroundRun.disabled": "Tắt",
   "backgroundRun.enabled": "Bật",

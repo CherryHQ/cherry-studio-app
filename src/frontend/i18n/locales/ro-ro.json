@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "Optimizarea bateriei se aplică în continuare",
   "backgroundRun.android.unrestricted": "Excepție de la optimizarea bateriei permisă",
   "backgroundRun.android.vendor": "Setările de fundal ale producătorului",
-  "backgroundRun.android.vendorHint": "Pornirea automată, activitatea în fundal și blocarea în aplicațiile recente pe {{manufacturer}} necesită confirmare manuală.",
+  "backgroundRun.android.vendorHint": "Verificați pornirea automată, activitatea în fundal și blocarea în aplicațiile recente în setările sistemului.",
   "backgroundRun.description": "Conversațiile neterminate continuă să solicite protecția execuției, inclusiv în timp ce așteaptă răspunsul dumneavoastră.",
   "backgroundRun.disabled": "Dezactivat",
   "backgroundRun.enabled": "Activat",

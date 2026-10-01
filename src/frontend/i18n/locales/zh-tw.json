@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "仍受電池最佳化限制",
   "backgroundRun.android.unrestricted": "已允許忽略電池最佳化",
   "backgroundRun.android.vendor": "廠商背景設定",
-  "backgroundRun.android.vendorHint": "{{manufacturer}} 的自動啟動、背景執行和最近使用工作鎖定需要手動確認。",
+  "backgroundRun.android.vendorHint": "請在系統設定中確認自動啟動、背景執行和最近使用的應用程式鎖定設定。",
   "backgroundRun.description": "未結束的對話會持續請求執行保護，包括等待你的輸入。",
   "backgroundRun.disabled": "已關閉",
   "backgroundRun.enabled": "已開啟",

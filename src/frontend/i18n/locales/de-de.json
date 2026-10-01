@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "Akkuoptimierung weiterhin aktiv",
   "backgroundRun.android.unrestricted": "Ausnahme von der Akkuoptimierung erlaubt",
   "backgroundRun.android.vendor": "Hintergrundeinstellungen des Herstellers",
-  "backgroundRun.android.vendorHint": "Autostart, Hintergrundaktivität und Sperren in der App-Übersicht auf {{manufacturer}} müssen manuell bestätigt werden.",
+  "backgroundRun.android.vendorHint": "Prüfen Sie in den Systemeinstellungen den Autostart, die Hintergrundaktivität und das Sperren in der App-Übersicht.",
   "backgroundRun.description": "Nicht abgeschlossene Unterhaltungen fordern weiterhin Ausführungsschutz an, auch während sie auf Ihre Eingabe warten.",
   "backgroundRun.disabled": "Aus",
   "backgroundRun.enabled": "Ein",

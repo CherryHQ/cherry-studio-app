@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "Ограничения оптимизации батареи действуют",
   "backgroundRun.android.unrestricted": "Исключение из оптимизации батареи разрешено",
   "backgroundRun.android.vendor": "Фоновые настройки производителя",
-  "backgroundRun.android.vendorHint": "Автозапуск, фоновая активность и закрепление в недавних приложениях на {{manufacturer}} требуют ручной проверки.",
+  "backgroundRun.android.vendorHint": "Проверьте автозапуск, фоновую активность и закрепление в недавних приложениях в настройках системы.",
   "backgroundRun.description": "Незавершённые разговоры продолжают запрашивать защиту выполнения, в том числе во время ожидания вашего ответа.",
   "backgroundRun.disabled": "Выключен",
   "backgroundRun.enabled": "Включён",

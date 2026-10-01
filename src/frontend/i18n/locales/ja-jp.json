@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "バッテリー最適化の制限があります",
   "backgroundRun.android.unrestricted": "バッテリー最適化の除外が許可されています",
   "backgroundRun.android.vendor": "メーカーのバックグラウンド設定",
-  "backgroundRun.android.vendorHint": "{{manufacturer}} の自動起動、バックグラウンド動作、最近使ったアプリのロックは手動で確認してください。",
+  "backgroundRun.android.vendorHint": "システム設定で自動起動、バックグラウンド動作、最近使ったアプリのロック設定を確認してください。",
   "backgroundRun.description": "未完了の会話は、入力を待っている間も実行の保護を要求し続けます。",
   "backgroundRun.disabled": "オフ",
   "backgroundRun.enabled": "オン",

@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "La optimización de batería sigue aplicándose",
   "backgroundRun.android.unrestricted": "Exención de optimización de batería permitida",
   "backgroundRun.android.vendor": "Ajustes de segundo plano del fabricante",
-  "backgroundRun.android.vendorHint": "El inicio automático, la actividad en segundo plano y el bloqueo en aplicaciones recientes de {{manufacturer}} requieren confirmación manual.",
+  "backgroundRun.android.vendorHint": "Comprueba el inicio automático, la actividad en segundo plano y el bloqueo en aplicaciones recientes en los ajustes del sistema.",
   "backgroundRun.description": "Las conversaciones sin terminar siguen solicitando protección de ejecución, incluso mientras esperan tu respuesta.",
   "backgroundRun.disabled": "Desactivado",
   "backgroundRun.enabled": "Activado",

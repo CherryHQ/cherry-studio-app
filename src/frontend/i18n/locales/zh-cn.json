@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "仍受电池优化限制",
   "backgroundRun.android.unrestricted": "已允许忽略电池优化",
   "backgroundRun.android.vendor": "厂商后台设置",
-  "backgroundRun.android.vendorHint": "{{manufacturer}} 的自启动、后台运行和最近任务锁定需要手动确认。",
+  "backgroundRun.android.vendorHint": "请在系统设置中确认自启动、后台运行和最近任务锁定的设置。",
   "backgroundRun.description": "未结束的对话会持续请求执行保护，包括等待你的输入。",
   "backgroundRun.disabled": "已关闭",
   "backgroundRun.enabled": "已开启",

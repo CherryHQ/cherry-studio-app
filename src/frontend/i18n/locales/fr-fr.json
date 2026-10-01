@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "Optimisation de la batterie toujours appliquée",
   "backgroundRun.android.unrestricted": "Exemption d’optimisation de la batterie autorisée",
   "backgroundRun.android.vendor": "Réglages d’arrière-plan du fabricant",
-  "backgroundRun.android.vendorHint": "Le démarrage automatique, l’activité en arrière-plan et le verrouillage dans les applications récentes sur {{manufacturer}} doivent être confirmés manuellement.",
+  "backgroundRun.android.vendorHint": "Vérifiez le démarrage automatique, l’activité en arrière-plan et le verrouillage dans les applications récentes dans les réglages système.",
   "backgroundRun.description": "Les conversations inachevées continuent de demander une protection de l’exécution, même en attendant votre réponse.",
   "backgroundRun.disabled": "Désactivé",
   "backgroundRun.enabled": "Activé",

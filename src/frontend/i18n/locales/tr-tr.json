@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "Pil optimizasyonu hâlâ uygulanıyor",
   "backgroundRun.android.unrestricted": "Pil optimizasyonu istisnasına izin verildi",
   "backgroundRun.android.vendor": "Üreticinin arka plan ayarları",
-  "backgroundRun.android.vendorHint": "{{manufacturer}} cihazında otomatik başlatma, arka plan etkinliği ve son uygulamalarda kilitleme elle doğrulanmalıdır.",
+  "backgroundRun.android.vendorHint": "Sistem ayarlarında otomatik başlatmayı, arka plan etkinliğini ve son uygulamalarda kilitlemeyi kontrol edin.",
   "backgroundRun.description": "Tamamlanmamış konuşmalar, girdinizi beklerken de yürütme koruması istemeye devam eder.",
   "backgroundRun.disabled": "Kapalı",
   "backgroundRun.enabled": "Açık",

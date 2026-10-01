@@ -140,7 +140,7 @@
   "backgroundRun.android.restricted": "Battery optimization still applies",
   "backgroundRun.android.unrestricted": "Battery optimization exemption allowed",
   "backgroundRun.android.vendor": "Manufacturer background settings",
-  "backgroundRun.android.vendorHint": "Autostart, background activity, and recent-app locking on {{manufacturer}} require manual confirmation.",
+  "backgroundRun.android.vendorHint": "Check autostart, background activity, and recent-app locking in system settings.",
   "backgroundRun.description": "Unfinished conversations keep requesting execution protection, including while waiting for your input.",
   "backgroundRun.disabled": "Off",
   "backgroundRun.enabled": "On",

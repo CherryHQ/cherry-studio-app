@@ -137,9 +137,7 @@ export default function NotificationSettingsScreen() {
           />
           <Section.Item
             label={t('backgroundRun.android.vendor')}
-            description={t('backgroundRun.android.vendorHint', {
-              manufacturer: settings?.manufacturer ?? 'Android',
-            })}
+            description={t('backgroundRun.android.vendorHint')}
             onPress={openSystemSettings}
           />
         </Section>
