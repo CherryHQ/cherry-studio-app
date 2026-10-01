@@ -59,19 +59,9 @@ build numbers even when they share a release tag.
    for 30 days. The filename is `cherry-studio-<release-version>-android.apk`.
 4. Publish the files and notes to GitHub Releases.
 
-GitHub prepares a draft, attaches the files, and publishes it automatically. After GitHub publication,
-run the independent [GitCode Release](../../.github/workflows/gitcode-release.yml) workflow with the
-matching tag. It downloads the same APK, `SHA256SUMS`, and release notes from GitHub, checks out the
-tagged source, and uses the `GITCODE_TOKEN` Actions secret to publish the mirror without rebuilding.
-
-For example, start it from the Actions page or run:
-
-```bash
-gh workflow run gitcode-release.yml --ref main -f release_tag=v0.1.2
-```
-
-The publisher verifies checksums before remote writes, reuses identical existing attachments, and
-refuses to replace a conflicting tag or attachment. Publishing retries use the existing GitHub APK.
+GitHub prepares a draft, attaches the files, and publishes it automatically. GitCode releases are
+published manually from the matching tag using the same APK, `SHA256SUMS`, and release notes from
+the GitHub release.
 
 The public APK uses `production`, which enables Android update checks against GitCode's
 latest stable mobile release after app startup. Settings marks the update row with `NEW` when a newer
