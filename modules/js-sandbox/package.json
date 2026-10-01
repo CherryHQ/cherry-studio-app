@@ -1,0 +1,8 @@
+{
+  "name": "@cherrystudio/js-sandbox",
+  "version": "1.0.0",
+  "description": "Isolated Hermes runtime for running model-written JavaScript off the JS thread",
+  "main": "index.ts",
+  "private": true,
+  "license": "UNLICENSED"
+}

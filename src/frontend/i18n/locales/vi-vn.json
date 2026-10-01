@@ -225,6 +225,7 @@
   "chat.builtinTool.calendar.listCalendars": "Lấy danh sách lịch",
   "chat.builtinTool.calendar.listEvents": "Tìm sự kiện lịch",
   "chat.builtinTool.calendar.updateEvent": "Cập nhật sự kiện lịch",
+  "chat.builtinTool.code.runJs": "Chạy JavaScript",
   "chat.builtinTool.file.created": "Tệp đã được tạo",
   "chat.builtinTool.file.edit": "Chỉnh sửa tập tin",
   "chat.builtinTool.file.edited": "Tập tin đã được chỉnh sửa",

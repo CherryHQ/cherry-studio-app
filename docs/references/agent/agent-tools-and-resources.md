@@ -3,12 +3,13 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, health, location, web search and fetch,
-image generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
-`{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
-permission, app configuration, and the Agent's capability-group deny-list, then combines it with
+image generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+`run_js`, all using the settled `ToolRef` and `{ value, artifacts }` contracts. For each turn the
+Host resolves that catalog against model tool support, platform, OS permission, app
+configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location, agents) are enabled per Agent in the editor; the three file tools belong to every
-turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
+health, location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+belong to every turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -230,7 +231,8 @@ Configuration changes therefore still affect the next turn only.
 
 Mobile does not expose the desktop `tool_exec` JavaScript executor, a shell, workspace, dynamic
 extension, or unrestricted filesystem tool. The TypeScript signatures are model guidance only and
-are never compiled or executed.
+are never compiled or executed. `run_js` is not a substitute for `tool_exec`: its sandbox cannot
+call tools, MCP, or any application capability.
 
 ## Controlled File Ledger
 
@@ -494,6 +496,32 @@ Both tools run without approval because they have no destructive form, and the H
 to models that support function calling. Handing tools to a model that cannot call them fails the
 whole turn. Implementation: `src/backend/ai/agent/tools/`.
 
+### JavaScript Sandbox
+
+`run_js` lets the model compute exactly instead of estimating: arithmetic, statistics, dates,
+counting, sorting, parsing, and data transformation. It takes one `code` string, run as the body of
+an async function, and returns `{ status: 'ok', result?, logs? }` or
+`{ status: 'error', kind, message, logs? }`, where `kind` is `syntax`, `exception`, `timeout`,
+`memory`, `unsettled`, `cancelled`, or `internal`. The result is the returned value's JSON; Map and
+Set become object and array and BigInt becomes a string. A result over 32 KiB is returned as the head
+of its JSON text with `resultTruncated: true`; console output keeps its first 8 KiB.
+
+Isolation is structural rather than a permission check. [`modules/js-sandbox`](../../../modules/js-sandbox/README.md)
+creates a fresh Hermes runtime for every call, on its own native thread, from Hermes' hardened
+configuration: the global object holds standard built-ins, `Intl`, `TextEncoder`, `atob`/`btoa`,
+and a captured `console`, while `eval`, `Function`, `Proxy`, timers, modules, network, files, and
+every application binding are absent. Nothing persists between calls, so a script cannot observe
+another. The tool therefore has no side effects, runs as `auto` without an Agent capability group,
+and requires only that the model supports function calling and the client includes the native
+module; older clients omit the tool.
+
+Each call is bounded by a 10-second deadline and a 64 MiB heap. Both interrupt the script from
+native code, which JavaScript cannot catch. The heap limit is a GC tripwire, not Hermes' own
+maximum: exceeding that maximum aborts the whole process, so it is set to 256 MiB to leave room for
+the tripwire to act first. Turn cancellation interrupts the run the same way. The Host adds a prompt
+section asking the model to use the tool for exact computation and to copy the data it needs into
+the code, because the sandbox cannot read files or tool results itself.
+
 ### Skill Boundary
 
 - General Mobile Skill persistence and binding resolution are not implemented. Bundled plugin
@@ -526,9 +554,9 @@ limits are application constants rather than user settings in Version 1.
 Cherry Desktop proves the useful semantics: Pi owns its tool loop, MCP tools are adapted into Pi,
 tools are disabled and approved by application policy, and skills are injected explicitly. Mobile
 ports those semantics but not the Electron/Node execution surface. Desktop workspaces, shell tools,
-JavaScript tool execution, arbitrary filesystem paths, local MCP processes, and executable Skill
-trees are explicit mobile exclusions. Streamable HTTP MCP and device/application capability
-adapters are semantic ports.
+tool-calling JavaScript execution, arbitrary filesystem paths, local MCP processes, and executable
+Skill trees are explicit mobile exclusions; `run_js` computes in isolation and calls nothing.
+Streamable HTTP MCP and device/application capability adapters are semantic ports.
 
 The PC Agent Controller reuses the normalized application presentation of a tool or
 approval, but PC tools remain owned and executed by the PC Agent Runtime. The mobile adapter maps

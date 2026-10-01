@@ -229,6 +229,7 @@
   "chat.builtinTool.calendar.listCalendars": "Obtener lista de calendario",
   "chat.builtinTool.calendar.listEvents": "Buscar eventos del calendario",
   "chat.builtinTool.calendar.updateEvent": "Actualizar evento del calendario",
+  "chat.builtinTool.code.runJs": "Ejecutar JavaScript",
   "chat.builtinTool.file.created": "Archivo creado",
   "chat.builtinTool.file.edit": "Editar archivo",
   "chat.builtinTool.file.edited": "Archivo editado",

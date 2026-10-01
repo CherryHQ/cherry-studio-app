@@ -229,6 +229,7 @@
   "chat.builtinTool.calendar.listCalendars": "Obțineți lista de calendare",
   "chat.builtinTool.calendar.listEvents": "Găsiți evenimente din calendar",
   "chat.builtinTool.calendar.updateEvent": "Actualizați evenimentul din calendar",
+  "chat.builtinTool.code.runJs": "Rulează JavaScript",
   "chat.builtinTool.file.created": "Fișier creat",
   "chat.builtinTool.file.edit": "Editați fișierul",
   "chat.builtinTool.file.edited": "Fișier editat",
