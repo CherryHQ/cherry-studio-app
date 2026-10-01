@@ -24,8 +24,10 @@ const logger = loggerService.withContext('AudioKeepAlive');
  * audio session keeps Hermes scheduled after the app is backgrounded (the
  * OpenMinis approach). Reference counting and start retries live here.
  * `KeepAliveCoordinator` selects this source on iOS, so the class carries no
- * platform branch of its own. Audio never revokes a lease, so `onInterrupt`
- * is not used.
+ * platform branch of its own. Playback interruptions are retried, but the
+ * audio API exposes no execution-expiration callback; `onInterrupt` is not used.
+ * Status remains limited even during playback, since iOS can suspend or kill
+ * the process without delivering a JavaScript callback.
  */
 @Injectable('AudioKeepAliveSource')
 @ServicePhase(Phase.PostReady)
@@ -189,6 +191,10 @@ export class AudioKeepAliveSource extends BaseService implements KeepAliveSource
       logger.info('Background audio resumed after interruption');
     } catch (error) {
       logger.error('Background audio failed to resume after interruption', error as Error);
+      // An invalidated native player cannot protect held leases. Remove it so
+      // reconciliation can create a new session, rather than treating it as live.
+      this.releasePlayer(player);
+      this.scheduleRetry();
     }
   }
 

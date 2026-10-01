@@ -1967,6 +1967,70 @@ describe('MobileAgentHost', () => {
     },
   );
 
+  test('checkpoints unfinished text in bounded batches and retires the timer at finalization', async () => {
+    const started = createDeferred();
+    const releaseText = createDeferred();
+    const releaseSuffix = createDeferred();
+    const releaseTerminal = createDeferred();
+    const saveSnapshot = jest.spyOn(store, 'updateStreamingAssistantMessage');
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      started.resolve();
+      await releaseText.promise;
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: '', state: 'streaming' },
+      });
+      for (let index = 0; index < 100; index += 1) {
+        controller.emit({ type: 'text.delta', partId: 'text-1', text: 'partial ' });
+      }
+      await releaseSuffix.promise;
+      controller.emit({ type: 'text.delta', partId: 'text-1', text: 'finished' });
+      await releaseTerminal.promise;
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Continue until interrupted.' }],
+    });
+    await started.promise;
+    jest.useFakeTimers();
+    try {
+      releaseText.resolve();
+      await jest.advanceTimersByTimeAsync(999);
+      expect(saveSnapshot).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      expect(saveSnapshot).toHaveBeenCalledTimes(1);
+      expect((await store.listMessages(session.id))[1]).toMatchObject({
+        status: 'streaming',
+        parts: [{ type: 'text', text: 'partial '.repeat(100), state: 'streaming' }],
+      });
+
+      releaseSuffix.resolve();
+      await jest.advanceTimersByTimeAsync(0);
+      releaseTerminal.resolve();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
+      await jest.advanceTimersByTimeAsync(5_000);
+      expect(saveSnapshot).toHaveBeenCalledTimes(1);
+      expect((await store.listMessages(session.id))[1]).toMatchObject({
+        status: 'success',
+        parts: [{ text: 'partial '.repeat(100) + 'finished', state: 'done' }],
+      });
+    } finally {
+      releaseText.resolve();
+      releaseSuffix.resolve();
+      releaseTerminal.resolve();
+      await jest.advanceTimersByTimeAsync(0);
+      jest.useRealTimers();
+    }
+  });
+
   test('still finalizes the complete message when a mid-turn snapshot write fails', async () => {
     jest
       .spyOn(store, 'updateStreamingAssistantMessage')

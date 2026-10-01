@@ -76,6 +76,11 @@ the card. This does not change stored task content.
 The frontend consumes the coordinator's public execution status rather than inferring protection
 from a visible card. Android reports active only after native foreground-service proof. Denied
 admission is limited; revocation is interrupted. iOS's current audio strategy reports limited.
+An interrupted iOS player that throws on resume is removed, including its listener, and rebuilt
+with the same capped exponential retry used for admission. The last lease release cancels that
+retry; callbacks from a removed player cannot resume a replacement. Recovering audio never
+resubmits the model request. The audio API exposes no execution-expiration callback, so a held
+lease and successful playback still cannot establish an OS guarantee.
 System low-power, battery-optimization, Live Activity, and notification settings are separate facts.
 Manufacturer-specific autostart/background restrictions require manual confirmation.
 
