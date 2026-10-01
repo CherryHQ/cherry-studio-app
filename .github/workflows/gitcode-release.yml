@@ -1,0 +1,73 @@
+name: GitCode Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published GitHub release tag to mirror
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitcode-release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish-gitcode:
+    name: Mirror GitHub APK to GitCode
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+
+    steps:
+      - name: Validate release tag
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+
+      - name: Checkout release source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate release version
+        run: |
+          version="${RELEASE_TAG#v}"
+          test "${version%%-*}" = "$(jq -r '.expo.version' app.json)"
+
+      - name: Download published GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = false
+          artifact_dir="$RUNNER_TEMP/gitcode-release"
+          mkdir -p "$artifact_dir"
+          gh release download "$RELEASE_TAG" --dir "$artifact_dir" \
+            --pattern "cherry-studio-${RELEASE_TAG#v}-android.apk" --pattern SHA256SUMS
+          gh release view "$RELEASE_TAG" --json body --jq .body > "$artifact_dir/release-notes.md"
+          (cd "$artifact_dir" && sha256sum --check SHA256SUMS)
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.2.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish matching tag and release to GitCode
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          RELEASE_DIRECTORY: ${{ runner.temp }}/gitcode-release
+        run: pnpm exec tsx scripts/publishGitcodeRelease.ts
