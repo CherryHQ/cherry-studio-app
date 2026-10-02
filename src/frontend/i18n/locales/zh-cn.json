@@ -1441,6 +1441,7 @@
   "settings.profile.edit": "编辑个人资料",
   "settings.profile.setPrompt": "点击设置头像和用户名",
   "settings.profile.userName": "用户名",
+  "settings.profile.userNameSaveError": "用户名保存失败",
   "settings.provider.account.authorizationCode": "授权码或跳转地址",
   "settings.provider.account.authorizationCodeHint": "在浏览器完成授权后，粘贴最终跳转地址或授权码。",
   "settings.provider.account.deviceCode": "验证码",

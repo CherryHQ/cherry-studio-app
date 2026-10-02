@@ -1441,6 +1441,7 @@
   "settings.profile.edit": "Chỉnh sửa hồ sơ",
   "settings.profile.setPrompt": "Nhấn để đặt hình đại diện và tên",
   "settings.profile.userName": "Tên người dùng",
+  "settings.profile.userNameSaveError": "Không lưu được tên người dùng",
   "settings.provider.account.authorizationCode": "Mã cấp quyền hoặc URL chuyển hướng",
   "settings.provider.account.authorizationCodeHint": "Sau khi cấp quyền, dán URL chuyển hướng cuối cùng hoặc mã vào đây.",
   "settings.provider.account.deviceCode": "Mã xác minh",

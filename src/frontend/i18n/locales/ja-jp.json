@@ -1441,6 +1441,7 @@
   "settings.profile.edit": "プロフィールを編集する",
   "settings.profile.setPrompt": "タップしてアバターと名前を設定します",
   "settings.profile.userName": "ユーザー名",
+  "settings.profile.userNameSaveError": "ユーザー名の保存に失敗しました",
   "settings.provider.account.authorizationCode": "認証コードまたはリダイレクト URL",
   "settings.provider.account.authorizationCodeHint": "認証後、最後のリダイレクト URL またはコードをここに貼り付けてください。",
   "settings.provider.account.deviceCode": "確認コード",
