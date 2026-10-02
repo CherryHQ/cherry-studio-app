@@ -8,8 +8,8 @@ import {
   useToast,
 } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -133,6 +133,16 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
 
   const [form, setForm] = useState<McpServerFormState>(() => createFormState(server));
   const [isSaving, setIsSaving] = useState(false);
+  // Discovery can outlast the user's patience; once they leave, going back would pop their next page.
+  const isFocused = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      isFocused.current = true;
+      return () => {
+        isFocused.current = false;
+      };
+    }, []),
+  );
   const savedForm = createFormState(server);
   const isDirty =
     isCreating ||
@@ -168,7 +178,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
         const name = serverInfo.title?.trim() || serverInfo.name.trim() || dto.value.name;
         await createServer({ ...dto.value, isEnabled: true, name });
         // The new server joins the Plugins page's MCP group; opening it from there edits it.
-        router.back();
+        if (isFocused.current) router.back();
       }
     } catch (error) {
       logger.error('Failed to save MCP server', error as Error);
