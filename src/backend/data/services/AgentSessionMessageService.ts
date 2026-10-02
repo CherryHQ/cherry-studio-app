@@ -2,7 +2,6 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { agentSessionMessageTable, agentSessionTable, agentTable } from '@/backend/data/db/schemas';
-import type { AgentSessionMessageRow } from '@/backend/data/db/schemas/agentSessionMessage';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   AGENT_SESSION_MESSAGES_DEFAULT_LIMIT,
@@ -13,7 +12,12 @@ import {
   ListAgentSessionMessagesQuerySchema,
 } from '@/shared/data/api/schemas/agentSessionMessages';
 
-import { toAgentMessageView, toAgentSessionView } from './utils/agentSessionRows';
+import {
+  agentMessageViewColumns,
+  type AgentMessageViewRow,
+  toAgentMessageView,
+  toAgentSessionView,
+} from './utils/agentSessionRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
 /** SQL-only window and selected-ID reads for the durable linear transcript. */
@@ -38,7 +42,7 @@ export class AgentSessionMessageService {
 
     if (query.ids) {
       const rows = await this.db
-        .select()
+        .select(agentMessageViewColumns)
         .from(agentSessionMessageTable)
         .where(
           and(
@@ -115,7 +119,7 @@ export class AgentSessionMessageService {
 
   private async readAround(sessionId: string, messageId: string, limit: number) {
     const [target] = await this.db
-      .select()
+      .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
       .where(
         and(
@@ -156,14 +160,14 @@ export class AgentSessionMessageService {
     limit: number,
     direction: 'asc' | 'desc',
     cursor: { key: number; id: string } | null,
-  ): Promise<AgentSessionMessageRow[]> {
+  ): Promise<AgentMessageViewRow[]> {
     const ordering = keysetOrdering(
       agentSessionMessageTable.createdAt,
       agentSessionMessageTable.id,
       { major: direction, tie: direction },
     );
     return this.db
-      .select()
+      .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
       .where(
         and(

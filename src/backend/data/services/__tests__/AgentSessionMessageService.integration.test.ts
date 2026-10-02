@@ -192,6 +192,26 @@ describe('AgentSessionMessageService persistence', () => {
     ).rejects.toMatchObject({ details: { id: 'target', resource: 'AgentSessionMessage' } });
   });
 
+  test('reads transcript windows without decoding columns the message view omits', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'older', text: 'Older' });
+    insertMessage(sqlite, { createdAt: 200, id: 'checkpointed', text: 'Checkpointed' });
+    // Proves the context checkpoint and turn error are never read for the view.
+    sqlite
+      .prepare('UPDATE agent_session_message SET context_checkpoint = ?, error = ? WHERE id = ?')
+      .run('{not json', '{not json', 'checkpointed');
+
+    const latest = await agentSessionMessageService.listByCursor('session-1');
+    const around = await agentSessionMessageService.listByCursor('session-1', {
+      aroundMessageId: 'checkpointed',
+    });
+    const selected = await agentSessionMessageService.listByCursor('session-1', {
+      ids: ['checkpointed'],
+    });
+    expect(latest.items.map((message) => message.id)).toEqual(['checkpointed', 'older']);
+    expect(around.items.map((message) => message.id)).toEqual(['checkpointed', 'older']);
+    expect(selected.items.map((message) => message.id)).toEqual(['checkpointed']);
+  });
+
   test('preserves an unknown inference snapshot version as unsupported JSON', async () => {
     insertMessage(sqlite, { createdAt: 100, id: 'message-future', text: 'Future' });
     const futureSnapshot = { version: 2, opaque: { retained: true } };
