@@ -133,4 +133,29 @@ describe('health summaries with incomplete data', () => {
       false,
     );
   });
+
+  test('stops querying later days once the tool call is cancelled', async () => {
+    const controller = new AbortController();
+    const native = {
+      getQuantityData: jest.fn(async () => []),
+      getAggregatedQuantity: jest.fn(async () => {
+        controller.abort(new Error('The turn was cancelled.'));
+        return 100;
+      }),
+    };
+
+    await expect(
+      getHealthSummary(
+        {
+          startDate: localIso(2026, 6, 1),
+          endDate: localIso(2026, 8, 30),
+          granularity: 'day',
+          metrics: ['steps'],
+        },
+        async () => native as unknown as HealthKit,
+        controller.signal,
+      ),
+    ).rejects.toThrow('The turn was cancelled.');
+    expect(native.getAggregatedQuantity).toHaveBeenCalledTimes(1);
+  });
 });

@@ -433,6 +433,7 @@ interface AgentProtocol {
   retryMessage(input: { sessionId: string; messageId: string }): Promise<void>
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
+  cancelSubmission(input: { sessionId: string }): Promise<void>
 
   respondApproval(input: {
     sessionId: string
@@ -482,6 +483,13 @@ event arrives before or after the function returns. The current composer keeps o
 until both messages have formal data. Its preallocated Session ID also keeps the first message list
 mounted through navigation and history loading. Admission rejection restores the draft; execution
 errors belong to the accepted transcript.
+
+Stop works before a turn exists. Preparation (tool discovery, attachment reading, model preflight,
+and Runtime open) has no turn id, so the client stops it with `cancelSubmission`, which aborts the
+Session's submission, retry, or Draft start still in admission. The pending call rejects with
+`CANCELLED` and the composer restores the draft without a failure notice. A stop that lands while
+the reservation commits leaves a reserved turn that settles as `cancelled` without running. Once
+the turn is reserved, the client uses `cancelTurn`.
 
 `modelId` and `reasoningEffort` are immutable snapshots of the composer state for that submission.
 The model snapshot closes the gap while the same selection is persisted to the Agent. The reasoning

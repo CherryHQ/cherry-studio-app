@@ -47,7 +47,7 @@ export function createHealthTools(deps: DeviceToolDependencies, loadHealthKit?: 
       permissionScopes: (input) =>
         (input.metrics.length ? input.metrics : healthMetricNames).map(healthPermissionScope),
       permissionMatch: 'any',
-      run: async (input, _signal, permissions) => {
+      run: async (input, signal, permissions) => {
         const requested = input.metrics.length ? input.metrics : healthMetricNames;
         const metrics = requested.filter((metric) =>
           canUseDevicePermission(
@@ -63,6 +63,7 @@ export function createHealthTools(deps: DeviceToolDependencies, loadHealthKit?: 
             startDate: input.startDate || undefined,
           },
           loadHealthKit,
+          signal,
         );
         return {
           ...result,

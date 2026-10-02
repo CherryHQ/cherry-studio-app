@@ -55,13 +55,15 @@ export async function getHealthSummary(
     startDate?: string;
   },
   loadHealthKit: HealthKitLoader = loadHealthKitModule,
+  signal?: AbortSignal,
 ) {
   const range = normalizeOptionalDateRange(input.startDate, input.endDate);
   const healthKit = await loadHealthKit();
+  signal?.throwIfAborted();
   const metrics = input.metrics?.length ? input.metrics : [...healthMetricNames];
   const result =
     input.granularity === 'day'
-      ? await getDailyHealthData(healthKit, metrics, range.start, range.end)
+      ? await getDailyHealthData(healthKit, metrics, range.start, range.end, signal)
       : await getRangeHealthSummary(healthKit, metrics, range.start, range.end);
   return {
     ...result,
@@ -128,6 +130,7 @@ async function getDailyHealthData(
   metrics: HealthMetricName[],
   start: Date,
   end: Date,
+  signal?: AbortSignal,
 ) {
   const daily = new Map<string, Record<string, { unit: string; value: number }>>();
   const metricStates: Partial<Record<HealthMetricName, MetricState>> = {};
@@ -149,6 +152,8 @@ async function getDailyHealthData(
           // the native per-day value is what the caller asked for, and the range
           // fetch it replaces is what made dense metrics exceed the timeout.
           for (const day of localDays(start, end)) {
+            // Up to 90 sequential days per metric: stop between days once cancelled.
+            signal?.throwIfAborted();
             const value = await readQuantity(healthKit, metric, day.start, day.end);
             if (value === null) continue;
             found = true;
@@ -157,6 +162,7 @@ async function getDailyHealthData(
           metricStates[metric] = found ? 'available' : 'no-data';
         }
       } catch (error) {
+        signal?.throwIfAborted();
         logger.warn('Daily health metric query failed', { metric, error });
         metricStates[metric] = 'error';
         metricErrors[metric] = describeError(error);

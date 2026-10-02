@@ -29,6 +29,7 @@ export {
   type AgentSessionSnapshot,
 } from './events';
 export {
+  AgentCancelSubmissionInputSchema,
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,

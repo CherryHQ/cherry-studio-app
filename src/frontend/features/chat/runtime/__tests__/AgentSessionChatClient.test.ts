@@ -5,6 +5,7 @@ import type {
   AgentSessionObservation,
   AgentSessionSnapshot,
 } from '@/shared/contracts/agent';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 
 import { AgentSessionChatClient } from '../AgentSessionChatClient';
 
@@ -78,6 +79,7 @@ function protocolWithObservation(
   observeSession: AgentProtocol['observeSession'],
 ): jest.Mocked<AgentProtocol> {
   return {
+    cancelSubmission: jest.fn(),
     cancelTurn: jest.fn(),
     deleteSession: jest.fn(),
     deleteTurn: jest.fn(),
@@ -98,6 +100,13 @@ function protocolWithObservation(
     startSession: jest.fn(),
     submitMessage: jest.fn(),
   };
+}
+
+async function waitForCall(mock: { mock: { calls: unknown[] } }): Promise<void> {
+  for (let attempt = 0; attempt < 20 && mock.mock.calls.length === 0; attempt += 1) {
+    await Promise.resolve();
+  }
+  expect(mock.mock.calls.length).toBeGreaterThan(0);
 }
 
 describe('AgentSessionChatClient', () => {
@@ -450,6 +459,66 @@ describe('AgentSessionChatClient', () => {
       sessionId: 'session-1',
       turnId: 'turn-1',
     });
+  });
+
+  test('stops a submission the Host is still admitting and releases the composer', async () => {
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    let rejectSubmission!: (error: Error) => void;
+    protocol.submitMessage.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSubmission = reject;
+        }),
+    );
+    protocol.cancelSubmission.mockImplementation(async () => {
+      rejectSubmission(
+        new AgentProtocolError({ code: 'CANCELLED', message: 'cancelled', retryable: false }),
+      );
+    });
+    const client = new AgentSessionChatClient(protocol);
+    const unsubscribe = client.subscribe('session-1', () => undefined);
+    const submission = client.submitMessage({
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ type: 'text', text: 'Hello' }],
+    });
+    const rejected = expect(submission).rejects.toMatchObject({ view: { code: 'CANCELLED' } });
+    await waitForCall(protocol.submitMessage);
+
+    await client.cancelTurn('session-1');
+    await client.cancelTurn('session-1');
+
+    await rejected;
+    expect(protocol.cancelSubmission).toHaveBeenCalledTimes(1);
+    expect(protocol.cancelSubmission).toHaveBeenCalledWith({ sessionId: 'session-1' });
+    expect(protocol.cancelTurn).not.toHaveBeenCalled();
+    expect(client.getState('session-1').isSubmitting).toBe(false);
+    await client.cancelTurn('session-1');
+    expect(protocol.cancelSubmission).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  test('never submits when stopped before the Host receives the submission', async () => {
+    const observation = deferred<AgentSessionObservation>();
+    const protocol = protocolWithObservation(() => observation.promise);
+    const client = new AgentSessionChatClient(protocol);
+    const submission = client.submitMessage({
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ type: 'text', text: 'Hello' }],
+    });
+
+    await client.cancelTurn('session-1');
+    observation.resolve({ snapshot: snapshot(), unsubscribe: jest.fn() });
+
+    await expect(submission).rejects.toMatchObject({ view: { code: 'CANCELLED' } });
+    expect(protocol.submitMessage).not.toHaveBeenCalled();
+    expect(client.getState('session-1').isSubmitting).toBeFalsy();
   });
 
   test('unsubscribes the Host observation when the final React subscriber leaves', async () => {
