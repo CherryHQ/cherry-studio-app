@@ -11,6 +11,7 @@ import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import { ProviderRegistryQueryBridge } from '@/frontend/data/ProviderRegistryQueryBridge';
+import i18n, { initI18n } from '@/frontend/i18n';
 
 type AppBootstrapProviderProps = PropsWithChildren<{
   /** Test seam. Production owns one in-process backend runtime. */
@@ -28,6 +29,8 @@ type AppBootstrapState =
     }
   | {
       error: Error;
+      /** Starts again with a new runtime; a host that failed to start cannot restart. */
+      retry: () => void;
       status: 'error';
     };
 
@@ -35,7 +38,13 @@ const AppBootstrapContext = createContext<AppBootstrapState | null>(null);
 const logger = loggerService.withContext('AppBootstrap');
 
 export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapProviderProps) {
-  const runtime = useMemo(() => (createRuntime ?? createAppBootstrapRuntime)(), [createRuntime]);
+  const [attempt, setAttempt] = useState(0);
+  // Each startup attempt owns its runtime: a host that failed to start cannot
+  // restart. The effect cleanup disposes a failed one before the next installs.
+  const { runtime } = useMemo(
+    () => ({ attempt, runtime: (createRuntime ?? createAppBootstrapRuntime)() }),
+    [createRuntime, attempt],
+  );
   const [state, setState] = useState<AppBootstrapState>({ status: 'loading' });
 
   useEffect(() => {
@@ -43,6 +52,13 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
 
     void initializeApp({
       isDisposed: () => disposed,
+      retry: () => {
+        // Ignore repeated taps before the next attempt commits.
+        if (disposed) return;
+        disposed = true;
+        setState({ status: 'loading' });
+        setAttempt((current) => current + 1);
+      },
       runtime,
       setState,
     });
@@ -69,10 +85,12 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
 // 模块级函数：try/finally 会让 React Compiler 对组件 bail out，故初始化流程放在组件体外。
 async function initializeApp({
   isDisposed,
+  retry,
   runtime,
   setState,
 }: {
   isDisposed: () => boolean;
+  retry: () => void;
   runtime: AppBootstrapRuntime;
   setState: (state: AppBootstrapState) => void;
 }) {
@@ -92,7 +110,9 @@ async function initializeApp({
       logger.error('Application initialization failed', toError(error), {
         operation: 'app.initialize',
       });
-      setState({ error: toError(error), status: 'error' });
+      // The failure screen is translated; failures before the i18n step leave it uninitialized.
+      if (!i18n.isInitialized) await initI18n().catch(() => undefined);
+      if (!isDisposed()) setState({ error: toError(error), retry, status: 'error' });
     }
   }
 }

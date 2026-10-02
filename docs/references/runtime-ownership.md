@@ -67,13 +67,18 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 - uninstalls the host on unmount; reverse dependency order drains consumers before their
   infrastructure.
 
-The provider's own React context exposes only `loading`, `ready`, or `error`. Concrete backend
+The provider's own React context exposes only `loading`, `ready`, or `error`; `error` also carries
+`retry`, which replaces the failed runtime with a new one because a host that failed to start
+cannot start again. Concrete backend
 services never enter React state or frontend code. Its children receive three stable, narrow
 providers: `DataApiProvider` for typed resource endpoints, `PreferenceProvider` for preferences, and
 `BackendProvider` for workflow modules, including any caller-owned session factories.
 
-`AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and throws the
-initialization error. The root layout retains the native splash, while the app-shell
+`AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and the app-shell
+`StartupFailureScreen` after an initialization error, so a failed start never becomes a crash
+loop. The provider has already logged the failure and initialized translations for that screen
+when an earlier step failed. Render failures after the gate opens are contained by the app-shell
+`AppErrorBoundary`. The root layout retains the native splash, while the app-shell
 `StartupCoordinator` hides it only after its matching React Native cover has laid out and crossed
 two composited frames. The provider owns initialization state and post-ready work; it does not own
 splash visibility. `startupCoverHandoff` prevents Uniwind's native appearance synchronization from
