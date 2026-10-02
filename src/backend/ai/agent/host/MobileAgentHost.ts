@@ -1118,6 +1118,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.handleTerminalPersistenceFailure(sessionId, state, error);
         return;
       }
+      // Leaving the event loop does not stop the Runtime. An orphaned execution
+      // would hold the Session's only execute slot and could request an
+      // approval nobody can answer.
+      await state.runtimeSession
+        ?.cancel(state.turn.id)
+        .catch((cancelError) =>
+          logger.warn('Failed to cancel an abandoned Runtime turn', cancelError as Error),
+        );
       if (state.abortController.signal.aborted) {
         try {
           await this.finalize(sessionId, state, 'cancelled', null);

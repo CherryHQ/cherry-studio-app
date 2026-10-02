@@ -2766,6 +2766,51 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
+  test('cancels the Runtime turn when the Host fails handling its events', async () => {
+    let executionSignal: AbortSignal | undefined;
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      executionSignal = controller.signal;
+      controller.emit({
+        type: 'usage',
+        requestId: 'invocation:host-failure',
+        completedAt: 1_500,
+        context: USAGE_CONTEXT,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      });
+      await new Promise<void>((resolve) => {
+        controller.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    runtime.script((controller) => controller.emit({ type: 'completed' }));
+    usage.record.mockImplementationOnce(() => {
+      throw new Error('usage ledger unavailable');
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Fail in the Host.' }],
+    });
+    await waitFor(
+      () => host.getSessionStatus(session.id)?.status === 'failed',
+      'the Host failure to settle',
+    );
+
+    expect(executionSignal?.aborted).toBe(true);
+    // The Runtime session's single execute slot is free for the next turn.
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Next turn.' }],
+    });
+    await waitFor(
+      () => host.getSessionStatus(session.id)?.status === 'completed',
+      'the next turn to complete',
+    );
+  });
+
   test('background interruption preserves partial output and waits for failed turn persistence', async () => {
     const started = createDeferred();
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
