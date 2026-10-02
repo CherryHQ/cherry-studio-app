@@ -263,6 +263,61 @@ describe('DesktopSession', () => {
     }
   });
 
+  it('keeps a healthy channel open while local requests fill the in-flight budget', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    try {
+      const pings: unknown[] = [];
+      const channel = fakeChannel({
+        'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),
+        'connection.ping': (params) => {
+          pings.push(params);
+          return { nonce: (params as { nonce: string }).nonce, serverTime: '2026-10-02T00:00:00Z' };
+        },
+        'agent.commands.get': () => NO_REPLY,
+      });
+      const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+      const pending = Array.from({ length: 16 }, (_, index) =>
+        session.request('agent.commands.get', { commandId: `c${index}` }).catch(() => undefined),
+      );
+      await expect(
+        session.request('agent.commands.get', { commandId: 'over-budget' }),
+      ).rejects.toMatchObject({ reason: 'RESOURCE_EXHAUSTED' });
+
+      await jest.advanceTimersByTimeAsync(20_000);
+      expect(pings).toHaveLength(1);
+      expect(session.isOpen).toBe(true);
+      session.close();
+      await Promise.all(pending);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('treats a refused heartbeat as proof of life and a lost one as a dead channel', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    try {
+      let reply: 'refuse' | 'drop' = 'refuse';
+      const channel = fakeChannel({
+        ...hello,
+        'connection.ping': () => {
+          if (reply === 'drop') return NO_REPLY;
+          throw Object.assign(new Error('Too many requests'), {
+            data: { reason: 'RESOURCE_EXHAUSTED', message: 'Too many requests' },
+          });
+        },
+      });
+      const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+      await jest.advanceTimersByTimeAsync(20_000);
+      expect(session.isOpen).toBe(true);
+
+      reply = 'drop';
+      await jest.advanceTimersByTimeAsync(80_000);
+      expect(session.isOpen).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('reports a failed record write as transport loss, and a desktop verdict as a failure', async () => {
     const channel = fakeChannel({
       'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),

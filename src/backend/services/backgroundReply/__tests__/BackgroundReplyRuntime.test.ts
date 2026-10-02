@@ -641,6 +641,43 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
+  test('retiring a turn removes its card without terminal content or a completion notice', async () => {
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
+    const notifyTurnFinished = jest.fn(async () => true);
+    const runtime = await createRuntime(undefined, {
+      dismissDestination: jest.fn(),
+      notifyTurnFinished,
+      requestPermissionOnce: jest.fn(),
+    });
+    const input = {
+      connectionId: 'pc',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'Desktop task',
+    };
+    const turn = runtime.startTurn(input);
+    turn.retire();
+    turn.finish('cancelled');
+    turn.update({ parts: [textPart('late')] });
+    await flushOperations();
+
+    const [session] = mockSessions;
+    expect(session!.cancel).toHaveBeenCalledTimes(1);
+    expect(session!.finish).not.toHaveBeenCalled();
+    expect(session!.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'cancelled' }),
+      expect.anything(),
+    );
+    expect(notifyTurnFinished).not.toHaveBeenCalled();
+
+    // Foreground recovery starts a fresh card for the same destination.
+    runtime.startTurn(input);
+    expect(mockStartSession).toHaveBeenCalledTimes(2);
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
+    await runtime._doStop();
+  });
+
   test('ends sessions when stopped during an active turn and stops idempotently', async () => {
     const runtime = await createRuntime();
     runtime.startTurn({

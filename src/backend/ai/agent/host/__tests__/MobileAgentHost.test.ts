@@ -123,6 +123,7 @@ const backgroundReplyTurn = {
   updateContent: jest.fn(),
   awaitApproval: jest.fn(),
   finish: jest.fn(),
+  retire: jest.fn(),
   update: jest.fn(),
 };
 const backgroundReply = {
