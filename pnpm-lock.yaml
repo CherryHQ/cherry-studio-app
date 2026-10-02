@@ -135,6 +135,7 @@ patchedDependencies:
   '@openrouter/ai-sdk-provider@2.10.0': fe61d9ff590828fc0fd3f8b3b8b88a4a1b736a99b595a276c8df9e12c9498009
   '@opeoginni/github-copilot-openai-compatible@1.0.0': 4bea0e526136ed32d0be4849ec5cbb41bd5de7b7418dd6920598357438cfef25
   ai@6.0.185: 61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711
+  drizzle-orm@0.45.2: f0752da0b8bbfb3f31057a6735061860ec0a2facb1c608a25795bb5a9ad845d6
   expo-app-metrics@57.0.17: ad695b0d3d5a23f410da2ab093834f73c20749edf3a7aaf46b20b2908e66a527
   expo-calendar@57.0.3: ce5bad9449643aa40eb701547f61fc25bc9a0279ec6080c2e9bc8607f50885cd
   expo-image-picker@57.0.16: 836940bda8fa51ce79062ddda02a56e1f0b599717a031730b9c4ed95e98dc156
@@ -316,7 +317,7 @@ importers:
         version: 1.5.1
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@opentelemetry/api@1.9.1)(expo-sqlite@57.0.2(expo@57.0.24)(react-native@0.86.3(patch_hash=5cff80f1c85ad62edb2c5da0f36ee87f0c095775bc36bd2bc3dec211184a6de6)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))
+        version: 0.45.2(patch_hash=f0752da0b8bbfb3f31057a6735061860ec0a2facb1c608a25795bb5a9ad845d6)(@opentelemetry/api@1.9.1)(expo-sqlite@57.0.2(expo@57.0.24)(react-native@0.86.3(patch_hash=5cff80f1c85ad62edb2c5da0f36ee87f0c095775bc36bd2bc3dec211184a6de6)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))
       expo:
         specifier: ~57.0.23
         version: 57.0.24(b5664cba767fb7be49e9f4d346bd7a99)
@@ -15428,7 +15429,7 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.22.0
 
-  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(expo-sqlite@57.0.2(expo@57.0.24)(react-native@0.86.3(patch_hash=5cff80f1c85ad62edb2c5da0f36ee87f0c095775bc36bd2bc3dec211184a6de6)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)):
+  drizzle-orm@0.45.2(patch_hash=f0752da0b8bbfb3f31057a6735061860ec0a2facb1c608a25795bb5a9ad845d6)(@opentelemetry/api@1.9.1)(expo-sqlite@57.0.2(expo@57.0.24)(react-native@0.86.3(patch_hash=5cff80f1c85ad62edb2c5da0f36ee87f0c095775bc36bd2bc3dec211184a6de6)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)):
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
       expo-sqlite: 57.0.2(expo@57.0.24)(react-native@0.86.3(patch_hash=5cff80f1c85ad62edb2c5da0f36ee87f0c095775bc36bd2bc3dec211184a6de6)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
