@@ -79,6 +79,9 @@ export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
 });
+export const AgentCancelSubmissionInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+});
 export const AgentRespondApprovalInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
