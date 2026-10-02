@@ -401,6 +401,45 @@ it('bounds hosted discovery without cancelling the independent local catalog', a
   }
 });
 
+it('keeps a hosted write running when concurrent discovery times out, then retires its client', async () => {
+  jest.useFakeTimers();
+  try {
+    let release!: () => void;
+    let writeSignal!: AbortSignal;
+    const started = new Promise<void>((resolve) => {
+      mockRemote.callTool.mockImplementationOnce(({ options }) => {
+        writeSignal = options.abortSignal;
+        resolve();
+        return new Promise((finish) => {
+          release = () => finish({ content: [{ type: 'text', text: 'created' }] });
+        });
+      });
+    });
+    const write = client.callTool({ name: 'create-doc', args: {} });
+    await started;
+    mockRemote.listTools.mockImplementation(
+      ({ options }) =>
+        new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        }),
+    );
+    const discovery = client.listTools();
+    await jest.advanceTimersByTimeAsync(5_000);
+    await discovery;
+    expect(client.discoveryWarnings).toEqual([expect.stringContaining('timeout')]);
+    expect(writeSignal.aborted).toBe(false);
+    expect(mockRemote.close).not.toHaveBeenCalled();
+
+    release();
+    await expect(write).resolves.toEqual({ content: [{ type: 'text', text: 'created' }] });
+    expect(mockRemote.close).toHaveBeenCalledTimes(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 it('does not disguise an aborted discovery as a successful partial catalog', async () => {
   const caller = new AbortController();
   mockRemote.listTools.mockImplementationOnce(async () => {

@@ -389,6 +389,36 @@ it('reports an unknown write outcome after a connection failure without replay',
   }
 });
 
+it('reports an unknown write outcome when closing the client aborts a submitted write', async () => {
+  mockFetch.mockImplementation(async (url, init) => {
+    const response = respond(url, init);
+    if (init?.body && JSON.parse(init.body).method === 'initialize')
+      response.headers.set('mcp-session-id', 'session-1');
+    return response;
+  });
+  const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
+  await client.listTools();
+  let submitted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    submitted = resolve;
+  });
+  mockFetch.mockImplementation((url, init) => {
+    if (!init?.body || JSON.parse(init.body).method !== 'tools/call') return respond(url, init);
+    submitted();
+    return new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+    });
+  });
+  const result = Promise.resolve(
+    client.callTool({ name: 'issue_write', args: { method: 'create' } }),
+  );
+  const outcome = expect(result).rejects.toMatchObject({ reason: 'unknown-write' });
+  await started;
+  await client.close();
+  await outcome;
+  expect(toolRequests()).toHaveLength(1);
+});
+
 it('does not send a request cancelled while resolving credentials', async () => {
   const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
   try {
