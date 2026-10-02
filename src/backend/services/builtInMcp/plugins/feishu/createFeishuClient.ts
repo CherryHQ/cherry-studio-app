@@ -19,6 +19,15 @@ export async function createFeishuClient(context: PluginClientContext): Promise<
   let connecting: Promise<PluginClient> | undefined;
   let closing: Promise<void> | undefined;
   let discoveryWarnings: string[] = [];
+  // Remote calls in flight per hosted client; a replaced client closes once its calls settle.
+  const calls = new Map<PluginClient, number>();
+  const retired = new Set<PluginClient>();
+
+  function retire(client: PluginClient) {
+    // Closing aborts in-flight calls, which would turn a submitted write into a lost outcome.
+    if (calls.has(client)) retired.add(client);
+    else void client.close().catch(() => undefined);
+  }
 
   function operationSignal(caller?: AbortSignal) {
     if (lifetime.signal.aborted) throw new PluginError('cancelled', 'Feishu client closed.');
@@ -126,7 +135,7 @@ export async function createFeishuClient(context: PluginClientContext): Promise<
         const failed = remote;
         remote = undefined;
         // Closing a failed hosted transport must not hold up the independent local catalog.
-        void failed?.close().catch(() => undefined);
+        if (failed) retire(failed);
         if (localTools.length === 0) throw error;
         const reason = deadline.signal.aborted
           ? 'timeout'
@@ -153,7 +162,17 @@ export async function createFeishuClient(context: PluginClientContext): Promise<
         if (!Object.hasOwn(allowed, input.name))
           throw new PluginError('access', 'Update Feishu authorization to use this tool.');
         const client = await getRemote(signal);
-        return client.callTool({ ...input, options: { abortSignal: signal } });
+        calls.set(client, (calls.get(client) ?? 0) + 1);
+        try {
+          return await client.callTool({ ...input, options: { abortSignal: signal } });
+        } finally {
+          const remaining = calls.get(client)! - 1;
+          if (remaining > 0) calls.set(client, remaining);
+          else {
+            calls.delete(client);
+            if (retired.delete(client)) void client.close().catch(() => undefined);
+          }
+        }
       }
       throw new PluginError('access', 'The Feishu tool is not admitted.');
     },
@@ -162,6 +181,9 @@ export async function createFeishuClient(context: PluginClientContext): Promise<
         lifetime.abort();
         closing = (async () => {
           await connecting?.catch(() => undefined);
+          const clients = [...retired];
+          retired.clear();
+          await Promise.all(clients.map((client) => client.close().catch(() => undefined)));
           await remote?.close();
           remote = undefined;
         })();

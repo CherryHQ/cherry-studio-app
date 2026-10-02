@@ -73,6 +73,8 @@ export interface PluginDefinition {
   readonly acceptsDiscoveredTool?: (name: string) => boolean;
   readonly guide?: PluginGuideDefinition;
   createClient(context: PluginClientContext): Promise<PluginClient>;
+  /** Remove device files the plugin's tools saved, after its connection is removed. */
+  clearLocalFiles?(): void;
   readonly validation: {
     /** Omit to accept any admitted discovered tool without executing a business operation. */
     readonly tool?: string;

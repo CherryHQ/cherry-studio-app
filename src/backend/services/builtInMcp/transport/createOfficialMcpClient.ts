@@ -105,7 +105,10 @@ export async function createOfficialMcpClient(
       return response;
     } catch (error) {
       if (init?.signal?.aborted) {
-        throw new PluginError('cancelled', 'The plugin request was cancelled.');
+        // Closing the client also aborts a submitted write, which the service may have committed.
+        throw isWrite && submitted
+          ? unknownWriteError(context.pluginId)
+          : new PluginError('cancelled', 'The plugin request was cancelled.');
       }
       if (error instanceof PluginError) throw error;
       if (isWrite && submitted) throw unknownWriteError(context.pluginId);

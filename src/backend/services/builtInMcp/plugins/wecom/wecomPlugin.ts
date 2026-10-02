@@ -5,6 +5,7 @@ import { createWecomClient } from './createWecomClient';
 import { wecomGuide } from './guide';
 import { WecomAuthorizationRuntime } from './WecomAuthorizationRuntime';
 import { readWecomCredential } from './wecomCredentials';
+import { deleteWecomFiles } from './wecomFiles';
 import { isWecomApiUrl } from './wecomSchema';
 import { acceptsWecomTool, WECOM_TOOL_POLICY } from './wecomTools';
 
@@ -41,6 +42,7 @@ export const wecomPlugin: PluginDefinition = {
     },
   ],
   createClient: createWecomClient,
+  clearLocalFiles: deleteWecomFiles,
   // Authorization exchanges a token; setup only discovers tools, without business calls.
   validation: {
     accountLabel: () => 'WeCom',
