@@ -24,6 +24,7 @@ import {
   RemoteTransportError,
 } from '@/backend/services/desktopConnections/remoteErrors';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import type {
   RemoteAgentSource,
   RemoteSessionSnapshot,
@@ -326,9 +327,14 @@ export class RemoteAgentScope implements RemoteAgentSource {
   }
   private request: AgentRequest = async (method, params, caller) => {
     this.assertActive();
-    const signal = caller ? AbortSignal.any([caller, this.lease.signal]) : this.lease.signal;
-    const session = await this.lease.ready(signal);
-    return this.call(session, method, params, signal);
+    const linked = caller ? linkAbortSignals([caller, this.lease.signal]) : undefined;
+    const signal = linked?.signal ?? this.lease.signal;
+    try {
+      const session = await this.lease.ready(signal);
+      return await this.call(session, method, params, signal);
+    } finally {
+      linked?.dispose();
+    }
   };
   private async call<M extends AgentMethod>(
     session: DesktopSession,
