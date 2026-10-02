@@ -4,8 +4,6 @@ import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library';
 import { Platform } from 'react-native';
 
-import type { DevicePermissionStatus, HealthDataType } from '@/shared/contracts';
-
 import { DevicePermissions } from '../DevicePermissions';
 
 jest.mock('expo-calendar', () => ({
@@ -34,25 +32,7 @@ const unrequested = { granted: false, status: 'undetermined', canAskAgain: true 
 const originalPlatform = Platform.OS;
 const originalVersion = Platform.Version;
 
-function nativeHealthStatuses(
-  types: readonly HealthDataType[],
-  state: DevicePermissionStatus['state'],
-) {
-  return Object.fromEntries(
-    types.map((type) => [type, { state, canAskAgain: state === 'undetermined' }]),
-  );
-}
-
 describe('DevicePermissions', () => {
-  const health = {
-    getAvailability: jest.fn(async (): Promise<'available' | 'unsupported'> => 'available'),
-    getStatuses: jest.fn(async (types: readonly HealthDataType[]) =>
-      nativeHealthStatuses(types, 'undetermined'),
-    ),
-    request: jest.fn(async (types: readonly HealthDataType[]) =>
-      nativeHealthStatuses(types, 'requested'),
-    ),
-  };
   let service: DevicePermissions;
 
   beforeEach(() => {
@@ -64,17 +44,7 @@ describe('DevicePermissions', () => {
     jest.mocked(Location.hasServicesEnabledAsync).mockResolvedValue(true);
     jest.mocked(ImagePicker.getCameraPermissionsAsync).mockResolvedValue(allowed as never);
     jest.mocked(MediaLibrary.getPermissionsAsync).mockResolvedValue(allowed as never);
-    health.getAvailability.mockResolvedValue('available');
-    health.getStatuses.mockImplementation(async (types) =>
-      nativeHealthStatuses(types, 'undetermined'),
-    );
-    health.request.mockImplementation(async (types) => {
-      health.getStatuses.mockImplementation(async (queried) =>
-        nativeHealthStatuses(queried, 'requested'),
-      );
-      return nativeHealthStatuses(types, 'requested');
-    });
-    service = new DevicePermissions(() => health);
+    service = new DevicePermissions();
   });
 
   afterEach(() => {
@@ -82,16 +52,12 @@ describe('DevicePermissions', () => {
     Object.defineProperty(Platform, 'Version', { configurable: true, value: originalVersion });
   });
 
-  test('deduplicates scopes and batches health status reads without requesting access', async () => {
-    await service.getStatuses([
-      'calendar.read',
-      'calendar.read',
-      'health.steps.read',
-      'health.sleep.read',
-    ]);
+  test('deduplicates scopes without requesting access', async () => {
+    await expect(service.getStatuses(['calendar.read', 'calendar.read'])).resolves.toEqual({
+      'calendar.read': { state: 'granted', canAskAgain: false },
+    });
     expect(Calendar.getCalendarPermissions).toHaveBeenCalledTimes(1);
-    expect(health.getStatuses).toHaveBeenCalledWith(['steps', 'sleep']);
-    expect(health.request).not.toHaveBeenCalled();
+    expect(Calendar.requestCalendarPermissions).not.toHaveBeenCalled();
   });
 
   test('keeps an iOS write-only calendar useful and allows requesting full access', async () => {
@@ -119,7 +85,7 @@ describe('DevicePermissions', () => {
 
     await service.request(['calendar.read']);
     // The native requester persists the refusal, so recreating the adapter cannot re-enable it.
-    service = new DevicePermissions(() => health);
+    service = new DevicePermissions();
     await expect(service.request(['calendar.read', 'calendar.write'])).resolves.toEqual({
       'calendar.read': { state: 'denied', canAskAgain: false },
       'calendar.write': { state: 'granted', canAskAgain: false },
@@ -169,59 +135,30 @@ describe('DevicePermissions', () => {
     expect(ImagePicker.requestCameraPermissionsAsync).not.toHaveBeenCalled();
   });
 
-  test('cancelling an open health sheet prevents subsequent prompts and retains serialization', async () => {
+  test('cancelling an open sheet prevents subsequent prompts and retains serialization', async () => {
     const started = createDeferred();
-    const finishHealth = createDeferred();
+    const finishCamera = createDeferred();
     const controller = new AbortController();
     jest.mocked(ImagePicker.getCameraPermissionsAsync).mockResolvedValue(unrequested as never);
+    jest.mocked(Calendar.getCalendarPermissions).mockResolvedValue(unrequested as never);
     jest.mocked(MediaLibrary.getPermissionsAsync).mockResolvedValue(unrequested as never);
-    health.request.mockImplementation(async () => {
+    jest.mocked(ImagePicker.requestCameraPermissionsAsync).mockImplementation(async () => {
       started.resolve();
-      await finishHealth.promise;
-      return nativeHealthStatuses(['steps'], 'requested');
+      await finishCamera.promise;
+      return refused as never;
     });
-    const cancelled = service.request(['health.steps.read', 'camera.read'], controller.signal);
+    const cancelled = service.request(['camera.read', 'calendar.read'], controller.signal);
     const cancelledResult = expect(cancelled).rejects.toThrow();
     await started.promise;
     controller.abort();
     const next = service.request(['photos.read']);
     expect(MediaLibrary.requestPermissionsAsync).not.toHaveBeenCalled();
 
-    finishHealth.resolve();
+    finishCamera.resolve();
     await cancelledResult;
     await next;
-    expect(ImagePicker.requestCameraPermissionsAsync).not.toHaveBeenCalled();
+    expect(Calendar.requestCalendarPermissions).not.toHaveBeenCalled();
     expect(MediaLibrary.requestPermissionsAsync).toHaveBeenCalledTimes(1);
-  });
-
-  test('does not describe completed HealthKit inquiries as read grants', async () => {
-    await expect(service.request(['health.steps.read'])).resolves.toEqual({
-      'health.steps.read': { state: 'requested', canAskAgain: false },
-    });
-    expect(health.request).toHaveBeenCalledWith(['steps']);
-  });
-
-  test('reports health as unsupported on Android without a native bridge', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    service = new DevicePermissions(() => null);
-    await expect(service.getStatuses(['health.steps.read'])).resolves.toEqual({
-      'health.steps.read': { state: 'unavailable', canAskAgain: false, reason: 'unsupported' },
-    });
-  });
-
-  test('reports a device without HealthKit as unsupported', async () => {
-    health.getAvailability.mockResolvedValue('unsupported');
-    await expect(service.getStatuses(['health.steps.read'])).resolves.toEqual({
-      'health.steps.read': { state: 'unavailable', canAskAgain: false, reason: 'unsupported' },
-    });
-    expect(health.getStatuses).not.toHaveBeenCalled();
-  });
-
-  test('a missing native module needs an app update, not another permission request', async () => {
-    service = new DevicePermissions(() => null);
-    await expect(service.getStatuses(['health.steps.read'])).resolves.toEqual({
-      'health.steps.read': { state: 'error', canAskAgain: false, reason: 'native-unavailable' },
-    });
   });
 
   test('lookup and request failures are not described as user denials', async () => {

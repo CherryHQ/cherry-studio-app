@@ -1,4 +1,4 @@
-import { Button, Section, Spinner, useAlert, useToast } from '@cherrystudio/ui/components';
+import { Button, Section, Spinner, useToast } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,7 +24,6 @@ export function PermissionSettingsItem({
   refresh: () => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const { alert } = useAlert();
   const { toast } = useToast();
   const permissions = useBackendModule('permissions');
   const [pending, setPending] = useState(false);
@@ -42,14 +41,7 @@ export function PermissionSettingsItem({
       if (action === 'request') {
         await permissions.request([...config.requestScopes]);
       } else if (action === 'open-settings') {
-        if (kind === 'health') {
-          alert.show({
-            title: t('settings.permissions.health.manage'),
-            description: t('settings.permissions.health.appleInstructions'),
-          });
-        } else {
-          await permissions.openSystemSettings(config.permission);
-        }
+        await permissions.openSystemSettings(config.permission);
       }
       await refresh();
     } catch {
