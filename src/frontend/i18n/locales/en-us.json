@@ -1476,6 +1476,7 @@
   "settings.provider.account.signInSupported": "Supports account sign-in (OAuth)",
   "settings.provider.account.title": "{{name}} account",
   "settings.provider.actions.add": "Add model provider",
+  "settings.provider.add.avatarSaveFailed": "Provider created, but its avatar was not saved.",
   "settings.provider.add.endpoint.anthropic": "Anthropic Messages",
   "settings.provider.add.endpoint.gemini": "Google Gemini",
   "settings.provider.add.endpoint.imageEdit": "Image editing Base URL",

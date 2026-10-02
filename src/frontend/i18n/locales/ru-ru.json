@@ -1494,6 +1494,7 @@
   "settings.provider.account.signInSupported": "Поддерживает вход в аккаунт (OAuth)",
   "settings.provider.account.title": "Аккаунт {{name}}",
   "settings.provider.actions.add": "Добавить поставщика моделей",
+  "settings.provider.add.avatarSaveFailed": "Провайдер создан, но его аватар не сохранился.",
   "settings.provider.add.endpoint.anthropic": "Антропные сообщения",
   "settings.provider.add.endpoint.gemini": "Google Близнецы",
   "settings.provider.add.endpoint.imageEdit": "Базовый URL-адрес редактирования изображений",

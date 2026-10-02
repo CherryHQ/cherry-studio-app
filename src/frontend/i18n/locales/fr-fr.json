@@ -1485,6 +1485,7 @@
   "settings.provider.account.signInSupported": "Prend en charge la connexion au compte (OAuth)",
   "settings.provider.account.title": "Compte {{name}}",
   "settings.provider.actions.add": "Ajouter un fournisseur de modèles",
+  "settings.provider.add.avatarSaveFailed": "Le fournisseur a été créé, mais son avatar n'a pas été enregistré.",
   "settings.provider.add.endpoint.anthropic": "Messages anthropiques",
   "settings.provider.add.endpoint.gemini": "Google Gémeaux",
   "settings.provider.add.endpoint.imageEdit": "URL de base d'édition d'images",

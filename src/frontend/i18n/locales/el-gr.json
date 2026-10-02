@@ -1476,6 +1476,7 @@
   "settings.provider.account.signInSupported": "Υποστηρίζει σύνδεση λογαριασμού (OAuth)",
   "settings.provider.account.title": "Λογαριασμός {{name}}",
   "settings.provider.actions.add": "Προσθήκη παρόχου μοντέλου",
+  "settings.provider.add.avatarSaveFailed": "Ο πάροχος δημιουργήθηκε, αλλά το avatar του δεν αποθηκεύτηκε.",
   "settings.provider.add.endpoint.anthropic": "Anthropic Messages\n\n[[0010] Google Gemini",
   "settings.provider.add.endpoint.gemini": "Google Gemini",
   "settings.provider.add.endpoint.imageEdit": "Βασική διεύθυνση URL επεξεργασίας εικόνας",

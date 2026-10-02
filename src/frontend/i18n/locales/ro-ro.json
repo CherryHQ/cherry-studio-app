@@ -1485,6 +1485,7 @@
   "settings.provider.account.signInSupported": "Acceptă autentificarea în cont (OAuth)",
   "settings.provider.account.title": "Cont {{name}}",
   "settings.provider.actions.add": "Adăugați furnizorul de modele",
+  "settings.provider.add.avatarSaveFailed": "Furnizorul a fost creat, dar avatarul său nu a fost salvat.",
   "settings.provider.add.endpoint.anthropic": "Mesaje antropice",
   "settings.provider.add.endpoint.gemini": "Google Gemeni",
   "settings.provider.add.endpoint.imageEdit": "Adresa URL de bază pentru editarea imaginii",

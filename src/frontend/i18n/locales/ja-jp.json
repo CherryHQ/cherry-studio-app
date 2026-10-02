@@ -1467,6 +1467,7 @@
   "settings.provider.account.signInSupported": "アカウントでのログインに対応（OAuth）",
   "settings.provider.account.title": "{{name}}アカウント",
   "settings.provider.actions.add": "モデルプロバイダーを追加",
+  "settings.provider.add.avatarSaveFailed": "プロバイダーは作成されましたが、アバターは保存されませんでした。",
   "settings.provider.add.endpoint.anthropic": "人間的なメッセージ",
   "settings.provider.add.endpoint.gemini": "Google Gemini",
   "settings.provider.add.endpoint.imageEdit": "画像編集ベース URL",

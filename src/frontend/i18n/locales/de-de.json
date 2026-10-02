@@ -1476,6 +1476,7 @@
   "settings.provider.account.signInSupported": "Unterstützt die Kontoanmeldung (OAuth)",
   "settings.provider.account.title": "{{name}}-Konto",
   "settings.provider.actions.add": "Modellanbieter hinzufügen",
+  "settings.provider.add.avatarSaveFailed": "Anbieter wurde erstellt, aber sein Avatar wurde nicht gespeichert.",
   "settings.provider.add.endpoint.anthropic": "Anthropische Botschaften",
   "settings.provider.add.endpoint.gemini": "Google Gemini",
   "settings.provider.add.endpoint.imageEdit": "Basis-URL für die Bildbearbeitung",
