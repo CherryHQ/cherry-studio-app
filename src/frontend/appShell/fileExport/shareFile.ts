@@ -1,4 +1,3 @@
-import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
@@ -37,11 +36,14 @@ export async function shareFiles(
     const prepared = await prepareFileExport(file, watermark);
     try {
       signal?.throwIfAborted();
+      // One path per revision and treatment, so sharing again replaces rather than adds a copy.
       const directory = new Directory(
         Paths.cache,
         'FileExports',
         file.entry.id,
-        prepared.uri === file.uri ? String(file.entry.updatedAt) : randomUUID(),
+        prepared.uri === file.uri
+          ? String(file.entry.updatedAt)
+          : `${file.entry.updatedAt}-${hashWatermark(watermark)}`,
       );
       const exported = new File(directory, prepared.filename);
       directory.create({ idempotent: true, intermediates: true });
@@ -79,4 +81,15 @@ export async function shareFile(
   options: { watermark: ExportWatermark; signal?: AbortSignal },
 ): Promise<void> {
   return shareFiles(async () => [typeof source === 'function' ? await source() : source], options);
+}
+
+/** FNV-1a over the resolved treatment; it names a cache path and is not a security boundary. */
+function hashWatermark(watermark: ExportWatermark): string {
+  const json = JSON.stringify(watermark);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < json.length; index += 1) {
+    hash ^= json.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
 }
