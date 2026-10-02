@@ -7,8 +7,7 @@
  * this device can still grant, and this app has configured. Everything it
  * returns is executable; a capability that fails any gate is absent rather than
  * present and broken. A permission the OS can still request keeps the tool
- * offered as `ask`; execution prompts after in-app approval. HealthKit read
- * access remains unknown after prompting, so queries can return no data.
+ * offered as `ask`; execution prompts after in-app approval.
  *
  * Resolution is per turn on purpose. Permissions and the drawing-model setting
  * change outside Cherry, so a catalog cached across turns would offer tools the
@@ -47,7 +46,6 @@ import { createAgentManagementTools, type AgentManagementData } from './agentMan
 import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
   createCalendarTools,
-  createHealthTools,
   createLocationTools,
   createReminderTools,
   type DeviceToolDependencies,
@@ -197,7 +195,7 @@ export function resolveApproval(
       canUseDevicePermission(permission, scope.deviceAccess[permission]) ||
       canRequestDevicePermission(scope.deviceAccess[permission]),
   );
-  if (descriptor.permissionMatch === 'any' ? !available.some(Boolean) : !available.every(Boolean)) {
+  if (!available.every(Boolean)) {
     return null;
   }
   if (
@@ -251,7 +249,6 @@ function createCatalog(
     createWriteFileTool(fileContent),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),
-    ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
     createGenerateImageTool(deps.painting, scope.paintingModel, resources, resolveUsageAttribution),
