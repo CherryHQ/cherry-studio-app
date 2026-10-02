@@ -34,6 +34,7 @@ import type {
 import { RemoteAgentActions } from './RemoteAgentActions';
 import { RemoteAgentError } from './RemoteAgentError';
 import {
+  createMessageViewCache,
   projectMessage,
   projectSession,
   projectSnapshot,
@@ -105,7 +106,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     string,
     { sessionId: string; value: RemoteResourceDescriptor }
   >();
-  private readonly messageViews: MessageViewCache = new WeakMap();
+  private readonly messageViews: MessageViewCache = createMessageViewCache();
   private readonly partResources = new WeakMap<AgentPart, { sessionId: string; id: string }>();
   private readonly work = new Set<Promise<unknown>>();
   private readonly actions: RemoteAgentActions;

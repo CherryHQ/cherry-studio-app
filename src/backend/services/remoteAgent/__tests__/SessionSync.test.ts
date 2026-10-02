@@ -33,7 +33,7 @@ const executionFailure = {
     source: { layer: 'provider' as const },
   },
 };
-function setup(state = projection()) {
+function setup(state = projection(), readContent?: () => Promise<Uint8Array>) {
   const { page, descriptor } = createCheckpointFixture(state);
   let subscription = 0;
   let notify: (notification: DesktopNotification) => void = () => {};
@@ -70,6 +70,7 @@ function setup(state = projection()) {
     's',
     {
       request: request as AgentRequest,
+      readContent,
       onNotification: (listener) => {
         notify = listener;
         return () => {
@@ -263,6 +264,52 @@ it('presents streamed text at most once per interval and structural changes at o
     await settle();
     expect(presented()).toBe(initial + 2);
     expect(test.publish.mock.calls.at(-1)![0].messages.m).toMatchObject({ status: 'success' });
+    test.sync.stop();
+    await test.sync.drain();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('keeps one materialized object for unchanged deferred text across presentations', async () => {
+  jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+  try {
+    const state = streaming();
+    state.messages.done = {
+      messageId: 'done',
+      revision: '1',
+      role: 'assistant',
+      partIds: ['long'],
+      status: 'success',
+    };
+    state.parts.long = {
+      partId: 'long',
+      revision: '1',
+      kind: 'text',
+      state: 'completed',
+      content: {
+        ref: {
+          contentId: 'long',
+          revision: '1',
+          byteLength: '4',
+          mediaType: 'text/plain',
+          sha256: 'a'.repeat(64),
+        },
+      },
+    };
+    const test = setup(state, async () => new TextEncoder().encode('long'));
+    await test.sync.start();
+    const presented = () => test.publish.mock.calls.filter(([, current]) => current);
+    const initial = presented().at(-1)![0].parts.long;
+    expect(initial).toMatchObject({ content: { text: 'long' } });
+
+    test.notify(append(1));
+    await settle();
+    jest.advanceTimersByTime(100);
+    await settle();
+    const next = presented().at(-1)![0];
+    expect(next.parts.p).toMatchObject({ content: { text: 'a' } });
+    expect(next.parts.long).toBe(initial);
     test.sync.stop();
     await test.sync.drain();
   } finally {

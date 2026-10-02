@@ -137,6 +137,26 @@ it('retains partial text and stable part keys while a failed answer waits for hi
   expect(presenter.update(terminal(), [], undefined)[0].display.data.parts).toHaveLength(2);
 });
 
+it('keeps the rows while an unsettled failure repeats in later snapshots', () => {
+  const presenter = new ConversationPresenter();
+  const row = failed();
+  const live = { ...message('answer'), state: 'streaming' as const };
+  const failure = (liveMessages: ConversationMessage[]): RemoteConversationSnapshot => ({
+    ...snapshot(liveMessages, '2'),
+    executions: [
+      {
+        id: 'execution',
+        state: 'failed',
+        terminal: { message: row, durable: false, historyReady: false },
+      },
+    ],
+  });
+  const alone = presenter.update(failure([]), [], undefined);
+  expect(presenter.update(failure([]), [], undefined)).toBe(alone);
+  const merged = presenter.update(failure([live]), [], undefined);
+  expect(presenter.update(failure([live]), [], undefined)).toBe(merged);
+});
+
 it('does not let an older saved row acknowledge an unsaved terminal result', () => {
   const presenter = new ConversationPresenter();
   const persisted = failed();
