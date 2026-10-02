@@ -9,6 +9,7 @@ import p_baichuan from './baichuan';
 import p_baidu_cloud from './baidu-cloud';
 import p_burncloud from './burncloud';
 import p_cerebras from './cerebras';
+import p_cheaperinference from './cheaperinference';
 import p_cherryin from './cherryin';
 import p_claude_code from './claude-code';
 import p_copilot from './copilot';
@@ -88,6 +89,7 @@ export const PROVIDERS: Provider[] = [
   p_openrouter,
   p_ollama,
   p_requesty,
+  p_cheaperinference,
   p_new_api,
   p_lmstudio,
   p_anthropic,
