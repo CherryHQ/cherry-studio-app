@@ -21,6 +21,7 @@ type Connection = {
 };
 
 type Notification = ReturnType<typeof agentNotificationSchema.parse>;
+type TextPart = Extract<AgentPart, { kind: 'text' | 'reasoning' }>;
 
 const PRESENT_INTERVAL_MS = 100;
 
@@ -39,6 +40,7 @@ export class SessionSync {
   private projection?: AgentProjection;
   private started?: Promise<void>;
   private readonly textCache = new Map<string, string>();
+  private readonly materializedParts = new WeakMap<TextPart, TextPart>();
   private interactionRevision?: string;
   private persistedInteractions: AgentInteraction[] = [];
   constructor(
@@ -255,14 +257,14 @@ export class SessionSync {
       ),
     });
     const retained = new Set<string>();
-    const missing: { part: AgentPart; ref: ContentRef; key: string }[] = [];
+    const missing: { part: TextPart; ref: ContentRef; key: string }[] = [];
     for (const part of Object.values(parts)) {
       if ((part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content) {
         const ref = part.content.ref;
         const key = `${ref.contentId}:${ref.revision}:${ref.sha256}`;
         retained.add(key);
         const text = this.textCache.get(key);
-        if (text !== undefined) parts[part.partId] = { ...part, content: { text } };
+        if (text !== undefined) parts[part.partId] = this.materialized(part, text);
         else missing.push({ part, ref, key });
       }
     }
@@ -275,7 +277,7 @@ export class SessionSync {
       try {
         const text = decodeContent(await this.read(ref));
         this.textCache.set(key, text);
-        parts[part.partId] = { ...part, content: { text } };
+        parts[part.partId] = this.materialized(part, text);
       } catch {
         this.lifetime.signal.throwIfAborted();
       }
@@ -299,6 +301,15 @@ export class SessionSync {
     }
     this.lifetime.signal.throwIfAborted();
     this.publish(view(), current);
+  }
+  /** Unchanged parts keep one materialized object, so message views projected from them are reused. */
+  private materialized(part: TextPart, text: string): TextPart {
+    let value = this.materializedParts.get(part);
+    if (!value) {
+      value = { ...part, content: { text } };
+      this.materializedParts.set(part, value);
+    }
+    return value;
   }
   stop() {
     this.lifetime.abort();
