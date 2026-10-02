@@ -11,6 +11,7 @@ jest.mock('../wecomFiles', () => ({
   prepareWecomFiles: async (_api: unknown, _schema: unknown, args: unknown) => ({ payload: args }),
   saveWecomResult: (_schema: unknown, value: unknown) => value,
   saveWecomFile: () => ({ file_path: 'file:///download' }),
+  sweepWecomFiles: () => {},
 }));
 
 const output = (value: unknown) => ({ kind: 'json', value: { result: JSON.stringify(value) } });

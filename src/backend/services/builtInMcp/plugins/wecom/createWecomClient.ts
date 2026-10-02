@@ -5,7 +5,7 @@ import { PluginError } from '@/shared/contracts/plugins';
 import type { PluginClient, PluginClientContext } from '../../pluginDefinition';
 import { createWecomApi, readWecomResult, unknownWecomWrite } from './wecomApi';
 import { readWecomCredential } from './wecomCredentials';
-import { prepareWecomFiles, saveWecomFile, saveWecomResult } from './wecomFiles';
+import { prepareWecomFiles, saveWecomFile, saveWecomResult, sweepWecomFiles } from './wecomFiles';
 import { readWecomService, WecomCatalogSchema, type WecomTool } from './wecomSchema';
 
 /** One authorized CLI gateway client; business definitions are discovered from the official service. */
@@ -14,6 +14,7 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
   const initial = readWecomCredential(await context.getCredential(context.signal));
   await context.assertAuthorized();
   context.signal.throwIfAborted();
+  sweepWecomFiles();
   const lifetime = new AbortController();
   const api = createWecomApi(context, initial.botId);
   let routes = new Map<string, WecomTool>();
