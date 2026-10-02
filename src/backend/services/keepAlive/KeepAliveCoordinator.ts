@@ -42,15 +42,15 @@ export type KeepAliveSource = {
  */
 @Injectable('KeepAliveCoordinator')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['AudioKeepAliveSource', 'AndroidBackgroundActivityRuntime'])
+@DependsOn(['IosBackgroundExecutionSource', 'AndroidBackgroundActivityRuntime'])
 @AppStatePolicy('not-applicable')
 export class KeepAliveCoordinator extends BaseService implements BackgroundExecutionModule {
   private disposed = false;
   private readonly source: KeepAliveSource;
 
-  constructor(audio: KeepAliveSource, androidForegroundService: KeepAliveSource) {
+  constructor(iosBackgroundExecution: KeepAliveSource, androidForegroundService: KeepAliveSource) {
     super();
-    this.source = selectSource({ android: androidForegroundService, ios: audio });
+    this.source = selectSource({ android: androidForegroundService, ios: iosBackgroundExecution });
   }
 
   acquire(tag: string, onInterrupt?: (reason: Error) => void | Promise<void>): KeepAliveLease {

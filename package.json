@@ -113,7 +113,6 @@
     "drizzle-orm": "^0.45.2",
     "expo": "~57.0.23",
     "expo-asset": "~57.0.16",
-    "expo-audio": "~57.0.4",
     "expo-blob": "^57.0.1",
     "expo-blur": "~57.0.2",
     "expo-build-properties": "~57.0.21",
