@@ -226,6 +226,15 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
           },
         );
       },
+      retire: () =>
+        this.runTurnCallback(record.key, 'retire turn', () => {
+          if (!this.isCurrent(record.key, generation)) return;
+          this.turns.delete(record.key);
+          this.clearUpdateTimer(record);
+          // Cancellation leaves no settled card behind.
+          record.session?.cancel();
+          record.session = undefined;
+        }),
       update: (message, options) =>
         this.runTurnCallback(record.key, 'update turn', () => {
           this.updateTurn(record.key, generation, message, options);
@@ -530,6 +539,7 @@ const noOpTurn: BackgroundReplyTurn = {
   updateContent: () => {},
   awaitApproval: () => {},
   finish: () => {},
+  retire: () => {},
   update: () => {},
 };
 
