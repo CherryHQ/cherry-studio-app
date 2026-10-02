@@ -27,6 +27,7 @@ import {
 } from '@/frontend/appShell/navigation';
 import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/observability';
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
+import { AppErrorBoundary } from '@/frontend/appShell/recovery';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
 import {
   AppUpdateObserver,
@@ -61,24 +62,27 @@ function RootLayout() {
                   <BootstrapStartupCoordinator>
                     <AppBootstrapGate>
                       <StartupRouteReadyReporter>
-                        <NavigationThemeProvider>
-                          <AppAlertProvider>
-                            <BottomSheetProvider>
-                              <RouteHeaderProvider rootAction="back">
-                                <AppUpdateObserver />
-                                <BackgroundActivityBridge />
-                                <LanguagePreferenceObserver />
-                                <SystemEntryBridge />
-                                <ConversationProvider>
-                                  <RootStack />
-                                </ConversationProvider>
-                                <PrivacyConsentGate />
-                                <RestoreOutcomeNotice />
-                                <BackupDialog />
-                              </RouteHeaderProvider>
-                            </BottomSheetProvider>
-                          </AppAlertProvider>
-                        </NavigationThemeProvider>
+                        {/* Inside the reporter so a failed first render still lays out and ends startup. */}
+                        <AppErrorBoundary>
+                          <NavigationThemeProvider>
+                            <AppAlertProvider>
+                              <BottomSheetProvider>
+                                <RouteHeaderProvider rootAction="back">
+                                  <AppUpdateObserver />
+                                  <BackgroundActivityBridge />
+                                  <LanguagePreferenceObserver />
+                                  <SystemEntryBridge />
+                                  <ConversationProvider>
+                                    <RootStack />
+                                  </ConversationProvider>
+                                  <PrivacyConsentGate />
+                                  <RestoreOutcomeNotice />
+                                  <BackupDialog />
+                                </RouteHeaderProvider>
+                              </BottomSheetProvider>
+                            </AppAlertProvider>
+                          </NavigationThemeProvider>
+                        </AppErrorBoundary>
                       </StartupRouteReadyReporter>
                     </AppBootstrapGate>
                   </BootstrapStartupCoordinator>

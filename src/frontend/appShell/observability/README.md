@@ -98,7 +98,8 @@ categories and Data API error codes supplement stacks without retaining free-for
 logs that pass an actual `Error` with a stack and name a fixed `operation` are reported; every other
 error log stays local. Only the fixed `module` and `operation` tags cross that boundary, and
 cancellation errors are excluded. Startup, service initialization, task recovery, task
-finalization, and chat terminal persistence name their operations today. Existing service
+finalization, chat terminal persistence, and render failures caught by an `ErrorBoundary` name
+their operations today. Existing service
 initialization errors include database migration failures through their call stacks. Adding a call
 site to the upload set means adding an `operation` to its log context; keep the documented collection
 scope accurate when the set grows.
