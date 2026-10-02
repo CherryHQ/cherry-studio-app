@@ -97,9 +97,13 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     this.store = store;
   }
   protected onInit() {
-    this.registerAppStateListener((state) => this.setForeground(state === 'active'));
+    // iOS reports `inactive` for Control Center, system alerts and Face ID; only `background` hides the app.
+    const onAppState = (state: string | null) => {
+      if (state === 'active' || state === 'background') this.setForeground(state === 'active');
+    };
+    this.registerAppStateListener(onAppState);
     // Construction precedes database initialization; a foreground transition may happen meanwhile.
-    this.setForeground(AppState.currentState === 'active');
+    onAppState(AppState.currentState);
     this.registerDisposable(
       this.resolver.subscribe((changed) => {
         for (const [id, entry] of this.entries) {
@@ -445,6 +449,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
 
   private setForeground(foreground: boolean) {
+    const returning = foreground && !this.foreground;
     this.foreground = foreground;
     if (!foreground) this.resolver.accept({ type: 'network' });
     this.refreshDiscoveryActivity();
@@ -457,6 +462,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     }
     for (const [id, entry] of this.entries) {
       if (foreground) entry.backgroundExpired = false;
+      // Hidden redials must not delay the first foreground retry.
+      if (returning) entry.retry = 0;
       this.reconcileVisibility(id, entry);
     }
   }
