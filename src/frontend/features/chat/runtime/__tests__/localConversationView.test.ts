@@ -201,6 +201,22 @@ test('message actions follow the busy state and reuse projections while it is un
   expect(f.projector.message(message('system', 'system'), f.state).actions).toEqual({});
 });
 
+test('history keeps its rows while live state streams and refreshes them when busy state changes', () => {
+  const f = fixture({
+    activeTurn: { id: 'turn', status: 'running' } as AgentSessionChatState['activeTurn'],
+  });
+  const history = [message('first'), message('second')];
+  const streaming = f.projector.history(history, f.state);
+  f.set({ liveMessages: [message('live')] });
+  expect(f.projector.history(history, f.state)).toBe(streaming);
+
+  f.set({ activeTurn: null });
+  const idle = f.projector.history(history, f.state);
+  expect(idle).not.toBe(streaming);
+  expect(idle[0].actions.retry?.availability).toEqual({ state: 'enabled' });
+  expect(f.projector.history([...history], f.state)).toEqual(idle);
+});
+
 test('cancellation targets the observed turn and the snapshot reports freshness from the client', async () => {
   const f = fixture({
     activeTurn: { id: 'turn', status: 'running' } as AgentSessionChatState['activeTurn'],
