@@ -115,7 +115,12 @@ export class DesktopSession {
   ) {
     this.client = new JSONRPCClient((request) => this.channel.write(request));
     this.heartbeat = setInterval(() => {
-      void this.request('connection.ping', { nonce: String(Date.now()) }).catch(() => this.close());
+      // Any desktop verdict, even a refusal, proves the channel is alive; only a lost reply ends it.
+      void this.request('connection.ping', { nonce: String(Date.now()) }).catch(
+        (error: unknown) => {
+          if (!(error instanceof RemoteFailureError)) this.close();
+        },
+      );
     }, remoteLimits.heartbeatMs);
     this.done = this.pump();
   }
@@ -145,7 +150,8 @@ export class DesktopSession {
         reason: 'UPGRADE_REQUIRED',
         message: 'Desktop Agent failure contract is not supported',
       });
-    if (this.inFlight >= remoteLimits.inFlightRequests)
+    // Local load must not stop the heartbeat from measuring liveness.
+    if (method !== 'connection.ping' && this.inFlight >= remoteLimits.inFlightRequests)
       throw new RemoteFailureError({ reason: 'RESOURCE_EXHAUSTED', message: 'Too many requests' });
     const schema = desktopMethods[method];
     this.inFlight++;
