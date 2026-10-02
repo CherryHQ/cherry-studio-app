@@ -46,7 +46,8 @@ export function createLocalConversationSource(input: {
     input.api.subscribeChanges?.((paths) => {
       if (paths.some((path) => path === '/agents' || path.startsWith('/agents/')))
         publishCatalog('agents');
-      if (paths.some((path) => path === '/agent-sessions' || path.startsWith('/agent-sessions/')))
+      // A Session's message paths change with usage, not with its catalog row.
+      if (paths.some((path) => /^\/agent-sessions(?:\/[^/]+)?$/.test(path)))
         publishCatalog('sessions');
     });
   const state = createConversationState<{ availability: Availability }>({
