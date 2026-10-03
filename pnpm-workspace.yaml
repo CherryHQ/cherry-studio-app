@@ -80,6 +80,7 @@ patchedDependencies:
   react-native-streamdown@0.2.0: patches/react-native-streamdown@0.2.0.patch
   expo-observe@57.0.20: patches/expo-observe@57.0.20.patch
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
+  drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
 
 minimumReleaseAgeExclude:
   - '@cherrystudio/ai-core@2.1.0'
