@@ -1459,6 +1459,7 @@
   "settings.provider.account.signInSupported": "支援帳號登入（OAuth）",
   "settings.provider.account.title": "{{name}} 帳號",
   "settings.provider.actions.add": "新增模型供應商",
+  "settings.provider.add.avatarSaveFailed": "供應商已建立，但頭像未能儲存。",
   "settings.provider.add.endpoint.anthropic": "Anthropic Messages",
   "settings.provider.add.endpoint.gemini": "Google Gemini",
   "settings.provider.add.endpoint.imageEdit": "圖像編輯 Base URL",

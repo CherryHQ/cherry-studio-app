@@ -83,11 +83,13 @@ export function ProviderAddressSection({ value }: { value: ProviderConfiguration
             }
           : address.kind === 'custom' &&
               edit.endpoint !== address.defaultChatEndpoint &&
-              address.endpointUrls[edit.endpoint]?.trim()
+              !issue &&
+              edit.text.trim()
             ? {
                 label: t('settings.provider.apiService.setDefaultEndpoint'),
+                // The address in the field is the one made default, even if it was just edited.
                 onPress: () => {
-                  void value.actions.setDefaultEndpoint(edit.endpoint);
+                  void value.actions.setDefaultEndpoint(edit.endpoint, edit.text.trim());
                   closeEdit();
                 },
               }

@@ -1468,6 +1468,7 @@
   "settings.provider.account.signInSupported": "Hesapla oturum açmayı destekler (OAuth)",
   "settings.provider.account.title": "{{name}} hesabı",
   "settings.provider.actions.add": "Model sağlayıcı ekle",
+  "settings.provider.add.avatarSaveFailed": "Sağlayıcı oluşturuldu ancak avatarı kaydedilmedi.",
   "settings.provider.add.endpoint.anthropic": "Antropik Mesajlar",
   "settings.provider.add.endpoint.gemini": "Google İkizler",
   "settings.provider.add.endpoint.imageEdit": "Resim düzenleme Temel URL'si",
