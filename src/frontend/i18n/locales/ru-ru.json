@@ -1460,6 +1460,7 @@
   "settings.profile.edit": "Редактировать профиль",
   "settings.profile.setPrompt": "Нажмите, чтобы установить аватар и имя",
   "settings.profile.userName": "Имя пользователя",
+  "settings.profile.userNameSaveError": "Не удалось сохранить имя пользователя.",
   "settings.provider.account.authorizationCode": "Код авторизации или URL перенаправления",
   "settings.provider.account.authorizationCodeHint": "После авторизации вставьте сюда конечный URL перенаправления или код.",
   "settings.provider.account.deviceCode": "Код подтверждения",

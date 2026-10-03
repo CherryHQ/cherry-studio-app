@@ -14,8 +14,8 @@ import {
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigation, useRouter } from 'expo-router';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -31,7 +31,6 @@ import {
   useSelectionActions,
   useSelectionState,
 } from '@/frontend/components/Selection';
-import { useBackendModule } from '@/frontend/data';
 import {
   type PaintingGalleryItem,
   usePaintingGalleryEntries,
@@ -41,21 +40,16 @@ import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
-import { canUseDevicePermission } from '@/shared/contracts';
 
 import { usePaintingSelectionSource } from '../hooks/usePaintingSelectionSource';
-import {
-  loadPhotoPreviewPage,
-  type PhotoPreview,
-  shouldRequestPhotoPreviewAccess,
-} from '../utils/photoLibrary';
+import { useRecentPaintingPhotos } from '../hooks/useRecentPaintingPhotos';
+import type { PhotoPreview } from '../utils/photoLibrary';
 import {
   type PaintingTemplate,
   PaintingTemplateRow,
   toPaintingTemplateDraft,
 } from './PaintingTemplates';
 
-const recentPhotoLimit = 12;
 const galleryGap = 6;
 const MIN_COLUMN_WIDTH = 180;
 const pageEdge = 16;
@@ -66,6 +60,7 @@ export function DrawingList() {
   const { alert } = useAlert();
   const { toast } = useToast();
   const router = useRouter();
+  const navigation = useNavigation();
   const { isDeletionPending, isEditing, selectedIds } = useSelectionState();
   const pendingDeletionIds = usePendingDeletionIds('drawings');
   const { enterEditing, toggleId } = useSelectionActions();
@@ -106,12 +101,15 @@ export function DrawingList() {
     [enterEditing, isDeletionPending, isEditing, toggleId],
   );
 
+  // Every draft and blank canvas is a distinct screen, so only the first of repeated taps opens
+  // one; the push leaves this page unfocused before the next tap lands.
   const openPainting = useCallback(
     (payload: PaintingDraftHandoff) => {
+      if (!navigation.isFocused()) return;
       const handoff = createPaintingDraftHandoff(payload);
       router.push({ pathname: '/paintings', params: { handoff } });
     },
-    [router],
+    [navigation, router],
   );
   const openPaintingWithAttachments = useCallback(
     (attachments: readonly ComposerInitialAttachment[]) => {
@@ -120,8 +118,8 @@ export function DrawingList() {
     [openPainting],
   );
   const handleCreatePainting = useCallback(() => {
-    router.push('/paintings');
-  }, [router]);
+    if (navigation.isFocused()) router.push('/paintings');
+  }, [navigation, router]);
   const handleTemplateUse = useCallback(
     (template: PaintingTemplate) => {
       openPainting(toPaintingTemplateDraft(template));
@@ -596,71 +594,6 @@ function renderTileContent({
     </View>
   );
 }
-
-function useRecentPaintingPhotos(enabled: boolean) {
-  const permissions = useBackendModule('permissions');
-  const [isLoading, setLoading] = useState(true);
-  const [photos, setPhotos] = useState<PhotoPreview[]>([]);
-  const isActiveRef = useRef(false);
-
-  const refresh = useCallback(
-    async (isUserInitiated: boolean): Promise<PhotoAccessResult> => {
-      if (!enabled) {
-        return 'denied';
-      }
-
-      try {
-        let permission = (await permissions.getStatuses(['photos.read']))['photos.read'];
-        if (shouldRequestPhotoPreviewAccess(permission, isUserInitiated)) {
-          permission = (await permissions.request(['photos.read']))['photos.read'];
-        }
-        const granted = canUseDevicePermission('photos.read', permission);
-        const nextPhotos = granted
-          ? (await loadPhotoPreviewPage(0)).photoPreviews.slice(0, recentPhotoLimit)
-          : [];
-        if (isActiveRef.current) {
-          setPhotos(nextPhotos);
-          setLoading(false);
-        }
-        return granted
-          ? 'granted'
-          : permission?.state === 'denied' && !permission.canAskAgain
-            ? 'blocked'
-            : 'denied';
-      } catch {
-        if (isActiveRef.current) {
-          setPhotos([]);
-          setLoading(false);
-        }
-        return 'denied';
-      }
-    },
-    [enabled, permissions],
-  );
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-    isActiveRef.current = true;
-    const refreshPhotos = () => void refresh(false);
-    queueMicrotask(refreshPhotos);
-    const subscription = MediaLibrary.addListener(refreshPhotos);
-    return () => {
-      isActiveRef.current = false;
-      subscription.remove();
-    };
-  }, [enabled, refresh]);
-
-  const requestAccess = useCallback(() => refresh(true), [refresh]);
-
-  return useMemo(
-    () => ({ isLoading: enabled && isLoading, photos, requestAccess }),
-    [enabled, isLoading, photos, requestAccess],
-  );
-}
-
-type PhotoAccessResult = 'blocked' | 'denied' | 'granted';
 
 const styles = StyleSheet.create({
   empty: {

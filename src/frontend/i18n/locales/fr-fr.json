@@ -1451,6 +1451,7 @@
   "settings.profile.edit": "Modifier le profil",
   "settings.profile.setPrompt": "Appuyez pour définir l'avatar et le nom",
   "settings.profile.userName": "Nom d'utilisateur",
+  "settings.profile.userNameSaveError": "Échec de l'enregistrement du nom d'utilisateur",
   "settings.provider.account.authorizationCode": "Code d’autorisation ou URL de redirection",
   "settings.provider.account.authorizationCodeHint": "Après l’autorisation, collez ici l’URL de redirection finale ou le code.",
   "settings.provider.account.deviceCode": "Code de vérification",

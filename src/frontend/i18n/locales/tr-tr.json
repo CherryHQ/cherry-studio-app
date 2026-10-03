@@ -1442,6 +1442,7 @@
   "settings.profile.edit": "Profili düzenle",
   "settings.profile.setPrompt": "Avatarı ve adı ayarlamak için dokunun",
   "settings.profile.userName": "Kullanıcı Adı",
+  "settings.profile.userNameSaveError": "Kullanıcı adı kaydedilemedi",
   "settings.provider.account.authorizationCode": "Yetkilendirme kodu veya yönlendirme URL’si",
   "settings.provider.account.authorizationCodeHint": "Yetkilendirmeden sonra son yönlendirme URL’sini veya kodu buraya yapıştırın.",
   "settings.provider.account.deviceCode": "Doğrulama kodu",
