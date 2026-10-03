@@ -31,8 +31,8 @@ export type AgentMessageData = {
  * There is no message tree and no turn table: `turnId` is the correlation id
  * shared by a submission's user/assistant pair, and the Host projects
  * `AgentTurnView` from the assistant row plus its live in-memory state.
- * searchableText is a plain column populated by triggers for FTS5 indexing;
- * see AGENT_SESSION_MESSAGE_FTS_STATEMENTS below.
+ * searchableText is the visible plain text the store writes for FTS5
+ * indexing; see AGENT_SESSION_MESSAGE_FTS_STATEMENTS below.
  */
 export const agentSessionMessageTable = sqliteTable(
   'agent_session_message',
@@ -65,7 +65,8 @@ export const agentSessionMessageTable = sqliteTable(
     // Versioned Agent inference snapshot. Keep raw JSON so unknown future
     // versions can be projected as unsupported without losing the message.
     messageSnapshot: text({ mode: 'json' }).$type<AgentInferenceSnapshotV1 | JsonValue>(),
-    // Searchable text extracted from data.parts (populated by trigger, used for FTS5)
+    // Visible plain text of data.parts' text parts, written by the store and
+    // mirrored into FTS5 by triggers; mid-stream snapshots leave it unchanged.
     searchableText: text().notNull().default(''),
     // Stable integer surrogate for the FTS5 content_rowid: trigger-assigned,
     // local-only, and nullable because the AFTER INSERT trigger fills it.
@@ -107,20 +108,11 @@ export type InsertAgentSessionMessageRow = typeof agentSessionMessageTable.$infe
  * `fts_rowid` column (NOT the implicit rowid, which a table rebuild or VACUUM
  * would reshuffle).
  *
- * Only `text` parts are indexed — NOT `reasoning` (model-internal, the UI does
- * not render it in search) and NOT tool payloads (structured data, not prose).
+ * The store writes `searchable_text` as the visible plain text of `text` parts
+ * (`toSearchableText`); SQL cannot strip Markdown. The triggers only mirror
+ * that column into the index, so a write that leaves it untouched, such as a
+ * mid-stream snapshot, does not re-tokenize the row.
  */
-const searchableTextExpression = (dataExpression: string) => `COALESCE((
-  SELECT group_concat(text, char(10))
-  FROM (
-    SELECT json_extract(value, '$.text') AS text
-    FROM json_each(json_extract(${dataExpression}, '$.parts'))
-    WHERE json_extract(value, '$.type') = 'text'
-      AND json_extract(value, '$.text') IS NOT NULL
-      AND trim(json_extract(value, '$.text')) != ''
-  )
-), '')`;
-
 export const AGENT_SESSION_MESSAGE_FTS_STATEMENTS: string[] = [
   `CREATE VIRTUAL TABLE IF NOT EXISTS agent_session_message_fts USING fts5(
     searchable_text,
@@ -134,13 +126,12 @@ export const AGENT_SESSION_MESSAGE_FTS_STATEMENTS: string[] = [
   `DROP TRIGGER IF EXISTS agent_session_message_ad`,
   `DROP TRIGGER IF EXISTS agent_session_message_au`,
 
-  // Trigger: assign fts_rowid, populate searchable_text, and sync FTS on
-  // INSERT. MAX+1 is race-free under withWriteTx serialization and O(log N)
-  // via agent_session_message_fts_rowid_uniq.
+  // Trigger: assign fts_rowid and index searchable_text on INSERT. MAX+1 is
+  // race-free under withWriteTx serialization and O(log N) via
+  // agent_session_message_fts_rowid_uniq.
   `CREATE TRIGGER agent_session_message_ai AFTER INSERT ON agent_session_message BEGIN
     UPDATE agent_session_message SET
-      fts_rowid = (SELECT COALESCE(MAX(fts_rowid), 0) + 1 FROM agent_session_message),
-      searchable_text = ${searchableTextExpression('NEW.data')}
+      fts_rowid = (SELECT COALESCE(MAX(fts_rowid), 0) + 1 FROM agent_session_message)
     WHERE id = NEW.id;
     INSERT INTO agent_session_message_fts(rowid, searchable_text)
     SELECT fts_rowid, searchable_text FROM agent_session_message WHERE id = NEW.id;
@@ -152,17 +143,14 @@ export const AGENT_SESSION_MESSAGE_FTS_STATEMENTS: string[] = [
     VALUES ('delete', OLD.fts_rowid, OLD.searchable_text);
   END`,
 
-  // Trigger: update searchable_text and sync FTS on UPDATE OF data. fts_rowid
-  // is stable across data edits — only re-keyed delete + re-insert. Unsettled
-  // rows are skipped: a turn's mid-stream snapshots are not worth re-tokenizing,
-  // and searchable_text only changes here, so the settling update still finds
-  // the OLD value it must delete from the index.
-  `CREATE TRIGGER agent_session_message_au AFTER UPDATE OF data ON agent_session_message
-  WHEN NEW.status NOT IN ('pending', 'streaming') BEGIN
+  // Trigger: re-index when searchable_text changes. fts_rowid is stable after
+  // insert, so the index always holds the column's current value and the
+  // delete below removes exactly what was indexed.
+  `CREATE TRIGGER agent_session_message_au AFTER UPDATE OF searchable_text ON agent_session_message
+  WHEN OLD.searchable_text IS NOT NEW.searchable_text BEGIN
     INSERT INTO agent_session_message_fts(agent_session_message_fts, rowid, searchable_text)
     VALUES ('delete', OLD.fts_rowid, OLD.searchable_text);
-    UPDATE agent_session_message SET searchable_text = ${searchableTextExpression('NEW.data')} WHERE id = NEW.id;
     INSERT INTO agent_session_message_fts(rowid, searchable_text)
-    SELECT fts_rowid, searchable_text FROM agent_session_message WHERE id = NEW.id;
+    VALUES (NEW.fts_rowid, NEW.searchable_text);
   END`,
 ];
