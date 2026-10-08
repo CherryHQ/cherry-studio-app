@@ -1,7 +1,7 @@
 # Agent Architecture
 
-> Status: local Version 1 is as-built. A PC Agent Controller boundary is planned and not
-> implemented.
+> Status: local Version 1 is as-built. The separate PC Agent Controller version 2 is implemented;
+> PC/mobile interoperability verification is pending.
 
 This directory documents Cherry Mobile's conversation execution boundary. For mobile-originated
 local execution, Cherry Mobile owns Agents, Sessions, persistence, application capabilities, and
@@ -34,9 +34,9 @@ Application capability adapters
 The Agent Client never imports the Runtime contract. The Host is the only adapter that depends on
 both sides.
 
-## Planned PC Agent Controller Boundary
+## PC Agent Controller Boundary
 
-The future mobile experience controls a PC-hosted Agent; it does not move that Agent's conversation
+The PC mobile experience controls a PC-hosted Agent; it does not move that Agent's conversation
 Runtime onto mobile:
 
 ```text
@@ -52,25 +52,25 @@ PC Agent Runtime / Host
 
 The PC owns the Agent, Session, conversation, execution, tool, approval, task, and persistence state.
 Mobile consumes normalized events, renders a temporary application projection, and sends user
-intent such as messages, cancellation, approval decisions, and task-stop commands. It does not run
+intent such as messages, cancellation, and approval decisions. Independent background-task control awaits PC support. It does not run
 the PC Agent or copy the PC Runtime into the Mobile Agent Host.
 
 The adapter maps the PC's native snapshots, events, resources, and errors into the application-facing
 Agent Protocol and maps mobile commands back to PC operations. It separately owns transport,
-authentication, ordering, replay, reconnection, and compatibility with PC wire versions. The future
-connection may use WebSocket, WebRTC, or another transport; this architecture does not select one.
+authentication, ordering, reconnection, and compatibility with PC wire versions. The current adapter
+uses the encrypted Cherry Remote v1 WebSocket and re-queries snapshots/history; PC has no event replay.
 The PC implementation is not required to implement the local TypeScript `AgentProtocol` interface
 or expose the local `AgentRuntime` contract.
 
-This direction is planned but not as-built. Version 1 remains local-only. The application-level
-extension is specified in [Agent Protocol](./agent-protocol.md#planned-pc-agent-controller-extension),
-while transport details remain deferred to a separately versioned adapter contract. See
-[Backend AI Target Architecture](../ai/target-architecture.md#planned-pc-agent-controller-boundary).
+Version 1 remains local-only. The application-level extension is specified in
+[Agent Protocol](./agent-protocol.md#pc-agent-controller-extension); the implemented subset, transport
+ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.md). See
+[Backend AI Target Architecture](../ai/target-architecture.md#pc-agent-controller-boundary).
 
 ## Current Contract
 
 - Execution target is always `local`; there is no local engine registry or persisted Runtime
-  choice. The planned PC Agent Controller is not a second local Runtime or a current execution
+  choice. The PC Agent Controller is not a second local Runtime or a current execution
   target.
 - One Session permits at most one active turn, while different Sessions may run concurrently.
 - Mobile SQLite is the complete record for mobile-originated Sessions. The retired

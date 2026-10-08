@@ -1,26 +1,25 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
-import { Alert, Button, ContentState, Spinner, useToast } from '@cherrystudio/ui/components';
+import { ContentState, Section, useToast } from '@cherrystudio/ui/components';
 import { Redirect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { Text, View } from 'react-native';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
-import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { SelectionToolbar } from '@/frontend/components/Selection';
-import { useBackendModule } from '@/frontend/data';
-import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import { useBackendModule, useQuery } from '@/frontend/data';
 import type { Model } from '@/shared/data/types/model';
 
-import { useProviderApiServiceSheetClose, useProviderConfigurationForm } from '../apiService';
-import { ProviderForm, providerFormAvatarSize } from '../components/ProviderForm';
+import { useProviderApiServiceSheetClose } from '../apiService';
+import {
+  ProviderConfiguration,
+  useSavedProviderConfiguration,
+} from '../components/ProviderConfiguration';
 import { useProviderDeletion } from '../hooks/useProviderDeletion';
 import { useProviderSetup } from '../hooks/useProviderSetup';
-import { ProviderModelCheckSection } from '../models/components/ProviderModelCheckSection';
 import { ProviderModelPurposeTabs } from '../models/components/ProviderModelPurposeTabs';
 import { useProviderModelManagement } from '../models/hooks/useProviderModelManagement';
 import {
@@ -85,23 +84,14 @@ function ProviderDetailSettings({
     };
   }, [activeTab, providers]);
   const { isPreparing, openSetup } = useProviderSetup();
-  const [isSyncPromptOpen, setIsSyncPromptOpen] = useState(false);
   const [modelPurpose, setModelPurpose] = useState<ProviderModelPurpose>('all');
   const { models, modelsQuery } = useProviderDetailSettings(providerId);
-  const {
-    apiKeys,
-    canSubmit: canSubmitProvider,
-    createInitialValues: createInitialFormValues,
-    form,
-    isCustomProvider,
-    isLoading: isProviderDetailLoading,
-    isSaving,
-    modelsQuery: allProviderModelsQuery,
-    provider,
-    providerQuery,
-    requestSave,
-    showApiKey: showApiKeys,
-  } = useProviderConfigurationForm(providerId);
+  const configuration = useSavedProviderConfiguration(providerId);
+  const { provider, providerQuery } = configuration;
+  const allProviderModelsQuery = useQuery('/models', {
+    enabled: Boolean(providerId),
+    query: { providerId },
+  });
   const allProviderModels = useMemo(
     () => allProviderModelsQuery.data ?? [],
     [allProviderModelsQuery.data],
@@ -132,10 +122,10 @@ function ProviderDetailSettings({
   const management = useProviderModelManagement(providerId, managedModels, listedModels);
   const isModelListFiltered = isModelSearchActive || effectiveModelPurpose !== 'all';
   const showsModelPurposeTabs = hasMultipleProviderModelPurposes(modelPurposeCounts);
-  const { meta: formMeta, state: formState } = form;
+  const isConfigurationBusy = configuration.value?.isBusy ?? false;
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
-    hasUnsavedChanges: formMeta.isDirty && !management.isSelecting,
-    isSaving: isSaving || management.isDeleting,
+    hasUnsavedChanges: false,
+    isSaving: configuration.isSaving || management.isDeleting,
   });
   const { isDeleting, requestDelete } = useProviderDeletion({ onBeforeDismiss: allowNavigation });
   const handleDelete = useCallback(() => {
@@ -143,29 +133,6 @@ function ProviderDetailSettings({
       requestDelete(provider);
     }
   }, [provider, requestDelete]);
-  const handleSave = useCallback(
-    (onSaved?: () => void) => {
-      if (!formMeta.isDirty) return;
-      requestSave(() => {
-        toast.show({ label: t('settings.provider.toast.saved'), variant: 'success' });
-        onSaved?.();
-      });
-    },
-    [formMeta.isDirty, requestSave, t, toast],
-  );
-  const configurationSaveActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.save'),
-        disabled: !canSubmitProvider || !formMeta.isDirty || isDeleting,
-        key: 'save-provider',
-        label: isSaving ? t('common.saving') : t('common.save'),
-        onPress: () => handleSave(),
-        type: 'label',
-      },
-    ],
-    [canSubmitProvider, formMeta.isDirty, handleSave, isDeleting, isSaving, t],
-  );
   const configuredProviderName = provider?.name;
   const startModelSync = useCallback(() => {
     void openSetup(
@@ -174,10 +141,6 @@ function ProviderDetailSettings({
       'sync',
     );
   }, [openSetup, providerId]);
-  const openModelSyncSettings = useCallback(() => {
-    if (formMeta.isDirty) setIsSyncPromptOpen(true);
-    else startModelSync();
-  }, [formMeta.isDirty, startModelSync]);
 
   const openModelAddSettings = useCallback(() => {
     router.push({
@@ -194,15 +157,15 @@ function ProviderDetailSettings({
     () => [
       {
         accessibilityLabel: t('settings.provider.models.syncTitle'),
-        disabled: !provider || isPreparing || isSaving || management.isDeleting,
+        disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
         icon: RefreshCwIcon,
         key: 'sync-provider-models',
-        onPress: openModelSyncSettings,
+        onPress: startModelSync,
         type: 'icon',
       },
       {
         accessibilityLabel: t('settings.provider.models.addTitle'),
-        disabled: !provider || isPreparing || isSaving || management.isDeleting,
+        disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
         icon: PlusIcon,
         key: 'add-provider-model',
         onPress: openModelAddSettings,
@@ -210,18 +173,18 @@ function ProviderDetailSettings({
       },
     ],
     [
+      isConfigurationBusy,
       isPreparing,
-      isSaving,
       management.isDeleting,
       openModelAddSettings,
-      openModelSyncSettings,
+      startModelSync,
       provider,
       t,
     ],
   );
   const handleTabChange = useCallback(
     (tab: ProviderDetailTab) => {
-      if (isSaving || management.isSelecting || management.isDeleting) {
+      if (isConfigurationBusy || management.isSelecting || management.isDeleting) {
         return;
       }
 
@@ -229,7 +192,13 @@ function ProviderDetailSettings({
       setModelPurpose('all');
       router.setParams({ tab });
     },
-    [isSaving, management.isDeleting, management.isSelecting, router, setModelSearchText],
+    [
+      isConfigurationBusy,
+      management.isDeleting,
+      management.isSelecting,
+      router,
+      setModelSearchText,
+    ],
   );
   if (providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -243,31 +212,6 @@ function ProviderDetailSettings({
   // the content rendered underneath the header.
   return (
     <>
-      <Alert
-        isOpen={isSyncPromptOpen}
-        onOpenChange={setIsSyncPromptOpen}
-        title={t('settings.provider.models.syncRecovery.unsavedTitle')}
-        description={t('settings.provider.models.syncRecovery.unsavedDescription')}
-        actions={[
-          {
-            label: t('settings.provider.setup.next'),
-            onPress: () => {
-              setIsSyncPromptOpen(false);
-              handleSave(startModelSync);
-            },
-          },
-          {
-            label: t('common.discard'),
-            role: 'destructive',
-            onPress: () => {
-              setIsSyncPromptOpen(false);
-              form.actions.reset(createInitialFormValues());
-              startModelSync();
-            },
-          },
-          { label: t('common.cancel'), role: 'cancel', onPress: () => setIsSyncPromptOpen(false) },
-        ]}
-      />
       <RouteHeader
         onBack={management.isSelecting ? management.finishSelection : requestClose}
         rightActions={
@@ -283,7 +227,7 @@ function ProviderDetailSettings({
                 },
               ]
             : activeTab === 'configuration'
-              ? configurationSaveActions
+              ? undefined
               : modelActions
         }
         title={
@@ -302,70 +246,21 @@ function ProviderDetailSettings({
         }
       />
       {activeTab === 'configuration' ? (
-        <KeyboardAwareScrollView
-          alwaysBounceVertical={false}
-          bottomOffset={keyboardBottomOffset}
-          contentContainerStyle={styles.configurationContent}
-          contentInsetAdjustmentBehavior="automatic"
-          disableScrollOnKeyboardHide
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          mode="layout"
-          showsVerticalScrollIndicator={false}
-          style={styles.screen}
-        >
-          {isProviderDetailLoading ? (
-            <View className="items-center py-10">
-              <Spinner accessibilityLabel={t('settings.provider.loading')} />
-            </View>
-          ) : (
-            <>
-              <ProviderForm value={form}>
-                <ProviderForm.Avatar>
-                  {provider ? (
-                    <ProviderBrandAvatar
-                      presetProviderId={provider.presetProviderId}
-                      providerId={provider.id}
-                      providerName={formState.name}
-                      shape="circle"
-                      size={providerFormAvatarSize}
-                    />
-                  ) : undefined}
-                </ProviderForm.Avatar>
-                <ProviderForm.Name />
-                {isCustomProvider ? (
-                  <>
-                    {showApiKeys ? <ProviderForm.ApiKeys /> : null}
-                    <ProviderForm.Endpoints />
-                  </>
-                ) : (
-                  <>
-                    <ProviderForm.BaseUrl />
-                    {showApiKeys ? <ProviderForm.ApiKeys /> : null}
-                  </>
-                )}
-              </ProviderForm>
-              <View className="gap-6 px-4 pb-8">
-                <ProviderModelCheckSection
-                  apiKeys={apiKeys}
-                  isDisabled={formMeta.isDirty}
-                  isLoading={modelsQuery.isPending}
-                  models={models}
-                  provider={provider}
-                  providerId={providerId}
-                />
-                <Button
-                  disabled={isDeleting || isSaving}
-                  onPress={handleDelete}
-                  size="lg"
-                  variant="destructive"
-                >
-                  {t('settings.provider.deleteProvider')}
-                </Button>
-              </View>
-            </>
-          )}
-        </KeyboardAwareScrollView>
+        <ProviderConfiguration
+          footer={
+            <Section>
+              <Section.Item
+                destructive
+                disabled={isDeleting || configuration.value?.isBusy}
+                label={t('settings.provider.deleteProvider')}
+                onPress={handleDelete}
+                showChevron={false}
+              />
+            </Section>
+          }
+          testID="provider-configuration"
+          value={configuration.value}
+        />
       ) : (
         <>
           {/* Search mounts with the header, not with the models: letting a finished load add the
@@ -414,12 +309,12 @@ function ProviderDetailSettings({
                 management={management}
                 supportedModelIds={supportedModelIds}
                 groupByPurpose={effectiveModelPurpose === 'all'}
-                isEndpointSelectionDisabled={formMeta.isDirty || management.isDeleting}
+                isEndpointSelectionDisabled={management.isDeleting}
                 isFiltered={isModelListFiltered}
                 isLoading={allProviderModelsQuery.isPending}
                 models={listedModels}
                 onAddModelManually={openModelAddSettings}
-                onPullModels={openModelSyncSettings}
+                onPullModels={startModelSync}
                 provider={provider}
               />
             )}
@@ -437,12 +332,3 @@ function ProviderDetailSettings({
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  configurationContent: {
-    paddingBottom: 24,
-  },
-  screen: {
-    flex: 1,
-  },
-});

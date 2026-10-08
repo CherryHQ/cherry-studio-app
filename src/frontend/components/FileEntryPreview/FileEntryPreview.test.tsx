@@ -162,6 +162,29 @@ describe('FileEntryPreview', () => {
     expect(mockFileAttachmentPreview).not.toHaveBeenCalled();
   });
 
+  it('keeps the reserved image size while resolving the generated file', () => {
+    mockUseResolvedFile.mockReturnValue({ data: null, isLoading: true });
+    let renderer: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(<FileEntryAttachment entryId={entry.id} initialAspectRatio={16 / 9} />);
+    });
+    expect(mockSkeleton).toHaveBeenCalledWith({
+      className: 'w-full rounded-xl',
+      style: { aspectRatio: 16 / 9 },
+    });
+
+    mockUseResolvedFile.mockReturnValue({
+      data: { entry, uri: 'file:///documents/image.png' },
+      isLoading: false,
+    });
+    act(() => {
+      renderer!.update(<FileEntryAttachment entryId={entry.id} initialAspectRatio={16 / 9} />);
+    });
+    expect(mockFileEntryImage).toHaveBeenCalledWith(
+      expect.objectContaining({ entry, initialAspectRatio: 16 / 9 }),
+    );
+  });
+
   it('records thumbnail failures without changing the file surface', () => {
     act(() => {
       create(<FileEntryPreview entryId={entry.id} />);

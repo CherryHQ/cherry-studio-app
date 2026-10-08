@@ -7,16 +7,38 @@ import {
 describe('desktop connection api schemas', () => {
   test('does not let QR payloads inject a local connection ID', () => {
     const qr = DesktopPairingQrSchema.parse({
-      code: '0123456789abcdef0123456789abcdef',
       connectionId: '0ad227b7-d202-4e30-a17d-6f6e22fbf1ef',
+      desktopIdentity: '12D3KooWDesktop',
+      invitationId: 'invitation',
+      invitationSecret: 'secret',
       ips: ['192.168.1.10'],
       name: 'Cherry Studio PC',
       port: 23333,
+      protocolVersions: [1],
       t: 'cherry-studio-pair',
-      v: 1,
+      v: 2,
     });
 
     expect(qr).not.toHaveProperty('connectionId');
+  });
+
+  test('accepts 32 ordered QR addresses and rejects a 33rd', () => {
+    const ips = Array.from({ length: 32 }, (_, i) => `10.0.0.${i + 1}`);
+    const input = {
+      desktopIdentity: '12D3KooWDesktop',
+      invitationId: 'invitation',
+      invitationSecret: 'secret',
+      ips,
+      name: 'Desktop',
+      port: 23333,
+      protocolVersions: [1],
+      t: 'cherry-studio-pair',
+      v: 2,
+    };
+    expect(DesktopPairingQrSchema.parse(input).ips).toEqual(ips);
+    expect(DesktopPairingQrSchema.safeParse({ ...input, ips: [...ips, '10.0.0.33'] }).success).toBe(
+      false,
+    );
   });
 
   test('preserves desktop provider and model registry metadata', () => {
@@ -89,5 +111,27 @@ describe('desktop connection api schemas', () => {
       authType: 'oauth',
     });
     expect(parseSupportedAuthConfig(snapshot.providers[0]?.authConfig)).toBeNull();
+  });
+  test('drops desktop OAuth secrets while deriving eligibility from authConfig when authType is absent', () => {
+    const snapshot = DesktopProvidersSnapshotSchema.parse({
+      version: 1,
+      providers: [
+        {
+          id: 'cherryin',
+          name: 'CherryIN',
+          models: [],
+          apiKeys: [{ id: 'model', key: 'model-key', isEnabled: true }],
+          authConfig: {
+            type: 'oauth',
+            accessToken: 'desktop-access',
+            refreshToken: 'desktop-refresh',
+          },
+        },
+      ],
+    });
+    expect(snapshot.providers[0]).toMatchObject({ authType: 'oauth', authConfig: null });
+    expect(JSON.stringify(snapshot)).not.toContain('desktop-access');
+    expect(JSON.stringify(snapshot)).not.toContain('desktop-refresh');
+    expect(snapshot.providers[0]?.apiKeys[0]?.key).toBe('model-key');
   });
 });

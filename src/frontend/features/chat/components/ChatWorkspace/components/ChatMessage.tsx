@@ -5,7 +5,7 @@ import {
   ContextMenuExclusion,
   type MenuItem,
 } from '@cherrystudio/ui/components';
-import { memo, type ReactElement } from 'react';
+import { memo, type ReactElement, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -15,7 +15,6 @@ import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { AssistantMessageUsage } from './AssistantMessageUsage';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -29,11 +28,18 @@ type ChatMessageProps = {
   isScreenReaderEnabled?: boolean;
   message: MessageListItem;
   shouldShowTimestamp: boolean;
+  attachments?: ReactNode;
+  accessories?: ReactNode;
+  /** A stable renderer, called here so the row's memo boundary still holds. */
+  renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
 function renderChatAssistantMessage(
   message: MessageListItem,
   presentation: AssistantMessagePresentation,
+  attachments: ReactNode,
+  accessories: ReactNode,
+  renderUsage: ((message: MessageListItem) => ReactNode) | undefined,
 ) {
   return (
     <View className="w-full gap-2.5">
@@ -60,13 +66,13 @@ function renderChatAssistantMessage(
         </View>
       </View>
       <AssistantMessage message={message}>
+        {attachments}
+        {accessories}
         {message.status !== 'pending' ? (
           <BackgroundPressExclusion>
             <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
               <AssistantMessageToolbar message={message} />
-              <View className="min-w-0 max-w-full flex-1 items-end">
-                <AssistantMessageUsage message={message} />
-              </View>
+              <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
             </ContextMenuExclusion>
           </BackgroundPressExclusion>
         ) : null}
@@ -99,13 +105,25 @@ export const ChatMessage = memo(function ChatMessage({
   isScreenReaderEnabled = false,
   message,
   shouldShowTimestamp,
+  attachments,
+  accessories,
+  renderUsage,
 }: ChatMessageProps) {
   const createdAt = shouldShowTimestamp ? formatMessageCreatedAt(message.createdAt) : undefined;
   const content =
     message.role === 'user' ? (
-      <UserMessage message={message} />
+      <View className="gap-2">
+        <UserMessage attachments={attachments} message={message} />
+        {accessories}
+      </View>
     ) : (
-      renderChatAssistantMessage(message, assistantPresentation)
+      renderChatAssistantMessage(
+        message,
+        assistantPresentation,
+        attachments,
+        accessories,
+        renderUsage,
+      )
     );
 
   return (

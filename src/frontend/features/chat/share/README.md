@@ -18,8 +18,9 @@ closing the export preview retains the existing selection, while a closed system
 dismisses both pages to the chat. At most 128 messages can be selected; an empty selection cannot
 be confirmed. Leaving the page cancels pending export reads.
 
-Confirmation reads only the selected persisted messages through a single bounded ID query and
-restores chronological order, regardless of click order. It does not implicitly include questions
+Confirmation calls the share target's `prepareSelection`. The local route reads messages, session
+title and assistant name in one SQLite snapshot through the Data API; the desktop route calls the
+opened remote Session, which reads and revalidates a fixed history revision. Both return chronological order, regardless of click order. It does not implicitly include questions
 or unselected messages. The conversation may exceed 128 messages. Missing or unfinished content
 and failed reads reject the export instead of silently sharing a partial selection.
 
@@ -38,15 +39,17 @@ standalone-image-reference filter: an invented preview URL ending in an image ID
 that message is omitted, while unrelated images and code examples stay intact. Non-image files
 collect after the answer. Images and HTML use
 the message-list hierarchy: attachments above right-aligned user bubbles and full-width answers
-under the assistant name. They omit article titles and message numbering. Markdown retains the
-conversation title and ordinary role headings. All preserve chronological order.
+under the message-list author row (a round 🍒 avatar, the assistant name and, for local chats, each
+answer's own model name). They omit article titles and message numbering. Markdown retains the
+conversation title and ordinary role headings, with the model after answer headings. All preserve
+chronological order.
 The export renderers own code, resource, source-list and table presentation and their format-specific
 fallbacks. Images and HTML show the opening code inside fixed 192-point panels; HTML retains full
 code with internal scrolling, and Markdown keeps the complete authored source. Images and HTML show
 one compact source-count row with a single Globe icon and the same localized count as the chat,
 plus quiet superscript citations, without individual source cards.
 Inline code stays visible in every format. All formats follow the global Share watermark setting. Images and HTML share the white
-Cherry footer; Markdown uses the matching brand/time text row.
+Cherry brand/download footer with its QR area; Markdown uses the matching brand and download link.
 
 Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
 `chat.process.duration` and `chat.reasoningStatus.thought` translations, and elapsed time uses the
@@ -61,3 +64,13 @@ capability. Opening the preview renders the selection's default format without t
 changing the format or switch renders the selected snapshot as needed. Image output uses a fixed-width layout at
 3x density and sequential page capture, without source-image byte, pixel or count caps. Device resources determine practical
 capacity. Image conversion failures prepare HTML; HTML failures retain the complete Markdown preview.
+
+Local and desktop routes share the selection controls, the history window shape and export
+preparation; the local route uses the Session-keyed local history window and the desktop route the
+remote revisioned window. The desktop route binds the selection to its source scope, so a replaced
+pairing cannot reuse the previous selection. The preparation validates the entire selected set.
+Remote resources never become local file IDs; file metadata exports as named attachments. Partial
+messages cannot be selected as complete export content.
+
+Local documents keep their existing managed-file references and the document renderer resolves
+them; the underlying bytes are not pinned for the duration of the export.

@@ -1,29 +1,39 @@
-import type { AgentMessage, AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
 import {
+  BACKGROUND_CONTEXT,
   compact,
   estimateContextTokens,
   estimateTokens,
   prepareCompaction,
   shouldCompact,
+  withAbortSignal,
+  type AgentMessage,
+  type AgentTool as PiAgentTool,
   type CompactionPreparation,
   type CompactionSettings,
-} from '@earendil-works/pi-agent-core/compaction';
+} from '@earendil-works/pi-agent-core';
 import type {
   Api as PiApi,
+  ImageContent,
   Message as PiLlmMessage,
   Model as PiModel,
   Models,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
+import {
+  getCurrentSystemMessage,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+} from '@earendil-works/pi-ai/utils/transcript';
 
 import type { RuntimeContextCheckpoint, RuntimeContextCompaction } from '../types';
 import type { PiConversation, PiHistoryTurn } from './modelMessages';
+import { estimatePiImageTokens } from './piImageTokens';
 
 const PI_CONTEXT_CHECKPOINT_KIND = 'pi-context-compaction';
+// Pi's own estimate prices every image at this flat cost; the dialect formula replaces it.
 const PI_ESTIMATED_IMAGE_TOKENS = 1_200;
 
 export const PI_ESTIMATED_CHARACTERS_PER_TOKEN = 4;
-export const PI_IMAGE_CONTEXT_TOKEN_RESERVE = 4_096;
 export const PI_CONTEXT_SAFETY_MARGIN_TOKENS = 1_024;
 // Pi's per-request output clamp keeps 4,096 tokens clear of the window before sizing output.
 export const PI_OUTPUT_CLAMP_SAFETY_TOKENS = 4_096;
@@ -65,7 +75,7 @@ type PiContextPlanInput = {
   options?: PiContextCompactionOptions;
   redactSummary: (summary: string) => string;
   signal: AbortSignal;
-  thinkingLevel: Parameters<typeof compact>[5];
+  thinkingLevel: Parameters<typeof compact>[4];
   tools: readonly PiToolSchema[];
   onCompaction?: (update: PiCompactionUpdate) => void;
 };
@@ -103,6 +113,7 @@ type PiCheckpointPayload = {
   resume?: {
     turnId: string;
     messageOffset: number;
+    replayKind?: string;
   };
 };
 
@@ -124,6 +135,7 @@ type ProjectedContext = {
 type PiToolSchema = Pick<PiAgentTool, 'name' | 'description' | 'parameters'>;
 
 function estimatePiNonMessageContextCosts(input: {
+  api: PiApi;
   imageMessages: readonly AgentMessage[];
   outputReserveTokens: number;
   systemPrompt: string;
@@ -134,12 +146,12 @@ function estimatePiNonMessageContextCosts(input: {
     (total, tool) => total + estimateTextTokens(serializeTool(tool)),
     0,
   );
-  const imageCount = input.imageMessages.reduce(
-    (total, message) => total + countImages(message),
-    0,
-  );
-  const attachmentTokens =
-    imageCount * Math.max(0, PI_IMAGE_CONTEXT_TOKEN_RESERVE - PI_ESTIMATED_IMAGE_TOKENS);
+  const attachmentTokens = input.imageMessages
+    .flatMap(messageImages)
+    .reduce(
+      (total, image) => total + estimatePiImageTokens(input.api, image) - PI_ESTIMATED_IMAGE_TOKENS,
+      0,
+    );
   const outputReserveTokens = Math.max(0, input.outputReserveTokens);
   const safetyMarginTokens = PI_CONTEXT_SAFETY_MARGIN_TOKENS;
   return {
@@ -174,6 +186,8 @@ function estimatePiContextTokens(messages: AgentMessage[]) {
 
 /** Content only, even if an assistant message carries usage for an entire request. */
 export function estimatePiMessageTokens(message: AgentMessage): number {
+  // Instructions and tool declarations are accounted for separately from history.
+  if (message.role === 'system') return 0;
   let reserve = 0;
   if (message.role === 'compactionSummary' || message.role === 'branchSummary') {
     reserve = nonAsciiTokenReserve(message.summary);
@@ -194,6 +208,7 @@ export function estimatePiMessageTokens(message: AgentMessage): number {
 
 /** Remaining room for model-loop messages before another provider request. */
 export function estimatePiLoopContextHeadroomTokens(input: {
+  api: PiApi;
   contextWindow: number;
   maxInputTokens?: number;
   messages: AgentMessage[];
@@ -206,6 +221,7 @@ export function estimatePiLoopContextHeadroomTokens(input: {
 }
 
 export function measurePiContext(input: {
+  api: PiApi;
   contextWindow: number;
   maxInputTokens?: number;
   messages: AgentMessage[];
@@ -218,20 +234,16 @@ export function measurePiContext(input: {
     estimate.lastUsageIndex === null
       ? input.messages
       : input.messages.slice(estimate.lastUsageIndex + 1);
-  const addedToolNames = new Set(
-    unmeasuredMessages.flatMap((message) =>
-      message.role === 'toolResult' ? (message.addedToolNames ?? []) : [],
-    ),
-  );
   const fixedCosts = estimatePiNonMessageContextCosts({
+    api: input.api,
     imageMessages: unmeasuredMessages,
     outputReserveTokens: input.outputReserveTokens,
     // Live usage already covers the system prompt, tool definitions, and old images.
-    systemPrompt: estimate.lastUsageIndex === null ? input.systemPrompt : '',
-    tools:
+    systemPrompt:
       estimate.lastUsageIndex === null
-        ? input.tools
-        : input.tools.filter((tool) => addedToolNames.has(tool.name)),
+        ? input.systemPrompt
+        : getCurrentSystemPrompt(unmeasuredMessages),
+    tools: estimate.lastUsageIndex === null ? input.tools : getCurrentTools(unmeasuredMessages),
   });
 
   return {
@@ -263,6 +275,7 @@ function resolveContextBudget(input: {
 }
 
 export function estimatePiContextFixedCosts(input: {
+  api: PiApi;
   conversation: PiConversation;
   outputReserveTokens: number;
   tools: readonly PiToolSchema[];
@@ -270,6 +283,7 @@ export function estimatePiContextFixedCosts(input: {
   const currentMessages = [input.conversation.prompt, ...(input.conversation.resume ?? [])];
   const currentInputTokens = estimatePiMessagesTokens(currentMessages);
   const fixedCosts = estimatePiNonMessageContextCosts({
+    api: input.api,
     imageMessages: currentMessages,
     outputReserveTokens: input.outputReserveTokens,
     systemPrompt: input.conversation.systemPrompt,
@@ -306,7 +320,10 @@ export async function planPiLoopContext(
     systemPrompt: string;
   },
 ): Promise<PiContextPlan> {
-  const entries: CompactionEntries = input.messages.map((message, index) => ({
+  // System deltas configure the live request; they are not summary candidates.
+  const systemMessage = getCurrentSystemMessage(input.messages);
+  const messages = input.messages.filter((message) => message.role !== 'system');
+  const entries: CompactionEntries = messages.map((message, index) => ({
     id: `live:${index}`,
     parentId: index === 0 ? null : `live:${index - 1}`,
     seq: index,
@@ -317,14 +334,25 @@ export async function planPiLoopContext(
           summary: message.summary,
           tokensBefore: message.tokensBefore,
           retainedTail: [],
+          fromHook: false,
         }
       : { type: 'message' as const, message }),
   }));
-  return planProjectedContext({
+  const result = await planProjectedContext({
     ...input,
     projected: { checkpoint: null, entries, messages: input.messages, metadata: new WeakMap() },
     historyTurns: [],
   });
+  if (!result.ok) return result;
+  return {
+    ...result,
+    messages:
+      result.messages === input.messages
+        ? input.messages
+        : systemMessage
+          ? [systemMessage, ...result.messages]
+          : result.messages,
+  };
 }
 
 async function planProjectedContext(
@@ -349,6 +377,7 @@ async function planProjectedContext(
     );
   const currentMessages = input.currentMessages ?? [];
   const fixedCosts = estimatePiNonMessageContextCosts({
+    api: input.model.api,
     imageMessages: currentMessages,
     outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
     systemPrompt: input.systemPrompt,
@@ -366,6 +395,7 @@ async function planProjectedContext(
 
   const measure = (messages: AgentMessage[]) =>
     measurePiContext({
+      api: input.model.api,
       contextWindow: input.model.contextWindow,
       maxInputTokens: input.maxInputTokens,
       messages: [...messages, ...currentMessages],
@@ -412,12 +442,14 @@ async function planProjectedContext(
     return canSendWithoutCompaction ? unchanged : overflow;
   }
 
-  const lastCallIndex = projected.messages.findLastIndex((message) => message.role === 'assistant');
+  // System deltas are not compaction entries, so they do not end the newest batch.
+  const history = projected.messages.filter((message) => message.role !== 'system');
+  const lastCallIndex = history.findLastIndex((message) => message.role === 'assistant');
   // A cut inside the newest result has no following assistant boundary. Keep
   // that whole batch so Pi can cut before it instead of retaining all history.
   const newestBatchTokens =
-    projected.messages.at(-1)?.role === 'toolResult' && lastCallIndex >= 0
-      ? projected.messages
+    history.at(-1)?.role === 'toolResult' && lastCallIndex >= 0
+      ? history
           .slice(lastCallIndex)
           .reduce((total, message) => total + estimateTokens(message), 0) + 1
       : 0;
@@ -484,8 +516,10 @@ async function planProjectedContext(
       input.models as Models,
       input.model,
       CHERRY_COMPACTION_INSTRUCTIONS,
-      input.signal,
       input.thinkingLevel,
+      undefined,
+      undefined,
+      withAbortSignal(input.signal, BACKGROUND_CONTEXT),
     );
   } catch (error) {
     report(
@@ -586,6 +620,7 @@ function projectContext(
       summary: payload.summary,
       retainedTail: [],
       tokensBefore: payload.tokensBefore,
+      fromHook: false,
     });
     parentId = entryId;
     messages.push(createCompactionSummary(payload.summary, payload.tokensBefore));
@@ -598,7 +633,9 @@ function projectContext(
     if (!resumeApplied) {
       if (turn.turnId !== payload?.resume?.turnId) continue;
       sourceOffset = payload.resume.messageOffset;
-      if (sourceOffset > turnMessages.length) {
+      if (sourceOffset > turnMessages.length || payload.resume.replayKind !== turn.replayKind) {
+        // The Host already trimmed the summarized prefix. Keep that summary, but never
+        // apply native-message offsets to a fallback display projection (or vice versa).
         sourceOffset = 0;
       }
       turnMessages = turnMessages.slice(sourceOffset);
@@ -658,7 +695,12 @@ function createCheckpoint(
     const previousTurn = findPreviousDurableTurn(historyTurns, splitTurn.turnIndex);
     anchorTurnId = previousTurn?.turnId ?? previous?.anchorTurnId ?? null;
     if (!anchorTurnId) return null;
-    resume = { turnId: splitTurn.turnId, messageOffset: splitTurn.messageOffset };
+    const replayKind = historyTurns[splitTurn.turnIndex]?.replayKind;
+    resume = {
+      turnId: splitTurn.turnId,
+      messageOffset: splitTurn.messageOffset,
+      ...(replayKind ? { replayKind } : {}),
+    };
   } else if (lastSummarized?.turnId === null) {
     return null;
   }
@@ -706,7 +748,15 @@ function parseCheckpointPayload(value: unknown): PiCheckpointPayload | null {
     ) {
       return null;
     }
-    resume = { turnId: value.resume.turnId, messageOffset: value.resume.messageOffset };
+    if (value.resume.replayKind !== undefined && typeof value.resume.replayKind !== 'string')
+      return null;
+    resume = {
+      turnId: value.resume.turnId,
+      messageOffset: value.resume.messageOffset,
+      ...(typeof value.resume.replayKind === 'string'
+        ? { replayKind: value.resume.replayKind }
+        : {}),
+    };
   }
   return {
     kind: PI_CONTEXT_CHECKPOINT_KIND,
@@ -762,6 +812,7 @@ export function convertPiMessagesToLlm(messages: AgentMessage[]): PiLlmMessage[]
             timestamp: message.timestamp,
           },
         ];
+      case 'system':
       case 'user':
       case 'assistant':
       case 'toolResult':
@@ -796,9 +847,14 @@ function nonAsciiTokenReserve(text: string): number {
   return reserve;
 }
 
-function countImages(message: AgentMessage): number {
-  if (message.role !== 'user' || typeof message.content === 'string') return 0;
-  return message.content.filter((part) => part.type === 'image').length;
+function messageImages(message: AgentMessage): ImageContent[] {
+  if (
+    (message.role !== 'user' && message.role !== 'toolResult') ||
+    typeof message.content === 'string'
+  ) {
+    return [];
+  }
+  return message.content.filter((part): part is ImageContent => part.type === 'image');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

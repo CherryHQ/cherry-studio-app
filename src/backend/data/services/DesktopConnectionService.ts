@@ -1,5 +1,12 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
-import { asc, eq } from 'drizzle-orm';
+import {
+  configuredEndpointsSchema,
+  directEndpointSchema,
+  directEndpointUrl,
+  type DirectEndpoint,
+} from '@cherrystudio/remote-protocol';
+import { and, asc, eq } from 'drizzle-orm';
+import { randomUUID } from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
 import type { DbService } from '@/backend/data/db/DbService';
@@ -10,6 +17,10 @@ import {
   userModelTable,
   userProviderTable,
 } from '@/backend/data/db/schemas';
+import type {
+  ProviderAccountCapabilities,
+  ProviderAccountIdentity,
+} from '@/shared/contracts/providerAccounts';
 import { DataApiError, DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import {
   type DesktopImportPreview,
@@ -38,13 +49,22 @@ function desktopError(reason: string, message: string): DataApiError {
   return new DataApiError(ErrorCode.INVALID_OPERATION, message, { reason });
 }
 
+/**
+ * Desktops pair under their network hostname, so `jds-MacBook-Pro.local` keeps only its host label.
+ * Anything that is not a dotted hostname, such as a spaced display name, is shown unchanged.
+ */
+function displayName(name: string): string {
+  const match = /^([a-z0-9-]*[a-z][a-z0-9-]*)(\.[a-z0-9-]+)+$/i.exec(name);
+  return match ? match[1] : name;
+}
+
 function rowToConnection(row: DesktopConnectionRow): DesktopConnection {
   return {
-    activeBaseUrl: row.activeBaseUrl,
-    desktopVersion: row.desktopVersion,
+    configuredEndpoints: row.configuredEndpoints,
+    capabilities: row.grants.map((grant) => grant.domain),
     id: row.id,
     lastFetchedAt: row.lastFetchedAt,
-    name: row.name,
+    name: displayName(row.name),
     status: row.status,
   };
 }
@@ -118,13 +138,16 @@ function resolvePresetProviderId(provider: DesktopProviderSnapshot): string | nu
 /** Payload-only rejections; the import transaction re-validates whatever needs the database. */
 function getProviderImportRejection(
   provider: DesktopProviderSnapshot,
+  account?: ProviderAccountCapabilities,
 ): DesktopImportUnavailableReason | undefined {
   if (provider.unreadable) return 'unreadable';
   // An absent `authMethods` predates the field rather than denying API keys.
   const acceptsApiKey = provider.authMethods?.includes('api-key') ?? true;
-  if (provider.authType === 'oauth' || !acceptsApiKey) return 'unsupported-auth';
-  // A desktop signed in through OAuth exports no key, and mobile has no flow to obtain one.
   const hasUsableKey = provider.apiKeys.some((entry) => entry.isEnabled && entry.key.trim());
+  if (provider.authType === 'oauth') {
+    return account?.apiKeys && hasUsableKey ? undefined : 'unsupported-auth';
+  }
+  if (!acceptsApiKey) return 'unsupported-auth';
   return provider.authOptional || hasUsableKey ? undefined : 'missing-api-key';
 }
 
@@ -132,11 +155,12 @@ function getProviderImportRejection(
 function getProviderImportUnavailableReason(
   provider: DesktopProviderSnapshot,
   existingEndpointConfigs: EndpointConfigs | null | undefined,
+  account?: ProviderAccountCapabilities,
 ): DesktopImportUnavailableReason | undefined {
-  const rejection = getProviderImportRejection(provider);
+  const rejection = getProviderImportRejection(provider, account);
   if (rejection) return rejection;
   try {
-    const configuration = mapProvider(provider);
+    const configuration = mapProvider(provider, account);
     if (configuration.presetProviderId) return undefined;
     const endpointConfigs = { ...existingEndpointConfigs, ...configuration.endpointConfigs };
     assertCustomProviderEndpointConfiguration({
@@ -178,7 +202,10 @@ function getEnabledDesktopProviders(snapshot: DesktopProvidersSnapshot) {
     });
 }
 
-function mapProvider(provider: DesktopProviderSnapshot): Omit<InsertUserProviderRow, 'orderKey'> {
+function mapProvider(
+  provider: DesktopProviderSnapshot,
+  account?: ProviderAccountCapabilities,
+): Omit<InsertUserProviderRow, 'orderKey'> {
   const presetProviderId = resolvePresetProviderId(provider);
   const defaultChatEndpoint =
     provider.defaultChatEndpoint ??
@@ -186,7 +213,10 @@ function mapProvider(provider: DesktopProviderSnapshot): Omit<InsertUserProvider
   return {
     apiFeatures: mapApiFeatures(provider),
     apiKeys: provider.apiKeys,
-    authConfig: parseSupportedAuthConfig(provider.authConfig),
+    authConfig:
+      account?.apiKeys && provider.authType === 'oauth'
+        ? { type: 'api-key' }
+        : parseSupportedAuthConfig(provider.authConfig),
     defaultChatEndpoint,
     endpointConfigs: mapEndpointConfigs(provider),
     isEnabled: true,
@@ -247,7 +277,12 @@ function mapModel(
 
 export class DesktopConnectionService {
   // Workflows bind the originating host's database; API reads use the active host.
-  constructor(private readonly database?: Pick<DbService, 'getDb' | 'withWriteTx'>) {}
+  constructor(
+    private readonly database?: Pick<DbService, 'getDb' | 'withWriteTx'>,
+    private readonly accountCapabilities?: (
+      provider: ProviderAccountIdentity,
+    ) => ProviderAccountCapabilities,
+  ) {}
 
   private get dbService() {
     return this.database ?? application.get('DbService');
@@ -280,16 +315,13 @@ export class DesktopConnectionService {
   }
 
   async savePair(
-    input: Pick<
-      DesktopConnectionRow,
-      'id' | 'activeBaseUrl' | 'baseUrls' | 'desktopVersion' | 'name'
-    >,
+    input: Pick<DesktopConnectionRow, 'id' | 'desktopIdentity' | 'deviceId' | 'grants' | 'name'>,
     replace: boolean,
     signal: AbortSignal,
   ): Promise<DesktopConnection> {
     return this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
-      const values = { ...input, status: 'paired' as const };
+      const values = { ...input, learnedEndpoints: [], status: 'paired' as const };
       const [row] = await (replace
         ? tx
             .update(desktopConnectionTable)
@@ -303,6 +335,101 @@ export class DesktopConnectionService {
     });
   }
 
+  async updateEndpoints(id: string, input: DirectEndpoint[]): Promise<DesktopConnection> {
+    const configuredEndpoints = configuredEndpointsSchema.parse(input);
+    return this.dbService.withWriteTx(async (tx) => {
+      const [row] = await tx
+        .update(desktopConnectionTable)
+        .set({ configuredEndpoints })
+        .where(eq(desktopConnectionTable.id, id))
+        .returning();
+      if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
+      return rowToConnection(row);
+    });
+  }
+
+  async updateLearnedEndpoints(
+    id: string,
+    input: DirectEndpoint[],
+    expected: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
+    signal: AbortSignal,
+  ): Promise<DirectEndpoint[]> {
+    const learnedEndpoints = [
+      ...new Map(
+        input.slice(0, 32).map((value) => {
+          const endpoint = directEndpointSchema.parse(value);
+          return [directEndpointUrl(endpoint), endpoint] as const;
+        }),
+      ).values(),
+    ].filter(
+      (endpoint) => !/^fe[89ab][0-9a-f]:/i.test(endpoint.host) && !endpoint.host.includes('%'),
+    );
+    return this.dbService.withWriteTx(async (tx) => {
+      signal.throwIfAborted();
+      const [row] = await tx
+        .select()
+        .from(desktopConnectionTable)
+        .where(eq(desktopConnectionTable.id, id))
+        .limit(1);
+      if (
+        !row ||
+        row.status !== 'paired' ||
+        row.deviceId !== expected.deviceId ||
+        row.desktopIdentity !== expected.desktopIdentity ||
+        JSON.stringify(row.grants) !== JSON.stringify(expected.grants)
+      )
+        throw desktopError('auth-revoked', 'Pairing changed while syncing addresses');
+      if (JSON.stringify(row.learnedEndpoints) !== JSON.stringify(learnedEndpoints))
+        await tx
+          .update(desktopConnectionTable)
+          .set({ learnedEndpoints })
+          .where(eq(desktopConnectionTable.id, id));
+      signal.throwIfAborted();
+      return learnedEndpoints;
+    });
+  }
+
+  async addEndpoint(
+    id: string,
+    endpoint: DirectEndpoint,
+    expected: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
+    signal: AbortSignal,
+  ): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      signal.throwIfAborted();
+      const [row] = await tx
+        .select()
+        .from(desktopConnectionTable)
+        .where(eq(desktopConnectionTable.id, id))
+        .limit(1);
+      if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
+      if (
+        row.status !== 'paired' ||
+        row.deviceId !== expected.deviceId ||
+        row.desktopIdentity !== expected.desktopIdentity ||
+        JSON.stringify(row.grants) !== JSON.stringify(expected.grants)
+      )
+        throw desktopError('auth-revoked', 'Pairing changed while verifying the address');
+      if (
+        row.configuredEndpoints.some(
+          (item) => directEndpointUrl(item) === directEndpointUrl(endpoint),
+        )
+      )
+        return;
+      if (row.configuredEndpoints.length >= 8)
+        throw desktopError('endpoint-limit', 'Remove an address before adding another');
+      const configuredEndpoints = configuredEndpointsSchema.parse([
+        ...row.configuredEndpoints,
+        endpoint,
+      ]);
+      await tx
+        .update(desktopConnectionTable)
+        .set({ configuredEndpoints })
+        .where(eq(desktopConnectionTable.id, id));
+      signal.throwIfAborted();
+    });
+  }
+
   async remove(id: string): Promise<void> {
     await this.dbService.withWriteTx((tx) =>
       tx.delete(desktopConnectionTable).where(eq(desktopConnectionTable.id, id)),
@@ -311,16 +438,27 @@ export class DesktopConnectionService {
 
   async updateStatus(
     id: string,
-    values: Pick<DesktopConnectionRow, 'status'> &
-      Partial<Pick<DesktopConnectionRow, 'activeBaseUrl' | 'lastFetchedAt'>>,
+    values: Partial<Pick<DesktopConnectionRow, 'status' | 'grants' | 'lastFetchedAt'>>,
     signal: AbortSignal,
+    expected?: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
   ): Promise<void> {
     await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
       const [row] = await tx
         .update(desktopConnectionTable)
         .set(values)
-        .where(eq(desktopConnectionTable.id, id))
+        .where(
+          and(
+            eq(desktopConnectionTable.id, id),
+            expected
+              ? and(
+                  eq(desktopConnectionTable.deviceId, expected.deviceId),
+                  eq(desktopConnectionTable.desktopIdentity, expected.desktopIdentity),
+                  eq(desktopConnectionTable.grants, expected.grants),
+                )
+              : undefined,
+          ),
+        )
         .returning({ id: desktopConnectionTable.id });
       if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
       signal.throwIfAborted();
@@ -342,9 +480,11 @@ export class DesktopConnectionService {
     const existingModels = new Set(modelRows.map((row) => row.id));
     return {
       providers: getEnabledDesktopProviders(snapshot).map((provider) => {
+        const account = this.accountCapabilities?.(provider);
         const unavailableReason = getProviderImportUnavailableReason(
           provider,
           existingProviders.get(provider.id),
+          account,
         );
         return {
           action: existingProviders.has(provider.id) ? 'update' : 'add',
@@ -358,6 +498,9 @@ export class DesktopConnectionService {
           })),
           name: provider.name,
           ...(unavailableReason ? { unavailableReason } : {}),
+          ...(!unavailableReason && account?.balance && provider.authType === 'oauth'
+            ? { accountNotice: 'sign-in-for-balance' as const }
+            : {}),
         };
       }),
     };
@@ -382,7 +525,7 @@ export class DesktopConnectionService {
       if (!provider) {
         throw desktopError('invalid-selection', 'A selected provider is no longer available');
       }
-      const rejection = getProviderImportRejection(provider);
+      const rejection = getProviderImportRejection(provider, this.accountCapabilities?.(provider));
       if (rejection) {
         throw desktopError(rejection, `A selected provider was rejected as ${rejection}`);
       }
@@ -404,7 +547,19 @@ export class DesktopConnectionService {
           .from(userProviderTable)
           .where(eq(userProviderTable.providerId, providerId))
           .limit(1);
-        const configuration = mapProvider(provider);
+        const account = this.accountCapabilities?.(provider);
+        const configuration = mapProvider(provider, account);
+        if (existingProvider && account?.apiKeys) {
+          // Local key identities and enabled choices belong to the phone, including account-owned keys.
+          const keys = [...(existingProvider.apiKeys ?? [])];
+          for (const key of provider.apiKeys) {
+            if (keys.some((existing) => existing.key === key.key)) continue;
+            keys.push(
+              keys.some((existing) => existing.id === key.id) ? { ...key, id: randomUUID() } : key,
+            );
+          }
+          configuration.apiKeys = keys;
+        }
         if (!configuration.presetProviderId) {
           // Retained mobile models may still use endpoints absent from the PC.
           configuration.endpointConfigs = {

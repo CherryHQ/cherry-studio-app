@@ -1,6 +1,5 @@
 import { Section } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { visiblePermissionKinds } from './components/PermissionListPresentation/PermissionListPresentation';
@@ -13,12 +12,8 @@ export default function PermissionsSettingsScreen() {
   const { statuses, refresh } = usePermissionSystemStatuses();
 
   return (
-    <SettingsScrollPage
-      contentClassName="gap-4"
-      headerProps={{ title: t('settings.permissions.title') }}
-    >
-      <Text className="text-sm text-muted-foreground">{t('settings.permissions.description')}</Text>
-      <Section>
+    <SettingsScrollPage headerProps={{ title: t('settings.permissions.title') }}>
+      <Section footer={t('settings.permissions.description')}>
         {visiblePermissionKinds
           .filter((kind) => isPermissionSupported(kind, statuses))
           .map((kind) => (

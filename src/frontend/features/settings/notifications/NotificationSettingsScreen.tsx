@@ -1,4 +1,3 @@
-import RadioIcon from '@cherrystudio/app-icons/icons/radio';
 import { Section, useToast } from '@cherrystudio/ui/components';
 import Constants from 'expo-constants';
 import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
@@ -8,14 +7,27 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, Platform } from 'react-native';
 
-import { usePreference } from '@/frontend/data/hooks';
+import { useBackendModule } from '@/frontend/data';
+import { useBackgroundExecutionStatus, usePreference } from '@/frontend/data/hooks';
+import type { BackgroundRunSettings } from '@/shared/contracts/backgroundExecution';
 import { isNotificationBlocked } from '@/shared/notifications/notificationPermission';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
+const STATUS_KEYS = {
+  active: 'backgroundRun.status.active',
+  idle: 'backgroundRun.status.idle',
+  interrupted: 'backgroundRun.status.interrupted',
+  limited: 'backgroundRun.status.limited',
+  starting: 'backgroundRun.status.starting',
+} as const;
+
 export default function NotificationSettingsScreen() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const execution = useBackendModule('backgroundExecution');
+  const status = useBackgroundExecutionStatus();
+  const [settings, setSettings] = useState<BackgroundRunSettings | null>(null);
   const [isLiveActivityEnabled, setIsLiveActivityEnabled] = usePreference(
     'chat.background_reply.enabled',
   );
@@ -25,44 +37,57 @@ export default function NotificationSettingsScreen() {
   const [isNotificationPermissionBlocked, setIsNotificationPermissionBlocked] = useState(false);
 
   useEffect(() => {
-    // Only meaningful while the switch is on; rendering gates the recovery row
-    // on the same condition, so a stale denial needs no synchronous reset.
-    if (!isCompletionNotificationEnabled) return;
     let cancelled = false;
-    const refreshPermissionState = (): void => {
+    let revision = 0;
+    const refresh = (): void => {
+      const current = ++revision;
+      void execution
+        .getSettings()
+        .then((settings) => {
+          if (cancelled || current !== revision) return;
+          setSettings(settings);
+        })
+        .catch(() => {
+          if (!cancelled && current === revision) setSettings(null);
+        });
       void getPermissionsAsync()
-        .then((status) => {
-          if (!cancelled) setIsNotificationPermissionBlocked(isNotificationBlocked(status));
+        .then((permission) => {
+          if (!cancelled && current === revision)
+            setIsNotificationPermissionBlocked(isNotificationBlocked(permission));
         })
         .catch(() => {});
     };
-    refreshPermissionState();
-    // Returning from system Settings keeps this screen mounted: re-query so a
-    // grant made there replaces the blocked row without a remount.
+    refresh();
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refreshPermissionState();
+      if (state === 'active') refresh();
     });
     return () => {
       cancelled = true;
       subscription.remove();
     };
-  }, [isCompletionNotificationEnabled]);
+  }, [execution]);
 
+  const reportSettingsFailure = () => {
+    toast.show({ label: t('settings.notifications.completion.settingsFailed'), variant: 'danger' });
+  };
+  const openBackgroundSettings = () => {
+    void execution.openSettings().catch(reportSettingsFailure);
+  };
+  const openSystemSettings = () => {
+    void openSettings().catch(reportSettingsFailure);
+  };
   const setLiveActivityPreference = (isEnabled: boolean) => {
     void setIsLiveActivityEnabled(isEnabled).catch(() => {
       toast.show({ label: t('settings.notifications.liveActivity.saveFailed'), variant: 'danger' });
     });
   };
-
   const setCompletionNotificationPreference = (isEnabled: boolean) => {
     void setIsCompletionNotificationEnabled(isEnabled)
       .then(async () => {
         if (!isEnabled) return;
-        // The system sheet follows the user's explicit opt-in; Android only
-        // reports the current state once it has already been decided.
-        const status = await requestPermissionsAsync();
-        setIsNotificationPermissionBlocked(isNotificationBlocked(status));
-        if (isNotificationBlocked(status)) {
+        const permission = await requestPermissionsAsync();
+        setIsNotificationPermissionBlocked(isNotificationBlocked(permission));
+        if (isNotificationBlocked(permission)) {
           toast.show({
             label: t('settings.notifications.completion.permissionDenied'),
             variant: 'warning',
@@ -70,28 +95,13 @@ export default function NotificationSettingsScreen() {
         }
       })
       .catch(() => {
-        toast.show({
-          label: t('settings.notifications.completion.saveFailed'),
-          variant: 'danger',
-        });
+        toast.show({ label: t('settings.notifications.completion.saveFailed'), variant: 'danger' });
       });
   };
-
   const openNotificationSettings = () => {
     void startActivityAsync(ActivityAction.APP_NOTIFICATION_SETTINGS, {
       extra: { 'android.provider.extra.APP_PACKAGE': Constants.expoConfig?.android?.package },
-    }).catch(() => {
-      toast.show({ label: t('notifications.android.settingsFailed'), variant: 'danger' });
-    });
-  };
-
-  const openSystemSettings = () => {
-    void openSettings().catch(() => {
-      toast.show({
-        label: t('settings.notifications.completion.settingsFailed'),
-        variant: 'danger',
-      });
-    });
+    }).catch(reportSettingsFailure);
   };
 
   return (
@@ -99,47 +109,86 @@ export default function NotificationSettingsScreen() {
       contentClassName="gap-6"
       headerProps={{ title: t('settings.notifications.title') }}
     >
+      <Section title={t('backgroundRun.title')} footer={t('backgroundRun.description')}>
+        <Section.Item label={t('backgroundRun.status')} description={t(STATUS_KEYS[status])} />
+        <Section.Item
+          label={t(Platform.OS === 'ios' ? 'backgroundRun.ios.power' : 'backgroundRun.power')}
+          description={t(
+            settings
+              ? settings.lowPowerMode
+                ? 'backgroundRun.enabled'
+                : 'backgroundRun.disabled'
+              : 'backgroundRun.unknown',
+          )}
+        />
+      </Section>
+      {Platform.OS === 'android' ? (
+        <Section footer={t('backgroundRun.android.guide')}>
+          <Section.Item
+            label={t('backgroundRun.android.battery')}
+            description={t(
+              settings?.batteryOptimizationExempt === true
+                ? 'backgroundRun.android.unrestricted'
+                : settings?.batteryOptimizationExempt === false
+                  ? 'backgroundRun.android.restricted'
+                  : 'backgroundRun.unknown',
+            )}
+            onPress={openBackgroundSettings}
+          />
+          <Section.Item
+            label={t('backgroundRun.android.vendor')}
+            description={t('backgroundRun.android.vendorHint')}
+            onPress={openSystemSettings}
+          />
+        </Section>
+      ) : (
+        <>
+          <Section footer={t('backgroundRun.ios.guide')}>
+            <Section.Item
+              label={t('backgroundRun.settings')}
+              description={t('backgroundRun.ios.limited')}
+              onPress={openBackgroundSettings}
+            />
+          </Section>
+          <Section footer={t('settings.notifications.liveActivity.description')}>
+            <Section.SwitchItem
+              label={t('settings.notifications.liveActivity.title')}
+              onValueChange={setLiveActivityPreference}
+              value={isLiveActivityEnabled}
+            />
+            {settings?.liveActivitiesEnabled === false ? (
+              <Section.Item
+                label={t('settings.notifications.completion.systemSettings')}
+                onPress={openSystemSettings}
+              />
+            ) : null}
+          </Section>
+        </>
+      )}
       <Section
         footer={t(
-          Platform.OS === 'android'
-            ? 'notifications.android.description'
-            : 'settings.notifications.liveActivity.description',
+          isNotificationPermissionBlocked
+            ? 'settings.notifications.completion.permissionDenied'
+            : 'settings.notifications.completion.description',
         )}
       >
         <Section.SwitchItem
-          label={t(
-            Platform.OS === 'android'
-              ? 'notifications.android.title'
-              : 'settings.notifications.liveActivity.title',
-          )}
-          leading={<RadioIcon className="size-5 text-foreground" />}
-          onValueChange={setLiveActivityPreference}
-          value={isLiveActivityEnabled}
-        />
-      </Section>
-      <Section footer={t('settings.notifications.completion.description')}>
-        <Section.SwitchItem
           label={t('settings.notifications.completion.title')}
-          leading={<RadioIcon className="size-5 text-foreground" />}
           onValueChange={setCompletionNotificationPreference}
           value={isCompletionNotificationEnabled}
         />
+        {Platform.OS === 'ios' && isNotificationPermissionBlocked ? (
+          <Section.Item
+            label={t('settings.notifications.completion.systemSettings')}
+            onPress={openSystemSettings}
+          />
+        ) : null}
       </Section>
       {Platform.OS === 'android' ? (
         <Section footer={t('notifications.android.systemDescription')}>
           <Section.Item
             label={t('notifications.android.systemSettings')}
             onPress={openNotificationSettings}
-          />
-        </Section>
-      ) : null}
-      {Platform.OS === 'ios' &&
-      isCompletionNotificationEnabled &&
-      isNotificationPermissionBlocked ? (
-        <Section footer={t('settings.notifications.completion.permissionDenied')}>
-          <Section.Item
-            label={t('settings.notifications.completion.systemSettings')}
-            onPress={openSystemSettings}
           />
         </Section>
       ) : null}

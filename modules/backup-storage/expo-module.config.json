@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "ios/BackupStorage.podspec",
+    "modules": ["BackupStorageModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.backupstorage.BackupStorageModule"]
+  }
+}

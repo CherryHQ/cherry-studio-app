@@ -3,17 +3,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
 
+import { ConversationReadError } from '@/frontend/appShell/conversation';
 import { useDocumentExport } from '@/frontend/appShell/documentExport';
-import { chatHref } from '@/frontend/appShell/navigation/chat';
-import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { DocumentExportError } from '@/shared/contracts/documentExport';
-import type { ListAgentSessionMessagesQueryParams } from '@/shared/data/api/schemas/agentSessionMessages';
 
-import { ChatExportError, loadChatExportMessages } from './loadChatExportMessages';
+import type { ChatShareTarget } from './chatShareTarget';
+import { ChatExportError, prepareChatExport } from './prepareChatExport';
 import { toChatExportDocument, type ChatExportOptions } from './toChatExportDocument';
 
-export function useShareChat(sessionId?: string) {
-  const api = useApiClient();
+export function useShareChat(target: ChatShareTarget) {
   const { open } = useDocumentExport();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -31,37 +30,26 @@ export function useShareChat(sessionId?: string) {
       loading.current?.abort();
       subscription.remove();
     };
-  }, [sessionId]);
+  }, [target]);
 
   const shareChat = useCallback(
     (messageIds: readonly string[]) => {
-      if (!sessionId || busy.current) return;
+      if (busy.current) return;
       busy.current = true;
       const controller = new AbortController();
       loading.current = controller;
       setIsSharing(true);
       void (async () => {
         try {
-          const readPage = (query: ListAgentSessionMessagesQueryParams) =>
-            api.get(`/agent-sessions/${sessionId}/messages`, {
-              query,
-              signal: controller.signal,
-            });
-          const [messages, sourceSession] = await Promise.all([
-            loadChatExportMessages(messageIds, readPage, controller.signal),
-            api.get(`/agent-sessions/${sessionId}`, { signal: controller.signal }),
-          ]);
+          const data = await prepareChatExport(target, messageIds, controller.signal);
           controller.signal.throwIfAborted();
-          const agent = await api.get(`/agents/${sourceSession.agentId}`, {
-            signal: controller.signal,
-          });
-          controller.signal.throwIfAborted();
+          const { messages } = data;
           const options: ChatExportOptions = {
-            title: sourceSession.title.trim() || t('chat.share.documentTitle'),
+            title: data.title?.trim() || t('chat.share.documentTitle'),
             includeProcess: true,
             labels: {
               user: t('chat.share.user'),
-              assistant: agent.name || t('chat.share.assistant'),
+              assistant: data.assistantName || t('chat.share.assistant'),
               process: (seconds) => t('chat.process.duration', { seconds }),
               sources: (count) => t('chat.sources.count', { count }),
               reasoning: t('chat.reasoningStatus.thought'),
@@ -96,7 +84,7 @@ export function useShareChat(sessionId?: string) {
                   },
                 }
               : undefined,
-            returnTo: chatHref({ kind: 'session', sessionId }),
+            returnTo: conversationHref(target.ref),
           });
           if (outcome === 'busy' && mounted.current)
             toast.show({ label: t('documentExport.errors.busy'), variant: 'danger' });
@@ -105,9 +93,11 @@ export function useShareChat(sessionId?: string) {
             const label =
               error instanceof ChatExportError
                 ? t(`chat.share.errors.${error.code}`)
-                : error instanceof DocumentExportError && error.code === 'size-limit'
-                  ? t('chat.share.tooLarge')
-                  : t('chat.share.loadFailed');
+                : error instanceof ConversationReadError && error.failure.code === 'not-found'
+                  ? t('chat.share.errors.missing')
+                  : error instanceof DocumentExportError && error.code === 'size-limit'
+                    ? t('chat.share.tooLarge')
+                    : t('chat.share.loadFailed');
             toast.show({ label, variant: 'danger' });
           }
           controller.abort();
@@ -118,7 +108,7 @@ export function useShareChat(sessionId?: string) {
         }
       })();
     },
-    [api, open, sessionId, t, toast],
+    [open, target, t, toast],
   );
   const cancelShare = useCallback(() => loading.current?.abort(), []);
   return { shareChat, isSharing, cancelShare };

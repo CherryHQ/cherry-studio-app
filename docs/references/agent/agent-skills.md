@@ -159,7 +159,9 @@ Installation binds nothing unless Agent IDs were explicitly supplied; conversati
 only the current Agent. Binding changes preserve
 unrelated bindings; global disablement preserves binding preferences.
 
-The native `managed-storage` module resolves iOS Application Support or Android `filesDir` at runtime.
+The native `managed-storage` module resolves iOS Application Support or Android `filesDir` at runtime
+for the original storage generation. After backup restoration, packages follow the selected
+`Documents/stores/<id>` generation alongside its database.
 Accepted packages live under `Data/Skills/<folderName>/revisions/<packageDigest>/`; absolute sandbox
 paths are never persisted. Cache staging is disposable. A complete tree is published before the
 SQLite acceptance transaction commits. A failed commit leaves an unreferenced tree for cleanup.
@@ -175,9 +177,10 @@ reconciliation runs after database initialization and removes unreferenced revis
 Both an accepted adapted revision and its original upstream revision are retained by reconciliation.
 Missing package bytes are reported as setup required, not as an empty successful installation.
 
-Any backup/restore mechanism must preserve both database records and their managed package trees.
-This implementation does not add a backup archive/export workflow. Restored records without their
-bytes are unavailable until repaired or reinstalled; cache recovery is never treated as installation.
+The existing local backup includes accepted package trees and original revisions retained by mobile
+adaptations. Restore validates their references and activates them with the database in a separate
+storage generation. Missing referenced files block backup instead of producing an incomplete archive.
+Package writes and backup capture exclude each other. Cache recovery is never treated as installation.
 
 Library reads use `/skills` and `/skills/:skillId`; `/agents/:agentId/skills` reads and updates bindings.
 Composer search applies binding, global enablement, invocation and admission filters before its
@@ -212,13 +215,15 @@ eight eligible Skills and does not silently create bindings. Rejected sends keep
 switches clear them.
 
 Active entry instructions have a 48,000-character aggregate limit. They live in Host-owned context
-outside compactable tool-result history. The generic Runtime callback refreshes that context before
-Pi's next tool-loop budget and compaction decision. Oversized activation fails rather than truncating
+outside compactable tool-result history. The generic Runtime callback refreshes that context through Pi
+system-section updates before the next tool-loop budget and compaction decision. Oversized activation fails rather than truncating
 instructions. References are read progressively and can be read again after compaction.
 
 Only successful built-in loading receipts or Host-written user selection metadata restore active
 instructions. Restoration rechecks the current binding, digest, invocation policy and prerequisites.
 Old instruction/resource payloads are stripped from Runtime replay without changing durable history.
+Turns containing Skill tools use the stripped transcript instead of the native replay cache, which
+would otherwise restore the original tool bodies.
 A stale activation invalidates a saved compaction checkpoint, triggering full transcript replay.
 Retries exclude replaced answer receipts; explicit retries require the selected accepted revisions
 to remain available. Session branches derive activation only from the copied history prefix.

@@ -43,6 +43,9 @@ export type ExportDocument = {
     heading?: string;
     /** Source-owned visual hierarchy, independent of chat models or live UI. */
     presentation?: 'bubble' | 'message';
+    /** Message author row: an emoji avatar and the model beside the heading. */
+    avatar?: string;
+    model?: string;
     metadata?: readonly { label: string; value: string }[];
     blocks: readonly ExportBlock[];
   }[];

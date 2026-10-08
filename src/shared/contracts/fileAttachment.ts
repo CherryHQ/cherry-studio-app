@@ -11,9 +11,7 @@ export const FileAttachmentIssueSchema = z.strictObject({
     'runtime-unsupported',
     'count',
     'file-bytes',
-    'total-bytes',
     'context',
-    'binary-content',
     'invalid-utf8',
     'nul-byte',
     'document-empty',
@@ -128,8 +126,6 @@ function fileAttachmentDiagnostic(issue: FileAttachmentIssue): string {
       return `${name} contains NUL bytes and appears to be binary.`;
     case 'invalid-utf8':
       return `${name} is not valid UTF-8 text.`;
-    case 'binary-content':
-      return `${name} contains binary control characters.`;
     case 'document-empty':
       return `${name} has no extractable text. Scanned documents require OCR.`;
     case 'document-invalid':

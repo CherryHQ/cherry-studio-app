@@ -25,7 +25,8 @@ This page branch owns the `/settings/provider` list and its child pages.
   child page's own `components/` directory.
 - `hooks/` contains provider-owned persistence and deletion behavior.
 - `models/` owns provider model grouping, synchronization, health checks, and list UI.
-- `components/ProviderForm/` owns the compound form shared by provider creation and provider detail.
+- `components/ProviderConfiguration/` owns the configuration body shared by provider details,
+  setup, creation and onboarding.
 
 ## Provider List Motion
 
@@ -49,7 +50,7 @@ the shared theme tokens in both light and dark themes.
 
 `catalog/ProviderCatalogScreen` owns the bundled provider catalog. A fixed custom-provider row is the first
 item in the recommended section; preset rows keep their explicit Add action. Both paths continue to
-`new/ProviderCreationScreen`, which renders the shared provider form before model synchronization. The
+`new/ProviderCreationScreen`, which renders the shared provider configuration before model synchronization. The
 catalog carries a validated `returnTo` href through creation and model selection; finishing setup
 returns to the requesting surface, or to the provider list when settings opened the flow.
 
@@ -72,47 +73,20 @@ models can keep using them; matching endpoint entries use the PC configuration.
 Preview and import both exclude CherryAI and local providers (Ollama, LM Studio, GPUStack, and
 OpenVINO Model Server), including copies identified by their preset provider ID or legacy type.
 
-## Provider Form
+## Provider Configuration
 
-`ProviderForm` is a compound component over one draft: `ProviderForm.Avatar`, `.Name`, `.BaseUrl`,
-`.Endpoint`, `.Endpoints`, and `.ApiKeys`. `useProviderFormDraft` owns field state; `useProviderConfigurationForm` adds loading,
-validation, endpoint impact confirmation, and saving for existing providers. Creation keeps its
-own initial persistence step. Each screen drives its actions from the same draft that its fields
-consume and composes the slots it needs.
+`components/ProviderConfiguration/` is the one configuration body for provider details, setup from
+the catalog, custom provider creation and onboarding; see its README for the section order and
+data sources. Saved providers write every change as it is made, so provider details have no Save
+button and no discard confirmation. Only creating a custom provider keeps a local draft, written
+once when the user continues; leaving with an unsaved draft still asks first.
 
-`ProviderForm.ApiKeys` edits a dynamic list of credential entries. Each row keeps its ID, key,
-optional label, and enabled state together; removing another row never reassigns that identity.
-Each credential occupies one grouped-list row showing its optional note (or default name), a
-masked key, an enable switch, and a Settings button. The switch and Settings button have separate
-touch targets. Scroll cancellation stays with the page scroller and shared controls; the row adds
-no long-press or swipe recognizers.
-
-Adding or opening Settings presents a dedicated `BottomSheet` for that key, with the key and an
-optional note explaining its identification-only purpose. Existing keys edit the page draft
-directly; closing the sheet keeps those edits. New keys stay in a local buffer until Add validates
-and inserts the entry; cancelling an addition leaves the list unchanged.
-Delete is a full-width destructive button below the existing-key sheet's fields.
-There is no second confirmation action for editing a key. Empty,
-duplicate, or multi-key input shows an error in the sheet and list and blocks page save; it also
-blocks Add for a new key. Short keys are fully masked; longer keys expose only their last four
-characters in the list.
-All edits, including enabling keys during setup, remain in the page draft until the explicit page
-save succeeds. Editing unrelated fields does not replace keys updated by background synchronization.
-
-The data model follows desktop's `ProviderApiKeyListDrawer`; presentation and editing follow
-Mobile's grouped rows, keyboard-aware sheet, and page save/discard contract. No database or device
-synchronization protocol change is needed.
-
-Endpoint fields share protocol labels, full request URL previews with explicit copying, and
-correction hints for pasted request paths. Base URLs accept the desktop-compatible trailing `#` to
-disable automatic version insertion. The marker remains visible in the input and saved configuration,
-and is removed before outgoing requests. Provider-specific transports
-without a standard URL formatter do not display a guessed request URL.
-
-First-use setup replaces the single selected text endpoint atomically when the protocol changes,
-carrying the visible URL forward. Clearing that URL keeps the selected protocol. Providers already
-configured with multiple text endpoints use the multi-endpoint form so setup cannot hide or discard
-their other addresses.
+API keys keep their ID, key, optional label and enabled state together; removing one never
+reassigns another's identity. The first key is typed straight into the card. Later keys toggle in
+place, and opening one presents a sheet that edits a copy of its key and label; the change is
+written once on Save, and Delete removes it. Empty, duplicate or multi-key input shows an error in
+the sheet and blocks saving it. Short keys are fully masked; longer keys expose only their last
+four characters.
 
 ## Connectivity And Models
 
@@ -131,3 +105,41 @@ provider models for management, labels unavailable models, and supports detail, 
 menus, and scoped multi-selection. The detail page's `model/` branch owns model inspection and its
 `edit/` child. Model grouping, deletion protection, selection, and synchronization remain under
 `models/`.
+
+## Provider Accounts
+
+`backend.providers.accounts` is the shared account contract. Setup and detail compose
+`components/ProviderAccount/` using its capability declaration; `account/` receives the
+`/oauth/callback` route. UI, callback handling, query keys and credential ownership do not branch on
+provider IDs. The registered adapter determines sign-in, model API-key and balance support.
+Mobile adds only login-based providers that the desktop app already supports.
+
+The account panel follows provider identity and precedes manual configuration in setup, detail
+and onboarding. Signed-out accounts expose one primary sign-in action. Signed-in accounts show
+identity and local sign-out in the header, with a balance and adjacent refresh action below.
+
+The backend's `providers/account/ProviderAccountRuntime` owns attempts, callback validation,
+credential persistence, refresh, logout and provider deletion cleanup. `providerOauth` supplies the
+shared PKCE authorization-code client. Adapters own client configuration and account API response
+parsing. The composition root currently registers only CherryIN. The desktop app's Codex and Grok
+CLI logins are not available on mobile: their upstream clients accept only loopback callbacks.
+
+An in-progress attempt (state, PKCE verifier and deadline) exists only in runtime memory. A callback
+must match that attempt's registered redirect URL exactly, so one provider's callback cannot
+complete another provider's attempt. If the app is terminated during sign-in, the returning
+callback is rejected and the user signs in again.
+
+Model calls keep their existing supported authentication paths. Account login adds model API keys
+when the adapter supplies them; logout removes only unchanged keys owned by that local account.
+Account key changes update the form baseline without discarding other edits. Balance values carry
+their currency instead of assuming USD throughout the shared UI.
+
+Desktop OAuth imports use the same registered model-key capability. They discard the desktop grant,
+preserve local keys and IDs/enabled choices, and add new PC keys. The balance belongs to the account
+signed in on this phone; imported keys may belong to a different account. Unsupported upstream
+OAuth/model protocols are not enabled merely by catalog metadata.
+
+Each adapter declares the desktop app's registered client ID and redirect URL. CherryIN shares
+`cherrystudio://oauth/callback` with desktop; a custom-scheme callback only reaches the app on the
+device that opened the browser. Only production builds register the `cherrystudio` scheme, so
+development and preview builds cannot complete provider sign-in.

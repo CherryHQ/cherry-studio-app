@@ -2,53 +2,59 @@ import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import SquarePenIcon from '@cherrystudio/app-icons/icons/square-pen';
 import { BottomSheet, Button, ContentState } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
+import type { AgentSummary, useConversationAgents } from '@/frontend/appShell/conversation';
 import { AgentAvatar } from '@/frontend/components/Avatar';
-import { useAgentsApi } from '@/frontend/hooks/agent';
-import type { Agent } from '@/shared/data/types/agent';
 
 type MainHeaderAgentPickerSheetProps = {
   currentAgentId?: string;
+  catalog: ReturnType<typeof useConversationAgents>;
+  onSelect(agentId: string): void;
+  onEdit?(agentId: string): void;
+  onCreate?(): void;
   onClose: () => void;
   open: boolean;
 };
 
 export function MainHeaderAgentPickerSheet({
   currentAgentId,
+  catalog,
+  onSelect,
+  onEdit,
+  onCreate,
   onClose,
   open,
 }: MainHeaderAgentPickerSheetProps) {
   const { t } = useTranslation();
-  const router = useRouter();
-  const { agents, error, isLoading, refetch } = useAgentsApi();
-
+  const { items: agents, isError, isLoading, refetch } = catalog;
   const selectAgent = (agentId: string) => {
     onClose();
-    router.setParams(chatRouteParams({ agentId, kind: 'draft' }));
+    onSelect(agentId);
   };
-  const editAgent = (agentId: string) => {
-    onClose();
-    router.push({ params: { agentId }, pathname: '/agents/[agentId]/edit' });
-  };
-  const createAgent = () => {
-    onClose();
-    router.push({ params: { startChat: 'true' }, pathname: '/agents/new' });
-  };
+  const editAgent = onEdit
+    ? (agentId: string) => {
+        onClose();
+        onEdit(agentId);
+      }
+    : undefined;
 
   return (
     <BottomSheet
       footer={
-        <Button
-          icon={<PlusIcon className="size-5 text-foreground" />}
-          onPress={createAgent}
-          variant="secondary"
-        >
-          <Button.Label>{t('agent.actions.create')}</Button.Label>
-        </Button>
+        onCreate ? (
+          <Button
+            icon={<PlusIcon className="size-5 text-foreground" />}
+            onPress={() => {
+              onClose();
+              onCreate();
+            }}
+            variant="secondary"
+          >
+            <Button.Label>{t('agent.actions.create')}</Button.Label>
+          </Button>
+        ) : undefined
       }
       onClose={onClose}
       open={open}
@@ -63,7 +69,7 @@ export function MainHeaderAgentPickerSheet({
       >
         {isLoading ? (
           <ContentState.Loading title={t('agent.list.loading')} />
-        ) : error ? (
+        ) : isError ? (
           <ContentState.Error
             primaryAction={{
               children: t('agent.actions.retry'),
@@ -89,6 +95,15 @@ export function MainHeaderAgentPickerSheet({
             ))}
           </View>
         )}
+        {catalog.hasNextPage ? (
+          <Button
+            variant="ghost"
+            loading={catalog.isFetchingNextPage}
+            onPress={() => void catalog.fetchNextPage()}
+          >
+            {t('remoteAgent.loadMore')}
+          </Button>
+        ) : null}
       </ScrollView>
     </BottomSheet>
   );
@@ -100,8 +115,8 @@ function AgentPickerRow({
   onSelect,
   selected,
 }: {
-  agent: Agent;
-  onEdit: (agentId: string) => void;
+  agent: AgentSummary;
+  onEdit?: (agentId: string) => void;
   onSelect: (agentId: string) => void;
   selected: boolean;
 }) {
@@ -116,24 +131,34 @@ function AgentPickerRow({
         className="min-w-0 flex-1 flex-row items-center gap-3 rounded-xl py-1 active:opacity-60"
         onPress={() => onSelect(agent.id)}
       >
-        <AgentAvatar avatar={agent.avatar} name={agent.name} size={36} uri={agent.avatarUri} />
+        <AgentAvatar
+          avatar={agent.avatar}
+          emoji={agent.emoji}
+          name={agent.name}
+          size={36}
+          uri={agent.avatarUri}
+        />
         <View className="min-w-0 flex-1 gap-0.5">
           <Text className="font-semibold text-base text-foreground">{agent.name}</Text>
-          <Text className="text-muted-foreground text-xs" numberOfLines={1}>
-            {agent.modelName ?? t('agent.model.none')}
-          </Text>
+          {agent.modelName || agent.configuration !== 'unknown' ? (
+            <Text className="text-muted-foreground text-xs" numberOfLines={1}>
+              {agent.modelName ?? t('agent.model.none')}
+            </Text>
+          ) : null}
         </View>
         {selected ? <CheckIcon className="size-5 shrink-0 text-foreground" /> : null}
       </Pressable>
-      <Pressable
-        accessibilityLabel={`${t('common.edit')}: ${agent.name}`}
-        accessibilityRole="button"
-        className="size-10 items-center justify-center rounded-full active:bg-secondary"
-        hitSlop={4}
-        onPress={() => onEdit(agent.id)}
-      >
-        <SquarePenIcon className="size-5 text-muted-foreground" />
-      </Pressable>
+      {onEdit ? (
+        <Pressable
+          accessibilityLabel={`${t('common.edit')}: ${agent.name}`}
+          accessibilityRole="button"
+          className="size-10 items-center justify-center rounded-full active:bg-secondary"
+          hitSlop={4}
+          onPress={() => onEdit(agent.id)}
+        >
+          <SquarePenIcon className="size-5 text-muted-foreground" />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

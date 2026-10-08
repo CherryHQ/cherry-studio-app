@@ -24,6 +24,11 @@ export function useComposerSendError({
 
   return useCallback(
     (error: unknown, attemptId?: number) => {
+      // The user stopped this send; the restored draft is the whole outcome.
+      if (error instanceof Error && error.name === 'AbortError') {
+        logger.info('Message send stopped', { attemptId });
+        return;
+      }
       const issue = getFileAttachmentIssue(error);
       const explainedLabel = issue
         ? fileAttachmentIssueDescription(issue, t)

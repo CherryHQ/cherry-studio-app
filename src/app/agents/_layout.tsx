@@ -4,6 +4,7 @@ import { headerScreenOptions } from '@/frontend/appShell/header';
 import { FormContentFrame, useIsFormContentConstrained } from '@/frontend/appShell/layout';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 export default function AgentsStackLayout() {
   const foregroundColor = useThemeColor('foreground');
@@ -32,7 +33,12 @@ export default function AgentsStackLayout() {
       }}
     >
       <Stack.Screen name="index" />
-      <Stack.Screen name="[agentId]/edit" options={formScreen} />
+      <Stack.Screen
+        // One editor per Agent, so a repeated tap reuses it instead of stacking a copy.
+        getId={({ params }) => getSingleRouteParam(params?.agentId)}
+        name="[agentId]/edit"
+        options={formScreen}
+      />
       <Stack.Screen name="new" options={formScreen} />
     </Stack>
   );

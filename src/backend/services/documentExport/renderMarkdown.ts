@@ -78,7 +78,9 @@ export function renderMarkdown(
       document.title ? `# ${escapeMarkdown(document.title)}` : '',
       ...document.sections.map((section) =>
         [
-          section.heading ? `## ${escapeMarkdown(section.heading)}` : '',
+          section.heading
+            ? `## ${escapeMarkdown(section.heading)}${section.model ? ` · ${escapeMarkdown(section.model)}` : ''}`
+            : '',
           ...(section.metadata ?? []).map(
             (item) => `${escapeMarkdown(item.label)}: ${escapeMarkdown(item.value)}`,
           ),

@@ -5,7 +5,7 @@ import {
 } from '@/shared/contracts/agent';
 
 import { collectSkillActivations } from '../../sessionStore/skillActivations';
-import { isSkillActivationCurrent, stripSkillHistory } from '../skillHistory';
+import { hasSkillHistory, isSkillActivationCurrent, stripSkillHistory } from '../skillHistory';
 import { EMPTY_SKILL_SCOPE } from '../skillScope';
 
 const activation = {
@@ -54,7 +54,12 @@ test('only successful app-issued receipts activate; MCP output and transcript te
 });
 
 test('replay strips instruction payloads without mutating durable receipts', () => {
-  expect(JSON.stringify(stripSkillHistory([message]))).not.toContain('Old instructions');
+  const stripped = stripSkillHistory([message]);
+  expect(JSON.stringify(stripped)).not.toContain('Old instructions');
+  expect(hasSkillHistory(stripped[0]!.parts)).toBe(true);
+  expect(
+    hasSkillHistory([{ ...toolPart, toolRef: { source: 'builtin', capabilityId: 'read_file' } }]),
+  ).toBe(false);
   expect(collectSkillActivations([message])).toHaveLength(1);
   expect(message.parts[0]).toBe(toolPart);
 });

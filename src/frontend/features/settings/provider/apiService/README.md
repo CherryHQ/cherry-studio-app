@@ -7,18 +7,16 @@ This module owns provider API key, auth, endpoint validation, query, and save he
 - The `userProvider` row is the only persistent authority; its react-query entries
   (`providers.detail`, `providers.apiKeys`, `providers.authConfig`) are the only in-process
   copy of saved state.
-- `useProviderConfigurationForm` owns the editable draft for saved provider identity, endpoints,
-  and keys. Both provider details and configuration setup consume it; the screens own navigation
-  and success feedback. Setup additionally requires usable credentials before continuing.
-- The same save path protects referenced endpoints and confirms default-endpoint changes that
-  affect existing models. Provider enabled state belongs to the explicit setup workflow.
-- Save is explicit. Provider configuration and changed API keys commit together through one
-  provider update transaction. After that save finishes, the mounted form resets its
-  baseline to the saved values; leaving with a dirty draft asks for confirmation.
+- `components/ProviderConfiguration` writes each change through `useProviderApiServiceQueries`;
+  there is no page-level draft for saved providers. Address changes keep the guards against
+  removing an endpoint a model uses and against silently moving the default endpoint models
+  follow.
+- `useProviderApiServiceSheetClose` confirms leaving an unsaved custom-provider draft and returns
+  home when a provider screen has nothing to go back to.
 
 ## Public Interface
 
-- The shared configuration form, query hooks, close-confirmation behavior, and pure helpers are exported from
+- Query hooks, close-confirmation behavior, and pure helpers are exported from
   `index.ts`.
 
 ## Organization

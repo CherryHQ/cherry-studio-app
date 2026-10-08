@@ -116,6 +116,8 @@ export class BackgroundActivityManager extends BaseService {
   private operationTail: Promise<void> = Promise.resolve();
   private sessions = new Set<SessionRecord>();
   private settled = new Set<SettledSurface>();
+  private visibleTask?: string;
+  private readonly retiring = new Map<string, Promise<void>>();
 
   constructor(
     private readonly keepAlive: KeepAliveSource,
@@ -131,7 +133,10 @@ export class BackgroundActivityManager extends BaseService {
       this.environment.subscribePresentationEnabled(this.handlePresentationEnabledChange),
     );
     this.registerDisposable(
-      this.environment.subscribeVisibleTask((deepLinkUrl) => this.dismissTask(deepLinkUrl)),
+      this.environment.subscribeVisibleTask((deepLinkUrl) => {
+        this.visibleTask = deepLinkUrl;
+        void this.dismissTask(deepLinkUrl);
+      }),
     );
     await this.clearOrphanedSurfaces();
     // Environments without a logo surface resolve `undefined`; no platform check here.
@@ -180,12 +185,16 @@ export class BackgroundActivityManager extends BaseService {
   }
 
   /** Retires whatever settled surface is still showing for this destination. */
-  dismissTask(deepLinkUrl: string | undefined): void {
-    if (!deepLinkUrl) return;
+  dismissTask(deepLinkUrl: string | undefined): Promise<void> {
+    if (!deepLinkUrl) return Promise.resolve();
+    const dismissals: Promise<void>[] = [];
     for (const entry of [...this.settled]) {
       if (entry.deepLinkUrl !== deepLinkUrl) continue;
-      this.dismissSettled(entry);
+      dismissals.push(this.dismissSettled(entry));
     }
+    // A previous caller may already have removed the entry while its native
+    // dismissal is queued. Replacement must await that retirement as well.
+    return Promise.all([...dismissals, this.operationTail]).then(() => undefined);
   }
 
   protected async onStop(): Promise<void> {
@@ -218,8 +227,15 @@ export class BackgroundActivityManager extends BaseService {
 
   private readonly handleAppStateChange = (nextState: AppStateStatus) => {
     if (this.disposed) return;
+    const returning = nextState === 'active' && this.appState !== 'active';
     this.appState = nextState;
     for (const record of this.sessions) {
+      if (
+        returning &&
+        record.presenter.requiresForegroundStart &&
+        record.surface.status === 'unavailable'
+      )
+        record.surface = { status: 'pending' };
       if (nextState === 'active' && record.presenter.presentWhile === 'app-hidden') {
         this.retireSurface(record);
         continue;
@@ -293,10 +309,19 @@ export class BackgroundActivityManager extends BaseService {
       // that delivery is in flight still finds it — the queue keeps the
       // dismissal behind the end regardless.
       if (policy === 'default') this.retainSettled(record, handle);
-      return this.enqueue(async () => {
+      const delivery = this.enqueue(async () => {
         await this.endNative(record, handle, policy);
         this.reconcileLease(record);
       });
+      if (policy === 'immediate' && record.presenter.requiresPredecessorRetirement)
+        this.trackRetirement(record.deepLinkUrl, delivery);
+      if (
+        policy === 'default' &&
+        this.appState === 'active' &&
+        this.visibleTask === record.deepLinkUrl
+      )
+        void this.dismissTask(record.deepLinkUrl);
+      return delivery;
     }
     this.reconcileLease(record);
     return Promise.resolve();
@@ -310,16 +335,26 @@ export class BackgroundActivityManager extends BaseService {
     record.surface = { status: 'pending' };
     if (!handle) return;
     this.clearUpdateTimer(record);
-    void this.enqueue(async () => {
+    const retirement = this.enqueue(async () => {
       await this.endNative(record, handle, 'immediate');
       this.reconcileLease(record);
     });
+    if (record.presenter.requiresPredecessorRetirement)
+      this.trackRetirement(record.deepLinkUrl, retirement);
   }
 
   private startNative(record: SessionRecord): void {
     if (this.disposed || record.ended || record.surface.status !== 'pending') return;
     if (!this.environment.isPresentationEnabled()) return;
+    if (record.presenter.requiresForegroundStart && this.appState !== 'active') return;
     if (record.presenter.presentWhile === 'app-hidden' && this.appState === 'active') return;
+    const retirement = record.deepLinkUrl && this.retiring.get(record.deepLinkUrl);
+    if (record.presenter.requiresPredecessorRetirement && retirement) {
+      // Keep the execution lease while the previous native identity retires.
+      // startNative rechecks visibility, cancellation and the latest content.
+      void retirement.then(() => this.startNative(record));
+      return;
+    }
     try {
       const handle = record.presenter.start(this.toNativeProps(record), record.deepLinkUrl);
       record.surface = { handle, status: 'active' };
@@ -411,9 +446,9 @@ export class BackgroundActivityManager extends BaseService {
     this.settled.delete(entry);
   }
 
-  private dismissSettled(entry: SettledSurface): void {
+  private dismissSettled(entry: SettledSurface): Promise<void> {
     this.forgetSettled(entry);
-    void this.enqueue(async () => {
+    const retirement = this.enqueue(async () => {
       try {
         await entry.handle.dismiss();
       } catch (error) {
@@ -422,6 +457,19 @@ export class BackgroundActivityManager extends BaseService {
         });
       }
     });
+    return this.trackRetirement(entry.deepLinkUrl, retirement);
+  }
+
+  private trackRetirement(
+    deepLinkUrl: string | undefined,
+    retirement: Promise<void>,
+  ): Promise<void> {
+    if (!deepLinkUrl) return retirement;
+    this.retiring.set(deepLinkUrl, retirement);
+    void retirement.then(() => {
+      if (this.retiring.get(deepLinkUrl) === retirement) this.retiring.delete(deepLinkUrl);
+    });
+    return retirement;
   }
 
   private toNativeProps(

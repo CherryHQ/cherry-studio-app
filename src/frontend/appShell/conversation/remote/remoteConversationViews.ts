@@ -1,0 +1,296 @@
+import type {
+  RemoteCommand,
+  RemoteMessagePart,
+  RemoteMessageView,
+  RemoteSourceState,
+} from '@/shared/contracts/remoteAgent';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { createUniqueModelId } from '@/shared/data/types/model';
+
+import type {
+  Availability,
+  ConversationAction,
+  ConversationFailure,
+  ConversationMessage,
+  ResourceRead,
+  TranscriptMessage,
+} from '../contracts';
+import type {
+  ConversationInput,
+  OperationId,
+  Submission,
+  UndeliveredMessage,
+} from './remoteContracts';
+
+export function remoteConversationFailure(error: unknown): ConversationFailure {
+  const failure = classifyRemoteFailure(error);
+  if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
+    const message =
+      'detail' in error && typeof error.detail === 'string' ? error.detail : undefined;
+    if (message) return { ...failure, detail: { code: error.code, message } };
+  }
+  return failure;
+}
+
+function classifyRemoteFailure(error: unknown): ConversationFailure {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+  switch (code) {
+    case 'TARGET_UNAVAILABLE':
+      return { code: 'target-unavailable', retry: 'revise-input' };
+    case 'UPGRADE_REQUIRED':
+      return { code: 'upgrade-required', retry: 'none' };
+    case 'CLOSED':
+      return { code: 'retired', retry: 'none' };
+    case 'FORBIDDEN':
+    case 'GRANT_REVOKED':
+      return { code: 'not-authorized', retry: 'repair-source' };
+    case 'UNAUTHENTICATED':
+      return { code: 'needs-repair', retry: 'repair-source' };
+    case 'REVISION_EXPIRED':
+      return { code: 'version-expired', retry: 'read-again' };
+    case 'NOT_FOUND':
+      return { code: 'not-found', retry: 'read-again' };
+    case 'CONFLICT':
+      return { code: 'conflict', retry: 'read-again' };
+    case 'IDEMPOTENCY_CONFLICT':
+      return { code: 'idempotency-conflict', retry: 'none' };
+    case 'RESOURCE_UNAVAILABLE':
+      return { code: 'resource-unavailable', retry: 'none' };
+  }
+  if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError')
+    return { code: 'cancelled', retry: 'none' };
+  if (
+    code === 'CONNECTION_LOST' ||
+    (error &&
+      typeof error === 'object' &&
+      'name' in error &&
+      error.name === 'DesktopUnreachableError')
+  )
+    return { code: 'offline', retry: 'read-again' };
+  return { code: 'internal', retry: 'none' };
+}
+/** A final send or start outcome the user still has to resolve; resending through `action` replaces it. */
+export function undeliveredMessage(
+  operation: Pick<RemoteCommand, 'status' | 'text' | 'error' | 'errorMessage'>,
+  id: OperationId,
+  action: ConversationAction<ConversationInput, Submission>,
+  discard: () => void,
+): UndeliveredMessage | undefined {
+  const { status, text } = operation;
+  if ((status !== 'rejected' && status !== 'interrupted') || !text) return undefined;
+  const input: ConversationInput = { parts: [{ type: 'text', text }] };
+  return {
+    id,
+    input,
+    state: status,
+    ...(status === 'rejected' && operation.error
+      ? {
+          failure: remoteConversationFailure({
+            code: operation.error,
+            detail: operation.errorMessage,
+          }),
+        }
+      : {}),
+    resend: { availability: action.availability, execute: () => action.execute(input) },
+    discard,
+  };
+}
+export function remoteAvailability(source: RemoteSourceState, disposed: boolean): Availability {
+  if (
+    !disposed &&
+    source.status !== 'retired' &&
+    (source.reason === 'upgrade-required' || source.reason === 'unsupported-version')
+  )
+    return { state: 'disabled', reason: 'upgrade-required' };
+  if (disposed || source.status === 'retired')
+    return {
+      state: 'disabled',
+      reason:
+        source.reason === 'needs-repair'
+          ? 'needs-repair'
+          : source.reason === 'not-authorized'
+            ? 'not-authorized'
+            : 'retired',
+    };
+  if (source.status === 'offline' || source.status === 'connecting') {
+    switch (source.reason) {
+      case 'no-location':
+      case 'discovery-unavailable':
+      case 'unreachable':
+        return { state: 'disabled', reason: source.reason };
+    }
+  }
+  return source.status === 'ready'
+    ? { state: 'enabled' }
+    : {
+        state: 'disabled',
+        reason: source.status === 'connecting' ? 'synchronizing' : source.status,
+      };
+}
+type ConversationTool = NonNullable<ConversationMessage['tools']>[number];
+/**
+ * Projections keyed by remote part view. A streamed update replaces only the parts it changes, so
+ * unchanged parts, and the tool list while no tool changes, keep their identity and skip rendering.
+ */
+export type RemoteMessageProjectionCache = {
+  parts: WeakMap<
+    RemoteMessagePart,
+    { streaming: boolean; part: CherryMessagePart; tool?: ConversationTool }
+  >;
+  tools: Map<string, readonly ConversationTool[]>;
+};
+export const createRemoteMessageProjectionCache = (): RemoteMessageProjectionCache => ({
+  parts: new WeakMap(),
+  tools: new Map(),
+});
+function projectRemotePart(
+  part: Extract<RemoteMessagePart, { kind: 'text' | 'reasoning' | 'tool' }>,
+  streaming: boolean,
+  resource: (value: string) => ResourceRead,
+): { part: CherryMessagePart; tool?: ConversationTool } {
+  if (part.kind !== 'tool')
+    return { part: { type: part.kind, text: part.text, state: streaming ? 'streaming' : 'done' } };
+  const base = {
+    type: 'dynamic-tool' as const,
+    toolCallId: part.callId,
+    toolName: part.name,
+    input: undefined,
+  };
+  return {
+    part:
+      part.state === 'failed'
+        ? { ...base, state: 'output-error', errorText: '' }
+        : part.output
+          ? { ...base, state: 'output-available', output: undefined }
+          : {
+              ...base,
+              state: part.state === 'streaming' ? 'input-streaming' : 'input-available',
+            },
+    tool: {
+      key: part.callId,
+      title: part.name,
+      state: part.state,
+      ...(part.input ? { input: resource(part.input) } : {}),
+      ...(part.output ? { output: resource(part.output) } : {}),
+    },
+  };
+}
+export function remoteMessage(
+  message: RemoteMessageView,
+  resource: (value: string) => ResourceRead,
+  cache?: RemoteMessageProjectionCache,
+): ConversationMessage {
+  const parts: CherryMessagePart[] = [];
+  const keys: string[] = [];
+  const tools: ConversationTool[] = [];
+  const attachments: NonNullable<ConversationMessage['attachments']>[number][] = [];
+  for (const part of message.parts) {
+    if (part.kind === 'file') {
+      attachments.push({ key: part.id, name: part.name, mediaType: part.mediaType });
+      continue;
+    }
+    if (part.kind === 'data') continue;
+    // A text part leaves streaming mode once it completes, even while its message continues.
+    const streaming =
+      part.kind !== 'tool' && message.state === 'streaming' && part.state === 'streaming';
+    let projected = cache?.parts.get(part);
+    if (projected?.streaming !== streaming) {
+      projected = { streaming, ...projectRemotePart(part, streaming, resource) };
+      cache?.parts.set(part, projected);
+    }
+    // The desktop renames text parts when history commits; position keeps the rendered part.
+    keys.push(part.kind === 'tool' ? part.id : `${message.id}:${part.kind}:${parts.length}`);
+    parts.push(projected.part);
+    if (projected.tool) tools.push(projected.tool);
+  }
+  let toolList: readonly ConversationTool[] = tools;
+  const previousTools = cache?.tools.get(message.id);
+  if (
+    previousTools?.length === tools.length &&
+    previousTools.every((tool, index) => tool === tools[index])
+  )
+    toolList = previousTools;
+  else cache?.tools.set(message.id, tools);
+  if (message.failure) {
+    parts.push({
+      type: 'data-error',
+      data: {
+        code: 'EXECUTION_FAILED',
+        message: message.failure.message,
+        retryable: message.failure.retryable,
+        ...message.failure.failure,
+      },
+    });
+    keys.push(`${message.id}:failure`);
+  }
+  if (message.persistenceFailure) {
+    parts.push({
+      type: 'data-error',
+      data: {
+        code: 'PERSISTENCE_FAILED',
+        message: message.persistenceFailure.message,
+        retryable: false,
+        ...message.persistenceFailure.failure,
+      },
+    });
+    keys.push(`${message.id}:persistence-failure`);
+  }
+  return {
+    key: message.id,
+    state: message.state,
+    completeness: message.parts.some(
+      (part) => (part.kind === 'text' || part.kind === 'reasoning') && !part.complete,
+    )
+      ? 'partial'
+      : 'complete',
+    display: {
+      id: message.id,
+      usage: message.usage,
+      ...(message.model
+        ? {
+            model: {
+              ...message.model,
+              id: createUniqueModelId(message.model.providerId, message.model.modelId),
+            },
+          }
+        : {}),
+      role: message.role,
+      status:
+        message.state === 'streaming'
+          ? 'pending'
+          : message.state === 'cancelled'
+            ? 'paused'
+            : message.state,
+      data: { parts, partKeys: keys },
+    },
+    actions: {},
+    tools: toolList,
+    attachments,
+  };
+}
+export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptMessage {
+  const parts: TranscriptMessage['parts'] = [];
+  const attachments: NonNullable<TranscriptMessage['attachments']>[number][] = [];
+  for (const part of message.parts) {
+    if (part.kind === 'text' || part.kind === 'reasoning') {
+      if (!part.complete) throw new Error('Incomplete transcript content');
+      parts.push({ type: part.kind, id: part.id, text: part.text, state: 'done' });
+    } else if (part.kind === 'tool')
+      parts.push({ type: 'tool-summary', id: part.id, displayName: part.name });
+    else if (part.kind === 'file') attachments.push({ name: part.name, mediaType: part.mediaType });
+  }
+  if (message.failure)
+    parts.push({
+      id: `${message.id}:failure`,
+      type: 'error',
+      error: { code: 'EXECUTION_FAILED', ...message.failure },
+    });
+  return {
+    id: message.id,
+    role: message.role,
+    status: message.state,
+    parts,
+    attachments,
+    stats: null,
+  };
+}

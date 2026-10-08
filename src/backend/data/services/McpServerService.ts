@@ -4,6 +4,7 @@
 import { and, asc, eq, ne, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import type { InsertMcpServerRow, McpServerRow } from '@/backend/data/db/schemas';
 import {
   agentToolBindingTable,
@@ -106,18 +107,20 @@ export class McpServerService {
     const parsed = CreateMcpServerSchema.parse(dto);
     const name = parsed.name.trim();
     this.validateName(name);
-    await this.assertNameAvailable(name);
 
-    const [row] = await this.db
-      .insert(mcpServerTable)
-      .values({
-        disabledTools: parsed.disabledTools ?? [],
-        endpointUrl: parsed.endpointUrl,
-        headers: parsed.headers,
-        isEnabled: parsed.isEnabled ?? false,
-        name,
-      })
-      .returning();
+    const [row] = await this.dbService.withWriteTx(async (tx) => {
+      await this.assertNameAvailable(tx, name);
+      return tx
+        .insert(mcpServerTable)
+        .values({
+          disabledTools: parsed.disabledTools ?? [],
+          endpointUrl: parsed.endpointUrl,
+          headers: parsed.headers,
+          isEnabled: parsed.isEnabled ?? false,
+          name,
+        })
+        .returning();
+    });
 
     return rowToMcpServer(row);
   }
@@ -136,7 +139,6 @@ export class McpServerService {
     const name = parsed.name?.trim();
     if (name !== undefined) {
       this.validateName(name);
-      await this.assertNameAvailable(name, id);
     }
 
     const updates: Partial<InsertMcpServerRow> = {
@@ -152,11 +154,12 @@ export class McpServerService {
       return existing;
     }
 
-    const [row] = await this.db
-      .update(mcpServerTable)
-      .set(updates)
-      .where(eq(mcpServerTable.id, id))
-      .returning();
+    const [row] = await this.dbService.withWriteTx(async (tx) => {
+      if (name !== undefined) {
+        await this.assertNameAvailable(tx, name, id);
+      }
+      return tx.update(mcpServerTable).set(updates).where(eq(mcpServerTable.id, id)).returning();
+    });
 
     if (!row) {
       throw DataApiErrorFactory.notFound('McpServer', id);
@@ -192,11 +195,11 @@ export class McpServerService {
    * Names are minted into `mcp__{server}__{tool}` tool ids, so two servers
    * sharing a name would collide in the model-facing toolset.
    */
-  private async assertNameAvailable(name: string, excludeId?: string): Promise<void> {
+  private async assertNameAvailable(tx: Database, name: string, excludeId?: string): Promise<void> {
     const conditions = excludeId
       ? and(eq(mcpServerTable.name, name), ne(mcpServerTable.id, excludeId))
       : eq(mcpServerTable.name, name);
-    const [existing] = await this.db
+    const [existing] = await tx
       .select({ id: mcpServerTable.id })
       .from(mcpServerTable)
       .where(conditions)

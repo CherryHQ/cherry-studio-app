@@ -12,7 +12,7 @@ import { usePreference } from '@/frontend/data/hooks';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
-const profileAvatarSize = 104;
+const profileAvatarSize = 96;
 const logger = loggerService.withContext('ProfileSettingsScreen');
 
 export default function ProfileSettingsScreen() {
@@ -42,10 +42,13 @@ export default function ProfileSettingsScreen() {
   const finishEditing = useCallback(() => {
     blurInput();
     if (nameDraft !== userName) {
-      void setUserName(nameDraft, { optimistic: true });
+      void setUserName(nameDraft, { optimistic: true }).catch((error: unknown) => {
+        logger.error('Failed to save user name', error as Error);
+        toast.show({ label: t('settings.profile.userNameSaveError'), variant: 'danger' });
+      });
     }
     router.back();
-  }, [blurInput, nameDraft, router, setUserName, userName]);
+  }, [blurInput, nameDraft, router, setUserName, t, toast, userName]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
@@ -61,7 +64,7 @@ export default function ProfileSettingsScreen() {
 
   return (
     <SettingsScrollPage
-      contentClassName="gap-8 px-6 py-8"
+      contentClassName="gap-8"
       headerProps={{ rightActions, title: t('settings.profile.edit') }}
       keyboardShouldPersistTaps="handled"
     >

@@ -33,14 +33,14 @@ Promotion to a workspace package happens only when a real independent consumer e
 Mobile Agent accepts only the `local` execution target. Application composition injects one Pi
 Runtime directly into the Host. There is no Runtime registry, no implementation-selection Router,
 and no persisted Runtime binding. Agent configuration, Session configuration, model selection, and
-tool availability never select another engine or execution device. The planned PC Agent Controller
+tool availability never select another engine or execution device. The PC Agent Controller
 does not change this local Runtime seam.
 
-Future PC Agent control does not add a `RemoteRuntime` to this process. A mobile-owned adapter sits
+PC Agent control does not add a `RemoteRuntime` to this process. A mobile-owned adapter sits
 at the application-protocol boundary, converts PC-owned snapshots and events into Agent Protocol
 values, and leaves execution and authoritative Session state on the PC. The adapter's transport is
 defined separately. The local Host never turns PC tools into `RuntimeTool` callbacks. See
-[Agent Architecture](./README.md#planned-pc-agent-controller-boundary).
+[Agent Architecture](./README.md#pc-agent-controller-boundary).
 
 The Agent's instructions, model, and MCP bindings, plus application-owned system capabilities, are
 resolved afresh for every turn. After freezing the tool snapshot, the Host combines fixed mobile
@@ -69,9 +69,27 @@ deny-list with the Agent's persisted, currently executable MCP bindings. It also
 managed images for registry-declared image-capable models supported by the selected Pi endpoint
 adapter, plus bounded UTF-8 managed text as untrusted user content.
 
-The repository patches expose `pi-agent-core/compaction` and its exact RN-safe Pi AI utility
-subpaths. Short conversations retain the complete-history path. Long conversations reuse or
+The Runtime uses the official `pi-agent-core` exports and Pi AI utility subpaths, pinned together
+at `0.99.1`. Short conversations retain the complete-history path. Long conversations reuse or
 incrementally update a Runtime checkpoint before the first provider turn.
+
+Pi system messages carry instructions and tool declaration changes. The adapter uses Pi's
+transcript helpers to resolve their current values, includes unmeasured changes in request budgets,
+and retains the effective system message when compacting a live loop. `finishTurn` decides whether
+to end before next-turn preparation; reaching the tool budget still allows one final answer.
+Compaction cancellation passes through Pi's execution Context.
+
+When following an upstream release, update both exact package pins, review the upstream changelogs
+and public message/hook/compaction contracts, and rebase both Pi patches onto the published packages.
+The upstream `pi-ai` entry and model catalog reach authentication code with a computed dynamic
+import, which Metro rejects. The `pi-agent-core` patch therefore imports Pi AI through its utility
+subpaths, and the `pi-ai` patch gives the endpoint adapters a local model-runtime module. The `pi-ai`
+patch also disables Bun's Node filesystem fallback, retains structured provider failures, and
+accelerates partial JSON parsing. Jest runs these modules in Node and cannot detect a Metro failure,
+so the patch guard walks the Runtime's Pi module graph. Before removing any remaining patch, review
+that guard and the Runtime regression suites, then bundle the app for a release. Mobile continues to own provider bindings, transport, approvals, application
+budgets, and persistence; adopting upstream releases does not require sharing desktop filesystem
+paths or changing application database fields.
 
 ## Descriptor and lifecycle
 
@@ -268,24 +286,29 @@ file storage first, `AgentInputPart` carries the resulting `fileEntryId`, and th
 live entry and managed blob before message reservation. The Host authorizes tools from managed ids
 referenced by the current input and complete Session transcript, while it resolves attachment
 content only for the current input and checkpoint-visible history. A Runtime never reads the device
-filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist plus
-at most 9 images, 10 MiB per file, 20 MiB total, and a conservative context reserve of 4,096 input
-tokens per image plus 1,024 tokens for text. This remains the Host's current-input admission ceiling;
-S2b separately includes image costs in Pi compression-trigger estimates. The Host then reads a
+filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist and
+10 MiB per file. There is no request-level image count or byte ceiling: every request replays the
+checkpoint-visible history with its images, and Pi prices each image into the context window by the
+endpoint's documented formula (Anthropic, OpenAI, or Gemini) over the dimensions read from the
+image header, falling back to that dialect's typical cost. Compaction folds old images away like any
+other history; a current input that alone exceeds the window fails as a context error before the
+provider call. The Host then reads a
 temporary Data URL after reservation. Cancellation aborts that read boundary and late content is
 discarded. Current image read failure settles the reserved turn; missing historical content is
 omitted while its persisted reference remains.
 
 For text, the Host accepts `text/*` and an explicit application/source-code allowlist cross-checked
 by filename extension. It reads at most 1 MiB per current file before reservation, accepts and strips
-a leading UTF-8 BOM, rejects invalid UTF-8, NUL, and binary controls, then emits at most 200,000
+a leading UTF-8 BOM, rejects invalid UTF-8 and NUL, then emits at most 200,000
 Unicode code points per file and 400,000 across all model-visible text attachment occurrences. The
 temporary Runtime part keeps body, authoritative metadata, truncation, and the
 `untrusted-user-content` trust label structurally separate. Pi JSON-escapes that part only while
 adapting it to ordinary user message text, so attachment data cannot become system instructions or
 forge its boundary metadata. Pi's current-input/history estimator counts the resulting text
 alongside images, tool schemas, the output reserve, and the safety margin. Exact attachment bodies
-are redacted if a compaction model reproduces them in a persisted checkpoint.
+are redacted if a compaction model reproduces them in a persisted checkpoint. Redaction matches
+serialized bodies and document strings of at least 32 characters; shorter values such as IR node
+types, style names, or chart labels would rewrite unrelated summary and error text.
 
 Document attachments use the file module's shared reader with the parser preference frozen before
 turn preparation first yields. That same setting enters the turn's `read_file` callback. The Host
@@ -311,6 +334,12 @@ logs. Tool-side access follows the stricter managed-id ledger in
 type RuntimeHistoryTurn = {
   turnId: string | null
   messages: RuntimeMessage[]
+  replay?: RuntimeTurnReplay
+}
+
+type RuntimeTurnReplay = {
+  version: 1
+  payload: RuntimeJsonValue
 }
 
 type RuntimeMessage = {
@@ -353,6 +382,36 @@ type RuntimeContextCheckpoint = {
 ```
 
 The Host converts persisted Cherry messages into normalized history grouped by their durable Turn.
+Successful turns may additionally carry a bounded, versioned `RuntimeTurnReplay`. The Runtime
+decodes this private artifact to recover its original assistant/tool-result sequence, including
+thinking signatures, concurrent tool-call grouping, and model-visible discovery results. It contains
+only the turn's assistant and tool messages, never user attachments, connection credentials, or
+Host session/turn ids. Pi types and decoding stay inside `runtime/pi`; public message views, search,
+and traces do not expose the artifact. Missing, oversized, or unsupported artifacts use normalized
+history, and the Runtime logs why an artifact was dropped or ignored. Original provider/model provenance is retained for cross-model conversion. Usage is rebuilt
+from the Host's current context anchor rather than stale per-request measurements.
+After live tool-loop compaction, the final request's context measurement is not persisted as an
+anchor: the next execution restores the full turn and estimates it before deciding to compact again.
+The optional `replay` field on `completed` carries the artifact to the Host's private MMKV cache,
+written only after the terminal message commits. It survives app restarts without adding a database
+column or entering backups. Each record is limited to 4 MiB; the cache evicts least recently used
+records above 128 entries or 32 MiB of payloads. Only its small index is retained in memory; payloads
+are read on demand for successful assistant rows matching Session, message, and Turn ids. Storage
+failures and eviction fall back to normalized history. Failed, cancelled, and interrupted executions
+do not cache replay. A resumed retry includes its retained prefix.
+Retries and deletions remove obsolete entries. Forks copy available artifacts to the new message/Turn
+ids using the store's committed identity mapping; restored application storage clears the cache.
+Compaction offsets record the replay representation; a mismatched representation retains the summary
+but replays the entire retained turn rather than slicing at an incompatible offset.
+
+The Pi transport honors the provider's `cacheControl.enabled` setting (`none` when disabled,
+otherwise `short`) and receives the stable Host session id. Pi owns cache breakpoint placement;
+AI SDK-specific threshold and last-message-count settings are not applied to this conversation path.
+OpenRouter chat-completion endpoints are recognized by preset identity or the exact `openrouter.ai`
+hostname, including custom provider ids. They opt into OpenRouter session-affinity headers; model ids
+under `anthropic/` also opt into Anthropic cache-control serialization. Other relay endpoints do not
+gain that capability merely because their model name contains Claude.
+
 Rows without a Turn id retain a `null` group id and cannot be checkpoint anchors. Runtime-native
 messages never become the application source of truth. User attachment parts may become Runtime
 file parts; assistant artifact parts remain application-visible managed references and are not
@@ -370,13 +429,19 @@ checkpoint, the request carries complete Turn groups after the anchor. With no c
 invalid, incompatible, oversized, or orphaned candidate—the Host supplies the entire grouped
 history. Pi owns all later selection, formatting, and compaction policy.
 
-Pi estimates reconstructed history with `pi-agent-core`'s content estimator. Persisted assistant
-usage aggregates multiple requests for analytics and is never a context-size measurement. The adapter
-adds system instructions, current input, tool schemas, image reserves, and a fixed safety margin
-before calling Pi's `shouldCompact`. Historical image reserves follow the checkpoint-projected
-history; they are removable history costs, not part of the current input's fixed cost. A current
-input whose fixed costs exceed the hard budget fails before the first model call. Crossing the
-compaction trigger alone never proves that a request cannot be sent.
+Pi estimates reconstructed history from a measured anchor. When a completed answer's final request
+reported its input, the Host stores that request's total as the message's `stats.contextTokens`:
+everything sent plus the answer. The newest replayed assistant message carries it when the turn uses
+the same model, and `pi-agent-core`'s estimator counts only the content replayed after it. A failed,
+cancelled, or retried answer, a model switch, or a provider that omits input counts leaves no
+anchor, and the whole history is estimated by content. Persisted assistant `usage` sums every
+request of a turn for analytics and is never a context-size measurement. The adapter adds system
+instructions, current input, tool schemas, per-image dialect estimates (replacing Pi's flat image
+charge), and a fixed safety margin before calling Pi's `shouldCompact`; content already covered by
+the anchor is not added again. Historical image estimates follow the checkpoint-projected history;
+they are removable history costs, not part of the current input's fixed cost. A current input whose
+fixed costs exceed the hard budget fails before the first model call. Crossing the compaction
+trigger alone never proves that a request cannot be sent.
 
 On compaction, Pi owns the cut point, `previousSummary` merge, retained tail, and split-turn prefix
 summary. Checkpoint payloads store the redacted summary and an optional structural resume cursor;
@@ -500,12 +565,18 @@ reaching either limit disables tool selection and allows one final model respons
 results, with instructions to disclose uncertainty and unfinished work. A successful final response
 completes the turn; further tool requests fail with the budget error. Tool definitions remain in the
 request to keep tool history valid; the final provider payload forces tool choice to `none` (Google:
-`NONE`). Context exhaustion still stops before another provider request, and the final response shares
-the whole turn's ten-minute execution deadline. Human response time is not execution: the deadline
-pauses while an approval or a tool marked `interaction: 'user-input'` waits, and resumes with the
-remaining budget afterward. Cancellation and timeout abort the model, approval waiters, and
-the callback signal before terminalizing live tool parts. Streamable HTTP MCP callbacks add their own
-60-second invocation bound.
+`NONE`). Context exhaustion still stops before another provider request.
+
+A turn has no wall-clock deadline. Long generations, such as writing a large file through a tool, are
+legitimate progress, and the step and call budgets already bound runaway tool loops. A turn ends only
+by completing, failing, or being cancelled; cancellation aborts the model, approval waiters, and the
+callback signal before terminalizing live tool parts. Bounded waits belong to the operations that can
+stall: each model request shares a 120-second waiting budget across all API-key attempts. Switching
+keys or receiving stream-start or empty text/thinking events does not reset it; content events
+reset the idle timer, so ongoing generation can continue. Expiry fails the request and aborts its active transport. Every
+request settles on cancellation, source failure, or premature stream closure, even when the source
+ignores abort. Tool execution is outside this timer, and the next model request starts a fresh
+budget. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -549,7 +620,7 @@ type RuntimeEvent =
       context: RuntimeUsageContext
       completedAt: number
     }
-  | { type: 'completed' }
+  | { type: 'completed'; contextTokens?: number; replay?: RuntimeTurnReplay }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' }
 
@@ -768,7 +839,7 @@ Every Runtime implementation passes the same suite:
 16. Image preflight happens before reservation, and Runtime image payloads contain only bounded,
     request-local managed content accepted by the model and endpoint.
 17. Tool-step and tool-call budgets stop new tool execution and allow one response with tools disabled;
-    context, callback, and whole-turn limits retain classified failure outcomes.
+    context and callback limits retain classified failure outcomes.
 18. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
     previous complete-history model input.
 19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded

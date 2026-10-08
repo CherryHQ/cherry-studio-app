@@ -1,1 +1,0 @@
-export { McpScreen } from './McpScreen';

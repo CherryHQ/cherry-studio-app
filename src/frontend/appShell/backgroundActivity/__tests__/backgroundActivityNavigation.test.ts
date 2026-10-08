@@ -1,4 +1,4 @@
-import { chatHref } from '@/frontend/appShell/navigation/chat';
+import { chatHref, remoteChatHref } from '@/frontend/appShell/navigation/chat';
 
 import { backgroundActivityHref } from '../backgroundActivityNavigation';
 
@@ -15,5 +15,8 @@ test('maps current and legacy task links to their owning routes', () => {
     pathname: '/paintings',
     params: { paintingId: 'p' },
   });
+  expect(backgroundActivityHref(`${scheme}://remote?connectionId=pc&sessionId=s`, scheme)).toEqual(
+    remoteChatHref({ connectionId: 'pc', sessionId: 's' }),
+  );
   expect(backgroundActivityHref(`${scheme}://settings`, scheme)).toBeUndefined();
 });

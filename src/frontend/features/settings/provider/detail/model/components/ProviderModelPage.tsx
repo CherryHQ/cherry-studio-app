@@ -17,8 +17,11 @@ import type { Provider } from '@/shared/data/types/provider';
 
 export function ProviderModelPage({
   children,
+  title,
 }: {
   children: (model: Model, provider: Provider) => ReactNode;
+  /** The route title, kept by the header of every loading and failure state. */
+  title: string;
 }) {
   const { modelId, providerId } = useLocalSearchParams<{ modelId?: string; providerId?: string }>();
   const { t } = useTranslation();
@@ -30,7 +33,7 @@ export function ProviderModelPage({
   ) {
     return (
       <>
-        <RouteHeader title={t('settings.provider.models.detail.title')} />
+        <RouteHeader title={title} />
         <View className="px-6 py-10">
           <ContentState.Error title={t('settings.provider.models.management.loadFailed')} />
         </View>
@@ -38,8 +41,8 @@ export function ProviderModelPage({
     );
   }
   return (
-    <ModelRegistryGate>
-      <LoadedProviderModel modelId={modelId} providerId={providerId}>
+    <ModelRegistryGate header={<RouteHeader title={title} />}>
+      <LoadedProviderModel modelId={modelId} providerId={providerId} title={title}>
         {children}
       </LoadedProviderModel>
     </ModelRegistryGate>
@@ -50,10 +53,12 @@ function LoadedProviderModel({
   modelId,
   providerId,
   children,
+  title,
 }: {
   modelId: UniqueModelId;
   providerId: string;
   children: (model: Model, provider: Provider) => ReactNode;
+  title: string;
 }) {
   const { t } = useTranslation();
   const modelQuery = useQuery('/models/:uniqueModelId*', {
@@ -66,7 +71,7 @@ function LoadedProviderModel({
   if (!modelQuery.data || !providerQuery.data) {
     return (
       <>
-        <RouteHeader title={t('settings.provider.models.detail.title')} />
+        <RouteHeader title={title} />
         <View className="px-6 py-10">
           {modelQuery.isError || providerQuery.isError ? (
             <ContentState.Error

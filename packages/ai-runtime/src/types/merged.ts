@@ -4,13 +4,11 @@
  * `AppProviderSettingsMap`, and `appProviderIds` lookup.
  */
 
-import type { RuntimeConfig } from '@cherrystudio/ai-core/core';
 import type {
   ExtensionConfigToIdResolutionMap,
   ExtensionToSettingsMap,
   ExtractProviderIds,
   ProviderExtensionConfig,
-  StringKeys,
   UnionToIntersection,
 } from '@cherrystudio/ai-core/provider';
 import { coreExtensions } from '@cherrystudio/ai-core/provider';
@@ -65,7 +63,3 @@ function buildAppProviderIds(): ProviderIdsMap {
 }
 
 export const appProviderIds = buildAppProviderIds();
-
-export type AppRuntimeConfig<
-  T extends StringKeys<AppProviderSettingsMap> = StringKeys<AppProviderSettingsMap>,
-> = RuntimeConfig<AppProviderSettingsMap, T>;

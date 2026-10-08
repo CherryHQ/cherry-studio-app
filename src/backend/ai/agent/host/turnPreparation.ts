@@ -44,7 +44,7 @@ import type {
   StoredRuntimeTurnContext,
 } from '../sessionStore/AgentSessionStore';
 import { collectSkillActivations } from '../sessionStore/skillActivations';
-import type { AskUserQuestion } from '../tools/askUserQuestionTool';
+import { ASK_USER_QUESTION_TOOL_NAME, type AskUserQuestion } from '../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import { createSkillTools, createSkillManagementTools } from '../tools/skill';
@@ -760,13 +760,20 @@ function applyTurnOverrides(
 /**
  * Applies only the Agent's interactive approval preference; the value-level
  * rule lives in the shared policy module next to the MCP approval floor.
+ * Choosing auto means the user does not want the turn to stop for them, so it
+ * also withholds the question tool: the model asks in its reply instead.
  */
 function applyAgentToolApprovalMode(
   tools: readonly RuntimeTool[],
   mode: AgentDefinition['toolApprovalMode'],
 ): RuntimeTool[] {
-  return tools.map((tool) => {
+  return tools.flatMap((tool) => {
+    if (mode === 'auto' && isAskUserQuestionTool(tool)) return [];
     const approval = applyToolApprovalMode(tool.approval, mode, tool.autoApprovalEligible ?? true);
-    return approval === tool.approval ? tool : { ...tool, approval };
+    return [approval === tool.approval ? tool : { ...tool, approval }];
   });
+}
+
+function isAskUserQuestionTool({ ref }: RuntimeTool): boolean {
+  return ref.source === 'builtin' && ref.capabilityId === ASK_USER_QUESTION_TOOL_NAME;
 }

@@ -1,11 +1,3 @@
-import {
-  AppStatePolicy,
-  BaseService,
-  DependsOn,
-  Injectable,
-  Phase,
-  ServicePhase,
-} from '@/backend/core/lifecycle';
 /**
  * Mobile Agent Host: the only adapter between the Agent Protocol
  * (`@/shared/contracts/agent`) and the Agent Runtime contract
@@ -45,6 +37,16 @@ import {
  * 14. a Draft Session becomes durable in the same transaction as its first
  *     user/assistant message reservation.
  */
+
+import {
+  AppStatePolicy,
+  BaseService,
+  DependsOn,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
@@ -54,7 +56,8 @@ import {
   AgentRespondQuestionSchema,
   type AgentRespondQuestionInput,
   type AgentPendingQuestion,
-  type AgentUserQuestion,
+  type AgentUserQuestions,
+  AgentCancelSubmissionInputSchema,
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
@@ -102,6 +105,7 @@ import type {
   RuntimeContextCheckpoint,
   RuntimeEvent,
   RuntimeUsage,
+  RuntimeTurnReplay,
 } from '../runtime';
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
@@ -114,6 +118,7 @@ import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPort } from './agentImageGeneration';
+import type { AgentReplayCache } from './AgentReplayCache';
 import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { buildActiveSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
@@ -127,7 +132,7 @@ import {
   toAgentUsageView,
   toCompactionAnchorPart,
 } from './runtimeProjection';
-import { stripSkillHistoryParts } from './skillHistory';
+import { hasSkillHistory, stripSkillHistoryParts } from './skillHistory';
 import type { SkillScopeSource } from './skillScope';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
@@ -149,8 +154,10 @@ const INTERRUPTED_ERROR: AgentErrorView = {
 };
 
 const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
+  updateContent: () => {},
   awaitApproval: () => {},
   finish: () => {},
+  retire: () => {},
   update: () => {},
 };
 
@@ -168,6 +175,7 @@ const MESSAGE_SURFACE_EVENTS: ReadonlySet<RuntimeEvent['type']> = new Set([
 ]);
 
 const TERMINAL_PERSISTENCE_RETRY_DELAYS_MS = [0, 50, 200] as const;
+const STREAMING_SNAPSHOT_INTERVAL_MS = 1_000;
 
 export type MobileAgentHostNaming = Pick<
   AgentSessionNaming,
@@ -186,6 +194,7 @@ export type MobileAgentHostPorts = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
+  replayCache?: AgentReplayCache;
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;
@@ -222,6 +231,8 @@ type ActiveTurnState = {
   snapshotDirty: boolean;
   /** The single in-flight snapshot writer, or null when none is running. */
   snapshotFlush: Promise<void> | null;
+  /** Batches unfinished text so process death loses at most the recent uncommitted suffix. */
+  streamingSnapshotTimer?: ReturnType<typeof setTimeout>;
   /** Turn aggregate for the in-memory view and fallback when no usage projection was persisted. */
   usage: RuntimeUsage | null;
   recordedInvocations: Set<string>;
@@ -234,6 +245,16 @@ type AdmissionState = {
   abortController: AbortController;
   completion: Promise<void>;
 };
+
+/**
+ * A user cancellation outranks whatever the interrupted preparation step threw,
+ * so the caller can tell a stopped submission from a failed one.
+ */
+function throwIfSubmissionCancelled(signal: AbortSignal): void {
+  if (signal.reason instanceof AgentProtocolError && signal.reason.view.code === 'CANCELLED') {
+    throw signal.reason;
+  }
+}
 
 class TerminalPersistenceError extends Error {
   override readonly name = 'TerminalPersistenceError';
@@ -290,7 +311,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly sessionStatusListeners = new Map<string, Set<() => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
   private readonly admittingSessions = new Map<string, AdmissionState>();
-  private readonly initialAdmissions = new Set<AdmissionState>();
+  private readonly initialAdmissions = new Set<AdmissionState & { sessionId: string }>();
   private readonly observingSessions = new Map<string, Set<Promise<void>>>();
   private readonly deletingSessions = new Set<string>();
   private readonly runningTurnsBySession = new Map<string, Promise<void>>();
@@ -327,6 +348,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   /** Bootstrap supplies the same workflow used by the library UI before accepting turns. */
   configureSkills(workflow: SkillsModule): void {
     this.skillWorkflow = workflow;
+  }
+
+  /** Storage restore invalidates optional local replay before the Host starts. */
+  resetReplayCacheForRestore(): void {
+    this.ports.replayCache?.resetForRestore();
   }
 
   private get usage(): MobileAgentHostPorts['usage'] {
@@ -441,7 +467,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.assertAcceptingSubmissions();
     const completion = createCompletionSignal();
     const abortController = new AbortController();
-    const admission = { abortController, completion: completion.promise };
+    const admission = {
+      abortController,
+      completion: completion.promise,
+      sessionId: parsed.sessionId,
+    };
     const { signal } = abortController;
     this.initialAdmissions.add(admission);
     let openedRuntimeSession: AgentRuntimeSession | undefined;
@@ -488,6 +518,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (error instanceof KeepAliveInterruptionError) {
         fail('INTERRUPTED', error.message, true);
       }
+      throwIfSubmissionCancelled(signal);
       throw error;
     } finally {
       if (openedRuntimeSession && !isRuntimeSessionInstalled) {
@@ -526,6 +557,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('SESSION_BUSY', 'The fork point has not settled yet.');
         break;
       case 'forked':
+        this.ports.replayCache?.copyFork(parsed.sessionId, result.session.id, result.messageCopies);
         return result.session;
     }
   }
@@ -555,6 +587,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           fail('SESSION_BUSY', 'The turn has not settled yet.');
           break;
         case 'deleted':
+          this.ports.replayCache?.removeMessages(parsed.sessionId, result.deletedMessageIds);
           break;
       }
 
@@ -615,6 +648,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot: plan.inferenceSnapshot,
       });
+      this.ports.replayCache?.removeMessages(sessionId, [source.assistant.id]);
       this.startReservedTurn(
         sessionId,
         plan.sessionTitle,
@@ -625,6 +659,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
     } catch (error) {
       if (error instanceof KeepAliveInterruptionError) fail('INTERRUPTED', error.message, true);
+      throwIfSubmissionCancelled(signal);
       throw error;
     } finally {
       this.admittingSessions.delete(sessionId);
@@ -670,6 +705,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (!deleted) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
+      this.ports.replayCache?.removeSession(sessionId);
       this.updateSessionStatus(sessionId, null);
       this.listeners.delete(sessionId);
     } finally {
@@ -729,6 +765,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (error instanceof KeepAliveInterruptionError) {
         fail('INTERRUPTED', error.message, true);
       }
+      throwIfSubmissionCancelled(signal);
       throw error;
     } finally {
       this.admittingSessions.delete(sessionId);
@@ -751,12 +788,27 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     await active.runtimeSession?.cancel(parsed.turnId);
   }
 
+  async cancelSubmission(input: { sessionId: string }): Promise<void> {
+    const { sessionId } = AgentCancelSubmissionInputSchema.parse(input);
+    const reason = new AgentProtocolError({
+      code: 'CANCELLED',
+      message: 'The submission was cancelled.',
+      retryable: false,
+    });
+    // Admission settles through its own catch; an abort that lands while the
+    // reservation commits starts a turn that settles as cancelled instead.
+    this.admittingSessions.get(sessionId)?.abortController.abort(reason);
+    for (const admission of this.initialAdmissions) {
+      if (admission.sessionId === sessionId) admission.abortController.abort(reason);
+    }
+  }
+
   /**
    * The `ask_user_question` response channel bound into every turn's catalog.
    * The call's turn id selects the live turn; a call from a turn that is no
    * longer active fails closed instead of reaching a different session.
    */
-  private async askUserQuestion(question: AgentUserQuestion, call: RuntimeToolCall) {
+  private async askUserQuestion(question: AgentUserQuestions, call: RuntimeToolCall) {
     call.signal.throwIfAborted();
     const state = [...this.activeTurns.values()].find((entry) => entry.turn.id === call.turnId);
     if (!state || state.abortController.signal.aborted) {
@@ -1067,7 +1119,15 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         }),
         resolveAdditionalInstructions: () => buildActiveSkillInstructions(plan.skills),
         model: plan.agent.model,
-        history: toRuntimeHistory(plan.history, runtimeAttachments),
+        history: toRuntimeHistory(
+          plan.history,
+          runtimeAttachments,
+          plan.inferenceSnapshot.model.uniqueModelId,
+          this.ports.replayCache?.readHistory(
+            sessionId,
+            plan.history.filter((message) => !hasSkillHistory(message.parts)),
+          ),
+        ),
         contextCheckpoint: plan.runtimeContextCheckpoint,
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
         ...(resume.length ? { resume } : {}),
@@ -1110,6 +1170,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.handleTerminalPersistenceFailure(sessionId, state, error);
         return;
       }
+      // Leaving the event loop does not stop the Runtime. An orphaned execution
+      // would hold the Session's only execute slot and could request an
+      // approval nobody can answer.
+      await state.runtimeSession
+        ?.cancel(state.turn.id)
+        .catch((cancelError) =>
+          logger.warn('Failed to cancel an abandoned Runtime turn', cancelError as Error),
+        );
       if (state.abortController.signal.aborted) {
         try {
           await this.finalize(sessionId, state, 'cancelled', null);
@@ -1215,6 +1283,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         const part = state.assistantMessage.parts.find((entry) => entry.id === event.partId);
         if (part && (part.type === 'text' || part.type === 'reasoning')) {
           part.text += event.text;
+          this.scheduleStreamingSnapshot(sessionId, state);
         }
         this.publish(sessionId, {
           type: 'message.delta',
@@ -1318,7 +1387,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'completed':
-        await this.finalize(sessionId, state, 'completed', null);
+        await this.finalize(sessionId, state, 'completed', null, event.contextTokens, event.replay);
         return true;
       case 'failed':
         state.trace?.setAttributes(traceErrorAttributes(event.error));
@@ -1337,7 +1406,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     state: ActiveTurnState,
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
+    /** The next turn's context-estimate anchor; kept only on a completed answer. */
+    contextTokens?: number,
+    replay?: RuntimeTurnReplay,
   ): Promise<void> {
+    clearTimeout(state.streamingSnapshotTimer);
+    state.streamingSnapshotTimer = undefined;
     const interruption: unknown = state.abortController.signal.reason;
     if (interruption instanceof KeepAliveInterruptionError) {
       outcome = 'failed';
@@ -1376,8 +1450,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       usage: state.usage ? toAgentUsageView(state.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
-      runtimeStats: { runtimeTiming },
+      runtimeStats: {
+        runtimeTiming,
+        ...(outcome === 'completed' && contextTokens !== undefined ? { contextTokens } : {}),
+      },
     });
+    if (outcome === 'completed') this.ports.replayCache?.write(sessionId, finalized, replay);
     const turn: AgentTurnView = {
       ...state.turn,
       status: outcome,
@@ -1400,10 +1478,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       logFailure('Agent turn reached a failed terminal state', {
         assistantMessageId: finalized.id,
         durationMs: Math.max(0, runtimeTiming.completedAt - runtimeTiming.startedAt),
+        errorMessage: error.message,
         hasUsage: state.usage !== null,
         modelId: error.failure?.context?.modelId ?? state.agent.model.modelId,
         providerId: error.failure?.context?.providerId ?? state.agent.model.providerId,
         reasonCode: error.failure?.reasonCode ?? 'unknown',
+        responseBody: error.failure?.context?.responseBody,
         retryable: error.retryable,
         sessionId,
         sourceCode: error.failure?.source.code,
@@ -1432,6 +1512,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       outcome,
       initialNamePromise ? { waitFor: initialNamePromise } : undefined,
     );
+  }
+
+  private scheduleStreamingSnapshot(sessionId: string, state: ActiveTurnState): void {
+    if (state.streamingSnapshotTimer !== undefined) return;
+    state.streamingSnapshotTimer = setTimeout(() => {
+      state.streamingSnapshotTimer = undefined;
+      if (this.activeTurns.get(sessionId) === state && !state.abortController.signal.aborted) {
+        this.requestSnapshot(sessionId, state);
+      }
+    }, STREAMING_SNAPSHOT_INTERVAL_MS);
   }
 
   /**
@@ -1515,7 +1605,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   // ── Helpers ──
 
+  hasPendingStorageWork(): boolean {
+    return (
+      this.activeTurns.size > 0 ||
+      this.admittingSessions.size > 0 ||
+      this.initialAdmissions.size > 0 ||
+      this.runningTurns.size > 0
+    );
+  }
+
   private assertAcceptingSubmissions(): void {
+    storageMutationGate.assertWritable();
     if (!this.acceptingSubmissions) {
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is stopping.');
     }

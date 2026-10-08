@@ -1,5 +1,5 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { Agent } from '@earendil-works/pi-agent-core/agent';
+import { Agent } from '@earendil-works/pi-agent-core';
 import type {
   AssistantMessage,
   AssistantMessageEvent,
@@ -7,6 +7,7 @@ import type {
   Model,
 } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { getCurrentTools, normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { RuntimeJsonValue, RuntimeTool } from '../../types';
 import { withPiDeepseekDsml } from '../piDeepseekDsml';
@@ -26,16 +27,12 @@ const MODEL: Model<'openai-completions'> = {
 };
 const CALL =
   '<｜DSML｜tool_calls><｜DSML｜invoke name="Lookup"><｜DSML｜parameter name="query" string="true">notes</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>';
-const CONTEXT: Context = {
-  messages: [],
-  tools: [
-    {
-      name: 'lookup',
-      description: 'Find notes',
-      parameters: { type: 'object', properties: { query: { type: 'string' } } } as never,
-    },
-  ],
+const LOOKUP_TOOL = {
+  name: 'lookup',
+  description: 'Find notes',
+  parameters: { type: 'object', properties: { query: { type: 'string' } } } as never,
 };
+const CONTEXT = normalizeContext({ messages: [], tools: [LOOKUP_TOOL] });
 
 function message(
   content: AssistantMessage['content'],
@@ -327,7 +324,7 @@ describe('Pi DeepSeek DSML adaptation', () => {
     await agent.prompt('Save hello in notes.');
     expect(executions).toEqual([{ text: 'hello' }]);
     expect(requests).toHaveLength(3);
-    expect(requests[1].tools?.map((tool) => tool.name)).toEqual([
+    expect(getCurrentTools(requests[1].messages).map((tool) => tool.name)).toEqual([
       'tool_search',
       'tool_describe',
       'tool_call',
@@ -349,7 +346,7 @@ describe('Pi DeepSeek DSML adaptation', () => {
           model: MODEL,
           tools: [
             {
-              ...CONTEXT.tools![0],
+              ...LOOKUP_TOOL,
               label: 'Lookup',
               execute: async () => {
                 executed.push('lookup');
@@ -358,7 +355,7 @@ describe('Pi DeepSeek DSML adaptation', () => {
             },
           ],
         },
-        shouldStopAfterTurn: async () => true,
+        finishTurn: async () => ({ action: 'end' }),
         streamFn: withPiDeepseekDsml(() =>
           sourceOf(
             message(

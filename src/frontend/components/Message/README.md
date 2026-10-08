@@ -24,13 +24,21 @@ history, message rows and parts, viewport following, and scroll restoration.
   slot is unconditional, including while the placeholder is up; an accessory holds the message and
   decides for itself when to appear.
 - `UserMessage` owns standard user content, including managed attachments and the text bubble.
+  Its attachment slot lets source-owned files reuse the same placement above the bubble.
 - `getBuiltInToolDisplay` exposes the shared title and platform-specific icon used by
   feature-owned tool approval UI.
+- `ToolRendererProvider` lets a source supply tool detail loading and presentation inside the
+  shared process layout, including localized titles for group summaries. Without a provider, tools keep the local built-in dispatch. Source-owned
+  renderers compose `MessagePart.Tool`; remote data never enters the local tool adapters.
 
 A feature composes an explicit role variant and gives `MessageList` a stable `renderMessage`.
 LegendList refreshes mounted rows through `itemKey`, `data`, and `extraData`; changing the renderer
 identity alone is not a data channel. Dynamic rendered state therefore arrives through changed
 message items, `extraData`, or a feature-owned context/store read inside the row.
+
+Each row renders inside an `ErrorBoundary`. A message that throws while rendering shows a short
+notice in its place instead of taking the conversation down, and renders again when its item,
+`extraData`, or the renderer changes.
 
 Part renderers, animation providers, and platform controls remain private implementation details.
 Callers import only from `@/frontend/components/Message`.
@@ -72,8 +80,8 @@ instead of creating feature-owned rows or sheets:
 | --- | --- | --- |
 | Summary | `MessagePart.Summary` | Renders the title, status text, tone, running shimmer, and disclosure chevron. |
 | Interaction | `MessagePart.Tool` | Owns local open/close state and connects the summary press to its detail. Business renderers do not lift this transient state. |
-| Process | `MessagePart.Process` | After streaming settles, renders one collapsed total-duration disclosure before the answer and expands every pre-result part inline. |
-| Grouping | `MessagePart.ToolGroup` | Owns the group summary row and inline step container for a run of tool calls. Expanded while the run is live, folded once it settles; a manual toggle always wins. |
+| Process | `MessagePart.Process` | After streaming settles, renders one neutral total-duration disclosure before the answer. Defaults closed unless the reader already opened a tool group. |
+| Grouping | `MessagePart.ToolGroup` | Owns the group summary row and inline step container. Defaults closed during both streaming and completion; the message retains manual group state across completion and outer folding. |
 | Detail shell | `MessagePart.Detail` | Owns the `BottomSheet`, title, dismissal, scrolling, content insets, and spacing. Tool and source details share this shell. |
 | Detail content | The part renderer | Supplies the business-specific content inside the shell. This content remains intentionally unconstrained until its visual variants are designed. |
 
@@ -111,9 +119,13 @@ precedence over that fallback.
 
 Reasoning expands inline: `MessagePart.Reasoning` owns the toggle and the left-rail container its
 markdown renders into, so a reader keeps their place in the transcript. While a response streams,
-its process parts remain visible without a total-duration wrapper. Once the response settles,
-intermediate prose, reasoning, and tools move into one collapsed `MessagePart.Process`
-row whose label is the message's total wall-clock duration. Expanding it reveals the original parts in order. Source
+its process has no total-duration wrapper. Narration, reasoning, and in-loop compaction markers
+between tool calls share one collapsed tool group; other visible parts separate groups. Reasoning
+without tools retains its existing disclosure. Once the response settles, every
+visible transcript part except the final result text moves into one collapsed `MessagePart.Process`
+row whose label is the message's total wall-clock duration. A manually opened tool group keeps that
+outer process open on completion. Expanding it reveals narration and tool groups in their original order.
+Messages without timing metadata use a plain process title instead of an invented duration. Source
 groups use a borderless row of overlapping favicons and their source count, while their expanded
 views must use `MessagePart.Detail`. The source group stays out of layout while the assistant is
 streaming and appears once the message reaches any terminal status. New
@@ -123,6 +135,14 @@ be expressed by `MessagePart.Summary`; they must not introduce another bottom-sh
 A process uses tighter internal spacing than the separation between the process and the answer,
 both during streaming and when expanded after completion. Settled blank text parts are excluded
 from the visual partition so they cannot insert empty layout rows between status summaries.
+
+Local and remote messages use the same grouping. One or two action titles describe settled groups;
+larger mixtures use a neutral tool-activity title. Live activity labels remain visible for at least
+1.2 seconds while fast calls coalesce to the latest activity. Approval and error status changes
+bypass that delay. Pending approvals remain visible on tool groups. Individual tool rows retain
+their own failure and denial states; neither those states nor operation counts are promoted to the
+group or completed process. Opening a group mounts its single-line tool rows; only opening a remote
+tool's detail sheet reads its argument/result resources.
 
 A manual inline disclosure toggle is a reading interaction. Before changing local disclosure state,
 the part adapter notifies the list scroll controller, which leaves live-edge following and cancels
@@ -342,12 +362,17 @@ File-input generation uses a static title while its adjacent content updates; th
 the normal running animation during tool execution.
 
 
-`ask_user_question` tool parts stay visible in the message body as read-only question/answer
-records. They never submit responses from history. The chat feature owns the active response
-sheet, including input, cancellation, and Protocol correlation.
+`ask_user_question` tool parts render flat in the message body: each question in secondary text
+followed by its answer, skip state, or waiting/closed status. There is no row or detail sheet, and
+history never submits responses. The chat feature owns the active question sheet and Protocol
+correlation; it retains per-question drafts while navigating and submits the complete answer set.
 
 
-Successful `agent_create` and `agent_update` parts render saved-Agent result cards in the body,
-with a Start chat action when a model is configured. The card uses persisted result metadata; navigation opens the
-current record, so a later-deleted Agent follows the destination's ordinary unavailable state.
+Successful `agent_create` and `agent_update` parts render compact saved-Agent capsules in the
+body. Each capsule shows the name and a short status, with a text-only chat action when a model is
+configured. The capsule fits its content up to the message width; beyond that, the name wraps while
+the status and action keep their width. Model metadata is not shown. The capsule uses persisted
+result metadata; navigation opens the current record, so a later-deleted Agent follows the
+destination's ordinary unavailable state. `ContextMenuExclusion` keeps name selection and the chat
+button separate from the message context menu; the shared button retains native press cancellation.
 Agent list/read calls remain in the execution disclosure.

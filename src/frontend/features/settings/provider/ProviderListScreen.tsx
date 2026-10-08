@@ -1,11 +1,12 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import { type MenuItem, Section, Spinner, useToast } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
+import { cn } from '@cherrystudio/ui/utils';
 import { AnimatedLegendList } from '@legendapp/list/reanimated';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
@@ -14,18 +15,27 @@ import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
 import type { Provider } from '@/shared/data/types/provider';
 
+import { SettingsGroupedSeparator } from '../components/SettingsServiceRow';
 import { ProviderListRow } from './components/ProviderListRow';
 import { useProviderSetup } from './hooks/useProviderSetup';
 import { PROVIDER_LIST_PAGE_SIZE, PROVIDER_LIST_STALE_TIME } from './providerListQuery';
 
-const PROVIDER_ROW_ESTIMATED_HEIGHT = 72;
+const PROVIDER_ROW_ESTIMATED_HEIGHT = 56;
 const providerListTransition = LinearTransition.duration(duration.base)
   .easing(easing.settle)
   .reduceMotion(ReduceMotion.System);
 
 type ProviderListItem =
-  | { id: string; kind: 'header'; title: string }
-  | { id: string; kind: 'provider'; provider: Provider; isEnabled: boolean; isPending: boolean };
+  | { id: string; kind: 'header'; isFirst: boolean; title: string }
+  | {
+      id: string;
+      kind: 'provider';
+      provider: Provider;
+      isEnabled: boolean;
+      isFirst: boolean;
+      isLast: boolean;
+      isPending: boolean;
+    };
 
 const keyExtractor = (item: ProviderListItem) => `${item.kind}:${item.id}`;
 const getItemType = (item: ProviderListItem) => item.kind;
@@ -146,39 +156,52 @@ export default function ProviderListScreen() {
       items.push({
         id: isEnabled ? 'enabled' : 'disabled',
         kind: 'header',
+        isFirst: items.length === 0,
         title: t(
           isEnabled ? 'settings.provider.section.enabled' : 'settings.provider.section.disabled',
           { count: providers.length },
         ),
       });
-      for (const provider of providers) {
+      providers.forEach((provider, index) => {
         items.push({
           id: provider.id,
           kind: 'provider',
           provider,
           isEnabled: pendingProviderStates.get(provider.id) ?? provider.isEnabled,
+          isFirst: index === 0,
+          isLast: index === providers.length - 1,
           isPending: pendingProviderStates.has(provider.id),
         });
-      }
+      });
     }
     return items;
   }, [listedProviders, pendingProviderStates, t]);
   const renderProviderItem = useCallback(
     ({ item }: { item: ProviderListItem }) =>
       item.kind === 'header' ? (
-        <View className="min-h-12 justify-end px-4 pt-4 pb-2">
-          <Text accessibilityRole="header" className="font-medium text-foreground-tertiary text-sm">
-            {item.title}
-          </Text>
+        // Mirrors a titled `Section`: the title sits 12pt inside the card edge, 4pt above it.
+        <View className={cn('px-7 pb-1', item.isFirst ? 'pt-2' : 'pt-6')}>
+          <Section.Header accessibilityRole="header" title={item.title} />
         </View>
       ) : (
-        <ProviderListRow
-          isEnabled={item.isEnabled}
-          isPending={item.isPending}
-          onOpen={openProvider}
-          onToggle={toggleProviderEnabled}
-          provider={item.provider}
-        />
+        // Each row draws its slice of the group's card, so the list can stay virtualized.
+        <View
+          className={cn(
+            'mx-4 overflow-hidden bg-card',
+            item.isFirst && 'rounded-t-2xl',
+            item.isLast && 'rounded-b-2xl',
+          )}
+          style={styles.cardSlice}
+        >
+          {item.isFirst ? null : <SettingsGroupedSeparator />}
+          <ProviderListRow
+            isEnabled={item.isEnabled}
+            isPending={item.isPending}
+            onOpen={openProvider}
+            onToggle={toggleProviderEnabled}
+            provider={item.provider}
+          />
+        </View>
       ),
     [openProvider, toggleProviderEnabled],
   );
@@ -275,6 +298,9 @@ export default function ProviderListScreen() {
 }
 
 const styles = StyleSheet.create({
+  cardSlice: {
+    borderCurve: 'continuous',
+  },
   list: {
     flex: 1,
   },

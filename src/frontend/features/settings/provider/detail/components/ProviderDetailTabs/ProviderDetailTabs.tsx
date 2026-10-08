@@ -18,8 +18,8 @@ export function ProviderDetailTabs({ onTabChange, tab }: ProviderDetailTabsProps
         testID: `provider-detail-tab-${item}`,
         value: item,
       }))}
+      layout="hug"
       onValueChange={onTabChange}
-      style={{ width: 144 }}
       value={tab}
     />
   );

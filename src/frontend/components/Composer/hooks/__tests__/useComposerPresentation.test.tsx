@@ -88,6 +88,18 @@ describe('useComposerPresentation', () => {
     expect(mockBlur).toHaveBeenCalledTimes(2);
   });
 
+  test('dismisses the question field that owns focus and returns ownership to the ordinary composer', () => {
+    const questionInput = { blur: jest.fn() };
+    act(() => presentation.actions.activateInput(questionInput));
+    act(() => presentation.actions.dismissInput());
+    expect(questionInput.blur).toHaveBeenCalledTimes(1);
+    expect(mockBlur).not.toHaveBeenCalled();
+    act(() => presentation.actions.activateInput());
+    act(() => presentation.actions.dismissInput());
+    expect(mockBlur).toHaveBeenCalledTimes(1);
+    expect(questionInput.blur).toHaveBeenCalledTimes(1);
+  });
+
   test('follows dismissal until the keyboard finishes closing, then detaches', () => {
     act(() => presentation.actions.activateInput());
     act(() => presentation.actions.dismissInput());

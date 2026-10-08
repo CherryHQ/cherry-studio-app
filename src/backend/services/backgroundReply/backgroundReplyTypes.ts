@@ -1,5 +1,8 @@
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import type { BackgroundReplyPhase } from '@/shared/backgroundActivity/chatReply';
+import type {
+  BackgroundReplyContent,
+  BackgroundReplyPhase,
+} from '@/shared/backgroundActivity/chatReply';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
 // The feature contract lives in shared so the service and activity
@@ -27,13 +30,17 @@ export type BackgroundReplyUpdateOptions = {
  * superseded by a newer generation become no-ops.
  */
 export type BackgroundReplyTurn = {
+  updateContent(content: BackgroundReplyContent): void;
   awaitApproval: (message?: BackgroundReplyMessage, reason?: 'question') => void;
   /** Shows terminal content immediately; `waitFor` delays only final surface dismissal. */
   finish: (outcome: BackgroundReplyOutcome, options?: { waitFor?: Promise<unknown> }) => void;
+  /** Removes the surface without terminal content or a notice; the work continues elsewhere. */
+  retire: () => void;
   update: (message: BackgroundReplyMessage, options?: BackgroundReplyUpdateOptions) => void;
 };
 
 export type BackgroundReplyTurnInput = {
+  connectionId?: string;
   agentId: string;
   agentName: string;
   sessionId: string;
@@ -50,5 +57,5 @@ export type BackgroundReplyLifecycle = {
   acquirePreparation: (sessionId: string, onInterrupt: (reason: Error) => void) => KeepAliveLease;
   clearSession: (sessionId: string) => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
-  updateSessionTitle: (sessionId: string, title: string) => void;
+  updateSessionTitle: (sessionId: string, title: string, connectionId?: string) => void;
 };

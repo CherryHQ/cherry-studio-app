@@ -4,15 +4,18 @@
  *
  * Reads expose content, so unlike `edit_file` this tool is ledger-scoped: only
  * an entry attached to the Session, produced by an earlier turn, or created in
- * this turn can be read. Output is a bounded text-line or raw JSON window so a large file is
+ * this turn can be read. Output is a bounded line or code-point window so a large file is
  * paged rather than dumped into the context.
  */
 
 import * as z from 'zod';
 
 import type { ParsedDocument } from '@/backend/services/file/documentParser';
-import { readAttachmentContent } from '@/backend/services/file/readAttachmentContent';
-import { takeCodePoints } from '@/backend/services/file/utf8Text';
+import {
+  readAttachmentContent,
+  type ReadAttachmentContent,
+} from '@/backend/services/file/readAttachmentContent';
+import { countCodePoints, takeCodePoints } from '@/backend/services/file/utf8Text';
 import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   FileAttachmentError,
@@ -20,6 +23,7 @@ import {
 } from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
 
 import type {
   ManagedFileFact,
@@ -53,7 +57,7 @@ export const readFileInputSchema = z.strictObject({
     .min(0)
     .optional()
     .describe(
-      'AnyDoc JSON only: zero-based Unicode code-point offset. Defaults to 0; continue with nextOffset.',
+      'Zero-based Unicode code-point offset into the full text (AnyDoc: its IR JSON). Defaults to 0; continue with nextOffset.',
     ),
   max_characters: z
     .int()
@@ -61,7 +65,7 @@ export const readFileInputSchema = z.strictObject({
     .max(READ_FILE_MAX_CHARACTERS)
     .optional()
     .describe(
-      `AnyDoc JSON only: maximum Unicode code points. Defaults to ${READ_FILE_MAX_CHARACTERS}. Do not combine with start_line or limit.`,
+      `Maximum Unicode code points from offset. Defaults to ${READ_FILE_MAX_CHARACTERS}. Do not combine with start_line or limit.`,
     ),
 });
 
@@ -71,11 +75,44 @@ export type ReadFileFiles = {
   readDocumentText: ManagedFileResolver['readDocumentText'];
 };
 
+type ReadContent =
+  | Extract<ReadAttachmentContent, { kind: 'text' }>
+  | (Extract<ReadAttachmentContent, { kind: 'document' }> & { json: string });
+
 export function createReadFileTool(
   files: ReadFileFiles,
   scope: TurnFileScope,
   documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
 ): RuntimeTool {
+  /**
+   * The last document this turn parsed, so paging a 20 MiB document parses it
+   * once rather than once per window. A document id always names the same
+   * content — only UTF-8 drafts are rewritten in place — so it never goes stale.
+   */
+  let lastDocument: { id: FileEntryId; content: ReadContent } | undefined;
+
+  const read = async (source: ManagedFileFact, signal: AbortSignal): Promise<ReadContent> => {
+    if (lastDocument?.id === source.fileEntryId) return lastDocument.content;
+    const content = await readAttachmentContent(
+      source,
+      {
+        readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
+        readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
+      },
+      signal,
+      READ_FILE_MAX_SOURCE_BYTES,
+      documentParserMode,
+    );
+    const result: ReadContent =
+      content.kind === 'document'
+        ? { ...content, json: JSON.stringify(content.parsed.output.ir) }
+        : content;
+    if (documentFileTypeFromMediaType(source.mediaType)) {
+      lastDocument = { id: source.fileEntryId, content: result };
+    }
+    return result;
+  };
+
   return {
     ref: { source: 'builtin', capabilityId: READ_FILE_TOOL_NAME },
     providerName: READ_FILE_TOOL_NAME,
@@ -84,7 +121,7 @@ export function createReadFileTool(
       documentParserMode === 'anydoc'
         ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Asset descriptors are references only: this tool sends no image pixels.'
         : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
-    } PDF and ordinary text always use start_line and limit, never JSON offsets. Lines start at 1; when truncated, use startLine + lineCount. A line larger than one window is cut and flagged with lineTruncated. sourceTruncated means the extractor reached its own limit. No image pixels are returned by this tool.`,
+    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. No image pixels are returned by this tool.`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
     async execute({ input, signal }): Promise<RuntimeToolResult> {
@@ -104,7 +141,7 @@ export function createReadFileTool(
       const hasJsonParameters =
         parsed.data.offset !== undefined || parsed.data.max_characters !== undefined;
       if (hasLineParameters && hasJsonParameters)
-        return invalid('Line parameters and JSON offset parameters cannot be combined.');
+        return invalid('Line parameters and offset parameters cannot be combined.');
       const fileEntryId = FileEntryIdSchema.parse(file_entry_id);
       if (!scope.fileEntryIds.has(fileEntryId)) {
         return invalid('The file is not part of this conversation.');
@@ -119,25 +156,12 @@ export function createReadFileTool(
       let sourceTruncated: boolean;
       let parser: 'builtin' | 'native-pdf' | undefined;
       try {
-        const content = await readAttachmentContent(
-          source,
-          {
-            readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
-            readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
-          },
-          signal,
-          READ_FILE_MAX_SOURCE_BYTES,
-          documentParserMode,
-        );
+        const content = await read(source, signal);
         if (content.kind === 'document') {
           if (hasLineParameters)
             return invalid('AnyDoc JSON requires offset/max_characters, not start_line/limit.');
           const { parsed: document } = content;
-          const window = jsonCharacterWindow(
-            JSON.stringify(document.output.ir),
-            offset,
-            max_characters,
-          );
+          const window = characterWindow(content.json, offset, max_characters);
           return {
             value: {
               status: 'ok',
@@ -159,10 +183,6 @@ export function createReadFileTool(
             artifacts: [],
           };
         }
-        if (hasJsonParameters)
-          return invalid(
-            'Text and PDF output requires start_line/limit, not offset/max_characters.',
-          );
         ({ text, sourceTruncated, parser } = content);
       } catch (error) {
         signal.throwIfAborted();
@@ -190,20 +210,35 @@ export function createReadFileTool(
       }
       signal.throwIfAborted();
 
+      const header = {
+        status: 'ok',
+        fileEntryId,
+        filename: source.name,
+        size: source.size,
+        ...(parser ? { parser } : {}),
+      };
+      if (hasJsonParameters) {
+        return {
+          value: {
+            ...header,
+            ...characterWindow(text, offset, max_characters),
+            ...(sourceTruncated ? { sourceTruncated: true } : {}),
+          },
+          artifacts: [],
+        };
+      }
       const window = lineWindow(text, start_line, limit);
       return {
         value: {
-          status: 'ok',
-          fileEntryId,
-          filename: source.name,
-          size: source.size,
-          ...(parser ? { parser } : {}),
+          ...header,
           startLine: start_line,
           lineCount: window.lineCount,
           totalLines: window.totalLines,
           truncated: window.truncated,
           ...(sourceTruncated ? { sourceTruncated: true } : {}),
-          ...(window.lineTruncated ? { lineTruncated: true } : {}),
+          ...(window.nextOffset !== undefined
+            ? { lineTruncated: true, nextOffset: window.nextOffset }
+            : {}),
           text: window.text,
         },
         artifacts: [],
@@ -213,7 +248,7 @@ export function createReadFileTool(
 }
 
 /** One linear scan; windows concatenate losslessly even through long strings and surrogate pairs. */
-export function jsonCharacterWindow(text: string, offset: number, maxCharacters: number) {
+export function characterWindow(text: string, offset: number, maxCharacters: number) {
   let totalCharacters = 0;
   let utf16Offset = 0;
   let start = text.length;
@@ -238,7 +273,8 @@ export function jsonCharacterWindow(text: string, offset: number, maxCharacters:
 
 type LineWindow = {
   lineCount: number;
-  lineTruncated: boolean;
+  /** Set only when one line alone overran the budget: where its rest starts, as a code-point `offset`. */
+  nextOffset?: number;
   text: string;
   totalLines: number;
   truncated: boolean;
@@ -269,20 +305,23 @@ export function lineWindow(text: string, startLine: number, limit: number): Line
     kept.push(line);
     characters += cost;
   }
-  let lineTruncated = false;
+  let nextOffset: number | undefined;
   if (kept.length === 0 && requested.length > 0) {
-    // One line over budget alone: return its head. Paging is by line, so the
-    // rest of this line is unreachable — saying the read was complete would
-    // present a quarter of a minified file as the whole of it.
-    kept.push(takeCodePoints(requested[0]!, READ_FILE_MAX_CHARACTERS).value);
-    lineTruncated = true;
+    // One line over budget alone: return its head. A later line cannot reach
+    // the rest, so the result hands over the code-point offset that does.
+    const head = takeCodePoints(requested[0]!, READ_FILE_MAX_CHARACTERS);
+    kept.push(head.value);
+    if (head.didTruncate) {
+      const lineStart = start === 0 ? 0 : countCodePoints(lines.slice(0, start).join('\n')) + 1;
+      nextOffset = lineStart + head.characters;
+    }
   }
   return {
     lineCount: kept.length,
-    lineTruncated,
+    ...(nextOffset !== undefined ? { nextOffset } : {}),
     text: kept.join('\n'),
     totalLines,
-    truncated: lineTruncated || start + kept.length < totalLines,
+    truncated: nextOffset !== undefined || start + kept.length < totalLines,
   };
 }
 

@@ -1,7 +1,7 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
-import { loadChatExportMessages } from '../loadChatExportMessages';
+import { prepareChatExport } from '../prepareChatExport';
 import {
   replaceChatCitations,
   toChatExportDocument,
@@ -78,6 +78,17 @@ test('disabling process includes the final answer and files but excludes earlier
     kind: 'managed-file',
     fileEntryId: '00000000-0000-4000-8000-000000000001',
   });
+});
+
+test('answers carry the Cherry avatar and their own model; questions stay plain bubbles', () => {
+  const document = toChatExportDocument(
+    [question, { ...answer, modelName: 'GPT-5' }, { ...answer, id: 'c' }],
+    options,
+  );
+  expect(document.sections[0]).not.toHaveProperty('avatar');
+  expect(document.sections[1]).toMatchObject({ avatar: '🍒', model: 'GPT-5' });
+  expect(document.sections[2]).toMatchObject({ avatar: '🍒' });
+  expect(document.sections[2]).not.toHaveProperty('model');
 });
 
 test('process includes the visible reasoning and intermediate text without timestamps', () => {
@@ -292,3 +303,23 @@ test('multiline inline code and quoted fences retain citation examples', () => {
     ),
   ).toBe(`${code}[1](<https://example.com/>)`);
 });
+
+async function loadChatExportMessages(
+  ids: readonly string[],
+  readPage: (query: { ids: string[] }) => Promise<{ items: AgentMessageView[] }>,
+  signal: AbortSignal,
+) {
+  const snapshot = await prepareChatExport(
+    {
+      prepareSelection: async (selected) => {
+        const page = await readPage({ ids: [...selected] });
+        return {
+          messages: page.items.filter((message) => selected.includes(message.id)).toReversed(),
+        };
+      },
+    },
+    ids,
+    signal,
+  );
+  return snapshot.messages;
+}

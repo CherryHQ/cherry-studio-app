@@ -6,7 +6,12 @@ placement. The virtualized list and message rendering live in `@/frontend/compon
 
 ## Public Interface
 
-- `ChatWorkspace` is exported from `index.ts` for Agent Session screens.
+- `ChatWorkspace` is exported from `index.ts` for Agent Session screens. It receives the shared
+  Conversation snapshot, the reconciled message rows and a history window; each source reconciles
+  live rows with history before handing them over. Local chat supplies the exported
+  `AssistantMessageUsage` through its `renderUsage` slot; remote chat supplies
+  `RemoteAssistantMessageUsage`. Both compose the same button and detail view. Only the local
+  adapter reads the mobile usage ledger; the remote adapter presents the host-owned snapshot.
 - Internal workspace pieces should be imported through relative paths inside this module.
 - The composer placement itself is not here — `ChatScreen` keeps the shared composer in normal
   parent flow, while CherryUI owns reusable keyboard and safe-area behavior. This module only
@@ -19,7 +24,13 @@ placement. The virtualized list and message rendering live in `@/frontend/compon
   input exists and must keep that session outside its session/empty-state branch.
 - `context/` owns message copy/share actions and assistant toolbar state/actions. Dynamic
   copied/busy/enabled state is consumed only by toolbar leaves; context menus consume only actions,
-  and the virtualized list and expensive message body do not subscribe.
+  and the virtualized list and expensive message body do not subscribe. Action handlers read the
+  latest transcript and snapshot when invoked, so their identities change only when an action's
+  availability does, not on every streamed update.
+- `context/` also owns each row's conversation state beyond its list item: tool calls, attachments,
+  and the timestamp boundary. Rows subscribe to it by message id and only rows whose state changed
+  are woken. The list's `extraData` carries only list-wide presentation, because changing it
+  refreshes every mounted row.
 - `hooks/` owns the cover handoff after the list controller completes initial restoration.
 - `utils/` contains pure helpers with co-located tests, including copyable-text projection.
 

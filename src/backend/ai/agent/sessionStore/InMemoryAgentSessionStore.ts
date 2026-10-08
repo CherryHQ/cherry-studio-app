@@ -257,22 +257,22 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       titleIsManual: source.titleIsManual,
     });
     const reissuedTurnIds = new Map<string, string>();
-    const forkedTranscript = transcript
+    const copied = transcript
       .slice(0, anchorIndex + 1)
-      .filter((stored) => !UNSETTLED_MESSAGE_STATUSES.has(stored.view.status))
-      .map<StoredMessage>((stored) => ({
-        // Runtime-private and anchored to a turn id this copy no longer
-        // carries, so the fork replays full history instead.
-        contextCheckpoint: null,
-        error: stored.error === null ? null : cloneJson(stored.error),
-        view: cloneJson({
-          ...stored.view,
-          id: uuidv7(),
-          sessionId: session.id,
-          turnId: reissueTurnId(reissuedTurnIds, stored.view.turnId),
-          updatedAt: nowIso(),
-        }),
-      }));
+      .filter((stored) => !UNSETTLED_MESSAGE_STATUSES.has(stored.view.status));
+    const forkedTranscript = copied.map<StoredMessage>((stored) => ({
+      // Runtime-private and anchored to a turn id this copy no longer
+      // carries, so the fork replays full history instead.
+      contextCheckpoint: null,
+      error: stored.error === null ? null : cloneJson(stored.error),
+      view: cloneJson({
+        ...stored.view,
+        id: uuidv7(),
+        sessionId: session.id,
+        turnId: reissueTurnId(reissuedTurnIds, stored.view.turnId),
+        updatedAt: nowIso(),
+      }),
+    }));
     const forkBoundaryMessageId = forkedTranscript.at(-1)?.view.id;
     if (!forkBoundaryMessageId) {
       throw new Error('Fork transcript is missing its settled boundary message.');
@@ -281,7 +281,17 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
 
     this.sessions.set(session.id, forkedSession);
     this.messages.set(session.id, forkedTranscript);
-    return { session: cloneJson(forkedSession), status: 'forked' };
+    return {
+      session: cloneJson(forkedSession),
+      status: 'forked',
+      messageCopies: copied.map(({ view }, index) => ({
+        source: { id: view.id, turnId: view.turnId },
+        target: {
+          id: forkedTranscript[index].view.id,
+          turnId: forkedTranscript[index].view.turnId,
+        },
+      })),
+    };
   }
 
   async deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult> {

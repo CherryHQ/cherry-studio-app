@@ -513,6 +513,7 @@
       "apiFeatures": {
         "reportsActualCost": true
       },
+      "authMethods": ["api-key", "oauth"],
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "OpenRouter - AI model provider",
       "endpointConfigs": {
@@ -643,6 +644,26 @@
         }
       },
       "name": "Ollama"
+    },
+    {
+      "defaultChatEndpoint": "openai-chat-completions",
+      "description": "Requesty - AI model provider",
+      "endpointConfigs": {
+        "openai-chat-completions": {
+          "adapterFamily": "openai-compatible",
+          "baseUrl": "https://router.requesty.ai/v1"
+        }
+      },
+      "id": "requesty",
+      "metadata": {
+        "website": {
+          "apiKey": "https://app.requesty.ai/api-keys",
+          "docs": "https://docs.requesty.ai",
+          "models": "https://www.requesty.ai/models",
+          "official": "https://requesty.ai/"
+        }
+      },
+      "name": "Requesty"
     },
     {
       "description": "New API - AI model provider",
@@ -1168,9 +1189,17 @@
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "Github Copilot - AI model provider",
       "endpointConfigs": {
+        "anthropic-messages": {
+          "adapterFamily": "anthropic",
+          "baseUrl": "https://api.githubcopilot.com"
+        },
         "openai-chat-completions": {
           "adapterFamily": "github-copilot-openai-compatible",
           "baseUrl": "https://api.githubcopilot.com/"
+        },
+        "openai-responses": {
+          "adapterFamily": "openai",
+          "baseUrl": "https://api.githubcopilot.com"
         }
       },
       "id": "copilot",
@@ -1242,6 +1271,25 @@
         }
       },
       "name": "Moonshot AI"
+    },
+    {
+      "authMethods": ["oauth"],
+      "defaultChatEndpoint": "anthropic-messages",
+      "description": "Kimi Code - AI model provider",
+      "endpointConfigs": {
+        "anthropic-messages": {
+          "adapterFamily": "anthropic",
+          "baseUrl": "https://api.kimi.com/coding"
+        }
+      },
+      "id": "kimi-coding",
+      "metadata": {
+        "website": {
+          "official": "https://www.kimi.com/code"
+        }
+      },
+      "modelListSource": "registry",
+      "name": "Kimi Code"
     },
     {
       "apiFeatures": {
@@ -1605,6 +1653,7 @@
       "name": "nvidia"
     },
     {
+      "authMethods": ["api-key", "oauth"],
       "defaultChatEndpoint": "openai-responses",
       "description": "Grok - AI model provider",
       "endpointConfigs": {
@@ -1665,6 +1714,25 @@
         }
       },
       "name": "Grok"
+    },
+    {
+      "authMethods": ["oauth"],
+      "defaultChatEndpoint": "openai-responses",
+      "description": "Meta - AI model provider",
+      "endpointConfigs": {
+        "openai-responses": {
+          "adapterFamily": "openai",
+          "baseUrl": "https://api.meta.ai/v1"
+        }
+      },
+      "id": "meta",
+      "metadata": {
+        "website": {
+          "official": "https://www.meta.ai"
+        }
+      },
+      "modelListSource": "registry",
+      "name": "Meta"
     },
     {
       "apiFeatures": {
@@ -2206,5 +2274,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "b74a116e1d18b7d6"
+  "version": "985f3aecd45a85af"
 }

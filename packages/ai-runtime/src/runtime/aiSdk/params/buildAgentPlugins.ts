@@ -1,5 +1,4 @@
 import type { AiPlugin } from '@cherrystudio/ai-core';
-import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { resolveAnthropicCacheSettings } from '@cherrystudio/universal/ai/anthropicCache';
@@ -11,6 +10,7 @@ import { isDeepSeekModel, isGemini3Model } from '@cherrystudio/universal/utils/m
 import { SystemProviderIds } from '../../../utils/providerIds';
 import { getReasoningTagName } from '../../../utils/reasoning';
 import type { ResolvedReasoningInvocation } from '../../../utils/reasoningSerializers';
+import type { WebSearchPluginConfig } from '../../../utils/websearch';
 import { createAnthropicCachePlugin } from './features/anthropicCache';
 import { createDeepseekDsmlParserPlugin } from './features/deepseekDsmlParserPlugin';
 import { createGatewayUsageNormalizePlugin } from './features/gatewayUsageNormalize';

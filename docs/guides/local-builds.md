@@ -46,8 +46,9 @@ development identity. An unset `PROFILE` defaults to production; unknown values 
 | `production` / `production-google-play` | Cherry Studio | none | `cherrystudio` |
 
 `production-google-play` inherits `PROFILE=production`. It changes Android's artifact format to
-AAB without adding an app identity or runtime environment. The `production` profile continues
-to create APKs for GitHub downloads and IPAs for iOS.
+AAB without adding an app identity or runtime environment, and explicitly disables APK update
+checks. The existing `production` profile creates public Android APKs with GitCode update checks
+and iOS IPAs with this feature disabled. Public APKs are published to GitHub and mirrored to GitCode.
 
 The base IDs are `com.cherryai.cherrystudio-app` (iOS) and
 `com.cherryai.cherrystudio_app` (Android). Widget identifiers and iOS App Groups follow the selected
@@ -65,6 +66,23 @@ These identity changes require new native builds. Each iOS variant needs
 matching Apple app identifiers, widget identifiers, App Groups, and provisioning profiles. The EAS
 project ID stays unchanged. Before production submission, check that `submit.production.ios.ascAppId`
 in `eas.json` points to an App Store Connect app matching the new production bundle identifier.
+
+## APK Update Distribution
+
+Only Android builds with `APK_UPDATES_ENABLED=true` show Check for updates in Settings and About.
+The app checks in the background after startup. The row reads that result and shows `NEW` for a newer
+APK, with no description; tapping it asks for confirmation before opening the browser download.
+`production` sets this flag, while `production-google-play` explicitly overrides
+it with `false`. Development and preview default to disabled. iOS always
+hides the feature, regardless of the flag. Disabled builds also reject detection and download calls.
+
+The value is parsed into the boolean `extra.isApkUpdatesEnabled` by `app.config.ts`; it is not a user
+preference or remote toggle. Only `true` and `false` are accepted; an unset value defaults to `false`.
+GitCode is the fixed update source. Keep store profiles disabled and never upload the public APK as
+a store artifact. Future Android store profiles must explicitly set `APK_UPDATES_ENABLED=false`, as
+`production-google-play` does. For an explicitly authorized Android development session exercising
+this feature, supply `APK_UPDATES_ENABLED=true` to Metro.
+The local build wrapper's default remains development.
 
 ## Sentry Environment Variables
 
@@ -126,9 +144,14 @@ pnpm build:local --platform ios --profile preview
 ```
 
 Preview and development bundles do not report to Sentry, even when the native dependency and a DSN
-are present. Production APK and IPA builds require `--profile production`; that profile is never
-the wrapper's default. When a Google Play release build is explicitly requested, use its separate
-AAB profile:
+are present. Production profiles are never the wrapper's default. Use `--profile production` for
+production iOS builds. When a public APK release is explicitly requested, enable its update path:
+
+```bash
+pnpm build:local --platform android --profile production --output /absolute/path/to/cherry-studio-0.1.0-android.apk
+```
+
+When a Google Play release build is explicitly requested, use its separate AAB profile:
 
 ```bash
 pnpm build:local --platform android --profile production-google-play --output /absolute/path/to/cherry-studio-0.1.0-android.aab
@@ -143,6 +166,19 @@ For production monitoring, provide a valid upload token and keep automatic uploa
 `SENTRY_DISABLE_AUTO_UPLOAD=true` skips uploads but does not disable runtime reporting. Without
 matching source maps and debug symbols, reported error stacks may not resolve back to source.
 Missing or invalid upload credentials can fail the build.
+
+Android preview and production APKs use arm64 Release builds without R8 code shrinking, so the
+Java and Kotlin stack traces Sentry receives stay readable without a mapping upload. The APK
+profiles set `useLegacyPackaging` to compress native `.so` libraries for direct downloads. Android
+extracts those libraries during installation, so a smaller APK does not mean less installed storage
+or a faster startup. The `production-google-play` profile sets `ANDROID_COMPRESS_NATIVE_LIBS=false`
+so the AAB keeps uncompressed libraries: Google Play compresses the download itself, and compressed
+libraries in an AAB only slow installation and double on-device storage. Development builds keep
+uncompressed native libraries. The EAS Release commands pass `-Xmx4096m` as the Gradle JVM
+arguments, which also drops the template Metaspace cap that made `lintVitalAnalyzeRelease` fail on
+local production builds. After changing native dependencies or packaging options, verify that a
+Release build starts and completes desktop QR pairing. Compare APK sizes using the same profile and
+architecture.
 
 Rebuild the native client after adding or changing native dependencies such as Sentry. Starting
 Metro again does not add a native module to an already installed client. Local and cloud EAS builds
@@ -190,6 +226,44 @@ Android builds compile `expo-image-picker`, `expo-notifications`, `expo-app-metr
 instead of using Expo's precompiled binaries. Observe's source build requires App Metrics to be
 available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
+
+### iOS Text Measurement Cache Patch
+
+Expo SwiftUI content-size updates can synchronously enter React Native layout on the main thread,
+including text-input measurement. A concurrent JS-thread measurement may wait for notification
+delivery while creating `NSTextStorage`. Holding the measurement-cache mutex across that native
+work can block the main thread and create a circular wait if delivery needs it.
+
+React Native 0.86.3's iOS text and line measurement caches use
+`SimpleThreadSafeCache::getWithGeneratorOutsideLock` to compute misses outside the mutex, so native
+text notifications cannot hold the measurement cache lock while waiting for another thread
+([#1182](https://github.com/CherryHQ/cherry-studio-app/issues/1182)). Lookup, insertion, LRU
+updates, and the returned-value copy remain locked. Concurrent misses may compute the same key more
+than once; the later insert reuses the first stored result. The default `get` and pointer-returning
+`getWithKey` keep their serialized generators, including Android measurements and iOS
+attributed-string conversion. Each iOS measurement creates its own text storage, layout manager, and
+text container.
+
+When upgrading React Native, inspect the generator's lock scope before dropping this patch. iOS
+enables `buildReactNativeFromSource`; delivering the patch requires a new native build. An OTA
+update cannot replace this code. The patch removes the cache-lock dependency, not notification
+delivery itself; the reported event does not identify the notification observer or its queue.
+
+`scripts/__tests__/reactNativeTextCache.test.ts` guards the patch wiring in PR CI. The patch also
+adds cache regressions to React Native's `SimpleThreadSafeCacheTest.cpp`, which no app build or CI
+job compiles. These include a generator waiting for another thread to access the same cache,
+concurrent misses for the same key, eviction, and returned-value lifetime. They cover the cache
+contract, not recovery from the production hang. Run them separately with a googletest source tree
+such as the Android NDK's `sources/third_party/googletest`:
+
+```bash
+RN=$(node -p "require('path').dirname(require.resolve('react-native/package.json'))")
+GTEST=$ANDROID_NDK_HOME/sources/third_party/googletest
+clang++ -std=c++20 -fsanitize=thread -I"$GTEST/include" -I"$GTEST" -I"$RN/ReactCommon" \
+  "$GTEST/src/gtest-all.cc" "$GTEST/src/gtest_main.cc" \
+  "$RN/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp" -o /tmp/simple-cache-test
+/tmp/simple-cache-test
+```
 
 ### iOS Build 26 Crash Patches
 

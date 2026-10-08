@@ -127,7 +127,11 @@ test('image fallback retains the same brand signature in Markdown preview and de
   const session = createSession();
   const signature = {
     brandName: 'Cherry Studio',
-    timestamp: '2026/09/15 12:00',
+    brandColor: '#ff5757',
+    downloadLabel: 'Scan to download the mobile app',
+    downloadLinkLabel: 'Download the mobile app',
+    downloadUrl: 'https://example.com/mobile',
+    qrCodeDataUrl: 'data:image/png;base64,AQ==',
     background: '#ffffff',
     foreground: '#111111',
     logoDataUrl: 'data:image/png;base64,AA==',
@@ -150,7 +154,7 @@ test('image fallback retains the same brand signature in Markdown preview and de
   });
   expect(ref.current?.state).toEqual({
     status: 'markdown',
-    text: 'Content\n---\n\n**Cherry Studio** · 2026/09/15 12:00\n',
+    text: 'Content\n---\n\n**Cherry Studio** · [Download the mobile app](<https://example.com/mobile>)\n',
     fallback: true,
   });
   await ref.current!.getArtifact(new AbortController().signal);

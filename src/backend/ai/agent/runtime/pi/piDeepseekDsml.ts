@@ -7,11 +7,15 @@ import {
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type {
   AssistantMessage,
+  JsonObject,
   TextContent,
   ThinkingContent,
   ToolCall,
 } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { getCurrentTools, normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
+
+import { emptyAssistantMessage, providerErrorEvent } from './piStreamEvents';
 
 type ContentState = {
   index: number;
@@ -25,6 +29,7 @@ type ContentState = {
 /** Normalize before Pi commits the assistant message and decides which tools to execute. */
 export function withPiDeepseekDsml(streamFn: StreamFn): StreamFn {
   return (model, context, options) => {
+    const tools = getCurrentTools(normalizeContext(context).messages);
     const stream = new AssistantMessageEventStream();
     const content: AssistantMessage['content'] = [];
     const states = new Map<number, ContentState>();
@@ -32,23 +37,8 @@ export function withPiDeepseekDsml(streamFn: StreamFn): StreamFn {
     let parseError: DeepseekDsmlError | undefined;
     let extracted = false;
     let started = false;
-    let partial: AssistantMessage = {
-      role: 'assistant',
-      api: model.api,
-      provider: model.provider,
-      model: model.id,
-      content,
-      stopReason: 'stop',
-      timestamp: Date.now(),
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-    };
+    // The parser writes into `content`; the partial must keep pointing at that array.
+    let partial: AssistantMessage = { ...emptyAssistantMessage(model), content };
 
     const updateMessage = (source: AssistantMessage) => {
       partial = { ...source, content };
@@ -63,7 +53,7 @@ export function withPiDeepseekDsml(streamFn: StreamFn): StreamFn {
         state = {
           index: content.length,
           block: block.type === 'text' ? { ...block, text: '' } : { ...block, thinking: '' },
-          parser: createDeepseekDsmlParser(context.tools),
+          parser: createDeepseekDsmlParser(tools),
           receivedLength: 0,
           ended: false,
           calls: [],
@@ -144,7 +134,7 @@ export function withPiDeepseekDsml(streamFn: StreamFn): StreamFn {
           type: 'toolCall',
           id: call.toolCallId,
           name: call.toolName,
-          arguments: call.input,
+          arguments: call.input as JsonObject,
         });
         extracted = true;
       }
@@ -152,27 +142,9 @@ export function withPiDeepseekDsml(streamFn: StreamFn): StreamFn {
     };
     const fail = (error: Error, aborted = false) => {
       updateMessage(partial);
-      partial = {
-        ...partial,
-        stopReason: aborted ? 'aborted' : 'error',
-        errorMessage: error.message,
-        diagnostics: [
-          ...(partial.diagnostics ?? []),
-          {
-            type: 'provider_response_failure',
-            timestamp: Date.now(),
-            error: {
-              name: error.name,
-              message: error.message,
-              ...(error instanceof DeepseekDsmlError ? { code: error.code } : {}),
-            },
-            ...(error instanceof DeepseekDsmlError
-              ? { details: { retryable: error.retryable } }
-              : {}),
-          },
-        ],
-      };
-      stream.push({ type: 'error', reason: aborted ? 'aborted' : 'error', error: partial });
+      const event = providerErrorEvent(partial, error, aborted);
+      partial = event.error;
+      stream.push(event);
     };
 
     void (async () => {

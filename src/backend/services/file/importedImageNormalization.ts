@@ -2,18 +2,15 @@ import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import {
-  MAX_IMAGE_ATTACHMENT_COUNT,
-  MAX_IMAGE_ATTACHMENT_TOTAL_BYTES,
-} from '@/shared/utils/fileAttachmentPolicy';
 import { imageMediaTypeFromExtension, isImageFileExtension } from '@/shared/utils/imageFileTypes';
 
 const logger = loggerService.withContext('importedImageNormalization');
 
-/** A full picker selection at this ceiling never trips the send-time total-bytes admission. */
-export const IMPORTED_IMAGE_MAX_BYTES = Math.floor(
-  MAX_IMAGE_ATTACHMENT_TOTAL_BYTES / MAX_IMAGE_ATTACHMENT_COUNT,
-);
+/**
+ * About 2.2 MB. Every request replays the conversation's images, so each stays far below the
+ * strictest provider per-image limit (Anthropic: 5 MB of base64) and many-image requests stay small.
+ */
+export const IMPORTED_IMAGE_MAX_BYTES = 2_330_168;
 /** Vision models downscale beyond roughly this edge, so larger pixels only cost upload time. */
 const MAX_DIMENSION = 2048;
 const MAX_ATTEMPTS = 5;

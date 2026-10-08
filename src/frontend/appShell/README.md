@@ -7,10 +7,14 @@ page.
 - `documentExport/` owns the source-neutral document export navigation handoff.
 - `header/` owns the app-wide main and route header adapters.
 - `navigation/` owns Expo Router and React Navigation integration shared by routes and pages.
+- `remoteAgent/` owns PC controller bindings and queries shared by the drawer and chat.
 - `sidebar/` owns the drawer's navigation surface.
 - `search/` owns the cross-page request session that opens the transient search page.
 - `backgroundActivity/` owns platform Live Activity factories registered during bootstrap.
 - `startup/` owns the frontend startup cover, readiness reporting, and handoff lifecycle.
+- `recovery/` owns the full-screen surfaces shown when the app fails to start or to render:
+  `StartupFailureScreen` for the bootstrap gate and `AppErrorBoundary` around the navigation tree.
+  Both offer a retry; startup copy falls back to English when translations could not initialize.
 - `observability/` owns EAS Observe, the entry-screen interactive marker, and Sentry consent,
   JavaScript event filtering, and the connection to the native crash-reporting module.
 - `privacy/` owns the blocking data-collection disclosure. It is app-wide rather than part of

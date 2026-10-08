@@ -2,10 +2,41 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 type MigrationJournal = {
-  entries: { tag: string }[];
+  entries: { idx: number; tag: string }[];
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds automatic routes without losing existing pairing or manual addresses', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      for (const sql of files.slice(0, 2)) database.exec(sql);
+      const addresses = JSON.stringify([{ host: 'company.example', port: 443, security: 'wss' }]);
+      const grants = JSON.stringify([{ domain: 'agent', grantId: 'grant' }]);
+      database
+        .prepare(`INSERT INTO desktop_connection
+        (id, name, device_id, desktop_identity, configured_endpoints, grants, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run('desktop', 'Desktop', 'device', 'identity', addresses, grants, 1, 1);
+      for (const sql of files.slice(2)) database.exec(sql);
+      expect(
+        database
+          .prepare(
+            'SELECT device_id, desktop_identity, configured_endpoints, learned_endpoints, grants FROM desktop_connection',
+          )
+          .get(),
+      ).toEqual({
+        device_id: 'device',
+        desktop_identity: 'identity',
+        configured_endpoints: addresses,
+        learned_endpoints: '[]',
+        grants,
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test('allows open plugin identifiers and methods while enforcing grant references', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -126,8 +157,8 @@ describe('bundled SQLite migrations', () => {
     const journal = readMigrationJournal();
     const bundleSource = readFileSync(`${process.cwd()}/src/backend/data/db/migrations.ts`, 'utf8');
 
-    for (const [index, { tag }] of journal.entries.entries()) {
-      const moduleName = `m${index.toString().padStart(4, '0')}`;
+    for (const { idx, tag } of journal.entries) {
+      const moduleName = `m${idx.toString().padStart(4, '0')}`;
       expect(bundleSource).toContain(
         `import ${moduleName} from '../../../../migrations/sqlite-drizzle/${tag}.sql';`,
       );
@@ -198,13 +229,15 @@ describe('bundled SQLite migrations', () => {
       expect(columnNames(database, 'desktop_connection')).toEqual([
         'id',
         'name',
-        'base_urls',
-        'active_base_url',
-        'desktop_version',
+        'device_id',
+        'desktop_identity',
+        'configured_endpoints',
+        'grants',
         'status',
         'last_fetched_at',
         'created_at',
         'updated_at',
+        'learned_endpoints',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'scope',

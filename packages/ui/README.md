@@ -72,7 +72,8 @@ also includes `open` for callers that use one error reporter for both operations
 logging, or translation dependency.
 
 `FileAttachmentPreview` is the compact horizontal result variant. It requires the same `onPress`
-callback while showing a filename and caller-supplied category label; square
+callback while showing filename metadata and a caller-supplied category label. It accepts metadata
+without a resolved URI, and `disabled` covers pending transfers or unavailable sources; square
 thumbnail callers continue to use `FilePreview`.
 
 `FilePreview` has four explicit visual variants. The default `thumbnail` uses the plugin and
@@ -196,6 +197,11 @@ translations, file identifiers, or application navigation:
 `MessagePart.Process` is the inline disclosure used for one total-duration row before an answer.
 The product adapter supplies its localized duration and every visible pre-result child; the
 primitive owns the quiet divider, running shimmer, disclosure state, and compact chevron.
+`defaultExpanded` preserves reading when a live tool group enters the completed process, and
+`statusText`/`statusTone` keep exceptions visible while the process is folded.
+`MessagePart.ToolGroup` defaults closed regardless of running state. Its optional controlled
+`expanded`/`onExpandedChange` pair lets a message retain group state across outer disclosure
+unmounts; new calls and completion never override the reader's choice.
 
 `MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
 already communicates live progress. The running state, status text, and detail action remain intact;
@@ -295,8 +301,9 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 `Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
 
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
-`destructive`, `outline`, `secondary`, `ghost`, and `link` variants, along with loading and disabled
-behavior. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
+`destructive`, `outline`, `secondary`, `ghost`, `link`, and `text` variants, along with loading and disabled
+behavior. `text` uses the link color without an underline for standalone text actions; `link` retains
+its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
 `inline`, `default`, `field`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
 compact zero-horizontal-padding action for headings or prose. The `icon` prop renders an icon before
@@ -384,7 +391,9 @@ persistence:
 
 `SelectionIndicator` is the decorative selected/unselected mark inside a parent checkbox or radio
 row. The parent owns the accessible role, state, and press handling. Use its `overlay` variant when
-the unselected ring sits on imagery and needs a dark contrast fill.
+the unselected ring sits on imagery and needs a dark contrast fill. A form that mixes single and
+multiple choice passes `control="radio"` (dot) or `control="checkbox"` (square check) so the shape,
+not a caption, tells them apart.
 
 `Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
 surfaces: the background is the lightest, the border is stronger, and the label has the highest
@@ -931,3 +940,6 @@ If the root app adds or removes the workspace dependency, also update
 ```sh
 pnpm install --lockfile-only
 ```
+
+`MenuItem.group` groups contiguous actions into sections. Android draws the shared panel separator;
+iOS maps sections to inline native menus. Omitted groups preserve the existing flat menu.

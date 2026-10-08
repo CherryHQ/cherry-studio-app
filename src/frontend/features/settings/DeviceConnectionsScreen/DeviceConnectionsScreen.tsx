@@ -4,13 +4,14 @@ import { ContentState } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
+import { describeCapabilities } from '../describeCapabilities';
 
 export function DeviceConnectionsScreen() {
   const { t } = useTranslation();
@@ -60,7 +61,7 @@ export function DeviceConnectionsScreen() {
           title={t('settings.deviceConnections.empty')}
         />
       ) : (
-        <View className="overflow-hidden rounded-2xl bg-grouped-surface">
+        <View className="overflow-hidden rounded-2xl bg-card" style={styles.card}>
           {connections.map((connection, index) => (
             <SettingsServiceRow
               id={connection.id}
@@ -69,9 +70,7 @@ export function DeviceConnectionsScreen() {
               showSeparator={index > 0}
               statusLabel={t(`settings.deviceConnections.status.${connection.status}`)}
               statusTone={connection.status === 'paired' ? 'success' : 'danger'}
-              subtitle={t('settings.deviceConnections.versionValue', {
-                version: connection.desktopVersion,
-              })}
+              subtitle={describeCapabilities(connection.capabilities, t)}
               onPress={() =>
                 router.push({
                   params: { connectionId: connection.id },
@@ -85,3 +84,9 @@ export function DeviceConnectionsScreen() {
     </SettingsScrollPage>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    borderCurve: 'continuous',
+  },
+});

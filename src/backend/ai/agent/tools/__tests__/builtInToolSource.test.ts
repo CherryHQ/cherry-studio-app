@@ -123,18 +123,22 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(tools, 'calendar_create_event')).toBe('ask');
   });
 
-  test('offers health summaries with just one granted metric without enabling workouts', async () => {
-    const tools = await resolve({
-      deviceAccess: { 'health.steps.read': 'granted', 'health.workouts.read': 'denied' },
-    });
-    expect(capabilityIds(tools)).toContain('health_get_summary');
-    expect(capabilityIds(tools)).not.toContain('health_list_workouts');
-  });
-
-  test('allows HealthKit read attempts after an inquiry without requiring a fictitious read grant', async () => {
-    const tools = await resolve({ deviceAccess: { 'health.steps.read': 'requested' } });
-    expect(capabilityIds(tools)).toContain('health_get_summary');
-  });
+  test.each(['ios', 'android'])(
+    'omits retired health tools despite existing device grants on %s',
+    async (platform) => {
+      const deviceAccess = {
+        'calendar.read': 'granted',
+        'calendar.write': 'granted',
+        'health.steps.read': 'granted',
+        'health.workouts.read': 'granted',
+      } as const;
+      const tools = await resolve({ deviceAccess }, { platform });
+      expect(capabilityIds(tools)).toContain('calendar_list_events');
+      expect(capabilityIds(tools)).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/^health_/)]),
+      );
+    },
+  );
 
   test('offers each web tool only when its provider is configured', async () => {
     const unconfigured = await resolve({});
@@ -167,18 +171,24 @@ describe('createSystemCapabilitySource', () => {
   });
 
   test('binds the Host response channel into ask_user_question with the calling turn', async () => {
-    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(async () => ({
-      selectedOptionIds: ['a'],
-      text: '',
-      skipped: false,
-    }));
+    const answer = {
+      answers: [{ questionId: 'pick', selectedOptionIds: ['a'], text: '', skipped: false }],
+    };
+    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(
+      async () => answer,
+    );
     const tools = await resolve({}, { askUser });
     const question = {
-      question: 'Which?',
-      selection: 'single',
-      options: [
-        { id: 'a', label: 'A', description: '' },
-        { id: 'b', label: 'B', description: '' },
+      questions: [
+        {
+          id: 'pick',
+          question: 'Which?',
+          selection: 'single',
+          options: [
+            { id: 'a', label: 'A' },
+            { id: 'b', label: 'B' },
+          ],
+        },
       ],
     };
     const ask = tools.find((tool) => tool.providerName === 'ask_user_question');
@@ -196,8 +206,50 @@ describe('createSystemCapabilitySource', () => {
       expect.objectContaining({ toolCallId: 'question-1', turnId: 'turn-7' }),
     );
     expect(result.value).toMatchObject({
-      selectedOptionIds: ['a'],
-      selectedOptions: [{ id: 'a', label: 'A', description: '' }],
+      ...answer,
+      selectedOptions: [{ questionId: 'pick', options: [{ id: 'a', label: 'A' }] }],
+    });
+  });
+
+  test('returns batch answers and selected labels associated by question ID', async () => {
+    const answer = {
+      answers: [
+        { questionId: 'second', selectedOptionIds: ['a'], text: 'Extra', skipped: false },
+        { questionId: 'first', selectedOptionIds: [], text: '', skipped: true },
+      ],
+    };
+    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(
+      async () => answer,
+    );
+    const tools = await resolve({}, { askUser });
+    const ask = tools.find((tool) => tool.providerName === 'ask_user_question')!;
+    const result = await ask.execute({
+      input: {
+        questions: [
+          {
+            id: 'first',
+            question: 'Choose',
+            selection: 'single',
+            options: [{ id: 'a', label: 'City' }],
+          },
+          {
+            id: 'second',
+            question: 'Choose',
+            selection: 'multiple',
+            options: [{ id: 'a', label: 'Food' }],
+          },
+        ],
+      },
+      signal: new AbortController().signal,
+      toolCallId: 'batch',
+      turnId: 'turn',
+    });
+    expect(result.value).toEqual({
+      ...answer,
+      selectedOptions: [
+        { questionId: 'second', options: [{ id: 'a', label: 'Food' }] },
+        { questionId: 'first', options: [] },
+      ],
     });
   });
 

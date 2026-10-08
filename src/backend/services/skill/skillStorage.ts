@@ -14,10 +14,10 @@
 
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { skillStorageRootDirectory } from '@/backend/data/storage/storagePaths';
 import { SkillsError } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { getManagedStorage } from '../../../../modules/managed-storage';
 import { isSafePackagePath, type SkillPackageFiles } from './skillPackage';
 
 const logger = loggerService.withContext('SkillStorage');
@@ -224,7 +224,7 @@ export const expoSkillFileSystem: SkillFileSystem = {
 
 export const expoSkillStorageRoots: SkillStorageRoots = {
   persistent: () => {
-    const uri = getManagedStorage()?.getApplicationSupportDirectory();
+    const uri = skillStorageRootDirectory()?.uri;
     return uri ? [uri] : null;
   },
   cache: () => [Paths.cache.uri],

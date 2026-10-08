@@ -41,8 +41,24 @@ const fields = z
   );
 const tablePath = (input: { app_token: string; table_id: string }) =>
   `/open-apis/bitable/v1/apps/${encodeURIComponent(input.app_token)}/tables/${encodeURIComponent(input.table_id)}` as const;
+const clientToken = z
+  .uuidv4()
+  .optional()
+  .describe('Optional idempotency UUID. Reuse only for the same intended creation.');
 
 export const feishuBaseTools = [
+  defineFeishuApiTool({
+    name: 'base_get',
+    access: 'read',
+    scopes: ['base:app:read'],
+    description:
+      '飞书多维表格。Read Base metadata, including its name, revision and time zone. This does not read table records.',
+    input: z.strictObject(baseShape),
+    request: ({ app_token }) => ({
+      method: 'GET',
+      path: `/open-apis/bitable/v1/apps/${encodeURIComponent(app_token)}`,
+    }),
+  }),
   defineFeishuApiTool({
     name: 'wiki_get_node',
     access: 'read',
@@ -133,6 +149,66 @@ export const feishuBaseTools = [
     }),
   }),
   defineFeishuApiTool({
+    name: 'base_create_table',
+    access: 'write',
+    scopes: ['base:table:create'],
+    description:
+      '飞书多维表格。Create a data table in an existing Base, optionally naming its default view. This does not create custom fields or populate records.',
+    input: z.strictObject({
+      ...baseShape,
+      name: z.string().min(1).max(100),
+      default_view_name: z.string().min(1).max(100).optional(),
+    }),
+    request: ({ app_token, ...table }) => ({
+      method: 'POST',
+      path: `/open-apis/bitable/v1/apps/${encodeURIComponent(app_token)}/tables`,
+      body: { table },
+    }),
+  }),
+  defineFeishuApiTool({
+    name: 'base_list_views',
+    access: 'read',
+    scopes: ['base:view:read'],
+    description:
+      '飞书多维表格、视图。List one page of views in a Base table. Continue with page_token while has_more is true.',
+    input: z.strictObject({ ...tableShape, ...FeishuPageShape }),
+    request: (input) => ({
+      method: 'GET',
+      path: `${tablePath(input)}/views`,
+      query: {
+        page_size: input.page_size ?? 20,
+        page_token: input.page_token,
+        user_id_type: 'open_id',
+      },
+    }),
+  }),
+  defineFeishuApiTool({
+    name: 'base_get_view',
+    access: 'read',
+    scopes: ['base:view:read'],
+    description:
+      '飞书多维表格、视图。Read a Base view, including its filter and hidden fields. Use its actual view ID from the URL or base_list_views.',
+    input: z.strictObject({ ...tableShape, view_id: FeishuIdSchema }),
+    request: (input) => ({
+      method: 'GET',
+      path: `${tablePath(input)}/views/${encodeURIComponent(input.view_id)}`,
+      query: { user_id_type: 'open_id' },
+    }),
+  }),
+  defineFeishuApiTool({
+    name: 'base_get_record',
+    access: 'read',
+    scopes: ['base:record:read'],
+    description:
+      '飞书多维表格。Read one Base record by its actual record ID. Use this to inspect values before changing them or checking an uncertain write outcome.',
+    input: z.strictObject({ ...tableShape, record_id: FeishuIdSchema }),
+    request: (input) => ({
+      method: 'GET',
+      path: `${tablePath(input)}/records/${encodeURIComponent(input.record_id)}`,
+      query: { user_id_type: 'open_id' },
+    }),
+  }),
+  defineFeishuApiTool({
     name: 'base_create_record',
     access: 'write',
     scopes: ['base:record:create'],
@@ -141,16 +217,55 @@ export const feishuBaseTools = [
     input: z.strictObject({
       ...tableShape,
       fields,
-      client_token: z
-        .uuidv4()
-        .optional()
-        .describe('Optional idempotency UUID. Reuse only for the same intended creation.'),
+      client_token: clientToken,
     }),
     request: (input) => ({
       method: 'POST',
       path: `${tablePath(input)}/records`,
       query: { user_id_type: 'open_id', client_token: input.client_token },
       body: { fields: input.fields },
+    }),
+  }),
+  defineFeishuApiTool({
+    name: 'base_batch_create_records',
+    access: 'write',
+    scopes: ['base:record:create'],
+    description:
+      '飞书多维表格、批量。Create up to 100 records in one Base table in a single request. Read base_list_fields first. Large field values may require a smaller batch. Check returned record IDs before retrying an uncertain outcome.',
+    input: z.strictObject({
+      ...tableShape,
+      records: z.array(z.strictObject({ fields })).min(1).max(100),
+      client_token: clientToken,
+    }),
+    request: (input) => ({
+      method: 'POST',
+      path: `${tablePath(input)}/records/batch_create`,
+      query: { user_id_type: 'open_id', client_token: input.client_token },
+      body: { records: input.records },
+    }),
+  }),
+  defineFeishuApiTool({
+    name: 'base_batch_update_records',
+    access: 'write',
+    scopes: ['base:record:update'],
+    description:
+      '飞书多维表格、批量。Update supplied fields of up to 100 distinct records in one Base table. Omitted fields are preserved; null clears a value. Inspect the field schema and target records first. Check each returned record before retrying an uncertain outcome.',
+    input: z.strictObject({
+      ...tableShape,
+      records: z
+        .array(z.strictObject({ record_id: FeishuIdSchema, fields }))
+        .min(1)
+        .max(100)
+        .refine(
+          (records) => new Set(records.map((record) => record.record_id)).size === records.length,
+          'Supply each record ID only once.',
+        ),
+    }),
+    request: (input) => ({
+      method: 'POST',
+      path: `${tablePath(input)}/records/batch_update`,
+      query: { user_id_type: 'open_id' },
+      body: { records: input.records },
     }),
   }),
   defineFeishuApiTool({

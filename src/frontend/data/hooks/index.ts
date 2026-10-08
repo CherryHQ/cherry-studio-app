@@ -7,3 +7,4 @@ export {
   useQuery,
 } from './useDataApi';
 export { useMultiplePreferences, usePreference } from './usePreference';
+export { useBackgroundExecutionStatus } from './useBackgroundExecutionStatus';

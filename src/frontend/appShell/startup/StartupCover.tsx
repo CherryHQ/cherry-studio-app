@@ -1,23 +1,34 @@
 import { easing } from '@cherrystudio/ui/motion';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
+  Easing,
   ReduceMotion,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withDelay,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { getStartupExitDurationMs, STARTUP_ATTRIBUTION_ENTER_DURATION_MS } from './startupState';
+import {
+  getStartupExitDurationMs,
+  STARTUP_ATTRIBUTION_ENTER_DURATION_MS,
+  STARTUP_EXIT_FADE_DELAY_MS,
+  STARTUP_EXIT_FADE_DURATION_MS,
+  STARTUP_EXIT_LOGO_DURATION_MS,
+  STARTUP_EXIT_LOGO_SCALE,
+} from './startupState';
 
 const STARTUP_LOGO = require('@/assets/icon.png');
 const LOGO_SIZE = 96;
 const ATTRIBUTION_SAFE_AREA_GAP = 48;
+// The fade starts slowly so the logo's growth is readable before the cover thins out.
+const coverFadeEasing = Easing.inOut(Easing.cubic);
 
 const colors = {
   dark: {
@@ -47,10 +58,12 @@ export function StartupCover({
   const reducedMotion = useReducedMotion();
   const attributionOpacity = useSharedValue(reducedMotion ? 1 : 0);
   const coverOpacity = useSharedValue(1);
+  const logoScale = useSharedValue(1);
   const palette = colors[colorScheme];
   const exitDurationMs = getStartupExitDurationMs(reducedMotion);
   const attributionStyle = useAnimatedStyle(() => ({ opacity: attributionOpacity.get() }));
   const coverStyle = useAnimatedStyle(() => ({ opacity: coverOpacity.get() }));
+  const logoStyle = useAnimatedStyle(() => ({ transform: [{ scale: logoScale.get() }] }));
 
   useEffect(() => {
     if (!coverPresented) {
@@ -81,29 +94,41 @@ export function StartupCover({
       return;
     }
 
+    logoScale.set(
+      withTiming(STARTUP_EXIT_LOGO_SCALE, {
+        duration: STARTUP_EXIT_LOGO_DURATION_MS,
+        easing: easing.settle,
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
     coverOpacity.set(
-      withTiming(
-        0,
-        {
-          duration: exitDurationMs,
-          easing: easing.settle,
-          reduceMotion: ReduceMotion.System,
-        },
-        (finished) => {
-          if (finished) {
-            scheduleOnRN(onExitComplete);
-          }
-        },
+      withDelay(
+        STARTUP_EXIT_FADE_DELAY_MS,
+        withTiming(
+          0,
+          {
+            duration: STARTUP_EXIT_FADE_DURATION_MS,
+            easing: coverFadeEasing,
+            reduceMotion: ReduceMotion.System,
+          },
+          (finished) => {
+            if (finished) {
+              scheduleOnRN(onExitComplete);
+            }
+          },
+        ),
+        ReduceMotion.System,
       ),
     );
-  }, [coverOpacity, exitDurationMs, exitRequested, onExitComplete]);
+  }, [coverOpacity, exitDurationMs, exitRequested, logoScale, onExitComplete]);
 
   useEffect(() => {
     return () => {
       cancelAnimation(attributionOpacity);
       cancelAnimation(coverOpacity);
+      cancelAnimation(logoScale);
     };
-  }, [attributionOpacity, coverOpacity]);
+  }, [attributionOpacity, coverOpacity, logoScale]);
 
   return (
     <Animated.View
@@ -116,12 +141,12 @@ export function StartupCover({
     >
       <StatusBar animated={false} style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <View pointerEvents="none" style={styles.logoContainer}>
-        <Image
+        <Animated.Image
           accessibilityIgnoresInvertColors
           accessible={false}
           resizeMode="contain"
           source={STARTUP_LOGO}
-          style={styles.logo}
+          style={[styles.logo, logoStyle]}
         />
       </View>
       <Animated.View

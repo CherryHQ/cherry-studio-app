@@ -71,13 +71,6 @@ jest.mock('@/frontend/hooks/agent', () => ({
     agent: agentId === 'agent-1' ? { id: 'agent-1' } : undefined,
     isLoading: false,
   }),
-  useAgentMessageHistoryWindow: () => ({
-    isLoadingInitial: false,
-    isLoadingOlder: false,
-    loadOlder: jest.fn(),
-    messages: [],
-    retry: jest.fn(),
-  }),
   useAgentSession: () => ({
     data: mockSessionData,
     error: mockSessionError,
@@ -98,12 +91,36 @@ const mockChatControls = {
 };
 
 jest.mock('../runtime', () => ({
-  latestAgentImageResult: jest.requireActual('../runtime/agentImageResult').latestAgentImageResult,
+  latestConversationImageResult: jest.requireActual('../runtime/agentImageResult')
+    .latestConversationImageResult,
   useAgentChatControls: (input: { agentId?: string; composerKey: number; sessionId?: string }) => {
     chatControlsInput = input;
     return mockChatControls;
   },
   useAgentChatDraftHandoff: () => undefined,
+  useLocalConversation: () => ({
+    snapshot: {
+      title: '',
+      freshness: { state: 'current' },
+      liveMessages: [],
+      executions: [],
+      interactions: [],
+    },
+    messages: [],
+    messageWindow: {
+      dataKey: 'session-1',
+      isLoadingInitial: false,
+      isRefreshing: false,
+      isLoadingOlder: false,
+      isLoadingNewer: false,
+      hasNewerMessages: false,
+      hasOlderMessages: false,
+      messages: [],
+      loadOlder: jest.fn(),
+      loadNewer: jest.fn(),
+      retry: jest.fn(),
+    },
+  }),
 }));
 
 jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
@@ -123,6 +140,7 @@ jest.mock('../components/ChatRouteResolver', () => ({
 }));
 
 jest.mock('../components/ChatWorkspace', () => ({
+  AssistantMessageUsage: () => null,
   ChatDraftState: () => null,
   ChatEmptyState: () => null,
   ChatWorkspace: (props: Record<string, unknown>) => {
@@ -135,7 +153,7 @@ describe('ChatScreen composer dock wiring', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
-    mockDismissInput.mockClear();
+    jest.clearAllMocks();
     chatControlsInput = undefined;
     chatInputProps = undefined;
     chatWorkspaceProps = undefined;

@@ -16,10 +16,12 @@ import { MessageListDisclosureProvider } from './list/MessageListDisclosureConte
 import {
   getMessageRowType,
   isMessageListAtBottom,
+  isMessageListLiveTailInView,
   MAINTAIN_VISIBLE_CONTENT_POSITION,
   MESSAGE_LIST_TOP_PADDING,
   messageKeyExtractor,
 } from './list/messageListLayout';
+import { MessageListLiveTailProvider } from './list/MessageListLiveTailContext';
 import { MessageListRow } from './list/MessageListRow';
 import { useMessageListScrollController } from './list/useMessageListScrollController';
 import type { MessageListItem, MessageListProps } from './types';
@@ -86,6 +88,11 @@ export function MessageList({
   const syncScrollButtonVisibility = useCallback((key: string | undefined, isAtBottom: boolean) => {
     setBottomState({ dataKey: key, isAtBottom });
   }, []);
+  const [liveTailState, setLiveTailState] = useState({ dataKey, isInView: true });
+  const syncLiveTailVisibility = useCallback((key: string | undefined, isInView: boolean) => {
+    setLiveTailState({ dataKey: key, isInView });
+  }, []);
+  const isLiveTailInView = useSharedValue(true);
   const handleListContentSizeChange = useCallback(
     (_width: number, height: number) => {
       contentHeight.set({ dataKey, height });
@@ -127,6 +134,41 @@ export function MessageList({
     },
   );
 
+  useAnimatedReaction(
+    () => {
+      const content = contentHeight.get();
+      const viewport = viewportHeight.get();
+      if (content.dataKey !== dataKey || viewport <= 0) {
+        return { dataKey, isInView: true };
+      }
+      const inset = Math.min(viewport, keyboardLift.get());
+      return {
+        dataKey,
+        isInView: isMessageListLiveTailInView(
+          scrollOffset.get(),
+          content.height + inset,
+          viewport,
+          contentBottomInset,
+          isLiveTailInView.get(),
+        ),
+      };
+    },
+    (current, previous) => {
+      isLiveTailInView.set(current.isInView);
+      if (
+        previous === null ||
+        current.dataKey !== previous.dataKey ||
+        current.isInView !== previous.isInView
+      ) {
+        runOnJS(syncLiveTailVisibility)(current.dataKey, current.isInView);
+      }
+    },
+  );
+  // Following keeps the end on screen by definition, including the frame
+  // between content growth and the stick-to-bottom correction.
+  const isLiveTailVisible =
+    isFollowing || liveTailState.dataKey !== dataKey || liveTailState.isInView;
+
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
   const contentContainerStyle = useMemo(
     () => ({
@@ -155,72 +197,74 @@ export function MessageList({
 
   return (
     <MessageListDisclosureProvider onDisclosureToggle={handleDisclosureToggle}>
-      <View className="flex-1" testID="chat-message-list">
-        <ScrollInteractionBoundary
-          onMomentumScrollBegin={handleMomentumScrollBegin}
-          onMomentumScrollEnd={handleMomentumScrollEnd}
-          onScrollBeginDrag={handleScrollBeginDrag}
-          onScrollEndDrag={handleScrollEndDrag}
-          onTouchStart={handleTouchStart}
-        >
-          {(scrollHandlers) => (
-            <KeyboardAwareLegendList
-              ref={listRef}
-              {...scrollHandlers}
-              applyWorkaroundForContentInsetHitTestBug
-              contentContainerStyle={contentContainerStyle}
-              contentInsetAdjustmentBehavior="never"
-              data={messages}
-              {...(dataKey ? { dataKey } : {})}
-              drawDistance={80}
-              estimatedItemSize={300}
-              estimatedHeaderSize={contentTopInset}
-              extraData={extraData}
-              getItemType={getMessageRowType}
-              keyExtractor={messageKeyExtractor}
-              keyboardDismissMode="none"
-              keyboardLiftBehavior={isFollowing ? 'persistent' : 'never'}
-              keyboardOffset={keyboardOffset}
-              keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-              ListHeaderComponent={listHeader}
-              {...(!dataKey ? { initialScrollAtEnd: true } : {})}
-              maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
-              onContentSizeChange={handleListContentSizeChange}
-              onLayout={handleListLayout}
-              onLoad={handleLoad}
-              onScroll={handleScroll}
-              onStartReached={onLoadOlder ? handleStartReached : undefined}
-              onStartReachedThreshold={0.05}
-              onEndReached={hasNewerMessages ? handleEndReached : undefined}
-              onEndReachedThreshold={0.3}
-              // Message parts own local disclosure state. Keep recycling disabled
-              // until that state is explicitly reset with LegendList recycling hooks.
-              recycleItems={false}
-              renderItem={renderMessageRow}
-              scrollEventThrottle={16}
-              scrollsToTop
-              sharedValues={sharedValues}
-              showsVerticalScrollIndicator={false}
-              className="flex-1"
+      <MessageListLiveTailProvider isVisible={isLiveTailVisible}>
+        <View className="flex-1" testID="chat-message-list">
+          <ScrollInteractionBoundary
+            onMomentumScrollBegin={handleMomentumScrollBegin}
+            onMomentumScrollEnd={handleMomentumScrollEnd}
+            onScrollBeginDrag={handleScrollBeginDrag}
+            onScrollEndDrag={handleScrollEndDrag}
+            onTouchStart={handleTouchStart}
+          >
+            {(scrollHandlers) => (
+              <KeyboardAwareLegendList
+                ref={listRef}
+                {...scrollHandlers}
+                applyWorkaroundForContentInsetHitTestBug
+                contentContainerStyle={contentContainerStyle}
+                contentInsetAdjustmentBehavior="never"
+                data={messages}
+                {...(dataKey ? { dataKey } : {})}
+                drawDistance={80}
+                estimatedItemSize={300}
+                estimatedHeaderSize={contentTopInset}
+                extraData={extraData}
+                getItemType={getMessageRowType}
+                keyExtractor={messageKeyExtractor}
+                keyboardDismissMode="none"
+                keyboardLiftBehavior={isFollowing ? 'persistent' : 'never'}
+                keyboardOffset={keyboardOffset}
+                keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+                ListHeaderComponent={listHeader}
+                {...(!dataKey ? { initialScrollAtEnd: true } : {})}
+                maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
+                onContentSizeChange={handleListContentSizeChange}
+                onLayout={handleListLayout}
+                onLoad={handleLoad}
+                onScroll={handleScroll}
+                onStartReached={onLoadOlder ? handleStartReached : undefined}
+                onStartReachedThreshold={0.05}
+                onEndReached={hasNewerMessages ? handleEndReached : undefined}
+                onEndReachedThreshold={0.3}
+                // Message parts own local disclosure state. Keep recycling disabled
+                // until that state is explicitly reset with LegendList recycling hooks.
+                recycleItems={false}
+                renderItem={renderMessageRow}
+                scrollEventThrottle={16}
+                scrollsToTop
+                sharedValues={sharedValues}
+                showsVerticalScrollIndicator={false}
+                className="flex-1"
+              />
+            )}
+          </ScrollInteractionBoundary>
+          {messages.length > 0 ? (
+            <ScrollToBottomButton
+              accessibilityLabel={t('chat.message.scrollToBottom')}
+              bottomAccessoryHeight={scrollButtonBottom}
+              gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
+              isAtBottom={
+                !hasNewerMessages &&
+                (isFollowing || bottomState.dataKey !== dataKey || bottomState.isAtBottom)
+              }
+              // The press only enters following mode, which already hides the
+              // button. Mirroring an optimistic at-end state here would stick at
+              // `true` whenever the scroll does not actually land at the end.
+              onPress={handleScrollToEnd}
             />
-          )}
-        </ScrollInteractionBoundary>
-        {messages.length > 0 ? (
-          <ScrollToBottomButton
-            accessibilityLabel={t('chat.message.scrollToBottom')}
-            bottomAccessoryHeight={scrollButtonBottom}
-            gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
-            isAtBottom={
-              !hasNewerMessages &&
-              (isFollowing || bottomState.dataKey !== dataKey || bottomState.isAtBottom)
-            }
-            // The press only enters following mode, which already hides the
-            // button. Mirroring an optimistic at-end state here would stick at
-            // `true` whenever the scroll does not actually land at the end.
-            onPress={handleScrollToEnd}
-          />
-        ) : null}
-      </View>
+          ) : null}
+        </View>
+      </MessageListLiveTailProvider>
     </MessageListDisclosureProvider>
   );
 }

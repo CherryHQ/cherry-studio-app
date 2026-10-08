@@ -3,6 +3,7 @@ export { AvatarImagePicker } from './components/AvatarImagePicker';
 export { AvatarPickerField } from './components/AvatarPickerField';
 export { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from './components/BrandAvatar';
 export { ModelAvatar } from './components/ModelAvatar';
+export { ProviderAvatar } from './components/ProviderAvatar';
 export { ProviderBrandAvatar } from './components/ProviderBrandAvatar';
 export { getBrandAvatarIconDisplayConfig } from './utils/brandAvatarStyles';
 export {

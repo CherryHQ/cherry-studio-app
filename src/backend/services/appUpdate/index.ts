@@ -1,0 +1,1 @@
+export { createAppUpdateModule } from './createAppUpdateModule';

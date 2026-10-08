@@ -25,6 +25,7 @@ import { cn } from '../../utils';
 import { Button } from '../button';
 import { useTextFieldState } from '../text-field/text-field-context';
 import type { InputPasswordProps, InputProps, InputTextProps } from './input.types';
+import { useFieldText } from './use-field-text';
 
 const multilineVisibleLines = 4;
 const multilineVerticalPadding = 16;
@@ -71,6 +72,7 @@ function NativeInput({
   value,
   ...inputProps
 }: NativeInputProps) {
+  const [text, changeText] = useFieldText(value, onChangeText);
   const [selectionTint, selectionBackground] = useCSSVariable([
     '--color-muted-foreground',
     '--color-secondary',
@@ -115,13 +117,13 @@ function NativeInput({
       keyboardType={keyboardType}
       maxFontSizeMultiplier={maxFontSizeMultiplier}
       multiline={multiline}
-      onChangeText={onChangeText}
+      onChangeText={changeText}
       returnKeyType={returnKeyType}
       scrollEnabled={scrollEnabled ?? (multiline ? true : undefined)}
       secureTextEntry={secureTextEntry}
       style={multiline ? [{ height: multilineHeight }, style] : style}
       testID={testID}
-      value={value}
+      value={text}
     />
   );
 }

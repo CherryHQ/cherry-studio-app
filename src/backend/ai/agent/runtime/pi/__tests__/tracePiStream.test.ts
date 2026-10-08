@@ -1,6 +1,7 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
 import { tracePiStream } from '../tracePiStream';
@@ -40,9 +41,12 @@ describe('tracePiStream', () => {
     const { traces, records } = createTraceRecorder();
     const root = traces.startTrace('turn');
     const source = new AssistantMessageEventStream();
-    const observed = await tracePiStream(() => source, root)(model, {
-      messages: [{ role: 'user', content: 'private prompt', timestamp: 1 }],
-    });
+    const observed = await tracePiStream(() => source, root)(
+      model,
+      normalizeContext({
+        messages: [{ role: 'user', content: 'private prompt', timestamp: 1 }],
+      }),
+    );
     expect(observed).toBe(source);
     const start = { type: 'start', partial: message } as const;
     const done = { type: 'done', reason: 'stop', message } as const;
@@ -68,7 +72,7 @@ describe('tracePiStream', () => {
     const { traces, records } = createTraceRecorder();
     const root = traces.startTrace('turn');
     const source = new AssistantMessageEventStream();
-    await tracePiStream(() => source, root)(model, { messages: [] });
+    await tracePiStream(() => source, root)(model, normalizeContext({ messages: [] }));
     root?.end('cancelled');
     source.push({ type: 'done', reason: 'stop', message });
     await source.result();
@@ -84,7 +88,7 @@ describe('tracePiStream', () => {
     const stream = tracePiStream(() => {
       throw failure;
     }, root);
-    await expect(stream(model, { messages: [] })).rejects.toBe(failure);
+    await expect(stream(model, normalizeContext({ messages: [] }))).rejects.toBe(failure);
     expect(records.at(-1)).toMatchObject({
       status: 'error',
       attributes: { 'http.status_code': 401 },

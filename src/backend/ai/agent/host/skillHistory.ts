@@ -59,3 +59,13 @@ export function stripSkillHistoryParts(parts: readonly AgentMessagePart[]): Agen
 export function stripSkillHistory(messages: readonly AgentMessageView[]): AgentMessageView[] {
   return messages.map((message) => ({ ...message, parts: stripSkillHistoryParts(message.parts) }));
 }
+
+/** Native replay carries original tool bodies, so these turns must use the stripped transcript. */
+export function hasSkillHistory(parts: readonly AgentMessagePart[]): boolean {
+  return parts.some(
+    (part) =>
+      part.type === 'tool' &&
+      part.toolRef.source === 'builtin' &&
+      SKILL_TOOL_NAMES.includes(part.toolRef.capabilityId),
+  );
+}

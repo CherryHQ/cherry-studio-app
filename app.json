@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cherry Studio",
     "slug": "cherry-studio",
-    "version": "0.1.0",
+    "version": "0.1.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "cherrystudio",
@@ -69,7 +69,6 @@
         ]
       },
       "entitlements": {
-        "com.apple.developer.healthkit": true,
         "com.apple.security.application-groups": ["group.com.cherryai.cherrystudio-app"]
       },
       "infoPlist": {
@@ -80,14 +79,11 @@
           "UIInterfaceOrientationLandscapeRight"
         ],
         "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add calendar events when you ask the assistant.",
-        "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant.",
-        "NSHealthUpdateUsageDescription": "Cherry Studio reads selected Apple Health data to answer your health and fitness questions. It does not save or modify data in Apple Health.",
         "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to the Cherry Studio desktop app, AI providers, and MCP servers on your local network.",
-        "NSBonjourServices": ["_cherrystudio-api._tcp"],
+        "NSBonjourServices": ["_cherry-remote._tcp"],
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
-        "UIBackgroundModes": ["audio"],
         "ITSAppUsesNonExemptEncryption": false
       }
     },

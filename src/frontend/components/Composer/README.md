@@ -65,7 +65,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 - `useComposerPresentationActions` — activates editing on field focus, ends it on send or explicit
   outside dismissal, and presents a Sheet or native picker while retaining the editing state. The model
   pill and media menu already use the replacement action; caller-owned replacement buttons, such
-  as painting settings, use the same action.
+  as painting settings, use the same action. An alternative field passes its blur handle to
+  `activateInput` on focus so background dismissal targets that field; the ordinary field resumes
+  ownership on its next focus.
 - `ComposerDock` — connects that input-context state to CherryUI's
   `Composer.Dock`. Chat keeps it in normal parent flow; floating surfaces can pair it with
   CherryUI's `useComposerDockLayout` measurement and content-inset primitive.
@@ -86,7 +88,7 @@ protocol, not a part, and two screens assembling it separately would be two
 implementations of it. It lives in `ComposerSurface`, which is what renders the
 surface, so there is no way to compose a composer that skips it. A synchronous
 in-flight lock also prevents a repeated gesture from snapshotting and restoring
-the same draft twice. Failure restoration also retains text and attachments added while the send was pending. Pasting is baked into `ComposerField` for the same reason.
+the same draft twice. Failure restoration also retains text and attachments added while the send was pending. A rejection named `AbortError` is a send the user stopped: the draft is restored without a failure notice. Pasting is baked into `ComposerField` for the same reason.
 
 The full checklist for it is the behaviour contract in
 `src/frontend/features/chat/components/ChatInput/README.md` — that is the screen you actually

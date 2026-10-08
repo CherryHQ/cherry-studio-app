@@ -9,7 +9,45 @@ let config = getSentryExpoConfig(__dirname);
 config.resolver.sourceExts.push('sql');
 config.watchFolders.push(path.resolve(__dirname, 'packages'));
 
+// libp2p packages pick their Node or browser entry through the legacy package.json `browser`
+// file map, which Metro ignores once a package declares `exports`. Apply that map for relative
+// imports inside those packages so the pure-JS entries win (node:os, node:crypto never bundle).
+// Pi uses the same map to select its native manual OAuth callback adapter.
+const legacyBrowserMapPackages =
+  /\/node_modules\/(@libp2p|@chainsafe|@multiformats|@earendil-works)\/[^/]+\//;
+const browserRedirect = (context, moduleName) => {
+  if (!moduleName.startsWith('.')) return null;
+  const match = legacyBrowserMapPackages.exec(context.originModulePath);
+  if (!match) return null;
+  const packageRoot = context.originModulePath.slice(0, match.index + match[0].length - 1);
+  let browser;
+  try {
+    browser = require(path.join(packageRoot, 'package.json')).browser;
+  } catch {
+    return null;
+  }
+  if (typeof browser !== 'object' || browser === null) return null;
+  const target = path.resolve(path.dirname(context.originModulePath), moduleName);
+  const key = `./${path.relative(packageRoot, target)}`;
+  const replacement = browser[key];
+  return typeof replacement === 'string' ? path.join(packageRoot, replacement) : null;
+};
+
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // pnpm peer variants can give @expo/ui a second Expo runtime. Its Expo.fx
+  // replaces __loadBundleAsync, but native startup initialized only the root
+  // copy's HMR client. Keep Expo and its subpaths on that same runtime.
+  if (moduleName === 'expo' || moduleName.startsWith('expo/')) {
+    return context.resolveRequest(
+      { ...context, originModulePath: path.join(__dirname, 'package.json') },
+      moduleName,
+      platform,
+    );
+  }
+  if (platform === 'android' || platform === 'ios') {
+    const redirected = browserRedirect(context, moduleName);
+    if (redirected) return { type: 'sourceFile', filePath: redirected };
+  }
   // pkce-challenge 5.x omits a native export; select the same browser entry as legacy resolution.
   if (moduleName === 'pkce-challenge' && (platform === 'android' || platform === 'ios')) {
     return context.resolveRequest(
@@ -34,7 +72,14 @@ config = withStorybook(config, {
   enabled: process.env.EXPO_PUBLIC_STORYBOOK_ENABLED === 'true',
 });
 
-module.exports = withUniwindConfig(config, {
+config = withUniwindConfig(config, {
   cssEntryFile: './src/frontend/styles/global.css',
   dtsFile: './src/types/uniwind-types.d.ts',
 });
+
+// Cached transforms can reference generated worklet files from a different EAS build directory.
+if (process.env.EAS_BUILD === '1') {
+  config.cacheStores = [];
+}
+
+module.exports = config;

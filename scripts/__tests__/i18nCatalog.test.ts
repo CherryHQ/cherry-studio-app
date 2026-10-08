@@ -73,6 +73,28 @@ describe('translation catalog checks', () => {
     );
   });
 
+  test.each(['to authorize', 'to-authorize', 'to.authorize'])(
+    'does not infer OAuth from ordinary words separated in %s',
+    (authorizationText) => {
+      expect(
+        checkCatalog(
+          { hint: `Open browser ${authorizationText}` },
+          { hint: '打开浏览器授权' },
+          'zh-CN',
+          ['OAuth'],
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  test('still rejects a dropped OAuth name and accepts it within translated text', () => {
+    const source = { hint: 'Sign in with OAuth' };
+    expect(checkCatalog(source, { hint: '登录' }, 'zh-CN', ['OAuth'])).toContain(
+      'hint: missing protected term OAuth',
+    );
+    expect(checkCatalog(source, { hint: '使用OAuth登录' }, 'zh-CN', ['OAuth'])).toEqual([]);
+  });
+
   test('source checks catch missing literal and conditional keys but accept plural stems', () => {
     const errors = checkSourceKeys(
       'example.ts',

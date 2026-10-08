@@ -54,7 +54,7 @@ export function deriveBackgroundReplyContent(
       part.toolRef.capabilityId === 'ask_user_question',
   );
   if (question) {
-    // Reuse the native attention phase and its released keep-alive lease.
+    // Waiting for a question uses the same attention phase and execution lease.
     return createContent('awaiting-approval', t('chat.question.waiting'), preview);
   }
   const activeTool = findLastToolPart(parts, isActiveToolPart);

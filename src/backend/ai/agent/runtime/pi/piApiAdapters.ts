@@ -1,7 +1,8 @@
 import { formatApiHost, withoutTrailingApiVersion } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
-import type { FetchFunction } from '@earendil-works/pi-ai';
+import type { AgentOptions } from '@earendil-works/pi-agent-core';
+import type { CacheRetention, FetchFunction } from '@earendil-works/pi-ai';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
 
@@ -10,6 +11,7 @@ export type SupportedPiApi =
   | 'google-generative-ai'
   | 'openai-completions'
   | 'openai-responses'
+  | 'openai-codex-responses'
   | 'azure-openai-responses';
 
 type PiStreamFn = AgentOptions['streamFn'];
@@ -84,6 +86,17 @@ export function resolvePiApiAdapter(
   endpointType: PiLanguageEndpointType,
   adapterFamily?: string,
 ): PiApiAdapter {
+  if (endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES && adapterFamily === 'openai-codex') {
+    return {
+      api: 'openai-codex-responses',
+      authHeaderNames: ['authorization'],
+      formatBaseUrl: (baseUrl) => baseUrl.replace(/\/$/, ''),
+      loadStreamSimple: async () =>
+        (await import('@earendil-works/pi-ai/api/openai-codex-responses'))
+          .streamSimple as unknown as PiStreamFn,
+      supportsCustomFetch: true,
+    };
+  }
   if (endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES && adapterFamily === 'azure-responses') {
     return AZURE_RESPONSES_ADAPTER;
   }
@@ -91,15 +104,16 @@ export function resolvePiApiAdapter(
 }
 
 type PiStreamBinding = {
-  apiKey: string;
+  apiKey?: string;
   fetch: FetchFunction;
   headers: Record<string, string>;
   maxRetries: number;
   maxTokens: number;
   requestParameters?: PiRequestParameters;
   temperature?: number;
-  timeoutMs: number;
   azureApiVersion?: string;
+  cacheRetention?: CacheRetention;
+  sessionId?: string;
 };
 
 export async function bindPiStream(
@@ -114,6 +128,9 @@ export async function bindPiStream(
     const streamOptions = {
       ...options,
       apiKey: binding.apiKey,
+      cacheRetention: binding.cacheRetention ?? options?.cacheRetention,
+      sessionId: binding.sessionId ?? options?.sessionId,
+      ...(adapter.api === 'openai-codex-responses' ? { transport: 'sse' } : {}),
       ...(adapter.api === 'azure-openai-responses' && binding.azureApiVersion
         ? { azureApiVersion: binding.azureApiVersion }
         : {}),
@@ -136,8 +153,7 @@ export async function bindPiStream(
       },
       signal: options?.signal,
       temperature,
-      timeoutMs: binding.timeoutMs,
     } as Parameters<PiStreamFn>[2];
-    return streamSimple(model, context, streamOptions);
+    return streamSimple(model, normalizeContext(context), streamOptions);
   };
 }

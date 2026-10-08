@@ -60,6 +60,13 @@ export interface AgentProtocol {
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>;
 
+  /**
+   * Abandons a submission, retry, or Draft start that has not reserved its turn
+   * yet; the pending call rejects with `CANCELLED`. A reserved turn is
+   * cancelled through `cancelTurn`. Idempotent.
+   */
+  cancelSubmission(input: { sessionId: string }): Promise<void>;
+
   respondQuestion(input: AgentRespondQuestionInput): Promise<void>;
 
   respondApproval(input: {

@@ -14,7 +14,6 @@ const mockPrepareExport = jest.fn();
 jest.mock('../prepareImageExport', () => ({
   prepareFileExport: (...args: unknown[]) => mockPrepareExport(...args),
 }));
-jest.mock('expo-crypto', () => ({ randomUUID: () => 'export-operation' }));
 
 jest.mock('expo-file-system', () => ({
   Directory: jest.fn((...parts: string[]) => ({
@@ -49,7 +48,11 @@ const signature: ExportSignature = {
   background: '#ffffff',
   foreground: '#000000',
   brandName: 'Cherry Studio',
-  timestamp: '2026.09.16 18:00',
+  brandColor: '#ff5757',
+  downloadLabel: 'Scan to download the mobile app',
+  downloadLinkLabel: 'Download the mobile app',
+  downloadUrl: 'https://example.com/mobile',
+  qrCodeDataUrl: 'data:image/png;base64,AQ==',
   logoDataUrl: 'data:image/png;base64,AA==',
 };
 
@@ -105,13 +108,42 @@ it('delivers the signed PNG copy with a matching filename and MIME type', async 
   });
   await shareFile({ entry: imageEntry, uri: 'file:///managed/original.jpg' }, { watermark });
   expect(mockShare).toHaveBeenCalledWith(
-    `file:///cache/FileExports/${entry.id}/export-operation/作品.png`,
+    expect.stringMatching(
+      new RegExp(`^file:///cache/FileExports/${entry.id}/2-[0-9a-f]{8}/作品\\.png$`),
+    ),
     {
       dialogTitle: '作品.png',
       mimeType: 'image/png',
     },
   );
   expect(mockRelease).toHaveBeenCalledTimes(1);
+});
+
+it('reuses one signed copy per revision and treatment instead of adding one per share', async () => {
+  const imageEntry = FileEntrySchema.parse({
+    ...entry,
+    filename: '作品.png',
+    mediaType: 'image/png',
+  });
+  mockPrepareExport.mockImplementation(async () => ({
+    uri: 'file:///signed.png',
+    filename: '作品.png',
+    mediaType: 'image/png',
+    release: mockRelease,
+  }));
+  const file = { entry: imageEntry, uri: 'file:///managed/original.png' };
+  const otherWatermark: ExportWatermark = {
+    kind: 'cherry',
+    signature: { ...signature, downloadLabel: 'Scannen zum Herunterladen' },
+  };
+  await shareFile(file, { watermark });
+  await shareFile(file, { watermark });
+  await shareFile(file, { watermark: otherWatermark });
+  await shareFile({ ...file, entry: { ...imageEntry, updatedAt: 3 } }, { watermark });
+  const [first, second, otherTreatment, otherRevision] = mockShare.mock.calls.map(([uri]) => uri);
+  expect(second).toBe(first);
+  expect(otherTreatment).not.toBe(first);
+  expect(otherRevision).not.toBe(first);
 });
 
 it('does not share the unmarked original after signature generation fails', async () => {

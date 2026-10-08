@@ -1,3 +1,4 @@
+import { loggerService } from '@logger';
 import { Platform } from 'react-native';
 import { Uniwind } from 'uniwind';
 
@@ -14,14 +15,30 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import {
+  cleanupStorageAfterBoot,
+  commitStorageBoot,
+  failStorageBoot,
+  getStorageBoot,
+  rejectStorageCandidate,
+} from '@/backend/data/storage/storagePaths';
 import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
+import type { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
-import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import { type BackupRuntime, validateRestoringStorage } from '@/backend/services/backup';
+import type {
+  DesktopConnectionManager,
+  DesktopConnectionRuntime,
+} from '@/backend/services/desktopConnections';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
+import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
+import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
@@ -32,8 +49,10 @@ import {
 } from '@/frontend/appShell/backgroundActivity';
 import AssistantActivity from '@/frontend/appShell/backgroundActivity/AssistantActivity/AssistantActivity';
 import PaintingActivity from '@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActivity';
-import i18n from '@/frontend/i18n';
+import { cacheService as frontendCache } from '@/frontend/data/CacheService';
+import i18n, { initI18n } from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
+import { BackupError } from '@/shared/contracts/backup';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
 
@@ -76,7 +95,7 @@ export function createAppBootstrapRuntime(
     assistantPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
-    // Android's switch controls chat execution; its service notifications remain mandatory.
+    // This preference controls iOS cards only; conversation execution is unconditional.
     isPresentationEnabled: () =>
       Platform.OS !== 'ios' || preference.readCached('chat.background_reply.enabled'),
     isReplyCompletionNotificationEnabled,
@@ -92,15 +111,28 @@ export function createAppBootstrapRuntime(
   // Opening a destination retires its delivered completion notice, mirroring
   // the manager's settled-surface dismissal on the same visible-task source.
   const unsubscribeVisibleTask = subscribeVisibleBackgroundTask((deepLinkUrl) => {
-    if (deepLinkUrl) replyCompletionNotifications?.dismissDestination(deepLinkUrl);
+    if (deepLinkUrl) {
+      replyCompletionNotifications?.dismissDestination(deepLinkUrl);
+      void androidActivities?.dismissCompletedTask(deepLinkUrl).catch((error: unknown) => {
+        loggerService
+          .withContext('BackgroundActivity')
+          .warn('Could not retire viewed result', error as Error);
+      });
+    }
   });
   const agent = host.container.get<MobileAgentHost>('MobileAgentHost');
   const ai = host.container.get<AiService>('AiService');
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
+  const backup = host.container.get<BackupRuntime>('BackupRuntime');
   const desktopConnections = host.container.get<DesktopConnectionRuntime>(
     'DesktopConnectionRuntime',
   );
+  const providerAccounts = host.container.get<ProviderAccountRuntime>('ProviderAccountRuntime');
+  const desktopConnectionManager = host.container.get<DesktopConnectionManager>(
+    'DesktopConnectionManager',
+  );
+  const remoteAgent = host.container.get<RemoteAgentRuntime>('RemoteAgentRuntime');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
@@ -118,14 +150,36 @@ export function createAppBootstrapRuntime(
     preference,
     webSearch,
   });
-  const { backend, dataApiDependencies, disposeSystemEntry, initializeSkills } = createBackend(
-    services,
-    {
-      dbService,
-      documentExport,
-      desktopConnections,
-      languageServing,
-      providerRegistryUpdater,
+  const {
+    backend,
+    dataApiDependencies,
+    disposeSystemEntry,
+    initializeSkills,
+    hasPendingSkillStorageWork,
+  } = createBackend(services, {
+    backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
+    remoteBackground: {
+      replies: host.container.get<BackgroundReplyRuntime>('BackgroundReplyRuntime'),
+      keepAlive: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
+      translate: (key) => i18n.t(key),
+    },
+    backup,
+    dbService,
+    providerAccounts,
+    documentExport,
+    desktopConnections,
+    desktopConnectionManager,
+    remoteAgent,
+    languageServing,
+    providerRegistryUpdater,
+  });
+  backup.configure(
+    () =>
+      agent.hasPendingStorageWork() ||
+      jobRuntime.hasPendingStorageWork() ||
+      hasPendingSkillStorageWork(),
+    () => {
+      void jobRuntime.pump({ reason: 'timer' });
     },
   );
   let disposePromise: Promise<void> | undefined;
@@ -141,6 +195,7 @@ export function createAppBootstrapRuntime(
       aiUsageRecords: services.aiUsageRecord,
       contentSearch: services.contentSearch,
       desktopConnections: services.desktopConnection,
+      desktopConnectionEndpointsChanged: (id) => desktopConnectionManager.refreshEndpoints(id),
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,
@@ -154,6 +209,7 @@ export function createAppBootstrapRuntime(
       },
       providers: services.provider,
       skillAdmissions: dataApiDependencies.skillAdmissions,
+      providerAccounts,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),
   );
@@ -180,9 +236,50 @@ export function createAppBootstrapRuntime(
     initialize: async () => {
       // Runs the Gate phase — cache, then database, then preferences — ordered
       // by the dependency graph rather than by the order written here.
-      await application.install(host);
-      await initializeAppRuntime(services);
-      await initializeSkills();
+      const logger = loggerService.withContext('Backup');
+      let { restoring } = getStorageBoot();
+      try {
+        if (restoring) {
+          try {
+            await validateRestoringStorage();
+          } catch (error) {
+            // Validation only opens its own connections, so nothing holds the candidate yet
+            // and this process can continue on the current generation.
+            logger.warn('Rejected a restored storage generation', error as Error);
+            rejectStorageCandidate();
+            restoring = false;
+          }
+        }
+        if (getStorageBoot().resetCaches) {
+          cache.resetForRestore();
+          agent.resetReplayCacheForRestore();
+          frontendCache.resetForRestore();
+          resetFilePreviewsForRestore();
+        }
+        await application.install(host);
+        await initializeAppRuntime(services);
+        await initializeSkills();
+        commitStorageBoot();
+        try {
+          cleanupStorageAfterBoot();
+        } catch (error) {
+          logger.warn('Could not clean previous backup staging files', error as Error);
+        }
+      } catch (error) {
+        if (restoring) {
+          try {
+            failStorageBoot();
+          } catch (failure) {
+            logger.error('Could not record restore rollback', failure as Error);
+          }
+        }
+        if (restoring || (error instanceof BackupError && error.code === 'restart-required')) {
+          // Validation may fail before preferences and translations have initialized.
+          if (!i18n.isInitialized) await initI18n();
+          throw new BackupError('restart-required');
+        }
+        throw error;
+      }
     },
     runPostReadyTasks: async () => {
       // Starts the best-effort PostReady phase off the first-paint path.

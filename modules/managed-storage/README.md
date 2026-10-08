@@ -8,7 +8,9 @@ Android returns the app's internal `filesDir`.
 
 The module resolves the root through `FileManager` / `Context` at call time; it never hardcodes a
 container path. Directory and file operations stay with `expo-file-system`, which accepts the
-returned URI. `src/backend/services/skill/skillStorage.ts` is the only consumer.
+returned URI. `src/backend/data/storage/storagePaths.ts` uses it for the original Skill storage generation;
+restored packages follow the selected database generation. Skill file operations remain with
+`src/backend/services/skill/skillStorage.ts`.
 
 Native changes require a new development build. An older client reports the module as unavailable,
 and Skill installation fails with `storage-unavailable` rather than falling back to Documents.

@@ -156,13 +156,17 @@ test('HTML escapes authored markup, rejects executable links, renders tables and
   expect(result.issues).toEqual([]);
 });
 
-test('image and HTML exports include one brand signature after the complete content', async () => {
+test('image and HTML exports include one brand and download footer after the content', async () => {
   const document = normalizeDocument({ kind: 'markdown', source: 'Complete answer.' });
   const signature = {
     background: '#ffffff',
     foreground: '#000000',
     brandName: 'Cherry Studio <brand>',
-    timestamp: '2026.09.16 18:00',
+    brandColor: '#ff5757',
+    downloadLabel: 'Scan to download the mobile app',
+    downloadLinkLabel: 'Download the mobile app',
+    downloadUrl: 'https://example.com/mobile?platform=mobile&channel=share',
+    qrCodeDataUrl: 'data:image/png;base64,AQ==',
     logoDataUrl: 'data:image/png;base64,AA==',
   };
   for (const imageFrame of [undefined, { background: '#eeeeee', label: 'Conversation' }]) {
@@ -176,25 +180,38 @@ test('image and HTML exports include one brand signature after the complete cont
     expect(html.match(/<footer\b/g)).toHaveLength(1);
     const footer = html.slice(html.indexOf('<footer'));
     expect(footer).toContain('Cherry Studio &lt;brand&gt;');
-    expect(footer).toContain(signature.timestamp);
+    expect(footer).toContain(
+      `<a class="print-download print-secondary" href="https://example.com/mobile?platform=mobile&amp;channel=share">${signature.downloadLabel}</a>`,
+    );
+    expect(footer).toContain(`<img class="print-qr" src="${signature.qrCodeDataUrl}" alt="">`);
     expect(footer).not.toContain('<brand>');
     expect(footer).not.toContain('AI-generated');
     expect(html.indexOf('Complete answer.')).toBeLessThan(html.indexOf('<footer'));
   }
 });
 
-test('rejects invalid signature colors and missing timestamp instead of rendering unsafe markup', async () => {
+test('rejects invalid signature colors, copy, download links and QR images', async () => {
   const document = normalizeDocument({ kind: 'markdown', source: 'Answer.' });
   const signature = {
     background: '#ffffff',
     foreground: '#000000',
     brandName: 'Cherry Studio',
-    timestamp: '2026.09.16 18:00',
+    brandColor: '#ff5757',
+    downloadLabel: 'Scan to download the mobile app',
+    downloadLinkLabel: 'Download the mobile app',
+    downloadUrl: 'https://example.com/mobile',
+    qrCodeDataUrl: 'data:image/png;base64,AQ==',
     logoDataUrl: 'data:image/png;base64,AA==',
   };
   for (const invalid of [
     { ...signature, background: 'white;position:fixed' },
-    { ...signature, timestamp: undefined },
+    { ...signature, brandColor: 'red;position:fixed' },
+    { ...signature, downloadLinkLabel: undefined },
+    { ...signature, downloadUrl: '' },
+    { ...signature, downloadUrl: 'javascript:alert(1)' },
+    { ...signature, downloadUrl: 'https://example.com/\nmalformed' },
+    { ...signature, qrCodeDataUrl: 'https://example.com/qr.png' },
+    { ...signature, qrCodeDataUrl: '' },
   ]) {
     await expect(
       renderHtml(
@@ -367,13 +384,15 @@ test('chat exports keep user bubbles and answer rows while Markdown keeps portab
         id: 'two',
         heading: 'Assistant',
         presentation: 'message',
+        avatar: '🍒',
+        model: 'GPT <5>',
         blocks: [{ kind: 'markdown', source: 'Complete answer.' }],
       },
     ],
   };
   const markdown = renderMarkdown(document);
   expect(markdown).toContain('## You');
-  expect(markdown).toContain('## Assistant');
+  expect(markdown).toContain('## Assistant · GPT \\<5\\>');
   expect(markdown).toContain('\\# literal question');
   for (const imageFrame of [undefined, { background: '#ffffff', label: 'Conversation' }]) {
     const { html } = await renderHtml(
@@ -386,8 +405,10 @@ test('chat exports keep user bubbles and answer rows while Markdown keeps portab
     expect(html).toContain('<title>Export &lt;review&gt;</title>');
     expect(html).not.toContain('<h1 class="document-title">');
     expect(html).toContain('<section class="bubble-row" aria-label="You">');
-    expect(html).toContain('<h2 class="message-heading">Assistant</h2>');
-    expect(html.indexOf('aria-label="You"')).toBeLessThan(html.indexOf('>Assistant</h2>'));
+    expect(html).toContain(
+      '<h2 class="message-heading"><span class="message-avatar" aria-hidden="true">🍒</span><span class="message-name">Assistant</span><span class="message-model">GPT &lt;5&gt;</span></h2>',
+    );
+    expect(html.indexOf('aria-label="You"')).toBeLessThan(html.indexOf('>Assistant</span>'));
     expect(html).not.toContain('01 ·');
     expect(html).toContain('# literal question');
     expect(html).toContain('Complete answer.');

@@ -32,6 +32,15 @@ jest.mock('@swmansion/react-native-bottom-sheet', () => {
   };
 });
 
+jest.mock('react-native-reanimated', () => {
+  const { View } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: { View },
+    useAnimatedStyle: (factory: () => object) => factory(),
+  };
+});
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
 }));
@@ -275,6 +284,66 @@ describe('BottomSheet', () => {
 
     expect(largeHeight).toBeGreaterThan(compactHeight);
     expect(fullHeight).toBeGreaterThan(largeHeight);
+  });
+
+  test('follows its own keyboard-driven height when it avoids the keyboard', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          avoidKeyboard
+          dismissible={false}
+          footer={<Text>Submit</Text>}
+          onClose={jest.fn()}
+          open
+          size="medium"
+          title="Question"
+        >
+          <Text>Content</Text>
+        </BottomSheet>,
+      );
+    });
+
+    expect(mockBottomSheetProps.detents).toEqual([{ programmatic: true, value: 0 }, 'content']);
+    expect(mockBottomSheetProps.animateContentHeight).toBe(false);
+    expect(mockBottomSheetProps.index).toBe(1);
+  });
+
+  test('shows the drag handle only when a drag can close or resize the sheet', () => {
+    const sheet = (props: { dismissible?: boolean; sizes?: ['compact', 'large'] }) =>
+      props.sizes ? (
+        <BottomSheet
+          dismissible={props.dismissible}
+          onClose={jest.fn()}
+          open
+          sizes={props.sizes}
+          title="Sheet"
+        >
+          <Text>Content</Text>
+        </BottomSheet>
+      ) : (
+        <BottomSheet
+          dismissible={props.dismissible}
+          onClose={jest.fn()}
+          open
+          size="medium"
+          title="Sheet"
+        >
+          <Text>Content</Text>
+        </BottomSheet>
+      );
+    const handles = () =>
+      renderer!.root.findAll((node) => node.props.testID === 'bottom-sheet-handle');
+
+    act(() => {
+      renderer = create(sheet({}));
+    });
+    expect(handles().length).toBeGreaterThan(0);
+
+    act(() => renderer!.update(sheet({ dismissible: false })));
+    expect(handles()).toHaveLength(0);
+
+    act(() => renderer!.update(sheet({ dismissible: false, sizes: ['compact', 'large'] })));
+    expect(handles().length).toBeGreaterThan(0);
   });
 
   test('opens at the smallest height and lets the user expand through semantic sizes', () => {

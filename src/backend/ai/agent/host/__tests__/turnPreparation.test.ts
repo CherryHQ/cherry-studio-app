@@ -53,7 +53,7 @@ const AGENT: AgentDefinition = {
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
   toolApprovalMode: 'auto',
-  disabledCapabilities: ['health'],
+  disabledCapabilities: ['location'],
 };
 
 const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
@@ -354,6 +354,29 @@ describe('turn preparation', () => {
 
     // The Agent runs in auto mode, but a consent-bearing ask must survive it.
     expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
+  });
+
+  test('withholds ask_user_question only under the auto approval mode', async () => {
+    const question = tool('ask_user_question', 'auto');
+    const prepare = async (toolApprovalMode: AgentDefinition['toolApprovalMode']) => {
+      const harness = createHarness();
+      harness.getSystemTools.mockResolvedValueOnce([question, harness.systemTool]);
+      harness.getAgent.mockResolvedValueOnce({ ...AGENT, toolApprovalMode });
+      const plan = await prepareTurn(
+        harness.dependencies,
+        textInput(),
+        new AbortController().signal,
+      );
+      return plan.tools.map((entry) => entry.providerName);
+    };
+
+    // Auto mode never blocks on the user, so missing decisions go into the reply.
+    expect(await prepare('auto')).toEqual(['system_tool', 'configured_tool']);
+    expect(await prepare('default')).toEqual([
+      'ask_user_question',
+      'system_tool',
+      'configured_tool',
+    ]);
   });
 
   test.each(['existing', 'initial'] as const)(

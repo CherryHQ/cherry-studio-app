@@ -4,7 +4,7 @@ This module owns Expo Router header adapters used by the app screens.
 
 ## Public Interface
 
-- `RouteHeader`, `RouteHeaderProvider`, `MainHeader`, `HeaderToolbarAction`, `HeaderActionGroup`,
+- `RouteHeader`, `RouteHeaderProvider`, `MainHeader`, `MainHeaderView`, `HeaderToolbarAction`, `HeaderActionGroup`,
   `HeaderChrome`, `HeaderIconButton`, and `headerScreenOptions` are exported from `index.ts`.
 - Callers should import from `@/frontend/appShell/header`.
 
@@ -25,7 +25,7 @@ This module owns Expo Router header adapters used by the app screens.
 - `components/HeaderActionGroup` is the platform gateway for adjacent top actions. Callers declare
   placement, tone, and actions without choosing a platform: iOS delegates the group surface to the
   native toolbar, while Android draws the Cherry fallback surface.
-- `MainHeader` keeps a thin platform adapter because Android draws an ultra-thin blurred overlay
+- `MainHeaderView` keeps a thin platform adapter because Android draws an ultra-thin blurred overlay
   above the scrolling chat scene, while iOS uses the native transparent toolbar. Android 12 and
   newer sample the chat surface through Expo Blur; older releases fall back to the material tint.
   The Android blur fades to fully transparent at the lower edge so it does not split the header and
@@ -41,7 +41,7 @@ This module owns Expo Router header adapters used by the app screens.
   width so their inset surface cannot collapse into a circle. Default surfaces use the card token
   and a compact shadow so their complete outline remains visible against the header; inverse
   surfaces use constant contrast because they sit over uncontrolled media.
-- `MainHeaderAgentButton` is the one exception to the black-icon rule: it carries the current
+- `MainHeaderAgentLabel` is the one exception to the black-icon rule: it carries the current
   Agent's avatar, so the chat identifies its Agent the same way the Agent list does. A compact
   avatar and medium-weight single-line name sit in a capsule beside the leading menu action on
   the left on both platforms, without a disclosure chevron. iOS lets the native toolbar own the
@@ -52,5 +52,11 @@ This module owns Expo Router header adapters used by the app screens.
   Android draws a borderless translucent card tint over the header's existing blur,
   in the flexible space between the action groups. The capsule reuses that blur without another
   blur view or sampling target; Android versions below 12 retain the translucent material fallback.
-  Its non-interactive background does not change the button's dimensions or fade the backdrop on
-  press. Long names truncate at the end, and pressing the capsule opens the Agent picker.
+  Long names truncate at the end. Both local and remote capsules open the same Agent picker, using the current
+  source catalog and the existing local layout. Local callers supply editing and creation shortcuts;
+  remote callers supply selection only. The sheet owns presentation and pagination controls, while
+  callers own navigation and source observation. Unknown remote model metadata is not shown as an
+  unconfigured model.
+
+`MainHeader` supplies local Agent data to `MainHeaderView`; the remote chat supplies PC Agent data
+to the same view. The source adapters do not duplicate platform chrome.

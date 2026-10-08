@@ -13,18 +13,22 @@ Cherry product data and presentation rules before composing that primitive.
   first-character backgrounds fill the frame. `BrandAvatarIcon` accepts a resolved light/dark
   source pair so aliases and model-to-provider fallbacks share the actual artwork's layout.
   OpenCode and MiMo compensate for their existing canvas padding at display time.
-- `ProviderBrandAvatar` resolves a provider's built-in logo and generated-initial fallback. It does
-  not read uploaded avatars, so provider-avatar persistence remains provider-owned.
-- `ModelAvatar` resolves a model icon from its model and provider records.
-- `AgentAvatar` renders an Agent's image, then its built-in Cherry emoji, then the generated initial
-  tile or a neutral bot badge for an unnamed draft. It stays round across these presentations.
+- `ProviderAvatar` shows a provider's uploaded avatar, then falls back to `ProviderBrandAvatar`.
+- `ProviderBrandAvatar` resolves a provider's built-in logo and generated-initial fallback only;
+  creation and detail forms use it as the fallback beneath a pending upload.
+- `ModelAvatar` resolves a model icon from its model and provider records. When neither the model
+  nor its maker has an icon, the hosting provider's uploaded avatar outranks its built-in logo.
+- `AgentAvatar` renders an Agent's image, then explicit desktop emoji or the built-in Cherry emoji, then the robot emoji
+  default (including unnamed drafts). It stays round across these presentations.
 - `AvatarImagePicker` owns the shared camera/library and square-crop interaction while leaving
   persistence to its caller.
 - `AvatarPickerField` is the block an editing form opens with — a centred avatar over its caption,
   both inside one `AvatarImagePicker` trigger. It takes the avatar as `children` because what an
-  unset one falls back to is domain knowledge: an Agent's initial, a provider's built-in logo.
+  unset one falls back to is domain knowledge: an Agent's robot emoji, a provider's built-in logo.
 - `ProfileAvatarImage` resolves the persisted user avatar for display-only surfaces.
 - `ProfileEditableAvatar` adds a camera or pencil badge for avatar-editing surfaces.
 
-Callers outside this module import from `@/frontend/components/Avatar`. Provider avatar persistence
-and lookup remain owned by `features/settings/provider`.
+Callers outside this module import from `@/frontend/components/Avatar`. Uploaded provider avatars
+are read and written through `@/frontend/hooks/useProviderAvatar`, whose shared store keeps every
+mounted avatar in sync after an edit; the files themselves are owned by the backend providers
+module.

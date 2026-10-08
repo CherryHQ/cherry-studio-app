@@ -89,9 +89,6 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build AI Packages
-        run: pnpm packages:build
-
       - name: Lint Check
         run: pnpm lint
 

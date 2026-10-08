@@ -6,14 +6,19 @@ import {
 } from '@cherrystudio/provider-registry';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
+import { GITHUB_COPILOT_MODELS } from '@earendil-works/pi-ai/providers/github-copilot.models';
+import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
 import { createPiModelResolver, toPiModelPreflight } from '../piModelResolver';
+import * as piOAuthModels from '../piOAuthModels';
 import type { PiRuntimeDependencies } from '../PiRuntime';
 
 type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
@@ -92,6 +97,7 @@ describe('Pi model resolver', () => {
   let resolver: PiRuntimeDependencies;
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
     mockBoundStreamFn.mockReset();
     mockGetAuthConfig.mockResolvedValue(null);
@@ -103,6 +109,175 @@ describe('Pi model resolver', () => {
     mockBindPiStream.mockResolvedValue(mockBoundStreamFn);
     resolver = createPiModelResolver();
   });
+
+  test('retains canonical Copilot identity, model API, and credential-specific base URL', async () => {
+    jest
+      .spyOn(piOAuthModels, 'resolveOAuthPiModel')
+      .mockResolvedValueOnce(GITHUB_COPILOT_MODELS['claude-sonnet-4.6']);
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      'https://api.githubcopilot.com',
+      'github-copilot-openai-compatible',
+    );
+    provider.presetProviderId = 'copilot';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, { apiModelId: 'claude-sonnet-4.6' }),
+    );
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'github-copilot',
+        auth: { apiKey: 'copilot-access', baseUrl: 'https://api.business.githubcopilot.com' },
+        availableModelIds: ['claude-sonnet-4.6'],
+      }),
+    });
+    const resolution = await resolve(resolver);
+    expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'github-copilot' }),
+      'claude-sonnet-4.6',
+    );
+    expect(resolution.model).toMatchObject({
+      provider: 'github-copilot',
+      api: 'anthropic-messages',
+      baseUrl: 'https://api.business.githubcopilot.com',
+    });
+    expect(resolution.usageContext).toMatchObject({
+      providerId: 'test-provider',
+      credentialReceipt: { attribution: 'unknown' },
+    });
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test('preserves header-owned Kimi authentication and redacts the raw bearer token', async () => {
+    jest
+      .spyOn(piOAuthModels, 'resolveOAuthPiModel')
+      .mockResolvedValueOnce(KIMI_CODING_MODELS['kimi-for-coding']);
+    const provider = makeProvider(
+      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      'https://api.kimi.com/coding',
+      'anthropic',
+    );
+    provider.presetProviderId = 'kimi-coding';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES, { apiModelId: 'kimi-for-coding' }),
+    );
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'kimi-coding',
+        auth: { headers: { Authorization: 'Bearer kimi-access' } },
+        availableModelIds: undefined,
+      }),
+    });
+    const resolution = await resolve(resolver);
+    expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'kimi-coding' }),
+      'kimi-for-coding',
+    );
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        apiKey: undefined,
+        headers: expect.objectContaining({ Authorization: 'Bearer kimi-access' }),
+      }),
+    );
+    expect(resolution.model).toMatchObject({
+      provider: 'kimi-coding',
+      compat: { forceAdaptiveThinking: true },
+    });
+    expect(resolution.redactionValues).toContain('kimi-access');
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test('never falls back to manual API keys after a stored OAuth refresh fails', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(ENDPOINT_TYPE.OPENAI_RESPONSES, 'https://api.x.ai/v1', 'xai-responses'),
+    );
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
+    resolver = createPiModelResolver({
+      resolveAuth: async () => {
+        throw new ProviderAccountError('authorization');
+      },
+    });
+    await expect(resolve(resolver)).rejects.toEqual(new ProviderAccountError('authorization'));
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { baseUrl: 'https://openrouter.ai/api', preset: undefined, enabled: true },
+    { baseUrl: 'https://relay.example', preset: 'openrouter', enabled: false },
+  ])(
+    'enables explicit OpenRouter compatibility for custom provider ids: %p',
+    async ({ baseUrl, preset, enabled }) => {
+      const provider = makeProvider(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, baseUrl, 'openai');
+      provider.presetProviderId = preset;
+      provider.settings.cacheControl = { enabled };
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(
+        makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, {
+          apiModelId: 'anthropic/claude-sonnet-4.6',
+        }),
+      );
+      const resolution = await resolve(resolver);
+      expect(resolution.model).toMatchObject({
+        provider: 'test-provider',
+        compat: {
+          cacheControlFormat: 'anthropic',
+          sendSessionAffinityHeaders: true,
+          sessionAffinityFormat: 'openrouter',
+        },
+      });
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          sessionId: 'session-1',
+          cacheRetention: enabled ? 'short' : 'none',
+        }),
+      );
+    },
+  );
+
+  test('does not infer Anthropic cache support from a Claude model name on an unknown relay', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(
+        ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        'https://openrouter.ai.untrusted.example/api',
+        'openai',
+      ),
+    );
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, {
+        apiModelId: 'anthropic/claude-sonnet-4.6',
+      }),
+    );
+    const resolution = await resolve(resolver);
+    expect(resolution.model.compat).not.toHaveProperty('cacheControlFormat');
+    expect(resolution.model.compat).not.toHaveProperty('sendSessionAffinityHeaders');
+  });
+
+  test.each([undefined, true, false])(
+    'applies native Anthropic cache setting %p',
+    async (enabled) => {
+      const provider = makeProvider(
+        ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        'https://api.anthropic.com',
+        'anthropic',
+      );
+      if (enabled !== undefined) provider.settings.cacheControl = { enabled };
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES));
+      await resolve(resolver);
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          cacheRetention: enabled === false ? 'none' : 'short',
+          sessionId: 'session-1',
+        }),
+      );
+    },
+  );
 
   test('uses the selected probe key for transport, attribution, and redaction', async () => {
     const testCase = CASES[0];
@@ -130,11 +305,10 @@ describe('Pi model resolver', () => {
     );
     expect(resolution.redactionValues).toContain('probe-key');
     expect(resolution.usageContext.credentialReceipt).toEqual(CREDENTIAL_RECEIPT);
-    expect(resolution.streamFn).toBe(mockBoundStreamFn);
     expect(mockListApiKeys).not.toHaveBeenCalled();
   });
 
-  test('uses remaining enabled keys in order and attributes successful calls to the serving key', async () => {
+  test('walks enabled keys as a ring and attributes each call to the serving key', async () => {
     const testCase = CASES[0];
     const keys = ['a', 'b', 'c'].map((id) => ({
       id,
@@ -164,10 +338,16 @@ describe('Pi model resolver', () => {
       };
     });
     const usedKeys: string[] = [];
+    const statuses: Record<string, number[]> = {
+      'secret-a': [200, 200, 503],
+      'secret-b': [401, 200],
+      'secret-c': [429],
+    };
     mockBindPiStream.mockImplementation(async (_adapter, binding) => () => {
-      usedKeys.push(binding.apiKey);
-      const status =
-        binding.apiKey === 'secret-b' ? 401 : binding.apiKey === 'secret-c' ? 429 : 200;
+      const { apiKey } = binding;
+      if (!apiKey) throw new Error('Expected an API key for credential rotation.');
+      usedKeys.push(apiKey);
+      const status = statuses[apiKey].shift()!;
       const response: AssistantMessage = {
         role: 'assistant',
         api: testCase.api,
@@ -200,16 +380,92 @@ describe('Pi model resolver', () => {
     expect(resolution.redactionValues).toEqual(
       expect.arrayContaining(['secret-a', 'secret-b', 'secret-c']),
     );
-    for (let step = 0; step < 2; step += 1) {
-      const stream = await resolution.streamFn(resolution.model, { messages: [] });
+    for (const [servingKey, attribution] of [
+      ['a', 'matched'],
+      ['a', 'matched'],
+      ['b', 'explicit'],
+    ]) {
+      const stream = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({ messages: [] }),
+      );
       expect((await stream.result()).content).toEqual([{ type: 'text', text: 'ok' }]);
       expect(resolution.usageContext.credentialReceipt).toMatchObject({
-        id: 'a',
-        label: 'Account a',
+        attribution,
+        id: servingKey,
+        label: `Account ${servingKey}`,
       });
     }
-    expect(usedKeys).toEqual(['secret-b', 'secret-c', 'secret-a', 'secret-a']);
+    expect(usedKeys).toEqual([
+      'secret-b',
+      'secret-c',
+      'secret-a',
+      'secret-a',
+      'secret-a',
+      'secret-b',
+    ]);
     expect(mockListApiKeys).toHaveBeenCalledWith(provider.id, { enabled: true });
+  });
+
+  test('bounds all credential attempts to two minutes before output', async () => {
+    jest.useFakeTimers();
+    try {
+      const testCase = CASES[0];
+      const keys = ['key-1', 'key-2', 'key-3'].map((id) => ({
+        id,
+        isEnabled: true,
+        key: `secret-${id}`,
+      }));
+      const provider = makeProvider(
+        testCase.endpointType,
+        testCase.baseUrl,
+        testCase.adapterFamily,
+      );
+      provider.apiKeys = keys;
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+      mockListApiKeys.mockResolvedValue({ keys });
+      mockResolveApiKey.mockImplementation(async (_providerId, override) => ({
+        value: override ?? keys[0].key,
+        apiKeySelection: {
+          ...CREDENTIAL_RECEIPT,
+          id: keys.find((key) => key.key === (override ?? keys[0].key))!.id,
+        },
+      }));
+      const usedKeys: string[] = [];
+      let signal: AbortSignal | undefined;
+      mockBindPiStream.mockImplementation(
+        async (_adapter, binding) => (_model, _context, options) => {
+          const { apiKey } = binding;
+          if (!apiKey) throw new Error('Expected an API key for credential retries.');
+          usedKeys.push(apiKey);
+          signal = options?.signal;
+          if (apiKey === keys[0].key) {
+            return new Promise<AssistantMessageEventStream>((_resolve, reject) => {
+              setTimeout(() => reject(new Error('Temporary failure')), 60_000);
+            });
+          }
+          return new AssistantMessageEventStream();
+        },
+      );
+
+      const resolution = await resolve(resolver);
+      const stream = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({ messages: [] }),
+      );
+      await jest.advanceTimersByTimeAsync(120_000);
+
+      expect(await stream.result()).toMatchObject({
+        stopReason: 'error',
+        errorMessage: 'The model response timed out after 120 seconds without data.',
+      });
+      expect(usedKeys).toEqual([keys[0].key, keys[1].key]);
+      expect(signal?.aborted).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test.each([
@@ -282,7 +538,10 @@ describe('Pi model resolver', () => {
           stream.push({ type: 'error', reason: 'error', error: failure });
           return stream;
         });
-        const stream = await resolution.streamFn(resolution.model, { messages: [] });
+        const stream = await resolution.streamFn(
+          resolution.model,
+          normalizeContext({ messages: [] }),
+        );
         expect(await stream.result()).toBe(failure);
       }
       expect(mockBoundStreamFn).toHaveBeenCalledTimes(2);
@@ -323,7 +582,6 @@ describe('Pi model resolver', () => {
           : undefined,
     );
     expect(resolution.model.headers).not.toHaveProperty('x-opencode-session');
-    expect(resolution.streamFn).toBe(mockBoundStreamFn);
     expect(resolution.supportsTools).toBe(true);
     expect(resolution.defaultThinkingLevel).toBe('high');
     expect(resolution.redactionValues).toEqual(['secret-key']);
@@ -343,7 +601,6 @@ describe('Pi model resolver', () => {
         maxRetries: 0,
         maxTokens: 1024,
         temperature: 0.25,
-        timeoutMs: 600_000,
       }),
     );
   });
@@ -504,7 +761,10 @@ describe('Pi model resolver', () => {
       };
       source.push({ type: 'done', reason: 'stop', message: response });
       mockBoundStreamFn.mockReturnValueOnce(source);
-      const stream = await resolution.streamFn(resolution.model, { messages: [] });
+      const stream = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({ messages: [] }),
+      );
       expect(await stream.result()).toMatchObject({
         stopReason: 'toolUse',
         content: [
@@ -563,12 +823,18 @@ describe('Pi model resolver', () => {
       expect.anything(),
       expect.objectContaining({ maxTokens: 500_000 }),
     );
-    const shortRequest = buildBaseOptions(resolution.model, {
-      messages: [{ role: 'user', content: '测试', timestamp: 1 }],
-    });
-    const longerRequest = buildBaseOptions(resolution.model, {
-      messages: [{ role: 'user', content: 'x'.repeat(100_000), timestamp: 1 }],
-    });
+    const shortRequest = buildBaseOptions(
+      resolution.model,
+      normalizeContext({
+        messages: [{ role: 'user', content: '测试', timestamp: 1 }],
+      }),
+    );
+    const longerRequest = buildBaseOptions(
+      resolution.model,
+      normalizeContext({
+        messages: [{ role: 'user', content: 'x'.repeat(100_000), timestamp: 1 }],
+      }),
+    );
     expect(shortRequest.maxTokens).toBeGreaterThan(16_384);
     expect(shortRequest.maxTokens).toBeLessThan(500_000);
     expect(longerRequest.maxTokens).toBeLessThan(shortRequest.maxTokens!);

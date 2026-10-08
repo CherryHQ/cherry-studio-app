@@ -38,6 +38,7 @@ import {
 } from '@/backend/core/lifecycle';
 import type { OperationHandle } from '@/backend/core/resources/types';
 import { ScopeFencedError } from '@/backend/core/resources/types';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import type { InsertJobRow, JobRow } from '@/backend/data/db/schemas/job';
 import {
@@ -390,7 +391,14 @@ export class JobRuntime extends BaseService {
     return { outcome: 'not-cancellable' };
   }
 
+  hasPendingStorageWork(): boolean {
+    return (
+      this.pumpRunning || this.inFlightExecuted.size > 0 || this.pendingTxVerifications.size > 0
+    );
+  }
+
   pump(request: PumpRequest): Promise<PumpResult> {
+    if (storageMutationGate.isFrozen) return Promise.resolve({ claimed: 0 });
     if (this.disposed) return Promise.resolve({ claimed: 0 });
     if (request.reason === 'cold-start') this.gcRequested = true;
     if (this.pumpRunning) {

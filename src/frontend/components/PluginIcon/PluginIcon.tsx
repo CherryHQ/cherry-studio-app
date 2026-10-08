@@ -1,5 +1,7 @@
+import type { LucideIconComponent } from '@cherrystudio/app-icons';
 import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import { Avatar } from '@cherrystudio/ui/components';
+import type { ImageSource } from 'expo-image';
 import { useResolveClassNames } from 'uniwind';
 
 import opticalScales from '@/assets/plugins/optical-scales.json';
@@ -22,15 +24,21 @@ const SIZES = {
 } as const;
 
 export function PluginIcon({
+  glyph: Glyph = FileTextIcon,
   icon,
   size = 'default',
+  source,
 }: {
+  /** Interface glyph drawn when there is no artwork, such as a built-in tool's symbol. */
+  glyph?: LucideIconComponent;
   icon?: string;
   size?: keyof typeof SIZES;
+  /** Untinted artwork from outside the plugin catalog, such as an MCP or web search provider mark. */
+  source?: ImageSource | number;
 }) {
   const foreground = useThemeColor('foreground');
   const iconId = icon && Object.hasOwn(ICONS, icon) ? (icon as PluginIconId) : undefined;
-  const artwork = iconId ? ICONS[iconId] : undefined;
+  const artwork = iconId ? ICONS[iconId] : source ? { source, tint: false } : undefined;
   const scale = iconId ? opticalScales[iconId] : 0.6;
   const dimensions = SIZES[size];
   const { borderRadius } = useResolveClassNames(dimensions.radius);
@@ -55,7 +63,7 @@ export function PluginIcon({
           tintColor={artwork.tint ? foreground : undefined}
         />
       ) : (
-        <FileTextIcon className="text-foreground" size={dimensions.size * scale} />
+        <Glyph className="text-foreground" size={dimensions.size * scale} />
       )}
     </Avatar>
   );

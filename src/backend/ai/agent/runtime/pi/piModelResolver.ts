@@ -12,8 +12,10 @@ import {
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import { resolveEndpointDialect } from '@/shared/data/types/provider';
+import type { Provider } from '@/shared/data/types/provider';
 import {
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
@@ -24,9 +26,14 @@ import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiA
 import { withPiApiKeyFallback } from './piApiKeyFallback';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
+import {
+  endpointForPiApi,
+  requireOAuthEndpoint,
+  resolveOAuthPiModel,
+  type ResolvedPiOAuth,
+} from './piOAuthModels';
 import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
-
-const DEFAULT_PI_TIMEOUT_MS = 10 * 60_000;
+import { withPiStreamIdleTimeout } from './piStreamIdleTimeout';
 
 class PiModelResolutionError extends Error {
   readonly retryable = false;
@@ -40,7 +47,9 @@ class PiModelResolutionError extends Error {
   }
 }
 
-export function createPiModelResolver(): PiRuntimeDependencies {
+export function createPiModelResolver(accounts?: {
+  resolveAuth(provider: Provider, signal?: AbortSignal): Promise<ResolvedPiOAuth | undefined>;
+}): PiRuntimeDependencies {
   return {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
@@ -50,12 +59,40 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       runtimeOptions,
       sessionId,
       apiKeyOverride,
+      signal,
     ): Promise<PiModelResolution> {
-      const { adapter, connection, model, preflight, provider } =
-        await resolveConfiguredPiModel(runtimeModel);
+      const {
+        adapter: configuredAdapter,
+        connection,
+        model,
+        preflight,
+        provider,
+      } = await resolveConfiguredPiModel(runtimeModel);
 
-      const selectedApiKey = await providerService.resolveApiKey(provider.id, apiKeyOverride);
-      if (!selectedApiKey.value.trim()) {
+      const oauth =
+        apiKeyOverride === undefined ? await accounts?.resolveAuth(provider, signal) : undefined;
+      if (oauth) requireOAuthEndpoint(provider, oauth.id, connection.baseUrl);
+      const oauthModel = oauth
+        ? await resolveOAuthPiModel(oauth, connection.wireModelId)
+        : undefined;
+      if (
+        !oauth &&
+        provider.authMethods?.includes('oauth') &&
+        !provider.authMethods.includes('api-key')
+      ) {
+        throw new ProviderAccountError('authorization');
+      }
+      const adapter = oauthModel
+        ? resolvePiApiAdapter(
+            endpointForPiApi(oauthModel.api),
+            oauthModel.api === 'openai-codex-responses' ? 'openai-codex' : undefined,
+          )
+        : configuredAdapter;
+
+      const selectedApiKey = oauth
+        ? { value: oauth.auth.apiKey ?? '', apiKeySelection: { attribution: 'unknown' as const } }
+        : await providerService.resolveApiKey(provider.id, apiKeyOverride);
+      if (!oauth && !selectedApiKey.value.trim()) {
         throw new PiModelResolutionError(
           'invalid_api_key',
           'Pi Runtime requires an API key from the selected provider.',
@@ -71,7 +108,26 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       }
 
       const modelId = connection.wireModelId;
+      const isOpenRouter =
+        provider.id === 'openrouter' ||
+        provider.presetProviderId === 'openrouter' ||
+        isOpenRouterUrl(connection.baseUrl);
       const headers = { ...connection.headers };
+      if (oauth) {
+        for (const name of Object.keys(headers)) {
+          if (['authorization', 'x-api-key', 'api-key'].includes(name.toLowerCase()))
+            delete headers[name];
+        }
+        for (const [name, value] of Object.entries({
+          ...oauthModel?.headers,
+          ...oauth.auth.headers,
+        })) {
+          for (const existing of Object.keys(headers)) {
+            if (existing.toLowerCase() === name.toLowerCase()) delete headers[existing];
+          }
+          if (value !== null) headers[name] = value;
+        }
+      }
       if (
         (provider.id === 'opencode' || provider.presetProviderId === 'opencode') &&
         !Object.keys(headers).some((name) => name.toLowerCase() === 'x-opencode-session')
@@ -89,7 +145,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
             reasoning: projectRuntimeReasoning(reasoningProfile.support, reasoningProfile.wire),
           }
         : model;
-      const piModel: PiModel<SupportedPiApi> = {
+      const configuredPiModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
         baseUrl: adapter.formatBaseUrl(
           connection.baseUrl.trim(),
@@ -101,6 +157,15 @@ export function createPiModelResolver(): PiRuntimeDependencies {
                 supportsDeveloperRole: false,
                 ...(adapter.api === 'openai-completions'
                   ? {
+                      ...(isOpenRouter
+                        ? {
+                            ...(modelId.startsWith('anthropic/')
+                              ? { cacheControlFormat: 'anthropic' as const }
+                              : {}),
+                            sendSessionAffinityHeaders: true,
+                            sessionAffinityFormat: 'openrouter' as const,
+                          }
+                        : {}),
                       maxTokensField:
                         connection.adapterFamily === 'openai'
                           ? 'max_completion_tokens'
@@ -123,26 +188,46 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         input: preflight.inputModalities,
         maxTokens: preflight.maxOutputTokens,
         name: model.name,
-        provider: provider.id,
+        provider: oauth?.id ?? provider.id,
         reasoning: invocationModel.reasoning !== undefined,
       };
+      const piModel: PiModel<SupportedPiApi> = oauthModel
+        ? {
+            ...oauthModel,
+            compat: {
+              ...oauthModel.compat,
+              ...(oauthModel.api === 'openai-completions' || oauthModel.api === 'openai-responses'
+                ? { supportsDeveloperRole: false }
+                : {}),
+            },
+            baseUrl: oauth?.auth.baseUrl ?? oauthModel.baseUrl,
+            headers,
+            maxTokens: Math.min(preflight.maxOutputTokens, oauthModel.maxTokens),
+          }
+        : configuredPiModel;
       const streamBinding: Parameters<typeof bindPiStream>[1] = {
-        apiKey: selectedApiKey.value,
+        apiKey: oauth ? oauth.auth.apiKey : selectedApiKey.value,
+        cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
+        sessionId,
         fetch: expoFetch as unknown as FetchFunction,
         headers,
         maxRetries: 0,
-        maxTokens: runtimeOptions.maxOutputTokens ?? piModel.maxTokens,
-        requestParameters: {
-          model: invocationModel,
-          profile: reasoningProfile.wire,
-          selection: runtimeOptions.reasoningEffort,
-          summary:
-            typeof provider.settings.summaryText === 'string'
-              ? provider.settings.summaryText
-              : undefined,
-        },
-        temperature: runtimeOptions.temperature,
-        timeoutMs: DEFAULT_PI_TIMEOUT_MS,
+        maxTokens: oauth
+          ? Math.min(runtimeOptions.maxOutputTokens ?? piModel.maxTokens, piModel.maxTokens)
+          : (runtimeOptions.maxOutputTokens ?? piModel.maxTokens),
+        requestParameters: oauth
+          ? undefined
+          : {
+              model: invocationModel,
+              profile: reasoningProfile.wire,
+              selection: runtimeOptions.reasoningEffort,
+              summary:
+                typeof provider.settings.summaryText === 'string'
+                  ? provider.settings.summaryText
+                  : undefined,
+            },
+        temperature:
+          adapter.api === 'openai-codex-responses' ? undefined : runtimeOptions.temperature,
         azureApiVersion,
       };
       const primaryStream = await bindPiStream(adapter, streamBinding);
@@ -187,25 +272,43 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         selectedIndex < 0
           ? []
           : [...enabledKeys.slice(selectedIndex + 1), ...enabledKeys.slice(0, selectedIndex)];
-      const streamFn = withPiApiKeyFallback(
-        primaryStream,
-        fallbackKeys.map((key) => async () => {
-          const selected = await providerService.resolveApiKey(provider.id, key.key);
-          const stream = await bindPiStream(adapter, { ...streamBinding, apiKey: selected.value });
-          usageContext.credentialReceipt = selected.apiKeySelection;
-          return stream;
-        }),
-      );
+      const primaryReceipt = usageContext.credentialReceipt;
+      const streamFn =
+        fallbackKeys.length === 0
+          ? primaryStream
+          : withPiApiKeyFallback([
+              async () => {
+                usageContext.credentialReceipt = primaryReceipt;
+                return primaryStream;
+              },
+              ...fallbackKeys.map((key) => async () => {
+                const selected = await providerService.resolveApiKey(provider.id, key.key);
+                const stream = await bindPiStream(adapter, {
+                  ...streamBinding,
+                  apiKey: selected.value,
+                });
+                usageContext.credentialReceipt = selected.apiKeySelection;
+                return stream;
+              }),
+            ]);
 
+      const timedStream = withPiStreamIdleTimeout(streamFn);
       return {
         defaultThinkingLevel: resolveDefaultThinkingLevel(invocationModel),
         maxInputTokens: model.maxInputTokens,
         model: piModel,
         redactionValues: [
           ...collectRedactionValues(selectedApiKey.value, headers),
+          ...(oauth
+            ? Object.values(oauth.auth.headers ?? {}).flatMap((value) => {
+                if (value === null) return [];
+                const token = /^Bearer\s+(.+)$/i.exec(value)?.[1];
+                return token ? [token] : [];
+              })
+            : []),
           ...fallbackKeys.map((key) => key.key),
         ],
-        streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(streamFn) : streamFn,
+        streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(timedStream) : timedStream,
         supportsTools: preflight.supportsTools,
         usageContext,
       };
@@ -223,7 +326,12 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
 
   const connection = resolveProviderConnection(provider, model);
   const piBinding = requirePiLanguageBinding(resolvePiLanguageBinding(provider, connection));
-  const adapter = resolvePiApiAdapter(piBinding.endpointType, connection.adapterFamily);
+  const adapter = resolvePiApiAdapter(
+    piBinding.endpointType,
+    (provider.presetProviderId ?? provider.id) === 'openai-codex'
+      ? 'openai-codex'
+      : connection.adapterFamily,
+  );
 
   return {
     adapter,
@@ -261,6 +369,14 @@ function collectRedactionValues(apiKey: string, headers: Record<string, string>)
       /authorization|api[-_]key|token|secret/i.test(name) ? [value] : [],
     ),
   ];
+}
+
+function isOpenRouterUrl(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl).hostname === 'openrouter.ai';
+  } catch {
+    return false;
+  }
 }
 
 function resolveDefaultThinkingLevel(model: Model): ModelThinkingLevel {

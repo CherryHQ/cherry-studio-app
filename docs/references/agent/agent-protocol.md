@@ -1,13 +1,13 @@
 # Cherry Agent Protocol
 
 > Status: Version 1 is as-built for device-local execution. A PC Agent Controller extension is
-> planned and is not implemented.
+> implemented as the separate application-facing version 2 contract; device verification is pending.
 
 This document defines the application-facing contract consumed by the Agent Client. Today that
-contract is provided in process by the Mobile Agent Host. The planned PC Agent Controller keeps the
+contract is provided in process by the Mobile Agent Host. The PC Agent Controller keeps the
 contract next to the application while a separate adapter translates between it and a PC-owned
 Agent Runtime. This document does not define either the local [Agent Runtime](./agent-runtime.md) or
-the future PC connection protocol.
+the separately versioned PC connection protocol.
 
 ## Scope
 
@@ -21,16 +21,16 @@ JSON-safe values validated at the boundary. Subscription callbacks and unsubscri
 process-local transport mechanics, not protocol data. JSON safety keeps application values
 portable; this document does not define a network wire protocol.
 
-For the planned PC Agent Controller, the PC owns the Agent, Session, conversation, execution, tool,
+For the PC Agent Controller, the PC owns the Agent, Session, conversation, execution, tool,
 approval, task, and persistence state. Mobile consumes normalized application events, maintains
 only the projection needed by its UI, and sends user intent such as a message, cancellation, or
 approval decision back through the adapter. The adapter may eventually use WebSocket, WebRTC, or
 another transport; that choice does not change the Agent Protocol.
 
 Version 1 remains local-only and its TypeScript shapes below are still the as-built contract. The
-planned PC extension is documented separately in [Planned PC Agent Controller
-extension](#planned-pc-agent-controller-extension); it must not be read as implemented behavior.
-See also [Agent Architecture](./README.md#planned-pc-agent-controller-boundary).
+PC extension is documented separately in [PC Agent Controller extension](#pc-agent-controller-extension).
+The implemented subset and PC gaps are specified in [PC Agent Controller](./pc-agent-controller.md).
+See also [Agent Architecture](./README.md#pc-agent-controller-boundary).
 
 The protocol does not expose provider SDK objects, Runtime-native events, SQLite rows,
 `AbortSignal`, streams, callbacks inside values, or implementation-specific Pi/provider-SDK state.
@@ -44,17 +44,20 @@ The protocol does not expose provider SDK objects, Runtime-native events, SQLite
 | Agent Protocol | Normalized views, application events, user commands, capabilities, and application-level errors | WebSocket/WebRTC frames, acknowledgements, heartbeats, or Runtime-native events |
 | Mobile UI | Rendering a temporary projection and collecting user intent | Authoritative conversation or execution state |
 
-The current local path uses the Mobile Agent Host and Pi Runtime in process and has no PC adapter.
-The table defines the planned PC path; it does not retroactively describe Version 1 internals.
+The local path still uses the Mobile Agent Host and Pi Runtime in process. The PC adapter is a
+separate path; the table does not retroactively describe Version 1 internals.
 
-## Planned PC Agent Controller extension
+## PC Agent Controller extension
 
-This section records the target application contract before implementation. It deliberately does
-not select a wire transport or claim that the current TypeScript schemas support PC Sessions.
+This section records the broader target contract. The implemented version 2 contract is
+`src/shared/contracts/agent/controller.ts`, translated by `RemoteAgentAdapter`. Current PC wire v1
+provides full snapshots, admission receipts and on-demand details rather than deltas, replay, or
+background-task control. Those differences are explicit in [the implementation](./pc-agent-controller.md);
+the requirements below must not be interpreted as already supported PC capabilities.
 
 ### Required application semantics
 
-The planned protocol must cover the following mobile-visible behavior:
+The full target protocol covers the following mobile-visible behavior:
 
 - An authoritative Session snapshot containing the visible transcript window, active turn,
   streaming message, pending approvals, background work, and a cursor for older messages. Mobile
@@ -317,7 +320,7 @@ Data URL exists only inside the Host-to-Runtime request.
 
 Text inputs accept authoritative `text/*` media types and an explicit application/source-code
 media-type and extension allowlist. The Host reads managed bytes before reservation, accepts and
-strips a leading UTF-8 BOM, rejects invalid UTF-8, NUL/binary controls, unsupported types, and
+strips a leading UTF-8 BOM, rejects invalid UTF-8, NUL, unsupported types, and
 oversized current files, then projects a temporary structured Runtime part. Pi JSON-escapes that
 part as untrusted user text with the authoritative name, media type, and `[complete]` or
 `[truncated]` state; its body cannot alter the system/tool instruction layer or expand the Turn
@@ -430,6 +433,7 @@ interface AgentProtocol {
   retryMessage(input: { sessionId: string; messageId: string }): Promise<void>
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
+  cancelSubmission(input: { sessionId: string }): Promise<void>
 
   respondApproval(input: {
     sessionId: string
@@ -479,6 +483,13 @@ event arrives before or after the function returns. The current composer keeps o
 until both messages have formal data. Its preallocated Session ID also keeps the first message list
 mounted through navigation and history loading. Admission rejection restores the draft; execution
 errors belong to the accepted transcript.
+
+Stop works before a turn exists. Preparation (tool discovery, attachment reading, model preflight,
+and Runtime open) has no turn id, so the client stops it with `cancelSubmission`, which aborts the
+Session's submission, retry, or Draft start still in admission. The pending call rejects with
+`CANCELLED` and the composer restores the draft without a failure notice. A stop that lands while
+the reservation commits leaves a reserved turn that settles as `cancelled` without running. Once
+the turn is reserved, the client uses `cancelTurn`.
 
 `modelId` and `reasoningEffort` are immutable snapshots of the composer state for that submission.
 The model snapshot closes the gap while the same selection is persisted to the Agent. The reasoning

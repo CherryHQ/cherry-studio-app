@@ -11,6 +11,7 @@ src/frontend/data/
 ├── QueryProvider.tsx       # React Query client and AppState focus bridge
 ├── FileQueryBridge.tsx     # invalidates file lists and affected details/content after writes
 ├── ProviderRegistryQueryBridge.tsx # invalidates model projections after a registry hot-swap
+├── appUpdate.ts            # GitCode APK update query shared by startup and settings
 ├── queryKeys/              # one file per endpoint family plus the public registry
 ├── hooks/                  # typed Data API, preference, and cache React bindings
 └── __tests__/              # entry-point service/provider tests
@@ -19,7 +20,9 @@ src/frontend/data/
 Resource-specific reads and mutations stay in their owning frontend hooks and call `useQuery`,
 `useMutation`, or `useInfiniteQuery`. Those hooks use the injected `ApiClient`; callers never select
 a persistence module. Query keys mirror endpoint families with one file each, but the data
-directory does not duplicate those endpoints as service or gateway wrappers.
+directory does not duplicate those endpoints as service or gateway wrappers. `appUpdate.ts` is the
+one exception: the startup observer and the settings row read the same backend workflow result, so
+its query options live here instead of in either owner.
 
 `FileQueryBridge` subscribes to the file workflow's committed changes for the app lifetime.
 Managed-file creation, draft rewrites, deletion, and rollback discards all notify through

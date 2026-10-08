@@ -21,11 +21,16 @@ type MockComposerProps = {
   children?: ReactNode;
   labels?: { send: string; stop: string };
   onSend: () => Promise<void> | void;
+  onStop: () => void;
   value: string;
 };
 
 const mockToastShow = jest.fn();
 const mockAlertShow = jest.fn();
+// Stable like the real providers, so handler identity reflects only the surface's own inputs.
+const mockToast = { show: mockToastShow };
+const mockAlert = { show: mockAlertShow };
+const mockTranslate = (key: string) => key;
 const mockLoggerDebug = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
@@ -49,15 +54,15 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }),
     Spinner: (props: Record<string, unknown>) => React.createElement('mock-spinner', props),
-    useToast: () => ({ toast: { show: mockToastShow } }),
-    useAlert: () => ({ alert: { show: mockAlertShow } }),
+    useToast: () => ({ toast: mockToast }),
+    useAlert: () => ({ alert: mockAlert }),
   };
 });
 
 jest.mock('@/frontend/components/FileEntryPreview', () => ({ FileEntryPreview: () => null }));
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: mockTranslate }),
 }));
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -106,6 +111,38 @@ describe('ComposerSurface', () => {
       pending.resolve();
       await Promise.all([firstSend, secondSend]);
     });
+  });
+
+  it('keeps its actions and labels while the draft and caller handlers change', async () => {
+    const onSend = jest.fn(async () => undefined);
+    const onStop = jest.fn();
+    render(
+      <ComposerSurface onSend={jest.fn()} onStop={jest.fn()} streaming={false}>
+        <StateProbe />
+      </ComposerSurface>,
+      'first',
+    );
+    const initial = mockComposerProps!;
+
+    act(() => mockComposerActions?.setDraft('first draft'));
+    act(() =>
+      renderer?.update(
+        <ComposerProvider initialDraft="first">
+          <ComposerSurface onSend={onSend} onStop={onStop} streaming={false}>
+            <StateProbe />
+          </ComposerSurface>
+        </ComposerProvider>,
+      ),
+    );
+    expect(mockComposerProps?.value).toBe('first draft');
+    expect(mockComposerProps?.onSend).toBe(initial.onSend);
+    expect(mockComposerProps?.onStop).toBe(initial.onStop);
+    expect(mockComposerProps?.labels).toBe(initial.labels);
+
+    act(() => mockComposerProps?.onStop());
+    expect(onStop).toHaveBeenCalledTimes(1);
+    await act(async () => mockComposerProps?.onSend());
+    expect(onSend).toHaveBeenCalledWith({ attachments: [], text: 'first draft' });
   });
 
   it('allows another send after the current attempt settles', async () => {

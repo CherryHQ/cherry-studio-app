@@ -1,14 +1,12 @@
 import { useToast } from '@cherrystudio/ui/components';
-import { useGlobalSearchParams, useRootNavigationState, useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useGlobalSearchParams, usePathname, useRootNavigationState, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { AppState } from 'react-native';
 
 import {
   type ChatRouteParamsInput,
   chatHref,
-  chatRouteParams,
   createChatComposerHandoff,
+  chatRouteParams,
   parseChatRoute,
 } from '@/frontend/appShell/navigation/chat';
 import {
@@ -17,12 +15,15 @@ import {
 } from '@/frontend/components/Composer/utils/composerAttachments';
 import { useBackendModule } from '@/frontend/data';
 import { useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
-import type { SystemSharedFile } from '@/shared/contracts';
+import type { SystemAction, SystemSharedFile } from '@/shared/contracts';
+
+import { useSystemEntryClaims } from './useSystemEntryClaims';
 
 /** Hands an incoming system share to the chat composer, for the user to edit, retarget, and send. */
 export function SystemEntryBridge() {
   const module = useBackendModule('systemEntry');
   const router = useRouter();
+  const pathname = usePathname();
   const navigation = useRootNavigationState();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -35,47 +36,28 @@ export function SystemEntryBridge() {
   const { agents } = useAgentsApi();
   const recentAgentId =
     (target?.kind === 'draft' ? target.agentId : openSession.data?.agentId) ?? agents[0]?.id;
-  // A claim survives one navigation and outlives the effect that started it.
-  const claiming = useRef(false);
 
-  useEffect(() => {
-    // Without an Agent there is nowhere to put a share, so it stays staged for a later pass.
-    if (!navigation?.key || !recentAgentId) return;
-    let stopped = false;
-
-    const claim = async () => {
-      if (stopped || claiming.current || AppState.currentState !== 'active') return;
-      claiming.current = true;
-      try {
-        const action = await module.claimNext();
-        if (!action || stopped) return;
-        const composerHandoff = createChatComposerHandoff({
-          attachments: action.files.map(toShareAttachment),
-          draft: action.text,
-        });
-        const chatTarget = { agentId: recentAgentId, kind: 'draft', composerHandoff } as const;
-        // Come back to chat from wherever the app was left, then seed its composer.
-        if (router.canDismiss()) router.dismissTo(chatHref(chatTarget));
-        else router.setParams(chatRouteParams(chatTarget));
-      } catch {
-        if (!stopped) toast.show({ label: t('systemEntry.failed'), variant: 'danger' });
-      } finally {
-        claiming.current = false;
-      }
-    };
-
-    const stopPending = module.subscribePending(() => void claim());
-    const foreground = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void claim();
+  const deliver = (action: SystemAction) => {
+    // Without an Agent there is nowhere to put a share, so it waits for a later pass.
+    if (!navigation?.key || !recentAgentId) return false;
+    const composerHandoff = createChatComposerHandoff({
+      attachments: action.files.map(toShareAttachment),
+      draft: action.text,
     });
-    void claim();
+    const chatTarget = { agentId: recentAgentId, kind: 'draft', composerHandoff } as const;
+    // Seed the chat in view, or come back to chat from wherever the app was left. Dismissing pops
+    // to chat when it is in the stack and replaces the current page when it is not.
+    if (pathname === '/') router.setParams(chatRouteParams(chatTarget));
+    else router.dismissTo(chatHref(chatTarget));
+    return true;
+  };
 
-    return () => {
-      stopped = true;
-      stopPending();
-      foreground.remove();
-    };
-  }, [module, navigation?.key, recentAgentId, router, t, toast]);
+  useSystemEntryClaims({
+    deliver,
+    isReady: Boolean(navigation?.key && recentAgentId),
+    module,
+    onFailure: () => toast.show({ label: t('systemEntry.failed'), variant: 'danger' }),
+  });
 
   return null;
 }

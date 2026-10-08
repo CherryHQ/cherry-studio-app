@@ -6,6 +6,7 @@ import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import {
   buildProviderModelAddInput,
+  changeProviderModelPrimaryType,
   createInitialProviderModelAddFormState,
   getDefaultProviderModelGroupName,
   getProviderChatEndpointTypes,
@@ -351,6 +352,38 @@ describe('provider model add helpers', () => {
         },
       }),
     ).toEqual([ENDPOINT_TYPE.OPENAI_RESPONSES, ENDPOINT_TYPE.ANTHROPIC_MESSAGES]);
+  });
+
+  test('never offers embedding or rerank protocols', () => {
+    const everyEndpoint = provider({
+      id: 'gateway',
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://api.example.com/v1' },
+        [ENDPOINT_TYPE.OPENAI_EMBEDDINGS]: { baseUrl: 'https://api.example.com/v1' },
+        [ENDPOINT_TYPE.JINA_RERANK]: { baseUrl: 'https://api.example.com/v1' },
+      },
+    });
+    expect(getProviderModelAddEndpointOptions(everyEndpoint).map(({ id }) => id)).toEqual([
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    ]);
+  });
+
+  test('turns a catalog embedding model into a text model on the chat protocol', () => {
+    const embedding = catalogModel('text-embedding-3-small', {
+      capabilities: [MODEL_CAPABILITY.EMBEDDING],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_EMBEDDINGS],
+    });
+    const form = changeProviderModelPrimaryType(
+      createInitialProviderModelAddFormState(),
+      'text',
+      openaiProvider,
+      embedding,
+    );
+    expect(form).toMatchObject({
+      capabilities: { embedding: false },
+      endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      primaryType: 'text',
+    });
   });
 });
 

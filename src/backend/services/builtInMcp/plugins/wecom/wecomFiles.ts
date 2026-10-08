@@ -1,7 +1,9 @@
+import { loggerService } from '@logger';
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
+import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import { getFileUri } from '@/backend/services/file/fileStorage';
 import { PluginError } from '@/shared/contracts/plugins';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
@@ -14,10 +16,37 @@ import {
   type WecomJsonSchema,
 } from './wecomSchema';
 
+const logger = loggerService.withContext('WecomFiles');
+
 type FieldPath = (string | number)[];
 type Field = { path: FieldPath; schema: WecomJsonSchema; value: unknown };
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
+// Downloads are tool artifacts; a later turn needing an older one downloads it again.
+const FILE_RETENTION_MS = 24 * 60 * 60 * 1000;
 const outputDirectory = () => new Directory(Paths.cache, 'WecomFiles');
+
+/** Drop downloads and saved results older than the retention window. Best effort. */
+export function sweepWecomFiles(now = Date.now()) {
+  try {
+    const directory = outputDirectory();
+    if (!directory.exists) return;
+    for (const entry of directory.list())
+      if (entry instanceof File && (entry.modificationTime ?? 0) < now - FILE_RETENTION_MS)
+        entry.delete();
+  } catch (error) {
+    logger.warn('Could not remove expired Wecom files.', { error });
+  }
+}
+
+/** Disconnecting removes every saved download and result from the device. Best effort. */
+export function deleteWecomFiles() {
+  try {
+    const directory = outputDirectory();
+    if (directory.exists) directory.delete();
+  } catch (error) {
+    logger.warn('Could not remove Wecom files.', { error });
+  }
+}
 
 function fields(
   schema: WecomJsonSchema,
@@ -68,7 +97,7 @@ async function uploadFile(value: string): Promise<File> {
   // These locations contain user attachments, document exports and prior Wecom downloads.
   // Never interpret a model-supplied path as permission to upload app databases/configuration.
   const roots = [
-    new Directory(Paths.document, 'Data', 'Files'),
+    new Directory(storageDirectory(), 'Data', 'Files'),
     new Directory(Paths.cache, 'DocumentExport'),
     outputDirectory(),
   ];
@@ -220,32 +249,43 @@ export function saveWecomResult(
   signal: AbortSignal,
 ): unknown {
   let result = value;
-  if (schema)
-    for (const field of fields(schema, value)) {
-      const options = field.schema['x-wecom-file-save'];
-      if (!options || typeof options !== 'object' || Array.isArray(options)) continue;
-      const defaults = options as Record<string, unknown>;
-      const data =
-        typeof field.value === 'string'
-          ? { content: field.value }
-          : (field.value as Record<string, unknown> | null);
-      if (!data || typeof data.content !== 'string') continue;
-      signal.throwIfAborted();
-      const name = data.file_name ?? defaults.fileName;
-      const encoding = data.content_encoding ?? defaults.contentEncoding;
-      const file = saveWecomFile(
-        data.content,
-        typeof name === 'string' ? name : 'download',
-        encoding === 'base64' ? 'base64' : undefined,
-      );
-      result = replace(result, field.path, file.file_path);
+  // A result that fails or is cancelled midway leaves no unreferenced files behind.
+  const saved: string[] = [];
+  try {
+    if (schema)
+      for (const field of fields(schema, value)) {
+        const options = field.schema['x-wecom-file-save'];
+        if (!options || typeof options !== 'object' || Array.isArray(options)) continue;
+        const defaults = options as Record<string, unknown>;
+        const data =
+          typeof field.value === 'string'
+            ? { content: field.value }
+            : (field.value as Record<string, unknown> | null);
+        if (!data || typeof data.content !== 'string') continue;
+        signal.throwIfAborted();
+        const name = data.file_name ?? defaults.fileName;
+        const encoding = data.content_encoding ?? defaults.contentEncoding;
+        const file = saveWecomFile(
+          data.content,
+          typeof name === 'string' ? name : 'download',
+          encoding === 'base64' ? 'base64' : undefined,
+        );
+        saved.push(file.file_path);
+        result = replace(result, field.path, file.file_path);
+      }
+    // Keep a large result intact as a local file rather than silently truncating it in the transcript.
+    const text = JSON.stringify(result);
+    if (new TextEncoder().encode(text).byteLength > 120 * 1024)
+      return {
+        ...saveWecomFile(text, 'result.json'),
+        note: 'The complete result was saved on this device. Use a smaller page or fewer fields to read it in chat.',
+      };
+    return result;
+  } catch (error) {
+    for (const uri of saved) {
+      const file = new File(uri);
+      if (file.exists) file.delete();
     }
-  // Keep a large result intact as a local file rather than silently truncating it in the transcript.
-  const text = JSON.stringify(result);
-  if (new TextEncoder().encode(text).byteLength > 120 * 1024)
-    return {
-      ...saveWecomFile(text, 'result.json'),
-      note: 'The complete result was saved on this device. Use a smaller page or fewer fields to read it in chat.',
-    };
-  return result;
+    throw error;
+  }
 }

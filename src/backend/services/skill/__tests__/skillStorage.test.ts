@@ -5,7 +5,7 @@ jest.mock('expo-file-system', () => ({
   File: jest.fn(),
   Paths: { cache: { uri: 'file:///cache/' } },
 }));
-jest.mock('../../../../../modules/managed-storage', () => ({ getManagedStorage: () => null }));
+jest.mock('@/backend/data/storage/storagePaths', () => ({ skillStorageRootDirectory: () => null }));
 
 type Node = { kind: 'dir'; children: Map<string, Node> } | { kind: 'file'; bytes: Uint8Array };
 

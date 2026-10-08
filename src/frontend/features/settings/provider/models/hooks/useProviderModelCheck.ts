@@ -1,4 +1,4 @@
-import { useAlert, useToast } from '@cherrystudio/ui/components';
+import { useAlert } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,7 +35,6 @@ export function useProviderModelCheck({
   selectedModelId,
 }: UseProviderModelCheckOptions) {
   const { t } = useTranslation();
-  const { toast } = useToast();
   const { alert } = useAlert();
   const modelsBackend = useBackendModule('models');
   const [checkState, setCheckState] = useState<ProviderModelCheckState>(() =>
@@ -105,12 +104,8 @@ export function useProviderModelCheck({
       const result = results[0] ?? { model: selectedModel, status: 'failed' as const };
       setCheckState({ isChecking: false, modelStatus: result, providerId, selectionKey });
 
-      if (result?.status === 'success') {
-        toast.show({
-          label: t('settings.provider.models.checkSuccess'),
-          variant: 'success',
-        });
-      } else {
+      // Success shows where the check was started; only a failure needs an explanation.
+      if (result?.status !== 'success') {
         alert.show({
           description: result.reason
             ? t(`onboarding.check.${result.reason}`)
@@ -153,7 +148,6 @@ export function useProviderModelCheck({
     selectionKey,
     alert,
     t,
-    toast,
   ]);
 
   return {

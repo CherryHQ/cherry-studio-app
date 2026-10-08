@@ -54,7 +54,7 @@ The Agent Data API, `Backend.agent`, and frontend surfaces share these current c
 protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
 Mobile Agent has one execution target and one engine: `local → Pi` in this mobile app. Application
 composition injects Pi directly into the Host, so there is no implementation choice to persist. The
-planned PC Agent Controller does not represent PC execution as a local Runtime binding or extend the
+PC Agent Controller does not represent PC execution as a local Runtime binding or extend the
 current local execution-target value. PC Agent Sessions remain authoritative on the PC. A mobile
 adapter may map them into Agent Protocol values for the application, but it does not copy them into
 these tables as a second source of truth. Any offline cache or projection requires a separate
@@ -63,6 +63,16 @@ versioned adapter and invalidation design.
 artifact anchored to a durable turn, not an engine id, resumable Runtime instance, provider cursor,
 or routing choice. The Host treats its payload as opaque and a process restart still interrupts an
 active turn.
+
+**Native model replay is an optional local cache.** Successful Runtime turns may preserve signed
+thinking blocks and the original assistant/tool-result sequence in an Agent-private MMKV store,
+`cherry-agent-replay-cache`. It survives process restarts but is bounded and disposable, separate from
+the SQLite transcript and excluded from application backups. There is no replay column or schema
+migration. The Host writes it after terminal message persistence, reads it by Session/message/Turn
+identity, and removes it on retry or deletion. Fork transactions return backend-private source/copy
+identities so the Host can copy available cache entries after commit. Storage restore clears this
+cache before startup. Missing or invalid entries use normalized message history; see
+[Agent Runtime](./agent-runtime.md#history) for limits and decoding ownership.
 
 **No workspace; controlled resources come from managed references.** A desktop workspace encodes a
 working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
@@ -182,7 +192,7 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
 | `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
-| `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` |
+| `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` and withholds `ask_user_question` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |
 | `createdAt` / `updatedAt` / `deletedAt` | integer | helper defaults | Soft delete via `deletedAt` |
 
@@ -234,12 +244,12 @@ recency; no `orderKey`).
 | `data` | text (json) | NOT NULL | `{ version: 1, parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
 | `usage` | text (json) | NULL | Assistant messages only |
-| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming` |
+| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
 | `error` | text (json) | NULL | Turn-level `AgentErrorView`, including the versioned failure snapshot when available; projected into `AgentTurnView.error`, not part of the message view |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
 | `messageSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
-| `searchableText` | text | NOT NULL DEFAULT `''` | Trigger-populated |
+| `searchableText` | text | NOT NULL DEFAULT `''` | Visible plain text of `text` parts, written by the store |
 | `ftsRowid` | integer | NULL, UNIQUE | Stable FTS5 `content_rowid`, trigger-assigned |
 | `createdAt` / `updatedAt` | integer | helper defaults | Physical row timestamps; hard delete via session cascade |
 
@@ -258,11 +268,14 @@ cannot match a partial index — see `message.ts`.)
 `data.parts` is exactly the protocol's `AgentMessagePart` union
 ([contract](../../../src/shared/contracts/agent/views.ts)); the version field guards future part-shape
 migrations. FTS mirrors the chat `message` architecture (external-content FTS5 table keyed on
-`ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) with an
-agent-specific extraction expression: `text` parts only. `reasoning` is model-internal and
-deliberately not searchable; tool payloads are structured data, not prose. The update trigger skips
-`pending` and `streaming` rows, so a turn's mid-stream snapshots are indexed once, when the row
-settles.
+`ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) and indexes
+`text` parts only. `reasoning` is model-internal and deliberately not searchable; tool payloads are
+structured data, not prose. The store writes `searchableText` as the parts' visible plain text,
+with Markdown formatting removed and code content kept, so a trigram `LIKE` finds every visible
+match without scanning the index. Triggers only mirror that column into FTS. Every write of `data`
+supplies it except the mid-stream snapshot, so a turn's streamed text is indexed once, when the row
+settles. When the custom SQL changes, startup re-derives settled rows whose stored text still
+contains Markdown markers; this also converts restored backups indexed by an older trigger.
 
 `reserveSubmission` writes the selected `modelId` and `AgentInferenceSnapshotV1` on the assistant
 placeholder in the same transaction as the user/assistant pair. The existing nullable columns from
@@ -305,9 +318,13 @@ projection:
   `streaming`, including any text already produced. The Host coalesces requests: the event loop
   does not wait on the store, one snapshot write is in flight at a time, and requests that arrive
   during a write collapse into one further write. A failed snapshot write is logged and execution
-  continues. Text-only events and non-terminal tool states do not request writes, `interrupted`
-  parts do not either because the terminal write always follows them, and there is no periodic
-  flush. A pending tool may be included in another tool or file's snapshot, but its intermediate
+  continues. Unfinished text and reasoning request a snapshot after a one-second batching window,
+  so a text-only stream has a durable prefix before its part finishes. This timer is scheduled only
+  after a delta, stops at finalization, and cannot write for a replaced or aborted turn. A slow or
+  failing store can leave a larger uncommitted suffix; the interval is not a durability guarantee.
+  Non-terminal tool states and input previews do not request writes; `interrupted` parts do not
+  either because the terminal write follows them. A pending tool may be included in another
+  part's snapshot, but its intermediate
   states are not guaranteed to survive a restart. Finalization remains authoritative: it drains
   the in-flight snapshot before the terminal write, and a late snapshot cannot reopen a settled
   row. On restart, reconciliation keeps saved parts, closes streaming text, and interrupts
@@ -329,8 +346,9 @@ projection:
   "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already
   ordered, and the reissued UUID v7 ids break ties in the same direction, so copying the value
   preserves order while stamping "now" on every row would be visibly wrong in the UI.
-  `searchableText` and `ftsRowid` are left to the insert trigger, which is race-free because the
-  whole copy runs inside the serialized write transaction.
+  `searchableText` is copied; `ftsRowid` is left to the insert trigger, which is race-free because
+  the whole copy runs inside the serialized write transaction. Copies are inserted in chunked
+  multi-row statements with ids generated in transcript order.
   The boundary is Session metadata rather than a synthetic Message, so it does not enter FTS,
   transcript pagination counts, Runtime history, or recursive fork copies.
 - Deleting a turn clears, in the same transaction, every checkpoint in that Session whose anchor

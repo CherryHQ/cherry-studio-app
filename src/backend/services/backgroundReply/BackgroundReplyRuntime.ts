@@ -3,7 +3,6 @@ import { resolveScheme } from 'expo-linking';
 import { AppState } from 'react-native';
 
 import {
-  type Activatable,
   AppStatePolicy,
   BaseService,
   DependsOn,
@@ -43,8 +42,6 @@ import {
 } from './deriveBackgroundReplyContent';
 import type { ReplyCompletionNotifier } from './replyCompletionNotifications';
 
-const ACTIVITY_PREFERENCE_KEY = 'chat.background_reply.enabled';
-const NOTIFICATION_PREFERENCE_KEY = 'chat.completion_notifications.enabled';
 const SESSION_TAG = 'chat.backgroundReply';
 const FINISH_TITLE_GRACE_MS = 5_000;
 const PREVIEW_UPDATE_INTERVAL_MS = 1_000;
@@ -67,17 +64,10 @@ type TurnRecord = {
 };
 
 type BackgroundActivityPort = {
-  dismissTask(deepLinkUrl: string): void;
+  dismissTask(deepLinkUrl: string): void | Promise<void>;
   startSession<Props extends BackgroundReplyActivityProps>(
     input: BackgroundActivitySessionInput<Props>,
   ): BackgroundActivitySession<Props>;
-};
-
-type RuntimePreferenceKey = typeof ACTIVITY_PREFERENCE_KEY | typeof NOTIFICATION_PREFERENCE_KEY;
-
-type PreferencePort = {
-  readCached(key: RuntimePreferenceKey): boolean;
-  subscribeChange(key: RuntimePreferenceKey): (listener: () => void) => () => void;
 };
 
 type EnvironmentPort = {
@@ -90,24 +80,16 @@ type EnvironmentPort = {
 /**
  * Chat's domain adapter over the background-activity mechanism: it owns the
  * per-session turn state machine, derives presentable content from chat
- * messages, and maps generating phases onto the session's keepAlive bit.
+ * messages, and holds execution until the turn and its final delivery settle.
  * Throttling, AppState handling, orphan sweeps, and platform keep-alive all live
  * behind the injected session manager. Platform availability is a presenter
  * and lease-source concern; this runtime never branches on it.
  */
 @Injectable('BackgroundReplyRuntime')
 @ServicePhase(Phase.PostReady)
-@DependsOn([
-  'BackgroundActivityManager',
-  'PreferenceService',
-  'BackgroundActivityEnvironment',
-  'KeepAliveCoordinator',
-])
+@DependsOn(['BackgroundActivityManager', 'BackgroundActivityEnvironment', 'KeepAliveCoordinator'])
 @AppStatePolicy('background-presentation')
-export class BackgroundReplyRuntime
-  extends BaseService
-  implements Activatable, BackgroundReplyLifecycle
-{
+export class BackgroundReplyRuntime extends BaseService implements BackgroundReplyLifecycle {
   private disposed = false;
   private generation = 0;
   private operationTail: Promise<void> = Promise.resolve();
@@ -116,63 +98,10 @@ export class BackgroundReplyRuntime
 
   constructor(
     private readonly activities: BackgroundActivityPort,
-    private readonly preference: PreferencePort,
     private readonly environment: EnvironmentPort,
     private readonly keepAlive: KeepAliveSource,
   ) {
     super();
-  }
-
-  protected onInit(): void {
-    // Both switches drive this runtime: the Live Activities switch controls
-    // the surfaces, the completion-notifications switch keeps the logical
-    // turn tracking — and with it the notice channel — alive on its own,
-    // wherever an independent notifier actually exists.
-    this.registerDisposable(
-      this.preference.subscribeChange(ACTIVITY_PREFERENCE_KEY)(() => this.handlePreferenceChange()),
-    );
-    this.registerDisposable(
-      this.preference.subscribeChange(NOTIFICATION_PREFERENCE_KEY)(() =>
-        this.handlePreferenceChange(),
-      ),
-    );
-  }
-
-  protected async onReady(): Promise<void> {
-    if (this.shouldRun()) await this.activate();
-  }
-
-  onActivate(): void {
-    this.presentSurfaces();
-  }
-
-  onDeactivate(): void {
-    this.cancelSessions();
-  }
-
-  /** Surfaces exist only while the Live Activities switch is on. */
-  private presentSurfaces(): void {
-    if (!this.preference.readCached(ACTIVITY_PREFERENCE_KEY)) return;
-    try {
-      for (const record of this.turns.values()) {
-        this.refreshContent(record);
-        this.ensureSession(record, true);
-      }
-    } catch (error) {
-      this.cancelSessions();
-      throw error;
-    }
-  }
-
-  private shouldRun(): boolean {
-    // The completion switch keeps this runtime alive only where an independent
-    // notifier exists (iOS). Elsewhere it must not resurrect chat execution
-    // that the background-replies switch turned off.
-    return (
-      this.preference.readCached(ACTIVITY_PREFERENCE_KEY) ||
-      (this.preference.readCached(NOTIFICATION_PREFERENCE_KEY) &&
-        this.environment.replyNotifications !== undefined)
-    );
   }
 
   private cancelSessions(): void {
@@ -189,7 +118,7 @@ export class BackgroundReplyRuntime
     sessionId: string,
     onInterrupt: (reason: Error) => void,
   ): KeepAliveLease => {
-    if (!this.isActivated || this.disposed) return { release() {} };
+    if (!this.isReady || this.disposed) return { release() {} };
     const lease = this.keepAlive.acquire('chat.preparation', onInterrupt);
     this.preparationLeases.add(lease);
     const prepared = this.prepareTurn(sessionId);
@@ -227,7 +156,7 @@ export class BackgroundReplyRuntime
   }
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
-    if (!this.isActivated || this.disposed) return noOpTurn;
+    if (!this.isReady || this.disposed) return noOpTurn;
 
     const normalized = normalizeTurnInput(input);
     const existing = this.turns.get(normalized.key);
@@ -252,6 +181,18 @@ export class BackgroundReplyRuntime
     this.ensureSession(record);
 
     return {
+      updateContent: (content) =>
+        this.runTurnCallback(record.key, 'update remote turn', () => {
+          if (!this.isCurrent(record.key, generation)) return;
+          const current = this.turns.get(record.key);
+          if (!current) return;
+          const phaseChanged = current.content.phase !== content.phase;
+          current.content = content;
+          current.session?.update(this.toActivityProps(current), {
+            keepAlive: true,
+            urgent: phaseChanged,
+          });
+        }),
       awaitApproval: (message, reason) =>
         this.runTurnCallback(record.key, 'mark approval pending', () => {
           if (!this.isCurrent(record.key, generation)) return;
@@ -272,7 +213,7 @@ export class BackgroundReplyRuntime
             ...(latest.preview ? { preview: latest.preview } : {}),
           };
           current.session?.update(this.toActivityProps(current), {
-            keepAlive: false,
+            keepAlive: true,
             urgent: true,
           });
         }),
@@ -285,6 +226,15 @@ export class BackgroundReplyRuntime
           },
         );
       },
+      retire: () =>
+        this.runTurnCallback(record.key, 'retire turn', () => {
+          if (!this.isCurrent(record.key, generation)) return;
+          this.turns.delete(record.key);
+          this.clearUpdateTimer(record);
+          // Cancellation leaves no settled card behind.
+          record.session?.cancel();
+          record.session = undefined;
+        }),
       update: (message, options) =>
         this.runTurnCallback(record.key, 'update turn', () => {
           this.updateTurn(record.key, generation, message, options);
@@ -296,13 +246,14 @@ export class BackgroundReplyRuntime
     this.clearTurn(sessionId);
   };
 
-  updateSessionTitle = (sessionId: string, title: string): void => {
-    this.runTurnCallback(sessionId, 'update Agent Session title', () => {
-      const record = this.turns.get(sessionId);
-      if (!record) return;
+  updateSessionTitle = (sessionId: string, title: string, connectionId?: string): void => {
+    const key = connectionId ? JSON.stringify([connectionId, sessionId]) : sessionId;
+    this.runTurnCallback(key, 'update Agent Session title', () => {
+      const record = this.turns.get(key);
+      if (!record || record.conversationTitle === title.trim()) return;
       record.conversationTitle = title.trim();
       record.session?.update(this.toActivityProps(record), {
-        keepAlive: isGeneratingPhase(record.content.phase),
+        keepAlive: true,
         urgent: true,
       });
     });
@@ -332,23 +283,6 @@ export class BackgroundReplyRuntime
     await this.operationTail;
   }
 
-  private handlePreferenceChange(): void {
-    // Live Activities going off drops only the surfaces (the manager retires
-    // them through its own presentation subscription); the session, its lease,
-    // and the turn tracking keep running while a switch still needs them.
-    const wasActivated = this.isActivated;
-    const transition = this.shouldRun() ? this.activate() : this.deactivate();
-    void transition
-      .then((activated) => {
-        // activate() is idempotent, so a notify-only run whose Live Activities
-        // switch came back on re-presents its surfaces here.
-        if (activated && wasActivated) this.presentSurfaces();
-      })
-      .catch((error: unknown) => {
-        logger.error('Background reply preference transition failed', error as Error);
-      });
-  }
-
   private updateTurn(
     key: string,
     generation: number,
@@ -360,7 +294,7 @@ export class BackgroundReplyRuntime
     if (!record) return;
 
     record.latestMessage = message;
-    if (!this.isActivated) return;
+    if (!this.isReady) return;
 
     if (options?.deferPreview) {
       if (record.content.phase === 'thinking' && !hasReplyText(message)) {
@@ -386,7 +320,7 @@ export class BackgroundReplyRuntime
     const phaseChanged = nextContent.phase !== record.content.phase;
     record.content = nextContent;
     record.session?.update(this.toActivityProps(record), {
-      keepAlive: isGeneratingPhase(nextContent.phase),
+      keepAlive: true,
       urgent: phaseChanged,
     });
   }
@@ -396,7 +330,7 @@ export class BackgroundReplyRuntime
 
     record.updateTimer = setTimeout(() => {
       record.updateTimer = undefined;
-      if (!this.isActivated || !this.isCurrent(record.key, generation)) return;
+      if (!this.isReady || !this.isCurrent(record.key, generation)) return;
       this.runTurnCallback(record.key, 'update deferred preview', () => {
         this.refreshContent(record);
       });
@@ -432,30 +366,23 @@ export class BackgroundReplyRuntime
       preview,
       this.environment.translate,
     );
-    // The notice and the final delivery must outlive the session's own lease
-    // (dropped by the keepAlive:false update below): hold a short delivery
-    // lease until both settle, or a backgrounded app can be suspended
-    // mid-submission. With neither channel left there is nothing to protect.
-    const deliveryLease =
-      record.session || this.environment.replyNotifications
-        ? this.keepAlive.acquire('chat.replyNotice')
-        : undefined;
+    // Keep the turn's lease through persistence and terminal delivery. A
+    // foreground/background transition or an attention phase never releases it.
+    record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
+    // iOS may replace the finished activity with a completion notification.
+    // Keep protection through that handoff even though finish ends the session.
+    const deliveryLease = this.environment.replyNotifications
+      ? this.keepAlive.acquire('chat.replyNotice')
+      : undefined;
     try {
-      record.session?.update(this.toActivityProps(record), { keepAlive: false, urgent: true });
-      if (waitFor) {
-        await this.waitForFinishDependency(key, waitFor);
-      }
-      // Keep terminal content updateable until any final title projection settles.
-      // A continuation that supersedes this generation inherits the live session.
+      if (waitFor) await this.waitForFinishDependency(key, waitFor);
       await this.enqueue(async () => {
         if (!this.isRecordCurrent(record)) return;
         const session = record.session;
         record.session = undefined;
-        const notified = await this.notifyReplyFinished(record, outcome, occurredInBackground);
         await session?.finish(this.toActivityProps(record));
-        // A delivered notice replaces the Live Activity card as the completion
-        // artifact; retire the settled surface so the lock screen shows one item.
-        if (notified) this.activities.dismissTask(record.deepLinkUrl);
+        if (!this.isRecordCurrent(record)) return;
+        await this.notifyReplyFinished(record, outcome, occurredInBackground);
         if (this.turns.get(key) === record) this.turns.delete(key);
       });
     } finally {
@@ -480,6 +407,8 @@ export class BackgroundReplyRuntime
     if (!notify) return false;
     try {
       return await notify({
+        beforeDelivery: () => Promise.resolve(this.activities.dismissTask(record.deepLinkUrl)),
+        isCurrent: () => this.isRecordCurrent(record),
         deepLinkUrl: record.deepLinkUrl,
         detail: record.content.detail,
         occurredInBackground,
@@ -517,18 +446,11 @@ export class BackgroundReplyRuntime
     if (timeout !== undefined) clearTimeout(timeout);
   }
 
-  /**
-   * Starts the conversation's activity, or re-syncs an inherited one, whenever
-   * the runtime is active. The session exists even with Live Activities off:
-   * its keep-alive bit is the generation's execution lease, and the manager —
-   * not this runtime — decides whether a surface presents it.
-   */
-  private ensureSession(record: TurnRecord, activating = false): void {
-    // `onActivate` runs before BaseService flips `isActivated`; callers during
-    // normal operation use the public state as the preference gate.
-    if ((!activating && !this.isActivated) || this.disposed) return;
+  /** The manager owns presentation; every unfinished turn owns execution. */
+  private ensureSession(record: TurnRecord): void {
+    if (!this.isReady || this.disposed) return;
 
-    const keepAlive = isGeneratingPhase(record.content.phase);
+    const keepAlive = true;
     if (record.session) {
       record.session.update(this.toActivityProps(record), { keepAlive, urgent: true });
       return;
@@ -596,8 +518,16 @@ function normalizeTurnInput(input: BackgroundReplyTurnInput): {
   return {
     actorName: input.agentName,
     conversationTitle: input.sessionTitle,
-    deepLinkUrl: sessionTaskUrl(input.sessionId),
-    key: input.sessionId,
+    deepLinkUrl: input.connectionId
+      ? createBackgroundTaskUrl(resolveScheme({}), {
+          kind: 'remote-chat',
+          connectionId: input.connectionId,
+          sessionId: input.sessionId,
+        })
+      : sessionTaskUrl(input.sessionId),
+    key: input.connectionId
+      ? JSON.stringify([input.connectionId, input.sessionId])
+      : input.sessionId,
   };
 }
 
@@ -606,19 +536,12 @@ function sessionTaskUrl(sessionId: string): string {
 }
 
 const noOpTurn: BackgroundReplyTurn = {
+  updateContent: () => {},
   awaitApproval: () => {},
   finish: () => {},
+  retire: () => {},
   update: () => {},
 };
-
-function isGeneratingPhase(phase: BackgroundReplyPhase): boolean {
-  return (
-    phase === 'preparing' ||
-    phase === 'thinking' ||
-    phase === 'using-tool' ||
-    phase === 'responding'
-  );
-}
 
 function hasReplyText(message: BackgroundReplyMessage): boolean {
   return message.parts.some((part) => part.type === 'text' && part.text.length > 0);

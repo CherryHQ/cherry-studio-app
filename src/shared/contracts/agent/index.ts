@@ -29,6 +29,7 @@ export {
   type AgentSessionSnapshot,
 } from './events';
 export {
+  AgentCancelSubmissionInputSchema,
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
@@ -97,11 +98,14 @@ export {
 export {
   AgentPendingQuestionSchema,
   type AgentPendingQuestion,
-  AgentUserQuestionSchema,
+  AgentUserQuestionsSchema,
   AgentUserAnswerSchema,
+  AgentUserAnswersSchema,
   AgentRespondQuestionSchema,
-  validateUserAnswer,
+  validateUserAnswers,
   type AgentUserQuestion,
+  type AgentUserQuestions,
   type AgentUserAnswer,
+  type AgentUserAnswers,
   type AgentRespondQuestionInput,
 } from './userQuestion';

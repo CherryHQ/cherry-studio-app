@@ -1,21 +1,25 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { TranscriptSnapshot } from '@/frontend/appShell/conversation';
 import type { useDocumentExport } from '@/frontend/appShell/documentExport';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
+import type { ChatShareTarget } from '../chatShareTarget';
 import { useShareChat } from '../useShareChat';
 
 const mockOpen = jest.fn(
   async (_input: Parameters<ReturnType<typeof useDocumentExport>['open']>[0]) => 'closed' as const,
 );
-const mockGet = jest.fn();
-const mockApi = { get: mockGet };
+const mockPrepare = jest.fn<Promise<TranscriptSnapshot>, [readonly string[], AbortSignal]>();
+const target: ChatShareTarget = {
+  ref: { source: { kind: 'local' }, sessionId: 'session' },
+  prepareSelection: mockPrepare,
+};
 
 jest.mock('@/frontend/appShell/documentExport', () => ({
   useDocumentExport: () => ({ open: mockOpen }),
 }));
-jest.mock('@/frontend/data/DataApiProvider', () => ({ useApiClient: () => mockApi }));
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: jest.fn() } }),
 }));
@@ -23,7 +27,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 
 type ShareChat = ReturnType<typeof useShareChat>;
 function Probe({ ref }: { ref: Ref<ShareChat> }) {
-  const share = useShareChat('session');
+  const share = useShareChat(target);
   useImperativeHandle(ref, () => share, [share]);
   return null;
 }
@@ -48,13 +52,13 @@ function message(id: string, role: 'user' | 'assistant'): AgentMessageView {
 let renderer: ReactTestRenderer | undefined;
 beforeEach(() => {
   mockOpen.mockClear();
-  mockGet.mockReset().mockImplementation(async (path: string) => {
-    if (path.endsWith('/messages'))
-      return { items: [message('answer', 'assistant'), message('question', 'user')] };
-    if (path === '/agent-sessions/session') return { title: 'Conversation', agentId: 'agent' };
-    if (path === '/agents/agent') return { name: 'Assistant' };
-    throw new Error(`Unexpected request: ${path}`);
-  });
+  mockPrepare.mockReset().mockImplementation(async (ids) => ({
+    title: 'Conversation',
+    assistantName: 'Assistant',
+    messages: [message('question', 'user'), message('answer', 'assistant')].filter((message) =>
+      ids.includes(message.id),
+    ),
+  }));
 });
 afterEach(() => {
   act(() => renderer?.unmount());
@@ -102,3 +106,22 @@ test.each([{ ids: ['answer'] }, { ids: ['answer', 'answer'] }])(
     );
   },
 );
+
+test('does not open the export after preparation was cancelled', async () => {
+  let finish!: (value: TranscriptSnapshot) => void;
+  mockPrepare.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const ref = createRef<ShareChat>();
+  await act(async () => {
+    renderer = create(<Probe ref={ref} />);
+  });
+  await act(async () => ref.current!.shareChat(['answer']));
+  act(() => ref.current!.cancelShare());
+  await act(async () => finish({ messages: [message('answer', 'assistant')] }));
+  expect(mockOpen).not.toHaveBeenCalled();
+  expect(ref.current!.isSharing).toBe(false);
+});

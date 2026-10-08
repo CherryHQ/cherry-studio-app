@@ -18,7 +18,8 @@ describe('provider Data API handlers', () => {
       update: jest.fn(async () => provider),
       updateApiKey: jest.fn(async () => provider),
     };
-    const handlers = createProviderHandlers(service as unknown as ProviderService);
+    const accounts = { forget: jest.fn(async () => undefined) };
+    const handlers = createProviderHandlers(service as unknown as ProviderService, accounts);
 
     await handlers['/providers'].GET({ query: { enabled: true } });
     await handlers['/providers/page'].GET({ query: { limit: 20 } });
@@ -53,6 +54,10 @@ describe('provider Data API handlers', () => {
     expect(service.getByProviderId).toHaveBeenCalledWith('provider-1');
     expect(service.update).toHaveBeenCalledWith('provider-1', { name: 'Renamed' });
     expect(service.delete).toHaveBeenCalledWith('provider-1');
+    expect(accounts.forget).toHaveBeenCalledWith('provider-1');
+    expect(accounts.forget.mock.invocationCallOrder[0]).toBeLessThan(
+      service.delete.mock.invocationCallOrder[0]!,
+    );
     expect(service.listApiKeys).toHaveBeenCalledWith('provider-1', { enabled: true });
     expect(service.replaceApiKeys).toHaveBeenCalledWith('provider-1', [apiKey]);
     expect(service.updateApiKey).toHaveBeenCalledWith('provider-1', 'key-1', {

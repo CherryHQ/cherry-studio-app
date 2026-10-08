@@ -16,7 +16,8 @@ Runtime tools, never through an AI SDK tool set. Availability comes from the Age
 configuration alone: the composer carries no web-search control, so it requests no turn-local
 `web-search` capability and keeps no per-Session selection.
 
-The settings workflow still configures and checks external providers globally, and a lookup that
+The Plugins page's built-in tool pages (**Web search** and **URL fetch**) configure and check
+external providers globally, and a lookup that
 fails because no provider is configured returns a terminal result telling the model to stop
 retrying rather than a transient error.
 

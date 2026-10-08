@@ -23,6 +23,11 @@ of these paths.
 Resource operations remain Data API endpoints even when their implementations use SQLite or a
 backend data module. Do not add a `Backend` module merely to avoid defining an endpoint.
 
+The credential-free `remoteAgent` workflow exposes source reads, observations and bound command
+results. Desktop transport, grants and recovery remain backend-owned; frontend conversation
+consumption lives in appShell. See [Remote Access](../../../docs/references/remote-access/README.md).
+The superseded `agentController` contract is removed.
+
 ## Admission Rules
 
 A new contract belongs here only when it cannot be expressed cleanly through the Data API or

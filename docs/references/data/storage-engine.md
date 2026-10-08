@@ -17,7 +17,9 @@ directly; (2) `DbService.withWriteTx` serializes writes on a long-lived connecti
 which crashes on physical iOS devices when FTS5 tables are present
 (`src/backend/data/db/DbService.ts`). Custom FTS SQL is checked after migrations from
 `src/backend/data/db/customSql.ts` and skipped when its journaled content hash is unchanged.
-Because these are mitigations for `expo-sqlite` deficiencies, they argue *for* evaluating `op-sqlite`
+`expo-sqlite` also never finalizes a statement on its own, so Drizzle's Expo session is patched
+(`patches/drizzle-orm@0.45.2.patch`) to prepare a statement per execution and finalize it
+afterwards. Because these are mitigations for `expo-sqlite` deficiencies, they argue *for* evaluating `op-sqlite`
 later, not against it.
 
 ## Reconsidering `op-sqlite`

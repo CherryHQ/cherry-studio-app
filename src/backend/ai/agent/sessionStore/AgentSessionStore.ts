@@ -70,6 +70,12 @@ export type ForkSessionInput = {
   title?: string;
 };
 
+/** Backend-private identities for copying optional per-message caches after commit. */
+export type ForkedMessageCopy = {
+  source: Pick<AgentMessageView, 'id' | 'turnId'>;
+  target: Pick<AgentMessageView, 'id' | 'turnId'>;
+};
+
 /**
  * Distinguishes a missing Session, a fork point that is not in it, and a fork
  * point whose own row has not settled. The last case is refused rather than
@@ -77,7 +83,7 @@ export type ForkSessionInput = {
  * caller never asked for.
  */
 export type ForkSessionResult =
-  | { status: 'forked'; session: AgentSessionView }
+  | { status: 'forked'; session: AgentSessionView; messageCopies: ForkedMessageCopy[] }
   | { status: 'session-not-found' }
   | { status: 'message-not-found' }
   | { status: 'fork-point-unsettled' };

@@ -1,49 +1,75 @@
+import { ContextMenuExclusion } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { AgentUserAnswerSchema, AgentUserQuestionSchema } from '@/shared/contracts/agent';
+import {
+  AgentUserAnswersSchema,
+  AgentUserQuestionsSchema,
+  validateUserAnswers,
+  type AgentUserAnswers,
+} from '@/shared/contracts/agent';
 
 import { GenericToolPart } from './GenericToolPart';
 import type { ToolMessagePart } from './toolPartState';
 
-/** Historical record only. The live response surface belongs to the chat sheet. */
+/** A flat transcript record of each question and its answer; the live form is the chat's sheet. */
 export function UserQuestionPart({ part }: { part: ToolMessagePart }) {
   const { t } = useTranslation();
-  const parsed = AgentUserQuestionSchema.safeParse(part.input);
+  const parsed = AgentUserQuestionsSchema.safeParse(part.input);
   if (!parsed.success) return <GenericToolPart part={part} />;
-  const question = parsed.data;
+  const request = parsed.data;
+  const { questions } = request;
   const output =
     part.state === 'output-available' && typeof part.output === 'object' && part.output !== null
       ? (part.output as Record<string, unknown>)
       : undefined;
-  const result = output
-    ? AgentUserAnswerSchema.safeParse({
-        selectedOptionIds: output.selectedOptionIds,
-        text: output.text,
-        skipped: output.skipped,
-      })
-    : undefined;
-  const answer = result?.success ? result.data : undefined;
-  const waiting = part.state === 'input-available';
+  const result = output ? AgentUserAnswersSchema.safeParse({ answers: output.answers }) : undefined;
+  let response: AgentUserAnswers | undefined;
+  if (result?.success) {
+    try {
+      validateUserAnswers(request, result.data);
+      response = result.data;
+    } catch {
+      // An invalid persisted result must not appear as a completed answer.
+    }
+  }
+  const answers = response?.answers ?? [];
+  const statusText = t(
+    part.state === 'input-available' ? 'chat.question.waiting' : 'chat.question.closed',
+  );
+
   return (
-    <View className="w-full gap-3 rounded-2xl bg-card p-4">
-      <Text accessibilityRole="header" className="font-semibold text-foreground text-lg">
-        {question.question}
-      </Text>
-      <Text className="text-muted-foreground text-base" selectable>
-        {answer
-          ? answer.skipped
-            ? t('chat.question.skipped')
-            : [
+    <ContextMenuExclusion className="w-full gap-3" testID="user-question-part">
+      {questions.map((question) => {
+        const answer = answers.find((item) => item.questionId === question.id);
+        const answerText =
+          answer && !answer.skipped
+            ? [
                 ...question.options
                   .filter((option) => answer.selectedOptionIds.includes(option.id))
                   .map((option) => option.label),
                 answer.text,
               ]
                 .filter(Boolean)
-                .join(' · ')
-          : t(waiting ? 'chat.question.waiting' : 'chat.question.closed')}
-      </Text>
-    </View>
+                .join('\n')
+            : undefined;
+        return (
+          <View key={question.id} className="gap-1">
+            <Text className="text-foreground-tertiary text-sm" selectable>
+              {question.question}
+            </Text>
+            {answerText ? (
+              <Text className="text-base text-foreground" selectable>
+                {answerText}
+              </Text>
+            ) : (
+              <Text className="text-foreground-tertiary text-base">
+                {answer?.skipped ? t('chat.question.skipped') : statusText}
+              </Text>
+            )}
+          </View>
+        );
+      })}
+    </ContextMenuExclusion>
   );
 }

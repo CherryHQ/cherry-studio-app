@@ -47,7 +47,9 @@ export interface PreferenceSchema {
   'app.user.id': string;
   'app.user.name': string;
 
-  /** Also gates all iOS Live Activity surfaces, including painting; keep the persisted key. */
+  'app.background_run_guidance.seen': boolean;
+
+  /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
   'chat.completion_notifications.enabled': boolean;
   'agent.default_model_id': string | null;
@@ -87,6 +89,8 @@ export const PreferenceDefaults = {
   'app.user.id': '',
   'app.user.name': '',
 
+  'app.background_run_guidance.seen': false,
+
   'chat.background_reply.enabled': true,
   'chat.completion_notifications.enabled': true,
   'agent.default_model_id': null,
@@ -115,3 +119,17 @@ export const PreferenceDefaults = {
 } satisfies PreferenceSchema;
 
 export type PreferenceKeyType = keyof PreferenceSchema;
+
+/**
+ * Preferences that describe this device or its consent rather than the user's content.
+ * Restoring a backup keeps the target device's values for these keys.
+ */
+export const DEVICE_LOCAL_PREFERENCE_KEYS = [
+  'app.background_run_guidance.seen',
+  'app.onboarding.status',
+  'app.privacy.data_collection.enabled',
+  'app.privacy.policy_version',
+  'app.user.id',
+  'chat.background_reply.enabled',
+  'chat.completion_notifications.enabled',
+] as const satisfies readonly PreferenceKeyType[];

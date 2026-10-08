@@ -4,6 +4,7 @@ import type { HandlersFor } from '@/shared/data/api/types';
 
 export function createDesktopConnectionHandlers(
   service: DesktopConnectionService,
+  endpointsChanged: (id: string) => Promise<void>,
 ): HandlersFor<DesktopConnectionSchemas> {
   return {
     '/desktop-connections': {
@@ -11,6 +12,11 @@ export function createDesktopConnectionHandlers(
     },
     '/desktop-connections/:id': {
       GET: ({ params }) => service.getById(params.id),
+      PATCH: async ({ params, body }) => {
+        const connection = await service.updateEndpoints(params.id, body.configuredEndpoints);
+        await endpointsChanged(params.id);
+        return connection;
+      },
     },
   };
 }

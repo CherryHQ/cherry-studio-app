@@ -11,6 +11,10 @@ import {
   useIsChatMessageSelected,
 } from '../ChatShareSelectionProvider';
 
+const target = {
+  ref: { source: { kind: 'local' as const }, sessionId: 'session' },
+  prepareSelection: jest.fn(),
+};
 const mockShareChat = jest.fn();
 const mockCancelShare = jest.fn();
 const mockToastShow = jest.fn();
@@ -67,7 +71,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   act(() => {
     renderer = create(
-      <ChatShareSelectionProvider sessionId="session" initialMessageId="answer">
+      <ChatShareSelectionProvider target={target} initialMessageId="answer">
         <SelectionProbe ref={selection} />
         <MessageSelectionProbe messageId="answer" />
         <MessageSelectionProbe messageId="question" />
@@ -136,7 +140,7 @@ test('a recycled row subscribes to its current message identity', () => {
   for (const messageId of ['question', 'answer']) {
     act(() => {
       renderer.update(
-        <ChatShareSelectionProvider sessionId="session" initialMessageId="answer">
+        <ChatShareSelectionProvider target={target} initialMessageId="answer">
           <SelectionProbe ref={selection} />
           <MessageSelectionProbe messageId={messageId} />
         </ChatShareSelectionProvider>,

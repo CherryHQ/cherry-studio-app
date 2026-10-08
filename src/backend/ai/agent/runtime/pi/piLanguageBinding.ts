@@ -5,6 +5,7 @@ import {
   resolveProviderConnection,
   type ResolvedProviderConnection,
 } from '@/backend/ai/provider/providerConnection';
+import { getPiOAuthProviderId } from '@/shared/data/providerOAuth';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -82,7 +83,11 @@ export function resolvePiLanguageBinding(
     );
   }
 
-  if (provider.authMethods?.length && !provider.authMethods.includes('api-key')) {
+  if (
+    !getPiOAuthProviderId(provider) &&
+    provider.authMethods?.length &&
+    !provider.authMethods.includes('api-key')
+  ) {
     return unsupported(
       'unsupported-auth-flow',
       'Pi Runtime does not support this provider authentication flow.',

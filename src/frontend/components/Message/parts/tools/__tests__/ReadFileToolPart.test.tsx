@@ -52,6 +52,30 @@ describe('ReadFileToolPart', () => {
     });
   });
 
+  it('summarizes a character window, such as an AnyDoc JSON fragment', () => {
+    const renderer = render(
+      toolPart({
+        output: {
+          status: 'ok',
+          filename: 'report.docx',
+          format: 'json-fragment',
+          offset: 100_000,
+          characterCount: 100_000,
+          totalCharacters: 350_000,
+          nextOffset: 200_000,
+          complete: false,
+          text: '{"x":'.repeat(20_000),
+        },
+      }),
+    );
+
+    expect(renderer.root.findAllByType('GenericToolPart')).toHaveLength(0);
+    expect(renderer.root.findByType('ValueSection').props.value).toEqual({
+      'chat.builtinTool.file.filename': 'report.docx',
+      'chat.builtinTool.file.characters': '100001-200000 / 350000',
+    });
+  });
+
   it('surfaces a rejection', () => {
     const renderer = render(
       toolPart({ output: { status: 'error', message: 'The managed file is unavailable.' } }),

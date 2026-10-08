@@ -53,14 +53,18 @@ describe('DesktopConnectionService provider synchronization', () => {
 
   beforeEach(async () => {
     testDb = createTestDb(new DatabaseSync(':memory:'));
-    service = new DesktopConnectionService(testDb.dbService);
+    service = new DesktopConnectionService(testDb.dbService, (provider) => {
+      const supported = (provider.presetProviderId ?? provider.id) === 'cherryin';
+      return { signIn: supported, apiKeys: supported, balance: supported };
+    });
     await service.savePair(
       {
         id: connectionId,
         name: 'Desktop',
-        desktopVersion: '2.0.8',
-        activeBaseUrl: 'http://192.168.1.2:23333',
-        baseUrls: ['http://192.168.1.2:23333'],
+        deviceId: 'device-1',
+        desktopIdentity: '12D3KooWDesktop',
+
+        grants: [{ domain: 'configuration', grantId: 'grant-1' }],
       },
       false,
       signal(),
@@ -70,6 +74,107 @@ describe('DesktopConnectionService provider synchronization', () => {
   afterEach(() => {
     jest.restoreAllMocks();
     testDb.sqlite.close();
+  });
+
+  it('persists all 32 addresses in a desktop snapshot', async () => {
+    const endpoints = Array.from({ length: 32 }, (_, i) => ({
+      host: `10.0.0.${i + 1}`,
+      port: 23333,
+      security: 'ws' as const,
+    }));
+    const row = await service.getRow(connectionId);
+    await service.updateLearnedEndpoints(connectionId, endpoints, row, signal());
+    expect((await service.getRow(connectionId)).learnedEndpoints).toEqual(endpoints);
+  });
+
+  it('replaces synced routes without changing manual addresses or pairing', async () => {
+    const original = await service.getRow(connectionId);
+    const manual = { host: 'company.example.com', port: 443, security: 'wss' as const };
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    await service.updateEndpoints(connectionId, [manual]);
+    await service.updateLearnedEndpoints(connectionId, [vpn, vpn], original, signal());
+    expect(await service.getRow(connectionId)).toMatchObject({
+      learnedEndpoints: [vpn],
+      configuredEndpoints: [manual],
+      grants: original.grants,
+    });
+    const updated = { ...vpn, host: 'fd7a:115c:a1e0::2' };
+    await service.updateLearnedEndpoints(connectionId, [updated], original, signal());
+    expect(await service.getRow(connectionId)).toMatchObject({
+      learnedEndpoints: [updated],
+      configuredEndpoints: [manual],
+      deviceId: original.deviceId,
+    });
+    await expect(
+      service.updateLearnedEndpoints(
+        connectionId,
+        [],
+        { ...original, deviceId: 'replaced' },
+        signal(),
+      ),
+    ).rejects.toMatchObject({ details: { reason: 'auth-revoked' } });
+    const cancelled = new AbortController();
+    cancelled.abort();
+    await expect(
+      service.updateLearnedEndpoints(connectionId, [], original, cancelled.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect((await service.getRow(connectionId)).learnedEndpoints).toEqual([updated]);
+    await service.updateEndpoints(connectionId, []);
+    expect((await service.getRow(connectionId)).learnedEndpoints).toEqual([updated]);
+  });
+
+  it('clears learned routes on re-pairing and rejects a late response from the previous binding', async () => {
+    const previous = await service.getRow(connectionId);
+    const endpoint = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    await service.updateEndpoints(connectionId, [endpoint]);
+    await service.updateLearnedEndpoints(connectionId, [endpoint], previous, signal());
+    const { id, name, desktopIdentity, grants } = previous;
+    await service.savePair(
+      { id, name, desktopIdentity, grants, deviceId: 'new-device' },
+      true,
+      signal(),
+    );
+    await expect(
+      service.updateLearnedEndpoints(connectionId, [endpoint], previous, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'auth-revoked' } });
+    expect(await service.getRow(connectionId)).toMatchObject({
+      deviceId: 'new-device',
+      learnedEndpoints: [],
+      configuredEndpoints: [endpoint],
+    });
+  });
+
+  it('adds a verified address once while preserving existing addresses and pairing', async () => {
+    const original = await service.getRow(connectionId);
+    const manual = { host: 'company.example.com', port: 443, security: 'wss' as const };
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    await service.updateEndpoints(connectionId, [manual]);
+    await service.addEndpoint(connectionId, vpn, original, signal());
+    await service.addEndpoint(connectionId, vpn, original, signal());
+    expect(await service.getRow(connectionId)).toMatchObject({
+      deviceId: original.deviceId,
+      desktopIdentity: original.desktopIdentity,
+      grants: original.grants,
+      configuredEndpoints: [manual, vpn],
+    });
+  });
+
+  it('rejects a late verification after re-pairing and does not overwrite a full address list', async () => {
+    const original = await service.getRow(connectionId);
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    await expect(
+      service.addEndpoint(connectionId, vpn, { ...original, deviceId: 'replaced' }, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'auth-revoked' } });
+    const full = Array.from({ length: 8 }, (_, index) => ({
+      host: `host-${index}.example.com`,
+      port: 23333,
+      security: 'ws' as const,
+    }));
+    await service.updateEndpoints(connectionId, full);
+    await expect(service.addEndpoint(connectionId, vpn, original, signal())).rejects.toMatchObject({
+      details: { reason: 'endpoint-limit' },
+    });
+    expect((await service.getRow(connectionId)).configuredEndpoints).toEqual(full);
   });
 
   function importSnapshot(data: DesktopProvidersSnapshot, requestSignal = signal()) {
@@ -82,6 +187,21 @@ describe('DesktopConnectionService provider synchronization', () => {
       requestSignal,
     );
   }
+
+  it('shows a paired hostname without its network domain', async () => {
+    for (const [stored, shown] of [
+      ['jddeMacBook-Pro-3.local', 'jddeMacBook-Pro-3'],
+      ['DESKTOP-4F2K9.corp.example.com', 'DESKTOP-4F2K9'],
+      ['192.168.1.20', '192.168.1.20'],
+      ["J.D.'s Mac", "J.D.'s Mac"],
+    ]) {
+      await testDb.database
+        .update(desktopConnectionTable)
+        .set({ name: stored })
+        .where(eq(desktopConnectionTable.id, connectionId));
+      await expect(service.getById(connectionId)).resolves.toMatchObject({ name: shown });
+    }
+  });
 
   it('imports the complete API key list and keeps desktop order and labels when resynced', async () => {
     const keys = ['a', 'b', 'c'].map((id) => ({
@@ -204,6 +324,72 @@ describe('DesktopConnectionService provider synchronization', () => {
         },
       ]);
       expect(await testDb.database.select().from(userModelTable)).toEqual(beforeModels);
+    },
+  );
+
+  it('imports CherryIN model keys without cloning the PC grant or overwriting mobile key identities', async () => {
+    const data = DesktopProvidersSnapshotSchema.parse({
+      version: 1,
+      providers: [
+        {
+          ...provider('cherryin'),
+          authMethods: ['oauth'],
+          authConfig: {
+            type: 'oauth',
+            accessToken: 'desktop-access',
+            refreshToken: 'desktop-refresh',
+          },
+        },
+      ],
+    });
+    expect(await service.preview(data)).toMatchObject({
+      providers: [{ id: 'cherryin', accountNotice: 'sign-in-for-balance' }],
+    });
+    expect((await service.preview(data)).providers[0]?.unavailableReason).toBeUndefined();
+    await importSnapshot(data);
+    const local = [
+      { id: 'mobile-account', key: 'mobile-key', isEnabled: true },
+      { id: 'mobile-copy', key: 'desktop-secret', isEnabled: false },
+    ];
+    await testDb.database.update(userProviderTable).set({ apiKeys: local });
+    data.providers[0]!.apiKeys.push({
+      id: 'mobile-account',
+      key: 'new-desktop-key',
+      isEnabled: true,
+    });
+    await importSnapshot(data);
+    await importSnapshot(data);
+    const [row] = await testDb.database.select().from(userProviderTable);
+    expect(row?.authConfig).toEqual({ type: 'api-key' });
+    expect(row?.apiKeys?.slice(0, 2)).toEqual(local);
+    expect(row?.apiKeys).toHaveLength(3);
+    expect(row?.apiKeys?.[2]).toMatchObject({ key: 'new-desktop-key', isEnabled: true });
+    expect(row?.apiKeys?.[2]?.id).not.toBe('mobile-account');
+    expect(JSON.stringify(row)).not.toContain('desktop-access');
+    expect(JSON.stringify(row)).not.toContain('desktop-refresh');
+  });
+
+  it.each(['cherryin', 'openai-codex'])(
+    'keeps %s OAuth unavailable without an enabled model key',
+    async (id) => {
+      const data = DesktopProvidersSnapshotSchema.parse({
+        version: 1,
+        providers: [
+          {
+            ...provider(id),
+            authType: 'oauth',
+            authMethods: ['oauth'],
+            apiKeys: [{ id: 'disabled', key: 'key', isEnabled: false }],
+          },
+        ],
+      });
+      expect((await service.preview(data)).providers[0]?.unavailableReason).toBe(
+        'unsupported-auth',
+      );
+      await expect(importSnapshot(data)).rejects.toMatchObject({
+        details: { reason: 'unsupported-auth' },
+      });
+      expect(await testDb.database.select().from(userProviderTable)).toHaveLength(0);
     },
   );
 

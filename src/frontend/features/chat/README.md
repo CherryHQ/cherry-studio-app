@@ -23,12 +23,39 @@ message list keeps its geometry and selection does not subscribe into the chat r
 - `components/ChatInput/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
   edited on the Agent screen; image attachment admission failures restore the managed draft and
   surface a user-facing reason.
-- `workspace/` merges persisted transcript rows with live Agent messages, adapts protocol parts into
-  the shared `MessageList`, and owns history loading, initial-render gating, and approvals.
-- `runtime/` owns the route-scoped `AgentSessionChatClient`, observes the app-owned Mobile Agent Host
-  through `Backend.agent`, and owns frontend navigation and query invalidation effects. On first
-  send it changes the route only after the new Session has accepted the submission, and carries the
-  originating Agent across that one route handoff while Session detail loads.
+- `components/ConversationQuestionSheet.tsx` presents a pending question interaction from either
+  source in a non-dismissible sheet mounted beside `ConversationApprovals`. It reads the bound input
+  (inline for local `ask_user_question`, deferred for desktop question forms), maps both into one
+  presentation model, and returns the matching response: local answers keep option and question IDs
+  and may skip; desktop answers are keyed by question text, joined from selected labels and free
+  text, and require every question. An unreadable desktop form opens a retryable error sheet.
+  `UserQuestionSheet/` shows one question at a time: an optional header and the full question are
+  in the scrolling body, followed by radio options for a single choice or checkboxes for multiple
+  and option descriptions. A free-text field stays pinned below that body. The sheet avoids the
+  keyboard, so typing lifts the field and footer above it and shrinks only the scrolling body.
+  Choosing never navigates; the footer's action reads skip while the question is unanswered, next
+  once it is answered, and submit on the last question, where local requests skip whatever is still
+  unanswered. Tapping a selected option clears it, including a single choice, so the answer can
+  return to free text only or be skipped. Request identity resets the form; failed or unconfirmed
+  submissions keep the answers editable for resubmission. A leading approval or a source that is no
+  longer current closes the sheet without unmounting it, so drafts survive while navigation and
+  connection recovery remain reachable. Opening the sheet ends the ordinary composer's editing
+  session; its text and attachments stay intact.
+- `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
+  already-reconciled message rows and a history window. It preserves the shared `MessageList`,
+  initial-render gating and pending first-send rows. Message actions and approvals use the bound
+  actions carried by those values; the page does not choose an execution implementation, and the
+  workspace never receives a session handle.
+- `runtime/` owns local chat: `ChatProvider` creates and disposes the `AgentSessionChatClient`,
+  refreshes observed Sessions on foreground, invalidates Session queries, and supplies composer and
+  navigation extensions. `useLocalConversation` projects the client state through
+  `localConversationView` into the shared snapshot, keeps the Session-keyed history window
+  (`useAgentMessageHistoryWindow`, cached across route changes) and merges live rows into it by id.
+  Local execution settles in-process, so approvals, questions, cancel, retry, fork and delete are
+  bound callbacks over the client with inline inputs; there is no session lifecycle, revisioned
+  history window, operation journal or deferred resource on the local side. On first send the
+  composer changes the route only after admission and carries the originating Agent across that
+  handoff while Session detail loads.
 
 `useAgentChatControls` runs once in the content leaf, keyed by the existing composer identity.
 Its send action allocates Session/message IDs and synchronously displays the text, files, and
@@ -42,7 +69,7 @@ composer isolates its pending work and prevents a late completion from navigatin
 The visible, focused chat acknowledges the current completed turn through `useSessionReadReceipt`.
 Previews, an open drawer, and background routes do not clear the list's unread completion indicator.
 
-Search results may specify a message destination. `useAgentMessageHistoryWindow` opens a bounded
+Search results may specify a message destination. The local history window opens a bounded
 window around that message and supports pagination in both directions. It shows the full target
 window rather than trimming it to the usual recent-message render window. Until its newer edge
 reaches the live transcript, the workspace excludes live rows to avoid displaying a false contiguous
@@ -60,3 +87,51 @@ Compatible models can automatically use a single successful output when next-tur
 multiple outputs remain optional candidates. Generate-only models pause automatic references and
 block incompatible explicit images. The shared input strategy owns these rules. Effective references
 are submitted as file parts and stay separate from the text draft; text controls do not attach them.
+
+## Local and remote presentation
+
+`remote/RemoteChatScreen` keeps the `/remote` route, page frame, header and composer layout. It
+retains a desktop ConversationSource, opens a route Session through the remote-only hooks in
+`@/frontend/appShell/conversation/remote`, reconciles live rows with the desktop's history revision
+in `remote/ConversationPresenter`, and feeds the shared snapshot and rows into ChatWorkspace. The
+sidebar uses the same catalog boundary. Runtime wire state and command recovery stay behind
+Backend.remoteAgent; no Controller provider or Controller query keys remain.
+
+`RemoteComposer` owns text editing and registered/system workspace selection. New conversations call the
+bound Draft start action, existing conversations call Session send, and stop targets a selected
+execution. Backend journals own create/send IDs and recover pending commands silently; navigation
+does not resend them. A Session or Draft holds at most one undelivered message, the latest input
+the desktop rejected or interrupted, and `UndeliveredMessageRow` shows it as one line with its
+reason and the action that can deliver it. Resending submits the same text through the current
+send or start, which replaces the record in the journal; editing moves the text back into the
+composer. A send CONFLICT resynchronizes the Session before the user resends. Input rejected before
+admission never reaches the journal, so the composer restores it and reports the failure. The
+initiating route hands a created Session over without remounting the composer, then releases the
+start; a first send that failed after creation becomes that Session's undelivered message. Late
+completion from another route cannot navigate the current view. Unsent text is persisted under its
+stable source identity/grant binding, separately from the ephemeral Query scope.
+
+`ConversationMessageContent` renders tool summaries in the shared process layout; a deferred
+resource read bound to the row is resolved by the sheet that opens it, and closing the sheet cancels
+the read. Attachments currently show metadata because the desktop does not provide file bytes.
+ConversationApprovals shows decisions only: it reads the interaction input (inline for local,
+deferred for desktop), uses the bound response action and cancels only the execution associated
+with the displayed approval. Pending questions never open the approval sheet; desktop question
+forms use the same `ConversationQuestionSheet` as local questions.
+
+The matching desktop protocol supports question answers and system-workspace creation. Question
+forms consume a bound resource; responses carry complete answers rather than a boolean approval.
+The default workspace is offered only when advertised; older desktops still require a registered
+workspace. Denial reasons are supported by the protocol but have no editor in the current sheet.
+The plus-menu remains disabled and local model/attachment controls remain local.
+
+Both sources share selection preparation and export UI through a small share target (address plus
+selection read). See [Service Dependencies And Ownership](../../../../docs/references/remote-access/service-ownership.md)
+for source ownership and remaining work. Local regression tests do not establish device acceptance.
+
+Remote header Agent selection preserves the current desktop and unsent draft identity. The composer
+and its persisted text belong to that draft, not to the selected Agent. Agent changes remount only
+the remote execution controls, so workspace references are acquired for the new Agent. Selecting
+from an existing session or an admitted start opens a distinct draft; admission is checked at click
+time and navigation invalidates the old handoff immediately. Pending/uncertain operations remain
+recoverable and cannot redirect the new draft when their replies arrive.

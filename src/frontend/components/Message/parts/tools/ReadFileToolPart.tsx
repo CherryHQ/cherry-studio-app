@@ -11,9 +11,9 @@ type ReadFileToolPartProps = {
 };
 
 /**
- * A completed read summarizes which lines were returned. The text itself is
- * for the model; repeating up to 100k characters in the transcript would bury
- * the answer under its own source material.
+ * A completed read summarizes which lines or characters were returned. The text
+ * itself is for the model; repeating up to 100k characters in the transcript
+ * would bury the answer under its own source material.
  */
 export function ReadFileToolPart({ part }: ReadFileToolPartProps) {
   const { t } = useTranslation();
@@ -27,7 +27,9 @@ export function ReadFileToolPart({ part }: ReadFileToolPartProps) {
   if (read !== null) {
     const details = {
       [t('chat.builtinTool.file.filename')]: read.filename,
-      [t('chat.builtinTool.file.lines')]: formatLineRange(read),
+      [t(
+        read.unit === 'lines' ? 'chat.builtinTool.file.lines' : 'chat.builtinTool.file.characters',
+      )]: formatRange(read),
     };
 
     return (
@@ -59,44 +61,53 @@ export function isReadFileToolPart(part: ToolMessagePart) {
   return getToolName(part) === READ_FILE_TOOL_NAME;
 }
 
+/** A line window, or a character window (AnyDoc JSON, or text read by offset). */
 type ReadFile = {
+  count: number;
   filename: string;
-  lineCount: number;
-  startLine: number;
-  totalLines: number;
+  /** One-based. */
+  start: number;
+  total: number;
+  unit: 'characters' | 'lines';
 };
 
 function parseRead(output: unknown): ReadFile | null {
-  if (
-    !isRecord(output) ||
-    output.status !== 'ok' ||
-    typeof output.filename !== 'string' ||
-    !isCount(output.lineCount) ||
-    !isCount(output.startLine) ||
-    !isCount(output.totalLines)
-  ) {
+  if (!isRecord(output) || output.status !== 'ok' || typeof output.filename !== 'string') {
     return null;
   }
   const filename = output.filename.trim();
   if (!filename) return null;
-  return {
-    filename,
-    lineCount: output.lineCount,
-    startLine: output.startLine,
-    totalLines: output.totalLines,
-  };
+  if (isCount(output.lineCount) && isCount(output.startLine) && isCount(output.totalLines)) {
+    return {
+      count: output.lineCount,
+      filename,
+      start: output.startLine,
+      total: output.totalLines,
+      unit: 'lines',
+    };
+  }
+  if (isCount(output.characterCount) && isCount(output.offset) && isCount(output.totalCharacters)) {
+    return {
+      count: output.characterCount,
+      filename,
+      start: output.offset + 1,
+      total: output.totalCharacters,
+      unit: 'characters',
+    };
+  }
+  return null;
 }
 
 function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
-/** `1-120 / 480`: one-based, inclusive, followed by the file's line count. */
-function formatLineRange(read: ReadFile): string {
-  if (read.lineCount === 0) {
-    return `0 / ${read.totalLines}`;
+/** `1-120 / 480`: one-based, inclusive, followed by the file's line or character count. */
+function formatRange(read: ReadFile): string {
+  if (read.count === 0) {
+    return `0 / ${read.total}`;
   }
-  return `${read.startLine}-${read.startLine + read.lineCount - 1} / ${read.totalLines}`;
+  return `${read.start}-${read.start + read.count - 1} / ${read.total}`;
 }
 
 function parseRejection(output: unknown): string | null {

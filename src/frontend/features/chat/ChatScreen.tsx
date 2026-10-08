@@ -3,18 +3,18 @@ import {
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
-import { BlurTargetView } from 'expo-blur';
-import { useIsPreview, useLocalSearchParams } from 'expo-router';
-import { useRef } from 'react';
+import { router, useIsPreview, useLocalSearchParams } from 'expo-router';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MainHeader } from '@/frontend/appShell/header';
-import { ChatDockFooter, ReadingContentFrame } from '@/frontend/appShell/layout';
+import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   type ChatRouteParamsInput,
   type ChatTarget,
+  conversationShareHref,
   parseChatRoute,
   getChatComposerHandoff,
 } from '@/frontend/appShell/navigation/chat';
@@ -24,38 +24,31 @@ import {
   ComposerDropArea,
   ComposerSessionProvider,
 } from '@/frontend/components/Composer';
-import {
-  useAgentApiById,
-  useAgentMessageHistoryWindow,
-  useAgentSession,
-} from '@/frontend/hooks/agent';
+import type { MessageListItem } from '@/frontend/components/Message';
+import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
-import { ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import { ChatScreenFrame } from './components/ChatScreenFrame';
+import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
-import { latestAgentImageResult, useAgentChatControls, useAgentChatDraftHandoff } from './runtime';
+import {
+  latestConversationImageResult,
+  useAgentChatControls,
+  useAgentChatDraftHandoff,
+  useLocalConversation,
+} from './runtime';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
+const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage message={message} />;
 
 export function ChatScreen() {
-  const blurTargetRef = useRef<View>(null);
-
   return (
-    <>
-      <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
-        {/* Android samples the target's children, so paint the chat background
-            inside it even when the draft or loading state has no message list. */}
-        <View className="flex-1 bg-chat-background">
-          <ReadingContentFrame>
-            <ChatRouteContent />
-          </ReadingContentFrame>
-        </View>
-      </BlurTargetView>
-      <MainHeader blurTarget={blurTargetRef} />
-    </>
+    <ChatScreenFrame header={MainHeader}>
+      <ChatRouteContent />
+    </ChatScreenFrame>
   );
 }
 
@@ -85,9 +78,17 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     composerKey: composerSession.key,
   });
   const agent = useAgentApiById(resolvedAgentId);
-  const messageWindow = useAgentMessageHistoryWindow(
+  const { snapshot, messages, messageWindow } = useLocalConversation({
     sessionId,
-    target.kind === 'session' ? target : undefined,
+    title: session.data?.title,
+    navigation: target.kind === 'session' ? target : undefined,
+  });
+  const shareMessage = useCallback(
+    (messageId: string) => {
+      if (sessionId)
+        router.push(conversationShareHref({ source: { kind: 'local' }, sessionId }, messageId));
+    },
+    [sessionId],
   );
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));
@@ -137,6 +138,10 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             </View>
           ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
             <ChatWorkspace
+              renderUsage={renderLocalUsage}
+              snapshot={snapshot}
+              messages={messages}
+              onShare={sessionId ? shareMessage : undefined}
               pendingSend={controls.pendingSend}
               enteringUserMessageId={controls.enteringUserMessageId}
               onPendingSendDisplayed={controls.completePendingSend}
@@ -166,7 +171,9 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 imageResult={
                   messageWindow.hasNewerMessages
                     ? undefined
-                    : latestAgentImageResult(messageWindow.messages)
+                    : latestConversationImageResult(
+                        messageWindow.messages.map((message) => message.imageResult),
+                      )
                 }
                 sessionId={sessionId}
               />

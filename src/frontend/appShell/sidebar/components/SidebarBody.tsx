@@ -5,10 +5,11 @@ import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import { ScrollInteractionBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
+import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
+import { useChatSource } from '@/frontend/appShell/navigation/chat';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
@@ -82,36 +83,39 @@ function SidebarBodyContent({
   const { t } = useTranslation();
   const { navigateAgents, openLibrary, openPaintings, openPlugins } =
     useSidebarActions('SidebarBody');
+  const { source } = useChatSource();
 
   return (
     <>
-      {/* No home row: that surface moves under settings. */}
-      <View className="pb-1">
-        <SidebarNavRow
-          icon={MousePointerClickIcon}
-          label={t('navigation.agents')}
-          onPress={navigateAgents}
-          testID="sidebar-agents"
-        />
-        <SidebarNavRow
-          icon={PaletteIcon}
-          label={t('navigation.paintings')}
-          onPress={openPaintings}
-          testID="sidebar-paintings"
-        />
-        <SidebarNavRow
-          icon={BoxesIcon}
-          label={t('plugins.title')}
-          onPress={openPlugins}
-          testID="sidebar-plugins"
-        />
-        <SidebarNavRow
-          icon={FolderIcon}
-          label={t('navigation.library')}
-          onPress={openLibrary}
-          testID="sidebar-library"
-        />
-      </View>
+      {/* No home row: that surface moves under settings. These destinations only manage this phone. */}
+      {source === 'local' ? (
+        <>
+          <SidebarNavRow
+            icon={MousePointerClickIcon}
+            label={t('navigation.agents')}
+            onPress={navigateAgents}
+            testID="sidebar-agents"
+          />
+          <SidebarNavRow
+            icon={PaletteIcon}
+            label={t('navigation.paintings')}
+            onPress={openPaintings}
+            testID="sidebar-paintings"
+          />
+          <SidebarNavRow
+            icon={BoxesIcon}
+            label={t('plugins.title')}
+            onPress={openPlugins}
+            testID="sidebar-plugins"
+          />
+          <SidebarNavRow
+            icon={FolderIcon}
+            label={t('navigation.library')}
+            onPress={openLibrary}
+            testID="sidebar-library"
+          />
+        </>
+      ) : null}
 
       <SidebarRecents registerEndReachedHandler={registerEndReachedHandler} />
     </>

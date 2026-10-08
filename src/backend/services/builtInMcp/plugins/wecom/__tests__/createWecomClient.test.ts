@@ -1,3 +1,4 @@
+import { trackExpoAbortSignals } from '../../../authorization/__tests__/_expoAbortSignal';
 import type { PluginClient, PluginClientContext } from '../../../pluginDefinition';
 import { createWecomClient } from '../createWecomClient';
 import { getWecomToolEffect } from '../wecomTools';
@@ -11,6 +12,7 @@ jest.mock('../wecomFiles', () => ({
   prepareWecomFiles: async (_api: unknown, _schema: unknown, args: unknown) => ({ payload: args }),
   saveWecomResult: (_schema: unknown, value: unknown) => value,
   saveWecomFile: () => ({ file_path: 'file:///download' }),
+  sweepWecomFiles: () => {},
 }));
 
 const output = (value: unknown) => ({ kind: 'json', value: { result: JSON.stringify(value) } });
@@ -117,3 +119,34 @@ it('caches discovery but rejects undiscovered names, changed identities and call
     reason: 'cancelled',
   });
 });
+
+it.each([false, true])(
+  'releases settled discovery/call listeners and timers while the client remains open (caller: %s)',
+  async (withCaller) => {
+    jest.useFakeTimers();
+    const tracked = trackExpoAbortSignals();
+    try {
+      client = await createWecomClient(context);
+      await client.listTools({ options: { signal: new AbortController().signal } });
+      expect(tracked.timers.size).toBe(0);
+      expect(tracked.listeners.size).toBe(0);
+      for (let index = 0; index < 250; index++) {
+        await client.listTools({ options: { signal: new AbortController().signal } });
+        await client.callTool({
+          name: 'wecom_doc__search',
+          args: {},
+          ...(withCaller ? { options: { abortSignal: new AbortController().signal } } : {}),
+        });
+      }
+      await expect(client.callTool({ name: 'unknown', args: {} })).rejects.toMatchObject({
+        reason: 'access',
+      });
+      expect(tracked.listeners.size).toBe(0);
+      expect(tracked.timers.size).toBe(0);
+    } finally {
+      await client?.close();
+      jest.restoreAllMocks();
+      jest.useRealTimers();
+    }
+  },
+);

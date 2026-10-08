@@ -5,6 +5,7 @@ import { View } from 'react-native';
 
 import {
   useStartNewChat,
+  useChatSource,
   parseChatRoute,
   type ChatRouteParamsInput,
 } from '@/frontend/appShell/navigation/chat';
@@ -33,14 +34,18 @@ export function Sidebar({ navigation }: SidebarProps) {
       : undefined;
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
+  const { source, startRemoteChat } = useChatSource();
 
   const actions = useMemo<SidebarActions>(
     () => ({
       closeDrawer: () => navigation.closeDrawer(),
-      openSearch: () => {
-        navigation.closeDrawer();
-        openSessionSearch();
-      },
+      openSearch:
+        source === 'local'
+          ? () => {
+              navigation.closeDrawer();
+              openSessionSearch();
+            }
+          : undefined,
       navigateAgents: () => {
         navigation.closeDrawer();
         router.push('/agents');
@@ -66,10 +71,20 @@ export function Sidebar({ navigation }: SidebarProps) {
       },
       startNewChat: () => {
         navigation.closeDrawer();
-        void startNewChat();
+        if (source === 'remote') startRemoteChat();
+        else void startNewChat();
       },
     }),
-    [pluginAgentId, pluginSessionId, navigation, openSessionSearch, router, startNewChat],
+    [
+      pluginAgentId,
+      pluginSessionId,
+      navigation,
+      openSessionSearch,
+      router,
+      source,
+      startRemoteChat,
+      startNewChat,
+    ],
   );
 
   return (

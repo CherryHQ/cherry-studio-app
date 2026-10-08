@@ -40,13 +40,17 @@ const toneClassName = {
 
 export function MessagePartProcess({
   children,
+  defaultExpanded = false,
   onDisclosureToggle,
   state,
+  statusText,
+  statusTone = 'default',
   testID = 'process',
   title,
 }: MessagePartProcessProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultExpanded);
   const isRunning = state === 'running';
+  const colorClassName = toneClassName[statusTone];
   const toggle = () => {
     onDisclosureToggle?.();
     setIsOpen((open) => !open);
@@ -55,25 +59,30 @@ export function MessagePartProcess({
   return (
     <View className={`gap-3 border-border-subtle border-b ${isOpen ? 'pb-4' : ''}`}>
       <MessagePartStatus
-        accessibilityLabel={title}
+        accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
         expanded={isOpen}
         onPress={toggle}
         testID={`${testID}-trigger`}
       >
-        <View className="min-w-0 flex-row items-center gap-1">
+        <View className="min-w-0 shrink flex-row items-center gap-1">
           <View className="min-w-0 shrink">
             {isRunning ? (
               <ShimmerText className="text-sm" numberOfLines={1}>
                 {title}
               </ShimmerText>
             ) : (
-              <Text className="text-foreground-tertiary text-sm" numberOfLines={1}>
+              <Text className={`${colorClassName} text-sm`} numberOfLines={1}>
                 {title}
               </Text>
             )}
           </View>
           <MessagePartDisclosureIcon isOpen={isOpen} />
         </View>
+        {statusText ? (
+          <Text className={`ml-auto max-w-[50%] shrink-0 text-xs ${colorClassName}`}>
+            {statusText}
+          </Text>
+        ) : null}
       </MessagePartStatus>
       <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-detail`}>
         <MessagePartStatusDensityScope density="compact">{children}</MessagePartStatusDensityScope>
@@ -130,22 +139,23 @@ export function MessagePartReasoning({
 
 export function MessagePartToolGroup({
   children,
+  expanded,
   onDisclosureToggle,
+  onExpandedChange,
   state,
   statusText,
   statusTone = 'default',
   testID = 'tool-group',
   title,
 }: MessagePartToolGroupProps) {
-  // While the run is live the steps stay visible; once it settles the group
-  // collapses to its summary. A manual toggle always wins over that default.
-  const [manualOpen, setManualOpen] = useState<boolean | null>(null);
+  const [localOpen, setLocalOpen] = useState(false);
   const isRunning = state === 'running';
-  const isOpen = manualOpen ?? isRunning;
+  const isOpen = expanded ?? localOpen;
   const colorClassName = toneClassName[statusTone];
   const toggle = () => {
     onDisclosureToggle?.();
-    setManualOpen(!isOpen);
+    if (expanded === undefined) setLocalOpen(!isOpen);
+    onExpandedChange?.(!isOpen);
   };
 
   return (
@@ -170,9 +180,7 @@ export function MessagePartToolGroup({
         <MessagePartDisclosureIcon isOpen={isOpen} />
         <View className="flex-1" />
         {statusText ? (
-          <Text className={`max-w-[38%] shrink-0 text-xs ${colorClassName}`} numberOfLines={1}>
-            {statusText}
-          </Text>
+          <Text className={`max-w-[50%] shrink-0 text-xs ${colorClassName}`}>{statusText}</Text>
         ) : null}
       </MessagePartStatus>
       <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-steps`}>

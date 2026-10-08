@@ -80,6 +80,27 @@ function getCherryToolType(part: ToolMessagePart) {
   return typeof tool?.type === 'string' ? tool.type : undefined;
 }
 
+export type ToolGroupSummary = {
+  approvalCount: number;
+  dangerCount: number;
+  state: 'complete' | 'running';
+};
+
+/** Derives process state and pending approvals without promoting tool failures to group failures. */
+export function deriveToolGroupSummary(parts: readonly ToolMessagePart[]): ToolGroupSummary {
+  const approvalCount = parts.filter((part) => part.state === 'approval-requested').length;
+  const dangerCount = parts.filter(
+    (part) =>
+      part.state === 'output-error' ||
+      (part.state === 'output-available' && isRecord(part.output) && part.output.isError === true),
+  ).length;
+  return {
+    approvalCount,
+    dangerCount,
+    state: parts.some((part) => getToolDisplayState(part) === 'running') ? 'running' : 'complete',
+  };
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
