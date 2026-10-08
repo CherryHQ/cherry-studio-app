@@ -622,6 +622,7 @@
   "fileViewer.showPage": "View page",
   "fileViewer.showSource": "View source",
   "fileViewer.systemPreview": "Open this file with another app",
+  "fileViewer.tooLargeToPreview": "This file is too large to preview in the app",
   "fileViewer.truncated": "Only the first 1 MiB is displayed. Share or open the file with another app to use the complete file.",
   "imageActions.openSettingsFailed": "Couldn't open system settings. Open Settings manually.",
   "imageActions.saveAccessDenied": "Photo save access wasn't granted. The image wasn't saved.",

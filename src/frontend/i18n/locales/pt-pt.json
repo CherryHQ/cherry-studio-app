@@ -631,6 +631,7 @@
   "fileViewer.showPage": "Ver página",
   "fileViewer.showSource": "Ver fonte",
   "fileViewer.systemPreview": "Abra este ficheiro com outra aplicação",
+  "fileViewer.tooLargeToPreview": "O ficheiro é demasiado grande para pré-visualizar na app",
   "fileViewer.truncated": "Apenas o primeiro 1 MiB é apresentado. Partilhe ou abra o ficheiro com outra aplicação para utilizar o ficheiro completo.",
   "imageActions.openSettingsFailed": "Não foi possível abrir as definições do sistema. Abra as Definições manualmente.",
   "imageActions.saveAccessDenied": "O acesso para guardar fotografias não foi concedido. A imagem não foi guardada.",

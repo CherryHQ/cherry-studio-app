@@ -41,12 +41,15 @@ function deliver(webView: WebView | null, serializedMessage: string): void {
 export function FileDocumentPreview({
   file,
   page,
+  onDocumentError,
   onFailure,
   onRequestOpen,
   onUnsupported,
 }: {
   file: ResolvedFile;
   page: DocumentPreviewPage;
+  /** The package gave up on this document; the code distinguishes oversized files. */
+  onDocumentError: (code: string) => void;
   onFailure: () => void;
   onRequestOpen: () => void;
   onUnsupported: () => void;
@@ -146,6 +149,7 @@ export function FileDocumentPreview({
           code: message.code,
           message: message.message,
         });
+        onDocumentError(message.code);
         return;
       case 'requestOpen':
         if (message.reason === 'unsupported') onUnsupported();

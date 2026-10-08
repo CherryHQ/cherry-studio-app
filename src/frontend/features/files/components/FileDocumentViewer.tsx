@@ -14,7 +14,7 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
   const { t } = useTranslation();
   const { openFileEntryWithSystem } = useOpenFileEntry();
   const page = useDocumentPreviewPage();
-  const [status, setStatus] = useState<'preview' | 'failed' | 'system'>(() =>
+  const [status, setStatus] = useState<'preview' | 'failed' | 'system' | 'tooLarge'>(() =>
     canPreviewDocument(file.entry) ? 'preview' : 'system',
   );
   const [attempt, setAttempt] = useState(0);
@@ -24,11 +24,13 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
   return (
     <>
       <FileViewerHeader file={file} />
-      {status === 'system' ? (
+      {status === 'system' || status === 'tooLarge' ? (
         <View className="flex-1 items-center justify-center p-6">
           <ContentState.Empty
             primaryAction={openWithAction}
-            title={t('fileViewer.systemPreview')}
+            title={t(
+              status === 'tooLarge' ? 'fileViewer.tooLargeToPreview' : 'fileViewer.systemPreview',
+            )}
           />
         </View>
       ) : status === 'failed' || page.isError ? (
@@ -55,6 +57,8 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
         <FileDocumentPreview
           file={file}
           key={attempt}
+          // The app, not the package, offers system opening for documents it cannot preview.
+          onDocumentError={(code) => setStatus(code === 'too_large' ? 'tooLarge' : 'failed')}
           onFailure={() => setStatus('failed')}
           onRequestOpen={openWithSystem}
           onUnsupported={() => setStatus('system')}
