@@ -192,6 +192,32 @@ describe('AgentSessionMessageService persistence', () => {
     ).rejects.toMatchObject({ details: { id: 'target', resource: 'AgentSessionMessage' } });
   });
 
+  test('skips unreadable rows without failing the page or breaking its cursors', async () => {
+    for (const id of ['a', 'b', 'c', 'd']) {
+      insertMessage(sqlite, { createdAt: 100, id, text: id });
+    }
+    const corrupt = sqlite.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?');
+    corrupt.run(JSON.stringify({ version: 99, parts: [] }), 'b');
+    corrupt.run(JSON.stringify({ version: 1, parts: [{ id: 'p', type: 'future' }] }), 'c');
+
+    const newest = await agentSessionMessageService.listByCursor('session-1', { limit: 2 });
+    expect(newest.items.map((message) => message.id)).toEqual(['d']);
+    const older = await agentSessionMessageService.listByCursor('session-1', {
+      cursor: newest.nextCursor,
+      limit: 2,
+    });
+    expect(older.items.map((message) => message.id)).toEqual(['a']);
+    const around = await agentSessionMessageService.listByCursor('session-1', {
+      aroundMessageId: 'c',
+      limit: 3,
+    });
+    expect(around.items.map((message) => message.id)).toEqual(['d']);
+    const selected = await agentSessionMessageService.listByCursor('session-1', {
+      ids: ['a', 'b'],
+    });
+    expect(selected.items.map((message) => message.id)).toEqual(['a']);
+  });
+
   test('preserves an unknown inference snapshot version as unsupported JSON', async () => {
     insertMessage(sqlite, { createdAt: 100, id: 'message-future', text: 'Future' });
     const futureSnapshot = { version: 2, opaque: { retained: true } };

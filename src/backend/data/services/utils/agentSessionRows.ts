@@ -1,3 +1,5 @@
+import { loggerService } from '@logger';
+
 import type { AgentSessionMessageRow, AgentSessionRow } from '@/backend/data/db/schemas';
 import {
   AgentMessageViewSchema,
@@ -12,6 +14,8 @@ import {
 } from '@/shared/data/api/schemas/agentSessions';
 
 import { timestampToISO } from './rowMappers';
+
+const logger = loggerService.withContext('agentSessionRows');
 
 export function toAgentSessionView(row: AgentSessionRow): AgentSessionView {
   return AgentSessionViewSchema.parse({
@@ -51,5 +55,26 @@ export function toAgentMessageView(row: AgentSessionMessageRow): AgentMessageVie
     inferenceSnapshot: readAgentInferenceSnapshot(row.messageSnapshot),
     createdAt: timestampToISO(row.createdAt),
     updatedAt: timestampToISO(row.updatedAt),
+  });
+}
+
+/**
+ * Transcript reads skip a row that no longer satisfies the message contract
+ * (unknown data version or schema drift). Throwing would fail every page that
+ * contains the row, and retrying that read could never succeed.
+ */
+export function toReadableAgentMessageViews(
+  rows: readonly AgentSessionMessageRow[],
+): AgentMessageView[] {
+  return rows.flatMap((row) => {
+    try {
+      return [toAgentMessageView(row)];
+    } catch (error) {
+      logger.warn('Skipping unreadable agent message', error as Error, {
+        messageId: row.id,
+        sessionId: row.sessionId,
+      });
+      return [];
+    }
   });
 }
