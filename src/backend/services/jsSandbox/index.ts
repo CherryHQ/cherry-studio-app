@@ -4,6 +4,4 @@ export {
   type JsSandboxLimits,
   type JsSandboxOutcome,
   type JsSandboxRun,
-  type JsSandboxStore,
-  type JsSandboxStoreWrites,
 } from './jsSandbox';

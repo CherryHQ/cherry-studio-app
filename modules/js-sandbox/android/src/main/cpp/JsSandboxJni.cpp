@@ -31,7 +31,6 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_expo_modules_jssandbox_JsSandboxNat
     jclass,
     jbyteArray runId,
     jbyteArray code,
-    jbyteArray storeJson,
     jint timeoutMs,
     jint memoryBytes,
     jint maxResultBytes,
@@ -45,7 +44,7 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_expo_modules_jssandbox_JsSandboxNat
   return toBytes(
       env,
       cherry::jssandbox::run(
-          fromBytes(env, runId), fromBytes(env, code), fromBytes(env, storeJson), limits));
+          fromBytes(env, runId), fromBytes(env, code), limits));
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -20,11 +20,9 @@ struct Limits {
 
 /// Runs `code` as the body of an async function in a fresh, isolated QuickJS
 /// runtime on the calling thread, which must have a large enough native stack.
-/// `storeJson` maps keys to JSON text for `load()`; a fulfilled run reports its
-/// `store()` writes. Returns a JSON object describing the outcome; never throws.
+/// Returns a JSON object describing the outcome; never throws.
 std::string run(const std::string &runId,
                 const std::string &code,
-                const std::string &storeJson,
                 const Limits &limits);
 
 /// Interrupts the run with this id, including one that has not started yet.

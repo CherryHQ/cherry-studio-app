@@ -6,17 +6,16 @@ limits are described in [Agent Tools And Controlled Resources](../../docs/refere
 
 ## Design
 
-Each `run(runId, code, storeJson, limits)` creates a fresh [QuickJS-NG](https://github.com/quickjs-ng/quickjs)
+Each `run(runId, code, limits)` creates a fresh [QuickJS-NG](https://github.com/quickjs-ng/quickjs)
 runtime on a dedicated native thread and destroys it afterwards; the script is an in-memory string
 and nothing touches the file system. The app's own Hermes runtime and JS thread are untouched, so a
 busy script cannot stall the UI and cannot reach app state. QuickJS' `std` and `os` modules are not
 compiled in, so the sandbox's global object contains only ECMAScript built-ins, `atob`/`btoa`,
-`queueMicrotask`, `performance`, a captured `console`, and `store`/`load`. The C++ core in `cpp/` is
+`queueMicrotask`, `performance`, and a captured `console`. The C++ core in `cpp/` is
 shared by the iOS (Objective-C++ bridge) and Android (JNI) adapters.
 
-`store(key, value)` and `load(key)` follow Pi's codemode sandbox, including its limits and messages:
-they work synchronously on `storeJson` (key → JSON text), `load` returns a copy, and only a fulfilled
-script reports the keys it wrote. Where the values persist is the caller's business.
+Every call starts fresh. The caller supplies all input values in the code and receives the returned
+value and console output; the sandbox keeps no state between calls.
 
 QuickJS was chosen because it is built to embed untrusted code with budgets:
 
@@ -36,16 +35,14 @@ and its larger frames cut the recursion that fits in the stack to about 800 call
 `run` resolves with a JSON string; script failures never reject:
 
 ```text
-{ status: 'ok', result?: <JSON text>, resultTruncated?, storeWrites: <JSON text>, logs, logsTruncated, durationMs }
+{ status: 'ok', result?: <JSON text>, resultTruncated?, logs, logsTruncated, durationMs }
 { status: 'error', kind, message, logs, logsTruncated, durationMs }
 ```
-
-`storeWrites` is `[[key, json] | [key]]`: a value to set or a key to delete.
 
 `kind` is `syntax`, `exception`, `timeout`, `memory`, `unsettled` (the returned promise can never
 settle, since there are no timers or I/O), `cancelled`, or `internal`. `cancel(runId)` interrupts a
 run, including one that has not started yet. The caller (`src/backend/services/jsSandbox`) owns the
-limits and the store.
+limits.
 
 ## QuickJS-NG
 

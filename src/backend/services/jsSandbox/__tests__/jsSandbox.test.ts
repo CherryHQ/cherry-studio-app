@@ -15,48 +15,16 @@ describe('createJsSandbox', () => {
     expect(createJsSandbox(null)).toBeNull();
   });
 
-  test('passes one run id and the store as JSON text to the native run and parses its outcome', async () => {
+  test('passes one run id, code, and limits to the native run and parses its outcome', async () => {
     const native = createNative(async () => JSON.stringify({ status: 'ok', result: '3', ...DONE }));
     const sandbox = createJsSandbox(native, () => 'run-1')!;
 
-    await expect(
-      sandbox.run(runInput({ code: 'return 1 + 2', store: { user: { name: 'a' }, count: 3 } })),
-    ).resolves.toEqual({
+    await expect(sandbox.run(runInput({ code: 'return 1 + 2' }))).resolves.toEqual({
       status: 'ok',
       result: '3',
-      storeWrites: { set: {}, delete: [] },
       ...DONE,
     });
-    expect(native.run).toHaveBeenCalledWith(
-      'run-1',
-      'return 1 + 2',
-      JSON.stringify({ user: '{"name":"a"}', count: '3' }),
-      LIMITS,
-    );
-  });
-
-  test("parses a fulfilled script's store writes into values to set and keys to delete", async () => {
-    const native = createNative(async () =>
-      JSON.stringify({
-        status: 'ok',
-        storeWrites: JSON.stringify([['count', '4'], ['gone'], ['user', '{"name":"b"}']]),
-        ...DONE,
-      }),
-    );
-
-    await expect(createJsSandbox(native)!.run(runInput())).resolves.toMatchObject({
-      storeWrites: { set: { count: 4, user: { name: 'b' } }, delete: ['gone'] },
-    });
-  });
-
-  test('drops a garbled write report rather than applying part of it', async () => {
-    const native = createNative(async () =>
-      JSON.stringify({ status: 'ok', storeWrites: '[["ok","1"],["bad","{"]]', ...DONE }),
-    );
-
-    await expect(createJsSandbox(native)!.run(runInput())).resolves.toMatchObject({
-      storeWrites: { set: {}, delete: [] },
-    });
+    expect(native.run).toHaveBeenCalledWith('run-1', 'return 1 + 2', LIMITS);
   });
 
   test('cancels that run and rejects with the abort reason without waiting for it', async () => {
@@ -97,7 +65,6 @@ function runInput(overrides: Partial<JsSandboxRun> = {}): JsSandboxRun {
   return {
     code: 'return 1',
     limits: LIMITS,
-    store: {},
     signal: new AbortController().signal,
     ...overrides,
   };

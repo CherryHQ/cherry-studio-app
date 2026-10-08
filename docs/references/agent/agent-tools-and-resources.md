@@ -494,24 +494,19 @@ counting, sorting, parsing, and data transformation. It takes a `code` string, r
 async function, plus optional `timeout_ms` and `max_output_tokens`, and returns
 `{ status: 'ok', result?, logs? }` or `{ status: 'error', kind, message, logs? }`, where `kind` is
 `syntax`, `exception`, `timeout`, `memory`, `unsettled`, `cancelled`, or `internal`. The result is
-the returned value's JSON; Map and Set become object and array and BigInt becomes a string. The store,
-the output budget, and the unbounded default deadline follow Pi's codemode tool.
+the returned value's JSON; Map and Set become object and array and BigInt becomes a string. The output
+budget and the unbounded default deadline follow Pi's codemode tool.
 
 Isolation is structural rather than a permission check. [`modules/js-sandbox`](../../../modules/js-sandbox/README.md)
 creates a fresh QuickJS runtime for every call, on its own native thread, and destroys it when the
 script ends. Its global object holds the standard ECMAScript built-ins, `atob`/`btoa`,
-`queueMicrotask`, `performance.now()`, a captured `console`, and `store`/`load`; there is no `Intl`,
+`queueMicrotask`, `performance.now()`, and a captured `console`; there is no `Intl`,
 so locale arguments are ignored. Timers, modules, network, files, and every application binding are
 absent, and `eval` or `Function` only produce more code inside the same runtime. The tool runs as
 `auto` without an Agent capability group and requires only that the model supports function calling
-and the client includes the native module; older clients omit the tool.
+and the client includes the native module; older clients omit the tool. Every call starts fresh;
+inputs must be included in the code and results are retained through tool-result messages.
 
-- **Store.** `store(key, value)` and `load(key)` keep small JSON values across calls in one
-  Session; `load` returns a copy and storing `undefined` deletes a key. A script reads the values
-  current when it starts, and its writes are kept only when it succeeds. One value may hold 256 Ki
-  characters of JSON and all values together 1 Mi; a larger write throws a `RangeError` inside the
-  script. The values persist in `agent_session.runJsStore`, so they survive restarts, and a fork
-  copies them whole. Deleting or retrying a turn does not undo its writes.
 - **Output.** Output within `max_output_tokens` (default 10,000, estimated at four characters per
   token) keeps the structured form above. Longer output becomes one `output` text that keeps its
   start and end around a count of the removed tokens, and the full text — the returned value's JSON,

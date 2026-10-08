@@ -34,19 +34,13 @@ constexpr size_t kMaxStackBytes = 7u << 20;
 /// Cancels that arrive before their run starts; the oldest are forgotten.
 constexpr size_t kMaxPendingCancels = 64;
 
-/// Installs `console`, `store`, and `load`, and returns `observe(promise)`,
+/// Installs `console` and returns `observe(promise)`,
 /// which reports the settled value through `settle`, plus `describe(error)`.
 /// Built-ins are captured before user code runs, so a script that replaces
 /// them only spoils its own output.
-///
-/// `store(key, value)` and `load(key)` are adapted from Pi's codemode prelude
-/// (`@earendil-works/pi-codemode`, MIT), keeping its limits and messages: they work
-/// synchronously on `storeJson` (key -> JSON text), and a fulfilled script
-/// reports the keys it wrote as `[[key, json] | [key]]`; a failed one drops them.
-constexpr const char *kPrelude = R"JS((function (log, settle, storeJson) {
+constexpr const char *kPrelude = R"JS((function (log, settle) {
   'use strict';
   var stringify = JSON.stringify;
-  var parse = JSON.parse;
   var then = Promise.prototype.then;
   var fromEntries = Object.fromEntries;
   var arrayFrom = Array.from;
@@ -103,65 +97,6 @@ constexpr const char *kPrelude = R"JS((function (log, settle, storeJson) {
   globalThis.console = sandboxConsole;
   globalThis.print = sandboxConsole.log;
 
-  // key -> JSON text. Sizes count key and JSON characters.
-  var MAX_STORE_VALUE_CHARS = 262144;
-  var MAX_STORE_TOTAL_CHARS = 1048576;
-  var STORE_HINT = 'store() is for small state such as IDs, cursors, or summaries.';
-  var stored = new Map(Object.entries(parse(storeJson)));
-  var writes = new Map();
-  var storedChars = 0;
-  stored.forEach(function (json, key) {
-    storedChars += key.length + json.length;
-  });
-  function checkKey(name, key) {
-    if (typeof key !== 'string') throw new TypeError(name + '() key must be a string');
-  }
-  function store(key, value) {
-    checkKey('store', key);
-    var previous = stored.has(key) ? key.length + stored.get(key).length : 0;
-    if (value === undefined) {
-      stored.delete(key);
-      storedChars -= previous;
-      writes.set(key, undefined);
-      return;
-    }
-    var json;
-    try {
-      json = stringify(value, replacer);
-    } catch (error) {
-      throw new TypeError('store(' + stringify(key) + ') value is not JSON-serializable: ' + format(error));
-    }
-    if (json === undefined) {
-      throw new TypeError('store(' + stringify(key) + ') value is not JSON-serializable');
-    }
-    if (json.length > MAX_STORE_VALUE_CHARS) {
-      throw new RangeError('store(' + stringify(key) + ') value has ' + json.length +
-        ' characters of JSON, more than the limit of ' + MAX_STORE_VALUE_CHARS + '. ' + STORE_HINT);
-    }
-    var next = storedChars - previous + key.length + json.length;
-    if (next > MAX_STORE_TOTAL_CHARS) {
-      throw new RangeError('store is full: stored values would exceed ' + MAX_STORE_TOTAL_CHARS +
-        ' characters of JSON. Delete keys with store(key, undefined). ' + STORE_HINT);
-    }
-    stored.set(key, json);
-    storedChars = next;
-    writes.set(key, json);
-  }
-  function load(key) {
-    checkKey('load', key);
-    var json = stored.get(key);
-    return json === undefined ? undefined : parse(json);
-  }
-  function serializeWrites() {
-    var entries = [];
-    writes.forEach(function (json, key) {
-      entries.push(json === undefined ? [key] : [key, json]);
-    });
-    return stringify(entries);
-  }
-  Object.defineProperty(globalThis, 'store', { value: store, enumerable: true });
-  Object.defineProperty(globalThis, 'load', { value: load, enumerable: true });
-
   function observe(promise) {
     then.call(
       promise,
@@ -173,7 +108,7 @@ constexpr const char *kPrelude = R"JS((function (log, settle, storeJson) {
           settle(false, 'The returned value is not JSON-serializable: ' + format(error));
           return;
         }
-        settle(true, text, serializeWrites());
+        settle(true, text);
       },
       function (error) {
         settle(false, describeError(error));
@@ -200,7 +135,6 @@ struct Output {
   bool settled = false;
   bool fulfilled = false;
   std::optional<std::string> payload;
-  std::optional<std::string> storeWrites;
 };
 
 /// Every allocation of one runtime. QuickJS throws a catchable out-of-memory
@@ -508,9 +442,6 @@ JSValue hostSettle(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
   if (JS_IsString(argv[1])) {
     output.payload = toUtf8(ctx, argv[1]);
   }
-  if (argc > 2 && JS_IsString(argv[2])) {
-    output.storeWrites = toUtf8(ctx, argv[2]);
-  }
   return JS_UNDEFINED;
 }
 
@@ -572,16 +503,13 @@ std::string outcome(const Session &session) {
         .field("result", truncateUtf8(*output.payload, session.limits.maxResultBytes, &truncated))
         .field("resultTruncated", truncated);
   }
-  if (output.storeWrites) {
-    writer.field("storeWrites", *output.storeWrites);
-  }
   return writer.field("logs", output.logs)
       .field("logsTruncated", output.logsTruncated)
       .field("durationMs", session.elapsedMs())
       .finish();
 }
 
-std::string execute(const std::string &code, const std::string &storeJson, Session &session) {
+std::string execute(const std::string &code, Session &session) {
   // The context is declared after the runtime and every value after the
   // context, so they are released in the order QuickJS requires.
   std::unique_ptr<JSRuntime, RuntimeDeleter> runtime(
@@ -608,10 +536,9 @@ std::string execute(const std::string &code, const std::string &storeJson, Sessi
     return failure(ctx, session, "internal", JS_UNDEFINED);
   }
   Value log(ctx, JS_NewCFunction(ctx, hostLog, "log", 2));
-  Value settle(ctx, JS_NewCFunction(ctx, hostSettle, "settle", 3));
-  Value store(ctx, JS_NewStringLen(ctx, storeJson.data(), storeJson.size()));
-  JSValue hookArgs[] = {log.get(), settle.get(), store.get()};
-  Value hooks(ctx, JS_Call(ctx, install.get(), JS_UNDEFINED, 3, hookArgs));
+  Value settle(ctx, JS_NewCFunction(ctx, hostSettle, "settle", 2));
+  JSValue hookArgs[] = {log.get(), settle.get()};
+  Value hooks(ctx, JS_Call(ctx, install.get(), JS_UNDEFINED, 2, hookArgs));
   if (hooks.isException()) {
     return failure(ctx, session, "internal", JS_UNDEFINED);
   }
@@ -646,7 +573,6 @@ std::string execute(const std::string &code, const std::string &storeJson, Sessi
 
 std::string run(const std::string &runId,
                 const std::string &code,
-                const std::string &storeJson,
                 const Limits &limits) {
   auto state = std::make_shared<RunState>();
   {
@@ -664,7 +590,7 @@ std::string run(const std::string &runId,
   }
   std::string result;
   try {
-    result = execute(code, storeJson, session);
+    result = execute(code, session);
   } catch (const std::exception &error) {
     result = errorResult("internal", error.what(), session);
   }

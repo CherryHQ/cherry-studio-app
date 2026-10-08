@@ -1,1 +1,0 @@
-ALTER TABLE `agent_session` ADD `run_js_store` text DEFAULT '{}' NOT NULL;

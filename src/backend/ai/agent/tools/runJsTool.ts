@@ -4,23 +4,16 @@
  * Isolated by construction (docs/references/agent/agent-tools-and-resources.md):
  * each call gets a fresh native QuickJS runtime whose global object holds only
  * standard built-ins, so the code reaches nothing of the app, the network, or
- * the device. Its only effects are the Session's `store()` values and, for
- * output over budget, a text file holding the full output; neither needs
- * approval.
+ * the device. Output over budget is saved as a text file holding the full
+ * output; the tool needs no approval.
  *
- * The store, the output budget, and the unbounded default deadline follow Pi's
- * codemode tool.
+ * The output budget and the unbounded default deadline follow Pi's codemode
+ * tool.
  */
 
 import * as z from 'zod';
 
-import type {
-  JsSandbox,
-  JsSandboxLimits,
-  JsSandboxOutcome,
-  JsSandboxStoreWrites,
-} from '@/backend/services/jsSandbox';
-import type { JsonValue } from '@/shared/contracts/agent';
+import type { JsSandbox, JsSandboxLimits, JsSandboxOutcome } from '@/backend/services/jsSandbox';
 import type { FileEntry, FileEntryProvenance } from '@/shared/data/types/file';
 
 import type { RuntimeArtifact, RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../runtime';
@@ -75,12 +68,6 @@ export const runJsInputSchema = z.strictObject({
     ),
 });
 
-/** The Session's store values, read when a script starts and written when it succeeds. */
-export type RunJsStore = {
-  read(): Promise<Record<string, JsonValue>>;
-  apply(writes: JsSandboxStoreWrites): Promise<void>;
-};
-
 /** The slice of the managed-file port that saves an output over budget. */
 export type RunJsFiles = {
   createTextEntry(
@@ -92,17 +79,15 @@ export type RunJsFiles = {
 export type RunJsToolDependencies = {
   sandbox: JsSandbox;
   files: RunJsFiles;
-  /** Absent outside a Session: the store starts empty and writes are dropped. */
-  store?: RunJsStore;
 };
 
-export function createRunJsTool({ sandbox, files, store }: RunJsToolDependencies): RuntimeTool {
+export function createRunJsTool({ sandbox, files }: RunJsToolDependencies): RuntimeTool {
   return {
     ref: { source: 'builtin', capabilityId: RUN_JS_TOOL_NAME },
     providerName: RUN_JS_TOOL_NAME,
     displayName: 'Run JavaScript',
     description:
-      'Run JavaScript in an isolated sandbox for exact computation: arithmetic, statistics, date and time math, counting, sorting, parsing, and transforming data. `return` a JSON-serializable value (Map and Set become object and array, BigInt becomes a string); `console.log` output is returned as `logs`. Standard ECMAScript plus atob/btoa. There is no Intl, so locale arguments to toLocaleString and similar methods are ignored; format numbers and dates yourself. There is no network, file, timer, module, device, or app access. `store(key, value)` and `load(key)` keep small JSON values across run_js calls in this conversation: writes are kept only when the script succeeds, and storing `undefined` deletes a key. Memory is limited to 64 MB; there is no time limit unless you set `timeout_ms`. Output over `max_output_tokens` keeps its start and end, and the full text is saved to a file you can page through with `read_file`.',
+      'Run JavaScript in an isolated sandbox for exact computation: arithmetic, statistics, date and time math, counting, sorting, parsing, and transforming data. `return` a JSON-serializable value (Map and Set become object and array, BigInt becomes a string); `console.log` output is returned as `logs`. Standard ECMAScript plus atob/btoa. There is no Intl, so locale arguments to toLocaleString and similar methods are ignored; format numbers and dates yourself. There is no network, file, timer, module, device, or app access. Every call starts fresh; include every input value in the code. Memory is limited to 64 MB; there is no time limit unless you set `timeout_ms`. Output over `max_output_tokens` keeps its start and end, and the full text is saved to a file you can page through with `read_file`.',
     inputSchema: toRuntimeInputSchema(runJsInputSchema),
     // The catalog overrides this from the resolved binding policy; the value
     // here is only the floor this tool declares for itself.
@@ -119,15 +104,8 @@ export function createRunJsTool({ sandbox, files, store }: RunJsToolDependencies
       const outcome = await sandbox.run({
         code,
         limits: { ...RUN_JS_LIMITS, timeoutMs: timeout_ms ?? 0 },
-        store: (await store?.read()) ?? {},
         signal,
       });
-      if (
-        outcome.status === 'ok' &&
-        (Object.keys(outcome.storeWrites.set).length > 0 || outcome.storeWrites.delete.length > 0)
-      ) {
-        await store?.apply(outcome.storeWrites);
-      }
       return toToolResult(
         outcome,
         max_output_tokens ?? RUN_JS_DEFAULT_MAX_OUTPUT_TOKENS,

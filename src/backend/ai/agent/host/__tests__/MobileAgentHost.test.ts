@@ -1661,16 +1661,12 @@ describe('MobileAgentHost', () => {
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
       resolveUsageAttribution: expect.any(Function),
-      runJsStore: expect.objectContaining({ read: expect.any(Function) }),
     });
     // Tools are built before reservation; by execution the resolver sees the reserved message.
     expect(getTools.mock.calls[0]![0].resolveUsageAttribution?.()).toEqual({
       source: { type: 'agent', id: AGENT_ID, name: 'Test Agent', icon: null },
       messageRef: { kind: 'agent-session', id: (await store.listMessages(session.id))[1]!.id },
     });
-    // The run_js store is bound to the reserved Session the same way.
-    await getTools.mock.calls[0]![0].runJsStore?.apply({ set: { cursor: 1 }, delete: [] });
-    await expect(store.readRunJsStore(session.id)).resolves.toEqual({ cursor: 1 });
     expect([...getTools.mock.calls[0]![0].resources.fileEntryIds]).toEqual([]);
     expect(requests[0]?.tools).toEqual([stubTool]);
     expect((await store.listMessages(session.id))[1]?.inferenceSnapshot).toMatchObject({

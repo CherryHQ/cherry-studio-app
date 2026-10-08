@@ -7,40 +7,33 @@ import {
   RUN_JS_LIMITS,
   RUN_JS_OUTPUT_FILENAME,
   type RunJsFiles,
-  type RunJsStore,
   toModelValue,
 } from '../runJsTool';
 
-const NO_WRITES = { set: {}, delete: [] };
 const DONE = { durationMs: 3, logs: '', logsTruncated: false };
 const OUTPUT_ENTRY_ID = '0198d6b2-7a40-7c4e-9f13-1f6f2b8a9c01';
 
 describe('runJsTool', () => {
-  test('runs without a deadline over the store values and returns the parsed result', async () => {
+  test('runs without a deadline and returns the parsed result', async () => {
     const sandbox = createSandbox({
       status: 'ok',
       result: '{"total":42}',
-      storeWrites: NO_WRITES,
       ...DONE,
     });
-    const store = createStore({ cursor: 7 });
-
-    const output = await execute(createRunJsTool({ sandbox, files: createFiles(), store }), {
+    const output = await execute(createRunJsTool({ sandbox, files: createFiles() }), {
       code: 'return { total: 42 }',
     });
 
     expect(sandbox.run).toHaveBeenCalledWith({
       code: 'return { total: 42 }',
       limits: { ...RUN_JS_LIMITS, timeoutMs: 0 },
-      store: { cursor: 7 },
       signal: expect.any(AbortSignal),
     });
-    expect(store.apply).not.toHaveBeenCalled();
     expect(output).toEqual({ value: { status: 'ok', result: { total: 42 } }, artifacts: [] });
   });
 
-  test('passes the requested deadline and starts from an empty store outside a Session', async () => {
-    const sandbox = createSandbox({ status: 'ok', storeWrites: NO_WRITES, ...DONE });
+  test('passes the requested deadline', async () => {
+    const sandbox = createSandbox({ status: 'ok', ...DONE });
 
     await execute(createRunJsTool({ sandbox, files: createFiles() }), {
       code: 'return 1',
@@ -48,44 +41,8 @@ describe('runJsTool', () => {
     });
 
     expect(sandbox.run).toHaveBeenCalledWith(
-      expect.objectContaining({ limits: { ...RUN_JS_LIMITS, timeoutMs: 5000 }, store: {} }),
+      expect.objectContaining({ limits: { ...RUN_JS_LIMITS, timeoutMs: 5000 } }),
     );
-  });
-
-  test("keeps a successful script's store writes", async () => {
-    const writes = { set: { cursor: 8 }, delete: ['stale'] };
-    const store = createStore({ cursor: 7, stale: true });
-
-    await execute(
-      createRunJsTool({
-        sandbox: createSandbox({ status: 'ok', storeWrites: writes, ...DONE }),
-        files: createFiles(),
-        store,
-      }),
-      { code: "store('cursor', 8); store('stale', undefined)" },
-    );
-
-    expect(store.apply).toHaveBeenCalledWith(writes);
-  });
-
-  test('applies nothing for a failed script', async () => {
-    const store = createStore({});
-
-    await execute(
-      createRunJsTool({
-        sandbox: createSandbox({
-          status: 'error',
-          kind: 'exception',
-          message: 'Error: boom',
-          ...DONE,
-        }),
-        files: createFiles(),
-        store,
-      }),
-      { code: "store('a', 1); throw new Error('boom')" },
-    );
-
-    expect(store.apply).not.toHaveBeenCalled();
   });
 
   test('keeps the start and end of output over budget and saves the full text as a file', async () => {
@@ -95,7 +52,6 @@ describe('runJsTool', () => {
       sandbox: createSandbox({
         status: 'ok',
         result: '"done"',
-        storeWrites: NO_WRITES,
         ...DONE,
         logs,
       }),
@@ -161,7 +117,7 @@ describe('runJsTool', () => {
   });
 
   test('rejects malformed input as a correctable value without running anything', async () => {
-    const sandbox = createSandbox({ status: 'ok', storeWrites: NO_WRITES, ...DONE });
+    const sandbox = createSandbox({ status: 'ok', ...DONE });
 
     const output = await execute(createRunJsTool({ sandbox, files: createFiles() }), {
       code: 'return 1',
@@ -184,7 +140,7 @@ describe('runJsTool', () => {
 
 describe('toModelValue', () => {
   test('omits the result when the code returned nothing', () => {
-    expect(toModelValue({ status: 'ok', storeWrites: NO_WRITES, ...DONE })).toEqual({
+    expect(toModelValue({ status: 'ok', ...DONE })).toEqual({
       status: 'ok',
     });
   });
@@ -195,16 +151,16 @@ describe('toModelValue', () => {
         status: 'ok',
         result: '["aaa',
         resultTruncated: true,
-        storeWrites: NO_WRITES,
         ...DONE,
       }),
     ).toEqual({ status: 'ok', result: '["aaa', resultTruncated: true });
   });
 
   test('keeps non-JSON result text from code that replaced JSON.stringify', () => {
-    expect(
-      toModelValue({ status: 'ok', result: 'not json', storeWrites: NO_WRITES, ...DONE }),
-    ).toEqual({ status: 'ok', result: 'not json' });
+    expect(toModelValue({ status: 'ok', result: 'not json', ...DONE })).toEqual({
+      status: 'ok',
+      result: 'not json',
+    });
   });
 
   test('reports failures with their kind and keeps console output', () => {
@@ -229,12 +185,6 @@ describe('toModelValue', () => {
 
 function createSandbox(outcome: JsSandboxOutcome): JsSandbox & { run: jest.Mock } {
   return { run: jest.fn(async () => outcome) };
-}
-
-function createStore(values: Record<string, RuntimeJsonValue>): RunJsStore & {
-  apply: jest.Mock;
-} {
-  return { read: jest.fn(async () => values), apply: jest.fn(async () => {}) };
 }
 
 function createFiles(): RunJsFiles & { createTextEntry: jest.Mock } {

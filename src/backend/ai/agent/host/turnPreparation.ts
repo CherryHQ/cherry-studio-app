@@ -44,7 +44,6 @@ import type {
 } from '../sessionStore/AgentSessionStore';
 import { ASK_USER_QUESTION_TOOL_NAME, type AskUserQuestion } from '../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
-import type { RunJsStore } from '../tools/runJsTool';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPlan, AgentImageGenerationPort } from './agentImageGeneration';
@@ -79,11 +78,7 @@ export type TurnPreparationDependencies = {
   runtimeTools: AgentRuntimeToolResolver;
   store: Pick<
     AgentSessionStore,
-    | 'applyRunJsStoreWrites'
-    | 'getLatestContextCheckpoint'
-    | 'getSession'
-    | 'loadRuntimeTurnContext'
-    | 'readRunJsStore'
+    'getLatestContextCheckpoint' | 'getSession' | 'loadRuntimeTurnContext'
   >;
   systemCapabilities: SystemCapabilitySource;
 };
@@ -119,8 +114,6 @@ export type TurnPlan = {
   userParts: AgentMessagePart[];
   /** Source captured at admission; the Host binds the reserved message before execution. */
   usageAttribution: TurnUsageAttribution;
-  /** The Session's `run_js` store; the Host binds the Session before execution. */
-  runJsStore: TurnRunJsStore;
 };
 
 /**
@@ -134,37 +127,6 @@ type TurnUsageAttribution = {
   /** Reads the attribution as of now; before binding the message reference is null. */
   resolve: AiUsageAttributionResolver;
 };
-
-/**
- * `run_js` store access for this turn's tools. A first turn's Session row does
- * not exist while tools are created, so the store binds the Session id when the
- * Host reserves the turn and reads it at call time; unbound, it is empty and
- * drops writes.
- */
-type TurnRunJsStore = RunJsStore & {
-  /** Binds the reserved Session exactly once. */
-  bindSession(sessionId: string): void;
-};
-
-function createTurnRunJsStore(
-  store: Pick<AgentSessionStore, 'applyRunJsStoreWrites' | 'readRunJsStore'>,
-): TurnRunJsStore {
-  let sessionId: string | null = null;
-  return {
-    bindSession(id) {
-      if (sessionId) {
-        throw new Error('The turn run_js store is already bound to a Session.');
-      }
-      sessionId = id;
-    },
-    read: async () => (sessionId ? store.readRunJsStore(sessionId) : {}),
-    apply: async (writes) => {
-      if (sessionId) {
-        await store.applyRunJsStoreWrites(sessionId, writes);
-      }
-    },
-  };
-}
 
 function createTurnUsageAttribution(
   source: NonNullable<AiUsageAttribution['source']>,
@@ -314,7 +276,6 @@ export async function prepareResolvedTurn(
     name: agent.name,
     icon: null,
   });
-  const runJsStore = createTurnRunJsStore(dependencies.store);
   const runtime = dependencies.routeExecutionTarget(session.executionTarget);
   if (
     !runtime.descriptor.capabilities.attachments &&
@@ -390,7 +351,6 @@ export async function prepareResolvedTurn(
               },
       ),
       usageAttribution,
-      runJsStore,
     };
   }
   if (parsed.imageGeneration) {
@@ -416,7 +376,6 @@ export async function prepareResolvedTurn(
           resources,
           documentParserMode,
           resolveUsageAttribution: usageAttribution.resolve,
-          runJsStore,
         }),
         signal,
       );
@@ -521,7 +480,6 @@ export async function prepareResolvedTurn(
     userParts,
     pluginGuides,
     usageAttribution,
-    runJsStore,
   };
 }
 

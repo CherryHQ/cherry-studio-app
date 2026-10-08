@@ -941,7 +941,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     abortController: AbortController,
   ): { turnId: string; userMessageId: string; assistantMessageId: string } {
     plan.usageAttribution.bindMessage({ kind: 'agent-session', id: reserved.assistantMessage.id });
-    plan.runJsStore.bindSession(sessionId);
     // Match desktop timing ownership: execution starts when the Host launches
     // the Runtime, independently from the placeholder row's creation time.
     const runtimeStartedAt = Date.now();

@@ -25,25 +25,22 @@ import {
   type AgentErrorView,
   type AgentMessageView,
   type AgentSessionView,
-  type JsonValue,
 } from '@/shared/contracts/agent';
 
-import {
-  type AgentSessionStore,
-  applyRunJsStoreWrites,
-  type DeleteTurnInput,
-  type DeleteTurnResult,
-  type FinalizeAssistantMessageInput,
-  type ForkedMessageCopy,
-  type ForkSessionInput,
-  type ForkSessionResult,
-  type ReserveInitialSubmissionInput,
-  type ReserveInitialSubmissionResult,
-  type ReserveRetryInput,
-  type ReserveSubmissionInput,
-  type ReserveSubmissionResult,
-  type RunJsStoreWrites,
-  type UpdateStreamingAssistantMessageInput,
+import type {
+  AgentSessionStore,
+  DeleteTurnInput,
+  DeleteTurnResult,
+  FinalizeAssistantMessageInput,
+  ForkedMessageCopy,
+  ForkSessionInput,
+  ForkSessionResult,
+  ReserveInitialSubmissionInput,
+  ReserveInitialSubmissionResult,
+  ReserveRetryInput,
+  ReserveSubmissionInput,
+  ReserveSubmissionResult,
+  UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
@@ -199,33 +196,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
-  async readRunJsStore(sessionId: string): Promise<Record<string, JsonValue>> {
-    const [row] = await this.dbService
-      .getDb()
-      .select({ runJsStore: agentSessionTable.runJsStore })
-      .from(agentSessionTable)
-      .where(eq(agentSessionTable.id, sessionId))
-      .limit(1);
-    return row?.runJsStore ?? {};
-  }
-
-  async applyRunJsStoreWrites(sessionId: string, writes: RunJsStoreWrites): Promise<void> {
-    await this.dbService.withWriteTx(async (tx) => {
-      const [row] = await tx
-        .select({ runJsStore: agentSessionTable.runJsStore })
-        .from(agentSessionTable)
-        .where(eq(agentSessionTable.id, sessionId))
-        .limit(1);
-      if (!row) {
-        return;
-      }
-      await tx
-        .update(agentSessionTable)
-        .set({ runJsStore: applyRunJsStoreWrites(row.runJsStore, writes) })
-        .where(eq(agentSessionTable.id, sessionId));
-    });
-  }
-
   async forkSession(input: ForkSessionInput): Promise<ForkSessionResult> {
     return this.dbService.withWriteTx(async (tx) => {
       const [source] = await tx
@@ -277,7 +247,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           // first-user-message title the naming policy expects to overwrite.
           title: input.title ?? source.title,
           titleIsManual: source.titleIsManual,
-          runJsStore: source.runJsStore,
         })
         .returning();
 

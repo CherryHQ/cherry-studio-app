@@ -11,11 +11,8 @@ export type JsSandboxLimits = {
 };
 
 export type JsSandboxNativeModule = {
-  /**
-   * Resolves with the outcome JSON; script failures never reject. `storeJson`
-   * maps keys to JSON text for `load()`.
-   */
-  run(runId: string, code: string, storeJson: string, limits: JsSandboxLimits): Promise<string>;
+  /** Resolves with the outcome JSON; script failures never reject. */
+  run(runId: string, code: string, limits: JsSandboxLimits): Promise<string>;
   /** Interrupts a run, including one that has not started yet. */
   cancel(runId: string): void;
 };
