@@ -25,12 +25,16 @@ class ShareReceiverActivity : Activity() {
     super.onCreate(savedInstanceState)
     window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
     if (savedInstanceState != null || intent.action !in listOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)) { finish(); return }
-    val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
-      ?: intent.clipData?.let { clip -> (0 until clip.itemCount).mapNotNull { index ->
-        val item = clip.getItemAt(index)
-        item.text?.toString() ?: item.uri?.takeIf { it.scheme in listOf("http", "https") }?.toString()
-      }.joinToString("\n\n") }.orEmpty()
-    val uris = receiveUris(intent)
+    // The first extra read unparcels the sender's whole bundle; an unknown Parcelable in it
+    // throws (BadParcelableException) and must not crash this exported activity.
+    val (text, uris) = try {
+      val sharedText = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+        ?: intent.clipData?.let { clip -> (0 until clip.itemCount).mapNotNull { index ->
+          val item = clip.getItemAt(index)
+          item.text?.toString() ?: item.uri?.takeIf { it.scheme in listOf("http", "https") }?.toString()
+        }.joinToString("\n\n") }.orEmpty()
+      sharedText to receiveUris(intent)
+    } catch (_: Exception) { finish(); return }
     // No source content is staged until the user confirms the share.
     dialog = AlertDialog.Builder(this)
       .setTitle(R.string.cherry_share_title)

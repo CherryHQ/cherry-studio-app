@@ -10,7 +10,7 @@ jest.mock('expo-sqlite', () => ({
 }));
 jest.mock('drizzle-orm/expo-sqlite/migrator', () => ({ migrate: jest.fn() }));
 jest.mock('../seeding', () => ({ seedDatabase: jest.fn() }));
-jest.mock('../customSql', () => ({ customSqlStatements: [] }));
+jest.mock('../customSql', () => ({ backfillSearchableText: jest.fn(), customSqlStatements: [] }));
 jest.mock('@/backend/data/storage/storagePaths', () => ({
   assertStorageDatabaseExists: jest.fn(),
   databaseDirectory: () => 'file:///test/SQLite',

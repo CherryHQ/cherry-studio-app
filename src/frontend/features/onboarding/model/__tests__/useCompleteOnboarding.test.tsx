@@ -155,7 +155,6 @@ describe('useCompleteOnboarding', () => {
     // The default Agent keeps Agent management; other create defaults still apply.
     expect(mockCreateAgent.mock.calls[0][0].disabledCapabilities).toEqual([
       'calendar',
-      'health',
       'location',
       'reminders',
     ]);

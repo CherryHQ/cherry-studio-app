@@ -14,7 +14,7 @@ import {
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
-import { useNavigation, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -38,7 +38,6 @@ import {
 } from '@/frontend/data/paintings/usePaintings';
 import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
-import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 
 import { usePaintingSelectionSource } from '../hooks/usePaintingSelectionSource';
@@ -55,12 +54,14 @@ const MIN_COLUMN_WIDTH = 180;
 const pageEdge = 16;
 const galleryContentEdge = pageEdge - galleryGap / 2;
 
-export function DrawingList() {
+export function DrawingList({
+  openPainting,
+}: {
+  openPainting: (payload?: PaintingDraftHandoff) => void;
+}) {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
-  const router = useRouter();
-  const navigation = useNavigation();
   const { isDeletionPending, isEditing, selectedIds } = useSelectionState();
   const pendingDeletionIds = usePendingDeletionIds('drawings');
   const { enterEditing, toggleId } = useSelectionActions();
@@ -101,25 +102,13 @@ export function DrawingList() {
     [enterEditing, isDeletionPending, isEditing, toggleId],
   );
 
-  // Every draft and blank canvas is a distinct screen, so only the first of repeated taps opens
-  // one; the push leaves this page unfocused before the next tap lands.
-  const openPainting = useCallback(
-    (payload: PaintingDraftHandoff) => {
-      if (!navigation.isFocused()) return;
-      const handoff = createPaintingDraftHandoff(payload);
-      router.push({ pathname: '/paintings', params: { handoff } });
-    },
-    [navigation, router],
-  );
   const openPaintingWithAttachments = useCallback(
     (attachments: readonly ComposerInitialAttachment[]) => {
       openPainting({ attachments });
     },
     [openPainting],
   );
-  const handleCreatePainting = useCallback(() => {
-    if (navigation.isFocused()) router.push('/paintings');
-  }, [navigation, router]);
+  const handleCreatePainting = useCallback(() => openPainting(), [openPainting]);
   const handleTemplateUse = useCallback(
     (template: PaintingTemplate) => {
       openPainting(toPaintingTemplateDraft(template));

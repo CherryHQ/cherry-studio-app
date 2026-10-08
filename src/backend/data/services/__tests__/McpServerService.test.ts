@@ -1,56 +1,22 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-import { drizzle } from 'drizzle-orm/sqlite-proxy';
-
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
-import type { Database, DbService } from '@/backend/data/db/DbService';
-import { schema } from '@/backend/data/db/schemas';
+import type { DbService } from '@/backend/data/db/DbService';
 
 import { McpServerService } from '../McpServerService';
-import { applyMigrations } from './_testDb';
+import { createTestDb } from './_testDb';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 describe('McpServerService', () => {
   let sqlite: DatabaseSync;
+  let dbService: DbService;
   let service: McpServerService;
 
   beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
-    sqlite.exec('PRAGMA foreign_keys = ON');
-    applyMigrations(sqlite);
-    const database = drizzle(
-      async (sql, params, method) => {
-        const statement = sqlite.prepare(sql);
-        if (method === 'run') {
-          statement.run(...params);
-          return { rows: [] };
-        }
-        if (method === 'get') {
-          const row = statement.get(...params) as Record<string, unknown> | undefined;
-          return { rows: row ? Object.values(row) : [] };
-        }
-        const rows = statement.all(...params) as Record<string, unknown>[];
-        return { rows: rows.map((row) => Object.values(row)) };
-      },
-      undefined as never,
-      { casing: 'snake_case', schema },
-    ) as unknown as Database;
-    const dbService = {
-      getDb: () => database,
-      withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
-        sqlite.exec('BEGIN IMMEDIATE');
-        try {
-          const result = await callback(database);
-          sqlite.exec('COMMIT');
-          return result;
-        } catch (error) {
-          sqlite.exec('ROLLBACK');
-          throw error;
-        }
-      },
-    } as unknown as DbService;
+    ({ dbService } = createTestDb(sqlite));
     // Data services resolve `DbService` from `application`, so the fake is
     // installed as a host override instead of being passed to constructors.
     await installTestHost({ DbService: dbService });
@@ -158,6 +124,40 @@ describe('McpServerService', () => {
     await expect(service.update(server.id, { disabledTools: [] })).resolves.toMatchObject({
       disabledTools: [],
     });
+  });
+
+  // A write issued outside withWriteTx would join whichever transaction is
+  // open on the shared connection and vanish with that transaction's rollback.
+  it.each([
+    [
+      'create',
+      async () => () => service.create({ endpointUrl: 'https://a.example/mcp', name: 'Queued' }),
+    ],
+    [
+      'update',
+      async () => {
+        const server = await service.create({ endpointUrl: 'https://a.example/mcp', name: 'A' });
+        return () => service.update(server.id, { name: 'Queued' });
+      },
+    ],
+  ])('queues %s behind an open write transaction instead of joining it', async (_, arrange) => {
+    const write = await arrange();
+    let releaseOuter!: () => void;
+    const outerGate = new Promise<void>((resolve) => {
+      releaseOuter = resolve;
+    });
+    const outer = dbService.withWriteTx(async () => {
+      await outerGate;
+      throw new Error('outer transaction rolled back');
+    });
+
+    const written = write();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseOuter();
+
+    await expect(outer).rejects.toThrow('outer transaction rolled back');
+    const server = await written;
+    await expect(service.getById(server.id)).resolves.toMatchObject({ name: 'Queued' });
   });
 
   it('reports a missing server rather than silently succeeding', async () => {

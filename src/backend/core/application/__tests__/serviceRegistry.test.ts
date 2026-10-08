@@ -141,7 +141,9 @@ describe('service registry', () => {
     expect(getAppStatePolicy(services.BackgroundReplyRuntime)).toBe('background-presentation');
     expect(getAppStatePolicy(services.BackgroundActivityManager)).toBe('background-presentation');
     expect(getAppStatePolicy(services.KeepAliveCoordinator)).toBe('not-applicable');
-    expect(getAppStatePolicy(services.AudioKeepAliveSource)).toBe('background-presentation');
+    expect(getAppStatePolicy(services.IosBackgroundExecutionSource)).toBe(
+      'background-presentation',
+    );
     expect(getAppStatePolicy(services.AndroidBackgroundActivityRuntime)).toBe(
       'background-presentation',
     );

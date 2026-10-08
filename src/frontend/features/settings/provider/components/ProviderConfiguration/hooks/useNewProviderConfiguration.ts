@@ -69,7 +69,8 @@ export function useNewProviderConfiguration() {
       },
       // A custom provider always edits protocol addresses, never a single base URL.
       setBaseUrl: async () => false,
-      setDefaultEndpoint: async (endpoint) => {
+      setDefaultEndpoint: async (endpoint, baseUrl) => {
+        actions.setEndpointUrl(endpoint, baseUrl.trim());
         actions.setDefaultChatEndpoint(endpoint);
         return true;
       },
@@ -129,7 +130,12 @@ export function useNewProviderConfiguration() {
           providerId,
         },
       });
-      if (state.avatarUri) await providerAvatars.persist(providerId, state.avatarUri);
+      // The provider exists now; a lost avatar must not send the user back to create it twice.
+      if (state.avatarUri) {
+        await providerAvatars.persist(providerId, state.avatarUri).catch(() => {
+          toast.show({ label: t('settings.provider.add.avatarSaveFailed'), variant: 'warning' });
+        });
+      }
       return { providerId, providerName };
     } catch {
       toast.show({ label: t('settings.provider.add.error'), variant: 'danger' });

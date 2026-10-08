@@ -192,6 +192,88 @@ describe('AgentSessionMessageService persistence', () => {
     ).rejects.toMatchObject({ details: { id: 'target', resource: 'AgentSessionMessage' } });
   });
 
+  test('reads transcript windows without decoding columns the message view omits', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'older', text: 'Older' });
+    insertMessage(sqlite, { createdAt: 200, id: 'checkpointed', text: 'Checkpointed' });
+    // Proves the context checkpoint and turn error are never read for the view.
+    sqlite
+      .prepare('UPDATE agent_session_message SET context_checkpoint = ?, error = ? WHERE id = ?')
+      .run('{not json', '{not json', 'checkpointed');
+
+    const latest = await agentSessionMessageService.listByCursor('session-1');
+    const around = await agentSessionMessageService.listByCursor('session-1', {
+      aroundMessageId: 'checkpointed',
+    });
+    const selected = await agentSessionMessageService.listByCursor('session-1', {
+      ids: ['checkpointed'],
+    });
+    expect(latest.items.map((message) => message.id)).toEqual(['checkpointed', 'older']);
+    expect(around.items.map((message) => message.id)).toEqual(['checkpointed', 'older']);
+    expect(selected.items.map((message) => message.id)).toEqual(['checkpointed']);
+  });
+
+  test('skips unreadable rows without failing the page or breaking its cursors', async () => {
+    for (const id of ['a', 'b', 'c', 'd']) {
+      insertMessage(sqlite, { createdAt: 100, id, text: id });
+    }
+    const corrupt = sqlite.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?');
+    corrupt.run(JSON.stringify({ version: 99, parts: [] }), 'b');
+    corrupt.run(JSON.stringify({ version: 1, parts: [{ id: 'p', type: 'future' }] }), 'c');
+
+    const newest = await agentSessionMessageService.listByCursor('session-1', { limit: 2 });
+    expect(newest.items.map((message) => message.id)).toEqual(['d']);
+    const older = await agentSessionMessageService.listByCursor('session-1', {
+      cursor: newest.nextCursor,
+      limit: 2,
+    });
+    expect(older.items.map((message) => message.id)).toEqual(['a']);
+    const around = await agentSessionMessageService.listByCursor('session-1', {
+      aroundMessageId: 'c',
+      limit: 3,
+    });
+    expect(around.items.map((message) => message.id)).toEqual(['d']);
+    const selected = await agentSessionMessageService.listByCursor('session-1', {
+      ids: ['a', 'b'],
+    });
+    expect(selected.items.map((message) => message.id)).toEqual(['a']);
+  });
+
+  test('skips unreadable projected rows while advancing past an empty page', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'readable', text: 'Readable' });
+    insertMessage(sqlite, { createdAt: 200, id: 'unknown-version', text: 'Unknown' });
+    insertMessage(sqlite, { createdAt: 300, id: 'unknown-part', text: 'Unknown' });
+    const corrupt = sqlite.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?');
+    corrupt.run(JSON.stringify({ version: 99, parts: [] }), 'unknown-version');
+    corrupt.run(
+      JSON.stringify({ version: 1, parts: [{ id: 'part', type: 'future' }] }),
+      'unknown-part',
+    );
+    // Both fixes must hold together: omit corrupt non-view columns and skip invalid view data.
+    sqlite
+      .prepare('UPDATE agent_session_message SET context_checkpoint = ?, error = ?')
+      .run('{not json', '{not json');
+
+    const first = await agentSessionMessageService.listByCursor('session-1', { limit: 2 });
+    expect(first.items).toEqual([]);
+    expect(first.nextCursor).toBeDefined();
+    const next = await agentSessionMessageService.listByCursor('session-1', {
+      cursor: first.nextCursor,
+      limit: 2,
+    });
+    expect(next.items.map((message) => message.id)).toEqual(['readable']);
+    expect(next.nextCursor).toBeUndefined();
+
+    const around = await agentSessionMessageService.listByCursor('session-1', {
+      aroundMessageId: 'unknown-version',
+      limit: 3,
+    });
+    expect(around.items.map((message) => message.id)).toEqual(['readable']);
+    const selected = await agentSessionMessageService.listByCursor('session-1', {
+      ids: ['unknown-part', 'unknown-version', 'readable'],
+    });
+    expect(selected.items.map((message) => message.id)).toEqual(['readable']);
+  });
+
   test('preserves an unknown inference snapshot version as unsupported JSON', async () => {
     insertMessage(sqlite, { createdAt: 100, id: 'message-future', text: 'Future' });
     const futureSnapshot = { version: 2, opaque: { retained: true } };

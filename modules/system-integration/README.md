@@ -1,6 +1,6 @@
 # System Integration
 
-This local Expo module owns Cherry Mobile's native share boundary. Frontend code uses
+This local Expo module owns Cherry Mobile's native share boundary and platform execution/settings bridge. Frontend code uses
 `Backend.systemEntry`; it never imports this module directly. See the
 [architecture and behavior contract](../../docs/references/system-integration-design.md).
 
@@ -35,3 +35,10 @@ Before release, authorize and perform native builds and device checks for cold a
 delivery, attachment limits, expiry cleanup, App Group provisioning, Agent switching with a seeded
 draft, and sending. Run the focused system-entry and native-envelope suites when verification is
 authorized.
+
+## iOS execution window
+
+`beginBackgroundExecution` and `endBackgroundExecution` own one finite UIKit background assertion.
+Only the backend iOS execution source consumes them. Expiration ends the native assertion even if
+JavaScript cannot run, emits its owner ID, and prevents renewal until foreground return. No audio
+playback, audio background mode, scheduler, or permanent execution entitlement is used.

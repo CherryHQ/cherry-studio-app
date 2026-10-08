@@ -1,6 +1,5 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { useNavigation, useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +13,7 @@ import {
 } from '@/frontend/components/Selection';
 
 import { DrawingList } from './components/DrawingList';
+import { useOpenPainting } from './hooks/useOpenPainting';
 
 const paintingSelectionScope = 'drawings';
 
@@ -22,31 +22,26 @@ const paintingSelectionScope = 'drawings';
  * gallery grid plus multi-select batch deletion. Back exits selection before
  * leaving this root-stack page.
  * Creating and editing paintings stays on the root stack's `/paintings`, which
- * `DrawingList` pushes itself.
+ * the gallery shares one admission callback for every draft entry point.
  */
 function DrawingsScreenBody() {
   const { t } = useTranslation();
-  const router = useRouter();
-  const navigation = useNavigation();
+  const openPainting = useOpenPainting();
   const { left, right } = useSafeAreaInsets();
   const { exitEditing } = useSelectionActions();
   const { isDeletionPending, isEditing } = useSelectionState();
-  // A blank canvas has no route identity; repeated taps would stack several of them.
-  const openNewPainting = useCallback(() => {
-    if (navigation.isFocused()) router.push('/paintings');
-  }, [navigation, router]);
   const createActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
         accessibilityLabel: t('painting.history.createNew'),
         icon: PlusIcon,
         key: 'create-painting',
-        onPress: openNewPainting,
+        onPress: () => openPainting(),
         testID: 'painting-history-create-header',
         type: 'icon',
       },
     ],
-    [openNewPainting, t],
+    [openPainting, t],
   );
   const doneActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -70,7 +65,7 @@ function DrawingsScreenBody() {
         title={t('painting.history.title')}
       />
       <View className="flex-1" style={{ paddingLeft: left, paddingRight: right }}>
-        <DrawingList />
+        <DrawingList openPainting={openPainting} />
         <SelectionControls scope={paintingSelectionScope} />
       </View>
     </>
