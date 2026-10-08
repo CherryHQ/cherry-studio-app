@@ -113,6 +113,12 @@ only selecting the source painting/model. When generation is admitted, the route
 and adopts the new task's `paintingId` without remounting its composer. Task notification navigation
 can then reuse that page, while another edit always owns a fresh draft.
 
+Stack pages that show one entity declare that identity through the stack's `getId`: the file viewer
+by `fileEntryId`, the painting viewer by `paintingId` plus `fileEntryId`, and the Agent editor by
+`agentId`. Pushing an identity that is already open reuses its page, so repeated taps cannot stack
+copies. Blank canvases and new drafts have no identity; their entry points push only while the
+source page is still focused.
+
 ## Chat Identity Contract
 
 The chat route has two complete identities:

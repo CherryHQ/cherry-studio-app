@@ -1447,6 +1447,7 @@
   "settings.profile.edit": "Profil bearbeiten",
   "settings.profile.setPrompt": "Tippen Sie hier, um Avatar und Namen festzulegen",
   "settings.profile.userName": "Benutzername",
+  "settings.profile.userNameSaveError": "Benutzername konnte nicht gespeichert werden",
   "settings.provider.account.authorizationCode": "Autorisierungscode oder Weiterleitungs-URL",
   "settings.provider.account.authorizationCodeHint": "Füge nach der Autorisierung die endgültige Weiterleitungs-URL oder den Code hier ein.",
   "settings.provider.account.deviceCode": "Bestätigungscode",

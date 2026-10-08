@@ -24,6 +24,7 @@ import {
   NavigationThemeProvider,
   paintingRouteId,
   paintingViewerHeaderShown,
+  paintingViewerRouteId,
 } from '@/frontend/appShell/navigation';
 import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/observability';
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
@@ -39,6 +40,7 @@ import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { LanguagePreferenceObserver } from '@/frontend/i18n';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 // Hold the native surface until the matching React Native startup cover has
 // committed its first layout.
@@ -156,7 +158,12 @@ function RootStack() {
           headerShown: false,
         }}
       />
-      <Stack.Screen name="files/[fileEntryId]" options={{ headerTransparent: false }} />
+      <Stack.Screen
+        // Reopening the file already on top reuses it, so a repeated tap cannot stack a copy.
+        getId={({ params }) => getSingleRouteParam(params?.fileEntryId)}
+        name="files/[fileEntryId]"
+        options={{ headerTransparent: false }}
+      />
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
       <Stack.Screen
         name="document-export"
@@ -180,6 +187,7 @@ function RootStack() {
         }}
       />
       <Stack.Screen
+        getId={({ params }) => paintingViewerRouteId(params)}
         name="paintings/[paintingId]"
         options={{
           // The viewer runs the image full-bleed, so its chrome sits on the

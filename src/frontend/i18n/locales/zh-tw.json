@@ -1438,6 +1438,7 @@
   "settings.profile.edit": "編輯個人資料",
   "settings.profile.setPrompt": "點擊設定頭像和用戶名",
   "settings.profile.userName": "使用者名稱",
+  "settings.profile.userNameSaveError": "使用者名稱儲存失敗",
   "settings.provider.account.authorizationCode": "授權碼或跳轉網址",
   "settings.provider.account.authorizationCodeHint": "在瀏覽器完成授權後，貼上最終跳轉網址或授權碼。",
   "settings.provider.account.deviceCode": "驗證碼",

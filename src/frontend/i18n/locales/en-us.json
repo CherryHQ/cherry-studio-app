@@ -1447,6 +1447,7 @@
   "settings.profile.edit": "Edit profile",
   "settings.profile.setPrompt": "Tap to set avatar and name",
   "settings.profile.userName": "User Name",
+  "settings.profile.userNameSaveError": "Failed to save user name",
   "settings.provider.account.authorizationCode": "Authorization code or redirect URL",
   "settings.provider.account.authorizationCodeHint": "After authorization, paste the final redirect URL or code here.",
   "settings.provider.account.deviceCode": "Verification code",

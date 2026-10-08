@@ -1447,6 +1447,7 @@
   "settings.profile.edit": "Επεξεργασία προφίλ",
   "settings.profile.setPrompt": "Πατήστε για να ορίσετε το avatar και το όνομα",
   "settings.profile.userName": "Όνομα χρήστη",
+  "settings.profile.userNameSaveError": "Αποτυχία αποθήκευσης ονόματος χρήστη",
   "settings.provider.account.authorizationCode": "Κωδικός εξουσιοδότησης ή URL ανακατεύθυνσης",
   "settings.provider.account.authorizationCodeHint": "Μετά την εξουσιοδότηση, επικολλήστε εδώ το τελικό URL ανακατεύθυνσης ή τον κωδικό.",
   "settings.provider.account.deviceCode": "Κωδικός επαλήθευσης",

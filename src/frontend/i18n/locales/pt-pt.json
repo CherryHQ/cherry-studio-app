@@ -1456,6 +1456,7 @@
   "settings.profile.edit": "Editar perfil",
   "settings.profile.setPrompt": "Toque para definir o avatar e o nome",
   "settings.profile.userName": "Nome de utilizador",
+  "settings.profile.userNameSaveError": "Falha ao guardar o nome de utilizador",
   "settings.provider.account.authorizationCode": "Código de autorização ou URL de redirecionamento",
   "settings.provider.account.authorizationCodeHint": "Após a autorização, cole aqui o URL de redirecionamento final ou o código.",
   "settings.provider.account.deviceCode": "Código de verificação",

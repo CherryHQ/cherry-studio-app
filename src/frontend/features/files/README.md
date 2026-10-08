@@ -19,7 +19,8 @@ for format behavior, limits, selection evidence and pending acceptance.
 - `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. The header offers
   sharing, saving to Photos, and system opening.
 - `FileTextViewer` reads at most 1 MiB plus one truncation-detection byte. Truncated HTML stays
-  in source view. Copy uses the displayed source text and explicitly says when it is partial;
+  in source view. `FileTextBody` renders plain text and source as a virtualized list of bounded
+  blocks from `splitTextBlocks`. Copy uses the displayed source text and explicitly says when it is partial;
   sharing always exports the complete original file.
 - `FileHtmlBody` loads strings through `react-native-webview`, with local file access and cookie
   sharing disabled, and no app message bridge. Web links leave through `openExternalUrl`; other

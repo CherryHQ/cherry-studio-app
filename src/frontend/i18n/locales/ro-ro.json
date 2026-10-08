@@ -1456,6 +1456,7 @@
   "settings.profile.edit": "Editați profilul",
   "settings.profile.setPrompt": "Atingeți pentru a seta avatarul și numele",
   "settings.profile.userName": "Nume utilizator",
+  "settings.profile.userNameSaveError": "Nu s-a salvat numele de utilizator",
   "settings.provider.account.authorizationCode": "Cod de autorizare sau URL de redirecționare",
   "settings.provider.account.authorizationCodeHint": "După autorizare, lipește aici URL-ul final de redirecționare sau codul.",
   "settings.provider.account.deviceCode": "Cod de verificare",
