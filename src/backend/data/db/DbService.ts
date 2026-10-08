@@ -9,7 +9,7 @@ import {
   databaseDirectory,
 } from '@/backend/data/storage/storagePaths';
 
-import { customSqlStatements } from './customSql';
+import { backfillSearchableText, customSqlStatements } from './customSql';
 import { migrations } from './migrations';
 import { type DatabaseSchema, schema } from './schemas';
 import { seedDatabase } from './seeding';
@@ -170,6 +170,15 @@ export class DbService extends BaseService {
 
     for (const statement of customSqlStatements) {
       this.sqlite.execSync(statement);
+    }
+    // Rows indexed by an older trigger body, including restored backups, may
+    // still hold source Markdown. A failure only degrades search, so startup
+    // continues and the unjournaled run repeats on the next launch.
+    try {
+      backfillSearchableText(this.sqlite);
+    } catch (error) {
+      logger.warn('Failed to backfill searchable message text', error as Error);
+      return;
     }
 
     const now = Date.now();

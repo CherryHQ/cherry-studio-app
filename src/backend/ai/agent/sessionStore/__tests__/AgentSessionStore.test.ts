@@ -9,7 +9,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import { v7 as uuidv7 } from 'uuid';
@@ -104,6 +104,10 @@ function makeSqliteHarness(): StoreHarness {
   let writeTail: Promise<void> = Promise.resolve();
   const dbService = {
     getDb: () => database,
+    getSqlite: () => ({
+      getAllAsync: async (query: string, params: SQLInputValue[]) =>
+        sqlite.prepare(query).all(...params),
+    }),
     withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
       const previous = writeTail;
       let release: () => void = () => undefined;
@@ -1823,6 +1827,14 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       assistantMessageId: reserved.assistantMessage.id,
       checkpoint: 'not-json',
     });
+    // The Host then replays full history, which must not decode the rejected checkpoint.
+    await expect(store.loadRuntimeTurnContext(session.id, null)).resolves.toMatchObject({
+      anchorFound: true,
+      history: [{ id: reserved.userMessage.id }, { id: reserved.assistantMessage.id }],
+    });
+    await expect(
+      store.forkSession({ sessionId: session.id, fromMessageId: reserved.assistantMessage.id }),
+    ).resolves.toMatchObject({ status: 'forked' });
   });
 
   test('keeps the inference snapshot after its selected model is deleted', async () => {

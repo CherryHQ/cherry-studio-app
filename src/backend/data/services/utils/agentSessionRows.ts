@@ -1,6 +1,11 @@
 import { loggerService } from '@logger';
+import { sql } from 'drizzle-orm';
 
-import type { AgentSessionMessageRow, AgentSessionRow } from '@/backend/data/db/schemas';
+import {
+  agentSessionMessageTable,
+  type AgentSessionMessageRow,
+  type AgentSessionRow,
+} from '@/backend/data/db/schemas';
 import {
   AgentMessageViewSchema,
   AgentSessionViewSchema,
@@ -38,7 +43,63 @@ export function toAgentSessionEntity(row: AgentSessionRow): AgentSessionEntity {
   });
 }
 
-export function toAgentMessageView(row: AgentSessionMessageRow): AgentMessageView {
+/**
+ * The columns a message view reads. Transcript reads select these instead of
+ * the whole row, leaving out the context checkpoint (up to 256 KiB), the turn
+ * error, and the search-index copy of the text.
+ */
+export const agentMessageViewColumns = {
+  id: agentSessionMessageTable.id,
+  sessionId: agentSessionMessageTable.sessionId,
+  turnId: agentSessionMessageTable.turnId,
+  role: agentSessionMessageTable.role,
+  status: agentSessionMessageTable.status,
+  data: agentSessionMessageTable.data,
+  usage: agentSessionMessageTable.usage,
+  stats: agentSessionMessageTable.stats,
+  modelId: agentSessionMessageTable.modelId,
+  messageSnapshot: agentSessionMessageTable.messageSnapshot,
+  createdAt: agentSessionMessageTable.createdAt,
+  updatedAt: agentSessionMessageTable.updatedAt,
+};
+
+export type AgentMessageViewRow = Pick<
+  AgentSessionMessageRow,
+  keyof typeof agentMessageViewColumns
+>;
+
+type AgentMessageViewSqlRow = Omit<
+  AgentMessageViewRow,
+  'data' | 'messageSnapshot' | 'stats' | 'usage'
+> & {
+  data: string;
+  messageSnapshot: string | null;
+  stats: string | null;
+  usage: string | null;
+};
+
+/** {@link agentMessageViewColumns} for raw SQL over `agent_session_message AS message`. */
+export const agentMessageViewSqlColumns = sql`message.id, message.session_id AS "sessionId",
+  message.turn_id AS "turnId", message.role, message.status, message.data, message.usage,
+  message.stats, message.model_id AS "modelId", message.message_snapshot AS "messageSnapshot",
+  message.created_at AS "createdAt", message.updated_at AS "updatedAt"`;
+
+/** Decodes the JSON columns of an {@link agentMessageViewSqlColumns} row, as Drizzle would. */
+export function fromAgentMessageViewSqlRow(row: AgentMessageViewSqlRow): AgentMessageViewRow {
+  return {
+    ...row,
+    data: JSON.parse(row.data) as AgentMessageViewRow['data'],
+    messageSnapshot: parseNullableJson(row.messageSnapshot),
+    stats: parseNullableJson(row.stats),
+    usage: parseNullableJson(row.usage),
+  };
+}
+
+function parseNullableJson<TValue>(value: string | null): TValue | null {
+  return value === null ? null : (JSON.parse(value) as TValue);
+}
+
+export function toAgentMessageView(row: AgentMessageViewRow): AgentMessageView {
   if (row.data.version !== 1) {
     throw new Error(`Unknown agent message data version: ${String(row.data.version)}`);
   }
@@ -64,7 +125,7 @@ export function toAgentMessageView(row: AgentSessionMessageRow): AgentMessageVie
  * contains the row, and retrying that read could never succeed.
  */
 export function toReadableAgentMessageViews(
-  rows: readonly AgentSessionMessageRow[],
+  rows: readonly AgentMessageViewRow[],
 ): AgentMessageView[] {
   return rows.flatMap((row) => {
     try {
