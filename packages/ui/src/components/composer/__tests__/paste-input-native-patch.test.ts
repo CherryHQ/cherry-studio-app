@@ -25,14 +25,41 @@ describe('expo-paste-input iOS clipboard patch', () => {
   });
 
   test('preserves raw GIFs and falls back asynchronously when a representation fails', () => {
-    const imageTypes = source.split('private let imageTypes = [')[1]?.split(']')[0];
-    expect(imageTypes).toMatch(/"com\.compuserve\.gif"[\s\S]*"public\.png"/);
+    expect(source).toContain('private static let gifTypes = ["com.compuserve.gif"');
+    expect(source).toContain('private static let imageTypes = gifTypes + [');
     expect(source).toContain('provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier)');
     expect(source).toContain('typeIdentifiers: typeIdentifiers.dropFirst()');
     expect(source).toContain('provider.loadObject(ofClass: UIImage.self)');
     expect(source).toContain('return .gif(data)');
     expect(source).toContain('case .gif(let data):');
     expect(source).toContain('writeTemporaryGIF(data)');
+  });
+
+  test('rejects corrupt or mislabelled GIF bytes before ending representation fallback', () => {
+    const loading = source
+      .split('private func loadImagePayload(')[1]
+      ?.split('private func enqueuePasteboardContent(')[0];
+    expect(loading).toMatch(
+      /mediaProcessingQueue\.async[\s\S]*if error == nil, let data,\s*!isGifRepresentation \|\| self\.isGIFData\(data\),\s*let imageSource = CGImageSourceCreateWithData[\s\S]*CGImageSourceGetCount\(imageSource\) > 0,[\s\S]*completion\(payload\)\s*\} else \{[\s\S]*typeIdentifiers: typeIdentifiers\.dropFirst\(\)/,
+    );
+    expect(loading).toContain('Self.gifTypes.contains(typeIdentifier)');
+    expect(loading).toContain('UTType(typeIdentifier)?.conforms(to: .gif) == true');
+  });
+
+  test('reserves consecutive paste batches at initiation and advances them in FIFO order', () => {
+    const enqueue = source
+      .split('private func enqueuePasteboardContent(')[1]
+      ?.split('private func processPasteboardContent(')[0];
+    expect(enqueue).toMatch(
+      /pendingPasteBatches\.append\(providers\)\s*if pendingPasteBatches\.count == 1 \{\s*processPasteboardContent/,
+    );
+    const processing = source
+      .split('private func processPasteboardContent(')[1]
+      ?.split('private func isGIFData(')[0];
+    expect(processing).toMatch(
+      /emitImagesAsync\(for: payloads\)[\s\S]*pendingPasteBatches\.removeFirst\(\)\s*if let nextProviders = pendingPasteBatches\.first \{\s*processPasteboardContent\(nextProviders\[/,
+    );
+    expect(processing).toContain('pasteGeneration == generation');
   });
 
   test('loads each image item once in clipboard order and keeps text insertion with the editor', () => {
@@ -48,8 +75,12 @@ describe('expo-paste-input iOS clipboard patch', () => {
       ?.split('private func sanitizeAttachments')[0];
     expect(emission).toMatch(/mediaProcessingQueue\.async[\s\S]*temporaryFileURIs/);
     expect(emission).toMatch(
-      /DispatchQueue\.main\.async[\s\S]*self\.isMonitoring, self\.textInputView === textInput[\s\S]*self\.emitImages/,
+      /DispatchQueue\.main\.async[\s\S]*self\.isMonitoring,\s*self\.textInputView === textInput, self\.pasteGeneration == generation[\s\S]*self\.emitImages/,
     );
     expect(source).toContain('guard isMonitoring, textInputView === textInput else');
+    const restoration = source
+      .split('private func restoreTextInput(_ view: UIView) {')[1]
+      ?.split('private func swizzleTextInputMethods(')[0];
+    expect(restoration).toMatch(/pasteGeneration \+= 1\s*pendingPasteBatches\.removeAll\(\)/);
   });
 });

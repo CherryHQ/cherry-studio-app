@@ -1,5 +1,5 @@
 diff --git a/ios/ExpoPasteInputView.swift b/ios/ExpoPasteInputView.swift
-index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851343e1a4d 100644
+index 39b2302ed42bdd56db6084e333b9581e08c18689..cdc243628d475c24d45fca026d6c251b12adc4e6 100644
 --- a/ios/ExpoPasteInputView.swift
 +++ b/ios/ExpoPasteInputView.swift
 @@ -2,6 +2,7 @@ import ExpoModulesCore
@@ -10,22 +10,39 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
  
  // Association key for storing the wrapper view reference on text input views
  private var textInputWrapperKey: UInt8 = 0
-@@ -38,8 +39,12 @@ class ExpoPasteInputView: ExpoView {
+@@ -33,13 +34,19 @@ class ExpoPasteInputView: ExpoView {
+   private let onPaste = EventDispatcher()
+   private let mediaProcessingQueue = DispatchQueue(label: "expo.modules.pasteinput.media-processing", qos: .userInitiated)
+   private var textInputView: UIView?
++  private var pendingPasteBatches: [[NSItemProvider]] = []
++  private var pasteGeneration = 0
+   private var isMonitoring: Bool = false
+   private var textDidChangeObserver: NSObjectProtocol?
    private weak var observedTextView: UITextView?
    private var isSanitizingAttachments: Bool = false
    private var originalAdaptiveImageGlyphSupport: Bool?
 -  private let gifTypes: Set<String> = ["com.compuserve.gif", "public.gif", "image/gif"]
 -  private let webpTypes: Set<String> = ["org.webmproject.webp", "public.webp", "image/webp"]
 +  // Prefer raw GIF representations before formats that flatten animation.
-+  private let imageTypes = [
-+    "com.compuserve.gif", "public.gif", "image/gif",
++  private static let gifTypes = ["com.compuserve.gif", "public.gif", "image/gif"]
++  private static let imageTypes = gifTypes + [
 +    "public.png", "public.jpeg", "public.tiff", "public.heic", "public.heif",
 +    "org.webmproject.webp", "public.webp", "image/webp", "public.image"
 +  ]
    // Track which classes have been swizzled (once per class, never unswizzle)
    private static var swizzledClasses: Set<String> = []
    
-@@ -251,94 +256,28 @@ class ExpoPasteInputView: ExpoView {
+@@ -156,6 +163,9 @@ class ExpoPasteInputView: ExpoView {
+   }
+   
+   private func restoreTextInput(_ view: UIView) {
++    pasteGeneration += 1
++    pendingPasteBatches.removeAll()
++
+     if #available(iOS 18.0, *),
+        let originalAdaptiveImageGlyphSupport {
+       setAdaptiveImageGlyphSupport(originalAdaptiveImageGlyphSupport, for: view)
+@@ -251,94 +261,28 @@ class ExpoPasteInputView: ExpoView {
              return
            }
            
@@ -85,12 +102,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 -              }
 -            }
 -            if hasImageData { break }
-+          // Snapshot providers only after the explicit paste action. Type metadata
-+          // does not synchronously fetch every clipboard representation (APP-19).
-+          let itemProviders = UIPasteboard.general.itemProviders
-+          let imageProviders = itemProviders.filter {
-+            !wrapper.imageTypeIdentifiers(for: $0).isEmpty || $0.canLoadObject(ofClass: UIImage.self)
-           }
+-          }
 -          
 -          // If we found potential image data, process it
 -          if hasImageData {
@@ -98,7 +110,12 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 -              wrapper.processPasteboardContent()
 -            }
 -            return // Don't call original paste for images
--          }
++          // Snapshot providers only after the explicit paste action. Type metadata
++          // does not synchronously fetch every clipboard representation (APP-19).
++          let itemProviders = UIPasteboard.general.itemProviders
++          let imageProviders = itemProviders.filter {
++            !wrapper.imageTypeIdentifiers(for: $0).isEmpty || $0.canLoadObject(ofClass: UIImage.self)
+           }
 -          
 -          // Fallback: check hasImages only if no image data found in items
 -          // This is safer as we've already checked for GIFs above
@@ -109,7 +126,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 -            return // Don't call original paste for images
 +
 +          if !imageProviders.isEmpty, let textInput = object as? UIView {
-+            wrapper.processPasteboardContent(imageProviders[...], payloads: [], textInput: textInput)
++            wrapper.enqueuePasteboardContent(imageProviders, textInput: textInput)
 +            return // Images are attachments, not inline editor content.
            }
 -          
@@ -135,7 +152,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
          }
          
          let blockIMP = imp_implementationWithBlock(unsafeBitCast(swizzledImplementation, to: AnyObject.self))
-@@ -551,15 +490,19 @@ class ExpoPasteInputView: ExpoView {
+@@ -551,15 +495,21 @@ class ExpoPasteInputView: ExpoView {
    }
  
    private func emitImagesAsync(for payloads: [MediaPayload]) {
@@ -143,6 +160,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 +    guard let textInput = textInputView, isMonitoring else {
 +      return
 +    }
++    let generation = pasteGeneration
 +
 +    mediaProcessingQueue.async { [weak self, weak textInput] in
        guard let self else {
@@ -154,11 +172,12 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 -      DispatchQueue.main.async { [weak self] in
 -        guard let self else {
 +      DispatchQueue.main.async { [weak self, weak textInput] in
-+        guard let self, let textInput, self.isMonitoring, self.textInputView === textInput else {
++        guard let self, let textInput, self.isMonitoring,
++              self.textInputView === textInput, self.pasteGeneration == generation else {
            return
          }
  
-@@ -700,149 +643,77 @@ class ExpoPasteInputView: ExpoView {
+@@ -700,149 +650,111 @@ class ExpoPasteInputView: ExpoView {
      return true
    }
    
@@ -242,11 +261,30 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 -        if let imageData = item[imageType] as? Data, !imageData.isEmpty, !isGIFData(imageData) {
 -          extractedPayload = .imageData(imageData)
 -          break
+-        }
+-        
+-        // Method 2: Use pasteboard API
+-        if extractedPayload == nil,
+-           let dataArray = pasteboard.data(forPasteboardType: imageType, inItemSet: singleItemSet),
+-           let imageData = dataArray.first,
+-           !imageData.isEmpty, !isGIFData(imageData) {
+-          extractedPayload = .imageData(imageData)
+-          break
+-        }
+-      }
+-      
+-      // Fallback: Try any non-GIF image data from the item dictionary
+-      if extractedPayload == nil {
+-        // Sort keys to have consistent ordering (prefer png, jpeg, then others)
+-        let sortedKeys = itemKeys.sorted { k1, k2 in
+-          let priority1 = k1.contains("png") ? 0 : (k1.contains("jpeg") || k1.contains("jpg") ? 1 : 2)
+-          let priority2 = k2.contains("png") ? 0 : (k2.contains("jpeg") || k2.contains("jpg") ? 1 : 2)
+-          return priority1 < priority2
 +  private func imageTypeIdentifiers(for provider: NSItemProvider) -> [String] {
 +    let registeredTypes = provider.registeredTypeIdentifiers
-+    let preferredTypes = imageTypes.filter { registeredTypes.contains($0) }
++    let preferredTypes = Self.imageTypes.filter { registeredTypes.contains($0) }
 +    let otherImageTypes = registeredTypes.filter {
-+      !imageTypes.contains($0) && UTType($0)?.conforms(to: .image) == true
++      !Self.imageTypes.contains($0) && UTType($0)?.conforms(to: .image) == true
 +    }
 +    return preferredTypes + otherImageTypes
 +  }
@@ -257,35 +295,11 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 +    completion: @escaping (MediaPayload?) -> Void
 +  ) {
 +    if let typeIdentifier = typeIdentifiers.first {
-+      provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] data, _ in
++      provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] data, error in
 +        guard let self else {
 +          completion(nil)
 +          return
          }
--        
--        // Method 2: Use pasteboard API
--        if extractedPayload == nil,
--           let dataArray = pasteboard.data(forPasteboardType: imageType, inItemSet: singleItemSet),
--           let imageData = dataArray.first,
--           !imageData.isEmpty, !isGIFData(imageData) {
--          extractedPayload = .imageData(imageData)
--          break
-+
-+        if let data, let payload = self.extractMediaPayload(fromData: data) {
-+          completion(payload)
-+        } else {
-+          self.loadImagePayload(from: provider, typeIdentifiers: typeIdentifiers.dropFirst(), completion: completion)
-         }
-       }
--      
--      // Fallback: Try any non-GIF image data from the item dictionary
--      if extractedPayload == nil {
--        // Sort keys to have consistent ordering (prefer png, jpeg, then others)
--        let sortedKeys = itemKeys.sorted { k1, k2 in
--          let priority1 = k1.contains("png") ? 0 : (k1.contains("jpeg") || k1.contains("jpg") ? 1 : 2)
--          let priority2 = k2.contains("png") ? 0 : (k2.contains("jpeg") || k2.contains("jpg") ? 1 : 2)
--          return priority1 < priority2
--        }
 -        
 -        for key in sortedKeys {
 -          // Skip GIF-related keys
@@ -297,26 +311,45 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 -          if let imageData = item[key] as? Data, imageData.count >= 6, !isGIFData(imageData) {
 -            extractedPayload = .imageData(imageData)
 -            break
--          }
++
++        // Validate on the media queue before accepting this representation, so
++        // corrupt bytes cannot prevent a usable PNG/UIImage fallback.
++        self.mediaProcessingQueue.async { [weak self] in
++          guard let self else {
++            completion(nil)
++            return
+           }
 -          
 -          // Try UIImage
 -          if let image = item[key] as? UIImage, image.size.width > 0, image.size.height > 0 {
 -            extractedPayload = .image(image)
 -            break
--          }
-+    } else if provider.canLoadObject(ofClass: UIImage.self) {
-+      provider.loadObject(ofClass: UIImage.self) { image, _ in
-+        if let image = image as? UIImage, image.size.width > 0, image.size.height > 0 {
-+          completion(.image(image))
-+        } else {
-+          completion(nil)
++
++          let isGifRepresentation = Self.gifTypes.contains(typeIdentifier) ||
++            UTType(typeIdentifier)?.conforms(to: .gif) == true
++          if error == nil, let data,
++             !isGifRepresentation || self.isGIFData(data),
++             let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
++             CGImageSourceGetCount(imageSource) > 0,
++             let payload = self.extractMediaPayload(fromData: data) {
++            completion(payload)
++          } else {
++            self.loadImagePayload(from: provider, typeIdentifiers: typeIdentifiers.dropFirst(), completion: completion)
+           }
          }
        }
 -      
 -      // Add the extracted static image
 -      if let payload = extractedPayload {
 -        staticImagePayloads.append(payload)
--      }
++    } else if provider.canLoadObject(ofClass: UIImage.self) {
++      provider.loadObject(ofClass: UIImage.self) { image, _ in
++        if let image = image as? UIImage, image.size.width > 0, image.size.height > 0 {
++          completion(.image(image))
++        } else {
++          completion(nil)
++        }
+       }
 +    } else {
 +      completion(nil)
      }
@@ -326,11 +359,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 -      staticImagePayloads.append(.image(image))
 +  }
 +
-+  private func processPasteboardContent(
-+    _ providers: ArraySlice<NSItemProvider>,
-+    payloads: [MediaPayload],
-+    textInput: UIView
-+  ) {
++  private func enqueuePasteboardContent(_ providers: [NSItemProvider], textInput: UIView) {
 +    guard isMonitoring, textInputView === textInput else {
 +      return
      }
@@ -340,16 +369,39 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 -    if mediaPayloads.isEmpty {
 -      // If we have neither GIFs nor images, treat as unsupported
 -      handleUnsupportedPaste()
++    // Reserve batch order when Paste is invoked, not when its provider finishes.
++    pendingPasteBatches.append(providers)
++    if pendingPasteBatches.count == 1 {
++      processPasteboardContent(providers[...], payloads: [], textInput: textInput, generation: pasteGeneration)
++    }
++  }
++
++  private func processPasteboardContent(
++    _ providers: ArraySlice<NSItemProvider>,
++    payloads: [MediaPayload],
++    textInput: UIView,
++    generation: Int
++  ) {
++    guard isMonitoring, textInputView === textInput, pasteGeneration == generation else {
+       return
+     }
+ 
+-    emitImagesAsync(for: mediaPayloads)
 +    guard let provider = providers.first else {
 +      if payloads.isEmpty {
 +        handleUnsupportedPaste()
 +      } else {
 +        emitImagesAsync(for: payloads)
 +      }
-       return
-     }
- 
--    emitImagesAsync(for: mediaPayloads)
++      // File writes are enqueued before the next batch starts; their serial
++      // worker and main-thread callbacks retain the same order.
++      pendingPasteBatches.removeFirst()
++      if let nextProviders = pendingPasteBatches.first {
++        processPasteboardContent(nextProviders[...], payloads: [], textInput: textInput, generation: generation)
++      }
++      return
++    }
++
 +    // Load one representation per item, preserving clipboard order without
 +    // duplicating GIFs as static images. No semaphore or synchronous data read.
 +    loadImagePayload(from: provider, typeIdentifiers: imageTypeIdentifiers(for: provider)[...]) { [weak self, weak textInput] payload in
@@ -358,7 +410,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
 +          return
 +        }
 +        let nextPayloads = payload.map { payloads + [$0] } ?? payloads
-+        self.processPasteboardContent(providers.dropFirst(), payloads: nextPayloads, textInput: textInput)
++        self.processPasteboardContent(providers.dropFirst(), payloads: nextPayloads, textInput: textInput, generation: generation)
 +      }
 +    }
    }
@@ -367,7 +419,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
    /// Detects if the given data is a GIF by checking for GIF87a or GIF89a header
    private func isGIFData(_ data: Data) -> Bool {
      guard data.count >= 6 else { return false }
-@@ -885,19 +756,25 @@ class ExpoPasteInputView: ExpoView {
+@@ -885,19 +797,27 @@ class ExpoPasteInputView: ExpoView {
      return "png"
    }
    
@@ -385,13 +437,15 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
      }
 -    
 -    // No text found - don't trigger unsupported, just ignore
++    let generation = pasteGeneration
 +
 +    provider.loadObject(ofClass: NSString.self) { [weak self, weak textInput] value, _ in
 +      guard let text = value as? String, !text.isEmpty else {
 +        return
 +      }
 +      DispatchQueue.main.async { [weak self, weak textInput] in
-+        guard let self, let textInput, self.isMonitoring, self.textInputView === textInput else {
++        guard let self, let textInput, self.isMonitoring,
++              self.textInputView === textInput, self.pasteGeneration == generation else {
 +          return
 +        }
 +        self.handleTextPaste(text)
@@ -403,7 +457,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..848f8884a6ed1516ce1f7f905642c851
    private func handleTextPaste(_ text: String) {
      onPaste([
        "type": "text",
-@@ -1013,15 +890,6 @@ class ExpoPasteInputView: ExpoView {
+@@ -1013,15 +933,6 @@ class ExpoPasteInputView: ExpoView {
      stopMonitoring()
      stopObservingTextView()
    }
