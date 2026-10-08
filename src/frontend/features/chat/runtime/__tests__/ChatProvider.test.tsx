@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import { AgentProtocolError, type AgentMessageView } from '@/shared/contracts/agent';
 
 import {
   ChatProvider,
@@ -11,6 +11,7 @@ import {
 } from '../ChatProvider';
 import { localImageResult } from '../localImageResult';
 
+const mockCancelTurn = jest.fn(async () => undefined);
 const mockDispose = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockPauseObservedSessions = jest.fn();
@@ -52,6 +53,7 @@ jest.mock('../AgentSessionChatClient', () => ({
     '../AgentSessionChatClient',
   ).isAgentSessionBusy,
   AgentSessionChatClient: jest.fn().mockImplementation(() => ({
+    cancelTurn: mockCancelTurn,
     dispose: mockDispose,
     pauseObservedSessions: mockPauseObservedSessions,
     resumeObservedSessions: mockResumeObservedSessions,
@@ -181,6 +183,7 @@ describe('ChatProvider Draft handoff', () => {
       const pending = currentControls().pendingSend!;
       const request = (sessionId ? mockSubmitMessage : mockStartSession).mock.calls[0][0];
       expect(pending.isSubmitting).toBe(true);
+      expect(currentControls().isBusy).toBe(true);
       expect(currentControls().canSend).toBe(false);
       expect(pending.sessionId).toBe(request.sessionId);
       expect(pending.messages.map((message) => message.id)).toEqual([
@@ -207,11 +210,41 @@ describe('ChatProvider Draft handoff', () => {
         isSubmitting: false,
         messages: pending.messages,
       });
+      expect(currentControls().isBusy).toBe(false);
       act(() => currentControls().completePendingSend(request.userMessageId));
       expect(currentControls().pendingSend).toBeUndefined();
       expect(currentControls().enteringUserMessageId).toBe(request.userMessageId);
     },
   );
+
+  it('stops first-message preparation by the pending session ID and restores the draft without navigation', async () => {
+    const admission = deferred<void>();
+    mockStartSession.mockImplementationOnce(() => admission.promise);
+    act(() => {
+      renderer = create(<Harness />);
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Hello' }] });
+    });
+    const pendingSessionId = currentControls().pendingSend!.sessionId;
+    await act(async () => {
+      await currentControls().cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenCalledWith(pendingSessionId);
+    await act(async () => {
+      const cancelled = expect(sending).rejects.toMatchObject({ name: 'AbortError' });
+      admission.reject(
+        new AgentProtocolError({ code: 'CANCELLED', message: 'Stopped', retryable: false }),
+      );
+      await cancelled;
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockSetParams).not.toHaveBeenCalled();
+  });
 
   it('withdraws a rejected send, keeps its scroll intent stable, and allows the next send', async () => {
     const admission = deferred<void>();

@@ -2766,6 +2766,51 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
+  test('cancels the Runtime turn when the Host fails handling its events', async () => {
+    let executionSignal: AbortSignal | undefined;
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      executionSignal = controller.signal;
+      controller.emit({
+        type: 'usage',
+        requestId: 'invocation:host-failure',
+        completedAt: 1_500,
+        context: USAGE_CONTEXT,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      });
+      await new Promise<void>((resolve) => {
+        controller.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    runtime.script((controller) => controller.emit({ type: 'completed' }));
+    usage.record.mockImplementationOnce(() => {
+      throw new Error('usage ledger unavailable');
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Fail in the Host.' }],
+    });
+    await waitFor(
+      () => host.getSessionStatus(session.id)?.status === 'failed',
+      'the Host failure to settle',
+    );
+
+    expect(executionSignal?.aborted).toBe(true);
+    // The Runtime session's single execute slot is free for the next turn.
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Next turn.' }],
+    });
+    await waitFor(
+      () => host.getSessionStatus(session.id)?.status === 'completed',
+      'the next turn to complete',
+    );
+  });
+
   test('background interruption preserves partial output and waits for failed turn persistence', async () => {
     const started = createDeferred();
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
@@ -2887,6 +2932,111 @@ describe('MobileAgentHost', () => {
     ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
     await expect(store.listMessages(session.id)).resolves.toEqual([]);
     releaseAdmission.resolve();
+  });
+
+  test('cancels a submission still in admission without reserving or running a turn', async () => {
+    const admissionStarted = createDeferred();
+    const releaseAdmission = createDeferred();
+    const host = hostWithText(['After cancel']);
+    const session = await createStoredSession();
+    const getSession = store.getSession.bind(store);
+    jest.spyOn(store, 'getSession').mockImplementationOnce(async (sessionId) => {
+      admissionStarted.resolve();
+      await releaseAdmission.promise;
+      return getSession(sessionId);
+    });
+
+    const submission = host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Stop while preparing.' }],
+    });
+    await admissionStarted.promise;
+    // Admission has no turn id yet, so cancelling a turn cannot reach it.
+    await host.cancelSubmission({ sessionId: session.id });
+
+    await expect(submission).rejects.toMatchObject({ view: { code: 'CANCELLED' } });
+    await expect(host.cancelSubmission({ sessionId: session.id })).resolves.toBeUndefined();
+    releaseAdmission.resolve();
+    await expect(store.listMessages(session.id)).resolves.toEqual([]);
+    expect(host.getSessionStatus(session.id)).toBeNull();
+
+    // The Session is idle again and the next submission runs normally.
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Send again.' }],
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'success',
+      'the next turn to settle',
+    );
+  });
+
+  test('settles a turn as cancelled when cancellation lands during reservation', async () => {
+    const reservationStarted = createDeferred();
+    const releaseReservation = createDeferred();
+    const executed = jest.fn();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async () => {
+      executed();
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const reserve = store.reserveSubmission.bind(store);
+    jest.spyOn(store, 'reserveSubmission').mockImplementationOnce(async (input) => {
+      reservationStarted.resolve();
+      await releaseReservation.promise;
+      return reserve(input);
+    });
+
+    const submission = host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Stop while reserving.' }],
+    });
+    await reservationStarted.promise;
+    await host.cancelSubmission({ sessionId: session.id });
+    releaseReservation.resolve();
+
+    const { turnId } = await submission;
+    await waitFor(
+      () => host.getSessionStatus(session.id)?.status === 'cancelled',
+      'the reserved turn to settle',
+    );
+    expect(host.getSessionStatus(session.id)).toEqual({ status: 'cancelled', turnId });
+    expect((await store.listMessages(session.id))[1]?.status).toBe('cancelled');
+    expect(executed).not.toHaveBeenCalled();
+  });
+
+  test('cancels a Draft start still in admission without creating its Session', async () => {
+    const admissionStarted = createDeferred();
+    const releaseAdmission = createDeferred();
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      noOpNaming,
+      noFiles,
+      noOpTools,
+      async (model) => {
+        admissionStarted.resolve();
+        await releaseAdmission.promise;
+        return inferenceModel(model);
+      },
+    );
+    const sessionId = uuidv7();
+
+    const start = host.startSession({
+      sessionId,
+      ...messageIds(),
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+      parts: [{ type: 'text', text: 'Stop the first send.' }],
+    });
+    await admissionStarted.promise;
+    await host.cancelSubmission({ sessionId });
+
+    await expect(start).rejects.toMatchObject({ view: { code: 'CANCELLED' } });
+    releaseAdmission.resolve();
+    await expect(store.getSession(sessionId)).resolves.toBeNull();
   });
 
   test('updates an active background reply when its Session is renamed', async () => {
