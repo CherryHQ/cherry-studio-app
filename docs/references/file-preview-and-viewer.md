@@ -31,9 +31,11 @@ CherryUI's renderer vocabulary remains an open string so plugin registration rem
 | `markdown` | `text/markdown` | In-app Markdown reader |
 | `html` | `text/html` | In-app rendered HTML page |
 | `text` | Remaining `text/*`, JSON, XML, YAML | In-app text reader |
-| `document` | Remaining types, including PDF and Office | Platform viewer |
+| `document` | PDF, DOCX, PPTX, XLSX | In-app document viewer |
+| `document` | Remaining types, including legacy Office, ODF and RTF | Platform viewer |
 
-`useOpenFileEntry` owns the decision. The composer, user-message attachments, assistant outputs,
+`canPreviewDocument` selects the in-app document types by the same normalized media type; the kind
+vocabulary does not change. `useOpenFileEntry` owns the decision. The composer, user-message attachments, assistant outputs,
 and library tiles all enter through `FileEntryPreview`. The library's existing Images/Documents
 filter groups the classifier's results; it does not introduce one filter tab per viewer kind.
 
@@ -87,6 +89,53 @@ vertically. Pinch/pan/double-tap zoom keeps the original page pixels. Large sing
 viewport-sized browser displaying the actual file, avoiding a full-height native Image drawable;
 browser decoding limits still apply. The export page reuses this reader.
 
+
+### Document
+
+PDF and Office Open XML documents render with `@cherrystudio/file-preview` inside a WebView. The
+package owns rendering, toolbars, zoom, selection and touch gestures inside the document; the app
+owns file access, the WebView container, theme, locale, logging and system opening. Behavior the
+app needs changed inside a document is requested from the package as an option, never patched or
+detected by platform in the app.
+
+[`@cherrystudio/file-preview-webview`](../../packages/file-preview-webview/README.md) builds the
+page: one inline HTML string with both workers, plus pdf.js CMaps and fonts in one byte-range
+asset. Both are generated on install and shipped as Metro assets. The page loads from a string with
+the reserved base URL `https://file-preview.local/`; an opaque `about:blank` origin cannot start
+the package's module workers from blob URLs.
+
+Bytes cross a minimal bridge. Each page `open` holds its own read-only `FileHandle`; `size` comes
+from that handle and `revision` is the entry's `updatedAt`. Reads return exactly the requested
+range as base64 chunks of at most 1 MiB and fail on short reads, size changes, cancellation and
+closed documents. DOCX, PPTX, XLSX and images request the whole file; PDF requests ranges.
+
+This page is application code, not uncontrolled content, so its container contract differs from
+HTML's:
+
+- Load `source={{ html, baseUrl: 'https://file-preview.local/' }}`. The origin is never fetched,
+  and the page's CSP restricts scripts, styles, workers, images and fonts to inline, `blob:` and
+  `data:` sources, so rendered documents cannot reach the network.
+- Keep `allowFileAccess`, `allowFileAccessFromFileURLs` and `allowUniversalAccessFromFileURLs`
+  disabled, incognito mode on, and cookie sharing off.
+- Accept page messages only from the reserved origin (Android reports it without the trailing
+  slash) and only after schema validation. The bridge can
+  read the current entry's bytes and bundled PDF resources, log diagnostics and request system
+  opening; it exposes nothing else.
+- Allow only the page itself and its anchors. HTTP/HTTPS links leave through `openExternalUrl`;
+  other schemes, other paths on the reserved origin and embedded-frame navigations are blocked.
+- The page frame does not scroll or zoom: the viewport disables page scaling, Android built-in zoom
+  is off, and iOS page scrolling, bouncing and automatic content insets are off. The package's
+  panes scroll and pinch, and `--file-preview-bottom-inset` reserves the bottom safe area.
+- Content-process termination or a load failure replaces the page with Retry and Open file with.
+
+Dark mode adds the package's `dark` class; `--background`, `--foreground`, `--primary`, `--border`,
+`--border-subtle` and `--ring` use the same app tokens, `--muted` uses `secondary` (HeroUI reserves
+`muted`) and `--muted-foreground` uses `muted-foreground`. Toolbar buttons are 44 points and the
+trailing inset is the bottom safe area. The locale is the resolved app language.
+
+`onRequestOpen('too_large')` opens the system viewer; `unsupported` replaces the page with the
+platform viewer state instead of launching another app on its own. Images keep the native image
+viewer, which already zooms, saves to Photos and pages exported documents.
 
 ### Markdown And Text
 
@@ -164,6 +213,8 @@ no incoming-share extension is enabled.
 
 ## Native Acceptance Still Required
 
+The document viewer adds no native dependency; it reuses `react-native-webview`.
+
 The two new native dependencies are `expo-sharing` and `react-native-webview`. A development-client
 rebuild is required before acceptance; a JavaScript reload alone cannot add these native modules.
 
@@ -179,10 +230,13 @@ Acceptance should cover both light and dark themes, concentrating on Android's f
 5. Share a file with a Chinese display name and confirm the recipient can read its complete bytes.
 6. Retain iOS Quick Look and Android chooser behavior for unsupported document types; verify
    permission denial, unavailable handlers, and native back from each viewer.
+7. Open PDF, DOCX, PPTX and XLSX in both themes. Pinch PDF and DOCX while one-finger scrolling
+   stays intact, tap and swipe XLSX cells, open a 24 MiB DOCX/PPTX, an over-limit file and a
+   corrupted file, and confirm the back gesture still leaves the viewer.
 
 ## Deferred
 
-Text excerpt cards, PDF/Office rendering, audio/video players, source-code highlighting, CSV table
+Text excerpt cards, legacy Office/ODF/RTF rendering, audio/video players, source-code highlighting, CSV table
 rendering, and Markdown rendered/source switching are separate follow-ups. `write_file` policy is
 unchanged. The first implementation delivers opening, reading, rendered HTML, and export.
 
