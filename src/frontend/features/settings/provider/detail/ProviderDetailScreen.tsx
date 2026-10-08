@@ -122,10 +122,10 @@ function ProviderDetailSettings({
   const management = useProviderModelManagement(providerId, managedModels, listedModels);
   const isModelListFiltered = isModelSearchActive || effectiveModelPurpose !== 'all';
   const showsModelPurposeTabs = hasMultipleProviderModelPurposes(modelPurposeCounts);
-  const isSaving = configuration.value?.isBusy ?? false;
+  const isConfigurationBusy = configuration.value?.isBusy ?? false;
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: false,
-    isSaving: isSaving || management.isDeleting,
+    isSaving: configuration.isSaving || management.isDeleting,
   });
   const { isDeleting, requestDelete } = useProviderDeletion({ onBeforeDismiss: allowNavigation });
   const handleDelete = useCallback(() => {
@@ -157,7 +157,7 @@ function ProviderDetailSettings({
     () => [
       {
         accessibilityLabel: t('settings.provider.models.syncTitle'),
-        disabled: !provider || isPreparing || isSaving || management.isDeleting,
+        disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
         icon: RefreshCwIcon,
         key: 'sync-provider-models',
         onPress: startModelSync,
@@ -165,7 +165,7 @@ function ProviderDetailSettings({
       },
       {
         accessibilityLabel: t('settings.provider.models.addTitle'),
-        disabled: !provider || isPreparing || isSaving || management.isDeleting,
+        disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
         icon: PlusIcon,
         key: 'add-provider-model',
         onPress: openModelAddSettings,
@@ -173,8 +173,8 @@ function ProviderDetailSettings({
       },
     ],
     [
+      isConfigurationBusy,
       isPreparing,
-      isSaving,
       management.isDeleting,
       openModelAddSettings,
       startModelSync,
@@ -184,7 +184,7 @@ function ProviderDetailSettings({
   );
   const handleTabChange = useCallback(
     (tab: ProviderDetailTab) => {
-      if (isSaving || management.isSelecting || management.isDeleting) {
+      if (isConfigurationBusy || management.isSelecting || management.isDeleting) {
         return;
       }
 
@@ -192,7 +192,13 @@ function ProviderDetailSettings({
       setModelPurpose('all');
       router.setParams({ tab });
     },
-    [isSaving, management.isDeleting, management.isSelecting, router, setModelSearchText],
+    [
+      isConfigurationBusy,
+      management.isDeleting,
+      management.isSelecting,
+      router,
+      setModelSearchText,
+    ],
   );
   if (providerQuery.isError) {
     return <Redirect href="/settings/provider" />;

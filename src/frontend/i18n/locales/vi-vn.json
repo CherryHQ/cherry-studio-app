@@ -1459,6 +1459,7 @@
   "settings.provider.account.signInSupported": "Hỗ trợ đăng nhập tài khoản (OAuth)",
   "settings.provider.account.title": "Tài khoản {{name}}",
   "settings.provider.actions.add": "Thêm nhà cung cấp mô hình",
+  "settings.provider.add.avatarSaveFailed": "Đã tạo nhà cung cấp nhưng chưa lưu được hình đại diện.",
   "settings.provider.add.endpoint.anthropic": "Thông Điệp Nhân Loại",
   "settings.provider.add.endpoint.gemini": "Google Song Tử",
   "settings.provider.add.endpoint.imageEdit": "URL cơ sở chỉnh sửa hình ảnh",
