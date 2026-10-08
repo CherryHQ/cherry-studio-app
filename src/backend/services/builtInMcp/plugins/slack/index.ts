@@ -1,0 +1,1 @@
+export { slackPlugin } from './slackPlugin';
