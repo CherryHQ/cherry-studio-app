@@ -1,5 +1,6 @@
 import type { ListToolsResult } from '@ai-sdk/mcp';
 
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import { PluginError } from '@/shared/contracts/plugins';
 
 import type { PluginClient, PluginClientContext } from '../../pluginDefinition';
@@ -32,7 +33,7 @@ export async function createFeishuClient(context: PluginClientContext): Promise<
   function operationSignal(caller?: AbortSignal) {
     if (lifetime.signal.aborted) throw new PluginError('cancelled', 'Feishu client closed.');
     // The initialization deadline is not the lifetime of later calls.
-    return caller ? AbortSignal.any([caller, lifetime.signal]) : lifetime.signal;
+    return linkAbortSignals([lifetime.signal, ...(caller ? [caller] : [])]);
   }
 
   async function grantedTools(signal: AbortSignal) {
@@ -82,99 +83,114 @@ export async function createFeishuClient(context: PluginClientContext): Promise<
       return discoveryWarnings;
     },
     async listTools(input) {
-      const signal = operationSignal(input?.options?.signal);
-      signal.throwIfAborted();
-      discoveryWarnings = [];
-      const allowed = await grantedTools(signal);
-      if (Object.keys(allowed).length === 0)
-        throw new PluginError('access', 'Feishu has no permitted tools. Update its authorization.');
-      const localTools = [...FEISHU_API_TOOLS.values()]
-        .filter((tool) => Object.hasOwn(allowed, tool.definition.name))
-        .map((tool) => tool.definition);
-      if (!Object.keys(allowed).some((name) => Object.hasOwn(FEISHU_REMOTE_TOOL_POLICY, name)))
-        return { tools: localTools };
-
-      const deadline = new AbortController();
-      const timer = setTimeout(() => deadline.abort(), REMOTE_DISCOVERY_TIMEOUT_MS);
-      const remoteSignal = AbortSignal.any([signal, deadline.signal]);
+      const linked = operationSignal(input?.options?.signal);
+      const { signal } = linked;
       try {
-        const client = await getRemote(remoteSignal);
-        const tools: ListToolsResult['tools'] = [];
-        const names = new Set<string>();
-        const cursors = new Set<string>();
-        let cursor: string | undefined;
-        // Collect hosted pages within their own deadline, then publish one complete local page.
-        while (true) {
-          const page = await client.listTools({
-            options: { signal: remoteSignal },
-            ...(cursor ? { params: { cursor } } : {}),
-          });
-          remoteSignal.throwIfAborted();
-          for (const tool of page.tools) {
-            if (
-              !Object.hasOwn(allowed, tool.name) ||
-              !Object.hasOwn(FEISHU_REMOTE_TOOL_POLICY, tool.name)
-            )
-              continue;
-            if (names.has(tool.name))
-              throw new PluginError('request', 'Feishu returned duplicate document tools.');
-            names.add(tool.name);
-            tools.push(tool);
-          }
-          if (!page.nextCursor) break;
-          if (cursors.has(page.nextCursor))
-            throw new PluginError('request', 'Feishu repeated a document tool page.');
-          cursors.add(page.nextCursor);
-          cursor = page.nextCursor;
-        }
-        if (tools.length === 0)
-          throw new PluginError('unavailable', 'Feishu returned no authorized document tools.');
-        return { tools: [...tools, ...localTools] };
-      } catch (error) {
         signal.throwIfAborted();
-        const failed = remote;
-        remote = undefined;
-        // Closing a failed hosted transport must not hold up the independent local catalog.
-        if (failed) retire(failed);
-        if (localTools.length === 0) throw error;
-        const reason = deadline.signal.aborted
-          ? 'timeout'
-          : error instanceof PluginError
-            ? error.reason
-            : 'unavailable';
-        discoveryWarnings = [
-          `Feishu document tools and people lookup could not be loaded (${reason}).`,
-        ];
-        return { tools: localTools };
+        discoveryWarnings = [];
+        const allowed = await grantedTools(signal);
+        if (Object.keys(allowed).length === 0)
+          throw new PluginError(
+            'access',
+            'Feishu has no permitted tools. Update its authorization.',
+          );
+        const localTools = [...FEISHU_API_TOOLS.values()]
+          .filter((tool) => Object.hasOwn(allowed, tool.definition.name))
+          .map((tool) => tool.definition);
+        if (!Object.keys(allowed).some((name) => Object.hasOwn(FEISHU_REMOTE_TOOL_POLICY, name)))
+          return { tools: localTools };
+
+        const deadline = new AbortController();
+        const timer = setTimeout(() => deadline.abort(), REMOTE_DISCOVERY_TIMEOUT_MS);
+        const discovery = linkAbortSignals([signal, deadline.signal]);
+        const remoteSignal = discovery.signal;
+        try {
+          const client = await getRemote(remoteSignal);
+          const tools: ListToolsResult['tools'] = [];
+          const names = new Set<string>();
+          const cursors = new Set<string>();
+          let cursor: string | undefined;
+          // Collect hosted pages within their own deadline, then publish one complete local page.
+          while (true) {
+            const page = await client.listTools({
+              options: { signal: remoteSignal },
+              ...(cursor ? { params: { cursor } } : {}),
+            });
+            remoteSignal.throwIfAborted();
+            for (const tool of page.tools) {
+              if (
+                !Object.hasOwn(allowed, tool.name) ||
+                !Object.hasOwn(FEISHU_REMOTE_TOOL_POLICY, tool.name)
+              )
+                continue;
+              if (names.has(tool.name))
+                throw new PluginError('request', 'Feishu returned duplicate document tools.');
+              names.add(tool.name);
+              tools.push(tool);
+            }
+            if (!page.nextCursor) break;
+            if (cursors.has(page.nextCursor))
+              throw new PluginError('request', 'Feishu repeated a document tool page.');
+            cursors.add(page.nextCursor);
+            cursor = page.nextCursor;
+          }
+          if (tools.length === 0)
+            throw new PluginError('unavailable', 'Feishu returned no authorized document tools.');
+          return { tools: [...tools, ...localTools] };
+        } catch (error) {
+          signal.throwIfAborted();
+          const failed = remote;
+          remote = undefined;
+          // Closing a failed hosted transport must not hold up the independent local catalog.
+          if (failed) retire(failed);
+          if (localTools.length === 0) throw error;
+          const reason = deadline.signal.aborted
+            ? 'timeout'
+            : error instanceof PluginError
+              ? error.reason
+              : 'unavailable';
+          discoveryWarnings = [
+            `Feishu document tools and people lookup could not be loaded (${reason}).`,
+          ];
+          return { tools: localTools };
+        } finally {
+          clearTimeout(timer);
+          discovery.dispose();
+        }
       } finally {
-        clearTimeout(timer);
+        linked.dispose();
       }
     },
     async callTool(input) {
-      const signal = operationSignal(input.options?.abortSignal);
-      signal.throwIfAborted();
-      if (!Object.hasOwn(context.tools, input.name))
-        throw new PluginError('access', 'The Feishu tool is not admitted.');
-      const local = FEISHU_API_TOOLS.get(input.name);
-      if (local) return callFeishuOpenApi(context, local, input.args, signal);
-      if (Object.hasOwn(FEISHU_REMOTE_TOOL_POLICY, input.name)) {
-        const allowed = await grantedTools(signal);
-        if (!Object.hasOwn(allowed, input.name))
-          throw new PluginError('access', 'Update Feishu authorization to use this tool.');
-        const client = await getRemote(signal);
-        calls.set(client, (calls.get(client) ?? 0) + 1);
-        try {
-          return await client.callTool({ ...input, options: { abortSignal: signal } });
-        } finally {
-          const remaining = calls.get(client)! - 1;
-          if (remaining > 0) calls.set(client, remaining);
-          else {
-            calls.delete(client);
-            if (retired.delete(client)) void client.close().catch(() => undefined);
+      const linked = operationSignal(input.options?.abortSignal);
+      const { signal } = linked;
+      try {
+        signal.throwIfAborted();
+        if (!Object.hasOwn(context.tools, input.name))
+          throw new PluginError('access', 'The Feishu tool is not admitted.');
+        const local = FEISHU_API_TOOLS.get(input.name);
+        if (local) return await callFeishuOpenApi(context, local, input.args, signal);
+        if (Object.hasOwn(FEISHU_REMOTE_TOOL_POLICY, input.name)) {
+          const allowed = await grantedTools(signal);
+          if (!Object.hasOwn(allowed, input.name))
+            throw new PluginError('access', 'Update Feishu authorization to use this tool.');
+          const client = await getRemote(signal);
+          calls.set(client, (calls.get(client) ?? 0) + 1);
+          try {
+            return await client.callTool({ ...input, options: { abortSignal: signal } });
+          } finally {
+            const remaining = calls.get(client)! - 1;
+            if (remaining > 0) calls.set(client, remaining);
+            else {
+              calls.delete(client);
+              if (retired.delete(client)) void client.close().catch(() => undefined);
+            }
           }
         }
+        throw new PluginError('access', 'The Feishu tool is not admitted.');
+      } finally {
+        linked.dispose();
       }
-      throw new PluginError('access', 'The Feishu tool is not admitted.');
     },
     close() {
       if (!closing) {

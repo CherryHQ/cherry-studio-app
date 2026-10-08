@@ -35,5 +35,6 @@ short/literal-wildcard searches inspect at most 500 candidates per page, indexed
 Reaching that budget returns the last scanned position even if there are no matches. Only an
 exhausted source drops its continuation. Batches advance by `(created_at, id)`, without OFFSET.
 
-Visible-text filtering preserves fenced and inline code. Snippets collapse lines and include the
+The index stores visible text, so indexed terms never scan the FTS table; visible-text filtering
+preserves fenced and inline code. Snippets collapse lines and include the
 earliest keyword instead of starting with a separate context-only or ellipsis line.

@@ -142,7 +142,7 @@ export class JobRuntime extends BaseService {
 // src/backend/core/application/serviceRegistry.ts
 export const services = {
   ResourceScopeCoordinator, CacheService, DbService, PreferenceService,
-  BackgroundActivityEnvironment, AndroidBackgroundActivityRuntime, AudioKeepAliveSource,
+  BackgroundActivityEnvironment, AndroidBackgroundActivityRuntime, IosBackgroundExecutionSource,
   KeepAliveCoordinator, BackgroundActivityManager, BackgroundReplyRuntime, WebSearchService,
   McpRuntimeService,
   AiService, AgentSessionStore, MobileAgentHost, JobHandlerRegistry, JobRuntime,

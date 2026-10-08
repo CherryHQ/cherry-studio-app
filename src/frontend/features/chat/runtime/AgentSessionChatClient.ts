@@ -523,7 +523,8 @@ export class AgentSessionChatClient {
         if (event.message.role === 'user') {
           this.options.onSessionChanged?.(entry.state.sessionId);
         }
-        this.options.onTranscriptChanged?.(entry.state.sessionId);
+        // The live overlay already shows a created row; finalization refreshes
+        // the durable transcript once the turn's rows have settled.
         return;
       case 'message.delta': {
         if (event.delta.op === 'tool.input.preview') {

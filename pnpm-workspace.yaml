@@ -65,7 +65,6 @@ patchedDependencies:
   '@openrouter/ai-sdk-provider@2.10.0': patches/@openrouter__ai-sdk-provider@2.10.0.patch
   ollama-ai-provider-v2@3.3.1: patches/ollama-ai-provider-v2@3.3.1.patch
   ai@6.0.185: patches/ai@6.0.185.patch
-  react-native-nitro-healthkit@1.0.0: patches/react-native-nitro-healthkit@1.0.0.patch
   react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
   expo-router@57.0.20: patches/expo-router@57.0.20.patch
   react-native-enriched-markdown@1.0.1: patches/react-native-enriched-markdown@1.0.1.patch
@@ -81,6 +80,7 @@ patchedDependencies:
   react-native-streamdown@0.2.0: patches/react-native-streamdown@0.2.0.patch
   expo-observe@57.0.20: patches/expo-observe@57.0.20.patch
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
+  drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
 
 minimumReleaseAgeExclude:
   - '@cherrystudio/ai-core@2.1.0'

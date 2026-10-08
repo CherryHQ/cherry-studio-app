@@ -71,13 +71,14 @@ The message list receives a chronological presentation sequence from two sources
 
 `localConversationView` maps protocol parts and statuses into `ConversationMessage` values using
 `agentMessageProjection`. `useAgentMessageHistoryWindow` owns the Session-keyed infinite query,
-older/newer pagination and its Query cache lifetime, so leaving and re-entering the chat shows the
-loaded pages again. `useLocalConversation` merges that history with live rows by message id and
+older/newer pagination and its Query cache lifetime, so leaving and re-entering the chat within the
+five-minute freshness window shows the loaded pages again. `useLocalConversation` merges that history with live rows by message id and
 hands each persisted page back to the client, which drops live copies once they are persisted.
 Older search windows exclude live rows until their newer edge reaches the current transcript. The
 renderer receives presentation values rather than protocol DTOs.
 
-When a message is created or finalized, the frontend invalidates the transcript query in place.
+When a message is finalized, the frontend invalidates the transcript query in place; a created
+message is already visible through the live projection until then.
 When a turn reaches a terminal status, it also invalidates Session list/detail queries. Stable
 message ids keep query refreshes from creating duplicate rows. The desktop route has a different
 problem, a history revision that lags the live stream, and keeps its own revisioned window and

@@ -139,7 +139,7 @@ private final class DesktopBrowser: NSObject, NetServiceBrowserDelegate, NetServ
   private func publish(_ service: NetService) {
     guard browser != nil, let id = services.first(where: { $0.value === service })?.key,
       let data = service.txtRecordData(), data.count <= 512 else { return }
-    let txt = NetService.dictionary(fromTXTRecord: data).compactMapValues { String(data: $0, encoding: .utf8) }
+    let txt = parseTXTRecord(data)
     let hosts = (service.addresses ?? []).prefix(16).compactMap { data -> String? in
       data.withUnsafeBytes { raw in
         guard let base = raw.baseAddress, data.count >= MemoryLayout<sockaddr>.size else { return nil }
@@ -150,5 +150,28 @@ private final class DesktopBrowser: NSObject, NetServiceBrowserDelegate, NetServ
       }
     }
     emit(["type": "service", "id": id, "txt": txt, "hosts": hosts, "port": service.port])
+  }
+
+  // NetService.dictionary(fromTXTRecord:) bridges a value-less key as NSNull, which traps
+  // when Swift reads it as Data. Parse the RFC 6763 entries directly instead.
+  private func parseTXTRecord(_ data: Data) -> [String: String] {
+    var txt: [String: String] = [:]
+    var index = data.startIndex
+    while index < data.endIndex {
+      let start = index + 1
+      let end = start + Int(data[index])
+      guard end <= data.endIndex else { break }
+      index = end
+      let entry = data[start..<end]
+      let separator = entry.firstIndex(of: UInt8(ascii: "="))
+      guard let key = String(data: entry[..<(separator ?? end)], encoding: .utf8), !key.isEmpty,
+        txt[key] == nil else { continue }
+      if let separator {
+        if let value = String(data: entry[(separator + 1)...], encoding: .utf8) { txt[key] = value }
+      } else {
+        txt[key] = ""
+      }
+    }
+    return txt
   }
 }

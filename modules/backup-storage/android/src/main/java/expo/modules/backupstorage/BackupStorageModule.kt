@@ -5,12 +5,15 @@ import android.net.Uri
 import android.os.Process
 import android.system.Os
 import android.system.OsConstants
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val backupProcessId = UUID.randomUUID().toString()
 private val controlLock = Any()
@@ -56,22 +59,27 @@ class BackupStorageModule : Module() {
         flush(requireNotNull(parent.parentFile))
       }
     }
-    AsyncFunction("hashFile") { uri: String ->
-      val digest = MessageDigest.getInstance("SHA-256")
-      privateFile(uri).inputStream().buffered().use { stream ->
-        val bytes = ByteArray(262144)
-        while (true) {
-          val size = stream.read(bytes)
-          if (size < 0) break
-          digest.update(bytes, 0, size)
+    // Plain AsyncFunctions share one serial thread with every Expo module.
+    AsyncFunction("hashFile") Coroutine { uri: String ->
+      withContext(Dispatchers.IO) {
+        val digest = MessageDigest.getInstance("SHA-256")
+        privateFile(uri).inputStream().buffered().use { stream ->
+          val bytes = ByteArray(262144)
+          while (true) {
+            val size = stream.read(bytes)
+            if (size < 0) break
+            digest.update(bytes, 0, size)
+          }
         }
+        digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
       }
-      digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
-    AsyncFunction("sealDirectory") { uri: String ->
-      val root = privateFile(uri)
-      seal(root)
-      flush(requireNotNull(root.parentFile))
+    AsyncFunction("sealDirectory") Coroutine { uri: String ->
+      withContext(Dispatchers.IO) {
+        val root = privateFile(uri)
+        seal(root)
+        flush(requireNotNull(root.parentFile))
+      }
     }
   }
 

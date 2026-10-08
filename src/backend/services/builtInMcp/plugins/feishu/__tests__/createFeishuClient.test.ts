@@ -1,6 +1,7 @@
 import { HttpError } from '@/backend/services/http';
 import { PluginError } from '@/shared/contracts/plugins';
 
+import { trackExpoAbortSignals } from '../../../authorization/__tests__/_expoAbortSignal';
 import type { PluginClient, PluginClientContext } from '../../../pluginDefinition';
 import { createOfficialMcpClient } from '../../../transport/createOfficialMcpClient';
 import { createFeishuClient } from '../createFeishuClient';
@@ -449,3 +450,33 @@ it('does not disguise an aborted discovery as a successful partial catalog', asy
   await expect(client.listTools({ options: { signal: caller.signal } })).rejects.toThrow();
   expect(client.discoveryWarnings).toEqual([]);
 });
+
+it.each([false, true])(
+  'releases settled discovery/call listeners and timers while the client remains open (caller: %s)',
+  async (withCaller) => {
+    jest.useFakeTimers();
+    const tracked = trackExpoAbortSignals();
+    try {
+      await client.listTools({ options: { signal: new AbortController().signal } });
+      expect(tracked.timers.size).toBe(0);
+      expect(tracked.listeners.size).toBe(0);
+      for (let index = 0; index < 250; index++) {
+        await client.listTools({ options: { signal: new AbortController().signal } });
+        const options = withCaller
+          ? { options: { abortSignal: new AbortController().signal } }
+          : {};
+        await client.callTool({ name: 'calendar_get_primary', args: {}, ...options });
+        await client.callTool({ name: 'search-doc', args: {}, ...options });
+      }
+      await expect(client.callTool({ name: 'unknown', args: {} })).rejects.toMatchObject({
+        reason: 'access',
+      });
+      expect(tracked.listeners.size).toBe(0);
+      expect(tracked.timers.size).toBe(0);
+    } finally {
+      await client?.close();
+      jest.restoreAllMocks();
+      jest.useRealTimers();
+    }
+  },
+);
