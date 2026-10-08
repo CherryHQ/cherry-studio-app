@@ -23,7 +23,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   submission. The empty composer returns to one row; local-send scrolling does not dismiss again.
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
-- While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
+- While a submission or turn is active, the send control becomes stop. Before the Host reserves
+  the turn it calls `cancelSubmission` and the draft returns to the composer; afterwards it calls
+  `cancelTurn` for that Session.
 - When empty and outside an editing interaction, the composer is one row with the ＋ menu and send
   action always reachable. Editing, draft text, or attachments keep it expanded into two rows: the field takes the
   full width, the action row moves below it, and

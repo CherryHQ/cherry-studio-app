@@ -96,7 +96,10 @@ splitting a final character when truncating. NUL-bearing content is refused as b
 
 Complete Markdown uses the existing app `MarkdownText`, including its link behavior, tables,
 code blocks, math, and typography preference. Plain text wraps at the screen width using body
-typography. Source and structured data use the code font and horizontal scrolling for long lines.
+typography. Source and structured data use the code font and horizontal scrolling for long lines;
+a line longer than 240 characters continues on the next row. Plain text and source render as a
+virtualized list of bounded text blocks, because one native text view lays out and draws its whole
+content at once.
 Truncated Markdown is shown as raw text, and truncated HTML is never executed.
 
 The truncation notice explains that sharing or system opening provides the complete file.

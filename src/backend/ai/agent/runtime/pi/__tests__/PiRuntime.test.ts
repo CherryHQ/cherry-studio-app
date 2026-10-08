@@ -20,6 +20,8 @@ import {
   normalizeContext,
 } from '@earendil-works/pi-ai/utils/transcript';
 
+import type { DocumentJsonValue } from '@/shared/contracts';
+
 import { createWebTools } from '../../../tools/web/webTools';
 import {
   type ArrangedApprovalRequest,
@@ -1253,8 +1255,20 @@ describe('PiRuntime mapping', () => {
   });
 
   test('redacts nested document strings, raw JSON, and image bytes from terminal diagnostics', async () => {
+    const paragraph = 'Original document body 🍒 with enough text to be distinctive.';
+    const imageBytes = 'AQID'.repeat(12);
     const part = documentAttachment({
-      images: [{ assetRef: 'image', mediaType: 'image/png', uri: 'data:image/png;base64,AQID' }],
+      document: {
+        delivery: 'complete',
+        result: {
+          status: 'ok',
+          ir: { type: 'paragraph', text: paragraph, styles: { color: '#123456' } },
+          warnings: [],
+        },
+      },
+      images: [
+        { assetRef: 'image', mediaType: 'image/png', uri: `data:image/png;base64,${imageBytes}` },
+      ],
       assetDelivery: [{ assetRef: 'image', contentType: 'image/png', size: 3, status: 'sent' }],
     });
     const runtime = createTestRuntime();
@@ -1263,14 +1277,17 @@ describe('PiRuntime mapping', () => {
         type: 'turn_end',
         message: assistantMessage({
           stopReason: 'error',
-          errorMessage: `Cannot process Original document body 🍒 ${JSON.stringify(part.document)} AQID`,
+          errorMessage: `Cannot process paragraph ${paragraph} ${JSON.stringify(part.document)} ${imageBytes}`,
         }),
         toolResults: [],
       });
     });
     const session = await runtime.open();
     const events = await collect(session.execute(baseRequest('document-error', { input: [part] })));
-    expect(events.at(-1)).toMatchObject({ type: 'failed' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      error: { message: expect.stringMatching(/^Cannot process paragraph \[REDACTED\] /) },
+    });
     expect(JSON.stringify(events)).not.toContain('Original document body');
     expect(JSON.stringify(events)).not.toContain('AQID');
     expect(JSON.stringify(events)).not.toContain('#123456');
@@ -2000,6 +2017,50 @@ describe('PiRuntime mapping', () => {
       await restartedSession.close();
     },
   );
+
+  test('redacts long document text from a checkpoint without matching short IR strings', async () => {
+    const paragraph = 'Revenue grew forty percent after the Cherry launch in March.';
+    const ir: DocumentJsonValue = {
+      type: 'document',
+      children: [
+        {
+          type: 'heading',
+          level: 1,
+          style: { align: 'justify', font: 'Calibri' },
+          children: [{ type: 'text', text: 'Summary' }],
+        },
+        { type: 'paragraph', children: [{ type: 'text', text: paragraph }, { text: '   ' }] },
+        { type: 'chart', series: [{ label: 'A', values: ['0', '1'] }, { label: 'B' }] },
+      ],
+    };
+    const runtime = createCompactionRuntime(
+      compactionOptions(
+        summaryCompletion(
+          `A user shared a paragraph and a chart: series A beat B by 1, not 0. Quote: ${paragraph}`,
+        ),
+      ),
+    );
+    arrange(runtime, (context) => emitText(context, 'Compacted answer.'));
+    const session = await runtime.open();
+    const history: RuntimeExecutionRequest['history'] = compactableHistory();
+    history[0]?.messages[0]?.parts.push(
+      documentAttachment({
+        document: { delivery: 'complete', result: { status: 'ok', ir, warnings: [] } },
+      }),
+    );
+
+    const events = await collect(session.execute(baseRequest('turn-compact-ir', { history })));
+
+    expect(events.find((event) => event.type === 'context.checkpoint')).toMatchObject({
+      checkpoint: {
+        payload: {
+          summary:
+            'A user shared a paragraph and a chart: series A beat B by 1, not 0. Quote: [REDACTED]',
+        },
+      },
+    });
+    await session.close();
+  });
 
   test('incrementally merges the previous summary into the next checkpoint', async () => {
     let summarizationPrompt = '';

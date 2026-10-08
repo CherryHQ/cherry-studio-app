@@ -30,11 +30,11 @@ import {
   useComposerState,
   useComposerActions,
 } from '@/frontend/components/Composer';
-import { usePersistCache } from '@/frontend/data/hooks';
 
 import { ChatInputSurface } from '../components/ChatInput';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
 import { UndeliveredMessageRow } from './UndeliveredMessageRow';
+import { useRemoteDraftPersistence } from './useRemoteDraftPersistence';
 
 export function RemoteComposer({
   agent,
@@ -57,7 +57,6 @@ export function RemoteComposer({
   const { draft: text } = useComposerState();
   const { setDraft } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
-  const [, setDrafts] = usePersistCache('remote_agent.drafts');
   const [workspace, setWorkspace] = useState<WorkspaceSummary>();
   const [choosingWorkspace, setChoosingWorkspace] = useState(false);
   const [choosingExecution, setChoosingExecution] = useState(false);
@@ -91,11 +90,7 @@ export function RemoteComposer({
   const canStop = cancellations.some(
     (execution) => execution.cancel?.availability.state === 'enabled',
   );
-  useEffect(() => {
-    setDrafts((current) =>
-      current[draftKey] === text ? current : { ...current, [draftKey]: text },
-    );
-  }, [text, draftKey, setDrafts]);
+  useRemoteDraftPersistence(draftKey, text);
   const stop = async (index: number) => {
     setChoosingExecution(false);
     const result = await cancellations[index]?.cancel?.execute(undefined);

@@ -14,6 +14,10 @@ export class ConversationPresenter {
   private previousVersion?: HistoryVersion;
   private readonly settled = new Set<string>();
   private result: readonly ConversationMessage[] = [];
+  private readonly terminalRows = new WeakMap<
+    ConversationMessage,
+    { row: ConversationMessage; merged: ConversationMessage }
+  >();
   update(
     snapshot: RemoteConversationSnapshot,
     history: readonly ConversationMessage[],
@@ -75,32 +79,7 @@ export class ConversationPresenter {
         continue;
       }
       const existing = merged.get(row.key);
-      const content =
-        existing?.display.data?.parts?.flatMap((part, index) =>
-          part.type === 'data-error'
-            ? []
-            : [{ part, key: existing.display.data?.partKeys?.[index] }],
-        ) ?? [];
-      merged.set(
-        row.key,
-        existing
-          ? {
-              ...existing,
-              state: row.state,
-              display: {
-                ...existing.display,
-                status: row.display.status,
-                data: {
-                  ...existing.display.data,
-                  parts: [...content.map(({ part }) => part), ...(row.display.data?.parts ?? [])],
-                  partKeys: content.every(({ key }) => key !== undefined)
-                    ? [...content.map(({ key }) => key!), ...(row.display.data?.partKeys ?? [])]
-                    : undefined,
-                },
-              },
-            }
-          : row,
-      );
+      merged.set(row.key, existing ? this.withTerminal(existing, row) : row);
     }
     const next = [...merged.values()];
     if (
@@ -109,5 +88,31 @@ export class ConversationPresenter {
     )
       this.result = next;
     return this.result;
+  }
+  /** Appends a terminal result to the row it ends; unchanged inputs keep the merged row. */
+  private withTerminal(existing: ConversationMessage, row: ConversationMessage) {
+    const cached = this.terminalRows.get(existing);
+    if (cached?.row === row) return cached.merged;
+    const content =
+      existing.display.data?.parts?.flatMap((part, index) =>
+        part.type === 'data-error' ? [] : [{ part, key: existing.display.data?.partKeys?.[index] }],
+      ) ?? [];
+    const merged: ConversationMessage = {
+      ...existing,
+      state: row.state,
+      display: {
+        ...existing.display,
+        status: row.display.status,
+        data: {
+          ...existing.display.data,
+          parts: [...content.map(({ part }) => part), ...(row.display.data?.parts ?? [])],
+          partKeys: content.every(({ key }) => key !== undefined)
+            ? [...content.map(({ key }) => key!), ...(row.display.data?.partKeys ?? [])]
+            : undefined,
+        },
+      },
+    };
+    this.terminalRows.set(existing, { row, merged });
+    return merged;
   }
 }

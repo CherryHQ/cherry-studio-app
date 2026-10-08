@@ -57,6 +57,7 @@ import {
   type AgentRespondQuestionInput,
   type AgentPendingQuestion,
   type AgentUserQuestions,
+  AgentCancelSubmissionInputSchema,
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
@@ -241,6 +242,16 @@ type AdmissionState = {
   completion: Promise<void>;
 };
 
+/**
+ * A user cancellation outranks whatever the interrupted preparation step threw,
+ * so the caller can tell a stopped submission from a failed one.
+ */
+function throwIfSubmissionCancelled(signal: AbortSignal): void {
+  if (signal.reason instanceof AgentProtocolError && signal.reason.view.code === 'CANCELLED') {
+    throw signal.reason;
+  }
+}
+
 class TerminalPersistenceError extends Error {
   override readonly name = 'TerminalPersistenceError';
 
@@ -296,7 +307,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly sessionStatusListeners = new Map<string, Set<() => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
   private readonly admittingSessions = new Map<string, AdmissionState>();
-  private readonly initialAdmissions = new Set<AdmissionState>();
+  private readonly initialAdmissions = new Set<AdmissionState & { sessionId: string }>();
   private readonly observingSessions = new Map<string, Set<Promise<void>>>();
   private readonly deletingSessions = new Set<string>();
   private readonly runningTurnsBySession = new Map<string, Promise<void>>();
@@ -443,7 +454,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.assertAcceptingSubmissions();
     const completion = createCompletionSignal();
     const abortController = new AbortController();
-    const admission = { abortController, completion: completion.promise };
+    const admission = {
+      abortController,
+      completion: completion.promise,
+      sessionId: parsed.sessionId,
+    };
     const { signal } = abortController;
     this.initialAdmissions.add(admission);
     let openedRuntimeSession: AgentRuntimeSession | undefined;
@@ -490,6 +505,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (error instanceof KeepAliveInterruptionError) {
         fail('INTERRUPTED', error.message, true);
       }
+      throwIfSubmissionCancelled(signal);
       throw error;
     } finally {
       if (openedRuntimeSession && !isRuntimeSessionInstalled) {
@@ -630,6 +646,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
     } catch (error) {
       if (error instanceof KeepAliveInterruptionError) fail('INTERRUPTED', error.message, true);
+      throwIfSubmissionCancelled(signal);
       throw error;
     } finally {
       this.admittingSessions.delete(sessionId);
@@ -735,6 +752,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (error instanceof KeepAliveInterruptionError) {
         fail('INTERRUPTED', error.message, true);
       }
+      throwIfSubmissionCancelled(signal);
       throw error;
     } finally {
       this.admittingSessions.delete(sessionId);
@@ -755,6 +773,21 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
     active.abortController.abort(new Error('The turn was cancelled.'));
     await active.runtimeSession?.cancel(parsed.turnId);
+  }
+
+  async cancelSubmission(input: { sessionId: string }): Promise<void> {
+    const { sessionId } = AgentCancelSubmissionInputSchema.parse(input);
+    const reason = new AgentProtocolError({
+      code: 'CANCELLED',
+      message: 'The submission was cancelled.',
+      retryable: false,
+    });
+    // Admission settles through its own catch; an abort that lands while the
+    // reservation commits starts a turn that settles as cancelled instead.
+    this.admittingSessions.get(sessionId)?.abortController.abort(reason);
+    for (const admission of this.initialAdmissions) {
+      if (admission.sessionId === sessionId) admission.abortController.abort(reason);
+    }
   }
 
   /**
@@ -1119,6 +1152,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.handleTerminalPersistenceFailure(sessionId, state, error);
         return;
       }
+      // Leaving the event loop does not stop the Runtime. An orphaned execution
+      // would hold the Session's only execute slot and could request an
+      // approval nobody can answer.
+      await state.runtimeSession
+        ?.cancel(state.turn.id)
+        .catch((cancelError) =>
+          logger.warn('Failed to cancel an abandoned Runtime turn', cancelError as Error),
+        );
       if (state.abortController.signal.aborted) {
         try {
           await this.finalize(sessionId, state, 'cancelled', null);

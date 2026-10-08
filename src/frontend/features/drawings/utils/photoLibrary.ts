@@ -28,17 +28,19 @@ type PhotoPreviewPage = {
   photoPreviews: PhotoPreview[];
 };
 
-const photoPreviewPageSize = 60;
-
-const photoPreviewQuery = (offset: number) =>
+const photoPreviewQuery = (offset: number, limit: number) =>
   new MediaLibrary.Query()
     .eq(MediaLibrary.AssetField.MEDIA_TYPE, MediaLibrary.MediaType.IMAGE)
     .orderBy({ ascending: false, key: MediaLibrary.AssetField.CREATION_TIME })
-    .limit(photoPreviewPageSize)
+    .limit(limit)
     .offset(offset);
 
-export async function loadPhotoPreviewPage(offset: number): Promise<PhotoPreviewPage> {
-  const assets = await photoPreviewQuery(offset).exeForMetadata();
+/** Reads only the page the caller shows; every row costs a native metadata fetch. */
+export async function loadPhotoPreviewPage(
+  offset: number,
+  limit: number,
+): Promise<PhotoPreviewPage> {
+  const assets = await photoPreviewQuery(offset, limit).exeForMetadata();
   const photoPreviews = assets.map((asset) => ({
     fileName: asset.filename ?? 'Image',
     id: asset.id,
@@ -48,7 +50,7 @@ export async function loadPhotoPreviewPage(offset: number): Promise<PhotoPreview
   }));
 
   return {
-    hasNextPhotoPage: assets.length === photoPreviewPageSize,
+    hasNextPhotoPage: assets.length === limit,
     nextOffset: offset + assets.length,
     photoPreviews,
   };

@@ -1,10 +1,7 @@
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import {
-  imageThumbnailCacheKey,
-  resolveCachedFilePreviewUris,
-  resolveFilePreviewUris,
-} from '../filePreviewStorage';
+import { imageThumbnailCacheKey } from '../filePreviewCache';
+import { resolveCachedFilePreviewUris, resolveFilePreviewUris } from '../filePreviewStorage';
 
 jest.mock('expo-file-system', () => {
   const directories = new Set<string>();
