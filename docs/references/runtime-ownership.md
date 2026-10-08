@@ -42,7 +42,7 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
   Platform protection remains subject to OS limits and process death.
 - `KeepAliveCoordinator` is the only execution-lease facade that business services and the
   background-activity manager use. It selects one registered platform source when constructed:
-  `AudioKeepAliveSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
+  `IosBackgroundExecutionSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
   elsewhere. Business services never branch on platform; a platform without a mechanism degrades
   through no-op sources and presenters.
 - Android uses task-scoped foreground-service and Headless JS lifetimes within OS limits; see
@@ -165,7 +165,7 @@ resource-deletion contract.
 - `WebSearchService` owns API-key rotation state; the host stops it.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, request cancellation, and fallback to bundled data; the host stops it.
-- `AudioKeepAliveSource` owns the iOS silent audio session; `AndroidBackgroundActivityRuntime`
+- `IosBackgroundExecutionSource` owns one finite iOS UIKit execution window; `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops
   both after their lease consumers have released.

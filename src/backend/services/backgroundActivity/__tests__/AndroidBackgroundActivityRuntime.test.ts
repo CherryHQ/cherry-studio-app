@@ -214,6 +214,9 @@ test('shares the library service across concurrent tasks and stops on the last r
     expect.objectContaining({
       foregroundServiceType: ['dataSync'],
       taskIcon: { name: 'notification_icon', type: 'drawable' },
+      // Conversation titles must not rename the shared notification channel.
+      channelName: 'notifications.android.runningTitle',
+      taskTitle: 'Chat',
     }),
   );
   expect(native.updateNotification).toHaveBeenLastCalledWith(
@@ -316,6 +319,19 @@ test('the background deadline drains cancellation before stopping and rejects mo
   runtime.acquire('new-user-task');
   await flush();
   expect(native.start).toHaveBeenCalledTimes(2);
+});
+
+test('a cancellation that never settles releases the service after the drain grace', async () => {
+  runtime.acquire('chat', () => new Promise<void>(() => {}));
+  await flush();
+  setAppState('background');
+  jest.advanceTimersByTime(359 * 60_000);
+  await flush();
+  expect(running).toBe(true);
+  jest.advanceTimersByTime(30_000);
+  await flush();
+  expect(running).toBe(false);
+  expect(native.stop).toHaveBeenCalledTimes(1);
 });
 
 test('old deadline cancellation cannot stop work admitted after a foreground budget reset', async () => {

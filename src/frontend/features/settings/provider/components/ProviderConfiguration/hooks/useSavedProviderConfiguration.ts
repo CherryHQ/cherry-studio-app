@@ -269,8 +269,8 @@ export function useSavedProviderConfiguration(providerId: string) {
               return false;
             }
           },
-          setDefaultEndpoint: (endpoint) =>
-            saveCustomEndpoints(provider, customEndpointUrls, endpoint),
+          setDefaultEndpoint: (endpoint, baseUrl) =>
+            saveCustomEndpoints(provider, { ...customEndpointUrls, [endpoint]: baseUrl }, endpoint),
           setEndpointUrl: (endpoint, baseUrl) =>
             saveCustomEndpoints(
               provider,
@@ -321,6 +321,9 @@ export function useSavedProviderConfiguration(providerId: string) {
     continueHint,
     isError,
     isLoading,
+    // Only writes hold the screen. An account sign-in can wait on a browser or device code
+    // indefinitely, and leaving the screen cancels it.
+    isSaving: pendingCount > 0,
     provider,
     providerQuery,
     value: isLoading ? undefined : value,

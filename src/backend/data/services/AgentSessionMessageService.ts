@@ -15,8 +15,8 @@ import {
 import {
   agentMessageViewColumns,
   type AgentMessageViewRow,
-  toAgentMessageView,
   toAgentSessionView,
+  toReadableAgentMessageViews,
 } from './utils/agentSessionRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
@@ -51,7 +51,7 @@ export class AgentSessionMessageService {
           ),
         )
         .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id));
-      return { items: rows.map(toAgentMessageView) };
+      return { items: toReadableAgentMessageViews(rows) };
     }
 
     const limit = query.limit ?? AGENT_SESSION_MESSAGES_DEFAULT_LIMIT;
@@ -70,7 +70,7 @@ export class AgentSessionMessageService {
     const head = pageRows[0];
     const tail = pageRows.at(-1);
     return {
-      items: pageRows.map(toAgentMessageView),
+      items: toReadableAgentMessageViews(pageRows),
       ...(tail && (isNewer ? cursor : rows.length > limit)
         ? { nextCursor: encodeCursor(tail.createdAt, tail.id) }
         : {}),
@@ -113,7 +113,7 @@ export class AgentSessionMessageService {
     return {
       assistantName: rows[0].assistantName ?? undefined,
       session: toAgentSessionView(rows[0].session),
-      messages: messages.map(toAgentMessageView),
+      messages: toReadableAgentMessageViews(messages),
     };
   }
 
@@ -147,7 +147,7 @@ export class AgentSessionMessageService {
     const head = rows[0];
     const tail = rows[rows.length - 1];
     return {
-      items: rows.map(toAgentMessageView),
+      items: toReadableAgentMessageViews(rows),
       ...(older.length > olderCount ? { nextCursor: encodeCursor(tail.createdAt, tail.id) } : {}),
       ...(newer.length > newerCount
         ? { previousCursor: encodeCursor(head.createdAt, head.id) }

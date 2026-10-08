@@ -31,6 +31,13 @@ describe('built-in tool display', () => {
     expect(getIosIcon('fileText')).toEqual({ icon: FileTextIcon });
   });
 
+  test.each([
+    ['health_get_summary', 'chat.builtinTool.health.summary'],
+    ['health_list_workouts', 'chat.builtinTool.health.listWorkouts'],
+  ])('keeps historical display for retired %s results', (toolName, titleKey) => {
+    expect(getBuiltInToolDisplay(toolName)).toMatchObject({ titleKey });
+  });
+
   test('returns no display for a non-built-in tool', () => {
     expect(getBuiltInToolDisplay('calculator')).toBeUndefined();
   });

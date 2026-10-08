@@ -41,7 +41,8 @@ private class DesktopBrowser(
 ) {
   private val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
   private val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-  private val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+  // Null on devices without the Wi-Fi feature; NSD still browses other interfaces.
+  private val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
   private val executor = Executor { handler.post(it) }
   private var lock: WifiManager.MulticastLock? = null
   private var discovery: NsdManager.DiscoveryListener? = null
@@ -129,7 +130,7 @@ private class DesktopBrowser(
     }
     discovery = listener
     try {
-      lock = wifi.createMulticastLock("cherry-remote-discovery").also { it.setReferenceCounted(false); it.acquire() }
+      lock = wifi?.createMulticastLock("cherry-remote-discovery")?.also { it.setReferenceCounted(false); it.acquire() }
       nsd.discoverServices("_cherry-remote._tcp.", NsdManager.PROTOCOL_DNS_SD, listener)
     } catch (_: Exception) { emit(mapOf("type" to "unavailable")); setBrowsing(false) }
   }
@@ -158,12 +159,23 @@ private class DesktopBrowser(
     if (resolving != null || current != revision || queue.isEmpty()) return
     val (id, info) = queue.removeFirst()
     val listener = object : NsdManager.ResolveListener {
-      override fun onResolveFailed(service: NsdServiceInfo, code: Int) { handler.post { finish(null) } }
+      override fun onResolveFailed(service: NsdServiceInfo, code: Int) { handler.post {
+        // Below API 34 a resolve abandoned by an earlier browse cannot be stopped and
+        // still holds this client's only resolve slot; retry once the system frees it.
+        if (code == NsdManager.FAILURE_ALREADY_ACTIVE) handler.postDelayed({ retry() }, 1000)
+        else finish(null)
+      } }
       override fun onServiceResolved(service: NsdServiceInfo) { handler.post { finish(service) } }
       fun finish(service: NsdServiceInfo?) {
         if (current != revision || resolving !== this) return
         resolving = null
         if (services.containsKey(id) && service != null) publish(id, service)
+        resolveNext(current)
+      }
+      fun retry() {
+        if (current != revision || resolving !== this) return
+        resolving = null
+        if (services.containsKey(id)) queue.addFirst(id to info)
         resolveNext(current)
       }
     }

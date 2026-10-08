@@ -74,10 +74,11 @@ export class DbService extends BaseService {
     try {
       connection?.sqlite.closeSync();
     } catch (error) {
-      // Drizzle prepares a statement per query and never finalizes it, and
-      // with the pre-close walk disabled SQLite refuses to close while any
-      // remain (SQLITE_BUSY). Leaking one handle at teardown is the accepted
-      // cost; a rejected onStop would leave the service stuck in Stopping.
+      // The patched Drizzle session finalizes each statement after it runs, but
+      // with the pre-close walk disabled SQLite still refuses to close while
+      // any statement remains (SQLITE_BUSY). Leaking one handle at teardown is
+      // the accepted cost; a rejected onStop would leave the service stuck in
+      // Stopping.
       logger.warn('Failed to close database connection', error as Error);
     }
   }

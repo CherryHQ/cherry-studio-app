@@ -1016,7 +1016,7 @@ index 240cd3e5d736d370160dc1907c0760f18d5ed478..b5b6edcceb083c4345e3a717f1173541
          underline: override.underline ?? linkBase.underline,
          backgroundColor:
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
-index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c42352385c97e96 100644
+index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..19202f05d4e7005ea99f0826c9703a0abe528b8b 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/EnrichedMarkdown.kt
 @@ -63,10 +63,25 @@ class EnrichedMarkdown
@@ -1081,7 +1081,7 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c423523
          try {
            val filtered =
              if (isStreaming) {
-@@ -364,33 +391,39 @@ class EnrichedMarkdown
+@@ -364,33 +391,41 @@ class EnrichedMarkdown
                null
              }
            val renderableMarkdown = filtered?.markdown ?: markdown
@@ -1120,9 +1120,13 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c423523
 -            )
 -
 -          postToMain(renderId) { applyRenderedSegments(renderedSegments, style, hasPendingCodeBlock) }
-         } catch (e: Exception) {
-           Log.e(TAG, "Render failed", e)
+-        } catch (e: Exception) {
+-          Log.e(TAG, "Render failed", e)
 -          postToMain(renderId) { applyRenderedSegments(emptyList(), style, false) }
++        } catch (e: Throwable) {
++          // Errors such as StackOverflowError would otherwise kill the process from this
++          // worker and skip the post below, leaving renderInFlight set forever.
++          Log.e(TAG, "Render failed", e)
 +        }
 +
 +        mainHandler.post {
@@ -1145,7 +1149,7 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c423523
          }
        }
      }
-@@ -453,6 +486,16 @@ class EnrichedMarkdown
+@@ -453,6 +488,16 @@ class EnrichedMarkdown
            requestLayout()
          }
        }
@@ -1162,7 +1166,7 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c423523
      }
  
      private fun viewMatchesSegmentKind(
-@@ -497,7 +540,7 @@ class EnrichedMarkdown
+@@ -497,7 +542,7 @@ class EnrichedMarkdown
            val tableView = view as TableContainerView
            val previousRowCount = tableView.rowCount
            tableView.applyTableNode(segment.node)
@@ -1171,7 +1175,7 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c423523
              tableView.animateNewRows(previousRowCount, BLOCK_FADE_DURATION_MS)
            }
          }
-@@ -517,11 +560,16 @@ class EnrichedMarkdown
+@@ -517,11 +562,16 @@ class EnrichedMarkdown
        }
      }
  
@@ -1189,7 +1193,7 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c423523
        when (segment) {
          is RenderedSegment.Text -> animateTextViewTail(view as EnrichedMarkdownInternalText, 0)
          is RenderedSegment.Table, is RenderedSegment.Math, is RenderedSegment.CodeBlock -> animateBlockViewFadeIn(view)
-@@ -532,14 +580,14 @@ class EnrichedMarkdown
+@@ -532,14 +582,14 @@ class EnrichedMarkdown
        view: EnrichedMarkdownInternalText,
        tailStart: Int,
      ) {
@@ -1206,7 +1210,7 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c423523
        if (isReducedMotionEnabled(context)) return
        view.alpha = 0f
        view
-@@ -635,15 +683,6 @@ class EnrichedMarkdown
+@@ -635,15 +685,6 @@ class EnrichedMarkdown
        }
      }
  
@@ -1222,7 +1226,7 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..297a902eb3ef4a9c7066c1f66c423523
      override fun onLayout(
        changed: Boolean,
        l: Int,
-@@ -729,11 +768,14 @@ class EnrichedMarkdown
+@@ -729,11 +770,14 @@ class EnrichedMarkdown
      }
  
      fun cleanup() {

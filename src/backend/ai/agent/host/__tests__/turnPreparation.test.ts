@@ -52,7 +52,7 @@ const AGENT: AgentDefinition = {
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
   toolApprovalMode: 'auto',
-  disabledCapabilities: ['health'],
+  disabledCapabilities: ['location'],
 };
 
 const EMPTY_CONTEXT: StoredRuntimeTurnContext = {

@@ -9,15 +9,11 @@ import {
   type DevicePermission,
   type DevicePermissionScope,
   type DevicePermissionStatus,
-  HEALTH_DATA_TYPES,
-  type HealthDataType,
-  healthPermissionScope,
   type PermissionStatuses,
   type PermissionsModule,
 } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { getHealthAccess, type HealthAccessModule } from '../../../../modules/health-access';
 import { getLocalNetworkAccess } from '../../../../modules/local-network-access';
 
 const logger = loggerService.withContext('DevicePermissions');
@@ -38,29 +34,19 @@ type ExpoPermission = {
 export class DevicePermissions implements PermissionsModule {
   private requestQueue = Promise.resolve();
 
-  constructor(
-    private readonly loadHealthAccess: () => HealthAccessModule | null = getHealthAccess,
-  ) {}
-
   async getStatuses(scopes: readonly DevicePermissionScope[]): Promise<PermissionStatuses> {
     const unique = [...new Set(scopes)];
-    const healthTypes = healthTypesForScopes(unique);
-    const [healthStatuses, entries] = await Promise.all([
-      healthTypes.length ? this.getHealthStatuses(healthTypes) : {},
-      Promise.all(
-        unique
-          .filter((scope) => !scope.startsWith('health.'))
-          .map(async (scope) => {
-            try {
-              return [scope, await this.getStatus(scope)] as const;
-            } catch (error) {
-              logger.warn('Permission lookup failed', { scope, error });
-              return [scope, failed] as const;
-            }
-          }),
-      ),
-    ]);
-    return { ...Object.fromEntries(entries), ...healthStatuses };
+    const entries = await Promise.all(
+      unique.map(async (scope) => {
+        try {
+          return [scope, await this.getStatus(scope)] as const;
+        } catch (error) {
+          logger.warn('Permission lookup failed', { scope, error });
+          return [scope, failed] as const;
+        }
+      }),
+    );
+    return Object.fromEntries(entries);
   }
 
   request(
@@ -164,13 +150,7 @@ export class DevicePermissions implements PermissionsModule {
     const before = await this.getStatuses(scopes);
     signal?.throwIfAborted();
     const requestable = scopes.filter((scope) => canRequestDevicePermission(before[scope]));
-    const healthTypes = healthTypesForScopes(requestable);
-    if (healthTypes.length) {
-      const health = this.loadHealthAccess();
-      if (!health) throw new Error('Health access native module is missing');
-      await health.request(healthTypes);
-    }
-    for (const scope of requestable.filter((scope) => !scope.startsWith('health.'))) {
+    for (const scope of requestable) {
       signal?.throwIfAborted();
       // An earlier request may have already granted both scopes (calendar/reminders).
       if (!canRequestDevicePermission(await this.getStatus(scope))) continue;
@@ -205,34 +185,9 @@ export class DevicePermissions implements PermissionsModule {
     signal?.throwIfAborted();
     return statuses;
   }
-
-  private async getHealthStatuses(types: readonly HealthDataType[]): Promise<PermissionStatuses> {
-    const fill = (status: DevicePermissionStatus): PermissionStatuses =>
-      Object.fromEntries(types.map((type) => [healthPermissionScope(type), status]));
-    if (Platform.OS !== 'ios') return fill(unsupported);
-    try {
-      const health = this.loadHealthAccess();
-      if (!health) return fill({ ...failed, reason: 'native-unavailable' });
-      const availability = await health.getAvailability();
-      if (availability !== 'available') {
-        return fill({ state: 'unavailable', canAskAgain: false, reason: availability });
-      }
-      const statuses = await health.getStatuses(types);
-      return Object.fromEntries(
-        types.map((type) => [healthPermissionScope(type), statuses[type] ?? failed]),
-      );
-    } catch (error) {
-      logger.warn('Health permission lookup failed', { error });
-      return fill(failed);
-    }
-  }
 }
 
 export const devicePermissions = new DevicePermissions();
-
-function healthTypesForScopes(scopes: readonly DevicePermissionScope[]): HealthDataType[] {
-  return HEALTH_DATA_TYPES.filter((type) => scopes.includes(healthPermissionScope(type)));
-}
 
 function toPermissionStatus(response: ExpoPermission): DevicePermissionStatus {
   return {
