@@ -1,5 +1,5 @@
 import type { JsSandboxNativeModule } from '../../../../../modules/js-sandbox';
-import { createJsSandbox } from '../jsSandbox';
+import { createJsSandbox, type JsSandboxRun } from '../jsSandbox';
 
 const LIMITS = {
   timeoutMs: 1000,
@@ -8,27 +8,55 @@ const LIMITS = {
   maxLogBytes: 4,
 };
 
+const DONE = { durationMs: 1, logs: '', logsTruncated: false };
+
 describe('createJsSandbox', () => {
   test('is absent on clients built without the native module', () => {
     expect(createJsSandbox(null)).toBeNull();
   });
 
-  test('passes one run id to the native run and parses its outcome', async () => {
-    const native = createNative(async () =>
-      JSON.stringify({ status: 'ok', result: '3', durationMs: 1, logs: '', logsTruncated: false }),
-    );
+  test('passes one run id and the store as JSON text to the native run and parses its outcome', async () => {
+    const native = createNative(async () => JSON.stringify({ status: 'ok', result: '3', ...DONE }));
     const sandbox = createJsSandbox(native, () => 'run-1')!;
 
     await expect(
-      sandbox.run('return 1 + 2', LIMITS, new AbortController().signal),
+      sandbox.run(runInput({ code: 'return 1 + 2', store: { user: { name: 'a' }, count: 3 } })),
     ).resolves.toEqual({
       status: 'ok',
       result: '3',
-      durationMs: 1,
-      logs: '',
-      logsTruncated: false,
+      storeWrites: { set: {}, delete: [] },
+      ...DONE,
     });
-    expect(native.run).toHaveBeenCalledWith('run-1', 'return 1 + 2', LIMITS);
+    expect(native.run).toHaveBeenCalledWith(
+      'run-1',
+      'return 1 + 2',
+      JSON.stringify({ user: '{"name":"a"}', count: '3' }),
+      LIMITS,
+    );
+  });
+
+  test("parses a fulfilled script's store writes into values to set and keys to delete", async () => {
+    const native = createNative(async () =>
+      JSON.stringify({
+        status: 'ok',
+        storeWrites: JSON.stringify([['count', '4'], ['gone'], ['user', '{"name":"b"}']]),
+        ...DONE,
+      }),
+    );
+
+    await expect(createJsSandbox(native)!.run(runInput())).resolves.toMatchObject({
+      storeWrites: { set: { count: 4, user: { name: 'b' } }, delete: ['gone'] },
+    });
+  });
+
+  test('drops a garbled write report rather than applying part of it', async () => {
+    const native = createNative(async () =>
+      JSON.stringify({ status: 'ok', storeWrites: '[["ok","1"],["bad","{"]]', ...DONE }),
+    );
+
+    await expect(createJsSandbox(native)!.run(runInput())).resolves.toMatchObject({
+      storeWrites: { set: {}, delete: [] },
+    });
   });
 
   test('cancels that run and rejects with the abort reason without waiting for it', async () => {
@@ -37,7 +65,7 @@ describe('createJsSandbox', () => {
     const controller = new AbortController();
     const reason = new Error('turn cancelled');
 
-    const running = sandbox.run('while (true) {}', LIMITS, controller.signal);
+    const running = sandbox.run(runInput({ code: 'while (true) {}', signal: controller.signal }));
     controller.abort(reason);
 
     await expect(running).rejects.toBe(reason);
@@ -50,7 +78,7 @@ describe('createJsSandbox', () => {
     controller.abort(new Error('cancelled'));
 
     await expect(
-      createJsSandbox(native)!.run('return 1', LIMITS, controller.signal),
+      createJsSandbox(native)!.run(runInput({ signal: controller.signal })),
     ).rejects.toThrow('cancelled');
     expect(native.run).not.toHaveBeenCalled();
   });
@@ -58,11 +86,22 @@ describe('createJsSandbox', () => {
   test('reports an unreadable native outcome as an internal error', async () => {
     const sandbox = createJsSandbox(createNative(async () => 'not json'))!;
 
-    await expect(
-      sandbox.run('return 1', LIMITS, new AbortController().signal),
-    ).resolves.toMatchObject({ status: 'error', kind: 'internal' });
+    await expect(sandbox.run(runInput())).resolves.toMatchObject({
+      status: 'error',
+      kind: 'internal',
+    });
   });
 });
+
+function runInput(overrides: Partial<JsSandboxRun> = {}): JsSandboxRun {
+  return {
+    code: 'return 1',
+    limits: LIMITS,
+    store: {},
+    signal: new AbortController().signal,
+    ...overrides,
+  };
+}
 
 function createNative(
   run: JsSandboxNativeModule['run'],

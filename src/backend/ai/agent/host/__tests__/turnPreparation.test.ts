@@ -249,6 +249,7 @@ describe('turn preparation', () => {
       resources: plan.resources,
       documentParserMode: 'anydoc',
       resolveUsageAttribution: plan.usageAttribution.resolve,
+      runJsStore: plan.runJsStore,
     });
     // Tools read the attribution when they run; the Host binds the message after reservation.
     expect(plan.usageAttribution.resolve()).toEqual({
@@ -273,6 +274,17 @@ describe('turn preparation', () => {
     expect(() =>
       plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
     ).toThrow('already bound');
+    // The run_js store likewise reaches the Session only once the Host binds it.
+    await expect(plan.runJsStore.read()).resolves.toEqual({});
+    await plan.runJsStore.apply({ set: { dropped: 1 }, delete: [] });
+    expect(harness.applyRunJsStoreWrites).not.toHaveBeenCalled();
+    plan.runJsStore.bindSession(SESSION_ID);
+    await expect(plan.runJsStore.read()).resolves.toEqual({ cursor: 7 });
+    expect(harness.readRunJsStore).toHaveBeenCalledWith(SESSION_ID);
+    const writes = { set: { cursor: 8 }, delete: ['stale'] };
+    await plan.runJsStore.apply(writes);
+    expect(harness.applyRunJsStoreWrites).toHaveBeenCalledWith(SESSION_ID, writes);
+    expect(() => plan.runJsStore.bindSession('session-2')).toThrow('already bound');
     expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(
       AGENT_ID,
       expect.any(Function),
@@ -503,6 +515,8 @@ function createHarness() {
     async (_sessionId: string, _anchorTurnId: string | null): Promise<StoredRuntimeTurnContext> =>
       EMPTY_CONTEXT,
   );
+  const readRunJsStore = jest.fn(async (_sessionId: string) => ({ cursor: 7 }));
+  const applyRunJsStoreWrites = jest.fn(async () => {});
   const resolveAvailable = jest.fn(async (fileEntryIds: readonly FileEntryId[]) =>
     fileEntryIds.includes(FILE_ENTRY_ID) ? new Map([[FILE_ENTRY_ID, textFact]]) : new Map(),
   );
@@ -555,11 +569,18 @@ function createHarness() {
     inferenceModel: resolveInferenceModel,
     routeExecutionTarget,
     runtimeTools: { resolve: resolveRuntimeTools },
-    store: { getLatestContextCheckpoint, getSession, loadRuntimeTurnContext },
+    store: {
+      applyRunJsStoreWrites,
+      getLatestContextCheckpoint,
+      getSession,
+      loadRuntimeTurnContext,
+      readRunJsStore,
+    },
     systemCapabilities: { getTools: getSystemTools },
   };
 
   return {
+    applyRunJsStoreWrites,
     askUser,
     configuredTool,
     dependencies,
@@ -570,6 +591,7 @@ function createHarness() {
     getSystemTools,
     loadRuntimeTurnContext,
     preflightModel,
+    readRunJsStore,
     resolveInferenceModel,
     resolveRuntimeTools,
     routeExecutionTarget,

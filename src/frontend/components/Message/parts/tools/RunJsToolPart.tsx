@@ -12,7 +12,9 @@ type RunJsToolPartProps = {
 
 /**
  * A finished run shows the code as code rather than as an escaped argument
- * string, beside its result or error and any console output.
+ * string, beside its result or error and any console output. Output over the
+ * model's budget arrives as one cut text, shown in place of both; its full
+ * text is a generated file attached to the message.
  */
 export function RunJsToolPart({ part }: RunJsToolPartProps) {
   const { t } = useTranslation();
@@ -35,12 +37,8 @@ export function RunJsToolPart({ part }: RunJsToolPartProps) {
       {run.status === 'error' ? (
         <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={run.message} />
       ) : null}
-      {run.status === 'ok' && run.hasResult ? (
-        <MessagePart.TextSection
-          title={t('chat.tool.result')}
-          value={formatMessagePartValue(run.result)}
-          variant="code"
-        />
+      {run.status === 'ok' && run.result !== null ? (
+        <MessagePart.TextSection title={t('chat.tool.result')} value={run.result} variant="code" />
       ) : null}
       {code ? (
         <MessagePart.TextSection title={t('chat.tool.code')} value={code} variant="code" />
@@ -57,17 +55,23 @@ export function isRunJsToolPart(part: ToolMessagePart) {
 }
 
 type Run =
-  | { status: 'ok'; hasResult: boolean; result: unknown; logs: string }
+  | { status: 'ok'; result: string | null; logs: string }
   | { status: 'error'; message: string; logs: string };
 
 function parseRun(output: unknown): Run | null {
   if (!isRecord(output)) return null;
+  const cut = typeof output.output === 'string' ? output.output : null;
   const logs = typeof output.logs === 'string' ? output.logs : '';
   if (output.status === 'ok') {
-    return { status: 'ok', hasResult: 'result' in output, result: output.result, logs };
+    if (cut !== null) return { status: 'ok', result: cut, logs: '' };
+    return {
+      status: 'ok',
+      result: 'result' in output ? formatMessagePartValue(output.result) : null,
+      logs,
+    };
   }
   if (output.status === 'error' && typeof output.message === 'string') {
-    return { status: 'error', message: output.message, logs };
+    return { status: 'error', message: output.message, logs: cut ?? logs };
   }
   return null;
 }

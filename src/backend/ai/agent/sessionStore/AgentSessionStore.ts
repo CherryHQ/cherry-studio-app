@@ -6,6 +6,7 @@ import type {
   AgentMessageView,
   AgentSessionView,
   AgentUsageView,
+  JsonValue,
 } from '@/shared/contracts/agent';
 import type { MessageRuntimeStatsInput, MessageRuntimeTiming } from '@/shared/data/types/message';
 
@@ -28,6 +29,24 @@ export type StoredRuntimeTurnContext = {
   /** Lightweight checkpoint-anchor projection across the complete transcript. */
   sessionTurnIds: string[];
 };
+
+/** One fulfilled `run_js` script's `store()` writes. */
+export type RunJsStoreWrites = {
+  set: Readonly<Record<string, JsonValue>>;
+  delete: readonly string[];
+};
+
+/** The store after `writes`; a key is never both set and deleted by one script. */
+export function applyRunJsStoreWrites(
+  store: Readonly<Record<string, JsonValue>>,
+  writes: RunJsStoreWrites,
+): Record<string, JsonValue> {
+  const next = { ...store, ...writes.set };
+  for (const key of writes.delete) {
+    delete next[key];
+  }
+  return next;
+}
 
 export type ReserveSubmissionResult = {
   /** Fresh correlation id shared by the reserved user/assistant pair. */
@@ -177,6 +196,12 @@ export interface AgentSessionStore {
    * turn is started: the new Session is idle.
    */
   forkSession(input: ForkSessionInput): Promise<ForkSessionResult>;
+
+  /** The Session's `run_js` store values; empty for an unknown Session. */
+  readRunJsStore(sessionId: string): Promise<Record<string, JsonValue>>;
+
+  /** Applies one script's writes atomically; an unknown Session is ignored. */
+  applyRunJsStoreWrites(sessionId: string, writes: RunJsStoreWrites): Promise<void>;
 
   /**
    * Atomically removes one turn's messages from a Session. The unit is the

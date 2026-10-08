@@ -6,18 +6,23 @@ limits are described in [Agent Tools And Controlled Resources](../../docs/refere
 
 ## Design
 
-Each `run(runId, code, limits)` creates a fresh [QuickJS-NG](https://github.com/quickjs-ng/quickjs)
-runtime on a dedicated native thread and destroys it afterwards. The app's own Hermes runtime and JS
-thread are untouched, so a busy script cannot stall the UI and cannot reach app state. QuickJS' `std`
-and `os` modules are not compiled in, so the sandbox's global object contains only ECMAScript
-built-ins, `atob`/`btoa`, `queueMicrotask`, `performance`, and a captured `console`. The C++ core in
-`cpp/` is shared by the iOS (Objective-C++ bridge) and Android (JNI) adapters.
+Each `run(runId, code, storeJson, limits)` creates a fresh [QuickJS-NG](https://github.com/quickjs-ng/quickjs)
+runtime on a dedicated native thread and destroys it afterwards; the script is an in-memory string
+and nothing touches the file system. The app's own Hermes runtime and JS thread are untouched, so a
+busy script cannot stall the UI and cannot reach app state. QuickJS' `std` and `os` modules are not
+compiled in, so the sandbox's global object contains only ECMAScript built-ins, `atob`/`btoa`,
+`queueMicrotask`, `performance`, a captured `console`, and `store`/`load`. The C++ core in `cpp/` is
+shared by the iOS (Objective-C++ bridge) and Android (JNI) adapters.
+
+`store(key, value)` and `load(key)` follow Pi's codemode sandbox, including its limits and messages:
+they work synchronously on `storeJson` (key → JSON text), `load` returns a copy, and only a fulfilled
+script reports the keys it wrote. Where the values persist is the caller's business.
 
 QuickJS was chosen because it is built to embed untrusted code with budgets:
 
 | Budget | Mechanism |
 | --- | --- |
-| Time and cancellation | QuickJS polls an interrupt handler during bytecode and regular expression execution. Once it fires, the error is uncatchable and every later job stops too. |
+| Time and cancellation | QuickJS polls an interrupt handler during bytecode and regular expression execution. Once it fires, the error is uncatchable and every later job stops too. `timeoutMs` 0 means no deadline, so a cancel that arrives before its run registers is held for it rather than lost. |
 | Memory | The runtime allocates through `cpp/JsSandbox.cpp`'s allocator, which refuses allocations past the limit. The script sees a catchable out-of-memory error; the process is never at risk. The allocator also records that the limit was hit, because QuickJS cannot always allocate the error object itself. |
 | Native stack | QuickJS throws a catchable `RangeError` past 7 MiB of the 8 MiB thread stack, about 7,000 JavaScript calls deep. Deep JSON, nested source, and regular expressions are bounded by the same check. |
 
@@ -31,13 +36,16 @@ and its larger frames cut the recursion that fits in the stack to about 800 call
 `run` resolves with a JSON string; script failures never reject:
 
 ```text
-{ status: 'ok', result?: <JSON text>, resultTruncated?, logs, logsTruncated, durationMs }
+{ status: 'ok', result?: <JSON text>, resultTruncated?, storeWrites: <JSON text>, logs, logsTruncated, durationMs }
 { status: 'error', kind, message, logs, logsTruncated, durationMs }
 ```
 
+`storeWrites` is `[[key, json] | [key]]`: a value to set or a key to delete.
+
 `kind` is `syntax`, `exception`, `timeout`, `memory`, `unsettled` (the returned promise can never
 settle, since there are no timers or I/O), `cancelled`, or `internal`. `cancel(runId)` interrupts a
-run and ignores unknown ids. The caller (`src/backend/services/jsSandbox`) owns the limits.
+run, including one that has not started yet. The caller (`src/backend/services/jsSandbox`) owns the
+limits and the store.
 
 ## QuickJS-NG
 

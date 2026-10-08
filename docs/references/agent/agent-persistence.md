@@ -229,6 +229,7 @@ listing/cascade and MCP server delete-time disabling.
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
 | `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is deleted |
 | `forkBoundaryMessageId` | text | NULL | Message inside the fork that closes the copied prefix; maintained atomically with lineage and not a cross-table FK |
+| `runJsStore` | text (json) | NOT NULL DEFAULT `{}` | `run_js` `store()` values, key → JSON value; written only by a successful script and copied whole by forks ([JavaScript Sandbox](./agent-tools-and-resources.md#javascript-sandbox)) |
 
 Indexes: `agent_session_agent_id_idx`, `agent_session_last_activity_idx` (list ordering is
 recency; no `orderKey`).
@@ -331,7 +332,7 @@ projection:
   unfinished tools. This preserves recorded artifacts for later turns without resuming execution
   or persisting a draft-file state.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
-  It copies `titleIsManual` and `executionTarget` from the source, takes `title` from the caller
+  It copies `titleIsManual`, `executionTarget`, and `runJsStore` from the source, takes `title` from the caller
   or else from the source, sets
   `forkedFromSessionId`, records the reissued copied anchor as `forkBoundaryMessageId`, and copies
   `lastActivityAt` from the source assistant's `stats.runtimeTiming.completedAt` at the inclusive

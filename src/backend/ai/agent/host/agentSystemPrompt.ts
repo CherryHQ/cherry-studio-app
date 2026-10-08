@@ -106,7 +106,7 @@ Attachment envelopes state the parser, output format, and delivery status. AnyDo
   ) {
     sections.push(`## JavaScript Sandbox
 
-Use \`${RUN_JS_TOOL_NAME}\` when an answer depends on exact computation: multi-step arithmetic, date and time differences, statistics, counting, sorting, or parsing and transforming data from the conversation, a file, or another tool's result. Do not estimate such results mentally. The sandbox cannot fetch or read anything, so copy the data it needs into the code. Answer from the returned result; when it reports an error, fix the code rather than guessing the answer.`);
+Use \`${RUN_JS_TOOL_NAME}\` when an answer depends on exact computation: multi-step arithmetic, date and time differences, statistics, counting, sorting, or parsing and transforming data from the conversation, a file, or another tool's result. Do not estimate such results mentally. The sandbox cannot fetch or read anything, so copy the data it needs into the code; \`store()\` and \`load()\` keep small values for later calls in this conversation. Answer from the returned result; when it reports an error, fix the code rather than guessing the answer. When the output was cut, page through the saved full output with \`${READ_FILE_TOOL_NAME}\` instead of rerunning the script.`);
   }
 
   if (pluginGuides.length > 0) {

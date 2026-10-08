@@ -7,21 +7,28 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
-
 import type {
-  AgentSessionStore,
-  DeleteTurnInput,
-  DeleteTurnResult,
-  FinalizeAssistantMessageInput,
-  ForkSessionInput,
-  ForkSessionResult,
-  ReserveInitialSubmissionInput,
-  ReserveInitialSubmissionResult,
-  ReserveRetryInput,
-  ReserveSubmissionInput,
-  ReserveSubmissionResult,
-  UpdateStreamingAssistantMessageInput,
+  AgentErrorView,
+  AgentMessageView,
+  AgentSessionView,
+  JsonValue,
+} from '@/shared/contracts/agent';
+
+import {
+  type AgentSessionStore,
+  applyRunJsStoreWrites,
+  type DeleteTurnInput,
+  type DeleteTurnResult,
+  type FinalizeAssistantMessageInput,
+  type ForkSessionInput,
+  type ForkSessionResult,
+  type ReserveInitialSubmissionInput,
+  type ReserveInitialSubmissionResult,
+  type ReserveRetryInput,
+  type ReserveSubmissionInput,
+  type ReserveSubmissionResult,
+  type RunJsStoreWrites,
+  type UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
@@ -158,10 +165,12 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   private readonly sessions = new Map<string, AgentSessionView>();
   /** Insertion-ordered per Session, which is the transcript order. */
   private readonly messages = new Map<string, StoredMessage[]>();
+  private readonly runJsStores = new Map<string, Record<string, JsonValue>>();
 
   protected override onDestroy(): void {
     this.sessions.clear();
     this.messages.clear();
+    this.runJsStores.clear();
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
@@ -216,6 +225,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return false;
     }
     this.messages.delete(sessionId);
+    this.runJsStores.delete(sessionId);
     // Mirrors the durable adapter's ON DELETE SET NULL: a fork outlives its
     // source and only loses the lineage claim.
     for (const [forkId, session] of this.sessions) {
@@ -229,6 +239,20 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       }
     }
     return true;
+  }
+
+  async readRunJsStore(sessionId: string): Promise<Record<string, JsonValue>> {
+    return cloneJson(this.runJsStores.get(sessionId) ?? {});
+  }
+
+  async applyRunJsStoreWrites(sessionId: string, writes: RunJsStoreWrites): Promise<void> {
+    if (!this.sessions.has(sessionId)) {
+      return;
+    }
+    this.runJsStores.set(
+      sessionId,
+      applyRunJsStoreWrites(this.runJsStores.get(sessionId) ?? {}, cloneJson(writes)),
+    );
   }
 
   async forkSession(input: ForkSessionInput): Promise<ForkSessionResult> {
@@ -280,6 +304,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
 
     this.sessions.set(session.id, forkedSession);
     this.messages.set(session.id, forkedTranscript);
+    const sourceStore = this.runJsStores.get(source.id);
+    if (sourceStore) {
+      this.runJsStores.set(session.id, cloneJson(sourceStore));
+    }
     return {
       session: cloneJson(forkedSession),
       status: 'forked',

@@ -9,8 +9,10 @@
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <deque>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
@@ -29,14 +31,22 @@ constexpr size_t kMaxMessageBytes = 4000;
 /// 7,000 JavaScript calls deep. The run thread has 8 MiB, which leaves room for
 /// native code below the checks.
 constexpr size_t kMaxStackBytes = 7u << 20;
+/// Cancels that arrive before their run starts; the oldest are forgotten.
+constexpr size_t kMaxPendingCancels = 64;
 
-/// Installs `console` and returns `observe(promise)`, which reports the
-/// settled value through `settle`, plus `describe(error)`. Built-ins are
-/// captured before user code runs, so a script that replaces them only spoils
-/// its own output.
-constexpr const char *kPrelude = R"JS((function (log, settle) {
+/// Installs `console`, `store`, and `load`, and returns `observe(promise)`,
+/// which reports the settled value through `settle`, plus `describe(error)`.
+/// Built-ins are captured before user code runs, so a script that replaces
+/// them only spoils its own output.
+///
+/// `store(key, value)` and `load(key)` are adapted from Pi's codemode prelude
+/// (`@earendil-works/pi-codemode`, MIT), keeping its limits and messages: they work
+/// synchronously on `storeJson` (key -> JSON text), and a fulfilled script
+/// reports the keys it wrote as `[[key, json] | [key]]`; a failed one drops them.
+constexpr const char *kPrelude = R"JS((function (log, settle, storeJson) {
   'use strict';
   var stringify = JSON.stringify;
+  var parse = JSON.parse;
   var then = Promise.prototype.then;
   var fromEntries = Object.fromEntries;
   var arrayFrom = Array.from;
@@ -92,6 +102,66 @@ constexpr const char *kPrelude = R"JS((function (log, settle) {
   };
   globalThis.console = sandboxConsole;
   globalThis.print = sandboxConsole.log;
+
+  // key -> JSON text. Sizes count key and JSON characters.
+  var MAX_STORE_VALUE_CHARS = 262144;
+  var MAX_STORE_TOTAL_CHARS = 1048576;
+  var STORE_HINT = 'store() is for small state such as IDs, cursors, or summaries.';
+  var stored = new Map(Object.entries(parse(storeJson)));
+  var writes = new Map();
+  var storedChars = 0;
+  stored.forEach(function (json, key) {
+    storedChars += key.length + json.length;
+  });
+  function checkKey(name, key) {
+    if (typeof key !== 'string') throw new TypeError(name + '() key must be a string');
+  }
+  function store(key, value) {
+    checkKey('store', key);
+    var previous = stored.has(key) ? key.length + stored.get(key).length : 0;
+    if (value === undefined) {
+      stored.delete(key);
+      storedChars -= previous;
+      writes.set(key, undefined);
+      return;
+    }
+    var json;
+    try {
+      json = stringify(value, replacer);
+    } catch (error) {
+      throw new TypeError('store(' + stringify(key) + ') value is not JSON-serializable: ' + format(error));
+    }
+    if (json === undefined) {
+      throw new TypeError('store(' + stringify(key) + ') value is not JSON-serializable');
+    }
+    if (json.length > MAX_STORE_VALUE_CHARS) {
+      throw new RangeError('store(' + stringify(key) + ') value has ' + json.length +
+        ' characters of JSON, more than the limit of ' + MAX_STORE_VALUE_CHARS + '. ' + STORE_HINT);
+    }
+    var next = storedChars - previous + key.length + json.length;
+    if (next > MAX_STORE_TOTAL_CHARS) {
+      throw new RangeError('store is full: stored values would exceed ' + MAX_STORE_TOTAL_CHARS +
+        ' characters of JSON. Delete keys with store(key, undefined). ' + STORE_HINT);
+    }
+    stored.set(key, json);
+    storedChars = next;
+    writes.set(key, json);
+  }
+  function load(key) {
+    checkKey('load', key);
+    var json = stored.get(key);
+    return json === undefined ? undefined : parse(json);
+  }
+  function serializeWrites() {
+    var entries = [];
+    writes.forEach(function (json, key) {
+      entries.push(json === undefined ? [key] : [key, json]);
+    });
+    return stringify(entries);
+  }
+  Object.defineProperty(globalThis, 'store', { value: store, enumerable: true });
+  Object.defineProperty(globalThis, 'load', { value: load, enumerable: true });
+
   function observe(promise) {
     then.call(
       promise,
@@ -103,7 +173,7 @@ constexpr const char *kPrelude = R"JS((function (log, settle) {
           settle(false, 'The returned value is not JSON-serializable: ' + format(error));
           return;
         }
-        settle(true, text);
+        settle(true, text, serializeWrites());
       },
       function (error) {
         settle(false, describeError(error));
@@ -119,6 +189,10 @@ struct RunState {
 
 std::mutex gRunsMutex;
 std::unordered_map<std::string, std::shared_ptr<RunState>> gRuns;
+/// Without a deadline a lost cancel would leave a script running for good, so a
+/// cancel that beats its run's registration waits here for it.
+std::unordered_set<std::string> gPendingCancels;
+std::deque<std::string> gPendingCancelOrder;
 
 struct Output {
   std::string logs;
@@ -126,6 +200,7 @@ struct Output {
   bool settled = false;
   bool fulfilled = false;
   std::optional<std::string> payload;
+  std::optional<std::string> storeWrites;
 };
 
 /// Every allocation of one runtime. QuickJS throws a catchable out-of-memory
@@ -141,7 +216,8 @@ struct Session {
   const Limits &limits;
   const RunState &state;
   Clock::time_point start;
-  Clock::time_point deadline;
+  /// Absent when the run has no time limit; cancellation still stops it.
+  std::optional<Clock::time_point> deadline = std::nullopt;
   /// Why the interrupt handler stopped the script; it keeps stopping it after.
   const char *interrupt = nullptr;
   Heap heap{limits.memoryBytes};
@@ -395,7 +471,7 @@ int interruptHandler(JSRuntime *, void *opaque) {
   if (!session.interrupt) {
     if (session.state.cancelled) {
       session.interrupt = "cancelled";
-    } else if (Clock::now() >= session.deadline) {
+    } else if (session.deadline && Clock::now() >= *session.deadline) {
       session.interrupt = "timeout";
     }
   }
@@ -431,6 +507,9 @@ JSValue hostSettle(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
   output.fulfilled = JS_IsBool(argv[0]) && JS_ToBool(ctx, argv[0]) == 1;
   if (JS_IsString(argv[1])) {
     output.payload = toUtf8(ctx, argv[1]);
+  }
+  if (argc > 2 && JS_IsString(argv[2])) {
+    output.storeWrites = toUtf8(ctx, argv[2]);
   }
   return JS_UNDEFINED;
 }
@@ -493,13 +572,16 @@ std::string outcome(const Session &session) {
         .field("result", truncateUtf8(*output.payload, session.limits.maxResultBytes, &truncated))
         .field("resultTruncated", truncated);
   }
+  if (output.storeWrites) {
+    writer.field("storeWrites", *output.storeWrites);
+  }
   return writer.field("logs", output.logs)
       .field("logsTruncated", output.logsTruncated)
       .field("durationMs", session.elapsedMs())
       .finish();
 }
 
-std::string execute(const std::string &code, Session &session) {
+std::string execute(const std::string &code, const std::string &storeJson, Session &session) {
   // The context is declared after the runtime and every value after the
   // context, so they are released in the order QuickJS requires.
   std::unique_ptr<JSRuntime, RuntimeDeleter> runtime(
@@ -526,9 +608,10 @@ std::string execute(const std::string &code, Session &session) {
     return failure(ctx, session, "internal", JS_UNDEFINED);
   }
   Value log(ctx, JS_NewCFunction(ctx, hostLog, "log", 2));
-  Value settle(ctx, JS_NewCFunction(ctx, hostSettle, "settle", 2));
-  JSValue hookArgs[] = {log.get(), settle.get()};
-  Value hooks(ctx, JS_Call(ctx, install.get(), JS_UNDEFINED, 2, hookArgs));
+  Value settle(ctx, JS_NewCFunction(ctx, hostSettle, "settle", 3));
+  Value store(ctx, JS_NewStringLen(ctx, storeJson.data(), storeJson.size()));
+  JSValue hookArgs[] = {log.get(), settle.get(), store.get()};
+  Value hooks(ctx, JS_Call(ctx, install.get(), JS_UNDEFINED, 3, hookArgs));
   if (hooks.isException()) {
     return failure(ctx, session, "internal", JS_UNDEFINED);
   }
@@ -561,18 +644,27 @@ std::string execute(const std::string &code, Session &session) {
 
 } // namespace
 
-std::string run(const std::string &runId, const std::string &code, const Limits &limits) {
+std::string run(const std::string &runId,
+                const std::string &code,
+                const std::string &storeJson,
+                const Limits &limits) {
   auto state = std::make_shared<RunState>();
   {
     std::lock_guard<std::mutex> lock(gRunsMutex);
     gRuns[runId] = state;
+    if (gPendingCancels.erase(runId) > 0) {
+      state->cancelled = true;
+    }
   }
 
   const auto start = Clock::now();
-  Session session{limits, *state, start, start + std::chrono::milliseconds(limits.timeoutMs)};
+  Session session{limits, *state, start};
+  if (limits.timeoutMs > 0) {
+    session.deadline = start + std::chrono::milliseconds(limits.timeoutMs);
+  }
   std::string result;
   try {
-    result = execute(code, session);
+    result = execute(code, storeJson, session);
   } catch (const std::exception &error) {
     result = errorResult("internal", error.what(), session);
   }
@@ -590,6 +682,16 @@ void cancel(const std::string &runId) {
   auto found = gRuns.find(runId);
   if (found != gRuns.end()) {
     found->second->cancelled = true;
+    return;
+  }
+  // The run has not registered yet, or has already finished; the latter leaves
+  // an entry that ages out.
+  if (gPendingCancels.insert(runId).second) {
+    gPendingCancelOrder.push_back(runId);
+    if (gPendingCancelOrder.size() > kMaxPendingCancels) {
+      gPendingCancels.erase(gPendingCancelOrder.front());
+      gPendingCancelOrder.pop_front();
+    }
   }
 }
 

@@ -10,13 +10,14 @@ class JsSandboxModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("JsSandbox")
 
-    AsyncFunction("run") { runId: String, code: String, limits: JsSandboxLimits, promise: Promise ->
+    AsyncFunction("run") { runId: String, code: String, storeJson: String, limits: JsSandboxLimits, promise: Promise ->
       // A dedicated thread per run: a script that spins until its deadline must
       // not hold a shared executor, and parallel tool calls run side by side.
       Thread(null, {
         val result = JsSandboxNative.run(
           runId.toByteArray(Charsets.UTF_8),
           code.toByteArray(Charsets.UTF_8),
+          storeJson.toByteArray(Charsets.UTF_8),
           limits.timeoutMs,
           limits.memoryBytes,
           limits.maxResultBytes,
@@ -53,6 +54,7 @@ internal object JsSandboxNative {
   external fun run(
     runId: ByteArray,
     code: ByteArray,
+    storeJson: ByteArray,
     timeoutMs: Int,
     memoryBytes: Int,
     maxResultBytes: Int,

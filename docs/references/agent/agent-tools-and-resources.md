@@ -480,30 +480,44 @@ whole turn. Implementation: `src/backend/ai/agent/tools/`.
 ### JavaScript Sandbox
 
 `run_js` lets the model compute exactly instead of estimating: arithmetic, statistics, dates,
-counting, sorting, parsing, and data transformation. It takes one `code` string, run as the body of
-an async function, and returns `{ status: 'ok', result?, logs? }` or
-`{ status: 'error', kind, message, logs? }`, where `kind` is `syntax`, `exception`, `timeout`,
-`memory`, `unsettled`, `cancelled`, or `internal`. The result is the returned value's JSON; Map and
-Set become object and array and BigInt becomes a string. A result over 32 KiB is returned as the head
-of its JSON text with `resultTruncated: true`; console output keeps its first 8 KiB.
+counting, sorting, parsing, and data transformation. It takes a `code` string, run as the body of an
+async function, plus optional `timeout_ms` and `max_output_tokens`, and returns
+`{ status: 'ok', result?, logs? }` or `{ status: 'error', kind, message, logs? }`, where `kind` is
+`syntax`, `exception`, `timeout`, `memory`, `unsettled`, `cancelled`, or `internal`. The result is
+the returned value's JSON; Map and Set become object and array and BigInt becomes a string. The store,
+the output budget, and the unbounded default deadline follow Pi's codemode tool.
 
 Isolation is structural rather than a permission check. [`modules/js-sandbox`](../../../modules/js-sandbox/README.md)
-creates a fresh QuickJS runtime for every call, on its own native thread. Its global object holds
-the standard ECMAScript built-ins, `atob`/`btoa`, `queueMicrotask`, `performance.now()`, and a
-captured `console`; there is no `Intl`, so locale arguments are ignored. Timers, modules, network,
-files, and every application binding are absent, and `eval` or `Function` only produce more code
-inside the same runtime. Nothing persists between calls, so a script cannot observe another. The
-tool therefore has no side effects, runs as `auto` without an Agent capability group, and requires
-only that the model supports function calling and the client includes the native module; older
-clients omit the tool.
+creates a fresh QuickJS runtime for every call, on its own native thread, and destroys it when the
+script ends. Its global object holds the standard ECMAScript built-ins, `atob`/`btoa`,
+`queueMicrotask`, `performance.now()`, a captured `console`, and `store`/`load`; there is no `Intl`,
+so locale arguments are ignored. Timers, modules, network, files, and every application binding are
+absent, and `eval` or `Function` only produce more code inside the same runtime. The tool runs as
+`auto` without an Agent capability group and requires only that the model supports function calling
+and the client includes the native module; older clients omit the tool.
 
-Each call is bounded by a 10-second deadline and 64 MiB of memory. The deadline and turn
-cancellation interrupt the script from native code, including inside a regular expression, and
-JavaScript cannot catch the interruption. An allocation past the memory limit fails inside the
-script, so the app is never at risk; the outcome reports `memory` whenever the limit caused the
-failure. Recursion stops with a catchable `RangeError` about 7,000 calls deep. The Host adds a
-prompt section asking the model to use the tool for exact computation and to copy the data it needs
-into the code, because the sandbox cannot read files or tool results itself.
+- **Store.** `store(key, value)` and `load(key)` keep small JSON values across calls in one
+  Session; `load` returns a copy and storing `undefined` deletes a key. A script reads the values
+  current when it starts, and its writes are kept only when it succeeds. One value may hold 256 Ki
+  characters of JSON and all values together 1 Mi; a larger write throws a `RangeError` inside the
+  script. The values persist in `agent_session.runJsStore`, so they survive restarts, and a fork
+  copies them whole. Deleting or retrying a turn does not undo its writes.
+- **Output.** Output within `max_output_tokens` (default 10,000, estimated at four characters per
+  token) keeps the structured form above. Longer output becomes one `output` text that keeps its
+  start and end around a count of the removed tokens, and the full text — the returned value's JSON,
+  then the console output — is saved as a generated `run_js-output.txt` managed file. The result
+  carries its `fullOutputFileEntryId`, and the file is granted to the turn so `read_file` can page
+  through it. The native side captures at most 500 KiB of each, which keeps a saved output within
+  `read_file`'s source limit.
+- **Limits.** There is no deadline unless the model sets `timeout_ms`; turn cancellation stops the
+  script either way, from native code and including inside a regular expression, and JavaScript
+  cannot catch the interruption. Memory is limited to 64 MiB: an allocation past it fails inside the
+  script, so the app is never at risk, and the outcome reports `memory` whenever the limit caused
+  the failure. Recursion stops with a catchable `RangeError` about 7,000 calls deep.
+
+The Host adds a prompt section asking the model to use the tool for exact computation, to copy the
+data it needs into the code because the sandbox cannot read files or tool results itself, and to page
+through a saved output instead of rerunning the script.
 
 ### Skill Boundary
 

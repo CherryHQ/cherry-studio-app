@@ -59,7 +59,7 @@ import {
   resolveConfiguredPaintingModel,
 } from './painting';
 import { createReadFileTool } from './readFileTool';
-import { createRunJsTool } from './runJsTool';
+import { createRunJsTool, type RunJsStore } from './runJsTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { createWriteFileTool } from './writeFileTool';
 
@@ -97,6 +97,8 @@ export type SystemCapabilitySource = {
     resources: TurnToolResources;
     /** Attribution for provider calls a tool makes; read when the tool runs. */
     resolveUsageAttribution?: AiUsageAttributionResolver;
+    /** The Session's `run_js` store; absent outside a Session. */
+    runJsStore?: RunJsStore;
   }): Promise<readonly RuntimeTool[]>;
 };
 
@@ -137,6 +139,7 @@ export function createSystemCapabilitySource(
       resources,
       documentParserMode,
       resolveUsageAttribution,
+      runJsStore,
     }) {
       const deps = resolveDependencies(services, overrides);
       if (!(await deps.supportsToolCalling(model))) {
@@ -153,6 +156,7 @@ export function createSystemCapabilitySource(
         resolveUsageAttribution,
         agentId,
         askUser,
+        runJsStore,
       );
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
@@ -235,6 +239,7 @@ function createCatalog(
   resolveUsageAttribution: AiUsageAttributionResolver | undefined,
   agentId: string | undefined,
   askUser: AskUserQuestion,
+  runJsStore: RunJsStore | undefined,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
@@ -251,7 +256,9 @@ function createCatalog(
     ),
     createReadFileTool(managedFileResolver, resources, documentParserMode),
     createWriteFileTool(fileContent),
-    ...(deps.jsSandbox ? [createRunJsTool(deps.jsSandbox)] : []),
+    ...(deps.jsSandbox
+      ? [createRunJsTool({ sandbox: deps.jsSandbox, files: fileContent, store: runJsStore })]
+      : []),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),
     ...createLocationTools(deviceDeps),

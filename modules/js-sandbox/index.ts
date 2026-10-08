@@ -2,6 +2,7 @@ import { requireOptionalNativeModule } from 'expo';
 
 /** Per-run budgets; the caller owns the policy. Sizes are in bytes. */
 export type JsSandboxLimits = {
+  /** 0 means no time limit; cancellation still stops the run. */
   timeoutMs: number;
   /** Cap on everything the script's runtime allocates. */
   memoryBytes: number;
@@ -10,9 +11,12 @@ export type JsSandboxLimits = {
 };
 
 export type JsSandboxNativeModule = {
-  /** Resolves with the outcome JSON; script failures never reject. */
-  run(runId: string, code: string, limits: JsSandboxLimits): Promise<string>;
-  /** Interrupts a run; unknown or finished ids are ignored. */
+  /**
+   * Resolves with the outcome JSON; script failures never reject. `storeJson`
+   * maps keys to JSON text for `load()`.
+   */
+  run(runId: string, code: string, storeJson: string, limits: JsSandboxLimits): Promise<string>;
+  /** Interrupts a run, including one that has not started yet. */
   cancel(runId: string): void;
 };
 

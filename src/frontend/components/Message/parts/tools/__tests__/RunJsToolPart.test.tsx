@@ -45,6 +45,33 @@ describe('RunJsToolPart', () => {
     ]);
   });
 
+  it('shows output cut to the model budget in place of the result and console output', () => {
+    const cut = 'Warning: truncated output (original token count: 20000)\n…';
+    expect(
+      sections(
+        render(
+          toolPart({ output: { status: 'ok', output: cut, fullOutputFileEntryId: 'file-1' } }),
+        ),
+      ),
+    ).toEqual([
+      ['chat.tool.result', cut],
+      ['chat.tool.code', 'return { total: 42 }'],
+    ]);
+    expect(
+      sections(
+        render(
+          toolPart({
+            output: { status: 'error', kind: 'cancelled', message: 'Cancelled.', output: cut },
+          }),
+        ),
+      ),
+    ).toEqual([
+      ['chat.tool.error', 'Cancelled.'],
+      ['chat.tool.code', 'return { total: 42 }'],
+      ['chat.tool.logs', cut],
+    ]);
+  });
+
   it('marks a script failure as a failed call', () => {
     const renderer = render(
       toolPart({ output: { status: 'error', kind: 'syntax', message: 'Compiling JS failed' } }),

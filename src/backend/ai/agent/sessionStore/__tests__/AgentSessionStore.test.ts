@@ -766,6 +766,45 @@ describe.each([
     ]);
   });
 
+  test('keeps run_js store values per Session, applies writes, and copies them into forks', async () => {
+    const source = await harness.createEmptySession({ agentId });
+    const other = await harness.createEmptySession({ agentId });
+    expect(await store.readRunJsStore(source.id)).toEqual({});
+
+    await store.applyRunJsStoreWrites(source.id, {
+      set: { cursor: 1, user: { name: 'a' }, stale: true },
+      delete: [],
+    });
+    await store.applyRunJsStoreWrites(source.id, { set: { cursor: 2 }, delete: ['stale'] });
+    // Unknown Sessions neither throw nor gain a store.
+    await store.applyRunJsStoreWrites('missing', { set: { cursor: 9 }, delete: [] });
+
+    expect(await store.readRunJsStore(source.id)).toEqual({ cursor: 2, user: { name: 'a' } });
+    expect(await store.readRunJsStore(other.id)).toEqual({});
+    expect(await store.readRunJsStore('missing')).toEqual({});
+
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: source.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
+    });
+    const result = await store.forkSession({
+      sessionId: source.id,
+      fromMessageId: reserved.userMessage.id,
+    });
+    expect(result.status).toBe('forked');
+    if (result.status !== 'forked') return;
+    expect(await store.readRunJsStore(result.session.id)).toEqual({
+      cursor: 2,
+      user: { name: 'a' },
+    });
+
+    // The copy is independent of its source.
+    await store.applyRunJsStoreWrites(result.session.id, { set: { cursor: 3 }, delete: [] });
+    expect(await store.readRunJsStore(source.id)).toEqual({ cursor: 2, user: { name: 'a' } });
+  });
+
   test('forkSession names the copy from the caller when one is supplied', async () => {
     const source = await harness.createEmptySession({ agentId, title: 'Maths' });
     const reserved = await store.reserveSubmission({

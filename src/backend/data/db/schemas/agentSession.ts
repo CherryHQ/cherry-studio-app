@@ -1,6 +1,6 @@
 import { type AnySQLiteColumn, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { AgentExecutionTarget } from '@/shared/contracts/agent';
+import type { AgentExecutionTarget, JsonValue } from '@/shared/contracts/agent';
 
 import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { agentTable } from './agent';
@@ -50,6 +50,10 @@ export const agentSessionTable = sqliteTable(
     // circular Session ↔ Message schema dependency; fork/delete transactions
     // maintain it together with forkedFromSessionId.
     forkBoundaryMessageId: text(),
+    // `run_js` store() values, key -> JSON value: kept across the Session's
+    // scripts and copied whole by forks
+    // (docs/references/agent/agent-tools-and-resources.md "JavaScript Sandbox").
+    runJsStore: text({ mode: 'json' }).$type<Record<string, JsonValue>>().notNull().default({}),
   },
   (t) => [
     index('agent_session_agent_id_idx').on(t.agentId),

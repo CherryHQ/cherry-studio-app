@@ -4,7 +4,7 @@ public class JsSandboxModule: Module {
   public func definition() -> ModuleDefinition {
     Name("JsSandbox")
 
-    AsyncFunction("run") { (runId: String, code: String, limits: JsSandboxLimits, promise: Promise) in
+    AsyncFunction("run") { (runId: String, code: String, storeJson: String, limits: JsSandboxLimits, promise: Promise) in
       // A dedicated thread per run: a script that spins until its deadline must
       // not hold a shared queue, and parallel tool calls run side by side.
       let thread = Thread {
@@ -12,6 +12,7 @@ public class JsSandboxModule: Module {
           JsSandboxRunner.run(
             id: runId,
             code: code,
+            storeJson: storeJson,
             timeoutMs: UInt32(clamping: limits.timeoutMs),
             memoryBytes: UInt32(clamping: limits.memoryBytes),
             maxResultBytes: UInt32(clamping: limits.maxResultBytes),
