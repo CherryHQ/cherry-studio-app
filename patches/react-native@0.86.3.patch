@@ -68,7 +68,7 @@ diff --git a/ReactCommon/react/utils/SimpleThreadSafeCache.h b/ReactCommon/react
 +    std::lock_guard<std::mutex> lock(mutex_);
 +    // Recheck after generation and copy the result before unlocking, so another
 +    // thread cannot evict the entry while it is being read.
-+    return getMapIterator(key, [&value]() { return value; })->second->second;
++    return getMapIterator(key, [&value]() { return std::move(value); })->second->second;
    }
 
    /*
@@ -105,43 +105,38 @@ diff --git a/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp b/React
  #include <react/utils/SimpleThreadSafeCache.h>
 
  namespace facebook::react {
-@@ -37,4 +40,112 @@
+@@ -37,4 +40,107 @@
    EXPECT_EQ(cache.get(3), "three");
  }
 
-+TEST(EvictingCacheMapTest, BlockedGeneratorDoesNotBlockOtherKeys) {
++TEST(EvictingCacheMapTest, GeneratorCanWaitForAnotherThreadUsingTheCache) {
 +  SimpleThreadSafeCache<int, std::string, 3> cache;
 +  cache.getWithGeneratorOutsideLock(0, []() { return std::string("zero"); });
 +
 +  std::promise<void> generating;
 +  auto generatingFuture = generating.get_future();
-+  std::promise<void> resume;
-+  auto resumeFuture = resume.get_future();
++  std::promise<void> callbackFinished;
++  auto callbackFinishedFuture = callbackFinished.get_future();
++  // Model native measurement waiting for a notification callback whose thread
++  // must also measure text. A timeout lets a regressed cache fail without hanging.
 +  auto blocked = std::async(std::launch::async, [&]() {
 +    return cache.getWithGeneratorOutsideLock(1, [&]() {
 +      generating.set_value();
-+      resumeFuture.wait();
-+      return std::string("one");
++      auto status = callbackFinishedFuture.wait_for(std::chrono::seconds(5));
++      return status == std::future_status::ready ? std::string("one") : std::string("callback timed out");
 +    });
 +  });
 +
 +  EXPECT_EQ(
 +      generatingFuture.wait_for(std::chrono::seconds(5)),
 +      std::future_status::ready);
-+  auto other = std::async(std::launch::async, [&]() {
-+    auto hit = cache.getWithGeneratorOutsideLock(0, []() { return std::string("unexpected"); });
-+    auto miss = cache.getWithGeneratorOutsideLock(2, []() { return std::string("two"); });
-+    return std::make_pair(hit, miss);
-+  });
-+  auto status = other.wait_for(std::chrono::seconds(5));
-+  // Always release before asserting or joining, including on an unpatched cache.
-+  resume.set_value();
++  auto hit = cache.getWithGeneratorOutsideLock(0, []() { return std::string("unexpected"); });
++  auto miss = cache.getWithGeneratorOutsideLock(2, []() { return std::string("two"); });
++  callbackFinished.set_value();
 +
-+  EXPECT_EQ(status, std::future_status::ready);
 +  EXPECT_EQ(blocked.get(), "one");
-+  auto values = other.get();
-+  EXPECT_EQ(values.first, "zero");
-+  EXPECT_EQ(values.second, "two");
++  EXPECT_EQ(hit, "zero");
++  EXPECT_EQ(miss, "two");
 +}
 +
 +TEST(EvictingCacheMapTest, ConcurrentMissReusesStoredValueAndUpdatesRecency) {

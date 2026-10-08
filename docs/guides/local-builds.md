@@ -229,27 +229,41 @@ JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspa
 
 ### iOS Text Measurement Cache Patch
 
+Expo SwiftUI content-size updates can synchronously enter React Native layout on the main thread,
+including text-input measurement. A concurrent JS-thread measurement may wait for notification
+delivery while creating `NSTextStorage`. Holding the measurement-cache mutex across that native
+work can block the main thread and create a circular wait if delivery needs it.
+
 React Native 0.86.3's iOS text and line measurement caches use
 `SimpleThreadSafeCache::getWithGeneratorOutsideLock` to compute misses outside the mutex, so native
-text notifications cannot hold the measurement cache lock while waiting for another thread.
-Lookup, insertion, LRU updates, and the returned-value copy remain locked. Concurrent misses may
-compute the same key more than once; the second lookup reuses the first stored result.
-The default `get` and pointer-returning `getWithKey` retain their serialized generator behavior,
-including Android measurements and iOS attributed-string conversion. Each iOS measurement creates
-its own text storage, layout manager, and text container; mutable layout objects are not shared.
-This addresses the cache-lock mechanism in [#1182](https://github.com/CherryHQ/cherry-studio-app/issues/1182);
-the production event does not identify the notification observer or its queue.
+text notifications cannot hold the measurement cache lock while waiting for another thread
+([#1182](https://github.com/CherryHQ/cherry-studio-app/issues/1182)). Lookup, insertion, LRU
+updates, and the returned-value copy remain locked. Concurrent misses may compute the same key more
+than once; the later insert reuses the first stored result. The default `get` and pointer-returning
+`getWithKey` keep their serialized generators, including Android measurements and iOS
+attributed-string conversion. Each iOS measurement creates its own text storage, layout manager, and
+text container.
 
-As reviewed on 2026-10-08, [React Native 0.87.1](https://github.com/react/react-native/blob/v0.87.1/packages/react-native/ReactCommon/react/utils/SimpleThreadSafeCache.h),
-0.88.0-rc.4, and upstream `main` still execute the generator under the mutex. Upgrading to these
-versions does not remove this locking mechanism. Expo SDK 57 targets React Native 0.86.
+When upgrading React Native, inspect the generator's lock scope before dropping this patch. iOS
+enables `buildReactNativeFromSource`; delivering the patch requires a new native build. An OTA
+update cannot replace this code. The patch removes the cache-lock dependency, not notification
+delivery itself; the reported event does not identify the notification observer or its queue.
 
-The patch includes native cache regressions in React Native's `SimpleThreadSafeCacheTest.cpp`.
-The local-only `scripts/__tests__/reactNativeTextCache.test.ts` guards patch wiring and iOS source
-compilation. iOS already enables `buildReactNativeFromSource`; delivering this patch requires a
-new native build, since OTA updates cannot replace native code.
-These native regressions are not run by the application's Jest suite or current PR CI. They require
-separate native test execution; source review alone does not establish that the production hang is resolved.
+`scripts/__tests__/reactNativeTextCache.test.ts` guards the patch wiring in PR CI. The patch also
+adds cache regressions to React Native's `SimpleThreadSafeCacheTest.cpp`, which no app build or CI
+job compiles. These include a generator waiting for another thread to access the same cache,
+concurrent misses for the same key, eviction, and returned-value lifetime. They cover the cache
+contract, not recovery from the production hang. Run them separately with a googletest source tree
+such as the Android NDK's `sources/third_party/googletest`:
+
+```bash
+RN=$(node -p "require('path').dirname(require.resolve('react-native/package.json'))")
+GTEST=$ANDROID_NDK_HOME/sources/third_party/googletest
+clang++ -std=c++20 -fsanitize=thread -I"$GTEST/include" -I"$GTEST" -I"$RN/ReactCommon" \
+  "$GTEST/src/gtest-all.cc" "$GTEST/src/gtest_main.cc" \
+  "$RN/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp" -o /tmp/simple-cache-test
+/tmp/simple-cache-test
+```
 
 ### iOS Build 26 Crash Patches
 
