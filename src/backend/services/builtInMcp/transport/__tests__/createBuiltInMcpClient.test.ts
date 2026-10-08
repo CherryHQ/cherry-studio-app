@@ -155,6 +155,7 @@ it.each([false, true])(
         await client.listTools(discovery);
         await expect(client.callTool({ name: 'fetch-doc', args: {}, options })).resolves.toEqual({
           content: [{ type: 'text', text: JSON.stringify({ login: 'cherry' }) }],
+          isError: false,
         });
         expect(tracked.listeners.size).toBe(0);
         expect(tracked.timers.size).toBe(0);
@@ -226,7 +227,10 @@ it.each(['complete', 'cancel'] as const)(
           },
         });
         received();
-        return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
+        const response = new Response(null, { headers: { 'content-type': 'text/event-stream' } });
+        // The SDK pipes the body through Jest's global stream polyfills, not Node's Response realm.
+        Object.defineProperty(response, 'body', { value: body });
+        return response;
       });
       pending = client.callTool({
         name: 'create-doc',
@@ -247,7 +251,7 @@ it.each(['complete', 'cancel'] as const)(
             `event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: requestId, result })}\n\n`,
           ),
         );
-        await expect(pending).resolves.toEqual(result);
+        await expect(pending).resolves.toEqual({ ...result, isError: false });
         expect(caller.signal.aborted).toBe(false);
       } else {
         const outcome = expect(pending).rejects.toThrow();
