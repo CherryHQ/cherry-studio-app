@@ -8,6 +8,7 @@ import type { ResolvedFile } from '@/shared/contracts/file';
 
 import { useDocumentPreviewPage } from '../hooks/useDocumentPreviewPage';
 import { FileDocumentPreview } from './FileDocumentPreview';
+import { FileMenuGuide } from './FileMenuGuide';
 import { FileViewerHeader } from './FileViewerHeader';
 
 export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
@@ -25,13 +26,11 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
     <>
       <FileViewerHeader file={file} />
       {status === 'tooLarge' ? (
-        // System opening stays in the header's overflow menu; this state only points there.
-        <View className="flex-1 items-center justify-center p-6">
-          <ContentState.Empty
-            description={t('fileViewer.tooLargeToPreviewDescription')}
-            title={t('fileViewer.tooLargeToPreview')}
-          />
-        </View>
+        // System opening stays in the header's overflow menu; this state points there.
+        <FileMenuGuide
+          hint={t('fileViewer.openWithMenuHint')}
+          title={t('fileViewer.tooLargeToPreview')}
+        />
       ) : status === 'system' ? (
         <View className="flex-1 items-center justify-center p-6">
           <ContentState.Empty
