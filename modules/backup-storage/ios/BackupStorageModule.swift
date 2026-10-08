@@ -5,6 +5,8 @@ import Foundation
 
 private let backupProcessId = UUID().uuidString.lowercased()
 private let controlLock = NSLock()
+// Expo's default AsyncFunction queue is one serial queue shared by every module.
+private let storageQueue = DispatchQueue(label: "expo.modules.BackupStorage", qos: .userInitiated)
 
 public class BackupStorageModule: Module {
   public func definition() -> ModuleDefinition {
@@ -48,12 +50,12 @@ public class BackupStorageModule: Module {
         digest.update(data: chunk)
       }
       return digest.finalize().map { String(format: "%02x", $0) }.joined()
-    }
+    }.runOnQueue(storageQueue)
     AsyncFunction("sealDirectory") { (uri: String) throws in
       let root = try self.privateFile(uri)
       try self.seal(root)
       try self.flush(root.deletingLastPathComponent())
-    }
+    }.runOnQueue(storageQueue)
   }
 
   private func controlFile(_ documentUri: String) throws -> URL {
