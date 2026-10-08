@@ -1,4 +1,4 @@
-export type ManagedTextFailure = 'binary-content' | 'file-bytes' | 'invalid-utf8' | 'nul-byte';
+export type ManagedTextFailure = 'file-bytes' | 'invalid-utf8' | 'nul-byte';
 
 export class ManagedTextError extends Error {
   constructor(readonly failure: ManagedTextFailure) {
@@ -10,8 +10,6 @@ export class ManagedTextError extends Error {
 /** A model-facing explanation of why a managed file could not be read as text. */
 export function describeManagedTextFailure(failure: ManagedTextFailure, maxBytes: number): string {
   switch (failure) {
-    case 'binary-content':
-      return 'The managed file contains binary control characters.';
     case 'file-bytes':
       return `The managed file exceeds the ${maxBytes}-byte limit.`;
     case 'invalid-utf8':
@@ -42,6 +40,11 @@ export function takeCodePoints(
   return { characters, didTruncate: end < value.length, value: value.slice(0, end) };
 }
 
+/** Unicode code points in `value`, the unit every model-facing character offset uses. */
+export function countCodePoints(value: string): number {
+  return value.length - (value.match(/[\ud800-\udbff][\udc00-\udfff]/g)?.length ?? 0);
+}
+
 /** Moves a slice start off the trailing half of a surrogate pair. */
 export function codePointStart(text: string, index: number): number {
   const code = text.charCodeAt(index);
@@ -53,7 +56,13 @@ export type DecodedManagedText = {
   text: string;
 };
 
-/** Strict RN-safe UTF-8 decoding shared by attachment projection and file tools. */
+/**
+ * Strict RN-safe UTF-8 decoding shared by attachment projection and file tools.
+ * Strict decoding already rejects nearly every binary format, so NUL is the only
+ * extra binary signal: other control characters occur in real text (ANSI colors
+ * in logs, form feeds in source), and refusing them would also make text the
+ * file tools wrote unreadable.
+ */
 export function decodeManagedUtf8(bytes: Uint8Array, maxBytes: number): DecodedManagedText {
   if (bytes.byteLength > maxBytes) {
     throw new ManagedTextError('file-bytes');
@@ -66,9 +75,6 @@ export function decodeManagedUtf8(bytes: Uint8Array, maxBytes: number): DecodedM
   const text = decodeUtf8Strict(bytes.subarray(hasBom ? 3 : 0));
   if (text === null) {
     throw new ManagedTextError('invalid-utf8');
-  }
-  if (/[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text)) {
-    throw new ManagedTextError('binary-content');
   }
   return { hasBom, text };
 }

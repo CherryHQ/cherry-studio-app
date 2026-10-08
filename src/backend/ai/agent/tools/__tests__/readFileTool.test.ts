@@ -6,7 +6,7 @@ import type { RuntimeJsonValue, RuntimeToolResult } from '../../runtime';
 import {
   createReadFileTool,
   lineWindow,
-  jsonCharacterWindow,
+  characterWindow,
   READ_FILE_DEFAULT_LINE_LIMIT,
   READ_FILE_MAX_CHARACTERS,
   READ_FILE_MAX_SOURCE_BYTES,
@@ -105,13 +105,6 @@ describe('AnyDoc raw JSON reads', () => {
     );
     expect(files.readAsBytes).not.toHaveBeenCalled();
     expectError(await execute(tool, { file_entry_id: FILE_ID, limit: 2 }), 'requires offset');
-    expectError(
-      await execute(createReadFileTool(createFiles('text'), IN_SCOPE), {
-        file_entry_id: FILE_ID,
-        max_characters: 2,
-      }),
-      'requires start_line',
-    );
     const invalidPaginationParams: Record<string, number>[] = [
       { offset: -1 },
       { max_characters: 0 },
@@ -120,6 +113,22 @@ describe('AnyDoc raw JSON reads', () => {
     for (const params of invalidPaginationParams) {
       expectError(await execute(tool, { file_entry_id: FILE_ID, ...params }), 'Invalid input');
     }
+  });
+
+  test('parses a document once while paging it', async () => {
+    jest.mocked(parseAnydocDocument).mockClear();
+    jest
+      .mocked(parseAnydocDocument)
+      .mockResolvedValue({ status: 'ok', ir: { text: 'body' }, warnings: [], assets: [] });
+    const tool = createReadFileTool(documentFiles(), IN_SCOPE, 'anydoc');
+
+    const first = await execute(tool, { file_entry_id: FILE_ID, max_characters: 5 });
+    const second = await execute(tool, { file_entry_id: FILE_ID, offset: 5 });
+
+    expect(parseAnydocDocument).toHaveBeenCalledTimes(1);
+    expect((first.value as { text: string }).text + (second.value as { text: string }).text).toBe(
+      '{"text":"body"}',
+    );
   });
 
   test('returns the original parser failure without invoking the built-in parser', async () => {
@@ -151,9 +160,9 @@ describe('AnyDoc raw JSON reads', () => {
   });
 });
 
-describe('JSON character windows', () => {
+describe('character windows', () => {
   test('addresses Unicode code points without splitting a surrogate pair at either edge', () => {
-    expect(jsonCharacterWindow('中🍒文🙂尾', 1, 3)).toEqual({
+    expect(characterWindow('中🍒文🙂尾', 1, 3)).toEqual({
       offset: 1,
       characterCount: 3,
       totalCharacters: 5,
@@ -161,7 +170,7 @@ describe('JSON character windows', () => {
       complete: false,
       text: '🍒文🙂',
     });
-    expect(jsonCharacterWindow('中🍒文🙂尾', 4, 3)).toEqual({
+    expect(characterWindow('中🍒文🙂尾', 4, 3)).toEqual({
       offset: 4,
       characterCount: 1,
       totalCharacters: 5,
@@ -169,7 +178,7 @@ describe('JSON character windows', () => {
       complete: true,
       text: '尾',
     });
-    expect(jsonCharacterWindow('中🍒', 9, 3)).toMatchObject({
+    expect(characterWindow('中🍒', 9, 3)).toMatchObject({
       characterCount: 0,
       complete: true,
       text: '',
@@ -277,6 +286,44 @@ describe('readFileTool', () => {
     expectError(output, 'Invalid input');
   });
 
+  test('reads text holding control characters other than NUL', async () => {
+    const text = '\u001b[31mfailed\u001b[0m\fnext';
+    const output = await execute(createReadFileTool(createFiles(text), IN_SCOPE), {
+      file_entry_id: FILE_ID,
+    });
+    expect(output.value).toMatchObject({ status: 'ok', text });
+  });
+
+  test('reads ordinary text as a code-point window', async () => {
+    const files = createFiles('ab\n🍒cd');
+    const output = await execute(createReadFileTool(files, IN_SCOPE), {
+      file_entry_id: FILE_ID,
+      offset: 3,
+      max_characters: 2,
+    });
+    expect(output.value).toMatchObject({
+      status: 'ok',
+      offset: 3,
+      characterCount: 2,
+      totalCharacters: 6,
+      nextOffset: 5,
+      complete: false,
+      text: '🍒c',
+    });
+  });
+
+  test('continues a line longer than one window through nextOffset', async () => {
+    const long = `${'x'.repeat(READ_FILE_MAX_CHARACTERS)}🍒tail`;
+    const tool = createReadFileTool(createFiles(`a🍒\n${long}\nlast`), IN_SCOPE);
+
+    const head = await execute(tool, { file_entry_id: FILE_ID, start_line: 2 });
+    expect(head.value).toMatchObject({ lineCount: 1, lineTruncated: true, truncated: true });
+    const { nextOffset } = head.value as { nextOffset: number };
+    const rest = await execute(tool, { file_entry_id: FILE_ID, offset: nextOffset });
+
+    expect((rest.value as { text: string }).text).toBe('🍒tail\nlast');
+  });
+
   test('rejects unavailable, oversized, and binary sources', async () => {
     const missing = createFiles('x');
     missing.resolveAvailable.mockResolvedValueOnce(new Map());
@@ -352,7 +399,6 @@ describe('lineWindow', () => {
     // Two half-budget lines plus their separator exceed the budget, so one fits.
     expect(window).toEqual({
       lineCount: 1,
-      lineTruncated: false,
       text: line,
       totalLines: 3,
       truncated: true,
@@ -363,21 +409,31 @@ describe('lineWindow', () => {
     const window = lineWindow('y'.repeat(READ_FILE_MAX_CHARACTERS + 1), 1, 10);
     expect(window.lineCount).toBe(1);
     expect(window.text).toHaveLength(READ_FILE_MAX_CHARACTERS);
-    // The rest of the line is unreachable by paging, so the read is not complete.
-    expect(window.lineTruncated).toBe(true);
+    // A later line cannot reach the rest, so the window hands over its offset.
+    expect(window.nextOffset).toBe(READ_FILE_MAX_CHARACTERS);
     expect(window.truncated).toBe(true);
   });
 
   test('cuts a long line on a code point', () => {
-    const window = lineWindow('🍒'.repeat(READ_FILE_MAX_CHARACTERS), 1, 10);
+    const window = lineWindow('🍒'.repeat(READ_FILE_MAX_CHARACTERS + 1), 1, 10);
     expect([...window.text]).toHaveLength(READ_FILE_MAX_CHARACTERS);
     expect(window.text.endsWith('🍒')).toBe(true);
+    expect(window.nextOffset).toBe(READ_FILE_MAX_CHARACTERS);
+  });
+
+  test('returns a whole line whose code points fit though its UTF-16 length does not', () => {
+    const line = '🍒'.repeat(READ_FILE_MAX_CHARACTERS);
+    expect(lineWindow(line, 1, 10)).toEqual({
+      lineCount: 1,
+      text: line,
+      totalLines: 1,
+      truncated: false,
+    });
   });
 
   test('does not count the empty tail of a newline-terminated file', () => {
     expect(lineWindow('a\nb\n', 1, 10)).toEqual({
       lineCount: 2,
-      lineTruncated: false,
       text: 'a\nb',
       totalLines: 2,
       truncated: false,
@@ -387,7 +443,6 @@ describe('lineWindow', () => {
   test('reports a start line past the end as empty and complete', () => {
     expect(lineWindow('a\nb', 6, 10)).toEqual({
       lineCount: 0,
-      lineTruncated: false,
       text: '',
       totalLines: 2,
       truncated: false,
