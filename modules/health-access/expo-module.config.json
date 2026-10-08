@@ -1,7 +1,0 @@
-{
-  "platforms": ["apple"],
-  "apple": {
-    "podspecPath": "ios/HealthAccess.podspec",
-    "modules": ["HealthAccessModule"]
-  }
-}

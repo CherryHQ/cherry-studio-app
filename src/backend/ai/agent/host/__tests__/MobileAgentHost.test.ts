@@ -98,7 +98,7 @@ const agents: AgentDefinitionSource = {
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
       toolApprovalMode: 'default',
-      disabledCapabilities: ['health'],
+      disabledCapabilities: ['location'],
     };
   },
 };
@@ -1656,7 +1656,7 @@ describe('MobileAgentHost', () => {
     expect(getTools).toHaveBeenCalledWith({
       agentId: AGENT_ID,
       askUser: expect.any(Function),
-      disabledCapabilities: ['health'],
+      disabledCapabilities: ['location'],
       documentParserMode: 'builtin',
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),

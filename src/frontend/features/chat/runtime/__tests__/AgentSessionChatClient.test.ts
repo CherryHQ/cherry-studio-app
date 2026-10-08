@@ -392,6 +392,30 @@ describe('AgentSessionChatClient', () => {
     expect(onSessionChanged).toHaveBeenCalledWith('session-1');
   });
 
+  test('refreshes the durable transcript when a message settles, not when it is created', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const onTranscriptChanged = jest.fn();
+    const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
+    await client.observe('session-1');
+    onTranscriptChanged.mockClear();
+
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.created', message: assistantMessage() });
+    expect(client.getState('session-1').liveMessages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
+    expect(onTranscriptChanged).not.toHaveBeenCalled();
+
+    listener?.({ type: 'message.finalized', message: assistantMessage() });
+    expect(onTranscriptChanged).toHaveBeenCalledTimes(1);
+    expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
+  });
+
   test('drops a deleted turn from live state and refreshes the durable transcript', async () => {
     let listener: ((event: AgentEvent) => void) | undefined;
     const protocol = protocolWithObservation(async (_sessionId, nextListener) => {

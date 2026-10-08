@@ -10,6 +10,7 @@ export type NativeSystemEntry = {
 
 type NativeSystemEvents = {
   onPending: () => void;
+  onBackgroundExecutionExpired: (event: { id: string }) => void;
 };
 
 /**
@@ -32,6 +33,9 @@ export interface SystemIntegrationNativeModule {
     manufacturer: string;
   }>;
   openBackgroundRunSettings?(): Promise<void>;
+  /** iOS-only finite execution window; it does not enable a background mode. */
+  beginBackgroundExecution?(id: string): Promise<boolean>;
+  endBackgroundExecution?(id: string): Promise<void>;
   /** Android-only notification transport, sharing IDs with the foreground service. */
   getBackgroundTaskNotificationId?(key: string): number;
   showBackgroundTaskNotification?(

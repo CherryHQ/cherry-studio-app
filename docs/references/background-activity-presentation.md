@@ -78,18 +78,18 @@ the card. This does not change stored task content.
 
 The frontend consumes the coordinator's public execution status rather than inferring protection
 from a visible card. Android reports active only after native foreground-service proof. Denied
-admission is limited; revocation is interrupted. iOS's current audio strategy reports limited.
-An interrupted iOS player that throws on resume is removed, including its listener, and rebuilt
-with the same capped exponential retry used for admission. The last lease release cancels that
-retry; callbacks from a removed player cannot resume a replacement. Recovering audio never
-resubmits the model request. The audio API exposes no execution-expiration callback, so a held
-lease and successful playback still cannot establish an OS guarantee.
+admission is limited; revocation is interrupted. iOS uses a finite UIKit background task and reports limited even after admission.
+The last lease release ends the assertion. Expiration ends it natively, then notifies held
+consumers to interrupt their work; no new assertion is requested in the same background stay.
+Returning to foreground permits a new window for remaining or newly started work. Late expiration
+callbacks cannot interrupt a replacement window. Suspension may delay JavaScript cleanup; cold
+startup still reconciles unfinished work. This does not promise a fixed duration or automatic replay.
 System low-power, battery-optimization, Live Activity, and notification settings are separate facts.
 Manufacturer-specific autostart/background restrictions require manual confirmation.
 
 iOS 26 continued-processing tasks are not integrated in this change. Their progress, expiration,
-and system-owned presentation require native feasibility acceptance before replacing the audio
-strategy. Neither current platform mechanism promises survival of force-stop or process death.
+and system-owned presentation require native feasibility acceptance before extending the finite
+UIKit window. Neither current platform mechanism promises survival of force-stop or process death.
 
 ## Acceptance
 

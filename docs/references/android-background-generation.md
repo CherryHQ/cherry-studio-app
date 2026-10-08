@@ -30,9 +30,13 @@ not interrupt successors. `START_NOT_STICKY` prevents replay after process death
 Each destination has a persistent numeric notification ID supplied by SystemIntegration. The
 same ID is used for ongoing content, approval, and a terminal result. One active destination
 anchors the service's required notification; the remaining destinations retain separate cards.
-Finishing an anchor moves service identity to a survivor without restarting execution. With no
-survivor, terminal teardown detaches the result instead of deleting it. Preparation without a
-known destination temporarily uses the service's generic notification.
+Finishing an anchor moves service identity to a survivor without restarting execution. Moving a
+finished result requires leaving foreground first, which Android 12+ does not allow a hidden app
+to re-enter, so while hidden the result keeps anchoring the service until foreground entry or
+teardown. With no survivor, terminal teardown detaches the result instead of deleting it.
+Preparation without a known destination temporarily uses the service's generic notification. The
+service and SystemIntegration name their shared channel with the same localized label, never with
+task content.
 
 SystemIntegration builds notifications with the same IDs because Expo's scheduled-notification
 identifiers do not expose the service's numeric Android identity. This is a notification bridge,
@@ -97,9 +101,9 @@ process termination. Settings guidance asks the user to adjust restrictions expl
 
 Android 15+ limits `dataSync` background execution to six hours; bringing the app to the foreground
 resets its budget. The adapter interrupts work one minute before that boundary, drains normal
-cancellation, and stops the library service. More background jobs are interrupted until the app
-returns to the foreground. This timer is an application cutoff. If native `onTimeout` or the system
-stops the service first, the patched destruction event interrupts current work while JavaScript
+cancellation for at most 30 seconds, and stops the library service. More background jobs are
+interrupted until the app returns to the foreground. This timer is an application cutoff. If
+native `onTimeout` or the system stops the service first, the patched destruction event interrupts current work while JavaScript
 remains alive. A refused foreground promotion does not stop it: the service logs it and stays a
 started service, so a short task can still finish; Android stops that service once the application
 is idle in the background, and only that destruction interrupts the work. Neither path restarts

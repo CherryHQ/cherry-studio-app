@@ -3,7 +3,6 @@ import BellIcon from '@cherrystudio/app-icons/icons/bell';
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import CalendarIcon from '@cherrystudio/app-icons/icons/calendar';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
-import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import { Section } from '@cherrystudio/ui/components';
@@ -35,14 +34,12 @@ const CAPABILITY_DISPLAY_ORDER = [
   'agents',
   'calendar',
   'reminders',
-  'health',
   'location',
 ] as const satisfies readonly AgentCapability[];
 
 const CAPABILITY_ICONS = {
   agents: BotIcon,
   calendar: CalendarIcon,
-  health: HeartPulseIcon,
   image: ImageIcon,
   location: MapPinIcon,
   reminders: BellIcon,
