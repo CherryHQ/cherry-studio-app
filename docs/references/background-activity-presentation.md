@@ -51,8 +51,11 @@ delivery lease. A superseded round cannot retire or post over its successor.
 
 ## Settled Surfaces
 
-Cancellation retires a card immediately. A completed or failed card remains available until the
-person opens its destination or a new round replaces it. A destination already visible when the
+Cancellation retires a card immediately. When the phone stops protecting a desktop conversation,
+such as after a minute of hidden unreachability, its card retires silently: the desktop still owns
+execution, so no terminal state or notice appears, and foreground recovery restores tracking. A
+completed or failed card remains available until the person opens its destination or a new round
+replaces it. A destination already visible when the
 round settles retires its result immediately. Merely opening the app does not acknowledge other
 conversations. Drawer-covered screens do not acknowledge results.
 

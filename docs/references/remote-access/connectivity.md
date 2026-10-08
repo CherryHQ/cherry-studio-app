@@ -37,7 +37,9 @@ the chat and sidebar offer a link to the affected device's settings.
 Foreground path monitoring is shared by the manager. Active recovery rounds share one native
 browser. Successful recovery or the final release stops browsing. Releasing the final lease
 cancels an unfinished attempt immediately; an established channel keeps the existing three-second
-idle grace. Backgrounding cancels browsing and connection work. All pending tasks drain on stop.
+idle grace. Backgrounding cancels browsing and connection work; iOS `inactive` overlays such as
+Control Center, system alerts and Face ID are not backgrounding. Returning to the foreground restarts
+reconnect backoff. All pending tasks drain on stop.
 
 `DesktopSession` receives one opened stream and owns Noise, hello, JSON-RPC, heartbeat and refresh.
 Only an `UNAUTHENTICATED` reply to authentication from the pinned desktop retires the binding for

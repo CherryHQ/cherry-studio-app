@@ -214,9 +214,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.backgroundBlocked = true;
     this.pendingCommandLease?.release();
     this.pendingCommandLease = undefined;
-    // The desktop still owns execution. Retire only the phone's surfaces.
+    // The desktop still owns execution. Retire only the phone's surfaces, without a terminal card.
     for (const observation of this.observations.values()) {
-      observation.reply?.finish('cancelled');
+      observation.reply?.retire();
       observation.reply = undefined;
     }
     this.publishExecution();
@@ -680,8 +680,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
         sessionTitle: observation.snapshot?.session.title ?? '',
         onInterrupt: () => {
           this.backgroundBlocked = true;
-          // The desktop still owns execution. Retire only the phone's surface.
-          observation!.reply?.finish('cancelled');
+          // The desktop still owns execution. Retire only the phone's surface, without a terminal card.
+          observation!.reply?.retire();
           observation!.reply = undefined;
           this.publishExecution();
         },
