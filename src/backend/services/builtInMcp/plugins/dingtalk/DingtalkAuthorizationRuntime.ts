@@ -1,5 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import {
   PluginError,
   type PluginAuthorizationState,
@@ -115,10 +116,10 @@ export class DingtalkAuthorizationRuntime implements PluginAuthorizationRuntime 
     return this.serialize(async () => this.project());
   }
   get attemptSignal() {
-    return AbortSignal.any([this.lifetime.signal, this.attempt.signal]);
+    return this.attempt.signal;
   }
   private get renewalSignal() {
-    return AbortSignal.any([this.lifetime.signal, this.renewal.signal]);
+    return this.renewal.signal;
   }
 
   begin() {
@@ -207,20 +208,19 @@ export class DingtalkAuthorizationRuntime implements PluginAuthorizationRuntime 
       if (!pending || pending.id !== attemptId) throw cancelled();
       if (pending.status !== 'waiting' || Date.now() < pending.nextPollAt) return this.project();
       pending.nextPollAt = Date.now() + pending.intervalMs;
-      const requestSignal = AbortSignal.any([
-        signal,
-        AbortSignal.timeout(Math.max(1, pending.expiresAt - Date.now())),
-      ]);
       const current =
         pending.stage === 'permission' && pending.previousId
           ? await this.resolve(pending.previousId, this.renewalSignal)
           : undefined;
+      const deadline = new AbortController();
+      const timer = setTimeout(() => deadline.abort(), Math.max(1, pending.expiresAt - Date.now()));
+      const request = linkAbortSignals([signal, deadline.signal]);
       let result;
       try {
         result = await dingtalkOauth.poll(
           pending,
           pending.application.clientId,
-          requestSignal,
+          request.signal,
           current?.tokens.accessToken,
         );
       } catch (error) {
@@ -230,6 +230,9 @@ export class DingtalkAuthorizationRuntime implements PluginAuthorizationRuntime 
           return this.project();
         }
         throw error;
+      } finally {
+        clearTimeout(timer);
+        request.dispose();
       }
       signal.throwIfAborted();
       if (result.status === 'pending' || result.status === 'slow-down') {
@@ -507,13 +510,19 @@ export class DingtalkAuthorizationRuntime implements PluginAuthorizationRuntime 
       return this.project();
     });
   }
+  /** stop() aborts the current attempt and renewal; generations replaced afterwards start aborted. */
+  private nextGeneration() {
+    const controller = new AbortController();
+    if (this.lifetime.signal.aborted) controller.abort(this.lifetime.signal.reason);
+    return controller;
+  }
   interrupt() {
     this.attempt.abort();
-    this.attempt = new AbortController();
+    this.attempt = this.nextGeneration();
   }
   invalidateGrant() {
     this.renewal.abort();
-    this.renewal = new AbortController();
+    this.renewal = this.nextGeneration();
     this.resolutions.clear();
     this.failures.clear();
     this.permission = undefined;

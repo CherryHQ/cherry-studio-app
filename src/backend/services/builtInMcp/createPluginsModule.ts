@@ -201,6 +201,7 @@ export function createPluginsModule(
           ? await current!.runtime.prepareRevocation!(current!.grant.id).catch(() => undefined)
           : undefined;
         await authorizations.credentials.disconnect(pluginId);
+        getPluginDefinition(pluginId)?.clearLocalFiles?.();
         if (!canRevoke) return { revocation: 'not-applicable' as const };
         if (!revocation)
           return {
