@@ -8,6 +8,7 @@ import type { PreviewSource } from '@cherrystudio/file-preview/core';
 import {
   Preview,
   type PreviewDiagnostic,
+  type PreviewOptions,
   type PreviewResources,
 } from '@cherrystudio/file-preview/react';
 import type { CSSProperties } from 'react';
@@ -60,7 +61,29 @@ function reportDiagnostic({ level, code, context, message, detail }: PreviewDiag
   });
 }
 
+/**
+ * Below this page width a 256px side outline would leave too little room for pages, so the PDF
+ * outline floats over them instead. Phones in either orientation stay below it; tablets keep the panel.
+ */
+const OVERLAY_OUTLINE_MAX_WIDTH = 640;
+
+const baseOptions = {
+  bottomInset: 'content',
+  docx: { initialZoom: 'fit-width', normalizeSymbolBullets: true },
+  xlsx: { opaqueHeaders: true },
+} satisfies PreviewOptions;
+// Stable references: an options change re-renders without reopening, but identity churn is wasted work.
+const layoutOptions: Record<'panel' | 'overlay', PreviewOptions> = {
+  panel: { ...baseOptions, pdf: { outlineLayout: 'panel' } },
+  overlay: { ...baseOptions, pdf: { outlineLayout: 'overlay' } },
+};
+
+function currentLayoutOptions(): PreviewOptions {
+  return layoutOptions[window.innerWidth < OVERLAY_OUTLINE_MAX_WIDTH ? 'overlay' : 'panel'];
+}
+
 let currentSource: PreviewSource | null = null;
+let lastRender: FilePreviewRenderOptions | null = null;
 
 function sourceFor(info: FilePreviewRenderOptions['source']): PreviewSource {
   // Theme and locale updates re-render with the same source, so the open document survives them.
@@ -73,6 +96,7 @@ function sourceFor(info: FilePreviewRenderOptions['source']): PreviewSource {
 const root = createRoot(document.getElementById('root')!);
 
 function render(options: FilePreviewRenderOptions): void {
+  lastRender = options;
   document.documentElement.style.colorScheme = options.isDark ? 'dark' : 'light';
   document.documentElement.style.backgroundColor = options.style['--background'] ?? '';
   root.render(
@@ -84,12 +108,18 @@ function render(options: FilePreviewRenderOptions): void {
         post({ type: 'error', code: error.code, message: error.message.slice(0, 4096) })
       }
       onRequestOpen={(reason) => post({ type: 'requestOpen', reason })}
+      options={currentLayoutOptions()}
       resources={resources}
       source={sourceFor(options.source)}
       style={options.style as CSSProperties}
     />,
   );
 }
+
+// Rotation and split-screen resizes can cross the outline threshold.
+window.addEventListener('resize', () => {
+  if (lastRender) render(lastRender);
+});
 
 window[FILE_PREVIEW_PAGE_GLOBAL] = {
   receive: (message) => {

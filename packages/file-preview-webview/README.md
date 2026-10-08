@@ -35,6 +35,13 @@ drops the package's fallback worker files because `createWorker` always takes pr
   fonts and media. Rendered documents cannot reach the network.
 - **Viewport.** `user-scalable=no`; the package owns pinch zoom inside its panes.
 
+## Preview Options
+
+`main.tsx` enables the package's opt-in host options: `bottomInset: 'content'`, DOCX
+`initialZoom: 'fit-width'` and `normalizeSymbolBullets`, and XLSX `opaqueHeaders`. The PDF
+outline uses `overlay` below 640 CSS pixels of page width and `panel` otherwise; a `resize`
+listener re-renders with the matching layout, so rotation needs no message from the app.
+
 ## Bridge Protocol
 
 [`src/protocol.ts`](src/protocol.ts) is shared by the page and the app. The app validates every page

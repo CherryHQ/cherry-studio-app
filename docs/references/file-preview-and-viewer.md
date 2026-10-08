@@ -133,6 +133,12 @@ Dark mode adds the package's `dark` class; `--background`, `--foreground`, `--pr
 `muted`) and `--muted-foreground` uses `muted-foreground`. Toolbar buttons are 44 points and the
 trailing inset is the bottom safe area. The locale is the resolved app language.
 
+The page enables the package's opt-in host options: the bottom inset is trailing space inside each
+document's scroll content, DOCX opens fitted to the width (manual zoom then sticks), Symbol and
+Wingdings bullets render as Unicode, and spreadsheet headers are opaque. The PDF outline floats over
+the pages when the page is narrower than 640 CSS pixels and stays a side panel otherwise; the page
+re-evaluates this on resize.
+
 `onRequestOpen('too_large')` opens the system viewer; `unsupported` replaces the page with the
 platform viewer state instead of launching another app on its own. Images keep the native image
 viewer, which already zooms, saves to Photos and pages exported documents.

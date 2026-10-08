@@ -1751,7 +1751,7 @@ packages:
         optional: true
 
   '@cherrystudio/file-preview@file:../../../../../../tmp/fp-pack/cherrystudio-file-preview-0.1.0-alpha.0.tgz':
-    resolution: {integrity: sha512-Lf7DyD6a1bUiRra10L0OWGftZhhph9bPqituT8dekp8NpFulobYiaL5y+RhSZYOGfW8P/lYjbIFx042iBQgB9g==, tarball: file:../../../../../../tmp/fp-pack/cherrystudio-file-preview-0.1.0-alpha.0.tgz}
+    resolution: {integrity: sha512-20gFNR9yIF3aRvf0siTiovAbTSYB0y4J7RzbeVEepWbtGQOTwextGmy8qdeIX/9nY3vHksiGnUEjz20IPlrriA==, tarball: file:../../../../../../tmp/fp-pack/cherrystudio-file-preview-0.1.0-alpha.0.tgz}
     version: 0.1.0-alpha.0
     peerDependencies:
       react: ^19.0.0
