@@ -64,7 +64,7 @@ export function useLocalConversation(input: {
     [projector, state, title],
   );
   const historyMessages = useMemo(
-    () => (projector ? history.map((message) => projector.message(message, state)) : []),
+    () => (projector ? projector.history(history, state) : []),
     [projector, history, state],
   );
   const messages = useMemo(() => {

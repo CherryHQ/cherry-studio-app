@@ -55,7 +55,10 @@ export type RemoteMessagePart =
       id: string;
       kind: 'text' | 'reasoning';
       text: string;
+      /** Whether `text` holds the content; otherwise `resource` reads it. */
       complete: boolean;
+      /** The part's own generation state, which settles before its message may. */
+      state: 'streaming' | 'completed';
       resource?: RemoteResource;
     }
   | {
