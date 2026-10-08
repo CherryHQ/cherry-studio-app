@@ -15,7 +15,11 @@ import {
   AiUsageRecordTimelineQuerySchema,
 } from '@/shared/data/api/schemas/aiUsageRecords';
 
-import type { AiUsageCaptureContext, RecordAiInvocationInput } from '../AiUsageRecordService';
+import type {
+  AiUsageCaptureContext,
+  CommittedAiInvocationUsage,
+  RecordAiInvocationInput,
+} from '../AiUsageRecordService';
 import { AiUsageRecordService } from '../AiUsageRecordService';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
@@ -366,42 +370,93 @@ describe('AI usage analytics', () => {
     );
   });
 
-  test('reports each newly committed invocation to product analytics exactly once', async () => {
-    const trackTokenUsage = jest.fn();
-    await installTestHost({
-      AnalyticsService: { trackTokenUsage },
-      DbService: application.get('DbService'),
-    });
+  test('emits immutable usage facts only for newly committed invocations', async () => {
+    const committed = jest.fn((_rows: readonly CommittedAiInvocationUsage[]) => ({
+      inTransaction: sqlite.isTransaction,
+      count: sqlite.prepare('SELECT COUNT(*) AS count FROM ai_usage_record').get()?.count,
+    }));
+    const subscription = service.onInvocationsCommitted(committed);
+    try {
+      const agentCall = invocation(
+        'analytics-1',
+        1000,
+        { inputTokens: 100, outputTokens: 20 },
+        context('openai', { source: { type: 'agent', id: 'agent-1', name: 'Agent', icon: null } }),
+      );
+      const assistantCall = invocation('analytics-2', 2000, { inputTokens: 5, outputTokens: 1 });
+      await service.recordInvocations([agentCall]);
+      // A mixed retry batch publishes only the new invocation.
+      await service.recordInvocations([agentCall, assistantCall]);
+      await service.recordInvocations([agentCall, assistantCall]);
+      expect(committed).toHaveBeenCalledTimes(2);
+      expect(committed).toHaveBeenNthCalledWith(1, [
+        {
+          requestId: 'analytics-1',
+          inputTokens: 100,
+          outputTokens: 20,
+          modelId: 'model-1',
+          providerId: 'openai',
+          sourceType: 'agent',
+        },
+      ]);
+      expect(committed).toHaveBeenNthCalledWith(2, [
+        {
+          requestId: 'analytics-2',
+          inputTokens: 5,
+          outputTokens: 1,
+          modelId: 'model-1',
+          providerId: 'a',
+          sourceType: 'assistant',
+        },
+      ]);
+      expect(committed.mock.results.map(({ value }) => value)).toEqual([
+        { inTransaction: false, count: 1 },
+        { inTransaction: false, count: 2 },
+      ]);
+      for (const [rows] of committed.mock.calls) {
+        expect(Object.isFrozen(rows)).toBe(true);
+        expect(Object.isFrozen(rows[0])).toBe(true);
+      }
+    } finally {
+      subscription.dispose();
+    }
+  });
 
-    const agentCall = invocation(
-      'analytics-1',
-      1000,
-      { inputTokens: 100, outputTokens: 20 },
-      context('openai', {
-        source: { type: 'agent', id: 'agent-1', name: 'Agent', icon: null },
+  test('does not emit usage facts when the transaction rolls back', async () => {
+    const dbService = application.get('DbService');
+    const write = dbService.withWriteTx.bind(dbService);
+    const failure = jest.spyOn(dbService, 'withWriteTx').mockImplementationOnce((callback) =>
+      write(async (tx) => {
+        await callback(tx);
+        throw new Error('Commit failed');
       }),
     );
-    const assistantCall = invocation('analytics-2', 2000, { inputTokens: 5, outputTokens: 1 });
-    await service.recordInvocations([agentCall, assistantCall]);
-    // A replayed request is rejected by the unique requestId, so it must not be
-    // reported a second time either.
-    await service.recordInvocations([agentCall]);
+    const committed = jest.fn();
+    const subscription = service.onInvocationsCommitted(committed);
+    try {
+      await service.recordInvocation(invocation('rolled-back', 1000, { inputTokens: 1 }));
+      expect(committed).not.toHaveBeenCalled();
+      expect(sqlite.prepare('SELECT COUNT(*) AS count FROM ai_usage_record').get()?.count).toBe(0);
+    } finally {
+      subscription.dispose();
+      failure.mockRestore();
+    }
+  });
 
-    expect(trackTokenUsage).toHaveBeenCalledTimes(2);
-    expect(trackTokenUsage).toHaveBeenNthCalledWith(1, {
-      input_tokens: 100,
-      model: 'model-1',
-      output_tokens: 20,
-      provider: 'openai',
-      source: 'agent',
+  test('a failing usage observer cannot block committed writes or other observers', async () => {
+    const throwing = service.onInvocationsCommitted(() => {
+      throw new Error('Observer failed');
     });
-    expect(trackTokenUsage).toHaveBeenNthCalledWith(2, {
-      input_tokens: 5,
-      model: 'model-1',
-      output_tokens: 1,
-      provider: 'a',
-      source: 'chat',
-    });
+    const committed = jest.fn();
+    const subscription = service.onInvocationsCommitted(committed);
+    try {
+      await service.recordInvocation(invocation('observer-error', 1000, { inputTokens: 1 }));
+      expect(committed).toHaveBeenCalledTimes(1);
+      expect(sqlite.prepare('SELECT COUNT(*) AS count FROM ai_usage_record').get()?.count).toBe(1);
+    } finally {
+      throwing.dispose();
+      subscription.dispose();
+    }
   });
 });
 

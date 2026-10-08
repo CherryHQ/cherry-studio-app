@@ -51,6 +51,8 @@ describe('resolved architecture boundaries', () => {
     ['src/frontend/hooks/probe.ts', '@earendil-works/pi-ai/api/openai-completions'],
     ['src/frontend/utils/probe.ts', '@cherrystudio/ai-core/provider'],
     ['src/frontend/utils/probe.ts', '@cherrystudio/ai-sdk-provider'],
+    ['src/frontend/utils/probe.ts', '@cherrystudio/ai-runtime/provider'],
+    ['src/frontend/utils/probe.ts', '@cherrystudio/ai-runtime/utils'],
     ['src/frontend/utils/probe.ts', 'drizzle-orm/sqlite-core'],
     ['src/frontend/utils/probe.ts', 'expo-sqlite'],
     ['src/shared/data/probe.ts', 'react-native'],
@@ -72,6 +74,10 @@ describe('resolved architecture boundaries', () => {
   });
 
   it.each([
+    [
+      'src/frontend/utils/probe.ts',
+      "import { formatApiHost } from '@cherrystudio/provider-registry';",
+    ],
     ['src/frontend/utils/probe.ts', "import '@cherrystudio/universal/ai/builtinTools';"],
     ['src/frontend/features/chat/probe.ts', "import './components/ChatInput/ChatInput';"],
     ['src/frontend/features/chat/probe.ts', "import '@/frontend/hooks/plugin';"],

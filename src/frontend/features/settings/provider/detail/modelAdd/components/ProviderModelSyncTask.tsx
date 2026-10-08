@@ -1,4 +1,4 @@
-import { formatApiHost, getBaseUrl } from '@cherrystudio/ai-runtime/provider';
+import { formatApiHost, getBaseUrl } from '@cherrystudio/provider-registry';
 import { Button, ContentState, useAlert } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
