@@ -2,7 +2,7 @@
  * `run_js`: the model runs JavaScript for exact computation.
  *
  * Isolated by construction (docs/references/agent/agent-tools-and-resources.md):
- * each call gets a fresh native Hermes runtime whose global object holds only
+ * each call gets a fresh native QuickJS runtime whose global object holds only
  * standard built-ins, so the code reaches nothing of the app, the network, or
  * the device. It has no side effects, which is why it needs no approval.
  */
@@ -21,8 +21,7 @@ export const RUN_JS_MAX_CODE_LENGTH = 100_000;
 
 export const RUN_JS_LIMITS: JsSandboxLimits = {
   timeoutMs: 10_000,
-  softHeapBytes: 64 * 1024 * 1024,
-  hardHeapBytes: 256 * 1024 * 1024,
+  memoryBytes: 64 * 1024 * 1024,
   maxResultBytes: 32 * 1024,
   maxLogBytes: 8 * 1024,
 };
@@ -43,7 +42,7 @@ export function createRunJsTool(sandbox: JsSandbox): RuntimeTool {
     providerName: RUN_JS_TOOL_NAME,
     displayName: 'Run JavaScript',
     description:
-      'Run JavaScript in an isolated sandbox for exact computation: arithmetic, statistics, date and time math, counting, sorting, parsing, and transforming data. `return` a JSON-serializable value (Map and Set become object and array, BigInt becomes a string); `console.log` output is returned as `logs`. Standard ECMAScript only, including Intl, TextEncoder, and atob/btoa. There is no network, file, timer, module, eval, device, or app access, and nothing persists between calls. Each call is limited to 10 seconds and 64 MB of memory.',
+      'Run JavaScript in an isolated sandbox for exact computation: arithmetic, statistics, date and time math, counting, sorting, parsing, and transforming data. `return` a JSON-serializable value (Map and Set become object and array, BigInt becomes a string); `console.log` output is returned as `logs`. Standard ECMAScript plus atob/btoa. There is no Intl, so locale arguments to toLocaleString and similar methods are ignored; format numbers and dates yourself. There is no network, file, timer, module, device, or app access, and nothing persists between calls. Each call is limited to 10 seconds and 64 MB of memory.',
     inputSchema: toRuntimeInputSchema(runJsInputSchema),
     // The catalog overrides this from the resolved binding policy; the value
     // here is only the floor this tool declares for itself.

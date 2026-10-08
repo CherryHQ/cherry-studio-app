@@ -6,25 +6,25 @@ limits are described in [Agent Tools And Controlled Resources](../../docs/refere
 
 ## Design
 
-Each `run(runId, code, limits)` creates a fresh Hermes runtime from `hardenedHermesRuntimeConfig()`
-on a dedicated native thread and destroys it afterwards. The app's own Hermes runtime and JS thread
-are untouched, so a busy script cannot stall the UI and cannot reach app state: the sandbox's global
-object contains only ECMAScript built-ins plus a captured `console`. The C++ core in `cpp/` is shared
-by the iOS (Objective-C++ bridge) and Android (JNI) adapters and links the Hermes build that ships
-with React Native, adding nothing to the app size.
+Each `run(runId, code, limits)` creates a fresh [QuickJS-NG](https://github.com/quickjs-ng/quickjs)
+runtime on a dedicated native thread and destroys it afterwards. The app's own Hermes runtime and JS
+thread are untouched, so a busy script cannot stall the UI and cannot reach app state. QuickJS' `std`
+and `os` modules are not compiled in, so the sandbox's global object contains only ECMAScript
+built-ins, `atob`/`btoa`, `queueMicrotask`, `performance`, and a captured `console`. The C++ core in
+`cpp/` is shared by the iOS (Objective-C++ bridge) and Android (JNI) adapters.
 
-The configuration choices are measured against React Native 0.86's Hermes release build:
+QuickJS was chosen because it is built to embed untrusted code with budgets:
 
-| Setting | Reason |
+| Budget | Mechanism |
 | --- | --- |
-| `ES6BlockScoping` on | Off by default for source compiled on device; `for (let …)` closures would otherwise share one binding and compute wrong results silently. |
-| `MicrotaskQueue` on | Off by default; `await` would never resume. |
-| `watchTimeLimit` / `asyncTriggerTimeout` | Interrupt a running script from another thread; JavaScript cannot catch the interruption. Also used for cancellation. |
-| GC tripwire as the memory limit | Exceeding Hermes' `MaxHeapSize` aborts the whole process. The tripwire fires after a collection above the soft limit and interrupts the script, while the hard maximum stays far higher so allocation cannot outrun it. The tripwire fires once per runtime, which is one reason every run gets a new runtime (creation costs well under a millisecond). |
+| Time and cancellation | QuickJS polls an interrupt handler during bytecode and regular expression execution. Once it fires, the error is uncatchable and every later job stops too. |
+| Memory | The runtime allocates through `cpp/JsSandbox.cpp`'s allocator, which refuses allocations past the limit. The script sees a catchable out-of-memory error; the process is never at risk. The allocator also records that the limit was hit, because QuickJS cannot always allocate the error object itself. |
+| Native stack | QuickJS throws a catchable `RangeError` past 7 MiB of the 8 MiB thread stack, about 7,000 JavaScript calls deep. Deep JSON, nested source, and regular expressions are bounded by the same check. |
 
-Very large single allocations (long strings, huge arrays or `ArrayBuffer`s) fail with ordinary
-catchable `RangeError`s. A regular expression with catastrophic backtracking is interrupted, but may
-overrun the deadline by a few seconds.
+QuickJS has no `Intl`, so locale arguments to `toLocaleString` and similar methods are ignored.
+
+Both platforms compile QuickJS at `-O2`, including debug builds: at `-O0` it runs about 9x slower,
+and its larger frames cut the recursion that fits in the stack to about 800 calls.
 
 ## Contract
 
@@ -39,9 +39,19 @@ overrun the deadline by a few seconds.
 settle, since there are no timers or I/O), `cancelled`, or `internal`. `cancel(runId)` interrupts a
 run and ignores unknown ids. The caller (`src/backend/services/jsSandbox`) owns the limits.
 
+## QuickJS-NG
+
+`vendor/quickjs-ng` holds the unmodified `quickjs-amalgam.c` and `quickjs.h` from the
+`quickjs-amalgam.zip` asset of [QuickJS-NG v0.17.0](https://github.com/quickjs-ng/quickjs/releases/tag/v0.17.0)
+(SHA-256 `a0955463c74809173a253ff87365095e6972e8b171cfb6aa8a1e781adf35cfeb`), with its MIT license.
+`cpp/QuickJs.c` compiles it as one translation unit with assertions off, as in upstream release
+builds. To update, replace both files from a newer release's amalgamation, update the version and
+checksum here, and rerun the verification below.
+
 ## Verification
 
-The core can be exercised on macOS without building the app by compiling `cpp/JsSandbox.cpp`
-against the macOS slice of the matching `hermes-ios-<version>-hermes-ios-release.tar.gz` from Maven
-Central. Device behavior (iOS and Android Hermes builds, Android `Intl` through JNI) needs a new
-development build.
+The core can be exercised on macOS without building the app by compiling `cpp/JsSandbox.cpp` and
+`cpp/QuickJs.c` into a small harness that calls `run` and `cancel` on threads with an 8 MiB stack;
+building it with `-fsanitize=address,undefined` and without `NDEBUG` also checks QuickJS' own
+assertions, including that every value is released before the runtime is freed. Device behavior
+needs a new development build.

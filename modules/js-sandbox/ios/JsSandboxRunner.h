@@ -9,11 +9,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)runWithId:(NSString *)runId
                    code:(NSString *)code
               timeoutMs:(uint32_t)timeoutMs
-          softHeapBytes:(uint32_t)softHeapBytes
-          hardHeapBytes:(uint32_t)hardHeapBytes
+            memoryBytes:(uint32_t)memoryBytes
          maxResultBytes:(uint32_t)maxResultBytes
             maxLogBytes:(uint32_t)maxLogBytes
-    NS_SWIFT_NAME(run(id:code:timeoutMs:softHeapBytes:hardHeapBytes:maxResultBytes:maxLogBytes:));
+    NS_SWIFT_NAME(run(id:code:timeoutMs:memoryBytes:maxResultBytes:maxLogBytes:));
 
 + (void)cancelWithId:(NSString *)runId NS_SWIFT_NAME(cancel(id:));
 

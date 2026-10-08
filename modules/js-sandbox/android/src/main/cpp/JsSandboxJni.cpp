@@ -32,14 +32,12 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_expo_modules_jssandbox_JsSandboxNat
     jbyteArray runId,
     jbyteArray code,
     jint timeoutMs,
-    jint softHeapBytes,
-    jint hardHeapBytes,
+    jint memoryBytes,
     jint maxResultBytes,
     jint maxLogBytes) {
   const cherry::jssandbox::Limits limits{
       static_cast<uint32_t>(timeoutMs),
-      static_cast<uint32_t>(softHeapBytes),
-      static_cast<uint32_t>(hardHeapBytes),
+      static_cast<size_t>(memoryBytes),
       static_cast<size_t>(maxResultBytes),
       static_cast<size_t>(maxLogBytes),
   };

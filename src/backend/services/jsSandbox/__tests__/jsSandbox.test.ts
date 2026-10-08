@@ -3,8 +3,7 @@ import { createJsSandbox } from '../jsSandbox';
 
 const LIMITS = {
   timeoutMs: 1000,
-  softHeapBytes: 1,
-  hardHeapBytes: 2,
+  memoryBytes: 1,
   maxResultBytes: 3,
   maxLogBytes: 4,
 };

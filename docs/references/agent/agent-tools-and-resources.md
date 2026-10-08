@@ -507,20 +507,22 @@ Set become object and array and BigInt becomes a string. A result over 32 KiB is
 of its JSON text with `resultTruncated: true`; console output keeps its first 8 KiB.
 
 Isolation is structural rather than a permission check. [`modules/js-sandbox`](../../../modules/js-sandbox/README.md)
-creates a fresh Hermes runtime for every call, on its own native thread, from Hermes' hardened
-configuration: the global object holds standard built-ins, `Intl`, `TextEncoder`, `atob`/`btoa`,
-and a captured `console`, while `eval`, `Function`, `Proxy`, timers, modules, network, files, and
-every application binding are absent. Nothing persists between calls, so a script cannot observe
-another. The tool therefore has no side effects, runs as `auto` without an Agent capability group,
-and requires only that the model supports function calling and the client includes the native
-module; older clients omit the tool.
+creates a fresh QuickJS runtime for every call, on its own native thread. Its global object holds
+the standard ECMAScript built-ins, `atob`/`btoa`, `queueMicrotask`, `performance.now()`, and a
+captured `console`; there is no `Intl`, so locale arguments are ignored. Timers, modules, network,
+files, and every application binding are absent, and `eval` or `Function` only produce more code
+inside the same runtime. Nothing persists between calls, so a script cannot observe another. The
+tool therefore has no side effects, runs as `auto` without an Agent capability group, and requires
+only that the model supports function calling and the client includes the native module; older
+clients omit the tool.
 
-Each call is bounded by a 10-second deadline and a 64 MiB heap. Both interrupt the script from
-native code, which JavaScript cannot catch. The heap limit is a GC tripwire, not Hermes' own
-maximum: exceeding that maximum aborts the whole process, so it is set to 256 MiB to leave room for
-the tripwire to act first. Turn cancellation interrupts the run the same way. The Host adds a prompt
-section asking the model to use the tool for exact computation and to copy the data it needs into
-the code, because the sandbox cannot read files or tool results itself.
+Each call is bounded by a 10-second deadline and 64 MiB of memory. The deadline and turn
+cancellation interrupt the script from native code, including inside a regular expression, and
+JavaScript cannot catch the interruption. An allocation past the memory limit fails inside the
+script, so the app is never at risk; the outcome reports `memory` whenever the limit caused the
+failure. Recursion stops with a catchable `RangeError` about 7,000 calls deep. The Host adds a
+prompt section asking the model to use the tool for exact computation and to copy the data it needs
+into the code, because the sandbox cannot read files or tool results itself.
 
 ### Skill Boundary
 

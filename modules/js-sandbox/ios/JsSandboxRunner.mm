@@ -18,13 +18,12 @@ std::string toUtf8(NSString *value) {
 + (NSString *)runWithId:(NSString *)runId
                    code:(NSString *)code
               timeoutMs:(uint32_t)timeoutMs
-          softHeapBytes:(uint32_t)softHeapBytes
-          hardHeapBytes:(uint32_t)hardHeapBytes
+            memoryBytes:(uint32_t)memoryBytes
          maxResultBytes:(uint32_t)maxResultBytes
             maxLogBytes:(uint32_t)maxLogBytes
 {
   const cherry::jssandbox::Limits limits{
-      timeoutMs, softHeapBytes, hardHeapBytes, maxResultBytes, maxLogBytes};
+      timeoutMs, memoryBytes, maxResultBytes, maxLogBytes};
   const std::string result = cherry::jssandbox::run(toUtf8(runId), toUtf8(code), limits);
   return [[NSString alloc] initWithBytes:result.data()
                                   length:result.size()

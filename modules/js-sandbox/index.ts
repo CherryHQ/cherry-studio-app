@@ -3,10 +3,8 @@ import { requireOptionalNativeModule } from 'expo';
 /** Per-run budgets; the caller owns the policy. Sizes are in bytes. */
 export type JsSandboxLimits = {
   timeoutMs: number;
-  /** Heap size after a collection that stops the script. */
-  softHeapBytes: number;
-  /** Hermes aborts the process past this size, so keep it well above the soft limit. */
-  hardHeapBytes: number;
+  /** Cap on everything the script's runtime allocates. */
+  memoryBytes: number;
   maxResultBytes: number;
   maxLogBytes: number;
 };

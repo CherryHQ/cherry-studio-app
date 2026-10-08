@@ -29,10 +29,6 @@ android {
     ndkVersion rootProject.ext.ndkVersion
   }
 
-  buildFeatures {
-    prefab true
-  }
-
   defaultConfig {
     minSdkVersion safeExtGet("minSdkVersion", 24)
     targetSdkVersion safeExtGet("targetSdkVersion", 36)
@@ -58,19 +54,7 @@ android {
   }
 
   packagingOptions {
-    // The app already packages React Native's shared libraries; ship only ours.
-    excludes += [
-      "**/libc++_shared.so",
-      "**/libfbjni.so",
-      "**/libjsi.so",
-      "**/libhermesvm.so",
-      "**/libreactnative.so",
-    ]
+    // The app already packages React Native's copy of the shared C++ runtime.
+    excludes += ["**/libc++_shared.so"]
   }
-}
-
-dependencies {
-  // Versions are substituted by the React Native Gradle Plugin.
-  implementation "com.facebook.react:react-android"
-  implementation "com.facebook.react:hermes-android"
 }

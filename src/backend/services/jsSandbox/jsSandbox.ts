@@ -1,7 +1,7 @@
 /**
  * Runs model-written JavaScript in the native sandbox (`modules/js-sandbox`).
  *
- * Every run gets a fresh Hermes runtime on its own native thread, so a script
+ * Every run gets a fresh QuickJS runtime on its own native thread, so a script
  * can neither block the JS thread nor reach the app: its global object holds
  * only standard built-ins and a captured `console`.
  */

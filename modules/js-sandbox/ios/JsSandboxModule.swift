@@ -13,8 +13,7 @@ public class JsSandboxModule: Module {
             id: runId,
             code: code,
             timeoutMs: UInt32(clamping: limits.timeoutMs),
-            softHeapBytes: UInt32(clamping: limits.softHeapBytes),
-            hardHeapBytes: UInt32(clamping: limits.hardHeapBytes),
+            memoryBytes: UInt32(clamping: limits.memoryBytes),
             maxResultBytes: UInt32(clamping: limits.maxResultBytes),
             maxLogBytes: UInt32(clamping: limits.maxLogBytes)
           )
@@ -31,15 +30,14 @@ public class JsSandboxModule: Module {
     }
   }
 
-  /// Hermes bounds JavaScript recursion itself; this covers native recursion in
-  /// the parser, JSON, and regular expressions.
-  private static let stackSize = 4 << 20
+  /// QuickJS stops recursion at 7 MiB of this stack (`kMaxStackBytes`), which
+  /// leaves room for the native code below its checks.
+  private static let stackSize = 8 << 20
 }
 
 struct JsSandboxLimits: Record {
   @Field var timeoutMs: Int = 0
-  @Field var softHeapBytes: Int = 0
-  @Field var hardHeapBytes: Int = 0
+  @Field var memoryBytes: Int = 0
   @Field var maxResultBytes: Int = 0
   @Field var maxLogBytes: Int = 0
 }

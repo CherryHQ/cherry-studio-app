@@ -12,15 +12,13 @@ class JsSandboxModule : Module() {
 
     AsyncFunction("run") { runId: String, code: String, limits: JsSandboxLimits, promise: Promise ->
       // A dedicated thread per run: a script that spins until its deadline must
-      // not hold a shared executor, and parallel tool calls run side by side. A
-      // Java thread is already attached to the VM, which Hermes' Intl needs.
+      // not hold a shared executor, and parallel tool calls run side by side.
       Thread(null, {
         val result = JsSandboxNative.run(
           runId.toByteArray(Charsets.UTF_8),
           code.toByteArray(Charsets.UTF_8),
           limits.timeoutMs,
-          limits.softHeapBytes,
-          limits.hardHeapBytes,
+          limits.memoryBytes,
           limits.maxResultBytes,
           limits.maxLogBytes,
         )
@@ -34,15 +32,14 @@ class JsSandboxModule : Module() {
   }
 
   private companion object {
-    /** Hermes bounds JavaScript recursion; this covers native recursion in the parser, JSON, and regular expressions. */
-    const val STACK_SIZE_BYTES = 4L shl 20
+    /** QuickJS stops recursion at 7 MiB of this stack (`kMaxStackBytes`), leaving room for the native code below its checks. */
+    const val STACK_SIZE_BYTES = 8L shl 20
   }
 }
 
 class JsSandboxLimits : Record {
   @Field val timeoutMs: Int = 0
-  @Field val softHeapBytes: Int = 0
-  @Field val hardHeapBytes: Int = 0
+  @Field val memoryBytes: Int = 0
   @Field val maxResultBytes: Int = 0
   @Field val maxLogBytes: Int = 0
 }
@@ -57,8 +54,7 @@ internal object JsSandboxNative {
     runId: ByteArray,
     code: ByteArray,
     timeoutMs: Int,
-    softHeapBytes: Int,
-    hardHeapBytes: Int,
+    memoryBytes: Int,
     maxResultBytes: Int,
     maxLogBytes: Int,
   ): ByteArray
