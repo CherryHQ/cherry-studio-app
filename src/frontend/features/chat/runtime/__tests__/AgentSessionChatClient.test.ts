@@ -7,7 +7,7 @@ import type {
 } from '@/shared/contracts/agent';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 
-import { AgentSessionChatClient } from '../AgentSessionChatClient';
+import { AgentSessionChatClient, isAgentSessionBusy } from '../AgentSessionChatClient';
 
 function deferred<TValue>() {
   let resolve!: (value: TValue) => void;
@@ -295,6 +295,44 @@ describe('AgentSessionChatClient', () => {
     expect(protocol.observeSession).not.toHaveBeenCalled();
   });
 
+  test('keeps first-message admission busy and cancellable without observing an uncreated session', async () => {
+    const admission = deferred<AgentSessionSnapshot['session']>();
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    protocol.startSession.mockImplementation(() => admission.promise);
+    const client = new AgentSessionChatClient(protocol);
+    const input = {
+      agentId: 'agent-1',
+      executionTarget: { kind: 'local' as const },
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ text: 'Hello', type: 'text' as const }],
+    };
+    const starting = client.startSession(input);
+    try {
+      expect(isAgentSessionBusy(client.getState(input.sessionId))).toBe(true);
+      await expect(client.startSession(input)).rejects.toMatchObject({
+        view: { code: 'SESSION_BUSY' },
+      });
+      await client.cancelTurn(input.sessionId);
+      await client.cancelTurn(input.sessionId);
+      expect(protocol.cancelSubmission).toHaveBeenCalledTimes(1);
+      expect(protocol.cancelSubmission).toHaveBeenCalledWith({ sessionId: input.sessionId });
+      expect(protocol.cancelTurn).not.toHaveBeenCalled();
+      expect(protocol.observeSession).not.toHaveBeenCalled();
+    } finally {
+      // Reservation can already have committed when Stop arrives. A successful
+      // admission stays navigable so its cancelled durable turn is not orphaned.
+      admission.resolve(snapshot().session);
+      await starting;
+      expect(isAgentSessionBusy(client.getState(input.sessionId))).toBe(false);
+      client.dispose();
+    }
+  });
+
   test('keeps an admitted Draft submission independent from destination observation', async () => {
     const protocol = protocolWithObservation(async () => {
       throw new Error('observation unavailable');
@@ -399,6 +437,30 @@ describe('AgentSessionChatClient', () => {
 
     expect(onSessionChanged).toHaveBeenCalledTimes(1);
     expect(onSessionChanged).toHaveBeenCalledWith('session-1');
+  });
+
+  test('refreshes the durable transcript when a message settles, not when it is created', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const onTranscriptChanged = jest.fn();
+    const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
+    await client.observe('session-1');
+    onTranscriptChanged.mockClear();
+
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.created', message: assistantMessage() });
+    expect(client.getState('session-1').liveMessages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
+    expect(onTranscriptChanged).not.toHaveBeenCalled();
+
+    listener?.({ type: 'message.finalized', message: assistantMessage() });
+    expect(onTranscriptChanged).toHaveBeenCalledTimes(1);
+    expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
   });
 
   test('drops a deleted turn from live state and refreshes the durable transcript', async () => {

@@ -262,9 +262,10 @@ export function useAgentChatControls(input: {
     };
   }, [composerKey]);
 
+  const cancellationSessionId = sessionId ?? pendingSend?.sessionId;
   const cancel = useCallback(() => {
-    return sessionId ? client.cancelTurn(sessionId) : Promise.resolve();
-  }, [client, sessionId]);
+    return cancellationSessionId ? client.cancelTurn(cancellationSessionId) : Promise.resolve();
+  }, [client, cancellationSessionId]);
   const send = useCallback(
     async (
       message: Omit<AgentSubmitMessageInput, 'sessionId' | 'userMessageId' | 'assistantMessageId'>,
@@ -331,7 +332,7 @@ export function useAgentChatControls(input: {
         : undefined,
     isApprovalPending:
       activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
-    isBusy: isSessionBusy,
+    isBusy: isSessionBusy || Boolean(pendingSend?.isSubmitting),
     sendMessage: send,
   };
 }

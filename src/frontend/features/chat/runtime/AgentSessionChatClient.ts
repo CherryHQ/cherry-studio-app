@@ -268,10 +268,21 @@ export class AgentSessionChatClient {
   }
 
   async startSession(input: AgentStartSessionInput): Promise<AgentSessionView> {
-    const session = await this.protocol.startSession(input);
-    // The destination route observes after navigation. Its atomic Host snapshot
-    // reconstructs any live turn state without leaving an ownerless listener here.
-    return session;
+    const entry = this.getEntry(input.sessionId);
+    const submission = this.beginSubmission(entry);
+    try {
+      // A draft already has its reserved session ID, but there is no durable
+      // session to observe yet. Stop targets the pending admission by that ID.
+      return await this.protocol.startSession(input);
+    } finally {
+      this.endSubmission(entry, submission);
+      this.updateState(entry, { ...entry.state, isSubmitting: false });
+      // The destination route owns observation after navigation.
+      if (entry.listeners.size === 0 && this.sessions.get(input.sessionId) === entry) {
+        this.stopObservation(entry);
+        this.sessions.delete(input.sessionId);
+      }
+    }
   }
 
   async forkSession(
@@ -556,7 +567,8 @@ export class AgentSessionChatClient {
         if (event.message.role === 'user') {
           this.options.onSessionChanged?.(entry.state.sessionId);
         }
-        this.options.onTranscriptChanged?.(entry.state.sessionId);
+        // The live overlay already shows a created row; finalization refreshes
+        // the durable transcript once the turn's rows have settled.
         return;
       case 'message.delta': {
         if (event.delta.op === 'tool.input.preview') {

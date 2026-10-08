@@ -26,7 +26,7 @@ surfaces.
   Other fields save immediately. Writes run in order and retain only the latest queued change per
   field. Failed writes keep the draft and offer Retry. A blank name remains invalid and never
   replaces the stored name. New agents still require an explicit Save to create the record.
-- Calendar, reminders, health, location, and file capabilities are injected uniformly by the Host
+- Calendar, reminders, location, and file capabilities are injected uniformly by the Host
   when their system gates pass. The frontend keeps web search as a Session-scoped composer
   selection. Selecting an image model saves that model on the Agent; image parameters belong to
   each submission. Image-model conversations remain ordinary Agent Sessions in the chat drawer.

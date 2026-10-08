@@ -9,7 +9,7 @@ import {
   databaseDirectory,
 } from '@/backend/data/storage/storagePaths';
 
-import { customSqlStatements } from './customSql';
+import { backfillSearchableText, customSqlStatements } from './customSql';
 import { migrations } from './migrations';
 import { type DatabaseSchema, schema } from './schemas';
 import { seedDatabase } from './seeding';
@@ -74,10 +74,11 @@ export class DbService extends BaseService {
     try {
       connection?.sqlite.closeSync();
     } catch (error) {
-      // Drizzle prepares a statement per query and never finalizes it, and
-      // with the pre-close walk disabled SQLite refuses to close while any
-      // remain (SQLITE_BUSY). Leaking one handle at teardown is the accepted
-      // cost; a rejected onStop would leave the service stuck in Stopping.
+      // The patched Drizzle session finalizes each statement after it runs, but
+      // with the pre-close walk disabled SQLite still refuses to close while
+      // any statement remains (SQLITE_BUSY). Leaking one handle at teardown is
+      // the accepted cost; a rejected onStop would leave the service stuck in
+      // Stopping.
       logger.warn('Failed to close database connection', error as Error);
     }
   }
@@ -169,6 +170,15 @@ export class DbService extends BaseService {
 
     for (const statement of customSqlStatements) {
       this.sqlite.execSync(statement);
+    }
+    // Rows indexed by an older trigger body, including restored backups, may
+    // still hold source Markdown. A failure only degrades search, so startup
+    // continues and the unjournaled run repeats on the next launch.
+    try {
+      backfillSearchableText(this.sqlite);
+    } catch (error) {
+      logger.warn('Failed to backfill searchable message text', error as Error);
+      return;
     }
 
     const now = Date.now();

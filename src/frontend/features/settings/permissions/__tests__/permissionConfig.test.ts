@@ -1,4 +1,4 @@
-import { type DevicePermissionStatus, HEALTH_PERMISSION_SCOPES } from '@/shared/contracts';
+import type { DevicePermissionStatus } from '@/shared/contracts';
 
 import {
   getPermissionAction,
@@ -22,14 +22,6 @@ describe('permission settings', () => {
         'calendar.write': granted,
       }),
     ).toMatchObject({ state: 'error' });
-  });
-  test('keeps partial Android health access distinct from all granted or all denied', () => {
-    expect(
-      getPermissionStatus('health', {
-        ...Object.fromEntries(HEALTH_PERMISSION_SCOPES.map((scope) => [scope, denied])),
-        'health.steps.read': granted,
-      }),
-    ).toMatchObject({ state: 'limited' });
   });
   test('saving photos does not imply permission to browse the library', () => {
     expect(
@@ -60,9 +52,6 @@ describe('permission settings', () => {
     expect(getPermissionAction({ state: 'error', canAskAgain: false })).toBe('retry');
     expect(
       getPermissionAction({ state: 'unavailable', canAskAgain: false, reason: 'unsupported' }),
-    ).toBeUndefined();
-    expect(
-      getPermissionAction({ state: 'error', canAskAgain: false, reason: 'native-unavailable' }),
     ).toBeUndefined();
   });
 });

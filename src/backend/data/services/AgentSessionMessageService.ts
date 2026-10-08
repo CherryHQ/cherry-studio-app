@@ -2,7 +2,6 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { agentSessionMessageTable, agentSessionTable, agentTable } from '@/backend/data/db/schemas';
-import type { AgentSessionMessageRow } from '@/backend/data/db/schemas/agentSessionMessage';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   AGENT_SESSION_MESSAGES_DEFAULT_LIMIT,
@@ -13,7 +12,12 @@ import {
   ListAgentSessionMessagesQuerySchema,
 } from '@/shared/data/api/schemas/agentSessionMessages';
 
-import { toAgentMessageView, toAgentSessionView } from './utils/agentSessionRows';
+import {
+  agentMessageViewColumns,
+  type AgentMessageViewRow,
+  toAgentSessionView,
+  toReadableAgentMessageViews,
+} from './utils/agentSessionRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
 /** SQL-only window and selected-ID reads for the durable linear transcript. */
@@ -38,7 +42,7 @@ export class AgentSessionMessageService {
 
     if (query.ids) {
       const rows = await this.db
-        .select()
+        .select(agentMessageViewColumns)
         .from(agentSessionMessageTable)
         .where(
           and(
@@ -47,7 +51,7 @@ export class AgentSessionMessageService {
           ),
         )
         .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id));
-      return { items: rows.map(toAgentMessageView) };
+      return { items: toReadableAgentMessageViews(rows) };
     }
 
     const limit = query.limit ?? AGENT_SESSION_MESSAGES_DEFAULT_LIMIT;
@@ -66,7 +70,7 @@ export class AgentSessionMessageService {
     const head = pageRows[0];
     const tail = pageRows.at(-1);
     return {
-      items: pageRows.map(toAgentMessageView),
+      items: toReadableAgentMessageViews(pageRows),
       ...(tail && (isNewer ? cursor : rows.length > limit)
         ? { nextCursor: encodeCursor(tail.createdAt, tail.id) }
         : {}),
@@ -109,13 +113,13 @@ export class AgentSessionMessageService {
     return {
       assistantName: rows[0].assistantName ?? undefined,
       session: toAgentSessionView(rows[0].session),
-      messages: messages.map(toAgentMessageView),
+      messages: toReadableAgentMessageViews(messages),
     };
   }
 
   private async readAround(sessionId: string, messageId: string, limit: number) {
     const [target] = await this.db
-      .select()
+      .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
       .where(
         and(
@@ -143,7 +147,7 @@ export class AgentSessionMessageService {
     const head = rows[0];
     const tail = rows[rows.length - 1];
     return {
-      items: rows.map(toAgentMessageView),
+      items: toReadableAgentMessageViews(rows),
       ...(older.length > olderCount ? { nextCursor: encodeCursor(tail.createdAt, tail.id) } : {}),
       ...(newer.length > newerCount
         ? { previousCursor: encodeCursor(head.createdAt, head.id) }
@@ -156,14 +160,14 @@ export class AgentSessionMessageService {
     limit: number,
     direction: 'asc' | 'desc',
     cursor: { key: number; id: string } | null,
-  ): Promise<AgentSessionMessageRow[]> {
+  ): Promise<AgentMessageViewRow[]> {
     const ordering = keysetOrdering(
       agentSessionMessageTable.createdAt,
       agentSessionMessageTable.id,
       { major: direction, tie: direction },
     );
     return this.db
-      .select()
+      .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
       .where(
         and(

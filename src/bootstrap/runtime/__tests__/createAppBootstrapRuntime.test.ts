@@ -123,7 +123,7 @@ const createRuntime = () =>
     BackgroundReplyRuntime: mockBackgroundReply,
     KeepAliveCoordinator: mockKeepAlive,
     BackgroundActivityManager: {} as never,
-    AudioKeepAliveSource: {} as never,
+    IosBackgroundExecutionSource: {} as never,
     AndroidBackgroundActivityRuntime: {} as never,
     CacheService: mockCache,
     DbService: mockDb,

@@ -8,8 +8,7 @@
  *    tool whose scopes were grantable when the turn was admitted; this wrapper
  *    rechecks them again immediately before the side effect, because the user
  *    can revoke access in Settings while a turn is running. Requestable scopes
- *    trigger a system prompt here, after the in-app approval. Health summaries
- *    can proceed with a subset of their requested metrics.
+ *    trigger a system prompt here, after the in-app approval.
  * 2. A failure the model could act on is a value, not a throw. A thrown error
  *    reaches the model as an opaque "tool execution failed", which tells it
  *    nothing about whether retrying could work.
@@ -57,7 +56,6 @@ type DeviceRuntimeToolInput<TSchema extends z.ZodType> = {
   permissionScopes:
     | readonly DevicePermissionScope[]
     | ((input: z.output<TSchema>) => readonly DevicePermissionScope[]);
-  permissionMatch?: 'any';
   run(
     input: z.output<TSchema>,
     signal: AbortSignal,
@@ -97,13 +95,7 @@ export function createDeviceRuntimeTool<TSchema extends z.ZodType>(
           typeof input.permissionScopes === 'function'
             ? input.permissionScopes(parsed.data)
             : input.permissionScopes;
-        const permissions = await assertPermissions(
-          input.deps,
-          scopes,
-          input.capabilityId,
-          signal,
-          input.permissionMatch,
-        );
+        const permissions = await assertPermissions(input.deps, scopes, input.capabilityId, signal);
         throwIfAborted(signal);
         const value = await input.run(parsed.data, signal, permissions);
         throwIfAborted(signal);
@@ -142,7 +134,6 @@ async function assertPermissions(
   scopes: readonly DevicePermissionScope[],
   capabilityId: string,
   signal: AbortSignal,
-  match?: 'any',
 ): Promise<PermissionStatuses> {
   let statuses = await deps.devicePermissions.getStatuses(scopes);
   const requestable = scopes.filter((scope) => canRequestDevicePermission(statuses[scope]));
@@ -154,7 +145,7 @@ async function assertPermissions(
     };
   }
   const allowed = scopes.map((scope) => canUseDevicePermission(scope, statuses[scope]));
-  if (match === 'any' ? !allowed.some(Boolean) : !allowed.every(Boolean)) {
+  if (!allowed.every(Boolean)) {
     throw new Error(`System permission for ${capabilityId} is not available`);
   }
   return statuses;
