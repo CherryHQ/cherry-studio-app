@@ -6,7 +6,8 @@ import type { ComposerInitialAttachment } from '../utils/composerAttachments';
 
 type ComposerSessionProviderProps = PropsWithChildren<{
   initialAttachments?: readonly ComposerInitialAttachment[];
-  initialDraft?: string;
+  /** Read once when the session mounts; pass a function to defer reading a stored draft. */
+  initialDraft?: string | (() => string);
 }>;
 
 /** Owns one draft and imports its transient attachments into managed storage. */

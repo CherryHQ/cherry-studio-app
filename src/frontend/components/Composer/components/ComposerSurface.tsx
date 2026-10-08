@@ -1,5 +1,5 @@
 import { Composer, useToast } from '@cherrystudio/ui/components';
-import { type PropsWithChildren, useCallback, useRef } from 'react';
+import { type PropsWithChildren, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -71,8 +71,15 @@ export function ComposerSurface({
   const { dismissInput } = useComposerPresentationActions();
   const activeSendAttemptIdRef = useRef<number | null>(null);
   const nextSendAttemptIdRef = useRef(0);
+  // The composer's actions must not change with what was typed (see CherryUI's `Composer`), and
+  // callers rebuild their handlers on every update, so the handlers read these when invoked.
+  const latest = useRef({ attachments, draft, onSend, onStop });
+  useLayoutEffect(() => {
+    latest.current = { attachments, draft, onSend, onStop };
+  });
 
   const handleSend = useCallback(async () => {
+    const { attachments, draft, onSend } = latest.current;
     if (activeSendAttemptIdRef.current !== null) {
       logger.debug('Ignored duplicate message send', {
         attemptId: activeSendAttemptIdRef.current,
@@ -111,19 +118,23 @@ export function ComposerSurface({
       activeSendAttemptIdRef.current = null;
     }
   }, [
-    attachments,
     clearAttachments,
     dismissInput,
     dismissKeyboardOnSend,
-    draft,
     reportSendError,
     labels?.sendFailed,
-    onSend,
     addAttachments,
     setDraft,
     t,
     toast,
   ]);
+  const handleStop = useCallback(() => latest.current.onStop(), []);
+  const sendLabel = labels?.send ?? t('chat.input.action.sendMessage');
+  const stopLabel = labels?.stop ?? t('chat.input.action.stopGenerating');
+  const composerLabels = useMemo(
+    () => ({ send: sendLabel, stop: stopLabel }),
+    [sendLabel, stopLabel],
+  );
 
   return (
     <Composer
@@ -131,13 +142,10 @@ export function ComposerSurface({
         !hasImportingComposerAttachments(attachments) &&
         (canSend ?? hasComposerSendableContent(draft, attachments))
       }
-      labels={{
-        send: labels?.send ?? t('chat.input.action.sendMessage'),
-        stop: labels?.stop ?? t('chat.input.action.stopGenerating'),
-      }}
+      labels={composerLabels}
       onChangeText={setDraft}
       onSend={handleSend}
-      onStop={onStop}
+      onStop={handleStop}
       streaming={streaming}
       testID={testID}
       value={draft}

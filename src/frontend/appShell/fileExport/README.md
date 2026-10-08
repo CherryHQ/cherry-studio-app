@@ -65,7 +65,8 @@ without re-encoding, and a failed copy never opens a partial share sheet.
 Photos copies it. System opening reuses `prepareFileExport`.
 
 Shared/system-open copies remain in the OS-managed cache because recipients may read after the
-chooser closes. A preparation failure fails delivery rather than sending a differently treated
+chooser closes. Shared copies use one path per entry revision and watermark treatment, so sharing
+the same file again reuses its copy instead of adding another. A preparation failure fails delivery rather than sending a differently treated
 original. Sheet dismissal does not establish recipient delivery.
 
 Native rendering, Photos saving and recipient delivery still require device acceptance.

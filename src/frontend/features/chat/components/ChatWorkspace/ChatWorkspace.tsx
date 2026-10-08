@@ -123,36 +123,41 @@ export function ChatWorkspace({
     () => getTimestampMessageIds(projectedMessages),
     [projectedMessages],
   );
-  const listMessages = useMemo(() => {
-    if (!forkBoundaryMessageId || !forkedFromSessionId) {
-      return projectedMessages;
-    }
-    const boundaryIndex = projectedMessages.findIndex(
-      (message) => message.id === forkBoundaryMessageId,
-    );
-    if (boundaryIndex < 0) {
-      // Pagination has not loaded the persisted boundary yet. Rendering no
-      // divider is more accurate than attaching it to the current page edge.
-      return projectedMessages;
-    }
-    const boundary = projectedMessages[boundaryIndex];
-    if (!boundary) {
-      return projectedMessages;
-    }
-    const forkOriginItem = {
-      createdAt: boundary.createdAt,
-      data: {},
-      id: `fork-origin:${sessionId}`,
-      role: 'system',
-      status: 'success',
-      systemEvent: { sourceSessionId: forkedFromSessionId, type: 'fork-origin' },
-    } satisfies MessageListItem;
-    return [
-      ...projectedMessages.slice(0, boundaryIndex + 1),
-      forkOriginItem,
-      ...projectedMessages.slice(boundaryIndex + 1),
-    ];
-  }, [forkBoundaryMessageId, forkedFromSessionId, projectedMessages, sessionId]);
+  // Pagination may not have loaded the persisted boundary yet. Rendering no
+  // divider is more accurate than attaching it to the current page edge.
+  const forkBoundaryIndex =
+    forkBoundaryMessageId && forkedFromSessionId
+      ? projectedMessages.findIndex((message) => message.id === forkBoundaryMessageId)
+      : -1;
+  const forkBoundary = forkBoundaryIndex >= 0 ? projectedMessages[forkBoundaryIndex] : undefined;
+  const hasForkBoundary = Boolean(forkBoundary);
+  const forkBoundaryCreatedAt = forkBoundary?.createdAt;
+  // The divider keeps its item while messages stream, so its row does not re-render.
+  const forkOriginItem = useMemo(
+    () =>
+      hasForkBoundary && forkedFromSessionId
+        ? ({
+            createdAt: forkBoundaryCreatedAt,
+            data: {},
+            id: `fork-origin:${sessionId}`,
+            role: 'system',
+            status: 'success',
+            systemEvent: { sourceSessionId: forkedFromSessionId, type: 'fork-origin' },
+          } satisfies MessageListItem)
+        : undefined,
+    [forkBoundaryCreatedAt, forkedFromSessionId, hasForkBoundary, sessionId],
+  );
+  const listMessages = useMemo(
+    () =>
+      forkOriginItem
+        ? [
+            ...projectedMessages.slice(0, forkBoundaryIndex + 1),
+            forkOriginItem,
+            ...projectedMessages.slice(forkBoundaryIndex + 1),
+          ]
+        : projectedMessages,
+    [forkBoundaryIndex, forkOriginItem, projectedMessages],
+  );
   const assistantPresentation = useMemo(
     () => ({
       avatar: assistantAvatar,
