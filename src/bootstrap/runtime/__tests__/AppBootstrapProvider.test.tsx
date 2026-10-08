@@ -11,6 +11,25 @@ import type { PreferenceClient } from '@/shared/data/preference';
 import { AppBootstrapGate } from '../AppBootstrapGate';
 import { AppBootstrapProvider, useAppBootstrapState } from '../AppBootstrapProvider';
 
+// Jest normally skips the production React Compiler. Exercise the provider after
+// compilation so a cached runtime factory cannot silently break startup retry.
+jest.mock('../AppBootstrapProvider', () => {
+  const { readFileSync } = jest.requireActual<typeof import('node:fs')>('node:fs');
+  const { createRequire } = jest.requireActual<typeof import('node:module')>('node:module');
+  const load = createRequire(require.resolve('babel-preset-expo'));
+  const filename = require.resolve('../AppBootstrapProvider');
+  const { code } = load('@babel/core').transformSync(readFileSync(filename, 'utf8'), {
+    filename,
+    babelrc: false,
+    configFile: false,
+    plugins: [[load('babel-plugin-react-compiler'), { target: '19' }]],
+    presets: [[require.resolve('babel-preset-expo'), { reactCompiler: false }]],
+  });
+  const compiled = { exports: {} };
+  new Function('require', 'module', 'exports', code)(require, compiled, compiled.exports);
+  return compiled.exports;
+});
+
 const mockHideAsync = jest.fn(async () => undefined);
 
 jest.mock('expo-splash-screen', () => ({
@@ -195,7 +214,11 @@ describe('AppBootstrapProvider startup gate', () => {
     const retry = renderer!.root
       .findAllByType(Text)
       .find((node) => node.props.children === 'startup-failed');
-    await act(async () => retry?.props.onPress());
+    await act(async () => {
+      retry?.props.onPress();
+      retry?.props.onPress();
+    });
+    expect(createRuntime).toHaveBeenCalledTimes(2);
     await flush();
 
     // The failed host cannot start again: it is disposed and a new runtime initializes.

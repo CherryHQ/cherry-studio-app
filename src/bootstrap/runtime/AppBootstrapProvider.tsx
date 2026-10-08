@@ -1,5 +1,5 @@
 import { loggerService } from '@logger';
-import { createContext, type PropsWithChildren, use, useEffect, useMemo, useState } from 'react';
+import { createContext, type PropsWithChildren, use, useEffect, useState } from 'react';
 
 import {
   type AppBootstrapRuntime,
@@ -38,13 +38,17 @@ const AppBootstrapContext = createContext<AppBootstrapState | null>(null);
 const logger = loggerService.withContext('AppBootstrap');
 
 export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapProviderProps) {
-  const [attempt, setAttempt] = useState(0);
-  // Each startup attempt owns its runtime: a host that failed to start cannot
-  // restart. The effect cleanup disposes a failed one before the next installs.
-  const { runtime } = useMemo(
-    () => ({ attempt, runtime: (createRuntime ?? createAppBootstrapRuntime)() }),
-    [createRuntime, attempt],
-  );
+  // Runtime identity is owned state, not a memoization guarantee. The Compiler
+  // can cache a factory call independently of an unused retry counter.
+  const [attempt, setAttempt] = useState(() => ({
+    createRuntime,
+    runtime: (createRuntime ?? createAppBootstrapRuntime)(),
+  }));
+  let { runtime } = attempt;
+  if (attempt.createRuntime !== createRuntime) {
+    runtime = (createRuntime ?? createAppBootstrapRuntime)();
+    setAttempt({ createRuntime, runtime });
+  }
   const [state, setState] = useState<AppBootstrapState>({ status: 'loading' });
 
   useEffect(() => {
@@ -57,7 +61,7 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
         if (disposed) return;
         disposed = true;
         setState({ status: 'loading' });
-        setAttempt((current) => current + 1);
+        setAttempt({ createRuntime, runtime: (createRuntime ?? createAppBootstrapRuntime)() });
       },
       runtime,
       setState,
@@ -67,7 +71,7 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
       disposed = true;
       void runtime.dispose();
     };
-  }, [runtime]);
+  }, [createRuntime, runtime]);
 
   return (
     <BackendProvider backend={runtime.backend}>

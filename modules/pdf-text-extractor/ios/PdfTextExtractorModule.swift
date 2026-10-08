@@ -2,6 +2,9 @@ import ExpoModulesCore
 import PDFKit
 import os
 
+// Expo's default AsyncFunction queue is one serial queue shared by every module.
+private let extractionQueue = DispatchQueue(label: "expo.modules.PdfTextExtractor", qos: .userInitiated)
+
 public class PdfTextExtractorModule: Module {
   private let defaultMaxPages = 100
 
@@ -11,12 +14,12 @@ public class PdfTextExtractorModule: Module {
     // 异步函数：提取 PDF 文本
     AsyncFunction("extractText") { (filePath: String, options: ExtractOptions?) -> [String: Any] in
       return try self.extractTextFromPDF(filePath: filePath, options: options)
-    }
+    }.runOnQueue(extractionQueue)
 
     // 异步函数：获取 PDF 页数
     AsyncFunction("getPageCount") { (filePath: String) -> Int in
       return self.getPageCount(filePath: filePath)
-    }
+    }.runOnQueue(extractionQueue)
   }
 
   // MARK: - PDF 文本提取核心逻辑

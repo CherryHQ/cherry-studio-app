@@ -249,7 +249,7 @@ recency; no `orderKey`).
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
 | `messageSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
-| `searchableText` | text | NOT NULL DEFAULT `''` | Trigger-populated |
+| `searchableText` | text | NOT NULL DEFAULT `''` | Visible plain text of `text` parts, written by the store |
 | `ftsRowid` | integer | NULL, UNIQUE | Stable FTS5 `content_rowid`, trigger-assigned |
 | `createdAt` / `updatedAt` | integer | helper defaults | Physical row timestamps; hard delete via session cascade |
 
@@ -268,11 +268,14 @@ cannot match a partial index — see `message.ts`.)
 `data.parts` is exactly the protocol's `AgentMessagePart` union
 ([contract](../../../src/shared/contracts/agent/views.ts)); the version field guards future part-shape
 migrations. FTS mirrors the chat `message` architecture (external-content FTS5 table keyed on
-`ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) with an
-agent-specific extraction expression: `text` parts only. `reasoning` is model-internal and
-deliberately not searchable; tool payloads are structured data, not prose. The update trigger skips
-`pending` and `streaming` rows, so a turn's mid-stream snapshots are indexed once, when the row
-settles.
+`ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) and indexes
+`text` parts only. `reasoning` is model-internal and deliberately not searchable; tool payloads are
+structured data, not prose. The store writes `searchableText` as the parts' visible plain text,
+with Markdown formatting removed and code content kept, so a trigram `LIKE` finds every visible
+match without scanning the index. Triggers only mirror that column into FTS. Every write of `data`
+supplies it except the mid-stream snapshot, so a turn's streamed text is indexed once, when the row
+settles. When the custom SQL changes, startup re-derives settled rows whose stored text still
+contains Markdown markers; this also converts restored backups indexed by an older trigger.
 
 `reserveSubmission` writes the selected `modelId` and `AgentInferenceSnapshotV1` on the assistant
 placeholder in the same transaction as the user/assistant pair. The existing nullable columns from
@@ -343,8 +346,9 @@ projection:
   "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already
   ordered, and the reissued UUID v7 ids break ties in the same direction, so copying the value
   preserves order while stamping "now" on every row would be visibly wrong in the UI.
-  `searchableText` and `ftsRowid` are left to the insert trigger, which is race-free because the
-  whole copy runs inside the serialized write transaction.
+  `searchableText` is copied; `ftsRowid` is left to the insert trigger, which is race-free because
+  the whole copy runs inside the serialized write transaction. Copies are inserted in chunked
+  multi-row statements with ids generated in transcript order.
   The boundary is Session metadata rather than a synthetic Message, so it does not enter FTS,
   transcript pagination counts, Runtime history, or recursive fork copies.
 - Deleting a turn clears, in the same transaction, every checkpoint in that Session whose anchor

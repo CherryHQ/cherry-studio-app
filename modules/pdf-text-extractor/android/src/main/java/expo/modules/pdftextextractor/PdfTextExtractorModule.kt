@@ -6,11 +6,14 @@ import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import expo.modules.kotlin.exception.CodedException
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class ExtractOptions : Record {
     @Field
@@ -50,12 +53,13 @@ class PdfTextExtractorModule : Module() {
             initializePdfBox()
         }
 
-        AsyncFunction("extractText") { filePath: String, options: ExtractOptions? ->
-            extractTextFromPDF(filePath, options)
+        // Plain AsyncFunctions share one serial thread with every Expo module.
+        AsyncFunction("extractText") Coroutine { filePath: String, options: ExtractOptions? ->
+            withContext(Dispatchers.IO) { extractTextFromPDF(filePath, options) }
         }
 
-        AsyncFunction("getPageCount") { filePath: String ->
-            getPageCount(filePath)
+        AsyncFunction("getPageCount") Coroutine { filePath: String ->
+            withContext(Dispatchers.IO) { getPageCount(filePath) }
         }
     }
 

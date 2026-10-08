@@ -194,15 +194,15 @@ describe('AgentService persistence', () => {
     expect(agent.disabledCapabilities).toEqual(['calendar', 'web']);
 
     await expect(
-      agentService.update(agent.id, { disabledCapabilities: ['health'] }),
-    ).resolves.toMatchObject({ disabledCapabilities: ['health'] });
+      agentService.update(agent.id, { disabledCapabilities: ['location'] }),
+    ).resolves.toMatchObject({ disabledCapabilities: ['location'] });
 
     // A build that no longer knows an id must drop it rather than fail the row.
     sqlite
       .prepare('UPDATE agent SET disabled_capabilities = ? WHERE id = ?')
-      .run(JSON.stringify(['health', 'retired-group']), agent.id);
+      .run(JSON.stringify(['location', 'health', 'retired-group']), agent.id);
     await expect(agentService.getById(agent.id)).resolves.toMatchObject({
-      disabledCapabilities: ['health'],
+      disabledCapabilities: ['location'],
     });
   });
 
