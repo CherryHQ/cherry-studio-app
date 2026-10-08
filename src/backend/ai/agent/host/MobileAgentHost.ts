@@ -154,6 +154,7 @@ const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
   updateContent: () => {},
   awaitApproval: () => {},
   finish: () => {},
+  retire: () => {},
   update: () => {},
 };
 

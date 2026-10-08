@@ -34,6 +34,8 @@ export type BackgroundReplyTurn = {
   awaitApproval: (message?: BackgroundReplyMessage, reason?: 'question') => void;
   /** Shows terminal content immediately; `waitFor` delays only final surface dismissal. */
   finish: (outcome: BackgroundReplyOutcome, options?: { waitFor?: Promise<unknown> }) => void;
+  /** Removes the surface without terminal content or a notice; the work continues elsewhere. */
+  retire: () => void;
   update: (message: BackgroundReplyMessage, options?: BackgroundReplyUpdateOptions) => void;
 };
 

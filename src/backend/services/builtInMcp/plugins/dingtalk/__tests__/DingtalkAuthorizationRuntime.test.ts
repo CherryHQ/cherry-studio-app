@@ -1,6 +1,7 @@
 import { PluginError } from '@/shared/contracts/plugins';
 
 import { authorizationStoreFixture } from '../../../authorization/__tests__/_authorizationStoreFixture';
+import { trackExpoAbortSignals } from '../../../authorization/__tests__/_expoAbortSignal';
 import type { PluginCredential } from '../../../authorization/pluginCredential';
 import { enrichDingtalkAccount } from '../dingtalkAccount';
 import { DingtalkAuthorizationRuntime } from '../DingtalkAuthorizationRuntime';
@@ -113,6 +114,19 @@ it('consumes one code even when observers poll concurrently', async () => {
     ),
   ).toEqual(['review', 'review']);
   expect(dingtalkOauth.exchange).toHaveBeenCalledTimes(1);
+});
+
+it('releases the expiry timer and attempt listeners after every pending poll', async () => {
+  const state = await begin();
+  const { listeners, timers } = trackExpoAbortSignals();
+  jest.mocked(dingtalkOauth.poll).mockResolvedValue({ status: 'pending' });
+  for (const now of [6000, 11000, 16000]) {
+    jest.mocked(Date.now).mockReturnValue(now);
+    expect(await runtime.poll(state.attemptId)).toMatchObject({ status: 'waiting' });
+  }
+  expect(dingtalkOauth.poll).toHaveBeenCalledTimes(3);
+  expect(timers.size).toBe(0);
+  expect(listeners.size).toBe(0);
 });
 
 it('drops ambiguous exchanges and requires a fresh attempt', async () => {

@@ -37,7 +37,9 @@ function fakeFile(content: Uint8Array) {
 }
 
 function patterned(length: number): Uint8Array {
-  return Uint8Array.from({ length }, (_, index) => (index * 7) % 251);
+  const bytes = new Uint8Array(length);
+  for (let index = 0; index < length; index++) bytes[index] = (index * 7) % 251;
+  return bytes;
 }
 
 function decode(messages: HostMessage[], requestId: number): Uint8Array {

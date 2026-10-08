@@ -24,6 +24,7 @@ import {
   RemoteTransportError,
 } from '@/backend/services/desktopConnections/remoteErrors';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import type {
   RemoteAgentSource,
   RemoteSessionSnapshot,
@@ -213,9 +214,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.backgroundBlocked = true;
     this.pendingCommandLease?.release();
     this.pendingCommandLease = undefined;
-    // The desktop still owns execution. Retire only the phone's surfaces.
+    // The desktop still owns execution. Retire only the phone's surfaces, without a terminal card.
     for (const observation of this.observations.values()) {
-      observation.reply?.finish('cancelled');
+      observation.reply?.retire();
       observation.reply = undefined;
     }
     this.publishExecution();
@@ -327,9 +328,14 @@ export class RemoteAgentScope implements RemoteAgentSource {
   }
   private request: AgentRequest = async (method, params, caller) => {
     this.assertActive();
-    const signal = caller ? AbortSignal.any([caller, this.lease.signal]) : this.lease.signal;
-    const session = await this.lease.ready(signal);
-    return this.call(session, method, params, signal);
+    const linked = caller ? linkAbortSignals([caller, this.lease.signal]) : undefined;
+    const signal = linked?.signal ?? this.lease.signal;
+    try {
+      const session = await this.lease.ready(signal);
+      return await this.call(session, method, params, signal);
+    } finally {
+      linked?.dispose();
+    }
   };
   private async call<M extends AgentMethod>(
     session: DesktopSession,
@@ -674,8 +680,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
         sessionTitle: observation.snapshot?.session.title ?? '',
         onInterrupt: () => {
           this.backgroundBlocked = true;
-          // The desktop still owns execution. Retire only the phone's surface.
-          observation!.reply?.finish('cancelled');
+          // The desktop still owns execution. Retire only the phone's surface, without a terminal card.
+          observation!.reply?.retire();
           observation!.reply = undefined;
           this.publishExecution();
         },
