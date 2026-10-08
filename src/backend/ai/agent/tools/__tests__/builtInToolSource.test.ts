@@ -133,18 +133,22 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(tools, 'calendar_create_event')).toBe('ask');
   });
 
-  test('offers health summaries with just one granted metric without enabling workouts', async () => {
-    const tools = await resolve({
-      deviceAccess: { 'health.steps.read': 'granted', 'health.workouts.read': 'denied' },
-    });
-    expect(capabilityIds(tools)).toContain('health_get_summary');
-    expect(capabilityIds(tools)).not.toContain('health_list_workouts');
-  });
-
-  test('allows HealthKit read attempts after an inquiry without requiring a fictitious read grant', async () => {
-    const tools = await resolve({ deviceAccess: { 'health.steps.read': 'requested' } });
-    expect(capabilityIds(tools)).toContain('health_get_summary');
-  });
+  test.each(['ios', 'android'])(
+    'omits retired health tools despite existing device grants on %s',
+    async (platform) => {
+      const deviceAccess = {
+        'calendar.read': 'granted',
+        'calendar.write': 'granted',
+        'health.steps.read': 'granted',
+        'health.workouts.read': 'granted',
+      } as const;
+      const tools = await resolve({ deviceAccess }, { platform });
+      expect(capabilityIds(tools)).toContain('calendar_list_events');
+      expect(capabilityIds(tools)).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/^health_/)]),
+      );
+    },
+  );
 
   test('offers each web tool only when its provider is configured', async () => {
     const unconfigured = await resolve({});

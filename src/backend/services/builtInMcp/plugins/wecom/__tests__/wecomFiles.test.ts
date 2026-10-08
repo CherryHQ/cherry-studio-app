@@ -1,5 +1,10 @@
 import type { createWecomApi } from '../wecomApi';
-import { prepareWecomFiles, saveWecomResult } from '../wecomFiles';
+import {
+  deleteWecomFiles,
+  prepareWecomFiles,
+  saveWecomResult,
+  sweepWecomFiles,
+} from '../wecomFiles';
 import { resolveWecomSchema } from '../wecomSchema';
 
 const mockGetFileUri = jest.fn();
@@ -15,6 +20,7 @@ jest.mock('@/backend/services/http', () => ({ createHttpClient: () => ({}) }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'unique-id' }));
 jest.mock('expo-file-system', () => {
   const files = new Map<string, number>();
+  const modified = new Map<string, number>();
   const writes: { uri: string; data: unknown; options?: unknown }[] = [];
   const join = (parts: (string | { uri: string })[]) =>
     parts.map((part) => (typeof part === 'string' ? part : part.uri).replace(/\/$/, '')).join('/');
@@ -24,6 +30,17 @@ jest.mock('expo-file-system', () => {
       this.uri = `${join(parts)}/`;
     }
     create() {}
+    get exists() {
+      return [...files.keys()].some((uri) => uri.startsWith(this.uri));
+    }
+    list() {
+      return [...files.keys()]
+        .filter((uri) => uri.startsWith(this.uri))
+        .map((uri) => new File(uri));
+    }
+    delete() {
+      for (const uri of files.keys()) if (uri.startsWith(this.uri)) files.delete(uri);
+    }
   }
   class File {
     uri: string;
@@ -39,7 +56,11 @@ jest.mock('expo-file-system', () => {
     get exists() {
       return files.has(this.uri);
     }
+    get modificationTime() {
+      return modified.get(this.uri) ?? null;
+    }
     write(data: string | Uint8Array, options?: unknown) {
+      if (data === 'unwritable') throw new Error('disk full');
       writes.push({ uri: this.uri, data, options });
       files.set(this.uri, typeof data === 'string' ? data.length : data.byteLength);
     }
@@ -51,13 +72,14 @@ jest.mock('expo-file-system', () => {
     File,
     Directory,
     Paths: { cache: { uri: 'file:///cache/' }, document: { uri: 'file:///documents/' } },
-    testState: { files, writes },
+    testState: { files, modified, writes },
   };
 });
 
 const { testState } = jest.requireMock<{
   testState: {
     files: Map<string, number>;
+    modified: Map<string, number>;
     writes: { uri: string; data: unknown; options?: unknown }[];
   };
 }>('expo-file-system');
@@ -70,6 +92,7 @@ const octet = { type: 'string', 'x-wecom-octet-stream': true };
 beforeEach(() => {
   mockStorageUri = 'file:///documents/';
   testState.files.clear();
+  testState.modified.clear();
   testState.files.set(uri, 123);
   testState.writes.length = 0;
   mockGetFileUri.mockReset().mockResolvedValue(uri);
@@ -246,6 +269,39 @@ it('preserves an oversized JSON result in a local file instead of truncating it'
     file_path: 'file:///cache/WecomFiles/unique-id-result.json',
   });
   expect(JSON.parse(testState.writes[0].data as string)).toEqual(value);
+});
+
+it('removes files already saved for a result that fails to save completely', () => {
+  const schema = {
+    type: 'object',
+    properties: {
+      first: { type: 'string', 'x-wecom-file-save': { fileName: 'first.txt' } },
+      second: { type: 'string', 'x-wecom-file-save': { fileName: 'second.txt' } },
+    },
+  };
+  expect(() => saveWecomResult(schema, { first: 'saved', second: 'unwritable' }, signal())).toThrow(
+    expect.objectContaining({ reason: 'request' }),
+  );
+  expect(testState.writes.map(({ uri }) => uri)).toEqual([
+    'file:///cache/WecomFiles/unique-id-first.txt',
+  ]);
+  expect([...testState.files.keys()]).toEqual([uri]);
+});
+
+it('sweeps expired downloads and removes every download on disconnect', () => {
+  const day = 24 * 60 * 60 * 1000;
+  const expired = 'file:///cache/WecomFiles/old-report.bin';
+  const recent = 'file:///cache/WecomFiles/new-report.bin';
+  testState.files.set(expired, 1);
+  testState.modified.set(expired, 1000);
+  testState.files.set(recent, 1);
+  testState.modified.set(recent, 2000);
+
+  sweepWecomFiles(1001 + day);
+
+  expect([...testState.files.keys()]).toEqual([uri, recent]);
+  deleteWecomFiles();
+  expect([...testState.files.keys()]).toEqual([uri]);
 });
 
 function recursiveFiles(directive: Record<string, unknown>) {

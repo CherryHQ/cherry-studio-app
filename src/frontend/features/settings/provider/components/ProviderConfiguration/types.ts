@@ -23,12 +23,14 @@ export type ProviderConfigurationActions = {
   rename: (name: string) => Promise<boolean>;
   setAvatar: (uri: string | null) => Promise<boolean>;
   setBaseUrl: (baseUrl: string) => Promise<boolean>;
-  setDefaultEndpoint: (endpoint: EndpointType) => Promise<boolean>;
+  /** Makes `endpoint` the default, writing `baseUrl` as its address in the same change. */
+  setDefaultEndpoint: (endpoint: EndpointType, baseUrl: string) => Promise<boolean>;
   setEndpointUrl: (endpoint: EndpointType, baseUrl: string) => Promise<boolean>;
   updateApiKey: (id: string, updates: Partial<Omit<ApiKeyEntry, 'id'>>) => Promise<boolean>;
 };
 
 export type ProviderConfigurationAccount = {
+  signedIn?: boolean;
   capabilities: ProviderAccountCapabilities;
   onBusyChange: (busy: boolean) => void;
   onKeysChanged: () => Promise<void>;

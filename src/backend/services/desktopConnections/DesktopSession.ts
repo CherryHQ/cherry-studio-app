@@ -69,6 +69,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 /** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
   agentFailureVersion?: number;
+  connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
     let session: DesktopSession | undefined;
     try {
@@ -88,6 +89,7 @@ export class DesktopSession {
         options.signal,
       );
       session.agentFailureVersion = hello.agentFailureVersion;
+      session.connectionEndpointsVersion = hello.connectionEndpointsVersion;
       options.signal.throwIfAborted();
       return session;
     } catch (error) {
@@ -113,7 +115,12 @@ export class DesktopSession {
   ) {
     this.client = new JSONRPCClient((request) => this.channel.write(request));
     this.heartbeat = setInterval(() => {
-      void this.request('connection.ping', { nonce: String(Date.now()) }).catch(() => this.close());
+      // Any desktop verdict, even a refusal, proves the channel is alive; only a lost reply ends it.
+      void this.request('connection.ping', { nonce: String(Date.now()) }).catch(
+        (error: unknown) => {
+          if (!(error instanceof RemoteFailureError)) this.close();
+        },
+      );
     }, remoteLimits.heartbeatMs);
     this.done = this.pump();
   }
@@ -133,12 +140,18 @@ export class DesktopSession {
   ): Promise<DesktopResult<M>> {
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
     signal?.throwIfAborted();
+    if (method === 'connection.endpoints' && this.connectionEndpointsVersion !== 1)
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop connection settings are not supported',
+      });
     if (method.startsWith('agent.') && this.agentFailureVersion !== 1)
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',
         message: 'Desktop Agent failure contract is not supported',
       });
-    if (this.inFlight >= remoteLimits.inFlightRequests)
+    // Local load must not stop the heartbeat from measuring liveness.
+    if (method !== 'connection.ping' && this.inFlight >= remoteLimits.inFlightRequests)
       throw new RemoteFailureError({ reason: 'RESOURCE_EXHAUSTED', message: 'Too many requests' });
     const schema = desktopMethods[method];
     this.inFlight++;
@@ -153,7 +166,12 @@ export class DesktopSession {
         ),
         signal,
       );
-      return schema.result.parse(result) as DesktopResult<M>;
+      const parsed = schema.result.parse(result);
+      if (method === 'pairing.get') {
+        const decision = parsed as DesktopResult<'pairing.get'>;
+        if (decision.status === 'approved') this.adopt(decision.authorization, decision.expiresAt);
+      }
+      return parsed as DesktopResult<M>;
     } catch (error) {
       if (error instanceof JSONRPCErrorException) {
         const failure = remoteFailureSchema.safeParse(error.data);

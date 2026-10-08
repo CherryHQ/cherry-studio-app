@@ -306,7 +306,9 @@ temporary Runtime part keeps body, authoritative metadata, truncation, and the
 adapting it to ordinary user message text, so attachment data cannot become system instructions or
 forge its boundary metadata. Pi's current-input/history estimator counts the resulting text
 alongside images, tool schemas, the output reserve, and the safety margin. Exact attachment bodies
-are redacted if a compaction model reproduces them in a persisted checkpoint.
+are redacted if a compaction model reproduces them in a persisted checkpoint. Redaction matches
+serialized bodies and document strings of at least 32 characters; shorter values such as IR node
+types, style names, or chart labels would rewrite unrelated summary and error text.
 
 Document attachments use the file module's shared reader with the parser preference frozen before
 turn preparation first yields. That same setting enters the turn's `read_file` callback. The Host

@@ -25,9 +25,14 @@ export interface DesktopDomainLease {
   getSnapshot(): DesktopLeaseState;
   subscribe(listener: () => void): () => void;
   ready(signal: AbortSignal): Promise<DesktopSession>;
+  /** Keeps this admitted domain connected while a user-started execution is unfinished. */
+  setBackgroundRequired?(required: boolean): void;
   release(): void;
 }
-export type DesktopConnectionStore = Pick<DesktopConnectionService, 'getRow' | 'updateStatus'>;
+export type DesktopConnectionStore = Pick<
+  DesktopConnectionService,
+  'getRow' | 'updateStatus' | 'updateLearnedEndpoints'
+>;
 export type DesktopConnectionTarget = {
   desktopIdentity: string;
   addresses: string[];

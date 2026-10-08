@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "engines": {
     "node": "24.x"
   },
@@ -84,8 +84,8 @@
     "@cherrystudio/app-icons": "workspace:*",
     "@cherrystudio/design-tokens": "workspace:*",
     "@cherrystudio/provider-registry": "workspace:*",
-    "@cherrystudio/remote-protocol": "0.1.0",
-    "@cherrystudio/remote-transport": "0.1.0",
+    "@cherrystudio/remote-protocol": "0.3.0",
+    "@cherrystudio/remote-transport": "0.1.2",
     "@cherrystudio/ui": "workspace:*",
     "@cherrystudio/universal": "workspace:*",
     "@e965/xlsx": "0.20.3",
@@ -113,7 +113,6 @@
     "drizzle-orm": "^0.45.2",
     "expo": "~57.0.23",
     "expo-asset": "~57.0.16",
-    "expo-audio": "~57.0.4",
     "expo-blob": "^57.0.1",
     "expo-blur": "~57.0.2",
     "expo-build-properties": "~57.0.21",
@@ -171,7 +170,6 @@
     "react-native-gesture-handler": "~2.33.0",
     "react-native-keyboard-controller": "^1.21.13",
     "react-native-mmkv": "4.3.2",
-    "react-native-nitro-healthkit": "1.0.0",
     "react-native-nitro-modules": "0.36.4",
     "react-native-nitro-theme-transition": "^1.0.0",
     "react-native-reanimated": "4.5.5",

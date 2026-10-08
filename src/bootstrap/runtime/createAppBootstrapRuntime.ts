@@ -25,6 +25,7 @@ import {
 import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
+import type { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
 import { type BackupRuntime, validateRestoringStorage } from '@/backend/services/backup';
 import type {
@@ -34,6 +35,7 @@ import type {
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
@@ -93,7 +95,7 @@ export function createAppBootstrapRuntime(
     assistantPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
-    // Android's switch controls chat execution; its service notifications remain mandatory.
+    // This preference controls iOS cards only; conversation execution is unconditional.
     isPresentationEnabled: () =>
       Platform.OS !== 'ios' || preference.readCached('chat.background_reply.enabled'),
     isReplyCompletionNotificationEnabled,
@@ -109,7 +111,14 @@ export function createAppBootstrapRuntime(
   // Opening a destination retires its delivered completion notice, mirroring
   // the manager's settled-surface dismissal on the same visible-task source.
   const unsubscribeVisibleTask = subscribeVisibleBackgroundTask((deepLinkUrl) => {
-    if (deepLinkUrl) replyCompletionNotifications?.dismissDestination(deepLinkUrl);
+    if (deepLinkUrl) {
+      replyCompletionNotifications?.dismissDestination(deepLinkUrl);
+      void androidActivities?.dismissCompletedTask(deepLinkUrl).catch((error: unknown) => {
+        loggerService
+          .withContext('BackgroundActivity')
+          .warn('Could not retire viewed result', error as Error);
+      });
+    }
   });
   const agent = host.container.get<MobileAgentHost>('MobileAgentHost');
   const ai = host.container.get<AiService>('AiService');
@@ -148,6 +157,12 @@ export function createAppBootstrapRuntime(
     },
   );
   const { backend, dataApiDependencies, disposeSystemEntry } = createBackend(services, {
+    backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
+    remoteBackground: {
+      replies: host.container.get<BackgroundReplyRuntime>('BackgroundReplyRuntime'),
+      keepAlive: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
+      translate: (key) => i18n.t(key),
+    },
     backup,
     dbService,
     providerAccounts,

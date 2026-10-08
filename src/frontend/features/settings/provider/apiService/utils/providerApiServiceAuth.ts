@@ -25,8 +25,8 @@ export function getEffectiveAuthConfig(
 /**
  * `authMethods` is the registry's capability catalogue, mirrored verbatim from
  * desktop — it says what a provider *is*, not what this app implements. Only
- * `api-key` drives UI here; `oauth` and `external-cli` are information the app
- * reads past, so do not strip them from the array to "match" mobile support.
+ * `api-key` drives these manual-key fields. Account capabilities independently
+ * decide whether an OAuth sign-in panel is available.
  *
  * Rows left behind by the removed OAuth sign-in were converted to `api-key`
  * by migration; the minted API keys they hold are real, working credentials.

@@ -1,8 +1,9 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
+import { useQuery as useQueryResource } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useBackendModule, useQuery } from '@/frontend/data';
+import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import { useProviderAvatar, useProviderAvatarActions } from '@/frontend/hooks/useProviderAvatar';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 import type { EndpointType } from '@/shared/data/types/model';
@@ -49,6 +50,16 @@ export function useSavedProviderConfiguration(providerId: string) {
   const queries = useProviderApiServiceQueries(providerId);
   const { apiKeysQuery, authConfigQuery, providerQuery } = queries;
   const provider = queries.provider;
+  const capabilities = provider ? accounts.getCapabilities(provider) : undefined;
+  const accountQuery = useQueryResource({
+    queryKey: queryKeys.providers.account(providerId),
+    queryFn: () => accounts.getStatus(providerId),
+    enabled: capabilities?.flow === 'interactive',
+    staleTime: Infinity,
+    retry: false,
+  });
+  const oauthSignedIn =
+    capabilities?.flow === 'interactive' && accountQuery.data?.signedIn === true;
   const modelsQuery = useQuery('/models', { enabled: Boolean(providerId), query: { providerId } });
   const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -61,14 +72,18 @@ export function useSavedProviderConfiguration(providerId: string) {
     providerQuery.isPending ||
     apiKeysQuery.isPending ||
     authConfigQuery.isPending ||
-    modelsQuery.isPending;
+    modelsQuery.isPending ||
+    (capabilities?.flow === 'interactive' && accountQuery.isPending);
   const isError =
-    providerQuery.isError || apiKeysQuery.isError || authConfigQuery.isError || modelsQuery.isError;
+    providerQuery.isError ||
+    apiKeysQuery.isError ||
+    authConfigQuery.isError ||
+    modelsQuery.isError ||
+    (capabilities?.flow === 'interactive' && accountQuery.isError);
   const isCustomProvider = isFullyCustomProvider(provider);
-  const showApiKeys = shouldShowApiKeys(
-    getEffectiveAuthConfig(queries.authConfig, provider).type,
-    provider,
-  );
+  const showApiKeys =
+    !oauthSignedIn &&
+    shouldShowApiKeys(getEffectiveAuthConfig(queries.authConfig, provider).type, provider);
   const requiresApiKey = showApiKeys && !provider?.authOptional;
 
   async function track<T>(work: () => Promise<T>): Promise<T> {
@@ -193,28 +208,30 @@ export function useSavedProviderConfiguration(providerId: string) {
       .catch(() => undefined);
   }, [provider, queries.saveProviderMutation, repairKey]);
 
-  const address: ProviderAddress = !provider
-    ? { kind: 'none' }
-    : isCustomProvider
-      ? {
-          defaultChatEndpoint: createProviderConfigurationValues({ avatarUri, provider })
-            .defaultChatEndpoint,
-          endpointUrls: customEndpointUrls,
-          kind: 'custom',
-        }
-      : resolveProviderConfigurationEndpointTypes(provider).length > 0
+  const address: ProviderAddress =
+    !provider || oauthSignedIn
+      ? { kind: 'none' }
+      : isCustomProvider
         ? {
-            baseUrl: getProviderPrimaryBaseUrl(provider),
-            endpoint: getPrimaryEndpoint(provider),
-            kind: 'primary',
+            defaultChatEndpoint: createProviderConfigurationValues({ avatarUri, provider })
+              .defaultChatEndpoint,
+            endpointUrls: customEndpointUrls,
+            kind: 'custom',
           }
-        : { kind: 'none' };
+        : resolveProviderConfigurationEndpointTypes(provider).length > 0
+          ? {
+              baseUrl: getProviderPrimaryBaseUrl(provider),
+              endpoint: getPrimaryEndpoint(provider),
+              kind: 'primary',
+            }
+          : { kind: 'none' };
 
   const value: ProviderConfigurationValue | undefined = provider
     ? {
-        account: accounts.getCapabilities(provider).signIn
+        account: capabilities?.signIn
           ? {
-              capabilities: accounts.getCapabilities(provider),
+              capabilities,
+              signedIn: oauthSignedIn,
               onBusyChange: setIsAccountBusy,
               onKeysChanged: async () => {
                 await apiKeysQuery.refetch({ throwOnError: true });
@@ -252,8 +269,8 @@ export function useSavedProviderConfiguration(providerId: string) {
               return false;
             }
           },
-          setDefaultEndpoint: (endpoint) =>
-            saveCustomEndpoints(provider, customEndpointUrls, endpoint),
+          setDefaultEndpoint: (endpoint, baseUrl) =>
+            saveCustomEndpoints(provider, { ...customEndpointUrls, [endpoint]: baseUrl }, endpoint),
           setEndpointUrl: (endpoint, baseUrl) =>
             saveCustomEndpoints(
               provider,
@@ -289,19 +306,24 @@ export function useSavedProviderConfiguration(providerId: string) {
         : true;
   const allKeysDisabled = apiKeys.length > 0 && !apiKeys.some((entry) => entry.isEnabled);
   const continueHint =
-    requiresApiKey && allKeysDisabled
-      ? t('settings.provider.setup.issues.disabled-api-keys')
-      : requiresApiKey && !hasUsableKey
-        ? t('settings.provider.setup.issues.missing-api-key')
-        : !hasAddress
-          ? t('settings.provider.setup.issues.invalid-endpoint')
-          : undefined;
+    capabilities?.flow === 'interactive' && !oauthSignedIn && !showApiKeys
+      ? t('settings.provider.setup.issues.missing-oauth')
+      : requiresApiKey && allKeysDisabled
+        ? t('settings.provider.setup.issues.disabled-api-keys')
+        : requiresApiKey && !hasUsableKey
+          ? t('settings.provider.setup.issues.missing-api-key')
+          : !hasAddress
+            ? t('settings.provider.setup.issues.invalid-endpoint')
+            : undefined;
 
   return {
     canContinue: Boolean(value) && !isLoading && !isError && continueHint === undefined,
     continueHint,
     isError,
     isLoading,
+    // Only writes hold the screen. An account sign-in can wait on a browser or device code
+    // indefinitely, and leaving the screen cancels it.
+    isSaving: pendingCount > 0,
     provider,
     providerQuery,
     value: isLoading ? undefined : value,

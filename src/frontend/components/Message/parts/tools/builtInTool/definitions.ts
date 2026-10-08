@@ -41,6 +41,7 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
     titleKey: 'chat.builtinTool.location.current',
   },
   health_get_summary: {
+    // Historical transcript display only; health tools are absent from the executable catalog.
     iconName: 'health',
     titleKey: 'chat.builtinTool.health.summary',
   },

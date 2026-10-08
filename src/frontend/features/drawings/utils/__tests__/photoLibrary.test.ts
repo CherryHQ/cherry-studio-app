@@ -4,6 +4,7 @@ const mockQueryExe = jest.fn();
 const mockQueryExeForMetadata = jest.fn();
 const mockAssetGetFilename = jest.fn();
 const mockAssetGetUri = jest.fn();
+const mockQueryLimit = jest.fn();
 
 jest.mock('expo-media-library', () => ({
   AssetField: {
@@ -26,7 +27,8 @@ jest.mock('expo-media-library', () => ({
       return mockQueryExeForMetadata();
     }
 
-    limit() {
+    limit(count: number) {
+      mockQueryLimit(count);
       return this;
     }
 
@@ -46,10 +48,11 @@ describe('photo library paging', () => {
     mockQueryExeForMetadata.mockReset();
     mockAssetGetFilename.mockReset();
     mockAssetGetUri.mockReset();
+    mockQueryLimit.mockReset();
   });
 
-  test('loads a preview page with one metadata query and no per-asset URI extraction', async () => {
-    const assets = Array.from({ length: 60 }, (_, index) => ({
+  test('loads only the requested preview count with one metadata query and no per-asset URI extraction', async () => {
+    const assets = Array.from({ length: 12 }, (_, index) => ({
       getFilename: () => mockAssetGetFilename(`photo-${index}.jpg`),
       getUri: () => mockAssetGetUri(`file://photo-${index}.jpg`),
       id: `ph://photo-${index}`,
@@ -68,9 +71,11 @@ describe('photo library paging', () => {
     mockQueryExe.mockResolvedValue(assets);
     mockQueryExeForMetadata.mockResolvedValue(metadata);
 
-    const page = await loadPhotoPreviewPage(0);
+    const page = await loadPhotoPreviewPage(0, 12);
 
-    expect(page.photoPreviews).toHaveLength(60);
+    expect(mockQueryLimit).toHaveBeenCalledWith(12);
+    expect(page.photoPreviews).toHaveLength(12);
+    expect(page.hasNextPhotoPage).toBe(true);
     expect(mockQueryExeForMetadata).toHaveBeenCalledTimes(1);
     expect(mockQueryExe).not.toHaveBeenCalled();
     expect(mockAssetGetFilename).not.toHaveBeenCalled();

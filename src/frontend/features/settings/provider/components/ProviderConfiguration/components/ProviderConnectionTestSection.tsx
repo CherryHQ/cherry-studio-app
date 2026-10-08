@@ -22,11 +22,13 @@ export function ProviderConnectionTestSection({
   disabled,
   models,
   providerId,
+  signedIn = false,
 }: {
   apiKeys: readonly ApiKeyEntry[];
   disabled: boolean;
   models: readonly Model[];
   providerId: string;
+  signedIn?: boolean;
 }) {
   const { t } = useTranslation();
   const [selectedModelId, setSelectedModelId] = useState<string>();
@@ -43,7 +45,7 @@ export function ProviderConnectionTestSection({
     setIsModelPickerOpen(false);
   }, []);
 
-  if (!selectedModel || !apiKeys.some((entry) => entry.isEnabled)) return null;
+  if (!selectedModel || (!signedIn && !apiKeys.some((entry) => entry.isEnabled))) return null;
 
   const result =
     isChecking || modelStatus?.status === 'checking' ? (

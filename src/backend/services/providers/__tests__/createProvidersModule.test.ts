@@ -18,6 +18,7 @@ function subject() {
     accounts: {
       getStatus: jest.fn(),
       begin: jest.fn(),
+      signIn: jest.fn(),
       cancel: jest.fn(),
       receiveRedirect: jest.fn(),
       refresh: jest.fn(),
@@ -90,9 +91,8 @@ describe('explicit provider activation', () => {
     const catalogIds = (await backend.listCatalog()).map(({ id }) => id);
 
     for (const providerId of [
-      'copilot',
       'grok-cli',
-      'openai-codex',
+      'meta',
       'claude-code',
       'lmstudio',
       'ollama',
@@ -110,7 +110,18 @@ describe('explicit provider activation', () => {
       );
     }
     expect(dependencies.providers.create).not.toHaveBeenCalled();
-    expect(catalogIds).toEqual(expect.arrayContaining(['openai', 'anthropic', 'gemini']));
+    expect(catalogIds).toEqual(
+      expect.arrayContaining([
+        'openai',
+        'anthropic',
+        'gemini',
+        'copilot',
+        'openai-codex',
+        'kimi-coding',
+        'grok',
+        'openrouter',
+      ]),
+    );
   });
 
   it('prepares without enabling, then enables a configured provider with local models', async () => {

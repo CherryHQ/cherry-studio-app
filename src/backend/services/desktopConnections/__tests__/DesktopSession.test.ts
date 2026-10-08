@@ -84,6 +84,69 @@ const options = (channels: Record<string, ReturnType<typeof fakeChannel>>) => {
 };
 
 describe('DesktopSession', () => {
+  it('adopts pairing approval so address sync does not authenticate an already authenticated channel', async () => {
+    const authorization = { grants: [{ domain: 'configuration', grantId: 'grant-1' }] };
+    const expiresAt = new Date(Date.now() + 600_000).toISOString();
+    const channel = fakeChannel({
+      ...hello,
+      'pairing.get': () => ({
+        status: 'approved',
+        deviceId: 'device-1',
+        authorization,
+        accessToken: 'token',
+        expiresAt,
+      }),
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    try {
+      expect(session.currentAuthorization).toBeUndefined();
+      await session.request('pairing.get', { claimId: 'claim' });
+      expect(session.currentAuthorization).toEqual(authorization);
+    } finally {
+      session.close();
+    }
+  });
+
+  it('reads VPN addresses through the published address handoff contract', async () => {
+    const snapshot = {
+      desktopIdentity: '12D3KooWDesktop',
+      endpoints: [
+        { host: '100.64.0.2', port: 23335, security: 'ws' },
+        { host: 'fd7a:115c:a1e0::2', port: 23335, security: 'ws' },
+      ],
+    };
+    const channel = fakeChannel({
+      'connection.hello': () => ({ ...hello['connection.hello'](), connectionEndpointsVersion: 1 }),
+      'connection.endpoints': (params) => {
+        expect(params).toEqual({ domain: 'agent' });
+        return snapshot;
+      },
+    });
+    const session = await DesktopSession.connect(options({ '100.64.0.2': channel }));
+    try {
+      await expect(session.request('connection.endpoints', { domain: 'agent' })).resolves.toEqual(
+        snapshot,
+      );
+    } finally {
+      session.close();
+    }
+  });
+
+  it('keeps old desktops connected while requiring an upgrade only for address handoff', async () => {
+    const channel = fakeChannel({
+      ...hello,
+      'connection.ping': ({ nonce }: any) => ({ nonce, serverTime: '2026-09-29T00:00:00Z' }),
+    });
+    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+    await expect(
+      session.request('connection.endpoints', { domain: 'agent' }),
+    ).rejects.toMatchObject({ reason: 'UPGRADE_REQUIRED' });
+    await expect(
+      session.request('connection.ping', { nonce: 'still-connected' }),
+    ).resolves.toMatchObject({ nonce: 'still-connected' });
+    expect(session.isOpen).toBe(true);
+    session.close();
+  });
   it('blocks unsupported Agent contracts without disconnecting configuration access', async () => {
     const channel = fakeChannel({
       ...hello,
@@ -195,6 +258,61 @@ describe('DesktopSession', () => {
       expect(error).toBeInstanceOf(RemoteTransportError);
       expect(error).toMatchObject({ kind: 'timeout' });
       session.close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('keeps a healthy channel open while local requests fill the in-flight budget', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    try {
+      const pings: unknown[] = [];
+      const channel = fakeChannel({
+        'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),
+        'connection.ping': (params) => {
+          pings.push(params);
+          return { nonce: (params as { nonce: string }).nonce, serverTime: '2026-10-02T00:00:00Z' };
+        },
+        'agent.commands.get': () => NO_REPLY,
+      });
+      const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+      const pending = Array.from({ length: 16 }, (_, index) =>
+        session.request('agent.commands.get', { commandId: `c${index}` }).catch(() => undefined),
+      );
+      await expect(
+        session.request('agent.commands.get', { commandId: 'over-budget' }),
+      ).rejects.toMatchObject({ reason: 'RESOURCE_EXHAUSTED' });
+
+      await jest.advanceTimersByTimeAsync(20_000);
+      expect(pings).toHaveLength(1);
+      expect(session.isOpen).toBe(true);
+      session.close();
+      await Promise.all(pending);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('treats a refused heartbeat as proof of life and a lost one as a dead channel', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    try {
+      let reply: 'refuse' | 'drop' = 'refuse';
+      const channel = fakeChannel({
+        ...hello,
+        'connection.ping': () => {
+          if (reply === 'drop') return NO_REPLY;
+          throw Object.assign(new Error('Too many requests'), {
+            data: { reason: 'RESOURCE_EXHAUSTED', message: 'Too many requests' },
+          });
+        },
+      });
+      const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+      await jest.advanceTimersByTimeAsync(20_000);
+      expect(session.isOpen).toBe(true);
+
+      reply = 'drop';
+      await jest.advanceTimersByTimeAsync(80_000);
+      expect(session.isOpen).toBe(false);
     } finally {
       jest.useRealTimers();
     }

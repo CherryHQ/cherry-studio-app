@@ -73,10 +73,20 @@ describe('desktop location hints', () => {
     expect(resolver.candidates('device', 'peer1', endpoints)).toEqual(endpoints);
   });
 
+  it('retains all 32 QR candidates in their advertised order', () => {
+    const resolver = new DesktopEndpointResolver();
+    const endpoints = Array.from({ length: 32 }, (_, i) => ({
+      ...endpoint,
+      host: `10.0.0.${i + 1}`,
+    }));
+    resolver.seed('device', 'peer1', endpoints);
+    expect(resolver.candidates('device', 'peer1', [])).toEqual(endpoints);
+  });
+
   it('bounds discovery flooding without evicting manually configured routes', () => {
     const resolver = new DesktopEndpointResolver();
     for (let i = 0; i < 200; i++) resolver.accept({ ...record, id: String(i), port: i + 1 });
-    expect(resolver.candidates('device', 'peer1', [endpoint])).toHaveLength(17);
+    expect(resolver.candidates('device', 'peer1', [endpoint])).toHaveLength(33);
     expect(resolver.candidates('device', 'peer1', [endpoint])[0]).toEqual(endpoint);
   });
 

@@ -34,6 +34,7 @@ import { DesktopUnreachableError, RemoteFailureError } from './remoteErrors';
 import { openWebSocketStream } from './remoteSocket';
 
 type LeaseEntry = {
+  backgroundRequired: boolean;
   domain: DesktopDomain;
   grantId: string;
   controller: AbortController;
@@ -48,6 +49,9 @@ type ConnectionEntry = {
   dial?: AbortController;
   idleTimer?: ReturnType<typeof setTimeout>;
   retryTimer?: ReturnType<typeof setTimeout>;
+  /** Background demand ends after the desktop stays unreachable this long, until foreground. */
+  backgroundLossTimer?: ReturnType<typeof setTimeout>;
+  backgroundExpired?: boolean;
   retry: number;
   updates: Promise<void>;
   revoked: Set<string>;
@@ -57,6 +61,7 @@ class DesktopAuthorizationError extends RemoteFailureError {}
 
 const logger = loggerService.withContext('DesktopConnectionManager');
 const IDLE_GRACE_MS = 3000;
+const BACKGROUND_UNREACHABLE_MS = 60_000;
 const fingerprint = (row: DesktopConnectionRow) =>
   JSON.stringify([row.desktopIdentity, row.deviceId]);
 const scopeFor = (row: DesktopConnectionRow, domain: DesktopDomain, grantId: string) =>
@@ -92,9 +97,13 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     this.store = store;
   }
   protected onInit() {
-    this.registerAppStateListener((state) => this.setForeground(state === 'active'));
+    // iOS reports `inactive` for Control Center, system alerts and Face ID; only `background` hides the app.
+    const onAppState = (state: string | null) => {
+      if (state === 'active' || state === 'background') this.setForeground(state === 'active');
+    };
+    this.registerAppStateListener(onAppState);
     // Construction precedes database initialization; a foreground transition may happen meanwhile.
-    this.setForeground(AppState.currentState === 'active');
+    onAppState(AppState.currentState);
     this.registerDisposable(
       this.resolver.subscribe((changed) => {
         for (const [id, entry] of this.entries) {
@@ -160,6 +169,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     const retained = entry;
     clearTimeout(entry.idleTimer);
     const lease: LeaseEntry = {
+      backgroundRequired: false,
       domain,
       grantId: grant.grantId,
       controller: new AbortController(),
@@ -175,6 +185,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       released = true;
       signal.removeEventListener('abort', release);
       retained.leases.delete(lease);
+      this.reconcileVisibility(id, retained);
       this.retire(lease, 'stopped');
       if (!retained.leases.size) {
         if (!retained.session?.isOpen) retained.dial?.abort();
@@ -254,6 +265,12 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
           else check();
         });
       },
+      setBackgroundRequired: (required) => {
+        if (released || lease.backgroundRequired === required) return;
+        lease.backgroundRequired = required;
+        this.reconcileVisibility(id, retained);
+        this.refreshDiscoveryActivity();
+      },
       release,
     };
   }
@@ -280,6 +297,67 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       if (!session.isOpen) throw new DesktopUnreachableError(['closed']);
       if (fingerprint(latest) !== fingerprint(row) || latest.status !== 'paired')
         throw new DOMException('Pairing replaced', 'AbortError');
+    } finally {
+      session.close();
+    }
+  }
+
+  async syncEndpoints(row: DesktopConnectionRow, session: DesktopSession, signal: AbortSignal) {
+    if (session.connectionEndpointsVersion !== 1) return;
+    const syncSignal = AbortSignal.any([signal, AbortSignal.timeout(4000)]);
+    try {
+      const authorization =
+        session.currentAuthorization ?? (await session.authenticate(row.deviceId, syncSignal));
+      const grant = row.grants.find((candidate) =>
+        authorization.grants.some(
+          (current) => current.domain === candidate.domain && current.grantId === candidate.grantId,
+        ),
+      );
+      if (!grant) return;
+      const snapshot = await session.request(
+        'connection.endpoints',
+        { domain: grant.domain },
+        syncSignal,
+      );
+      if (snapshot.desktopIdentity !== row.desktopIdentity)
+        throw new Error('Desktop identity changed while syncing addresses');
+      const learnedEndpoints = await this.store!.updateLearnedEndpoints(
+        row.id,
+        snapshot.endpoints,
+        row,
+        syncSignal,
+      );
+      const entry = this.entries.get(row.id);
+      if (entry && fingerprint(entry.row) === fingerprint(row))
+        entry.row = { ...entry.row, learnedEndpoints };
+    } catch (error) {
+      if (!signal.aborted) logger.warn('Could not sync desktop addresses', { error });
+    }
+  }
+
+  async verifyEndpoint(row: DesktopConnectionRow, endpoint: DirectEndpoint, signal: AbortSignal) {
+    const session = await this.openTemporary([endpoint], row.desktopIdentity, signal, row.deviceId);
+    try {
+      const grant = row.grants.find((candidate) =>
+        session.currentAuthorization?.grants.some(
+          (current) => current.domain === candidate.domain && current.grantId === candidate.grantId,
+        ),
+      );
+      if (!grant)
+        throw new RemoteFailureError({
+          reason: 'GRANT_REVOKED',
+          message: 'No approved capability',
+        });
+      const snapshot = await session.request(
+        'connection.endpoints',
+        { domain: grant.domain },
+        signal,
+      );
+      if (snapshot.desktopIdentity !== row.desktopIdentity)
+        throw new RemoteFailureError({
+          reason: 'UNAUTHENTICATED',
+          message: 'Desktop identity changed',
+        });
     } finally {
       session.close();
     }
@@ -371,6 +449,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
 
   private setForeground(foreground: boolean) {
+    const returning = foreground && !this.foreground;
     this.foreground = foreground;
     if (!foreground) this.resolver.accept({ type: 'network' });
     this.refreshDiscoveryActivity();
@@ -382,16 +461,51 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       }
     }
     for (const [id, entry] of this.entries) {
-      if (!foreground) {
-        this.close(entry);
-        for (const lease of entry.leases) this.update(lease, { status: 'suspended' });
-      } else this.ensureConnected(id, entry);
+      if (foreground) entry.backgroundExpired = false;
+      // Hidden redials must not delay the first foreground retry.
+      if (returning) entry.retry = 0;
+      this.reconcileVisibility(id, entry);
     }
   }
+  private canConnect(entry: ConnectionEntry): boolean {
+    return (
+      this.foreground ||
+      (!entry.backgroundExpired &&
+        [...entry.leases].some(
+          (lease) => lease.backgroundRequired && !lease.controller.signal.aborted,
+        ))
+    );
+  }
+
+  /** Hidden reconnect attempts against an unreachable desktop only drain the battery. */
+  private watchBackgroundLoss(id: string, entry: ConnectionEntry): void {
+    if (this.foreground || entry.session?.isOpen || !this.canConnect(entry)) {
+      clearTimeout(entry.backgroundLossTimer);
+      entry.backgroundLossTimer = undefined;
+      return;
+    }
+    entry.backgroundLossTimer ??= setTimeout(() => {
+      entry.backgroundLossTimer = undefined;
+      if (this.foreground || entry.session?.isOpen || this.entries.get(id) !== entry) return;
+      entry.backgroundExpired = true;
+      this.reconcileVisibility(id, entry);
+      this.refreshDiscoveryActivity();
+    }, BACKGROUND_UNREACHABLE_MS);
+  }
+
+  private reconcileVisibility(id: string, entry: ConnectionEntry): void {
+    this.watchBackgroundLoss(id, entry);
+    if (this.canConnect(entry)) this.ensureConnected(id, entry);
+    else {
+      this.close(entry);
+      for (const lease of entry.leases) this.update(lease, { status: 'suspended' });
+    }
+  }
+
   private ensureConnected(id: string, entry: ConnectionEntry) {
     if (
       this.stopped ||
-      !this.foreground ||
+      !this.canConnect(entry) ||
       entry.pending ||
       entry.session?.isOpen ||
       this.entries.get(id) !== entry ||
@@ -413,17 +527,20 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
             this.invalidate(id);
             throw new DOMException('Pairing replaced', 'AbortError');
           }
-          entry.row = { ...entry.row, configuredEndpoints: latest.configuredEndpoints };
+          entry.row = {
+            ...entry.row,
+            configuredEndpoints: latest.configuredEndpoints,
+            learnedEndpoints: latest.learnedEndpoints,
+          };
           this.refreshDiscoveryActivity();
           const stopBrowsing = this.discovery.browse();
           try {
             session = await this.connectCandidates(
               () =>
-                this.resolver.candidates(
-                  id,
-                  entry.row.desktopIdentity,
-                  entry.row.configuredEndpoints,
-                ),
+                this.resolver.candidates(id, entry.row.desktopIdentity, [
+                  ...entry.row.configuredEndpoints,
+                  ...entry.row.learnedEndpoints,
+                ]),
               entry.row.desktopIdentity,
               controller.signal,
               entry.row.deviceId,
@@ -447,13 +564,17 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
             ).catch(() => session?.close());
           });
           for (const lease of entry.leases) this.update(lease, { status: 'ready' });
+          this.watchBackgroundLoss(id, entry);
           const connected = session;
+          void this.track(this.syncEndpoints(entry.row, connected, controller.signal));
           this.track(connected.done)
             .finally(() => {
+              controller.abort();
               if (entry.session !== connected) return;
               entry.session = undefined;
               for (const lease of entry.leases)
-                this.update(lease, { status: this.foreground ? 'offline' : 'suspended' });
+                this.update(lease, { status: this.canConnect(entry) ? 'offline' : 'suspended' });
+              this.watchBackgroundLoss(id, entry);
               this.scheduleReconnect(id, entry);
             })
             .catch(() => undefined);
@@ -476,7 +597,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
               });
               for (const lease of entry.leases)
                 this.update(lease, {
-                  status: this.foreground ? 'offline' : 'suspended',
+                  status: this.canConnect(entry) ? 'offline' : 'suspended',
                   reason: error instanceof DesktopUnreachableError ? error.reason : 'unreachable',
                 });
             }
@@ -521,7 +642,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   private scheduleReconnect(id: string, entry: ConnectionEntry) {
     if (
       this.stopped ||
-      !this.foreground ||
+      !this.canConnect(entry) ||
       entry.session?.isOpen ||
       entry.pending ||
       this.entries.get(id) !== entry ||
@@ -531,7 +652,10 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     clearTimeout(entry.retryTimer);
     if (
       !this.resolver.discoveryAvailable &&
-      !this.resolver.candidates(id, entry.row.desktopIdentity, entry.row.configuredEndpoints).length
+      !this.resolver.candidates(id, entry.row.desktopIdentity, [
+        ...entry.row.configuredEndpoints,
+        ...entry.row.learnedEndpoints,
+      ]).length
     )
       return;
     entry.retryTimer = setTimeout(
@@ -563,6 +687,8 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   private close(entry: ConnectionEntry) {
     clearTimeout(entry.retryTimer);
     clearTimeout(entry.idleTimer);
+    clearTimeout(entry.backgroundLossTimer);
+    entry.backgroundLossTimer = undefined;
     entry.dial?.abort();
     entry.session?.close();
     entry.session = undefined;
@@ -586,7 +712,10 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   }
 
   private refreshDiscoveryActivity() {
-    this.discovery.setActive(!this.stopped && this.foreground);
+    this.discovery.setActive(
+      !this.stopped &&
+        (this.foreground || [...this.entries.values()].some((entry) => this.canConnect(entry))),
+    );
   }
 
   private async connectCandidates(
@@ -609,7 +738,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     try {
       for (;;) {
         round.signal.throwIfAborted();
-        if (attempted.size >= 24) throw new DesktopUnreachableError(failures);
+        if (attempted.size >= 32) throw new DesktopUnreachableError(failures);
         const endpoint = candidates().find(
           (endpoint) => !attempted.has(directEndpointUrl(endpoint)),
         );

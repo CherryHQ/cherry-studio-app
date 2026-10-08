@@ -2,6 +2,7 @@ import { authorizationStoreFixture } from '../authorization/__tests__/_authoriza
 import { PluginAuthorizationManager } from '../authorization/PluginAuthorizationManager';
 import { createPluginsModule as createModule } from '../createPluginsModule';
 import type { FeishuAuthorizationRuntime } from '../plugins/feishu/FeishuAuthorizationRuntime';
+import { wecomPlugin } from '../plugins/wecom/wecomPlugin';
 
 type Runtime = Parameters<typeof createModule>[0];
 function createPluginsModule(runtime: Pick<Runtime, 'invalidateServer'> & Partial<Runtime>) {
@@ -263,6 +264,19 @@ it('rejects unregistered plugins and invalid plugin-owned fields before network 
   }
   expect(mockValidateConnection).not.toHaveBeenCalled();
   expect(mockConnect).not.toHaveBeenCalled();
+});
+
+it('removes plugin-owned device files after the connection is removed', async () => {
+  const operations: string[] = [];
+  mockDisconnect.mockImplementation(async () => {
+    operations.push('disconnect');
+    return { serverId: 'server-1' };
+  });
+  jest.spyOn(wecomPlugin, 'clearLocalFiles').mockImplementation(() => {
+    operations.push('clear-files');
+  });
+  await createPluginsModule({ invalidateServer: jest.fn() }).disconnect('wecom');
+  expect(operations).toEqual(['disconnect', 'clear-files']);
 });
 
 it('allows disconnecting a plugin no longer bundled by this app version', async () => {

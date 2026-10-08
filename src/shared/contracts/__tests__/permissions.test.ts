@@ -2,14 +2,11 @@ import { canRequestDevicePermission, canUseDevicePermission } from '../permissio
 
 describe('device permission execution contract', () => {
   test.each([
-    ['health.steps.read', 'requested', true],
-    ['calendar.read', 'requested', false],
     ['photos.read', 'limited', true],
     ['calendar.read', 'limited', false],
-    ['health.steps.read', 'limited', false],
     ['camera.read', 'granted', true],
-    ['health.steps.read', 'error', false],
-    ['health.steps.read', 'denied', false],
+    ['calendar.read', 'error', false],
+    ['calendar.read', 'denied', false],
     ['location.read', 'unavailable', false],
   ] as const)('%s with %s permits execution: %s', (scope, state, expected) => {
     expect(canUseDevicePermission(scope, { state, canAskAgain: false })).toBe(expected);
@@ -28,7 +25,7 @@ describe('device permission execution contract', () => {
     },
   );
 
-  test.each(['granted', 'limited', 'requested', 'error', 'unavailable'] as const)(
+  test.each(['granted', 'limited', 'error', 'unavailable'] as const)(
     '%s cannot prompt even with a stale retry flag',
     (state) => {
       expect(canRequestDevicePermission({ state, canAskAgain: true })).toBe(false);

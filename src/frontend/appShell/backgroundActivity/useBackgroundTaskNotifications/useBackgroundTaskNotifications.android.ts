@@ -27,7 +27,8 @@ export function useBackgroundTaskNotifications(
 ): void {
   const scheme = resolveScheme({});
   const taskKind = task?.kind;
-  const taskId = task?.kind === 'chat' ? task.sessionId : task?.paintingId;
+  const taskId = task?.kind === 'painting' ? task.paintingId : task?.sessionId;
+  const connectionId = task?.kind === 'remote-chat' ? task.connectionId : undefined;
 
   useVisibleBackgroundTask(task, enabled);
 
@@ -35,9 +36,11 @@ export function useBackgroundTaskNotifications(
     useCallback(() => {
       if (!enabled || !taskKind || !taskId) return;
       const target: BackgroundTaskLink =
-        taskKind === 'chat'
-          ? { kind: taskKind, sessionId: taskId }
-          : { kind: taskKind, paintingId: taskId };
+        taskKind === 'remote-chat'
+          ? { kind: taskKind, connectionId: connectionId!, sessionId: taskId }
+          : taskKind === 'chat'
+            ? { kind: taskKind, sessionId: taskId }
+            : { kind: taskKind, paintingId: taskId };
       let focused = true;
 
       const dismissViewed = async (notification: Notification) => {
@@ -46,6 +49,7 @@ export function useBackgroundTaskNotifications(
           focused &&
           AppState.currentState === 'active' &&
           data?.owner === BACKGROUND_NOTIFICATION_OWNER &&
+          data.terminal === true &&
           isSameBackgroundTask(target, parseBackgroundTaskUrl(data.url, scheme))
         ) {
           await dismissNotificationAsync(notification.request.identifier);
@@ -72,6 +76,6 @@ export function useBackgroundTaskNotifications(
         appState.remove();
         presented.remove();
       };
-    }, [enabled, scheme, taskId, taskKind]),
+    }, [connectionId, enabled, scheme, taskId, taskKind]),
   );
 }

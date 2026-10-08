@@ -37,10 +37,12 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
   bootstrap remains the composition and installation boundary.
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
-- Backgrounding is not a reliable execution window for chat or painting generation.
+- Every admitted unfinished conversation holds execution demand in foreground and background,
+  including questions, approvals, persistence, and final delivery. Stored history does not.
+  Platform protection remains subject to OS limits and process death.
 - `KeepAliveCoordinator` is the only execution-lease facade that business services and the
   background-activity manager use. It selects one registered platform source when constructed:
-  `AudioKeepAliveSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
+  `IosBackgroundExecutionSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
   elsewhere. Business services never branch on platform; a platform without a mechanism degrades
   through no-op sources and presenters.
 - Android uses task-scoped foreground-service and Headless JS lifetimes within OS limits; see
@@ -65,13 +67,18 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 - uninstalls the host on unmount; reverse dependency order drains consumers before their
   infrastructure.
 
-The provider's own React context exposes only `loading`, `ready`, or `error`. Concrete backend
+The provider's own React context exposes only `loading`, `ready`, or `error`; `error` also carries
+`retry`, which replaces the failed runtime with a new one because a host that failed to start
+cannot start again. Concrete backend
 services never enter React state or frontend code. Its children receive three stable, narrow
 providers: `DataApiProvider` for typed resource endpoints, `PreferenceProvider` for preferences, and
 `BackendProvider` for workflow modules, including any caller-owned session factories.
 
-`AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and throws the
-initialization error. The root layout retains the native splash, while the app-shell
+`AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and the app-shell
+`StartupFailureScreen` after an initialization error, so a failed start never becomes a crash
+loop. The provider has already logged the failure and initialized translations for that screen
+when an earlier step failed. Render failures after the gate opens are contained by the app-shell
+`AppErrorBoundary`. The root layout retains the native splash, while the app-shell
 `StartupCoordinator` hides it only after its matching React Native cover has laid out and crossed
 two composited frames. The provider owns initialization state and post-ready work; it does not own
 splash visibility. `startupCoverHandoff` prevents Uniwind's native appearance synchronization from
@@ -163,8 +170,9 @@ resource-deletion contract.
 - `WebSearchService` owns API-key rotation state; the host stops it.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, request cancellation, and fallback to bundled data; the host stops it.
-- `AudioKeepAliveSource` owns the iOS silent audio session; `AndroidBackgroundActivityRuntime`
-  owns the Android foreground service, local notifications, and background budget. The host stops
+- `IosBackgroundExecutionSource` owns one finite iOS UIKit execution window; `AndroidBackgroundActivityRuntime`
+  owns Android execution demand, reused task notifications, protection status, and background budget.
+  SystemIntegration shares notification IDs with the patched background-actions service. The host stops
   both after their lease consumers have released.
 - Backend `CacheService` owns Provider API-key rotation state and backend-only MMKV persistence;
   the host initializes and stops it.

@@ -86,6 +86,7 @@ export function useAgentMessageHistoryWindow(
         `/agent-sessions/${sessionId ?? '__missing_session__'}/messages`,
         {
           query: { ...pageParam, limit: messageWindowPolicy.initialFetchCount },
+          signal,
         },
       );
       if (signal.aborted) throw new Error('Message history request cancelled');
@@ -100,8 +101,9 @@ export function useAgentMessageHistoryWindow(
       },
     ],
     staleTime: messageWindowPolicy.staleTimeMs,
-    // Each search selection gets a fresh window; discard inactive copies promptly.
-    ...(aroundMessageId ? { gcTime: messageWindowPolicy.staleTimeMs } : {}),
+    // Loaded pages outlive the page only while still fresh; past that a revisit refetches every
+    // page anyway, so retaining a long transcript in memory buys nothing.
+    gcTime: messageWindowPolicy.staleTimeMs,
   });
   const allMessages = useMemo(
     () => flattenMessagePages(query.data?.pages ?? []),

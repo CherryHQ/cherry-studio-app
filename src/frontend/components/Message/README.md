@@ -36,6 +36,10 @@ LegendList refreshes mounted rows through `itemKey`, `data`, and `extraData`; ch
 identity alone is not a data channel. Dynamic rendered state therefore arrives through changed
 message items, `extraData`, or a feature-owned context/store read inside the row.
 
+Each row renders inside an `ErrorBoundary`. A message that throws while rendering shows a short
+notice in its place instead of taking the conversation down, and renders again when its item,
+`extraData`, or the renderer changes.
+
 Part renderers, animation providers, and platform controls remain private implementation details.
 Callers import only from `@/frontend/components/Message`.
 

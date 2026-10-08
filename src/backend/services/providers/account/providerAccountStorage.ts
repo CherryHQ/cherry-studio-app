@@ -30,6 +30,21 @@ export const StoredProviderAccountSchema = z.object({
 });
 export type StoredProviderAccount = z.infer<typeof StoredProviderAccountSchema>;
 
+const StoredPiAccountSchema = z.object({
+  definitionId: z.string().min(1),
+  providerCreatedAt: z.number(),
+  updatedAt: z.number(),
+  credential: z
+    .object({
+      type: z.literal('oauth'),
+      access: z.string().min(1),
+      refresh: z.string(),
+      expires: z.number().finite(),
+    })
+    .passthrough(),
+});
+export type StoredPiAccount = z.infer<typeof StoredPiAccountSchema>;
+
 async function accountKey(providerId: string) {
   return `provider-account.${await digestStringAsync(CryptoDigestAlgorithm.SHA256, providerId)}`;
 }
@@ -53,6 +68,12 @@ async function write(key: string, value: unknown) {
 }
 
 export const providerAccountStorage = {
+  async readPiAccount(providerId: string) {
+    return read(`${await accountKey(providerId)}.pi`, StoredPiAccountSchema);
+  },
+  async writePiAccount(providerId: string, account: StoredPiAccount | null) {
+    await write(`${await accountKey(providerId)}.pi`, account);
+  },
   async readAccount(providerId: string) {
     return read(await accountKey(providerId), StoredProviderAccountSchema);
   },

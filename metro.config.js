@@ -12,7 +12,9 @@ config.watchFolders.push(path.resolve(__dirname, 'packages'));
 // libp2p packages pick their Node or browser entry through the legacy package.json `browser`
 // file map, which Metro ignores once a package declares `exports`. Apply that map for relative
 // imports inside those packages so the pure-JS entries win (node:os, node:crypto never bundle).
-const legacyBrowserMapPackages = /\/node_modules\/(@libp2p|@chainsafe|@multiformats)\/[^/]+\//;
+// Pi uses the same map to select its native manual OAuth callback adapter.
+const legacyBrowserMapPackages =
+  /\/node_modules\/(@libp2p|@chainsafe|@multiformats|@earendil-works)\/[^/]+\//;
 const browserRedirect = (context, moduleName) => {
   if (!moduleName.startsWith('.')) return null;
   const match = legacyBrowserMapPackages.exec(context.originModulePath);
@@ -32,6 +34,16 @@ const browserRedirect = (context, moduleName) => {
 };
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // pnpm peer variants can give @expo/ui a second Expo runtime. Its Expo.fx
+  // replaces __loadBundleAsync, but native startup initialized only the root
+  // copy's HMR client. Keep Expo and its subpaths on that same runtime.
+  if (moduleName === 'expo' || moduleName.startsWith('expo/')) {
+    return context.resolveRequest(
+      { ...context, originModulePath: path.join(__dirname, 'package.json') },
+      moduleName,
+      platform,
+    );
+  }
   if (platform === 'android' || platform === 'ios') {
     const redirected = browserRedirect(context, moduleName);
     if (redirected) return { type: 'sourceFile', filePath: redirected };

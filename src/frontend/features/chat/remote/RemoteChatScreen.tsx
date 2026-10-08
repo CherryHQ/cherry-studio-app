@@ -4,11 +4,13 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useDrawerStatus } from 'expo-router/drawer';
 import { type RefObject, createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import {
   ConversationSourceBoundary,
   useConversationSourceState,
@@ -36,13 +38,13 @@ import {
 } from '@/frontend/components/Composer';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import type { MessageListItem } from '@/frontend/components/Message';
-import { usePersistCache } from '@/frontend/data/hooks';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
 import { ConversationPresenter } from './ConversationPresenter';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
+import { readRemoteDraft } from './useRemoteDraftPersistence';
 
 const renderRemoteUsage = (message: MessageListItem) => (
   <RemoteAssistantMessageUsage message={message} />
@@ -127,6 +129,7 @@ function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
 }
 const ignorePending = () => {};
 function RemoteChatSession() {
+  const drawerStatus = useDrawerStatus();
   const source = useRemoteConversationSource();
   const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   const { availability } = useConversationSourceState();
@@ -138,6 +141,12 @@ function RemoteChatSession() {
   const opened = useConversation(
     target.sessionId ? { source: source.ref, sessionId: target.sessionId } : undefined,
     source,
+  );
+  useBackgroundTaskNotifications(
+    connectionId && target.sessionId
+      ? { kind: 'remote-chat', connectionId, sessionId: target.sessionId }
+      : undefined,
+    drawerStatus !== 'open',
   );
   const snapshot = useConversationSnapshot(opened.session);
   const history = useConversationHistory(opened.session, snapshot.historyVersion);
@@ -176,13 +185,12 @@ function RemoteChatSession() {
       void agents.fetchNextPage();
   }, [agentId, agent, agents]);
   const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? `session:${target.sessionId}` : identity}`;
-  const [drafts] = usePersistCache('remote_agent.drafts');
   return (
     <HeaderContext value={{ agent, selectAgent, startNewChat }}>
       <ChatScreenFrame header={RemoteHeader}>
         <ComposerSessionProvider
           key={`${source.scope}:${identity}`}
-          initialDraft={drafts[draftKey] ?? ''}
+          initialDraft={() => readRemoteDraft(draftKey)}
         >
           {/* Native background taps yield to scrolling and excluded message content. */}
           <ComposerDismissArea testID="chat-background">
@@ -212,7 +220,7 @@ function RemoteChatSession() {
               <ConversationStatus
                 availability={availability}
                 onRepair={() => router.push('/settings/device-connections')}
-                onEditAddresses={
+                onOpenDeviceSettings={
                   connectionId
                     ? () =>
                         router.push({

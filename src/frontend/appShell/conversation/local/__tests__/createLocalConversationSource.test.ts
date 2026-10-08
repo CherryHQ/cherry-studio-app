@@ -136,6 +136,9 @@ test('catalog changes and row actions refresh lists, and retired actions cannot 
   expect(changed).toHaveBeenLastCalledWith('agents');
   for (const listener of f.changes) listener(['/agent-sessions/session']);
   expect(changed).toHaveBeenLastCalledWith('sessions');
+  changed.mockClear();
+  for (const listener of f.changes) listener(['/agent-sessions/session/messages']);
+  expect(changed).not.toHaveBeenCalled();
   const preview = f.source.catalog.previewSession!({ source: f.source.ref, sessionId: 'session' });
   expect(await preview.rename!.execute({ title: ' Renamed ' })).toMatchObject({ state: 'applied' });
   expect(f.protocol.renameSession).toHaveBeenCalledWith({ sessionId: 'session', title: 'Renamed' });

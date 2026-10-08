@@ -6,15 +6,19 @@ import {
 } from '@cherrystudio/provider-registry';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
+import { GITHUB_COPILOT_MODELS } from '@earendil-works/pi-ai/providers/github-copilot.models';
+import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
 import { createPiModelResolver, toPiModelPreflight } from '../piModelResolver';
+import * as piOAuthModels from '../piOAuthModels';
 import type { PiRuntimeDependencies } from '../PiRuntime';
 
 type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
@@ -93,6 +97,7 @@ describe('Pi model resolver', () => {
   let resolver: PiRuntimeDependencies;
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
     mockBoundStreamFn.mockReset();
     mockGetAuthConfig.mockResolvedValue(null);
@@ -103,6 +108,101 @@ describe('Pi model resolver', () => {
     });
     mockBindPiStream.mockResolvedValue(mockBoundStreamFn);
     resolver = createPiModelResolver();
+  });
+
+  test('retains canonical Copilot identity, model API, and credential-specific base URL', async () => {
+    jest
+      .spyOn(piOAuthModels, 'resolveOAuthPiModel')
+      .mockResolvedValueOnce(GITHUB_COPILOT_MODELS['claude-sonnet-4.6']);
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      'https://api.githubcopilot.com',
+      'github-copilot-openai-compatible',
+    );
+    provider.presetProviderId = 'copilot';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, { apiModelId: 'claude-sonnet-4.6' }),
+    );
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'github-copilot',
+        auth: { apiKey: 'copilot-access', baseUrl: 'https://api.business.githubcopilot.com' },
+        availableModelIds: ['claude-sonnet-4.6'],
+      }),
+    });
+    const resolution = await resolve(resolver);
+    expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'github-copilot' }),
+      'claude-sonnet-4.6',
+    );
+    expect(resolution.model).toMatchObject({
+      provider: 'github-copilot',
+      api: 'anthropic-messages',
+      baseUrl: 'https://api.business.githubcopilot.com',
+    });
+    expect(resolution.usageContext).toMatchObject({
+      providerId: 'test-provider',
+      credentialReceipt: { attribution: 'unknown' },
+    });
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test('preserves header-owned Kimi authentication and redacts the raw bearer token', async () => {
+    jest
+      .spyOn(piOAuthModels, 'resolveOAuthPiModel')
+      .mockResolvedValueOnce(KIMI_CODING_MODELS['kimi-for-coding']);
+    const provider = makeProvider(
+      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      'https://api.kimi.com/coding',
+      'anthropic',
+    );
+    provider.presetProviderId = 'kimi-coding';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES, { apiModelId: 'kimi-for-coding' }),
+    );
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'kimi-coding',
+        auth: { headers: { Authorization: 'Bearer kimi-access' } },
+        availableModelIds: undefined,
+      }),
+    });
+    const resolution = await resolve(resolver);
+    expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'kimi-coding' }),
+      'kimi-for-coding',
+    );
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        apiKey: undefined,
+        headers: expect.objectContaining({ Authorization: 'Bearer kimi-access' }),
+      }),
+    );
+    expect(resolution.model).toMatchObject({
+      provider: 'kimi-coding',
+      compat: { forceAdaptiveThinking: true },
+    });
+    expect(resolution.redactionValues).toContain('kimi-access');
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test('never falls back to manual API keys after a stored OAuth refresh fails', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(ENDPOINT_TYPE.OPENAI_RESPONSES, 'https://api.x.ai/v1', 'xai-responses'),
+    );
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
+    resolver = createPiModelResolver({
+      resolveAuth: async () => {
+        throw new ProviderAccountError('authorization');
+      },
+    });
+    await expect(resolve(resolver)).rejects.toEqual(new ProviderAccountError('authorization'));
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -244,8 +344,10 @@ describe('Pi model resolver', () => {
       'secret-c': [429],
     };
     mockBindPiStream.mockImplementation(async (_adapter, binding) => () => {
-      usedKeys.push(binding.apiKey);
-      const status = statuses[binding.apiKey].shift()!;
+      const { apiKey } = binding;
+      if (!apiKey) throw new Error('Expected an API key for credential rotation.');
+      usedKeys.push(apiKey);
+      const status = statuses[apiKey].shift()!;
       const response: AssistantMessage = {
         role: 'assistant',
         api: testCase.api,
@@ -334,9 +436,11 @@ describe('Pi model resolver', () => {
       let signal: AbortSignal | undefined;
       mockBindPiStream.mockImplementation(
         async (_adapter, binding) => (_model, _context, options) => {
-          usedKeys.push(binding.apiKey);
+          const { apiKey } = binding;
+          if (!apiKey) throw new Error('Expected an API key for credential retries.');
+          usedKeys.push(apiKey);
           signal = options?.signal;
-          if (binding.apiKey === keys[0].key) {
+          if (apiKey === keys[0].key) {
             return new Promise<AssistantMessageEventStream>((_resolve, reject) => {
               setTimeout(() => reject(new Error('Temporary failure')), 60_000);
             });

@@ -2,6 +2,7 @@ import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';
 
 import type { ResourceRead } from '../../contracts';
 import {
+  createRemoteMessageProjectionCache,
   remoteConversationFailure,
   remoteAvailability,
   remoteMessage,
@@ -83,7 +84,7 @@ it('keeps tools in process order without putting deferred input/output values in
     role: 'assistant',
     state: 'success',
     parts: [
-      { id: 'r', kind: 'reasoning', text: 'Plan', complete: true },
+      { id: 'r', kind: 'reasoning', text: 'Plan', complete: true, state: 'completed' },
       {
         id: 'call1',
         kind: 'tool',
@@ -93,7 +94,7 @@ it('keeps tools in process order without putting deferred input/output values in
         input: 'input-ref',
         output: 'output-ref',
       },
-      { id: 't', kind: 'text', text: 'Found the file', complete: true },
+      { id: 't', kind: 'text', text: 'Found the file', complete: true, state: 'completed' },
       {
         id: 'call2',
         kind: 'tool',
@@ -102,7 +103,7 @@ it('keeps tools in process order without putting deferred input/output values in
         state: 'failed',
         output: 'error-ref',
       },
-      { id: 'last', kind: 'text', text: 'Final answer', complete: true },
+      { id: 'last', kind: 'text', text: 'Final answer', complete: true, state: 'completed' },
     ],
   };
   const projected = remoteMessage(message, resource);
@@ -137,9 +138,9 @@ it('keeps part keys when committed history renames the live text parts', () => {
     role: 'assistant',
     state: 'success',
     parts: [
-      { id: 'stream-r', kind: 'reasoning', text: 'Plan', complete: true },
+      { id: 'stream-r', kind: 'reasoning', text: 'Plan', complete: true, state: 'completed' },
       { id: 'call', kind: 'tool', callId: 'call', name: 'read_file', state: 'completed' },
-      { id: 'stream-t', kind: 'text', text: 'Done', complete: true },
+      { id: 'stream-t', kind: 'text', text: 'Done', complete: true, state: 'completed' },
     ],
   };
   const persisted: RemoteMessageView = {
@@ -165,7 +166,7 @@ it('preserves trailing live prose and keeps metadata-only files out of local fil
       state: 'streaming',
       parts: [
         { id: 'call', kind: 'tool', callId: 'call', name: 'read_file', state: 'streaming' },
-        { id: 'text', kind: 'text', text: 'Still working', complete: true },
+        { id: 'text', kind: 'text', text: 'Still working', complete: true, state: 'streaming' },
         {
           id: 'file',
           kind: 'file',
@@ -185,6 +186,52 @@ it('preserves trailing live prose and keeps metadata-only files out of local fil
     mediaType: 'image/png',
   });
   expect(JSON.stringify(projected.display)).not.toContain('pc-file');
+});
+
+it('ends streaming for each completed text part and reuses unchanged part projections', () => {
+  const reasoning = {
+    id: 'r',
+    kind: 'reasoning' as const,
+    text: 'Plan',
+    complete: true,
+    state: 'completed' as const,
+  };
+  const tool = {
+    id: 'call',
+    kind: 'tool' as const,
+    callId: 'call',
+    name: 'read_file',
+    state: 'completed' as const,
+    output: 'output-ref',
+  };
+  const tail = (text: string) => ({
+    id: 'tail',
+    kind: 'text' as const,
+    text,
+    complete: true,
+    state: 'streaming' as const,
+  });
+  const message = (
+    parts: RemoteMessageView['parts'],
+    state: RemoteMessageView['state'] = 'streaming',
+  ): RemoteMessageView => ({ id: 'reply', version: '1', role: 'assistant', state, parts });
+  const cache = createRemoteMessageProjectionCache();
+  const first = remoteMessage(message([reasoning, tool, tail('Fo')]), resource, cache);
+  const next = remoteMessage(message([reasoning, tool, tail('Found')]), resource, cache);
+
+  expect(first.display.data.parts?.[0]).toMatchObject({ type: 'reasoning', state: 'done' });
+  expect(first.display.data.parts?.[2]).toMatchObject({ type: 'text', state: 'streaming' });
+  expect(next.display.data.parts?.[0]).toBe(first.display.data.parts?.[0]);
+  expect(next.display.data.parts?.[1]).toBe(first.display.data.parts?.[1]);
+  expect(next.display.data.parts?.[2]).toMatchObject({ text: 'Found' });
+  expect(next.tools).toBe(first.tools);
+
+  const settled = remoteMessage(
+    message([reasoning, tool, tail('Found')], 'success'),
+    resource,
+    cache,
+  );
+  expect(settled.display.data.parts?.[2]).toMatchObject({ state: 'done' });
 });
 
 it('preserves known admission failure details instead of flattening them to internal', () => {

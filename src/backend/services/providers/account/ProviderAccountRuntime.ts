@@ -14,8 +14,10 @@ import {
   type ProviderAccountIdentity,
   type ProviderAccountsModule,
   type ProviderAccountStatus,
+  type ProviderSignInInteraction,
 } from '@/shared/contracts/providerAccounts';
 
+import type { ProviderAccountAdapter } from './providerAccountAdapter';
 import {
   getAccountCapabilities,
   type ProviderAccountDefinition,
@@ -62,6 +64,7 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
   private store: Pick<ProviderAccountService, 'get' | 'replaceKeys'> | undefined;
   private definitions: ReadonlyMap<string, ProviderAccountDefinition> = new Map();
   private stopped = false;
+  private adapter: ProviderAccountAdapter | undefined;
   private tail: Promise<unknown> = Promise.resolve();
   private active: AbortController | undefined;
   private pending: PendingAuthorization | undefined;
@@ -71,18 +74,29 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
   configure(
     store: Pick<ProviderAccountService, 'get' | 'replaceKeys'>,
     definitions: readonly ProviderAccountDefinition[],
+    adapter?: ProviderAccountAdapter,
   ) {
     this.store = store;
+    this.adapter = adapter;
+    adapter?.configure(store);
     this.definitions = new Map(definitions.map((definition) => [definition.id, definition]));
   }
 
   getCapabilities(provider: ProviderAccountIdentity) {
+    const capabilities = this.adapter?.getCapabilities(provider);
+    if (capabilities) return capabilities;
     return getAccountCapabilities(this.definitions.get(provider.presetProviderId ?? provider.id));
+  }
+
+  signIn(providerId: string, interaction: ProviderSignInInteraction) {
+    if (!this.adapter || this.stopped) return Promise.reject(new ProviderAccountError('cancelled'));
+    return this.adapter.signIn(providerId, interaction);
   }
 
   getStatus(providerId: string) {
     return this.run(async () => {
       const provider = await this.store!.get(providerId);
+      if (this.adapter?.getCapabilities(provider)) return this.adapter.getStatus(providerId);
       const definition = this.definitions.get(provider.presetProviderId ?? provider.id);
       return definition
         ? accountStatus(await this.readAccount(provider, definition.id))
@@ -172,7 +186,10 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
     const previous = this.refreshes.get(providerId);
     if (previous) return previous;
     const result = this.run(async (signal) => {
-      const { provider, definition } = await this.requireProvider(providerId);
+      const provider = await this.store!.get(providerId);
+      if (this.adapter?.getCapabilities(provider)) return this.adapter.refresh(providerId);
+      const definition = this.definitions.get(provider.presetProviderId ?? provider.id);
+      if (!definition) throw new ProviderAccountError('unsupported');
       let account = await this.readAccount(provider, definition.id);
       if (!account?.authorized) return { ...SIGNED_OUT };
       if (!definition.getBalance && !definition.getProfile) return accountStatus(account);
@@ -239,7 +256,8 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
     return result;
   }
 
-  logout(providerId: string) {
+  async logout(providerId: string) {
+    await this.adapter?.logout(providerId);
     this.active?.abort();
     return this.run(async (signal) => {
       const account = await providerAccountStorage.readAccount(providerId);
@@ -253,7 +271,8 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
   }
 
   /** Provider deletion clears credentials independently of any mounted account panel. */
-  forget(providerId: string) {
+  async forget(providerId: string) {
+    await this.adapter?.logout(providerId);
     this.active?.abort();
     return this.run(async () => {
       await this.clearAccount(providerId, await providerAccountStorage.readAccount(providerId));
@@ -342,6 +361,7 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
   protected async onStop() {
     this.stopped = true;
     this.active?.abort();
+    await this.adapter?.stop();
     await this.tail;
     this.pending = undefined;
     this.callbacks.clear();

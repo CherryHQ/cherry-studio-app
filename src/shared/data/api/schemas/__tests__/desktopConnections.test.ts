@@ -22,6 +22,25 @@ describe('desktop connection api schemas', () => {
     expect(qr).not.toHaveProperty('connectionId');
   });
 
+  test('accepts 32 ordered QR addresses and rejects a 33rd', () => {
+    const ips = Array.from({ length: 32 }, (_, i) => `10.0.0.${i + 1}`);
+    const input = {
+      desktopIdentity: '12D3KooWDesktop',
+      invitationId: 'invitation',
+      invitationSecret: 'secret',
+      ips,
+      name: 'Desktop',
+      port: 23333,
+      protocolVersions: [1],
+      t: 'cherry-studio-pair',
+      v: 2,
+    };
+    expect(DesktopPairingQrSchema.parse(input).ips).toEqual(ips);
+    expect(DesktopPairingQrSchema.safeParse({ ...input, ips: [...ips, '10.0.0.33'] }).success).toBe(
+      false,
+    );
+  });
+
   test('preserves desktop provider and model registry metadata', () => {
     const snapshot = DesktopProvidersSnapshotSchema.parse({
       providers: [

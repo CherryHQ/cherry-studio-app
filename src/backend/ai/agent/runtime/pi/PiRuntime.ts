@@ -103,6 +103,7 @@ export interface PiRuntimeDependencies {
     options: RuntimeExecutionRequest['options'],
     sessionId: string,
     apiKeyOverride?: string,
+    signal?: AbortSignal,
   ): PiModelResolution | Promise<PiModelResolution>;
 }
 
@@ -186,6 +187,12 @@ export const PI_TURN_SETTLE_GRACE_MS = 1_000;
 const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
 const MIN_USEFUL_META_TOOL_OUTPUT_CHARACTERS = 2_000;
 const REDACTED_SECRET = '[REDACTED]';
+/**
+ * Attachment and tool-result content shorter than this is too generic to
+ * redact: IR node types, style values, labels, or a lone "A" would otherwise
+ * rewrite unrelated text, including earlier `[REDACTED]` markers.
+ */
+const MIN_REDACTED_CONTENT_CHARS = 32;
 
 const TERMINAL_ERROR_DIAGNOSTIC_TYPES = new Set([
   'pi_messages_response_failure',
@@ -478,7 +485,9 @@ function sensitiveToolResultValues(messages: readonly PiAgentMessage[]): string[
   for (const message of messages) {
     if (message.role !== 'toolResult') continue;
     for (const part of message.content) {
-      if (part.type === 'text' && part.text) values.push(part.text);
+      if (part.type === 'text' && part.text.length >= MIN_REDACTED_CONTENT_CHARS) {
+        values.push(part.text);
+      }
     }
     collectSensitiveValues(message.details, values);
   }
@@ -491,7 +500,7 @@ function attachmentBodies(request: RuntimeExecutionRequest): string[] {
     ...request.input,
     ...request.history.flatMap((turn) => turn.messages.flatMap((message) => message.parts)),
   ]) {
-    if (part.type === 'text-attachment' && part.text) values.push(part.text);
+    if (part.type === 'text-attachment') values.push(part.text);
     if (part.type !== 'document-attachment') continue;
     if (part.document.delivery === 'complete') {
       values.push(JSON.stringify(part.document.result), JSON.stringify(part.document.result.ir));
@@ -501,7 +510,7 @@ function attachmentBodies(request: RuntimeExecutionRequest): string[] {
     for (const image of part.images)
       values.push(image.uri, image.uri.slice(image.uri.indexOf(',') + 1));
   }
-  return values;
+  return values.filter((value) => value.length >= MIN_REDACTED_CONTENT_CHARS);
 }
 
 function collectSensitiveValues(value: unknown, values: string[], sensitive = false): void {
@@ -679,11 +688,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private async run(request: RuntimeExecutionRequest, turn: ActiveTurn): Promise<void> {
     let unsubscribe: (() => void) | undefined;
-    const requestRedactions = [
-      ...attachmentBodies(request),
-      ...(request.apiKeyOverride ? [request.apiKeyOverride] : []),
-    ];
-    let secrets: readonly string[] = requestRedactions;
+    let credentials: readonly string[] = request.apiKeyOverride ? [request.apiKeyOverride] : [];
+    let attachmentRedactions: readonly string[] | undefined;
+    // Serializing every replayed document only pays off once text actually needs redacting.
+    const secrets = () => [...credentials, ...(attachmentRedactions ??= attachmentBodies(request))];
     try {
       const resolution = await raceAbort(
         this.dependencies.resolveModel(
@@ -691,10 +699,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
           request.options,
           request.sessionId,
           request.apiKeyOverride,
+          turn.abortController.signal,
         ),
         turn.abortController.signal,
       );
-      secrets = [...resolution.redactionValues, ...requestRedactions];
+      credentials = [...resolution.redactionValues, ...credentials];
       turn.usageContext = resolution.usageContext;
       if (this.settleIfEnding(turn)) return;
       const directTools = request.tools.filter((tool) => tool.ref.source !== 'mcp');
@@ -852,10 +861,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
       };
       const currentMessages = [conversation.prompt, ...(conversation.resume ?? [])];
       turn.replayMessages.push(...(conversation.resume ?? []));
-      const compactionRedactions = [
-        ...secrets,
-        ...sensitiveToolResultValues([...conversation.history, ...currentMessages]),
-      ];
+      let compactionSecrets: readonly string[] | undefined;
+      const compactionRedactions = () =>
+        (compactionSecrets ??= [
+          ...secrets(),
+          ...sensitiveToolResultValues([...conversation.history, ...currentMessages]),
+        ]);
       const thinkingLevel = resolveThinkingLevel(request, resolution);
       let compactionSequence = 0;
       const contextCallbacks = (phase: RuntimeContextCompaction['phase']) => {
@@ -890,7 +901,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           model: resolution.model,
           models,
           options: this.contextOptions,
-          redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions),
+          redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions()),
           signal: turn.abortController.signal,
           thinkingLevel,
           tools: piTools,
@@ -1002,7 +1013,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
               options: this.contextOptions,
               redactSummary: (summary) =>
                 redactCompactionSummary(summary, [
-                  ...compactionRedactions,
+                  ...compactionRedactions(),
                   ...sensitiveToolResultValues(context.messages),
                 ]),
               signal: turn.abortController.signal,
@@ -1105,7 +1116,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         case 'error':
           this.emit(turn, {
             type: 'failed',
-            error: normalizeAiError(terminalExecutionError(terminal), secrets, {
+            error: normalizeAiError(terminalExecutionError(terminal), secrets(), {
               providerId: resolution.usageContext.providerId,
               modelId: resolution.usageContext.modelId,
             }),
@@ -1128,7 +1139,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       if (!this.settleIfEnding(turn, { emitCancelled: true })) {
         this.emit(turn, {
           type: 'failed',
-          error: normalizeAiError(error, secrets, {
+          error: normalizeAiError(error, secrets(), {
             providerId: turn.usageContext?.providerId ?? request.model.providerId,
             modelId: turn.usageContext?.modelId ?? request.model.modelId,
           }),

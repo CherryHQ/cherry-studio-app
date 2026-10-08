@@ -2,13 +2,13 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-The system catalog ships device calendar and reminders, health, location, web search and fetch,
-image generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+The system catalog ships device calendar and reminders, location, web search and fetch, image
+generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
 `run_js`, all using the settled `ToolRef` and `{ value, artifacts }` contracts. For each turn the
 Host resolves that catalog against model tool support, platform, OS permission, app
 configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
 belong to every turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
@@ -84,9 +84,7 @@ content. See [Web Search](../web-search.md) for the request and partial-result p
 `generate_image` additionally requires a configured drawing model. An OS permission scope
 that can still be requested keeps a device tool available as `ask`; execution prompts after
 in-app approval, including after a denial when the OS allows another request. Permanently denied,
-unavailable, or unreadable permission states remove dependent tools for the turn. Health summaries
-need only one usable or requestable metric; execution checks the metrics selected by the call.
-HealthKit's `requested` state permits a query without claiming that read access was granted.
+unavailable, or unreadable permission states remove dependent tools for the turn.
 The inference snapshot records the tools that entered the immutable turn. Enabling an Agent
 capability changes its preference; it does not itself request OS permission.
 
@@ -378,31 +376,14 @@ retry; cancellation still propagates without becoming a cached failure.
   batch. The tool stops waiting immediately, while an already-open system sheet retains the queue
   until its native callback settles.
 
-### System Health
+### Retired Health Capability
 
-- Health is exposed only on iOS. Android does not package Nitro HealthKit, the Health Access
-  module, or Health Connect permissions; its health permission lookups report `unsupported`.
-  Historical health tool results are retained.
-- [Health Access](../../../modules/health-access/README.md) owns native read authorization;
-  `src/backend/services/permissions` maps its results to the shared permission contract. Data
-  queries remain in `src/backend/services/device/health.ts` using Nitro HealthKit.
-- The Nitro HealthKit iOS patch narrows authorization to the read types used by the built-in
-  tools and removes per-query logging. This patch and the iOS calendar requester patch require a
-  new native build.
-- Apple Health never discloses whether a read permission was granted. `requested` means the system
-  no longer needs to ask, and settings explain how to review access in Apple Health.
-- Summaries request only selected metrics, skip known denied metrics, and preserve successful
-  metrics when another query fails. Absent data is `null` in range summaries, with per-metric
-  `no-data` or `error` states; it must not be interpreted as zero activity. Daily results omit
-  missing values. Queries remain subject to the system's history limits.
-- Quantity reads take the native aggregate first and fetch raw samples only to settle a zero,
-  which is where a measured zero and a missing record still differ and where the raw fetch is
-  cheap. Fetching raw samples for the whole range first exceeds the native timeout on dense
-  metrics such as step count, active energy, and heart rate. Daily results aggregate one query
-  per calendar day in the device's timezone rather than bucketing raw samples by UTC date.
-- A metric marked `error` carries the native failure reason alongside its state. A timeout, an
-  unmapped type, and a revoked grant are different faults with the same state, and the device log
-  is not available where the result is read.
+The first App Store release omits health access. The executable catalog, Agent capability groups,
+permission settings, native dependencies, entitlements, and usage descriptions contain no health
+capability. Persisted Agent deny-lists drop the retired `health` id on read using the existing
+unknown-capability guard. Existing conversations retain health tool result labels and icons for
+historical display; those entries do not register executable tools or request permissions.
+Restoring health access requires a separate native feature and App Store submission.
 
 ### Image Generation
 

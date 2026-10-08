@@ -6,7 +6,10 @@ import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/c
 import type { AgentMessagePart } from '@/shared/contracts/agent';
 
 import { BackgroundReplyRuntime } from '../BackgroundReplyRuntime';
-import type { ReplyCompletionNotifier } from '../replyCompletionNotifications';
+import type {
+  ReplyCompletionNotifier,
+  ReplyCompletionNotificationEvent,
+} from '../replyCompletionNotifications';
 
 jest.mock('expo-constants', () => ({
   ...jest.requireActual('expo-constants'),
@@ -28,9 +31,6 @@ type MockSession = {
 };
 
 describe('BackgroundReplyRuntime', () => {
-  let preferenceListener: (() => void) | undefined;
-  let enabled: boolean;
-  let notificationsEnabled: boolean;
   const mockSessions: MockSession[] = [];
   const createMockSession = (input: SessionInput): MockSession => {
     const session: MockSession = {
@@ -48,9 +48,6 @@ describe('BackgroundReplyRuntime', () => {
   const acquire = jest.fn(() => ({ release: preparationRelease }));
 
   beforeEach(() => {
-    enabled = true;
-    notificationsEnabled = false;
-    preferenceListener = undefined;
     mockSessions.length = 0;
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -60,21 +57,16 @@ describe('BackgroundReplyRuntime', () => {
     jest.restoreAllMocks();
   });
 
-  test.each([true, false])(
-    'preparation follows the background-reply preference: %s',
-    async (value) => {
-      enabled = value;
-      const runtime = await createRuntime();
-      const interrupt = jest.fn();
-      const lease = runtime.acquirePreparation('session-1', interrupt);
-      expect(acquire).toHaveBeenCalledTimes(value ? 1 : 0);
-      if (value) expect(acquire).toHaveBeenCalledWith('chat.preparation', interrupt);
-      expect(mockStartSession).toHaveBeenCalledTimes(value ? 1 : 0);
-      lease.release();
-      expect(preparationRelease).toHaveBeenCalledTimes(value ? 1 : 0);
-      await runtime._doStop();
-    },
-  );
+  test('preparation acquires protection before turn admission', async () => {
+    const runtime = await createRuntime();
+    const interrupt = jest.fn();
+    const lease = runtime.acquirePreparation('session-1', interrupt);
+    expect(acquire).toHaveBeenCalledWith('chat.preparation', interrupt);
+    expect(mockStartSession).toHaveBeenCalledTimes(1);
+    lease.release();
+    expect(preparationRelease).toHaveBeenCalledTimes(1);
+    await runtime._doStop();
+  });
 
   test('preparation opens the surface the turn then inherits', async () => {
     const runtime = await createRuntime();
@@ -140,43 +132,34 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
-  test.each(['disabled', 'stopped'] as const)(
-    'releases pending preparation leases once when background reply is %s',
-    async (transition) => {
-      const runtime = await createRuntime();
-      const interrupt = jest.fn();
-      const completed = runtime.acquirePreparation('session-1', interrupt);
-      const pending = [
-        runtime.acquirePreparation('session-2', interrupt),
-        runtime.acquirePreparation('session-3', interrupt),
-      ];
-      completed.release();
-      completed.release();
-      expect(preparationRelease).toHaveBeenCalledTimes(1);
+  test('releases pending preparation leases once when stopped', async () => {
+    const runtime = await createRuntime();
+    const interrupt = jest.fn();
+    const completed = runtime.acquirePreparation('session-1', interrupt);
+    const pending = [
+      runtime.acquirePreparation('session-2', interrupt),
+      runtime.acquirePreparation('session-3', interrupt),
+    ];
+    completed.release();
+    completed.release();
+    expect(preparationRelease).toHaveBeenCalledTimes(1);
 
-      if (transition === 'disabled') {
-        enabled = false;
-        preferenceListener?.();
-        await flushOperations();
-      } else {
-        await runtime._doStop();
-      }
-      expect(preparationRelease).toHaveBeenCalledTimes(3);
-      expect(interrupt).not.toHaveBeenCalled();
+    await runtime._doStop();
+    expect(preparationRelease).toHaveBeenCalledTimes(3);
+    expect(interrupt).not.toHaveBeenCalled();
 
-      for (const lease of pending) lease.release();
-      completed.release();
-      await runtime._doStop();
-      expect(preparationRelease).toHaveBeenCalledTimes(3);
-    },
-  );
+    for (const lease of pending) lease.release();
+    completed.release();
+    await runtime._doStop();
+    expect(preparationRelease).toHaveBeenCalledTimes(3);
+  });
 
   test.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
     'opens chat activities with the current app scheme %s',
     async (scheme) => {
       Constants.expoConfig!.scheme = scheme;
       const runtime = await createRuntime();
-      expect(runtime.isActivated).toBe(true);
+      expect(runtime.isReady).toBe(true);
       const first = runtime.startTurn({
         agentId: 'agent-1',
         agentName: 'Alpha',
@@ -250,7 +233,10 @@ describe('BackgroundReplyRuntime', () => {
 
   test('delivers an iOS completion notice from a background terminal event and retires the Live Activity', async () => {
     Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
-    const notifyTurnFinished = jest.fn(async () => true);
+    const notifyTurnFinished = jest.fn(async (event: ReplyCompletionNotificationEvent) => {
+      await event.beforeDelivery?.();
+      return true;
+    });
     const dismissDestination = jest.fn();
     const runtime = await createRuntime(undefined, {
       dismissDestination,
@@ -336,10 +322,11 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
-  test('keeps the session lease alive through notify-only generation', async () => {
-    enabled = false;
-    notificationsEnabled = true;
-    const notifyTurnFinished = jest.fn(async () => true);
+  test('keeps execution independent of completion-notification delivery', async () => {
+    const notifyTurnFinished = jest.fn(async (event: ReplyCompletionNotificationEvent) => {
+      await event.beforeDelivery?.();
+      return true;
+    });
     const dismissDestination = jest.fn();
     const runtime = await createRuntime(undefined, {
       dismissDestination,
@@ -362,7 +349,7 @@ describe('BackgroundReplyRuntime', () => {
     // Live Activities are off, so no surface presents, but the session exists
     // and its generating keep-alive bit survives the preparation release. The
     // destination's notice channel is engaged for the new reply.
-    expect(runtime.isActivated).toBe(true);
+    expect(runtime.isReady).toBe(true);
     expect(mockStartSession).toHaveBeenCalledTimes(1);
     expect(mockSessions[0]?.input).toMatchObject({
       deepLinkUrl: 'cherrystudio:///?sessionId=session-1',
@@ -379,7 +366,7 @@ describe('BackgroundReplyRuntime', () => {
     // notice the whole run was kept alive for.
     expect(mockSessions[0]?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'completed' }),
-      { keepAlive: false, urgent: true },
+      { keepAlive: true, urgent: true },
     );
     expect(notifyTurnFinished).toHaveBeenCalledTimes(1);
     expect(notifyTurnFinished).toHaveBeenCalledWith(
@@ -388,74 +375,13 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
-  test('the completion switch alone cannot activate runtime execution without a notifier', async () => {
-    enabled = false;
-    notificationsEnabled = true;
-    // Android composes no independent notifier: with Background replies off,
-    // the completion switch must leave chat execution off entirely — no
-    // preparation lease, no session, no foreground-service activation.
-    const runtime = await createRuntime();
-    expect(runtime.isActivated).toBe(false);
-
-    const lease = runtime.acquirePreparation('session-1', jest.fn());
-    expect(acquire).not.toHaveBeenCalled();
-    expect(preparationRelease).not.toHaveBeenCalled();
-
-    const turn = runtime.startTurn({
-      agentId: 'agent-1',
-      agentName: 'Alpha',
-      sessionId: 'session-1',
-      sessionTitle: 'First session',
-    });
-    turn.finish('completed');
-    await flushOperations();
-
-    expect(mockStartSession).not.toHaveBeenCalled();
-    expect(mockSessions).toHaveLength(0);
-    lease.release();
-    expect(preparationRelease).not.toHaveBeenCalled();
-    await runtime._doStop();
-  });
-
-  test('re-presents surfaces when the Live Activities switch returns mid-tracking', async () => {
-    enabled = false;
-    notificationsEnabled = true;
-    const runtime = await createRuntime(undefined, {
-      dismissDestination: jest.fn(),
-      notifyTurnFinished: jest.fn(async () => true),
-      requestPermissionOnce: jest.fn(),
-    });
-    const turn = runtime.startTurn({
-      agentId: 'agent-1',
-      agentName: 'Alpha',
-      sessionId: 'session-1',
-      sessionTitle: 'First session',
-    });
-    // Notify-only: the session exists (its lease rides it) while the manager
-    // suppresses the surface.
-    expect(mockStartSession).toHaveBeenCalledTimes(1);
-
-    enabled = true;
-    preferenceListener?.();
-    await flushOperations();
-    expect(runtime.isActivated).toBe(true);
-    // The switch coming back on re-presents the inherited session — the
-    // runtime refreshes its content rather than creating a second one.
-    expect(mockStartSession).toHaveBeenCalledTimes(1);
-    expect(mockSessions[0]?.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ phase: 'preparing' }),
-      expect.objectContaining({ keepAlive: true, urgent: true }),
-    );
-
-    turn.finish('completed');
-    await flushOperations();
-    expect(mockSessions[0]?.finish).toHaveBeenCalledTimes(1);
-    await runtime._doStop();
-  });
-
   test('holds a delivery lease across the finish window', async () => {
     const release = jest.fn();
-    const runtime = await createRuntime();
+    const runtime = await createRuntime(undefined, {
+      dismissDestination: jest.fn(),
+      requestPermissionOnce: jest.fn(),
+      notifyTurnFinished: jest.fn(async () => false),
+    });
     acquire.mockImplementationOnce(() => ({ release }));
     const turn = runtime.startTurn({
       agentId: 'agent-1',
@@ -487,7 +413,7 @@ describe('BackgroundReplyRuntime', () => {
 
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'completed' }),
-      { keepAlive: false, urgent: true },
+      { keepAlive: true, urgent: true },
     );
     await flushOperations();
     expect(session?.finish).not.toHaveBeenCalled();
@@ -525,7 +451,7 @@ describe('BackgroundReplyRuntime', () => {
     }
   });
 
-  test('marks phase changes urgent and drops keep-alive while approval is pending', async () => {
+  test('marks phase changes urgent and keeps protection while approval is pending', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({
       agentId: 'agent-1',
@@ -561,7 +487,7 @@ describe('BackgroundReplyRuntime', () => {
         icon: 'bubble-exclamation',
         phase: 'awaiting-approval',
       }),
-      { keepAlive: false, urgent: true },
+      { keepAlive: true, urgent: true },
     );
 
     turn.update({
@@ -715,61 +641,40 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
-  test('cancels sessions when the preference turns off and restores them on re-enable', async () => {
-    const runtime = await createRuntime();
-    const turn = runtime.startTurn({
+  test('retiring a turn removes its card without terminal content or a completion notice', async () => {
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
+    const notifyTurnFinished = jest.fn(async () => true);
+    const runtime = await createRuntime(undefined, {
+      dismissDestination: jest.fn(),
+      notifyTurnFinished,
+      requestPermissionOnce: jest.fn(),
+    });
+    const input = {
+      connectionId: 'pc',
       agentId: 'agent-1',
       agentName: 'Alpha',
       sessionId: 'session-1',
-      sessionTitle: 'First session',
-    });
-    enabled = false;
-    preferenceListener?.();
+      sessionTitle: 'Desktop task',
+    };
+    const turn = runtime.startTurn(input);
+    turn.retire();
+    turn.finish('cancelled');
+    turn.update({ parts: [textPart('late')] });
     await flushOperations();
-    expect(runtime.isActivated).toBe(false);
-    expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
 
-    turn.update({ parts: [textPart('hi')] });
-    expect(mockStartSession).toHaveBeenCalledTimes(1);
+    const [session] = mockSessions;
+    expect(session!.cancel).toHaveBeenCalledTimes(1);
+    expect(session!.finish).not.toHaveBeenCalled();
+    expect(session!.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'cancelled' }),
+      expect.anything(),
+    );
+    expect(notifyTurnFinished).not.toHaveBeenCalled();
 
-    enabled = true;
-    preferenceListener?.();
-    await flushOperations();
-    expect(runtime.isActivated).toBe(true);
+    // Foreground recovery starts a fresh card for the same destination.
+    runtime.startTurn(input);
     expect(mockStartSession).toHaveBeenCalledTimes(2);
-    expect(mockSessions[1]?.input.props).toMatchObject({ phase: 'responding' });
-
-    await runtime._doStop();
-  });
-
-  test('rolls back partially restored sessions when activation fails', async () => {
-    const runtime = await createRuntime();
-    runtime.startTurn({
-      agentId: 'agent-1',
-      agentName: 'Alpha',
-      sessionId: 'session-1',
-      sessionTitle: 'First session',
-    });
-    runtime.startTurn({
-      agentId: 'agent-1',
-      agentName: 'Beta',
-      sessionId: 'session-2',
-      sessionTitle: 'Second session',
-    });
-
-    enabled = false;
-    preferenceListener?.();
-    await flushOperations();
-    mockStartSession.mockImplementationOnce(createMockSession).mockImplementationOnce(() => {
-      throw new Error('presenter unavailable');
-    });
-
-    enabled = true;
-    preferenceListener?.();
-    await flushOperations();
-
-    expect(runtime.isActivated).toBe(false);
-    expect(mockSessions[2]?.cancel).toHaveBeenCalledTimes(1);
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
     await runtime._doStop();
   });
 
@@ -786,22 +691,45 @@ describe('BackgroundReplyRuntime', () => {
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
   });
 
-  test('uses no-op turns when the preference is disabled at startup', async () => {
-    enabled = false;
-    const translate = jest.fn((key: string) => key);
-    const disabledRuntime = await createRuntime(translate);
-    expect(disabledRuntime.isActivated).toBe(false);
-    const disabledTurn = disabledRuntime.startTurn({
-      agentId: 'agent-1',
-      agentName: 'Alpha',
-      sessionId: 'session-2',
-      sessionTitle: 'Second session',
+  test('isolates local and desktop conversations that share a session id', async () => {
+    const runtime = await createRuntime();
+    const input = {
+      agentId: 'agent',
+      agentName: 'Assistant',
+      sessionId: 'same',
+      sessionTitle: 'Original',
+    };
+    runtime.startTurn(input);
+    runtime.startTurn({ ...input, connectionId: 'pc-one' });
+    runtime.startTurn({ ...input, connectionId: 'pc-two' });
+    expect(mockSessions).toHaveLength(3);
+    expect(new Set(mockSessions.map((session) => session.input.deepLinkUrl)).size).toBe(3);
+    runtime.updateSessionTitle('same', 'Renamed remote', 'pc-one');
+    expect(mockSessions[1]!.update).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Renamed remote' }),
+      expect.any(Object),
+    );
+    expect(mockSessions[0]!.update).not.toHaveBeenCalled();
+    expect(mockSessions[2]!.update).not.toHaveBeenCalled();
+    runtime.clearSession('same');
+    expect(mockSessions[0]!.cancel).toHaveBeenCalledTimes(1);
+    expect(mockSessions[1]!.cancel).not.toHaveBeenCalled();
+    expect(mockSessions[2]!.cancel).not.toHaveBeenCalled();
+    await runtime._doStop();
+  });
+
+  test('stopped runtimes cannot admit new turns', async () => {
+    const runtime = await createRuntime();
+    await runtime._doStop();
+    const turn = runtime.startTurn({
+      agentId: 'agent',
+      agentName: 'Assistant',
+      sessionId: 'session',
+      sessionTitle: '',
     });
-    disabledTurn.update({ parts: [textPart('ignored')] }, { deferPreview: true });
-    disabledTurn.finish('completed');
+    turn.update({ parts: [textPart('ignored')] });
+    turn.finish('completed');
     expect(mockStartSession).not.toHaveBeenCalled();
-    expect(translate).not.toHaveBeenCalled();
-    await disabledRuntime._doStop();
   });
 
   test('execution interruption targets the superseding turn of a shared session', async () => {
@@ -821,11 +749,9 @@ describe('BackgroundReplyRuntime', () => {
     mockSessions[0]!.input.onInterrupt?.(reason);
     expect(firstInterrupted).not.toHaveBeenCalled();
     expect(nextInterrupted).toHaveBeenCalledWith(reason);
-    enabled = false;
-    preferenceListener?.();
-    await flushOperations();
-    expect(mockSessions[0]!.cancel).toHaveBeenCalledTimes(1);
+    expect(mockSessions[0]!.cancel).not.toHaveBeenCalled();
     await runtime._doStop();
+    expect(mockSessions[0]!.cancel).toHaveBeenCalledTimes(1);
   });
 
   test('keeps turn callbacks non-throwing when content derivation fails', async () => {
@@ -873,15 +799,6 @@ describe('BackgroundReplyRuntime', () => {
   ) {
     const runtime = new BackgroundReplyRuntime(
       { dismissTask: mockDismissTask, startSession: mockStartSession },
-      {
-        readCached: jest.fn((key: string) =>
-          key === 'chat.completion_notifications.enabled' ? notificationsEnabled : enabled,
-        ),
-        subscribeChange: jest.fn(() => (listener: () => void) => {
-          preferenceListener = listener;
-          return jest.fn();
-        }),
-      },
       {
         assistantPresenter: undefined as never,
         ...(notifications ? { replyNotifications: notifications } : {}),

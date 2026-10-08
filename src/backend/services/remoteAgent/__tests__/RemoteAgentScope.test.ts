@@ -9,13 +9,13 @@ import {
 } from '@/backend/services/desktopConnections/remoteErrors';
 import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
 
-import { RemoteAgentScope } from '../RemoteAgentScope';
+import { RemoteAgentScope, type RemoteBackgroundExecution } from '../RemoteAgentScope';
 import { integrity } from '../remoteContent';
 import { RemoteSessionReadCache } from '../RemoteSessionReadCache';
 import { createCheckpointFixture } from './_checkpointFixture';
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
-function fixture(cache = new RemoteSessionReadCache()) {
+function fixture(cache = new RemoteSessionReadCache(), background?: RemoteBackgroundExecution) {
   let state: DesktopLeaseState = { status: 'ready' };
   const controller = new AbortController();
   const listeners = new Set<() => void>();
@@ -102,6 +102,7 @@ function fixture(cache = new RemoteSessionReadCache()) {
       };
     },
     ready: jest.fn(async () => connection as never),
+    setBackgroundRequired: jest.fn(),
     release: jest.fn(),
   };
   const values = new Map<string, string>();
@@ -118,12 +119,14 @@ function fixture(cache = new RemoteSessionReadCache()) {
     { retain: jest.fn(), revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
     journal,
     cache,
+    background,
   );
   return {
     source,
     request,
     projection,
     lease,
+    journal,
     notify(notification: DesktopNotification) {
       for (const listener of notifications) listener(notification);
     },
@@ -155,6 +158,280 @@ it('observes through its lease, suppresses stale command targets, and never owns
   test.source.dispose();
   await test.source.drain();
   expect(test.lease.release).toHaveBeenCalledTimes(1);
+});
+
+function backgroundFixture() {
+  const turn = {
+    updateContent: jest.fn(),
+    update: jest.fn(),
+    awaitApproval: jest.fn(),
+    finish: jest.fn(),
+    retire: jest.fn(),
+  };
+  const startTurn = jest.fn(
+    (_input: Parameters<RemoteBackgroundExecution['replies']['startTurn']>[0]) => turn,
+  );
+  const background: RemoteBackgroundExecution = {
+    replies: {
+      startTurn,
+      acquirePreparation: jest.fn(),
+      clearSession: jest.fn(),
+      updateSessionTitle: jest.fn(),
+    },
+    keepAlive: { acquire: jest.fn(() => ({ release: jest.fn() })) },
+    translate: (key) => key,
+  };
+  const test = fixture(new RemoteSessionReadCache(), background);
+  return { ...test, turn, startTurn, background };
+}
+
+it('retains an active desktop execution after its screen leaves and releases demand on a terminal checkpoint', async () => {
+  const test = backgroundFixture();
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  const unobserve = test.source.observe('s', () => {});
+  await settle();
+  expect(test.startTurn).toHaveBeenCalledWith(
+    expect.objectContaining({ connectionId: 'pc', sessionId: 's' }),
+  );
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(true);
+  unobserve();
+  await settle();
+  expect(test.source.hasPendingExecution()).toBe(true);
+  expect(test.request.mock.calls.some(([method]) => method === 'agent.subscriptions.close')).toBe(
+    false,
+  );
+  test.projection.executions.e = {
+    executionId: 'e',
+    status: 'completed',
+    durable: true,
+    messageId: 'm',
+    history: { historyRevision: '1', messageRevision: '1' },
+  };
+  test.setState({ status: 'ready' });
+  await settle();
+  expect(test.turn.finish).toHaveBeenCalledWith('completed');
+  expect(test.source.hasPendingExecution()).toBe(false);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('revocation of phone protection does not cancel or resubmit the desktop execution', async () => {
+  const test = backgroundFixture();
+  test.projection.executions.e = { executionId: 'e', status: 'awaiting-approval', durable: false };
+  test.source.observe('s', () => {});
+  await settle();
+  expect(test.turn.updateContent).toHaveBeenCalledWith(
+    expect.objectContaining({ phase: 'awaiting-approval' }),
+  );
+  test.startTurn.mock.calls[0]![0].onInterrupt?.(new Error('Service stopped'));
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+  expect(
+    test.request.mock.calls.some(([method]) =>
+      ['agent.messages.send', 'agent.executions.cancel'].includes(method),
+    ),
+  ).toBe(false);
+  expect(test.turn.retire).toHaveBeenCalledTimes(1);
+  expect(test.turn.finish).not.toHaveBeenCalled();
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('settles a rejected send as failed instead of repeating the previous turn outcome', async () => {
+  const test = backgroundFixture();
+  test.projection.executions.e = {
+    executionId: 'e',
+    status: 'completed',
+    durable: true,
+    messageId: 'm',
+    history: { historyRevision: '1', messageRevision: '1' },
+  };
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.messages.send')
+      throw new RemoteFailureError({ reason: 'INTERNAL', message: 'Rejected' });
+    return request(method, params);
+  });
+  const command = await test.source.send(snapshot!.sendTarget!, 'hello');
+  expect(command.status).toBe('rejected');
+  expect(test.turn.finish).toHaveBeenCalledWith('failed');
+  expect(test.source.hasPendingExecution()).toBe(false);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('stops background demand when a tracked session can no longer be observed', async () => {
+  const test = backgroundFixture();
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  const unobserve = test.source.observe('s', () => {});
+  await settle();
+  unobserve();
+  await settle();
+  expect(test.source.hasPendingExecution()).toBe(true);
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.subscribe')
+      throw new RemoteFailureError({ reason: 'NOT_FOUND', message: 'Session deleted' });
+    return request(method, params);
+  });
+  test.setState({ status: 'ready' });
+  await settle();
+  await settle();
+  expect(test.turn.finish).toHaveBeenCalledWith('failed');
+  expect(test.source.hasPendingExecution()).toBe(false);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('releases phone protection when background demand is suspended and resumes when ready', async () => {
+  const test = backgroundFixture();
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  const unobserve = test.source.observe('s', () => {});
+  await settle();
+  unobserve();
+  await settle();
+  test.setState({ status: 'suspended' });
+  expect(test.turn.retire).toHaveBeenCalledTimes(1);
+  expect(test.turn.finish).not.toHaveBeenCalled();
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+  expect(
+    test.request.mock.calls.some(([method]) =>
+      ['agent.messages.send', 'agent.executions.cancel'].includes(method),
+    ),
+  ).toBe(false);
+  test.setState({ status: 'ready' });
+  await settle();
+  await settle();
+  expect(test.startTurn).toHaveBeenCalledTimes(2);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(true);
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('leaves no card when the desktop finishes while suspended protection was retired', async () => {
+  const test = backgroundFixture();
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  const unobserve = test.source.observe('s', () => {});
+  await settle();
+  unobserve();
+  await settle();
+  test.setState({ status: 'suspended' });
+  expect(test.turn.retire).toHaveBeenCalledTimes(1);
+  test.projection.executions.e = {
+    executionId: 'e',
+    status: 'completed',
+    durable: true,
+    messageId: 'm',
+    history: { historyRevision: '1', messageRevision: '1' },
+  };
+  test.setState({ status: 'ready' });
+  await settle();
+  await settle();
+  expect(test.startTurn).toHaveBeenCalledTimes(1);
+  expect(test.turn.finish).not.toHaveBeenCalled();
+  expect(test.source.hasPendingExecution()).toBe(false);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+  test.source.dispose();
+  await test.source.drain();
+  expect(test.turn.finish).not.toHaveBeenCalled();
+});
+
+it('hands a recovered first send to execution observation before releasing command protection', async () => {
+  const test = backgroundFixture();
+  const methods = new Map<string, string>();
+  let confirmed = false;
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.get') return { session: test.projection.session } as never;
+    if (method === 'agent.sessions.create' || method === 'agent.messages.send') {
+      methods.set(params.commandId, method);
+      return {
+        commandId: params.commandId,
+        method,
+        status: method === 'agent.sessions.create' ? 'applied' : 'accepted',
+        admittedAt: '2026-09-22T00:00:00.000Z',
+        sessionId: 's',
+      } as never;
+    }
+    if (method === 'agent.commands.get')
+      return {
+        commandId: params.commandId,
+        method: methods.get(params.commandId),
+        status: confirmed ? 'applied' : 'accepted',
+        admittedAt: '2026-09-22T00:00:00.000Z',
+        sessionId: 's',
+      } as never;
+    return request(method, params);
+  });
+  const start = await test.source.start({
+    draftId: 'draft',
+    agentId: 'a',
+    workspace: { kind: 'system' },
+    text: 'hello',
+  });
+  expect(start.status).toBe('pending');
+  confirmed = true;
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  test.setState({ status: 'ready' });
+  await settle();
+  await settle();
+  expect(test.startTurn).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's' }));
+  expect(test.source.hasPendingExecution()).toBe(true);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(true);
+  expect(
+    test.request.mock.calls.filter(([method]) => method === 'agent.messages.send'),
+  ).toHaveLength(1);
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('resumes observation when a persisted uncertain send is confirmed after a source restart', async () => {
+  const test = backgroundFixture();
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  const command = await test.source.send(snapshot!.sendTarget!, 'hello');
+  expect(command.status).toBe('pending');
+  test.source.dispose();
+  await test.source.drain();
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.commands.get')
+      return {
+        commandId: params.commandId,
+        method: 'agent.messages.send',
+        status: 'applied',
+        admittedAt: '2026-09-22T00:00:00.000Z',
+        sessionId: 's',
+      } as never;
+    return request(method, params);
+  });
+  const restored = new RemoteAgentScope(
+    test.lease,
+    { retain: jest.fn(), revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
+    test.journal,
+    new RemoteSessionReadCache(),
+    test.background,
+  );
+  await settle();
+  await settle();
+  expect(restored.hasPendingExecution()).toBe(true);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(true);
+  expect(
+    test.request.mock.calls.filter(([method]) => method === 'agent.messages.send'),
+  ).toHaveLength(1);
+  restored.dispose();
+  await restored.drain();
 });
 
 it('publishes live events without rewriting an unchanged session into the history preview', async () => {

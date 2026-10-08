@@ -13,11 +13,20 @@ const mockScopes: ReturnType<typeof mockScope>[] = [];
 function mockScope(lease: DesktopDomainLease) {
   let status = 'ready';
   let pending = false;
+  let executing = false;
   const operations = new Set<() => void>();
+  const executionListeners = new Set<() => void>();
   const drain = deferred<void>();
   const unsubscribe = jest.fn();
   const scope = {
     scope: 'scope',
+    hasPendingExecution: () => pending || executing,
+    subscribeExecution: (listener: () => void) => {
+      executionListeners.add(listener);
+      return () => {
+        executionListeners.delete(listener);
+      };
+    },
     getState: () => ({ status }),
     getCommands: () => (pending ? [{ id: 'command', status: 'pending' }] : []),
     getStarts: () => [],
@@ -39,6 +48,10 @@ function mockScope(lease: DesktopDomainLease) {
     settled() {
       pending = false;
       for (const listener of operations) listener();
+    },
+    executing(value: boolean) {
+      executing = value;
+      for (const listener of executionListeners) listener();
     },
     finishDrain() {
       drain.resolve();
@@ -147,5 +160,17 @@ it('unsubscribes a released source exactly once even when the consumer later cle
   cleanup();
   source.dispose();
   expect(mockScopes[0].unsubscribe).toHaveBeenCalledTimes(count);
+  expect(lease.release).toHaveBeenCalledTimes(1);
+});
+
+it('retains running execution after receipts settle and disposes only after the execution ends', async () => {
+  const source = await runtime.open('pc', signal());
+  const scope = mockScopes[0]!;
+  scope.executing(true);
+  source.dispose();
+  await settle();
+  expect(lease.release).not.toHaveBeenCalled();
+  scope.executing(false);
+  await settle();
   expect(lease.release).toHaveBeenCalledTimes(1);
 });

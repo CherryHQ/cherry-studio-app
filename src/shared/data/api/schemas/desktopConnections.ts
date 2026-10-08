@@ -39,7 +39,7 @@ export const DesktopPairingQrSchema = z.object({
   desktopIdentity: z.string().min(1).max(256),
   invitationId: z.string().min(1).max(256),
   invitationSecret: z.string().min(1).max(256),
-  ips: z.array(z.string().refine(isIpAddress, 'Invalid IP address')).min(1).max(16),
+  ips: z.array(z.string().refine(isIpAddress, 'Invalid IP address')).min(1).max(32),
   name: z.string().min(1).max(128),
   port: z.number().int().min(1).max(65_535),
   protocolVersions: z.array(z.number().int().positive()).min(1).max(16),

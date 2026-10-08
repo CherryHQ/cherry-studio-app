@@ -11,6 +11,7 @@ export type SupportedPiApi =
   | 'google-generative-ai'
   | 'openai-completions'
   | 'openai-responses'
+  | 'openai-codex-responses'
   | 'azure-openai-responses';
 
 type PiStreamFn = AgentOptions['streamFn'];
@@ -85,6 +86,17 @@ export function resolvePiApiAdapter(
   endpointType: PiLanguageEndpointType,
   adapterFamily?: string,
 ): PiApiAdapter {
+  if (endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES && adapterFamily === 'openai-codex') {
+    return {
+      api: 'openai-codex-responses',
+      authHeaderNames: ['authorization'],
+      formatBaseUrl: (baseUrl) => baseUrl.replace(/\/$/, ''),
+      loadStreamSimple: async () =>
+        (await import('@earendil-works/pi-ai/api/openai-codex-responses'))
+          .streamSimple as unknown as PiStreamFn,
+      supportsCustomFetch: true,
+    };
+  }
   if (endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES && adapterFamily === 'azure-responses') {
     return AZURE_RESPONSES_ADAPTER;
   }
@@ -92,7 +104,7 @@ export function resolvePiApiAdapter(
 }
 
 type PiStreamBinding = {
-  apiKey: string;
+  apiKey?: string;
   fetch: FetchFunction;
   headers: Record<string, string>;
   maxRetries: number;
@@ -118,6 +130,7 @@ export async function bindPiStream(
       apiKey: binding.apiKey,
       cacheRetention: binding.cacheRetention ?? options?.cacheRetention,
       sessionId: binding.sessionId ?? options?.sessionId,
+      ...(adapter.api === 'openai-codex-responses' ? { transport: 'sse' } : {}),
       ...(adapter.api === 'azure-openai-responses' && binding.azureApiVersion
         ? { azureApiVersion: binding.azureApiVersion }
         : {}),

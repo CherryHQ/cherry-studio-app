@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
 import {
   useDesktopConnection,
   useDesktopConnectionActions,
@@ -13,7 +14,6 @@ import {
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { describeCapabilities } from '../describeCapabilities';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
-import { DesktopEndpointsEditor } from './DesktopEndpointsEditor';
 
 export function DeviceConnectionDetailScreen() {
   const { connectionId } = useLocalSearchParams<{ connectionId?: string }>();
@@ -93,24 +93,32 @@ export function DeviceConnectionDetailScreen() {
         />
       </Section>
 
-      {connection.status === 'paired' && connection.capabilities.includes('configuration') ? (
+      {connection.status === 'paired' && connection.capabilities.length > 0 ? (
         <Section>
-          <Section.Item
-            description={t('settings.deviceConnections.syncGuide.entryDescription')}
-            label={t('settings.deviceConnections.syncGuide.entry')}
-            onPress={() =>
-              router.push({
-                params: { connectionId: connection.id },
-                pathname: '/settings/provider/desktop-sync',
-              })
-            }
-          />
+          {connection.capabilities.includes('agent') ? (
+            <Section.Item
+              label={t('settings.deviceConnections.openHome')}
+              onPress={() => router.push(remoteChatHref({ connectionId: connection.id }))}
+            />
+          ) : null}
+          {connection.capabilities.includes('configuration') ? (
+            <Section.Item
+              description={t('settings.deviceConnections.syncGuide.entryDescription')}
+              label={t('settings.deviceConnections.syncGuide.entry')}
+              onPress={() =>
+                router.push({
+                  params: { connectionId: connection.id },
+                  pathname: '/settings/provider/desktop-sync',
+                })
+              }
+            />
+          ) : null}
         </Section>
       ) : null}
 
       <Section>
         <Section.Item
-          label={t('settings.deviceConnections.repair')}
+          label={t('settings.deviceConnections.location.scan')}
           onPress={() =>
             router.push({
               params: { connectionId: connection.id },
@@ -118,18 +126,7 @@ export function DeviceConnectionDetailScreen() {
             })
           }
         />
-        <Section.Item
-          label={t('settings.deviceConnections.location.scan')}
-          onPress={() =>
-            router.push({
-              params: { connectionId: connection.id, purpose: 'location' },
-              pathname: '/settings/device-connections/scan',
-            })
-          }
-        />
       </Section>
-
-      <DesktopEndpointsEditor key={connection.id} connection={connection} />
 
       <Section>
         <Section.Item

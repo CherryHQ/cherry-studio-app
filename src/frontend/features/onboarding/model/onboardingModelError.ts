@@ -40,6 +40,7 @@ const SETUP_FAILURE_REASONS: Record<ProviderSetupError['reason'], ModelListFailu
   'disabled-api-keys': 'authentication',
   'invalid-endpoint': 'endpoint',
   'missing-api-key': 'authentication',
+  'missing-oauth': 'authentication',
   'no-models': 'unknown',
   'unsupported-auth': 'unknown',
 };

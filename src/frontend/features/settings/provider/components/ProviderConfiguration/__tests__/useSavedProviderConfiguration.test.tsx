@@ -1,4 +1,5 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -35,6 +36,7 @@ const mockSave = jest.fn();
 const mockConfirm = jest.fn();
 const mockAlert = jest.fn();
 const mockToast = jest.fn();
+let mockCanSignIn = false;
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { confirm: mockConfirm, show: mockAlert } }),
@@ -47,8 +49,11 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 jest.mock('@/frontend/data', () => ({
+  queryKeys: jest.requireActual('@/frontend/data/queryKeys').queryKeys,
   useBackendModule: () => ({
-    accounts: { getCapabilities: () => ({ apiKeys: false, balance: false, signIn: false }) },
+    accounts: {
+      getCapabilities: () => ({ apiKeys: false, balance: false, signIn: mockCanSignIn }),
+    },
   }),
   useQuery: () => ({ data: mockModels, isError: false, isPending: false }),
 }));
@@ -69,20 +74,30 @@ jest.mock('@/frontend/hooks/useProviderAvatar', () => ({
 }));
 
 describe('saved provider configuration writes each change', () => {
+  let queryClient: QueryClient;
   let renderer: ReactTestRenderer;
   let configuration: ReturnType<typeof useSavedProviderConfiguration>;
-  function Probe() {
+  function ConfigurationProbe() {
     configuration = useSavedProviderConfiguration('custom');
     return null;
+  }
+  function Probe() {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <ConfigurationProbe />
+      </QueryClientProvider>
+    );
   }
   const actions = () => {
     if (!configuration.value) throw new Error('configuration did not load');
     return configuration.value.actions;
   };
   beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     jest.clearAllMocks();
     mockModels = [followingModel];
     mockApiKeys = [{ id: 'key', isEnabled: true, key: 'sk-test' }];
+    mockCanSignIn = false;
     mockSave.mockResolvedValue(mockProvider);
     act(() => {
       renderer = create(<Probe />);
@@ -90,11 +105,15 @@ describe('saved provider configuration writes each change', () => {
   });
   afterEach(() => {
     act(() => renderer.unmount());
+    queryClient.clear();
   });
 
   it('asks before moving the default endpoint that existing models follow', async () => {
     await act(async () => {
-      await actions().setDefaultEndpoint(ENDPOINT_TYPE.ANTHROPIC_MESSAGES);
+      await actions().setDefaultEndpoint(
+        ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        'https://example.com/anthropic',
+      );
     });
     expect(mockConfirm.mock.calls[0][0].description).toBe(
       'settings.provider.apiService.defaultEndpointChangeMessage:1',
@@ -107,6 +126,25 @@ describe('saved provider configuration writes each change', () => {
     expect(mockSave).toHaveBeenCalledWith(
       expect.objectContaining({ defaultChatEndpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES }),
     );
+  });
+
+  it('makes the edited address default together, not the stored one', async () => {
+    mockModels = [];
+    act(() => renderer.update(<Probe />));
+    await act(async () => {
+      await actions().setDefaultEndpoint(
+        ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        'https://edited.example.com/anthropic',
+      );
+    });
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockSave.mock.calls[0][0]).toEqual({
+      defaultChatEndpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { baseUrl: 'https://edited.example.com/anthropic' },
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://example.com/v1' },
+      },
+    });
   });
 
   it('refuses to clear an endpoint a model explicitly uses', async () => {
@@ -166,6 +204,14 @@ describe('saved provider configuration writes each change', () => {
     expect(saved).toBe(false);
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'danger' }));
     expect(configuration.value?.isBusy).toBe(false);
+  });
+
+  it('locks the fields during an account sign-in without holding the screen', () => {
+    mockCanSignIn = true;
+    act(() => renderer.update(<Probe />));
+    act(() => configuration.value?.account?.onBusyChange(true));
+    expect(configuration.value?.isBusy).toBe(true);
+    expect(configuration.isSaving).toBe(false);
   });
 
   it('holds setup back until an enabled key exists, and says why', () => {

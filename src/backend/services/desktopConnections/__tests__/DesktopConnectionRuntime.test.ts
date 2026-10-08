@@ -5,7 +5,12 @@ import type { DesktopConnectionService } from '@/backend/data/services/DesktopCo
 
 import { DesktopConnectionManager } from '../DesktopConnectionManager';
 import { DesktopConnectionRuntime } from '../DesktopConnectionRuntime';
-import { DesktopSession, DesktopUnreachableError, RemoteFailureError } from '../DesktopSession';
+import {
+  DesktopSession,
+  DesktopUnreachableError,
+  RemoteFailureError,
+  RemoteTransportError,
+} from '../DesktopSession';
 import { openWebSocketStream } from '../remoteSocket';
 
 jest.mock('@cherrystudio/remote-transport', () => ({}));
@@ -33,6 +38,7 @@ const row = {
   name: 'Desktop',
   deviceId: 'device-1',
   desktopIdentity: '12D3KooWDesktop',
+  learnedEndpoints: [] as { host: string; port: number; security: 'ws' | 'wss' }[],
   configuredEndpoints: [{ host: '192.168.1.2', port: 23333, security: 'ws' as const }],
   addresses: ['192.168.1.2'],
   port: 23333,
@@ -74,11 +80,26 @@ function deferred<T>() {
 }
 
 function createStore() {
+  let currentRow: Awaited<ReturnType<DesktopConnectionService['getRow']>> = { ...row };
   return {
-    getRow: jest.fn(async () => row),
+    getRow: jest.fn(async () => currentRow),
+    getById: jest.fn(async () => ({
+      ...connection,
+      status: currentRow.status,
+      capabilities: currentRow.grants.map((grant) => grant.domain),
+    })),
     savePair: jest.fn(async () => connection),
     remove: jest.fn(async () => undefined),
-    updateStatus: jest.fn(async () => undefined),
+    updateStatus: jest.fn(
+      async (_id: string, values: Parameters<DesktopConnectionService['updateStatus']>[1]) => {
+        currentRow = { ...currentRow, ...values };
+      },
+    ),
+    addEndpoint: jest.fn(async () => undefined),
+    updateLearnedEndpoints: jest.fn(async (_id, endpoints) => {
+      currentRow = { ...currentRow, learnedEndpoints: endpoints };
+      return endpoints;
+    }),
     preview: jest.fn(async () => ({ providers: [] })),
     import: jest.fn(async () => ({
       providersAdded: 0,
@@ -88,7 +109,15 @@ function createStore() {
     })),
   } satisfies Pick<
     DesktopConnectionService,
-    'getRow' | 'savePair' | 'remove' | 'updateStatus' | 'preview' | 'import'
+    | 'getRow'
+    | 'getById'
+    | 'savePair'
+    | 'remove'
+    | 'updateStatus'
+    | 'preview'
+    | 'import'
+    | 'addEndpoint'
+    | 'updateLearnedEndpoints'
   >;
 }
 
@@ -98,7 +127,7 @@ function createSession(handlers: Record<string, (params: any) => unknown>) {
   const session = {
     isOpen: true,
     done: closed.promise,
-    currentAuthorization: { grants },
+    currentAuthorization: { grants } as RemoteAuthorization | undefined,
     address: '192.168.1.2',
     onAuthorization: jest.fn(() => () => undefined),
     calls: [] as { method: string; params: unknown }[],
@@ -106,10 +135,17 @@ function createSession(handlers: Record<string, (params: any) => unknown>) {
       session.calls.push({ method, params });
       const handler = handlers[method];
       if (!handler) throw new Error(`Unexpected ${method}`);
-      return handler(params);
+      const result = await handler(params);
+      if (method === 'pairing.get') {
+        const decision = result as { status: string; authorization?: RemoteAuthorization };
+        if (decision.status === 'approved') session.currentAuthorization = decision.authorization;
+      }
+      return result;
     }),
     authenticate: jest.fn(async () => {
-      const result = (await handlers['connection.authenticate']?.({})) as {
+      if (!handlers['connection.authenticate'])
+        throw new RemoteFailureError({ reason: 'UNAUTHENTICATED', message: 'Pairing required' });
+      const result = (await handlers['connection.authenticate']({})) as {
         authorization: { grants: typeof grants };
       };
       session.currentAuthorization = result.authorization;
@@ -186,6 +222,154 @@ describe('DesktopConnectionRuntime', () => {
     await manager._doDestroy();
   });
 
+  it('saves authenticated desktop addresses before initial pairing completes', async () => {
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' };
+    const session = Object.assign(
+      createSession({
+        'pairing.claim': () => ({
+          claimId: 'claim',
+          verificationCode: '123456',
+          expiresAt: '2026-09-30T00:02:00Z',
+        }),
+        'pairing.get': () => ({
+          status: 'approved',
+          deviceId: row.deviceId,
+          authorization: { grants },
+        }),
+        'connection.authenticate': () => ({ authorization: { grants } }),
+        'connection.endpoints': () => ({ desktopIdentity: row.desktopIdentity, endpoints: [vpn] }),
+      }),
+      { connectionEndpointsVersion: 1, currentAuthorization: undefined },
+    );
+    connect.mockResolvedValueOnce(session as never);
+    await expect(runtime.pair({ ...pairing, connectionId: undefined }, signal())).resolves.toEqual(
+      connection,
+    );
+    expect((await store.getRow()).learnedEndpoints).toEqual([vpn]);
+    expect(session.calls.map((call) => call.method)).toEqual([
+      'pairing.claim',
+      'pairing.get',
+      'connection.endpoints',
+    ]);
+    expect(session.isOpen).toBe(false);
+  });
+
+  it('completes pairing even when automatic address sync is unavailable', async () => {
+    const session = Object.assign(
+      createSession({
+        'pairing.claim': () => ({
+          claimId: 'claim',
+          verificationCode: '123456',
+          expiresAt: '2026-09-30T00:02:00Z',
+        }),
+        'pairing.get': () => ({
+          status: 'approved',
+          deviceId: row.deviceId,
+          authorization: { grants },
+        }),
+        'connection.endpoints': () => {
+          throw new Error('Address query failed');
+        },
+      }),
+      { connectionEndpointsVersion: 1 },
+    );
+    connect.mockResolvedValueOnce(session as never);
+    await expect(runtime.pair({ ...pairing, connectionId: undefined }, signal())).resolves.toEqual(
+      connection,
+    );
+    expect((await store.getRow()).learnedEndpoints).toEqual([]);
+    expect(session.isOpen).toBe(false);
+  });
+
+  it('verifies exactly the selected address before saving, without exporting provider credentials', async () => {
+    const endpoint = { host: '100.64.0.2', port: 24444, security: 'ws' as const };
+    const session = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+      'connection.endpoints': () => ({
+        desktopIdentity: row.desktopIdentity,
+        endpoints: [endpoint],
+      }),
+    });
+    connect.mockResolvedValueOnce(session as never);
+    await expect(runtime.saveEndpoint(id, endpoint, signal())).resolves.toMatchObject({
+      endpoint,
+      verifiedAt: expect.any(Number),
+    });
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://100.64.0.2:24444/v1/remote/connect',
+    ]);
+    expect(session.calls).toEqual([
+      { method: 'connection.endpoints', params: { domain: 'configuration' } },
+    ]);
+    expect(store.addEndpoint).toHaveBeenCalledWith(id, endpoint, row, expect.any(AbortSignal));
+    expect(session.isOpen).toBe(false);
+  });
+
+  it('does not fall back to a LAN address or save when the selected address fails', async () => {
+    jest.mocked(openWebSocketStream).mockRejectedValueOnce(new Error('unreachable'));
+    await expect(
+      runtime.saveEndpoint(id, { host: '100.64.0.2', port: 24444, security: 'ws' }, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'unreachable' } });
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://100.64.0.2:24444/v1/remote/connect',
+    ]);
+    expect(store.addEndpoint).not.toHaveBeenCalled();
+    expect(store.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('keeps suggestions ephemeral until the user requests saving', async () => {
+    const endpoints = [{ host: '100.64.0.2', port: 23333, security: 'ws' }];
+    connect.mockResolvedValueOnce(
+      createSession({
+        'connection.authenticate': () => ({ authorization: { grants } }),
+        'connection.endpoints': () => ({ desktopIdentity: row.desktopIdentity, endpoints }),
+      }) as never,
+    );
+    await expect(runtime.getEndpoints(id, signal())).resolves.toEqual(endpoints);
+    expect(store.addEndpoint).not.toHaveBeenCalled();
+  });
+
+  it('does not save a verification result that arrives after cancellation', async () => {
+    const requested = deferred<void>();
+    const reply = deferred<unknown>();
+    const session = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+      'connection.endpoints': () => {
+        requested.resolve();
+        return reply.promise;
+      },
+    });
+    connect.mockResolvedValueOnce(session as never);
+    const controller = new AbortController();
+    const pending = runtime.saveEndpoint(
+      id,
+      { host: '100.64.0.2', port: 23333, security: 'ws' },
+      controller.signal,
+    );
+    await requested.promise;
+    controller.abort();
+    reply.resolve({ desktopIdentity: row.desktopIdentity, endpoints: [] });
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(store.addEndpoint).not.toHaveBeenCalled();
+    expect(session.isOpen).toBe(false);
+  });
+
+  it('does not save or invalidate the pairing when an older desktop cannot verify addresses', async () => {
+    connect.mockResolvedValueOnce(
+      createSession({
+        'connection.authenticate': () => ({ authorization: { grants } }),
+        'connection.endpoints': () => {
+          throw new RemoteFailureError({ reason: 'UPGRADE_REQUIRED', message: 'Older desktop' });
+        },
+      }) as never,
+    );
+    await expect(
+      runtime.saveEndpoint(id, { host: '100.64.0.2', port: 23333, security: 'ws' }, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'unsupported-version' } });
+    expect(store.addEndpoint).not.toHaveBeenCalled();
+    expect(store.updateStatus).not.toHaveBeenCalled();
+  });
+
   it('translates an endpoint authentication failure without saving or re-pairing', async () => {
     const checked = createSession({
       'connection.authenticate': () => {
@@ -210,9 +394,47 @@ describe('DesktopConnectionRuntime', () => {
     expect(invalidate).toHaveBeenCalledWith(id, 'removed');
   });
 
-  it('claims the invitation, reports the verification code, then stores the approved grants', async () => {
+  it('reports connection progress before the desktop responds and never advances ahead of approval', async () => {
+    const transport = deferred<ReturnType<typeof createSession>>();
+    const approval = deferred<unknown>();
+    const saving = deferred<typeof connection>();
+    const waiting = deferred<void>();
+    const saveStarted = deferred<void>();
+    const connecting = deferred<void>();
+    const events: string[] = [];
+    const session = createSession({
+      'pairing.claim': () => ({ claimId: 'claim', verificationCode: '123456', expiresAt: 'later' }),
+      'pairing.get': () => approval.promise,
+    });
+    connect.mockImplementationOnce(() => transport.promise as never);
+    store.savePair.mockImplementationOnce(() => saving.promise);
+    const result = runtime.pair(pairing, signal(), (event) => {
+      events.push(event.stage);
+      if (event.stage === 'connecting') connecting.resolve();
+      if (event.stage === 'waiting') waiting.resolve();
+      if (event.stage === 'saving') saveStarted.resolve();
+    });
+    await connecting.promise;
+    expect(events).toEqual(['connecting']);
+    transport.resolve(session);
+    await waiting.promise;
+    expect(events).toEqual(['connecting', 'requesting', 'waiting']);
+    expect(store.savePair).not.toHaveBeenCalled();
+    approval.resolve({ status: 'approved', deviceId: row.deviceId, authorization: { grants } });
+    await saveStarted.promise;
+    expect(events.at(-1)).toBe('saving');
+    expect(events).not.toContain('syncing');
+    saving.resolve(connection);
+    await expect(result).resolves.toEqual(connection);
+    expect(events.at(-1)).toBe('syncing');
+  });
+
+  it('requests approval after revoked authorization, then stores the newly approved pairing', async () => {
     let polls = 0;
     const session = createSession({
+      'connection.authenticate': () => {
+        throw new RemoteFailureError({ reason: 'UNAUTHENTICATED', message: 'Device revoked' });
+      },
       'pairing.claim': () => ({
         claimId: 'claim',
         verificationCode: '123456',
@@ -230,16 +452,22 @@ describe('DesktopConnectionRuntime', () => {
             },
     });
     connect.mockResolvedValue(session as never);
-    const onClaim = jest.fn();
+    const onProgress = jest.fn();
     const invalidate = jest.spyOn(manager, 'invalidate');
 
-    await expect(runtime.pair(pairing, signal(), onClaim)).resolves.toEqual(connection);
+    await expect(runtime.pair(pairing, signal(), onProgress)).resolves.toEqual(connection);
 
     expect(invalidate).toHaveBeenCalledWith(id);
-    expect(onClaim).toHaveBeenCalledWith({
-      verificationCode: '123456',
-      expiresAt: '2026-09-22T00:02:00.000Z',
-    });
+    expect(onProgress.mock.calls.map(([event]) => event)).toEqual([
+      { stage: 'connecting' },
+      { stage: 'requesting' },
+      {
+        stage: 'waiting',
+        claim: { verificationCode: '123456', expiresAt: '2026-09-22T00:02:00.000Z' },
+      },
+      { stage: 'saving' },
+      { stage: 'syncing' },
+    ]);
     expect(session.calls[0]).toMatchObject({
       method: 'pairing.claim',
       params: { invitationId: 'invitation', capabilities: ['configuration', 'agent'] },
@@ -272,7 +500,11 @@ describe('DesktopConnectionRuntime', () => {
     });
     connect.mockResolvedValue(session as never);
 
-    await expect(runtime.pair(pairing, signal())).rejects.toMatchObject({ details: { reason } });
+    const events: string[] = [];
+    await expect(
+      runtime.pair(pairing, signal(), (event) => events.push(event.stage)),
+    ).rejects.toMatchObject({ details: { reason } });
+    expect(events).toEqual(['connecting', 'requesting', 'waiting']);
     expect(store.savePair).not.toHaveBeenCalled();
     expect(session.close).toHaveBeenCalled();
   });
@@ -355,16 +587,78 @@ describe('DesktopConnectionRuntime', () => {
     expect(connect).not.toHaveBeenCalled();
   });
 
-  it('updates only location hints for the same identity, and rejects another desktop QR', async () => {
-    await runtime.updateLocation(id, pairing, signal());
-    expect(store.savePair).not.toHaveBeenCalled();
-    expect(store.updateStatus).not.toHaveBeenCalled();
-    expect(connect).not.toHaveBeenCalled();
+  it('reconnects an authorized device and learns addresses without requesting approval', async () => {
+    const endpoints = [{ host: '100.64.0.2', port: 23333, security: 'ws' }];
+    const session = Object.assign(
+      createSession({
+        'connection.authenticate': () => ({ authorization: { grants } }),
+        'connection.endpoints': () => ({ desktopIdentity: row.desktopIdentity, endpoints }),
+      }),
+      { connectionEndpointsVersion: 1 },
+    );
+    connect.mockResolvedValueOnce(session as never);
+    const events: string[] = [];
     await expect(
-      runtime.updateLocation(id, { ...pairing, desktopIdentity: 'anotherPeer' }, signal()),
-    ).rejects.toMatchObject({ details: { reason: 'identity-mismatch' } });
+      runtime.pair(pairing, signal(), (event) => events.push(event.stage)),
+    ).resolves.toEqual(connection);
+    expect(events).toEqual(['connecting', 'saving', 'syncing']);
+    expect(session.calls.map((call) => call.method)).toEqual(['connection.endpoints']);
+    expect((await store.getRow()).learnedEndpoints).toEqual(endpoints);
+    expect((await store.getRow()).deviceId).toBe(row.deviceId);
     expect(store.savePair).not.toHaveBeenCalled();
-    expect(row.grants).toEqual(grants);
+    expect(session.isOpen).toBe(false);
+  });
+
+  it.each([
+    new RemoteTransportError('timeout', 'Timed out'),
+    new RemoteFailureError({ reason: 'INTERNAL', message: 'Desktop failed' }),
+  ])(
+    'preserves the binding without requesting approval when authentication has no verdict: %s',
+    async (error) => {
+      const session = createSession({
+        'connection.authenticate': () => {
+          throw error;
+        },
+      });
+      connect.mockResolvedValueOnce(session as never);
+      await expect(runtime.pair(pairing, signal())).rejects.toBeDefined();
+      expect(session.calls).toEqual([]);
+      expect(await store.getRow()).toEqual(row);
+      expect(store.updateStatus).not.toHaveBeenCalled();
+      expect(store.savePair).not.toHaveBeenCalled();
+      expect(session.isOpen).toBe(false);
+    },
+  );
+
+  it('does not save authorization received after the reconnect was cancelled', async () => {
+    const started = deferred<void>();
+    const reply = deferred<{ authorization: RemoteAuthorization }>();
+    const session = createSession({
+      'connection.authenticate': () => {
+        started.resolve();
+        return reply.promise;
+      },
+    });
+    connect.mockResolvedValueOnce(session as never);
+    const controller = new AbortController();
+    const pending = runtime.pair(pairing, controller.signal);
+    await started.promise;
+    controller.abort();
+    reply.resolve({ authorization: { grants } });
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(store.updateStatus).not.toHaveBeenCalled();
+    expect(store.savePair).not.toHaveBeenCalled();
+    expect(session.calls).toEqual([]);
+    expect(session.isOpen).toBe(false);
+  });
+
+  it('rejects a different desktop before connecting or overwriting the existing pairing', async () => {
+    await expect(
+      runtime.pair({ ...pairing, desktopIdentity: 'anotherPeer' }, signal()),
+    ).rejects.toMatchObject({ details: { reason: 'identity-mismatch' } });
+    expect(connect).not.toHaveBeenCalled();
+    expect(await store.getRow()).toEqual(row);
+    expect(store.savePair).not.toHaveBeenCalled();
   });
 
   it('marks a revoked device for repair before returning the authorization failure', async () => {

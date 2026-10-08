@@ -40,6 +40,7 @@ const original: DesktopConnectionRow = {
   name: 'Desktop',
   deviceId: 'device-1',
   desktopIdentity: 'peer1',
+  learnedEndpoints: [],
   configuredEndpoints: [{ host: '192.168.1.2', port: 23333, security: 'ws' as const }],
   grants,
   status: 'paired',
@@ -84,7 +85,7 @@ describe('DesktopConnectionManager ownership', () => {
   let row: DesktopConnectionRow;
   let appState: (state: AppStateStatus) => void;
   const connect = jest.mocked(DesktopSession.connect);
-  let store: { getRow: jest.Mock; updateStatus: jest.Mock };
+  let store: { getRow: jest.Mock; updateStatus: jest.Mock; updateLearnedEndpoints: jest.Mock };
   beforeEach(async () => {
     jest.resetAllMocks();
     jest.mocked(openWebSocketStream).mockImplementation(async () => ({ abort() {} }) as never);
@@ -97,6 +98,12 @@ describe('DesktopConnectionManager ownership', () => {
     row = { ...original, configuredEndpoints: [...original.configuredEndpoints] };
     store = {
       getRow: jest.fn(async () => row),
+      updateLearnedEndpoints: jest.fn(async (_id, endpoints, expected, signal) => {
+        signal.throwIfAborted();
+        if (row.deviceId !== expected.deviceId) throw new Error('Pairing replaced');
+        row = { ...row, learnedEndpoints: endpoints };
+        return endpoints;
+      }),
       updateStatus: jest.fn(async (_id, input, signal, expected) => {
         signal.throwIfAborted();
         if (
@@ -117,6 +124,109 @@ describe('DesktopConnectionManager ownership', () => {
     await manager._doStop();
     await manager._doDestroy();
     jest.useRealTimers();
+  });
+
+  it('reconnects over a synced VPN address after network changes clear QR hints', async () => {
+    const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    row.configuredEndpoints = [];
+    manager.seedLocation(row.id, row.desktopIdentity, original.configuredEndpoints);
+    const first = Object.assign(session(), {
+      connectionEndpointsVersion: 1,
+      request: async () => ({ desktopIdentity: row.desktopIdentity, endpoints: [vpn] }),
+    });
+    connect.mockResolvedValueOnce(first as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).resolves.toBe(first);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(row.learnedEndpoints).toEqual([vpn]);
+    const next = session();
+    connect.mockResolvedValueOnce(next as never);
+    first.close();
+    await jest.advanceTimersByTimeAsync(0);
+    mockDiscoveryReceive({ type: 'network' });
+    await jest.advanceTimersByTimeAsync(0);
+    await expect(lease.ready(signal())).resolves.toBe(next);
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://192.168.1.2:23333/v1/remote/connect',
+      'ws://100.64.0.2:23333/v1/remote/connect',
+    ]);
+    expect(row.grants).toEqual(grants);
+  });
+
+  it('loads synced addresses on a fresh manager without discovery or another pairing', async () => {
+    const vpn = { host: 'fd7a:115c:a1e0::2', port: 23333, security: 'ws' as const };
+    row.configuredEndpoints = [];
+    row.learnedEndpoints = [vpn];
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://[fd7a:115c:a1e0::2]:23333/v1/remote/connect',
+    ]);
+    expect(row.learnedEndpoints).toEqual([vpn]);
+  });
+
+  it.each(['request failure', 'wrong identity'])(
+    'keeps a healthy connection and saved routes after sync %s',
+    async (failure) => {
+      const vpn = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+      row.learnedEndpoints = [vpn];
+      const channel = Object.assign(session(), {
+        connectionEndpointsVersion: 1,
+        request: async () => {
+          if (failure === 'request failure') throw new Error('Address query failed');
+          return { desktopIdentity: 'other-desktop', endpoints: [] };
+        },
+      });
+      connect.mockResolvedValueOnce(channel as never);
+      const lease = await manager.retain(row.id, 'agent', signal());
+      await expect(lease.ready(signal())).resolves.toBe(channel);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(channel.isOpen).toBe(true);
+      expect(lease.getSnapshot().status).toBe('ready');
+      expect(row.learnedEndpoints).toEqual([vpn]);
+      expect(row.status).toBe('paired');
+    },
+  );
+
+  it('does not save an address response from a closed session', async () => {
+    const reply = deferred<{
+      desktopIdentity: string;
+      endpoints: typeof original.configuredEndpoints;
+    }>();
+    const channel = Object.assign(session(), {
+      connectionEndpointsVersion: 1,
+      request: () => reply.promise,
+    });
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await lease.ready(signal());
+    channel.close();
+    await jest.advanceTimersByTimeAsync(0);
+    reply.resolve({
+      desktopIdentity: row.desktopIdentity,
+      endpoints: original.configuredEndpoints,
+    });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(row.learnedEndpoints).toEqual([]);
+  });
+
+  it('retries learned routes when discovery is unavailable instead of waiting for another scan', async () => {
+    row.configuredEndpoints = [];
+    row.learnedEndpoints = [{ host: '100.64.0.2', port: 23333, security: 'ws' }];
+    mockDiscoveryReceive({ type: 'unavailable' });
+    jest.mocked(openWebSocketStream).mockRejectedValueOnce(new Error('Network unavailable'));
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await expect(lease.ready(signal())).rejects.toMatchObject({ reason: 'unreachable' });
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    await jest.advanceTimersByTimeAsync(1_000);
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+    expect(jest.mocked(openWebSocketStream).mock.calls.map(([url]) => url)).toEqual([
+      'ws://100.64.0.2:23333/v1/remote/connect',
+      'ws://100.64.0.2:23333/v1/remote/connect',
+    ]);
   });
 
   it('reports missing addresses immediately when discovery is unavailable and waits for a new route', async () => {
@@ -278,6 +388,29 @@ describe('DesktopConnectionManager ownership', () => {
     latest.resolve(row);
     await failed;
     expect(checked.close).toHaveBeenCalled();
+  });
+
+  it('keeps channels and pairing checks through iOS inactive overlays', async () => {
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const agent = await manager.retain(row.id, 'agent', signal());
+    await agent.ready(signal());
+
+    const checked = session();
+    const latest = deferred<DesktopConnectionRow>();
+    store.getRow.mockResolvedValueOnce(row).mockImplementationOnce(() => latest.promise);
+    connect.mockResolvedValueOnce(checked as never);
+    const check = manager.testEndpoint(row.id, original.configuredEndpoints[0], signal());
+    await jest.advanceTimersByTimeAsync(0);
+    appState('inactive');
+    latest.resolve(row);
+    await expect(check).resolves.toBeUndefined();
+    await jest.advanceTimersByTimeAsync(30_000);
+    appState('active');
+
+    expect(channel.close).not.toHaveBeenCalled();
+    expect(agent.getSnapshot().status).toBe('ready');
+    expect(connect).toHaveBeenCalledTimes(2);
   });
 
   it.each(['inactive', 'background', 'unknown'] as const)(
@@ -492,6 +625,73 @@ describe('DesktopConnectionManager ownership', () => {
       reason: 'FORBIDDEN',
     });
     expect(await config.ready(signal())).toBe(channel);
+  });
+
+  it('keeps active conversation demand connected in the background and suspends after it settles', async () => {
+    const first = session();
+    const next = session();
+    connect.mockResolvedValueOnce(first as never).mockResolvedValueOnce(next as never);
+    const agent = await manager.retain(row.id, 'agent', signal());
+    await agent.ready(signal());
+    agent.setBackgroundRequired?.(true);
+    appState('background');
+    expect(first.close).not.toHaveBeenCalled();
+    expect(agent.getSnapshot().status).toBe('ready');
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(connect).toHaveBeenCalledTimes(1);
+    agent.setBackgroundRequired?.(false);
+    expect(first.close).toHaveBeenCalled();
+    expect(agent.getSnapshot().status).toBe('suspended');
+    appState('active');
+    expect(await agent.ready(signal())).toBe(next);
+  });
+
+  it('ends background demand after the desktop stays unreachable for a minute', async () => {
+    const first = session();
+    const next = session();
+    connect.mockResolvedValueOnce(first as never);
+    const agent = await manager.retain(row.id, 'agent', signal());
+    await agent.ready(signal());
+    agent.setBackgroundRequired?.(true);
+    appState('background');
+    connect.mockRejectedValue(new Error('Desktop unreachable'));
+    first.close();
+    await jest.advanceTimersByTimeAsync(59_000);
+    expect(agent.getSnapshot().status).not.toBe('suspended');
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(agent.getSnapshot().status).toBe('suspended');
+    const attempts = connect.mock.calls.length;
+    await jest.advanceTimersByTimeAsync(120_000);
+    expect(connect).toHaveBeenCalledTimes(attempts);
+    connect.mockReset();
+    connect.mockResolvedValueOnce(next as never);
+    appState('active');
+    expect(await agent.ready(signal())).toBe(next);
+  });
+
+  it('does not carry hidden reconnect backoff into the first foreground retry', async () => {
+    const first = session();
+    const next = session();
+    connect.mockResolvedValueOnce(first as never);
+    const agent = await manager.retain(row.id, 'agent', signal());
+    await agent.ready(signal());
+    agent.setBackgroundRequired?.(true);
+    appState('background');
+    mockDiscoveryReceive({ type: 'unavailable' });
+    connect.mockRejectedValue(new Error('Desktop unreachable'));
+    first.close();
+    await jest.advanceTimersByTimeAsync(45_000);
+    const hiddenAttempts = connect.mock.calls.length;
+    expect(hiddenAttempts).toBeGreaterThan(5);
+
+    appState('active');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(connect).toHaveBeenCalledTimes(hiddenAttempts + 1);
+    connect.mockReset();
+    connect.mockResolvedValueOnce(next as never);
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(agent.getSnapshot().status).toBe('ready');
+    expect(await agent.ready(signal())).toBe(next);
   });
 
   it('suspends all physical channels and reconnects retained consumers on foreground', async () => {
