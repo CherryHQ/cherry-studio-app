@@ -227,6 +227,30 @@ instead of using Expo's precompiled binaries. Observe's source build requires Ap
 available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
 
+### iOS Text Measurement Cache Patch
+
+React Native 0.86.3's iOS text and line measurement caches use
+`SimpleThreadSafeCache::getWithGeneratorOutsideLock` to compute misses outside the mutex, so native
+text notifications cannot hold the measurement cache lock while waiting for another thread.
+Lookup, insertion, LRU updates, and the returned-value copy remain locked. Concurrent misses may
+compute the same key more than once; the second lookup reuses the first stored result.
+The default `get` and pointer-returning `getWithKey` retain their serialized generator behavior,
+including Android measurements and iOS attributed-string conversion. Each iOS measurement creates
+its own text storage, layout manager, and text container; mutable layout objects are not shared.
+This addresses the cache-lock mechanism in [#1182](https://github.com/CherryHQ/cherry-studio-app/issues/1182);
+the production event does not identify the notification observer or its queue.
+
+As reviewed on 2026-10-08, [React Native 0.87.1](https://github.com/react/react-native/blob/v0.87.1/packages/react-native/ReactCommon/react/utils/SimpleThreadSafeCache.h),
+0.88.0-rc.4, and upstream `main` still execute the generator under the mutex. Upgrading to these
+versions does not remove this locking mechanism. Expo SDK 57 targets React Native 0.86.
+
+The patch includes native cache regressions in React Native's `SimpleThreadSafeCacheTest.cpp`.
+The local-only `scripts/__tests__/reactNativeTextCache.test.ts` guards patch wiring and iOS source
+compilation. iOS already enables `buildReactNativeFromSource`; delivering this patch requires a
+new native build, since OTA updates cannot replace native code.
+These native regressions are not run by the application's Jest suite or current PR CI. They require
+separate native test execution; source review alone does not establish that the production hang is resolved.
+
 ### iOS Build 26 Crash Patches
 
 - Screens 4.26.2 iterates over a copy of the header subviews. Synchronous shadow-state updates
