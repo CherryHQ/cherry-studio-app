@@ -320,7 +320,7 @@ Data URL exists only inside the Host-to-Runtime request.
 
 Text inputs accept authoritative `text/*` media types and an explicit application/source-code
 media-type and extension allowlist. The Host reads managed bytes before reservation, accepts and
-strips a leading UTF-8 BOM, rejects invalid UTF-8, NUL/binary controls, unsupported types, and
+strips a leading UTF-8 BOM, rejects invalid UTF-8, NUL, unsupported types, and
 oversized current files, then projects a temporary structured Runtime part. Pi JSON-escapes that
 part as untrusted user text with the authoritative name, media type, and `[complete]` or
 `[truncated]` state; its body cannot alter the system/tool instruction layer or expand the Turn

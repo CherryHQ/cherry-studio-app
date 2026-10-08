@@ -142,6 +142,21 @@ describe('writeFileTool', () => {
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
+  test('refuses NUL, which read_file would reject as binary', async () => {
+    const files = createFilesPort();
+
+    const output = await execute(createWriteFileTool(files), {
+      content: 'a\u0000b',
+      filename: 'notes.txt',
+    });
+
+    expect(output).toEqual({
+      value: { status: 'error', message: expect.stringContaining('NUL') },
+      artifacts: [],
+    });
+    expect(files.createTextEntry).not.toHaveBeenCalled();
+  });
+
   test('lets storage failures surface as a tool error', async () => {
     const files = createFilesPort();
     files.createTextEntry.mockRejectedValueOnce(new Error('disk full'));

@@ -293,7 +293,7 @@ read it through a controlled tool; otherwise the reference remains visible as un
 under `artifacts`. `edit_file` additionally returns the source id, replacement count, and a
 bounded snippet of the edited region; when it saves a new version it marks that entry as `derived`,
 and when it rewrites this turn's draft it returns no artifact because the draft's file part already
-exists. `read_file` returns a text-line or AnyDoc JSON-character window under `value` and never an artifact. `generate_image` returns `{ id, name }` refs under `value` and
+exists. `read_file` returns a line or code-point window under `value` and never an artifact. `generate_image` returns `{ id, name }` refs under `value` and
 each imported image under `artifacts`; each image is named after its prompt (`readableFilename`),
 never after an id. Pi projects those artifacts as `purpose: 'artifact'` file parts, and the Host
 persists both the result envelope and the file parts. Device and web capabilities return portable
@@ -399,14 +399,18 @@ Restoring health access requires a separate native feature and App Store submiss
 ### Managed File Write And Edit
 
 `write_file` accepts a display name rather than a path, writes
-bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. The
+bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. It
+refuses content holding NUL, the one character `read_file` treats as binary, so nothing it writes is
+unreadable later. The
 model receives `{ status, fileEntryId, filename, size }`; a name it can correct returns
 `{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
 opaque failure.
 
 `edit_file` takes `file_entry_id`, non-empty `old_string`, `new_string`, and optional `replace_all`.
 It accepts only active, strictly decoded UTF-8 sources no larger than 1 MiB and produces a result no
-larger than 1 MiB. Matching is exact and case-sensitive: a single edit requires exactly one
+larger than 1 MiB; a `replace_all` result is bounded before it is built, so a short match with a long
+replacement cannot allocate far past the limit. Like `write_file`, it refuses a `new_string` holding
+NUL. Matching is exact and case-sensitive: a single edit requires exactly one
 non-overlapping match, while `replace_all` changes every non-overlapping match. It preserves a UTF-8
 BOM and all untouched bytes represented by the decoded text. It never uses the desktop filesystem
 tool's fuzzy matching, empty-search overwrite, or path semantics. The model receives
@@ -452,24 +456,30 @@ lines, at most 2,000) and returns
 `{ status, fileEntryId, filename, size, startLine, lineCount, totalLines, truncated, text }`. The
 window is cut on a line boundary at 100,000 characters, so `startLine + lineCount` is always the
 next line to request. A single line larger than the whole budget is the one case that cannot be cut
-on a boundary: the head is returned with `lineTruncated: true` and the read reports itself
-truncated, because the rest of that line is unreachable by asking for a later line and silence would
-present a fraction of a minified file as the whole of it. Text sources use the same strict UTF-8 decoding and 1 MiB source limit as
-`edit_file`. Documents use the selected local parser and 20 MiB
+on a boundary: the head is returned with `lineTruncated: true`, the read reports itself truncated,
+and `nextOffset` gives the code-point offset where the rest of the line starts, since asking for a
+later line cannot reach it. Text sources use the same strict UTF-8 decoding and 1 MiB source limit as
+`edit_file`; NUL is the only control character refused as binary. Documents use the selected local parser and 20 MiB
 source ceiling described in [File Model](../data/file-model.md). `sourceTruncated: true` means the
 document extractor reached its own page/row/text limit; it is independent of the pageable window's
 `truncated` flag. This lets a model continue reading an attached document or revisit a file it wrote
 in an earlier turn, whose content is deliberately not replayed as an attachment.
 
-For AnyDoc output, use zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode
-code points), never line parameters. The result is explicitly `format: 'json-fragment'`, with
-`text`, `offset`, `characterCount`, `totalCharacters`, `nextOffset`, and `complete`. Concatenating
+Zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode code points) read the
+full text as a raw code-point window instead of lines, returning `text`, `offset`,
+`characterCount`, `totalCharacters`, `nextOffset`, and `complete`. They are how a cut line
+continues, and the only paging AnyDoc output accepts: its result is explicitly
+`format: 'json-fragment'`. Concatenating
 successive `text` windows until `nextOffset` is null recovers the complete original IR JSON, even
 through a single very long string or non-BMP characters. Fragments are not complete JSON objects.
 Parser/version, original warnings, and asset descriptors accompany each window. Assets are
 `reference-only`: no pixel bytes, image artifacts, or multimodal tool-result extension is added.
-Mixed line/JSON parameters fail explicitly. The original community `fallback` result remains an
+Mixed line/offset parameters fail explicitly. The original community `fallback` result remains an
 error result rather than being replaced by built-in text.
+
+The tool keeps the last document it parsed in the turn, so paging a document parses it once rather
+than once per window. A document entry is never rewritten in place — only this turn's UTF-8 drafts
+are — so the cache needs no invalidation. Ordinary text is read fresh on every call.
 
 Both tools run without approval because they have no destructive form, and the Host offers them only
 to models that support function calling. Handing tools to a model that cannot call them fails the
