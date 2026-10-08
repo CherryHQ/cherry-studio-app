@@ -21,7 +21,7 @@ import {
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
-import { AudioKeepAliveSource } from '@/backend/services/keepAlive/AudioKeepAliveSource';
+import { IosBackgroundExecutionSource } from '@/backend/services/keepAlive/IosBackgroundExecutionSource';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
@@ -60,7 +60,7 @@ export const services = {
   AnalyticsService,
   BackgroundActivityEnvironment,
   AndroidBackgroundActivityRuntime,
-  AudioKeepAliveSource,
+  IosBackgroundExecutionSource,
   KeepAliveCoordinator,
   BackgroundActivityManager,
   BackgroundReplyRuntime,

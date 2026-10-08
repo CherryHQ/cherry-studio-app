@@ -10,7 +10,6 @@ import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 
 import { asNumericKey, encodeCursor, parseCursor } from './keysetCursor';
-import { stripMarkdownFormatting } from './searchSnippet';
 
 const defaultFtsSearchLimit = 500;
 const ftsSearchChunkSize = 200;
@@ -93,23 +92,10 @@ export async function searchWithCursor<Row, PublicItem>({
   // Short words and literal SQL wildcards cannot use this LIKE index safely.
   // Scan them in bounded chronological batches and apply literal matching below.
   const indexedTerms = terms.filter((term) => Array.from(term).length >= 3 && !/[%_]/.test(term));
-  // The index contains source Markdown. Formatting can interrupt a visible match,
-  // so admit those rows for the exact plain-text check too, including old history.
-  // This broadens SQL scanning; the candidate/page budget below still bounds JS work.
-  const ftsConditions =
-    indexedTerms.length > 0
-      ? [
-          sql`((${sql.join(
-            indexedTerms.map((term) => sql`fts.searchable_text LIKE ${buildFtsLikePattern(term)}`),
-            sql` AND `,
-          )}) OR ${sql.join(
-            ['*', '[', '<', '#', '`', '~', '\r'].map(
-              (marker) => sql`instr(fts.searchable_text, ${marker}) > 0`,
-            ),
-            sql` OR `,
-          )})`,
-        ]
-      : [];
+  // The index holds visible plain text, so the trigram LIKE admits every visible match.
+  const ftsConditions = indexedTerms.map(
+    (term) => sql`fts.searchable_text LIKE ${buildFtsLikePattern(term)}`,
+  );
   let cursor = rawCursor !== undefined ? decodeSearchCursor(rawCursor, cursorConfig) : undefined;
   const createdAtFromMs = getCreatedAtFromMs(createdAtFrom);
   const results: SearchMappedItem<PublicItem>[] = [];
@@ -136,10 +122,9 @@ export async function searchWithCursor<Row, PublicItem>({
       cursor = getCursor(row);
       const searchableText = getSearchableText(row);
       if (!searchableText) continue;
-      const plainText = stripMarkdownFormatting(searchableText);
       const matches = regexes.every((regex) => {
         regex.lastIndex = 0;
-        return regex.test(plainText);
+        return regex.test(searchableText);
       });
       if (!matches) continue;
 

@@ -3,6 +3,8 @@ import {
   type KeywordMatchMode,
 } from '@cherrystudio/universal/utils/keywordSearch';
 
+import type { AgentMessagePart } from '@/shared/contracts/agent';
+
 const SEARCH_SNIPPET_MAX_LENGTH = 160;
 const SEARCH_SNIPPET_CONTEXT_LENGTH = 24;
 
@@ -32,21 +34,33 @@ export function stripMarkdownFormatting(text: string): string {
   return parts.join('');
 }
 
-/** A compact preview whose first visible line includes the earliest keyword match. */
+/**
+ * The visible text of a message's `text` parts, as stored in `searchable_text` for FTS. Indexing
+ * plain text keeps formatting from splitting a visible match. Reasoning and tool payloads are not
+ * prose and stay out of search.
+ */
+export function toSearchableText(parts: readonly AgentMessagePart[]): string {
+  const text = parts
+    .flatMap((part) => (part.type === 'text' && part.text.trim() !== '' ? [part.text] : []))
+    .join('\n');
+  return text ? stripMarkdownFormatting(text) : '';
+}
+
+/** A compact preview of indexed plain text whose first line includes the earliest keyword match. */
 export function buildSearchSnippet(
-  text: string,
+  plainText: string,
   terms: string[],
   matchMode: KeywordMatchMode,
 ): string {
-  const plainText = stripMarkdownFormatting(text).replace(/\s+/g, ' ').trim();
+  const text = plainText.replace(/\s+/g, ' ').trim();
   const matches = buildKeywordRegexes(terms, { flags: 'i', matchMode })
-    .map((regex) => regex.exec(plainText))
+    .map((regex) => regex.exec(text))
     .filter((match) => match !== null);
   const firstMatch = matches.reduce<RegExpExecArray | undefined>(
     (first, match) => (!first || match.index < first.index ? match : first),
     undefined,
   );
   const start = Math.max(0, (firstMatch?.index ?? 0) - SEARCH_SNIPPET_CONTEXT_LENGTH);
-  const end = Math.min(plainText.length, start + SEARCH_SNIPPET_MAX_LENGTH);
-  return (start > 0 ? '…' : '') + plainText.slice(start, end) + (end < plainText.length ? '…' : '');
+  const end = Math.min(text.length, start + SEARCH_SNIPPET_MAX_LENGTH);
+  return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
 }

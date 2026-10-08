@@ -117,6 +117,13 @@ describe('native Markdown streaming work patch', () => {
     expect(streamingPatch).toContain('+      disposed = true');
   });
 
+  test('releases the render slot when the worker throws an Error', () => {
+    expect(streamingPatch).not.toMatch(/^[ +]\s+\} catch \(e: Exception\) \{$/m);
+    expect(streamingPatch).toMatch(
+      /\+ {8}\} catch \(e: Throwable\) \{\n(?:\+[^\n]*\n)*?\+ {8}\}\n\+\n\+ {8}mainHandler\.post \{\n\+ {10}renderInFlight = false\n/,
+    );
+  });
+
   test('allows repaired suffix changes within the native view generation', () => {
     expect(streamingPatch).toContain('+              isStreaming && streamingAnimation &&');
     expect(streamingPatch).not.toContain('currentMarkdown.startsWith(markdown)');

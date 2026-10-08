@@ -33,6 +33,11 @@ test('a finished result survives service teardown and identity handoff', () => {
   expect(promotion.indexOf('detachFinishedResult();')).toBeLessThan(
     promotion.indexOf('ServiceCompat.startForeground('),
   );
+  // Detaching resets Android's foreground allowance; a hidden app could not re-promote.
+  const deferred = promotion.indexOf('else if (foreground && !anchorOngoing && !isAppVisible())');
+  expect(deferred).toBeGreaterThan(-1);
+  expect(deferred).toBeLessThan(promotion.indexOf('detachFinishedResult();'));
+  expect(service).toContain('final boolean retainResult = !anchorOngoing;');
 });
 
 test('updates cannot revive a stopped service or launch another headless task', () => {
@@ -62,6 +67,13 @@ test('a refused foreground promotion keeps the started service and its task', ()
   );
   expect(promotion).toContain('ForegroundServiceStartNotAllowedException');
   expect(promotion).not.toContain('stopSelf');
+});
+
+test('the service channel takes a fixed name instead of task content', () => {
+  const js = readFileSync(join(root, 'src/index.js'), 'utf8');
+  expect(js).toContain('channelName: options.channelName');
+  expect(service).toContain('createNotificationChannel(currentOptions.getChannelName())');
+  expect(service).not.toContain('channel.setDescription(');
 });
 
 test('notification identity is forwarded by JS and checked against the admitted native generation', () => {

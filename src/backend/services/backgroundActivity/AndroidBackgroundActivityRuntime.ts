@@ -30,6 +30,9 @@ import type { BackgroundActivityPresenter } from './presenter';
 // Android 15 gives dataSync six background hours, reset on foreground entry.
 // Leave a minute for the domain's normal cancellation and notification drain.
 const BACKGROUND_EXECUTION_LIMIT_MS = (6 * 60 - 1) * 60_000;
+// Interrupted work drains under protection within that minute. A handler that never settles
+// must not keep the service or block later admissions.
+const INTERRUPT_DRAIN_GRACE_MS = 30_000;
 const logger = loggerService.withContext('AndroidBackgroundActivity');
 
 // background-actions owns the Headless JS task and wake lock until stop(). A
@@ -326,6 +329,8 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
             // Native execution stays foreground until the last task releases it.
             taskName: 'CherryBackgroundGeneration',
             taskIcon: { name: 'notification_icon', type: 'drawable' },
+            // The notification bridge names the same channel; task content never does.
+            channelName: this.environment.translate('notifications.android.runningTitle'),
             foregroundServiceType: ['dataSync'],
             progressBar: { max: 1, value: 0, indeterminate: true },
           });
@@ -524,14 +529,28 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         leaseCount: leases.length,
       });
     }
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
     try {
-      for (const result of await Promise.allSettled(
+      const drained = Promise.allSettled(
         leases.map((lease) => Promise.resolve().then(() => lease.onInterrupt?.(reason))),
-      )) {
-        if (result.status === 'rejected')
-          logger.warn('Background task interruption failed', result.reason);
-      }
+      ).then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected')
+            logger.warn('Background task interruption failed', result.reason);
+        }
+      });
+      const expired = new Promise<void>((resolve) => {
+        graceTimer = setTimeout(() => {
+          logger.warn('Background task interruption exceeded its grace', {
+            graceMs: INTERRUPT_DRAIN_GRACE_MS,
+            reason: reason.reason,
+          });
+          resolve();
+        }, INTERRUPT_DRAIN_GRACE_MS);
+      });
+      await Promise.race([drained, expired]);
     } finally {
+      clearTimeout(graceTimer);
       await this.enqueue(async () => {
         this.interrupting = false;
         // Foreground entry may reset the budget and admit new leases while

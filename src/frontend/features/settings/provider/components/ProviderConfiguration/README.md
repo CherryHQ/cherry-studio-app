@@ -28,9 +28,12 @@ Callers add only a `header`, a `footer` inside the scroll view, or a fixed `bott
   is no draft, Save button or discard confirmation. Address changes keep the old guards:
   an endpoint still used by a model cannot be removed, and moving the default endpoint that
   models follow asks first. A custom provider whose default endpoint lost its address is
-  repaired once when opened.
+  repaired once when opened. Making a protocol the default also writes the address in its
+  sheet. A pending write holds the screen; an account sign-in only locks the fields, because
+  leaving cancels it.
 - `useNewProviderConfiguration` keeps a local draft (`useProviderConfigurationDraft`) because
-  the provider does not exist until the user continues; `create()` writes it once.
+  the provider does not exist until the user continues; `create()` writes it once. An avatar
+  that fails to save after the provider exists only warns, so continuing never creates it twice.
 
 Editing sheets are presentational: their owners keep the text or key draft, so sheet content
 never depends on app providers from inside its portal.

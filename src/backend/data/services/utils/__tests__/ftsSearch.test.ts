@@ -71,8 +71,8 @@ describe('searchWithCursor', () => {
     const fetchRows = jest
       .fn()
       .mockResolvedValueOnce([
-        { createdAt: 300, id: 'c', searchableText: '[link](needle)' },
-        { createdAt: 200, id: 'b', searchableText: '[link](needle)' },
+        { createdAt: 300, id: 'c', searchableText: 'haystack' },
+        { createdAt: 200, id: 'b', searchableText: 'haystack' },
       ])
       .mockResolvedValueOnce([{ createdAt: 100, id: 'a', searchableText: 'needle found' }]);
     const first = await searchWithCursor({ ...options(fetchRows), maxCandidates: 2 });

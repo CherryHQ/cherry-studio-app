@@ -28,12 +28,7 @@ export default function PermissionDetailsScreen() {
 function PermissionDetails({ kind }: { kind: PermissionKind }) {
   const { t } = useTranslation();
   const { statuses, refresh } = useDevicePermissionStatuses(permissionConfig[kind].scopes);
-  const isHealth = kind === 'health';
-  const purpose = t(
-    isHealth
-      ? 'settings.permissions.health.appleDescription'
-      : `settings.permissions.purpose.${kind}`,
-  );
+  const purpose = t(`settings.permissions.purpose.${kind}`);
 
   return (
     <SettingsScrollPage

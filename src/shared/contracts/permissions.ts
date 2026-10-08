@@ -1,31 +1,8 @@
-export const HEALTH_DATA_TYPES = [
-  'steps',
-  'activeEnergy',
-  'distance',
-  'heartRate',
-  'restingHeartRate',
-  'hrv',
-  'sleep',
-  'workouts',
-] as const;
-export type HealthDataType = (typeof HEALTH_DATA_TYPES)[number];
-export type HealthPermissionScope = `health.${HealthDataType}.read`;
-export const healthPermissionScope = (type: HealthDataType): HealthPermissionScope =>
-  `health.${type}.read`;
-export const HEALTH_PERMISSION_SCOPES = HEALTH_DATA_TYPES.map(healthPermissionScope);
-
-export type DevicePermission =
-  | 'calendar'
-  | 'camera'
-  | 'health'
-  | 'location'
-  | 'photos'
-  | 'reminders';
+export type DevicePermission = 'calendar' | 'camera' | 'location' | 'photos' | 'reminders';
 export type DevicePermissionScope =
   | 'calendar.read'
   | 'calendar.write'
   | 'camera.read'
-  | HealthPermissionScope
   | 'location.read'
   | 'photos.read'
   | 'photos.write'
@@ -35,8 +12,6 @@ export type SystemPermissionState =
   | 'denied'
   | 'granted'
   | 'limited'
-  /** HealthKit exposes whether it has asked, never whether read access was granted. */
-  | 'requested'
   | 'undetermined'
   | 'unavailable'
   | 'error';
@@ -44,7 +19,7 @@ export type SystemPermissionState =
 export type DevicePermissionStatus = {
   state: SystemPermissionState;
   canAskAgain: boolean;
-  reason?: 'unsupported' | 'service-disabled' | 'native-unavailable';
+  reason?: 'unsupported' | 'service-disabled';
   accuracy?: 'approximate' | 'precise';
 };
 export type PermissionStatuses = Partial<Record<DevicePermissionScope, DevicePermissionStatus>>;
@@ -61,16 +36,12 @@ export interface PermissionsModule {
   ): Promise<PermissionStatuses>;
 }
 
-/** Availability for execution, not a claim that HealthKit disclosed its read grants. */
+/** Availability for execution under the current OS permission. */
 export function canUseDevicePermission(
   scope: DevicePermissionScope,
   status: DevicePermissionStatus | undefined,
 ): boolean {
-  return (
-    status?.state === 'granted' ||
-    (scope === 'photos.read' && status?.state === 'limited') ||
-    (scope.startsWith('health.') && status?.state === 'requested')
-  );
+  return status?.state === 'granted' || (scope === 'photos.read' && status?.state === 'limited');
 }
 
 export function canRequestDevicePermission(status: DevicePermissionStatus | undefined): boolean {
@@ -89,8 +60,6 @@ export function summarizeDevicePermissions(
   if (states.every((status) => status.state === 'granted')) return states[0];
   if (states.some((status) => status.state === 'granted'))
     return { state: 'limited', canAskAgain: false };
-  if (states.some((status) => status.state === 'requested'))
-    return { state: 'requested', canAskAgain: false };
   return (
     states.find((status) => status.state === 'error') ??
     states.find((status) => status.state === 'undetermined') ??
