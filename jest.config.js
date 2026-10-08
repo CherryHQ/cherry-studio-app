@@ -28,8 +28,10 @@ module.exports = {
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
     // Tooling suites guard local-only tools, so PR CI skips them except the
-    // architecture rules that protect every PR.
-    ...(process.env.PRCI ? ['/scripts/__tests__/(?!architectureBoundaries\\.test\\.ts$)'] : []),
+    // architecture rules and the React Native patch guard that protect every PR.
+    ...(process.env.PRCI
+      ? ['/scripts/__tests__/(?!(architectureBoundaries|reactNativeTextCache)\\.test\\.ts$)']
+      : []),
   ],
   // Local build/export artifacts can contain copied workspace packages. Keep
   // them out of the Haste map so package names remain unique during tests.

@@ -299,7 +299,7 @@ omitted while its persisted reference remains.
 
 For text, the Host accepts `text/*` and an explicit application/source-code allowlist cross-checked
 by filename extension. It reads at most 1 MiB per current file before reservation, accepts and strips
-a leading UTF-8 BOM, rejects invalid UTF-8, NUL, and binary controls, then emits at most 200,000
+a leading UTF-8 BOM, rejects invalid UTF-8 and NUL, then emits at most 200,000
 Unicode code points per file and 400,000 across all model-visible text attachment occurrences. The
 temporary Runtime part keeps body, authoritative metadata, truncation, and the
 `untrusted-user-content` trust label structurally separate. Pi JSON-escapes that part only while
