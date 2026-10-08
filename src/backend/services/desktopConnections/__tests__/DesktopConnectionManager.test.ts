@@ -390,6 +390,29 @@ describe('DesktopConnectionManager ownership', () => {
     expect(checked.close).toHaveBeenCalled();
   });
 
+  it('keeps channels and pairing checks through iOS inactive overlays', async () => {
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const agent = await manager.retain(row.id, 'agent', signal());
+    await agent.ready(signal());
+
+    const checked = session();
+    const latest = deferred<DesktopConnectionRow>();
+    store.getRow.mockResolvedValueOnce(row).mockImplementationOnce(() => latest.promise);
+    connect.mockResolvedValueOnce(checked as never);
+    const check = manager.testEndpoint(row.id, original.configuredEndpoints[0], signal());
+    await jest.advanceTimersByTimeAsync(0);
+    appState('inactive');
+    latest.resolve(row);
+    await expect(check).resolves.toBeUndefined();
+    await jest.advanceTimersByTimeAsync(30_000);
+    appState('active');
+
+    expect(channel.close).not.toHaveBeenCalled();
+    expect(agent.getSnapshot().status).toBe('ready');
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['inactive', 'background', 'unknown'] as const)(
     'connects after becoming active between construction in %s and initialization',
     async (initialState) => {
@@ -643,6 +666,31 @@ describe('DesktopConnectionManager ownership', () => {
     connect.mockReset();
     connect.mockResolvedValueOnce(next as never);
     appState('active');
+    expect(await agent.ready(signal())).toBe(next);
+  });
+
+  it('does not carry hidden reconnect backoff into the first foreground retry', async () => {
+    const first = session();
+    const next = session();
+    connect.mockResolvedValueOnce(first as never);
+    const agent = await manager.retain(row.id, 'agent', signal());
+    await agent.ready(signal());
+    agent.setBackgroundRequired?.(true);
+    appState('background');
+    mockDiscoveryReceive({ type: 'unavailable' });
+    connect.mockRejectedValue(new Error('Desktop unreachable'));
+    first.close();
+    await jest.advanceTimersByTimeAsync(45_000);
+    const hiddenAttempts = connect.mock.calls.length;
+    expect(hiddenAttempts).toBeGreaterThan(5);
+
+    appState('active');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(connect).toHaveBeenCalledTimes(hiddenAttempts + 1);
+    connect.mockReset();
+    connect.mockResolvedValueOnce(next as never);
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(agent.getSnapshot().status).toBe('ready');
     expect(await agent.ready(signal())).toBe(next);
   });
 
