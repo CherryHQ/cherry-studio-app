@@ -139,11 +139,11 @@ Wingdings bullets render as Unicode, and spreadsheet headers are opaque. The PDF
 the pages when the page is narrower than 640 CSS pixels and stays a side panel otherwise; the page
 re-evaluates this on resize.
 
-System opening is an app decision, not a package feature. When the package reports a document error,
-the viewer replaces the page with a native state: `too_large` shows that the file is too large to
-preview with Open file with, and other errors show Retry and Open file with. `unsupported` shows the
-platform viewer state instead of launching another app on its own; `onRequestOpen('too_large')`
-from the PDF range fallback opens the system viewer. Images keep the native image
+System opening is an app action that lives in the header's overflow menu, not in the package or
+in error states. When the package reports a document error, the viewer replaces the page with a
+native state: `too_large` (including the PDF range fallback) explains that the file is too large and
+points to Open file with in the ⋯ menu, and other errors offer Retry. `unsupported` shows the
+platform viewer state instead of launching another app on its own. Images keep the native image
 viewer, which already zooms, saves to Photos and pages exported documents.
 
 ### Markdown And Text
@@ -217,8 +217,8 @@ no incoming-share extension is enabled.
 | Unreadable or binary text | Inline read error; sharing and system opening remain available |
 | Image decoding failure | Inline retry state |
 | HTML load/process failure | Source plus a failure explanation |
-| Document too large for the in-app preview | Inline explanation with system opening |
-| Document preview or WebView failure | Inline retry with system opening |
+| Document too large for the in-app preview | Inline explanation pointing to the overflow menu |
+| Document preview or WebView failure | Inline retry; system opening stays in the overflow menu |
 | Share or system-open failure | One translated toast |
 | Photo permission cannot be requested again | Existing settings guidance |
 

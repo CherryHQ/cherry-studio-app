@@ -632,6 +632,7 @@
   "fileViewer.showSource": "Vizualizați sursa",
   "fileViewer.systemPreview": "Deschideți acest fișier cu o altă aplicație",
   "fileViewer.tooLargeToPreview": "Fișierul este prea mare pentru previzualizare în aplicație",
+  "fileViewer.tooLargeToPreviewDescription": "Alegeți „$t(filePreview.openWith)” din meniul ⋯ din colțul din dreapta sus pentru a-l vedea în altă aplicație.",
   "fileViewer.truncated": "Este afișat doar primul 1 MiB. Partajați sau deschideți fișierul cu o altă aplicație pentru a utiliza fișierul complet.",
   "imageActions.openSettingsFailed": "Nu s-au putut deschide setările de sistem. Deschide Setări manual.",
   "imageActions.saveAccessDenied": "Accesul la salvarea fotografiilor nu a fost acordat. Imaginea nu a fost salvată.",

@@ -614,6 +614,7 @@
   "fileViewer.showSource": "ソースを見る",
   "fileViewer.systemPreview": "このファイルを別のアプリで開きます",
   "fileViewer.tooLargeToPreview": "ファイルが大きすぎるため、アプリ内でプレビューできません",
+  "fileViewer.tooLargeToPreviewDescription": "右上の ⋯ メニューから「$t(filePreview.openWith)」を選ぶと、他のアプリで表示できます。",
   "fileViewer.truncated": "最初の 1 MiB のみが表示されます。完全なファイルを使用するには、別のアプリでファイルを共有するか開いてください。",
   "imageActions.openSettingsFailed": "システム設定を開けませんでした。手動で設定を開きます。",
   "imageActions.saveAccessDenied": "写真保存アクセスが許可されませんでした。画像は保存されていませんでした。",

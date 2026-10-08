@@ -614,6 +614,7 @@
   "fileViewer.showSource": "Xem nguồn",
   "fileViewer.systemPreview": "Mở tệp này bằng ứng dụng khác",
   "fileViewer.tooLargeToPreview": "Tệp quá lớn để xem trước trong ứng dụng",
+  "fileViewer.tooLargeToPreviewDescription": "Chọn “$t(filePreview.openWith)” trong menu ⋯ ở góc trên bên phải để xem bằng ứng dụng khác.",
   "fileViewer.truncated": "Chỉ hiển thị 1 MiB đầu tiên. Chia sẻ hoặc mở tệp bằng ứng dụng khác để sử dụng tệp hoàn chỉnh.",
   "imageActions.openSettingsFailed": "Không thể mở cài đặt hệ thống. Mở Cài đặt theo cách thủ công.",
   "imageActions.saveAccessDenied": "Quyền truy cập lưu ảnh không được cấp. Hình ảnh chưa được lưu.",

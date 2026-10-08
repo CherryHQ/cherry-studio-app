@@ -24,13 +24,19 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
   return (
     <>
       <FileViewerHeader file={file} />
-      {status === 'system' || status === 'tooLarge' ? (
+      {status === 'tooLarge' ? (
+        // System opening stays in the header's overflow menu; this state only points there.
+        <View className="flex-1 items-center justify-center p-6">
+          <ContentState.Empty
+            description={t('fileViewer.tooLargeToPreviewDescription')}
+            title={t('fileViewer.tooLargeToPreview')}
+          />
+        </View>
+      ) : status === 'system' ? (
         <View className="flex-1 items-center justify-center p-6">
           <ContentState.Empty
             primaryAction={openWithAction}
-            title={t(
-              status === 'tooLarge' ? 'fileViewer.tooLargeToPreview' : 'fileViewer.systemPreview',
-            )}
+            title={t('fileViewer.systemPreview')}
           />
         </View>
       ) : status === 'failed' || page.isError ? (
@@ -45,7 +51,6 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
                 setStatus('preview');
               },
             }}
-            secondaryAction={openWithAction}
             title={t('fileViewer.previewFailed')}
           />
         </View>
@@ -60,7 +65,7 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
           // The app, not the package, offers system opening for documents it cannot preview.
           onDocumentError={(code) => setStatus(code === 'too_large' ? 'tooLarge' : 'failed')}
           onFailure={() => setStatus('failed')}
-          onRequestOpen={openWithSystem}
+          onTooLarge={() => setStatus('tooLarge')}
           onUnsupported={() => setStatus('system')}
           page={page.data}
         />

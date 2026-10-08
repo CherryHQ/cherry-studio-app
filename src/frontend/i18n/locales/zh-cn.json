@@ -614,6 +614,7 @@
   "fileViewer.showSource": "查看源码",
   "fileViewer.systemPreview": "使用其他应用打开此文件",
   "fileViewer.tooLargeToPreview": "文件过大，无法在应用内预览",
+  "fileViewer.tooLargeToPreviewDescription": "可在右上角的 ⋯ 菜单中选择“$t(filePreview.openWith)”，用其他应用查看。",
   "fileViewer.truncated": "仅显示前 1 MiB 内容。分享文件或使用其他应用打开可获取完整文件。",
   "imageActions.openSettingsFailed": "无法打开系统设置，请手动前往设置。",
   "imageActions.saveAccessDenied": "未获得相册保存权限，图片尚未保存。",

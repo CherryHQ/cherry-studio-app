@@ -623,6 +623,7 @@
   "fileViewer.showSource": "Quelle anzeigen",
   "fileViewer.systemPreview": "Öffnen Sie diese Datei mit einer anderen App",
   "fileViewer.tooLargeToPreview": "Diese Datei ist zu groß für die Vorschau in der App",
+  "fileViewer.tooLargeToPreviewDescription": "Wählen Sie im ⋯-Menü oben rechts „$t(filePreview.openWith)“, um die Datei in einer anderen App anzusehen.",
   "fileViewer.truncated": "Es werden nur die ersten 1 MiB angezeigt. Geben Sie die Datei frei oder öffnen Sie sie mit einer anderen App, um die vollständige Datei zu verwenden.",
   "imageActions.openSettingsFailed": "Systemeinstellungen konnten nicht geöffnet werden. Öffnen Sie die Einstellungen manuell.",
   "imageActions.saveAccessDenied": "Der Zugriff zum Speichern von Fotos wurde nicht gewährt. Das Bild wurde nicht gespeichert.",

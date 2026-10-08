@@ -43,7 +43,7 @@ export function FileDocumentPreview({
   page,
   onDocumentError,
   onFailure,
-  onRequestOpen,
+  onTooLarge,
   onUnsupported,
 }: {
   file: ResolvedFile;
@@ -51,7 +51,8 @@ export function FileDocumentPreview({
   /** The package gave up on this document; the code distinguishes oversized files. */
   onDocumentError: (code: string) => void;
   onFailure: () => void;
-  onRequestOpen: () => void;
+  /** The PDF range fallback asked the host to open the file elsewhere. */
+  onTooLarge: () => void;
   onUnsupported: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -153,7 +154,7 @@ export function FileDocumentPreview({
         return;
       case 'requestOpen':
         if (message.reason === 'unsupported') onUnsupported();
-        else onRequestOpen();
+        else onTooLarge();
         return;
       default:
         bridgeRef.current?.handle(message);

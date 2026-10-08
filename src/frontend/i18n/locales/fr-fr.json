@@ -632,6 +632,7 @@
   "fileViewer.showSource": "Afficher la source",
   "fileViewer.systemPreview": "Ouvrez ce fichier avec une autre application",
   "fileViewer.tooLargeToPreview": "Ce fichier est trop volumineux pour être prévisualisé dans l'app",
+  "fileViewer.tooLargeToPreviewDescription": "Choisissez « $t(filePreview.openWith) » dans le menu ⋯ en haut à droite pour l'afficher dans une autre app.",
   "fileViewer.truncated": "Seul le premier Mo est affiché. Partagez ou ouvrez le fichier avec une autre application pour utiliser le fichier complet.",
   "imageActions.openSettingsFailed": "Impossible d'ouvrir les paramètres système. Ouvrez les paramètres manuellement.",
   "imageActions.saveAccessDenied": "L'accès à la sauvegarde des photos n'a pas été accordé. L'image n'a pas été enregistrée.",
