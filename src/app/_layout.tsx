@@ -8,6 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { HeroUINativeProvider } from 'heroui-native/provider';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
@@ -55,7 +56,8 @@ const RootGestureView = withUniwind(GestureHandlerRootView);
 function RootLayout() {
   return (
     <RootGestureView className="flex-1">
-      <KeyboardProvider>
+      {/* iOS warmup focuses and removes a hidden input on the startup main thread. */}
+      <KeyboardProvider preload={Platform.OS !== 'ios'}>
         <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false }, toast: 'disabled' }}>
           <Portal.AccessibilityBoundary>
             <Toast.Provider>
