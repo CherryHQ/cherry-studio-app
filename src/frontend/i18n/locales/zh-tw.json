@@ -1886,7 +1886,6 @@
   "skills.detail.author": "作者",
   "skills.detail.bindHint": "在智能體設定中為該智能體開啟此技能。",
   "skills.detail.checkUpdates": "檢查更新",
-  "skills.detail.compatibilityNote": "作者提供的相容性說明",
   "skills.detail.files": "檔案",
   "skills.detail.globalEnabled": "對智能體可用",
   "skills.detail.globalEnabledHint": "關閉後所有智能體都不再看到此技能,但不會變更它們的設定。",

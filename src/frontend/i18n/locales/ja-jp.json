@@ -1886,7 +1886,6 @@
   "skills.detail.author": "作者",
   "skills.detail.bindHint": "エージェントの設定で、そのエージェントに対してこのスキルをオンにしてください。",
   "skills.detail.checkUpdates": "更新を確認",
-  "skills.detail.compatibilityNote": "作者による互換性の注記",
   "skills.detail.files": "ファイル",
   "skills.detail.globalEnabled": "エージェントで利用可能",
   "skills.detail.globalEnabledHint": "オフにすると、各エージェントの設定を変えずにすべてのエージェントからこのスキルを隠します。",

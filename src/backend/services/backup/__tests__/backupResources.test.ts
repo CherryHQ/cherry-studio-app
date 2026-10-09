@@ -16,7 +16,7 @@ const mockDb = {
     return [
       {
         folderName: 'brief',
-        packageDigest: digest,
+        contentHash: digest,
         manifest: JSON.stringify([
           { path: 'SKILL.md', size: 20, digest },
           { path: 'references/format.md', size: 30, digest },

@@ -33,8 +33,9 @@ Bundled recommendations carry app-owned compatibility profiles. Keyword search u
 returns listings only; nothing is downloaded until a listing URL is resolved. skills.sh pages and
 public GitHub repository, directory, raw entry and `SKILL.md` links resolve to GitHub packages;
 repositories with multiple Skills return candidates, with a maximum of 20 package directories.
-Package identity is the GitHub directory, so the same package found through different links is one
-installation.
+Like desktop, a package's folder name is its declared name and holds one installation. A candidate
+from the same origin (bundled name, or GitHub owner, repository and directory) reuses it; a
+different package with the same name is refused.
 
 GitHub resolution pins a ref to a commit and acquires the complete package directory, including a
 repository-root package when present. Truncated trees, symlinks and submodules are rejected. Sources
@@ -54,7 +55,8 @@ promised. Optional author, version, tags, license and compatibility metadata are
 - Package-relative paths cannot escape the root or collide after case/Unicode normalization, or
   represent both a file and a directory.
 - Limits are 200 files, 8 MiB per package, 2 MiB per file, and 24,000 Unicode characters for entry
-  instructions. Every file contributes to the sorted SHA-256 manifest and package digest.
+  instructions. Every file contributes to the SHA-256 manifest and to the content hash, which uses
+  desktop's `directory-sha256:` algorithm so one package has the same hash on both clients.
 
 ## Admission
 
@@ -101,21 +103,26 @@ Agent without republishing its files.
 
 ## Persistence And Lifecycle
 
-`agent_global_skill` owns installed metadata, source identity, immutable revision facts, manifest,
-profile and global enablement. `agent_skill` owns only Agent relationships and binding enablement.
-Installation binds nothing unless Agent IDs were explicitly supplied; conversation tools supply only
-the current Agent. Binding changes preserve unrelated bindings; global disablement preserves binding
-preferences.
+`agent_global_skill` and `agent_skill` match desktop's columns, defaults and index names. Mobile
+writes `source` as `builtin` (bundled recommendations) or `marketplace` (GitHub-hosted packages),
+`source_url` as the URL updates re-resolve, and `is_enabled` as global enablement; new
+installations and conversation bindings are written enabled. Desktop's `namespace` is absent
+because mobile has no built-in namespaces or system skill placements. Three mobile columns follow
+the shared ones: `manifest` lists accepted files for backup completeness and package-local reads,
+`profile` holds the requirements admission evaluates on every read without opening packages, and
+`invocation` lets list queries filter by invocation policy. Installation binds nothing unless
+Agent IDs were explicitly supplied; conversation tools supply only the current Agent. Binding
+changes preserve unrelated bindings; global disablement preserves binding preferences.
 
 Accepted packages live in the selected storage generation beside its database, under
-`Data/Skills/<folderName>/revisions/<packageDigest>/`; absolute sandbox paths are never persisted.
+`Data/Skills/<folder_name>/revisions/<content hash hex>/`; absolute sandbox paths are never persisted.
 Cache staging is disposable. A complete tree is published before the SQLite acceptance transaction
 commits. A failed commit leaves an unreferenced tree for cleanup.
 
 Updates follow the original GitHub ref (including an intentionally pinned commit), reacquire and
-validate the source before replacing the accepted revision, preserving ID, folder alias, enablement
-and bindings. Rejected updates leave the old package intact. Uninstall marks the record deleted and
-clears bindings immediately. Superseded and uninstalled bytes remain until next startup so already
+validate the source before replacing the accepted revision, preserving ID, folder, enablement and
+bindings. Rejected updates leave the old package intact. Uninstall deletes the row and its bindings
+immediately, like desktop. Superseded and uninstalled bytes remain until next startup so already
 prepared turns can finish reading their pinned revisions. Startup reconciliation runs after database
 initialization and removes unreferenced revisions and staging. Missing package bytes are reported as
 setup required, not as an empty successful installation.

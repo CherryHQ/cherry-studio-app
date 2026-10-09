@@ -41,7 +41,7 @@ export function AgentSkillsSection({
           const isEnabled = bindings.get(skill.id) === true;
           const status = effectiveSkillStatus(skill.admission, skill.agentAdmission);
           const reasons = mergeSkillReasons(skill.admission, skill.agentAdmission);
-          const caption = !skill.isGlobalEnabled
+          const caption = !skill.isEnabled
             ? t('agent.skills.globallyDisabled')
             : status === 'ready' || reasons.length === 0
               ? undefined

@@ -1895,7 +1895,6 @@
   "skills.detail.author": "Yazar",
   "skills.detail.bindHint": "Beceriyi bir ajan için o ajanın ayarlarından açın.",
   "skills.detail.checkUpdates": "Güncellemeleri kontrol et",
-  "skills.detail.compatibilityNote": "Yazarın uyumluluk notu",
   "skills.detail.files": "Dosyalar",
   "skills.detail.globalEnabled": "Ajanlar için kullanılabilir",
   "skills.detail.globalEnabledHint": "Kapatıldığında bu beceri, ayarları değiştirilmeden tüm ajanlardan gizlenir.",

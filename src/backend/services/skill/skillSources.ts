@@ -6,7 +6,7 @@
 
 import { createHttpClient, type HttpClient, isHttpError } from '@/backend/services/http';
 import { SkillsError } from '@/shared/contracts/skills';
-import type { SkillSource } from '@/shared/data/types/skill';
+import type { Skill, SkillSource } from '@/shared/data/types/skill';
 
 import { BUNDLED_SKILLS, bundledSkillLocator, type BundledSkillDefinition } from './bundled';
 import {
@@ -112,6 +112,15 @@ export function githubSkillLocator(
   location: Pick<GithubSkillLocation, 'owner' | 'repo' | 'directory'>,
 ): string {
   return `github:${location.owner}/${location.repo}/${location.directory}`;
+}
+
+/** The origin identity an installed Skill was resolved from; equals its candidates' locator. */
+export function installedSkillLocator(
+  skill: Pick<Skill, 'folderName' | 'source' | 'sourceUrl'>,
+): string | null {
+  if (skill.source === 'builtin') return bundledSkillLocator(skill.folderName);
+  const location = skill.sourceUrl ? parseGithubSkillUrl(skill.sourceUrl) : null;
+  return location ? githubSkillLocator(location) : null;
 }
 
 function parseGithubLocator(locator: string): Omit<GithubSkillLocation, 'ref'> | null {

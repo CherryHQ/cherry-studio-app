@@ -1904,7 +1904,6 @@
   "skills.detail.author": "Auteur",
   "skills.detail.bindHint": "Activez la skill pour un agent dans les réglages de cet agent.",
   "skills.detail.checkUpdates": "Rechercher des mises à jour",
-  "skills.detail.compatibilityNote": "Note de compatibilité de l’auteur",
   "skills.detail.files": "Fichiers",
   "skills.detail.globalEnabled": "Disponible pour les agents",
   "skills.detail.globalEnabledHint": "Une fois désactivée, aucun agent ne voit cette skill, sans modifier leurs réglages.",

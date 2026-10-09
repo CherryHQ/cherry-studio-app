@@ -1904,7 +1904,6 @@
   "skills.detail.author": "Autor",
   "skills.detail.bindHint": "Ligue a skill para um agente nas definições desse agente.",
   "skills.detail.checkUpdates": "Procurar atualizações",
-  "skills.detail.compatibilityNote": "Nota de compatibilidade do autor",
   "skills.detail.files": "Ficheiros",
   "skills.detail.globalEnabled": "Disponível para os agentes",
   "skills.detail.globalEnabledHint": "Ao desligar, nenhum agente vê esta skill, sem alterar as suas definições.",

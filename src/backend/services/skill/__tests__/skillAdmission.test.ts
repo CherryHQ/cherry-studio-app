@@ -20,7 +20,6 @@ function profile(
   provenance: SkillProfile['provenance'] = 'reviewed',
 ): SkillProfile {
   return {
-    packageDigest: 'digest',
     provenance,
     requirements: {
       platforms: null,

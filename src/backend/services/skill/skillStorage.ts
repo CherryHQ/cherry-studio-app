@@ -3,7 +3,7 @@
  *
  * Layout below the selected storage generation, beside its database:
  *
- *   Data/Skills/<folderName>/revisions/<packageDigest>/<package files>
+ *   Data/Skills/<folderName>/revisions/<content hash hex>/<package files>
  *
  * Roots are resolved at access time and never persisted.
  * Staging lives under the cache directory and is disposable; publication moves
@@ -17,6 +17,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import { SkillsError } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { skillContentHashHex } from '@/shared/data/types/skill';
 
 import { isSafePackagePath, type SkillPackageFiles } from './skillPackage';
 
@@ -43,7 +44,7 @@ export type SkillStorageRoots = {
   cache: () => readonly string[];
 };
 
-export type SkillRevisionRef = { folderName: string; packageDigest: string };
+export type SkillRevisionRef = { folderName: string; contentHash: string };
 
 export interface SkillStorage {
   /** Writes a complete package into a fresh staging directory and returns its handle. */
@@ -65,8 +66,9 @@ export function createSkillStorage(fs: SkillFileSystem, roots: SkillStorageRoots
   const stagingRoot = () => [...roots.cache(), STAGING_DIRECTORY];
   const revisionPath = (ref: SkillRevisionRef) => {
     assertSegment(ref.folderName);
-    assertSegment(ref.packageDigest);
-    return [...skillsRoot(), ref.folderName, REVISIONS_DIRECTORY, ref.packageDigest];
+    const revision = skillContentHashHex(ref.contentHash);
+    assertSegment(revision);
+    return [...skillsRoot(), ref.folderName, REVISIONS_DIRECTORY, revision];
   };
 
   return {
@@ -150,7 +152,7 @@ export function createSkillStorage(fs: SkillFileSystem, roots: SkillStorageRoots
       const liveByFolder = new Map<string, Set<string>>();
       for (const ref of live) {
         const digests = liveByFolder.get(ref.folderName) ?? new Set<string>();
-        digests.add(ref.packageDigest);
+        digests.add(skillContentHashHex(ref.contentHash));
         liveByFolder.set(ref.folderName, digests);
       }
       if (fs.isDirectory(skills)) {

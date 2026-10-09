@@ -87,8 +87,8 @@ export function useSkillMutations() {
   const triggerBindings = bindingsMutation.trigger;
 
   const setSkillGlobalEnabled = useCallback(
-    (skillId: string, isGlobalEnabled: boolean) =>
-      triggerGlobal({ body: { isGlobalEnabled }, params: { skillId } }),
+    (skillId: string, isEnabled: boolean) =>
+      triggerGlobal({ body: { isEnabled }, params: { skillId } }),
     [triggerGlobal],
   );
   const replaceAgentSkills = useCallback(

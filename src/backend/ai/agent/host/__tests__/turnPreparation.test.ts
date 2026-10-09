@@ -490,7 +490,7 @@ describe('Skill turn preparation', () => {
   const activation = {
     skillId,
     name: 'notes',
-    packageDigest: 'accepted',
+    contentHash: 'accepted',
     origin: 'automatic' as const,
   };
   const scope: SkillTurnScope = {
@@ -499,7 +499,7 @@ describe('Skill turn preparation', () => {
         id: skillId,
         name: 'notes',
         description: 'Take notes',
-        packageDigest: 'accepted',
+        contentHash: 'accepted',
         folderName: 'notes',
         files: ['SKILL.md'],
         invocation: { modelInvocable: true, userInvocable: true },

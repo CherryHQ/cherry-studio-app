@@ -19,7 +19,7 @@ export type SkillInspectedPackage = {
   tags: string[];
   invocation: SkillInvocation;
   manifest: SkillManifestEntry[];
-  packageDigest: string;
+  contentHash: string;
   /** Bounded head of the instruction body, for the detail view. */
   instructionsPreview: string;
 };

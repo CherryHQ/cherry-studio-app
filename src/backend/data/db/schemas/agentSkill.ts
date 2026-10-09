@@ -5,8 +5,8 @@ import { agentTable } from './agent';
 import { agentGlobalSkillTable } from './agentGlobalSkill';
 
 /**
- * One Agent's use of one installed Skill. No row means unbound: Agents never
- * inherit the library implicitly. Global disable hides the Skill from every
+ * One Agent's use of one installed Skill, matching desktop's `agent_skill`.
+ * No row means unbound: Agents never inherit the library implicitly. Global disable hides the Skill from every
  * Agent while preserving these per-Agent preferences for later re-enablement.
  * Deleting either side removes the join; the package is never copied.
  */
@@ -19,11 +19,12 @@ export const agentSkillTable = sqliteTable(
     skillId: text()
       .notNull()
       .references(() => agentGlobalSkillTable.id, { onDelete: 'cascade' }),
-    isEnabled: integer({ mode: 'boolean' }).notNull().default(true),
+    isEnabled: integer({ mode: 'boolean' }).notNull().default(false),
     ...createUpdateTimestamps,
   },
   (t) => [
     primaryKey({ columns: [t.agentId, t.skillId] }),
+    index('agent_skill_agent_id_idx').on(t.agentId),
     index('agent_skill_skill_id_idx').on(t.skillId),
   ],
 );

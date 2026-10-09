@@ -1886,7 +1886,6 @@
   "skills.detail.author": "Tác giả",
   "skills.detail.bindHint": "Bật kỹ năng cho một tác nhân trong cài đặt của tác nhân đó.",
   "skills.detail.checkUpdates": "Kiểm tra cập nhật",
-  "skills.detail.compatibilityNote": "Ghi chú tương thích của tác giả",
   "skills.detail.files": "Tệp",
   "skills.detail.globalEnabled": "Khả dụng cho tác nhân",
   "skills.detail.globalEnabledHint": "Khi tắt, mọi tác nhân sẽ không thấy kỹ năng này nhưng cài đặt của chúng không thay đổi.",

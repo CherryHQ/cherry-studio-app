@@ -3,7 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { withBackupDatabase } from '@/backend/data/db/backupDatabase';
 import { BackupError } from '@/shared/contracts/backup';
 import { FileEntryIdSchema, filenameExtension } from '@/shared/data/types/file';
-import { SkillManifestEntrySchema } from '@/shared/data/types/skill';
+import { SkillManifestEntrySchema, skillContentHashHex } from '@/shared/data/types/skill';
 
 import { archiveFile } from './backupArchive';
 import { assertBackupPath, BACKUP_LIMITS, type BackupManifest } from './backupFormat';
@@ -74,10 +74,10 @@ export async function describeDatabase(database: File): Promise<{
     if (skillTable) {
       const skills = await db.getAllAsync<{
         folderName: string;
-        packageDigest: string;
+        contentHash: string;
         manifest: string;
       }>(
-        'SELECT folder_name AS folderName, package_digest AS packageDigest, manifest FROM agent_global_skill WHERE deleted_at IS NULL LIMIT ?',
+        'SELECT folder_name AS folderName, content_hash AS contentHash, manifest FROM agent_global_skill LIMIT ?',
         BACKUP_LIMITS.entries + 1,
       );
       if (skills.length > BACKUP_LIMITS.entries) throw new BackupError('too-large');
@@ -85,7 +85,7 @@ export async function describeDatabase(database: File): Promise<{
         const files = SkillManifestEntrySchema.array().parse(JSON.parse(skill.manifest));
         for (const file of files)
           requiredPaths.push(
-            `skills/${skill.folderName}/revisions/${skill.packageDigest}/${file.path}`,
+            `skills/${skill.folderName}/revisions/${skillContentHashHex(skill.contentHash)}/${file.path}`,
           );
         if (requiredPaths.length + 1 > BACKUP_LIMITS.entries) throw new BackupError('too-large');
       }

@@ -11,7 +11,7 @@ import { EMPTY_SKILL_SCOPE } from '../skillScope';
 const activation = {
   skillId: '00000000-0000-4000-8000-000000000123',
   name: 'notes',
-  packageDigest: 'accepted',
+  contentHash: 'accepted',
   origin: 'automatic' as const,
 };
 const toolPart = {

@@ -8,7 +8,7 @@ function entry(overrides: Partial<SkillTurnEntry> & { id: string; name: string }
   return {
     description: `${overrides.name} description`,
     invocation: { modelInvocable: true, userInvocable: true },
-    packageDigest: 'abcdef0123456789',
+    contentHash: 'abcdef0123456789',
     folderName: overrides.name,
     files: ['SKILL.md', 'references/format.md'],
     admission: { status: 'ready', reasons: [] },

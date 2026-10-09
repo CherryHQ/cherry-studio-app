@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6bcf5ca5-6778-459d-b653-a9036d3472d1",
+  "id": "1f5808d5-82d1-47f5-bb8b-2dd21e3e5561",
   "prevId": "64d53510-1ee2-4e02-a02f-54a386ac87c4",
   "tables": {
     "app_state": {
@@ -305,7 +305,7 @@
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "folder_name": {
@@ -315,15 +315,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "source_registry": {
-          "name": "source_registry",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "source_locator": {
-          "name": "source_locator",
+        "source": {
+          "name": "source",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -334,13 +327,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false
-        },
-        "source_revision": {
-          "name": "source_revision",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
           "autoincrement": false
         },
         "author": {
@@ -357,20 +343,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "license": {
-          "name": "license",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "compatibility": {
-          "name": "compatibility",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "tags": {
           "name": "tags",
           "type": "text",
@@ -379,19 +351,20 @@
           "autoincrement": false,
           "default": "'[]'"
         },
-        "entry_digest": {
-          "name": "entry_digest",
+        "content_hash": {
+          "name": "content_hash",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "package_digest": {
-          "name": "package_digest",
-          "type": "text",
+        "is_enabled": {
+          "name": "is_enabled",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": false
         },
         "manifest": {
           "name": "manifest",
@@ -415,14 +388,6 @@
           "autoincrement": false,
           "default": "'{\"modelInvocable\":true,\"userInvocable\":true}'"
         },
-        "is_global_enabled": {
-          "name": "is_global_enabled",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -436,56 +401,29 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
-        "agent_global_skill_folder_name_uniq": {
-          "name": "agent_global_skill_folder_name_uniq",
+        "agent_global_skill_folder_name_unique": {
+          "name": "agent_global_skill_folder_name_unique",
           "columns": ["folder_name"],
-          "isUnique": true,
-          "where": "\"agent_global_skill\".\"deleted_at\" IS NULL"
+          "isUnique": true
         },
-        "agent_global_skill_source_locator_uniq": {
-          "name": "agent_global_skill_source_locator_uniq",
-          "columns": ["source_locator"],
-          "isUnique": true,
-          "where": "\"agent_global_skill\".\"deleted_at\" IS NULL"
-        },
-        "agent_global_skill_name_idx": {
-          "name": "agent_global_skill_name_idx",
-          "columns": ["name"],
+        "agent_global_skill_source_idx": {
+          "name": "agent_global_skill_source_idx",
+          "columns": ["source"],
           "isUnique": false
         },
-        "agent_global_skill_enabled_idx": {
-          "name": "agent_global_skill_enabled_idx",
-          "columns": ["is_global_enabled", "deleted_at"],
+        "agent_global_skill_is_enabled_idx": {
+          "name": "agent_global_skill_is_enabled_idx",
+          "columns": ["is_enabled"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "agent_global_skill_name_check": {
-          "name": "agent_global_skill_name_check",
-          "value": "length(\"agent_global_skill\".\"name\") > 0"
-        },
-        "agent_global_skill_folder_check": {
-          "name": "agent_global_skill_folder_check",
-          "value": "length(\"agent_global_skill\".\"folder_name\") > 0"
-        },
-        "agent_global_skill_locator_check": {
-          "name": "agent_global_skill_locator_check",
-          "value": "length(\"agent_global_skill\".\"source_locator\") > 0"
-        }
-      }
+      "checkConstraints": {}
     },
     "agent_skill": {
       "name": "agent_skill",
@@ -510,7 +448,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": true
+          "default": false
         },
         "created_at": {
           "name": "created_at",
@@ -528,6 +466,11 @@
         }
       },
       "indexes": {
+        "agent_skill_agent_id_idx": {
+          "name": "agent_skill_agent_id_idx",
+          "columns": ["agent_id"],
+          "isUnique": false
+        },
         "agent_skill_skill_id_idx": {
           "name": "agent_skill_skill_id_idx",
           "columns": ["skill_id"],

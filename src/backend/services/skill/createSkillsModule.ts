@@ -39,7 +39,11 @@ import {
   validateSkillPackage,
   type ValidatedSkillPackage,
 } from './skillPackage';
-import type { SkillSourceAdapter, SkillSourceCandidate } from './skillSources';
+import {
+  installedSkillLocator,
+  type SkillSourceAdapter,
+  type SkillSourceCandidate,
+} from './skillSources';
 import type { SkillStorage } from './skillStorage';
 
 const CANDIDATE_TTL_MS = 30 * 60 * 1000;
@@ -95,7 +99,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
   }
 
   async function toPublicCandidate(candidate: SkillSourceCandidate): Promise<SkillCandidate> {
-    const installed = await deps.skills.findByLocator(candidate.source.locator);
+    const installed = await findInstalled(candidate);
     return {
       candidateId: candidate.candidateId,
       name: candidate.name,
@@ -109,13 +113,20 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     };
   }
 
+  /** The installation in this candidate's folder, when it came from the same origin. */
+  async function findInstalled(candidate: SkillSourceCandidate) {
+    const installed = await deps.skills.findByFolderName(candidate.name);
+    return installed && installedSkillLocator(installed) === candidate.source.locator
+      ? installed
+      : null;
+  }
+
   function buildProfile(
     pkg: ValidatedSkillPackage,
     reviewed: BundledSkillDefinition | null,
   ): SkillProfile {
     if (reviewed) {
       return {
-        packageDigest: pkg.packageDigest,
         provenance: 'reviewed',
         requirements: reviewed.requirements,
         workflowScope: reviewed.workflowScope,
@@ -168,7 +179,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           tags: pkg.tags,
           invocation: pkg.invocation,
           manifest: pkg.manifest,
-          packageDigest: pkg.packageDigest,
+          contentHash: pkg.contentHash,
           instructionsPreview: previewInstructions(pkg.instructions),
         },
         issues: [],
@@ -188,14 +199,12 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     return {
       name: pkg.name,
       description: pkg.description,
-      source: candidate.source,
+      source: candidate.source.registry === 'bundled' ? 'builtin' : 'marketplace',
+      sourceUrl: candidate.source.url,
       author: pkg.author ?? candidate.author,
       version: pkg.version ?? candidate.version,
-      license: pkg.license,
-      compatibility: pkg.compatibility,
       tags: pkg.tags.length > 0 ? pkg.tags : candidate.tags,
-      entryDigest: pkg.entryDigest,
-      packageDigest: pkg.packageDigest,
+      contentHash: pkg.contentHash,
       manifest: pkg.manifest,
       profile,
       invocation: pkg.invocation,
@@ -268,7 +277,14 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
 
     async install(input: InstallSkillInput, signal) {
       const candidate = requireCandidate(input.candidateId);
-      const existing = await deps.skills.findByLocator(candidate.source.locator);
+      const occupant = await deps.skills.findByFolderName(candidate.name);
+      const existing =
+        occupant && installedSkillLocator(occupant) === candidate.source.locator ? occupant : null;
+      if (occupant && !existing)
+        throw new SkillsError(
+          'already-installed',
+          `A different Skill named ${candidate.name} is already installed.`,
+        );
       if (existing && !input.agentIds?.length)
         throw new SkillsError('already-installed', 'This Skill is already installed.');
       const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
@@ -286,12 +302,12 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       signal?.throwIfAborted();
 
       if (existing) {
-        if (existing.packageDigest !== pkg.packageDigest || !deps.storage.hasRevision(existing))
+        if (existing.contentHash !== pkg.contentHash || !deps.storage.hasRevision(existing))
           throw new SkillsError(
             'already-installed',
             'An existing revision needs an explicit update or repair.',
           );
-        if (!existing.isGlobalEnabled)
+        if (!existing.isEnabled)
           throw new SkillsError(
             'admission-setup-required',
             'This Skill is globally disabled. Enable it in the Skill library first.',
@@ -306,18 +322,18 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         return existing;
       }
       const handle = await deps.storage.stage(files);
-      let folderName: string | null = null;
       try {
         const skill = await deps.db.withWriteTx(async (tx) => {
-          folderName = await deps.skills.allocateFolderNameTx(tx, pkg.name);
           signal?.throwIfAborted();
           // Publish before the row commits: a failed commit leaves an orphan
           // directory that reconciliation reclaims, never a row without bytes.
-          await deps.storage.publish(handle, { folderName, packageDigest: pkg.packageDigest });
+          await deps.storage.publish(handle, {
+            folderName: pkg.name,
+            contentHash: pkg.contentHash,
+          });
           return deps.skills.createTx(
             tx,
             toRecord(candidate, pkg, inspection.profile!),
-            folderName,
             input.agentIds ?? [],
           );
         });
@@ -326,30 +342,25 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         return skill;
       } catch (error) {
         deps.storage.discardStaging(handle);
-        // Defer orphan cleanup: another committed installation may already
-        // share a source or alias by the time this rejected transaction unwinds.
+        // Startup reconciliation removes a revision no committed row references.
         throw error;
       }
     },
 
     async update(skillId, signal): Promise<SkillUpdateResult> {
       const current = await deps.skills.getById(skillId);
-      const source = deps.sources[current.source.registry];
-      if (!source) throw new SkillsError('source-invalid', 'This Skill source is unavailable.');
+      const locator = installedSkillLocator(current);
+      if (!locator) throw new SkillsError('source-invalid', 'This Skill source is unavailable.');
       const resolved =
-        current.source.registry === 'github' && current.source.url
-          ? await deps.sources.github.resolveUrl(current.source.url, signal)
-          : await source.resolve(current.source.locator, signal);
+        current.source === 'builtin'
+          ? await deps.sources.bundled.resolve(locator, signal)
+          : await deps.sources.github.resolveUrl(current.sourceUrl!, signal);
       const candidate = remember(resolved);
       const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
       if (!pkg || !files || !inspection.profile || !inspection.admission) {
         return { outcome: 'rejected', skill: current, inspection };
       }
-      if (
-        pkg.packageDigest === current.packageDigest &&
-        candidate.source.revision === current.source.revision &&
-        deps.storage.hasRevision(current)
-      ) {
+      if (pkg.contentHash === current.contentHash && deps.storage.hasRevision(current)) {
         return { outcome: 'unchanged', skill: current };
       }
       if (inspection.admission.status !== 'ready') {
@@ -361,7 +372,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           signal?.throwIfAborted();
           await deps.storage.publish(handle, {
             folderName: current.folderName,
-            packageDigest: pkg.packageDigest,
+            contentHash: pkg.contentHash,
           });
           return deps.skills.updateRevisionTx(
             tx,
@@ -379,10 +390,10 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     },
 
     async uninstall(skillId) {
-      await deps.db.withWriteTx((tx) => deps.skills.tombstoneTx(tx, skillId));
+      await deps.db.withWriteTx((tx) => deps.skills.deleteTx(tx, skillId));
       changes.fire();
       // Existing turns keep their pinned files until startup reconciliation.
-      // The tombstone and cascading bindings already exclude every new turn.
+      // The deleted row and bindings already exclude every new turn.
     },
 
     subscribeChanges(listener) {

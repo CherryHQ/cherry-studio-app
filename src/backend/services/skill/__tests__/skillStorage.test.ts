@@ -100,7 +100,7 @@ describe('createSkillStorage', () => {
     const handle = await storage.stage(files);
     expect(snapshot().every((path) => path.startsWith('cache/SkillStaging/'))).toBe(true);
 
-    const ref = { folderName: 'brief', packageDigest: 'abc' };
+    const ref = { folderName: 'brief', contentHash: 'abc' };
     expect(storage.hasRevision(ref)).toBe(false);
     await storage.publish(handle, ref);
     expect(snapshot()).toEqual([
@@ -127,15 +127,15 @@ describe('createSkillStorage', () => {
       persistent: () => ['store'],
       cache: () => ['cache'],
     });
-    await storage.publish(await storage.stage(files), { folderName: 'brief', packageDigest: 'v1' });
-    await storage.publish(await storage.stage(files), { folderName: 'brief', packageDigest: 'v2' });
+    await storage.publish(await storage.stage(files), { folderName: 'brief', contentHash: 'v1' });
+    await storage.publish(await storage.stage(files), { folderName: 'brief', contentHash: 'v2' });
     await storage.publish(await storage.stage(files), {
       folderName: 'orphan',
-      packageDigest: 'v1',
+      contentHash: 'v1',
     });
     await storage.stage(files); // an interrupted install leaves staging behind
 
-    storage.reconcile([{ folderName: 'brief', packageDigest: 'v2' }]);
+    storage.reconcile([{ folderName: 'brief', contentHash: 'v2' }]);
     expect(snapshot()).toEqual([
       'store/Data/Skills/brief/revisions/v2/SKILL.md',
       'store/Data/Skills/brief/revisions/v2/references/format.md',

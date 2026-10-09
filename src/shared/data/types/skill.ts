@@ -24,7 +24,7 @@ export const SKILL_ACTIVE_MAX_CHARACTERS = 48_000;
 export const SkillActivationSchema = z.strictObject({
   skillId: SkillIdSchema,
   name: z.string().min(1),
-  packageDigest: z.string().min(1),
+  contentHash: z.string().min(1),
   origin: z.enum(['automatic', 'explicit']),
 });
 export type SkillActivation = z.infer<typeof SkillActivationSchema>;
@@ -42,20 +42,36 @@ export const SkillNameSchema = z
   .max(SKILL_NAME_MAX_LENGTH)
   .regex(SKILL_NAME_PATTERN);
 
+/** Desktop `content_hash` format: a versioned SHA-256 over the whole package directory. */
+export const SKILL_CONTENT_HASH_PREFIX = 'directory-sha256:';
+
+/** The hexadecimal digest, used for revision directory names and short display. */
+export function skillContentHashHex(contentHash: string): string {
+  return contentHash.startsWith(SKILL_CONTENT_HASH_PREFIX)
+    ? contentHash.slice(SKILL_CONTENT_HASH_PREFIX.length)
+    : contentHash;
+}
+
+/**
+ * Desktop `agent_global_skill.source` vocabulary. Mobile installs app-shipped
+ * recommendations (`builtin`) and GitHub-hosted packages (`marketplace`).
+ */
+export const SkillSourceKindSchema = z.enum(['builtin', 'marketplace']);
+export type SkillSourceKind = z.infer<typeof SkillSourceKindSchema>;
+
 export const SkillSourceRegistrySchema = z.enum(['bundled', 'github']);
 export type SkillSourceRegistry = z.infer<typeof SkillSourceRegistrySchema>;
 
 /**
- * Where an installed package came from. `locator` is the stable origin
- * identity (`bundled:<name>` or `github:<owner>/<repo>/<skill root>`); two
- * packages with the same display name but different locators are different
- * Skills and never retarget each other.
+ * Where a discovered candidate comes from. `locator` is its origin identity
+ * (`bundled:<name>` or `github:<owner>/<repo>/<skill root>`); an installed
+ * Skill derives the same identity from its source and URL.
  */
 export const SkillSourceSchema = z.strictObject({
   registry: SkillSourceRegistrySchema,
   locator: z.string().min(1),
   url: z.string().nullable(),
-  /** The exact upstream revision the accepted package was taken from. */
+  /** The exact upstream revision the candidate is pinned to. */
   revision: z.string().min(1),
 });
 export type SkillSource = z.infer<typeof SkillSourceSchema>;
@@ -74,9 +90,8 @@ export const SkillExecutionRequirementSchema = z.enum([
 export type SkillExecutionRequirement = z.infer<typeof SkillExecutionRequirementSchema>;
 
 /**
- * The application-owned compatibility profile. It is bound to a whole-package
- * digest, so a changed reference file invalidates it even when `SKILL.md` is
- * unchanged. Profiles describe requirements; the capability owners decide
+ * The application-owned compatibility profile, stored with the package it was
+ * derived from. Profiles describe requirements; the capability owners decide
  * whether those requirements are met right now.
  */
 export const SkillRequirementsSchema = z.strictObject({
@@ -98,7 +113,6 @@ export const SkillProfileProvenanceSchema = z.enum(['reviewed', 'analyzed']);
 export type SkillProfileProvenance = z.infer<typeof SkillProfileProvenanceSchema>;
 
 export const SkillProfileSchema = z.strictObject({
-  packageDigest: z.string().min(1),
   provenance: SkillProfileProvenanceSchema,
   requirements: SkillRequirementsSchema,
   /** Human summary of the reviewed workflow scope; null for analyzed profiles. */
@@ -155,26 +169,25 @@ export const SkillInvocationSchema = z.strictObject({
 });
 export type SkillInvocation = z.infer<typeof SkillInvocationSchema>;
 
-/** One installed library entry (`agent_global_skill`). */
+/** One installed library entry (`agent_global_skill`), field-aligned with desktop. */
 export const SkillSchema = z.strictObject({
   id: SkillIdSchema,
   name: SkillNameSchema,
-  description: z.string().min(1).max(SKILL_DESCRIPTION_MAX_LENGTH),
-  /** Generated, unique storage alias; not publisher identity and not the display name. */
+  description: z.string().max(SKILL_DESCRIPTION_MAX_LENGTH),
+  /** Storage directory name, equal to the package name and unique like desktop. */
   folderName: z.string().min(1),
-  source: SkillSourceSchema,
+  source: SkillSourceKindSchema,
+  /** URL the package is re-resolved from for updates; null for built-in packages. */
+  sourceUrl: z.string().nullable(),
   author: z.string().nullable(),
   version: z.string().nullable(),
-  license: z.string().nullable(),
-  /** The specification's optional prose; informative only. */
-  compatibility: z.string().nullable(),
   tags: z.array(z.string().min(1)),
-  entryDigest: z.string().min(1),
-  packageDigest: z.string().min(1),
+  contentHash: z.string().min(1),
   manifest: z.array(SkillManifestEntrySchema),
   profile: SkillProfileSchema,
   invocation: SkillInvocationSchema,
-  isGlobalEnabled: z.boolean(),
+  /** Global enablement; Agent enablement lives on the binding. */
+  isEnabled: z.boolean(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });

@@ -1904,7 +1904,6 @@
   "skills.detail.author": "Autor",
   "skills.detail.bindHint": "Activează skill-ul pentru un agent din setările acelui agent.",
   "skills.detail.checkUpdates": "Caută actualizări",
-  "skills.detail.compatibilityNote": "Nota de compatibilitate a autorului",
   "skills.detail.files": "Fișiere",
   "skills.detail.globalEnabled": "Disponibil pentru agenți",
   "skills.detail.globalEnabledHint": "Dacă este dezactivat, niciun agent nu mai vede acest skill, fără a le schimba setările.",

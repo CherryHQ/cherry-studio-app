@@ -560,7 +560,7 @@ export async function prepareResolvedTurn(
     const skillSelections: SkillActivation[] = skills.selected.map(({ entry }) => ({
       skillId: entry.id,
       name: entry.name,
-      packageDigest: entry.packageDigest,
+      contentHash: entry.contentHash,
       origin: 'explicit',
     }));
     const textIndex = userParts.findIndex((part) => part.type === 'text');

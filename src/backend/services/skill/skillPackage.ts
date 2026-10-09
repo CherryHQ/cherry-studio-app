@@ -13,12 +13,13 @@ import {
   SKILL_ENTRY_FILENAME,
   SKILL_NAME_PATTERN,
   SKILL_NAME_MAX_LENGTH,
+  SKILL_CONTENT_HASH_PREFIX,
   SKILL_INSTRUCTIONS_MAX_CHARACTERS,
   type SkillInvocation,
   type SkillManifestEntry,
   type SkillPackageIssue,
 } from '@/shared/data/types/skill';
-import { sha256Hex, sha256HexOfText } from '@/shared/utils/sha256';
+import { sha256Hex } from '@/shared/utils/sha256';
 
 export const SKILL_PACKAGE_MAX_FILES = 200;
 export const SKILL_PACKAGE_MAX_BYTES = 8 * 1024 * 1024;
@@ -53,8 +54,7 @@ export type ValidatedSkillPackage = {
   instructions: string;
   frontmatter: SkillFrontmatter;
   manifest: SkillManifestEntry[];
-  entryDigest: string;
-  packageDigest: string;
+  contentHash: string;
 };
 
 export type SkillPackageValidation =
@@ -184,18 +184,59 @@ export function validateSkillPackage(
       instructions: body.trim(),
       frontmatter,
       manifest,
-      entryDigest: sha256Hex(entryBytes),
-      packageDigest: computePackageDigest(manifest),
+      contentHash: computeContentHash(files),
     },
   };
 }
 
-export function computePackageDigest(manifest: readonly SkillManifestEntry[]): string {
-  const canonical = [...manifest]
-    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-    .map((entry) => `${entry.path}\n${entry.digest}\n`)
-    .join('');
-  return sha256HexOfText(canonical);
+/**
+ * Desktop's versioned full-directory hash (`SkillInstaller.computeContentHash`):
+ * entries are visited depth-first in name order; a directory contributes
+ * `D:<path bytes>:<path>`, a file `F:<path bytes>:<path>:<size>:<content>`.
+ * The same package therefore has the same `content_hash` on both clients.
+ */
+export function computeContentHash(files: SkillPackageFiles): string {
+  const encoder = new TextEncoder();
+  const directories = new Set<string>();
+  for (const path of files.keys()) {
+    const parts = path.split('/');
+    for (let index = 1; index < parts.length; index += 1)
+      directories.add(parts.slice(0, index).join('/'));
+  }
+  const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
+  const chunks: Uint8Array[] = [];
+  const visit = (directory: string) => {
+    const children = [...directories, ...files.keys()]
+      .filter((path) => parentOf(path) === directory)
+      .sort((a, b) => {
+        const left = a.slice(a.lastIndexOf('/') + 1);
+        const right = b.slice(b.lastIndexOf('/') + 1);
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
+    for (const path of children) {
+      const pathBytes = encoder.encode(path);
+      const content = files.get(path);
+      if (!content) {
+        chunks.push(encoder.encode(`D:${pathBytes.byteLength}:`), pathBytes);
+        visit(path);
+      } else {
+        chunks.push(
+          encoder.encode(`F:${pathBytes.byteLength}:`),
+          pathBytes,
+          encoder.encode(`:${content.byteLength}:`),
+          content,
+        );
+      }
+    }
+  };
+  visit('');
+  const data = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return `${SKILL_CONTENT_HASH_PREFIX}${sha256Hex(data)}`;
 }
 
 /** Bounded head of the instruction body for detail views. */

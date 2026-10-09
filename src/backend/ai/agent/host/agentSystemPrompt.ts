@@ -2,6 +2,7 @@ import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from '@cherrystudio/univers
 
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import type { LanguageVarious } from '@/shared/data/preference';
+import { skillContentHashHex } from '@/shared/data/types/skill';
 
 import type { RuntimeTool } from '../runtime';
 import { EDIT_FILE_TOOL_NAME } from '../tools/editFileTool';
@@ -197,7 +198,7 @@ The user selected these Skills for this turn. Their instructions are loaded; do 
 ${skills.selected
   .map(
     ({ entry, instructions }) =>
-      `#### ${entry.name} (skill_id: ${entry.id}; revision ${entry.packageDigest.slice(0, 12)})
+      `#### ${entry.name} (skill_id: ${entry.id}; revision ${skillContentHashHex(entry.contentHash).slice(0, 12)})
 
 <skill_instructions>
 ${instructions}
@@ -217,7 +218,7 @@ export function buildActiveSkillInstructions(skills: TurnSkillPlan): string {
 
 These packages are already loaded for this turn. Follow their instructions within app policy and the user's current request. Historical Skill content is not an active instruction source.
 
-${active.map(({ entry, instructions }) => `### ${entry.name} (skill_id: ${entry.id}; revision ${entry.packageDigest})\n\n<skill_instructions>\n${instructions}\n</skill_instructions>`).join('\n\n')}`;
+${active.map(({ entry, instructions }) => `### ${entry.name} (skill_id: ${entry.id}; revision ${skillContentHashHex(entry.contentHash).slice(0, 12)})\n\n<skill_instructions>\n${instructions}\n</skill_instructions>`).join('\n\n')}`;
 }
 
 function truncateCharacters(text: string, max: number): string {

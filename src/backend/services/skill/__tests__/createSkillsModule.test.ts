@@ -61,19 +61,18 @@ function createFakes() {
     ...record,
     id,
     folderName,
-    isGlobalEnabled: true,
+    isEnabled: true,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   });
   const skills = {
-    findByLocator: async (locator: string) =>
-      [...rows.values()].find((s) => s.source.locator === locator) ?? null,
+    findByFolderName: async (folderName: string) =>
+      [...rows.values()].find((s) => s.folderName === folderName) ?? null,
     getById: async (id: string) => {
       const row = rows.get(id);
       if (!row) throw new Error('not found');
       return row;
     },
-    allocateFolderNameTx: async (_tx: unknown, name: string) => name,
     applyBindingUpdatesTx: async (
       _tx: unknown,
       agentId: string,
@@ -85,14 +84,9 @@ function createFakes() {
           .map((update) => `${agentId}:${update.skillId}`),
       );
     },
-    createTx: async (
-      _tx: unknown,
-      record: SkillInstallRecord,
-      folderName: string,
-      agentIds: readonly string[],
-    ) => {
+    createTx: async (_tx: unknown, record: SkillInstallRecord, agentIds: readonly string[]) => {
       const id = `00000000-0000-4000-8000-00000000000${nextId++}`;
-      const skill = toSkill(record, id, folderName);
+      const skill = toSkill(record, id, record.name);
       rows.set(id, skill);
       fakes.bound.push(...agentIds.map((agentId) => `${agentId}:${id}`));
       return skill;
@@ -102,13 +96,11 @@ function createFakes() {
       rows.set(id, skill);
       return skill;
     },
-    tombstoneTx: async (_tx: unknown, id: string) => {
-      const skill = rows.get(id)!;
+    deleteTx: async (_tx: unknown, id: string) => {
       rows.delete(id);
-      return skill;
     },
     listStorageReferences: async () =>
-      [...rows.values()].map((s) => ({ folderName: s.folderName, packageDigest: s.packageDigest })),
+      [...rows.values()].map((s) => ({ folderName: s.folderName, contentHash: s.contentHash })),
   } as unknown as AgentGlobalSkillService;
   const storage: SkillStorage = {
     stage: async () => {
@@ -119,7 +111,7 @@ function createFakes() {
     discardStaging: (handle) => void staged.delete(handle),
     publish: async (handle, ref) => {
       if (!staged.delete(handle)) throw new Error('missing staging');
-      published.push(`${ref.folderName}/${ref.packageDigest}`);
+      published.push(`${ref.folderName}/${ref.contentHash}`);
     },
     hasRevision: () => true,
     readFile: async () => null,
@@ -236,7 +228,7 @@ describe('createSkillsModule', () => {
       folderName: 'notes',
       profile: { provenance: 'reviewed' },
     });
-    expect(fakes.published).toEqual([`notes/${installed.packageDigest}`]);
+    expect(fakes.published).toEqual([`notes/${installed.contentHash}`]);
     expect(fakes.bound).toEqual([`agent-1:${installed.id}`]);
     expect(changes).toHaveBeenCalledTimes(1);
     await expect(module.install({ candidateId: notes!.candidateId })).rejects.toMatchObject({
@@ -283,9 +275,9 @@ describe('createSkillsModule', () => {
     const updated = await module.update(installed.id);
     expect(updated).toMatchObject({
       outcome: 'updated',
-      skill: { id: installed.id, source: { revision: '2' } },
+      skill: { id: installed.id, source: 'builtin' },
     });
-    expect(updated.skill.packageDigest).not.toBe(installed.packageDigest);
+    expect(updated.skill.contentHash).not.toBe(installed.contentHash);
     expect(fakes.published).toHaveLength(2);
 
     definitions[0] = {
@@ -296,7 +288,7 @@ describe('createSkillsModule', () => {
     };
     expect(await module.update(installed.id)).toMatchObject({
       outcome: 'rejected',
-      skill: { source: { revision: '2' } },
+      skill: { contentHash: updated.skill.contentHash },
     });
     expect(fakes.published).toHaveLength(2);
 
@@ -370,6 +362,6 @@ describe('createSkillsModule', () => {
         },
       },
     });
-    expect((await fakes.skills.getById(installed.id)).packageDigest).toBe(installed.packageDigest);
+    expect((await fakes.skills.getById(installed.id)).contentHash).toBe(installed.contentHash);
   });
 });

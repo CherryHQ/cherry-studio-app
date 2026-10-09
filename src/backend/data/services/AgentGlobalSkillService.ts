@@ -29,7 +29,7 @@ import {
   type SkillManifestEntry,
   type SkillProfile,
   SkillSchema,
-  type SkillSource,
+  type SkillSourceKind,
 } from '@/shared/data/types/skill';
 
 import { timestampToISO } from './utils/rowMappers';
@@ -38,14 +38,12 @@ import { timestampToISO } from './utils/rowMappers';
 export type SkillInstallRecord = {
   name: string;
   description: string;
-  source: SkillSource;
+  source: SkillSourceKind;
+  sourceUrl: string | null;
   author: string | null;
   version: string | null;
-  license: string | null;
-  compatibility: string | null;
   tags: string[];
-  entryDigest: string;
-  packageDigest: string;
+  contentHash: string;
   manifest: SkillManifestEntry[];
   profile: SkillProfile;
   invocation: SkillInvocation;
@@ -72,25 +70,18 @@ export function rowToSkill(row: AgentGlobalSkillRow): Skill {
   return SkillSchema.parse({
     id: row.id,
     name: row.name,
-    description: row.description,
+    description: row.description ?? '',
     folderName: row.folderName,
-    source: {
-      registry: row.sourceRegistry,
-      locator: row.sourceLocator,
-      url: row.sourceUrl,
-      revision: row.sourceRevision,
-    },
+    source: row.source,
+    sourceUrl: row.sourceUrl,
     author: row.author,
     version: row.version,
-    license: row.license,
-    compatibility: row.compatibility,
     tags: row.tags,
-    entryDigest: row.entryDigest,
-    packageDigest: row.packageDigest,
+    contentHash: row.contentHash,
     manifest: row.manifest,
     profile: row.profile,
     invocation: row.invocation,
-    isGlobalEnabled: row.isGlobalEnabled,
+    isEnabled: row.isEnabled,
     createdAt: timestampToISO(row.createdAt),
     updatedAt: timestampToISO(row.updatedAt),
   });
@@ -148,23 +139,23 @@ export class AgentGlobalSkillService {
   }
 
   async getById(skillId: string): Promise<Skill> {
-    const row = await this.findLiveRow(this.db, skillId);
+    const [row] = await this.db
+      .select()
+      .from(agentGlobalSkillTable)
+      .where(eq(agentGlobalSkillTable.id, skillId))
+      .limit(1);
     if (!row) {
       throw DataApiErrorFactory.notFound('Skill', skillId);
     }
     return rowToSkill(row);
   }
 
-  async findByLocator(locator: string): Promise<Skill | null> {
+  /** Folder names are package names; like desktop, one folder holds one installation. */
+  async findByFolderName(folderName: string): Promise<Skill | null> {
     const [row] = await this.db
       .select()
       .from(agentGlobalSkillTable)
-      .where(
-        and(
-          eq(agentGlobalSkillTable.sourceLocator, locator),
-          isNull(agentGlobalSkillTable.deletedAt),
-        ),
-      )
+      .where(eq(agentGlobalSkillTable.folderName, folderName))
       .limit(1);
     return row ? rowToSkill(row) : null;
   }
@@ -176,7 +167,7 @@ export class AgentGlobalSkillService {
    */
   async list(params: ListSkillsQueryParams): Promise<ListSkillsResult> {
     const query = ListSkillsQuerySchema.parse(params);
-    const conditions: SQL[] = [isNull(agentGlobalSkillTable.deletedAt)];
+    const conditions: SQL[] = [];
     if (query.search) {
       const pattern = escapeLike(query.search);
       conditions.push(
@@ -198,7 +189,7 @@ export class AgentGlobalSkillService {
     const agentId = query.agentId;
     if (query.scope === 'composer' && agentId) {
       conditions.push(
-        eq(agentGlobalSkillTable.isGlobalEnabled, true),
+        eq(agentGlobalSkillTable.isEnabled, true),
         inArray(agentGlobalSkillTable.id, enabledBindingSkillIds(agentId)),
         sql`json_extract(${agentGlobalSkillTable.invocation}, '$.userInvocable') = 1`,
       );
@@ -248,10 +239,10 @@ export class AgentGlobalSkillService {
       const [updated] = await tx
         .update(agentGlobalSkillTable)
         .set({
-          isGlobalEnabled: dto.isGlobalEnabled,
+          isEnabled: dto.isEnabled,
           updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt),
         })
-        .where(and(eq(agentGlobalSkillTable.id, skillId), isNull(agentGlobalSkillTable.deletedAt)))
+        .where(eq(agentGlobalSkillTable.id, skillId))
         .returning();
       if (!updated) {
         throw DataApiErrorFactory.notFound('Skill', skillId);
@@ -303,9 +294,7 @@ export class AgentGlobalSkillService {
     const liveRows = await tx
       .select({ id: agentGlobalSkillTable.id })
       .from(agentGlobalSkillTable)
-      .where(
-        and(inArray(agentGlobalSkillTable.id, skillIds), isNull(agentGlobalSkillTable.deletedAt)),
-      );
+      .where(inArray(agentGlobalSkillTable.id, skillIds));
     const live = new Set(liveRows.map((row) => row.id));
     const missing = skillIds.filter((id) => !live.has(id));
     if (missing.length > 0) {
@@ -339,8 +328,7 @@ export class AgentGlobalSkillService {
       .from(agentGlobalSkillTable)
       .where(
         and(
-          eq(agentGlobalSkillTable.isGlobalEnabled, true),
-          isNull(agentGlobalSkillTable.deletedAt),
+          eq(agentGlobalSkillTable.isEnabled, true),
           inArray(agentGlobalSkillTable.id, enabledBindingSkillIds(agentId)),
         ),
       )
@@ -359,25 +347,19 @@ export class AgentGlobalSkillService {
   async createTx(
     tx: Database,
     record: SkillInstallRecord,
-    folderName: string,
     agentIds: readonly string[] = [],
   ): Promise<Skill> {
     const [existing] = await tx
       .select({ id: agentGlobalSkillTable.id })
       .from(agentGlobalSkillTable)
-      .where(
-        and(
-          eq(agentGlobalSkillTable.sourceLocator, record.source.locator),
-          isNull(agentGlobalSkillTable.deletedAt),
-        ),
-      )
+      .where(eq(agentGlobalSkillTable.folderName, record.name))
       .limit(1);
     if (existing) {
-      throw DataApiErrorFactory.conflict('Skill is already installed', record.source.locator);
+      throw DataApiErrorFactory.conflict('Skill is already installed', record.name);
     }
     const [row] = await tx
       .insert(agentGlobalSkillTable)
-      .values({ ...toInsertRow(record), folderName })
+      .values({ ...toInsertRow(record), folderName: record.name, isEnabled: true })
       .returning();
     if (!row) throw new Error('Skill insert returned no row.');
     if (agentIds.length > 0) {
@@ -389,7 +371,7 @@ export class AgentGlobalSkillService {
     return rowToSkill(row);
   }
 
-  /** Switches the accepted revision in place, keeping id, alias, enablement, and bindings. */
+  /** Switches the accepted revision in place, keeping id, folder, enablement, and bindings. */
   async updateRevisionTx(
     tx: Database,
     skillId: string,
@@ -401,7 +383,7 @@ export class AgentGlobalSkillService {
         ...toInsertRow(record),
         updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt),
       })
-      .where(and(eq(agentGlobalSkillTable.id, skillId), isNull(agentGlobalSkillTable.deletedAt)))
+      .where(eq(agentGlobalSkillTable.id, skillId))
       .returning();
     if (!row) {
       throw DataApiErrorFactory.notFound('Skill', skillId);
@@ -409,63 +391,26 @@ export class AgentGlobalSkillService {
     return rowToSkill(row);
   }
 
-  /** Tombstones the installation and clears its bindings; bytes are cleaned afterwards. */
-  async tombstoneTx(tx: Database, skillId: string): Promise<Skill> {
-    const [row] = await tx
-      .update(agentGlobalSkillTable)
-      .set({
-        deletedAt: Date.now(),
-        updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt),
-      })
-      .where(and(eq(agentGlobalSkillTable.id, skillId), isNull(agentGlobalSkillTable.deletedAt)))
-      .returning();
-    if (!row) {
-      throw DataApiErrorFactory.notFound('Skill', skillId);
-    }
+  /** Deletes the installation and its bindings; startup reconciliation removes the bytes. */
+  async deleteTx(tx: Database, skillId: string): Promise<void> {
     await tx.delete(agentSkillTable).where(eq(agentSkillTable.skillId, skillId));
-    return rowToSkill(row);
+    const [row] = await tx
+      .delete(agentGlobalSkillTable)
+      .where(eq(agentGlobalSkillTable.id, skillId))
+      .returning({ id: agentGlobalSkillTable.id });
+    if (!row) {
+      throw DataApiErrorFactory.notFound('Skill', skillId);
+    }
   }
 
-  /** Aliases and digests in use by live rows, for storage reconciliation. */
-  async listStorageReferences(): Promise<{ folderName: string; packageDigest: string }[]> {
+  /** Folders and hashes in use, for storage reconciliation. */
+  async listStorageReferences(): Promise<{ folderName: string; contentHash: string }[]> {
     return this.db
       .select({
         folderName: agentGlobalSkillTable.folderName,
-        packageDigest: agentGlobalSkillTable.packageDigest,
+        contentHash: agentGlobalSkillTable.contentHash,
       })
-      .from(agentGlobalSkillTable)
-      .where(isNull(agentGlobalSkillTable.deletedAt));
-  }
-
-  /** Live aliases only: revisions are digest-named, so a reinstall never overwrites a pinned one. */
-  async allocateFolderNameTx(tx: Database, name: string): Promise<string> {
-    const rows = await tx
-      .select({ folderName: agentGlobalSkillTable.folderName })
-      .from(agentGlobalSkillTable)
-      .where(
-        and(
-          isNull(agentGlobalSkillTable.deletedAt),
-          or(
-            eq(agentGlobalSkillTable.folderName, name),
-            sql`${agentGlobalSkillTable.folderName} LIKE ${`${name}-%`} ESCAPE '\\'`,
-          ),
-        ),
-      );
-    const taken = new Set(rows.map((row) => row.folderName));
-    if (!taken.has(name)) return name;
-    for (let suffix = 2; ; suffix += 1) {
-      const candidate = `${name}-${suffix}`;
-      if (!taken.has(candidate)) return candidate;
-    }
-  }
-
-  private async findLiveRow(tx: Database, skillId: string): Promise<AgentGlobalSkillRow | null> {
-    const [row] = await tx
-      .select()
-      .from(agentGlobalSkillTable)
-      .where(and(eq(agentGlobalSkillTable.id, skillId), isNull(agentGlobalSkillTable.deletedAt)))
-      .limit(1);
-    return row ?? null;
+      .from(agentGlobalSkillTable);
   }
 
   private async assertAgentWritable(tx: Database, agentId: string): Promise<void> {
@@ -491,21 +436,16 @@ function enabledBindingSkillIds(agentId: string) {
 
 function toInsertRow(
   record: SkillInstallRecord,
-): Omit<InsertAgentGlobalSkillRow, 'folderName' | 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> {
+): Omit<InsertAgentGlobalSkillRow, 'folderName' | 'id' | 'createdAt' | 'updatedAt' | 'isEnabled'> {
   return {
     name: record.name,
     description: record.description,
-    sourceRegistry: record.source.registry,
-    sourceLocator: record.source.locator,
-    sourceUrl: record.source.url,
-    sourceRevision: record.source.revision,
+    source: record.source,
+    sourceUrl: record.sourceUrl,
     author: record.author,
     version: record.version,
-    license: record.license,
-    compatibility: record.compatibility,
     tags: record.tags,
-    entryDigest: record.entryDigest,
-    packageDigest: record.packageDigest,
+    contentHash: record.contentHash,
     manifest: record.manifest,
     profile: record.profile,
     invocation: record.invocation,

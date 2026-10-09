@@ -3,7 +3,11 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { SkillActivationSchema, SkillIdSchema } from '@/shared/data/types/skill';
+import {
+  SkillActivationSchema,
+  SkillIdSchema,
+  skillContentHashHex,
+} from '@/shared/data/types/skill';
 
 import { GenericToolPart } from './GenericToolPart';
 import { getToolName, isRecord, type ToolMessagePart } from './toolPartState';
@@ -26,7 +30,7 @@ export function SkillToolPart({ part }: { part: ToolMessagePart }) {
       testID="skill-load-receipt"
     >
       <Text className="text-sm text-muted-foreground" selectable>
-        {activation.data.name} · {activation.data.packageDigest.slice(0, 12)}
+        {activation.data.name} · {skillContentHashHex(activation.data.contentHash).slice(0, 12)}
       </Text>
     </MessagePart.Tool>
   );

@@ -18,23 +18,20 @@ const installed: Skill = {
   name: 'notes',
   description: 'Take notes',
   folderName: 'notes',
-  source: { registry: 'bundled', locator: 'bundled:notes', revision: '1', url: null },
+  source: 'marketplace',
+  sourceUrl: 'https://github.com/o/r/blob/main/notes/SKILL.md',
   author: null,
   version: null,
-  license: null,
-  compatibility: null,
   tags: [],
-  entryDigest: 'e'.repeat(64),
-  packageDigest: 'a'.repeat(64),
+  contentHash: 'a'.repeat(64),
   manifest: [{ path: 'SKILL.md', size: 1, digest: 'e'.repeat(64) }],
   invocation: { modelInvocable: true, userInvocable: true },
   profile: {
-    packageDigest: 'a'.repeat(64),
     provenance: 'reviewed',
     workflowScope: 'Notes',
     requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
   },
-  isGlobalEnabled: true,
+  isEnabled: true,
   createdAt: '2026-09-23T00:00:00.000Z',
   updatedAt: '2026-09-23T00:00:00.000Z',
 };
@@ -42,7 +39,12 @@ const candidate: SkillCandidate = {
   candidateId: 'issued',
   name: installed.name,
   description: installed.description,
-  source: { ...installed.source, url: 'https://github.com/o/r/blob/main/notes/SKILL.md' },
+  source: {
+    registry: 'github',
+    locator: 'github:o/r/notes',
+    url: installed.sourceUrl,
+    revision: 'commit',
+  },
   author: null,
   version: null,
   tags: [],
@@ -55,7 +57,7 @@ const checked: SkillTurnScope = {
       id: installed.id,
       name: installed.name,
       description: installed.description,
-      packageDigest: installed.packageDigest,
+      contentHash: installed.contentHash,
       folderName: installed.folderName,
       invocation: installed.invocation,
       files: ['SKILL.md'],
@@ -153,10 +155,10 @@ describe('conversation Skill installation', () => {
     const expanding = createExpandingSkillScope(checked);
     const changed = {
       ...checked,
-      entries: [{ ...checked.entries[0]!, packageDigest: 'b'.repeat(64) }],
+      entries: [{ ...checked.entries[0]!, contentHash: 'b'.repeat(64) }],
     };
     expect(expanding.include(changed, installed.id, 'b'.repeat(64))).toBe(false);
-    expect(expanding.include(checked, 'another-skill', installed.packageDigest)).toBe(false);
+    expect(expanding.include(checked, 'another-skill', installed.contentHash)).toBe(false);
     const blocked: SkillTurnScope = {
       ...checked,
       entries: [
@@ -167,7 +169,7 @@ describe('conversation Skill installation', () => {
         },
       ],
     };
-    expect(expanding.include(blocked, 'blocked', installed.packageDigest)).toBe(false);
+    expect(expanding.include(blocked, 'blocked', installed.contentHash)).toBe(false);
     expect(expanding.scope.entries).toEqual(checked.entries);
   });
 

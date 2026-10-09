@@ -12,7 +12,7 @@ import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { skillStatusTone } from '@/frontend/utils/skillStatus';
 import { isSkillsError } from '@/shared/contracts/skills';
-import type { SkillListItem } from '@/shared/data/types/skill';
+import { type SkillListItem, skillContentHashHex } from '@/shared/data/types/skill';
 
 import { SkillPage } from './SkillPage';
 import { SkillReasonList } from './SkillReasonList';
@@ -120,12 +120,12 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
                 label: t('skills.detail.checkUpdates'),
                 onPress: () => void checkForUpdates(),
               },
-              ...(skill.source.url
+              ...(skill.sourceUrl
                 ? [
                     {
                       id: 'skill-source',
                       label: t('skills.detail.openSource'),
-                      onPress: () => void openExternalUrl(skill.source.url!),
+                      onPress: () => void openExternalUrl(skill.sourceUrl!),
                     },
                   ]
                 : []),
@@ -172,7 +172,7 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           disabled={isSavingGlobal}
           label={t('skills.detail.globalEnabled')}
           onValueChange={(value) => void toggleGlobal(value)}
-          value={skill.isGlobalEnabled}
+          value={skill.isEnabled}
         />
       </Section>
       <Section title={t('skills.detail.about')}>
@@ -180,7 +180,7 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           label={t('skills.detail.source')}
           trailing={
             <Text className="text-sm text-muted-foreground">
-              {t(`skills.source.${skill.source.registry}`)}
+              {t(skill.source === 'builtin' ? 'skills.source.bundled' : 'skills.source.github')}
             </Text>
           }
         />
@@ -200,7 +200,7 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           label={t('skills.detail.revision')}
           trailing={
             <Text className="text-sm text-muted-foreground">
-              {skill.packageDigest.slice(0, 12)}
+              {skillContentHashHex(skill.contentHash).slice(0, 12)}
             </Text>
           }
         />
@@ -219,15 +219,6 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           }
         />
       </Section>
-      {skill.compatibility ? (
-        <Section title={t('skills.detail.compatibilityNote')}>
-          <Section.Item>
-            <Text className="text-sm text-muted-foreground" selectable>
-              {skill.compatibility}
-            </Text>
-          </Section.Item>
-        </Section>
-      ) : null}
       <Text className="px-1 text-muted-foreground text-xs">{t('skills.detail.bindHint')}</Text>
       {isBusy ? (
         <Button disabled size="sm" variant="secondary">

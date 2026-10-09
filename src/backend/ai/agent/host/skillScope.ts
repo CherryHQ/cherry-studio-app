@@ -35,7 +35,7 @@ export type SkillTurnEntry = {
   description: string;
   invocation: SkillInvocation;
   /** The accepted revision pinned for this turn. */
-  packageDigest: string;
+  contentHash: string;
   folderName: string;
   /** Package-relative paths, from the accepted manifest. */
   files: readonly string[];
@@ -126,7 +126,7 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
           )
         )
           continue;
-        const ref = { folderName: skill.folderName, packageDigest: skill.packageDigest };
+        const ref = { folderName: skill.folderName, contentHash: skill.contentHash };
         if (!deps.storage.hasRevision(ref)) {
           logger.warn('Installed Skill package is missing; excluding it from the turn', {
             skillId: skill.id,
@@ -138,7 +138,7 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
           name: skill.name,
           description: skill.description,
           invocation: skill.invocation,
-          packageDigest: skill.packageDigest,
+          contentHash: skill.contentHash,
           folderName: skill.folderName,
           files: skill.manifest.map((entry) => entry.path),
           admission,
@@ -186,12 +186,12 @@ export function createExpandingSkillScope(initial: SkillTurnScope) {
     scope,
     include(checked: SkillTurnScope, skillId: string, digest: string) {
       const entry = checked.entries.find(
-        (item) => item.id === skillId && item.packageDigest === digest,
+        (item) => item.id === skillId && item.contentHash === digest,
       );
       if (
         !entry ||
         !isSkillUsable(entry.admission) ||
-        (entries.has(skillId) && entries.get(skillId)!.packageDigest !== digest)
+        (entries.has(skillId) && entries.get(skillId)!.contentHash !== digest)
       )
         return false;
       entries.set(skillId, entry);

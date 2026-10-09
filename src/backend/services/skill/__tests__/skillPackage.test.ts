@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { computePackageDigest, parseSkillEntry, validateSkillPackage } from '../skillPackage';
+import { computeContentHash, parseSkillEntry, validateSkillPackage } from '../skillPackage';
 
 const encoder = new TextEncoder();
 
@@ -45,19 +45,32 @@ describe('validateSkillPackage', () => {
       'SKILL.md',
       'references/format.md',
     ]);
-    expect(result.package.entryDigest).toBe(createHash('sha256').update(ENTRY).digest('hex'));
+    expect(result.package.manifest[0]!.digest).toBe(
+      createHash('sha256').update(ENTRY).digest('hex'),
+    );
 
     const changedReference = validateSkillPackage(
       files({ 'SKILL.md': ENTRY, 'references/format.md': '# Format v2\n' }),
     );
-    expect(changedReference.ok && changedReference.package.entryDigest).toBe(
-      result.package.entryDigest,
+    expect(changedReference.ok && changedReference.package.contentHash).not.toBe(
+      result.package.contentHash,
     );
-    expect(changedReference.ok && changedReference.package.packageDigest).not.toBe(
-      result.package.packageDigest,
+  });
+
+  it('matches the desktop directory content hash byte for byte', () => {
+    // Reference value from desktop SkillInstaller.computeDirectoryHash over the same tree on disk.
+    const encoder = new TextEncoder();
+    const tree = new Map(
+      Object.entries({
+        'Z.md': 'z',
+        'SKILL.md': '---\nname: pkg\ndescription: d\n---\nUse references/a.md.\n',
+        'references/deep/\u00fc.md': '\u00e9 \u4e2d\u6587\n',
+        'assets/empty.txt': '',
+        'references/a.md': '# A\n',
+      }).map(([path, text]) => [path, encoder.encode(text)]),
     );
-    expect(computePackageDigest(result.package.manifest.toReversed())).toBe(
-      result.package.packageDigest,
+    expect(computeContentHash(tree)).toBe(
+      'directory-sha256:47aa140032743ebb242a0432f60f4e94a506fd92abca25d954bfe0ac0b516c30',
     );
   });
 

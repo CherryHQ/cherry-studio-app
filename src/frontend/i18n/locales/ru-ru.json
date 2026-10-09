@@ -1913,7 +1913,6 @@
   "skills.detail.author": "Автор",
   "skills.detail.bindHint": "Включите навык для агента в настройках этого агента.",
   "skills.detail.checkUpdates": "Проверить обновления",
-  "skills.detail.compatibilityNote": "Примечание автора о совместимости",
   "skills.detail.files": "Файлы",
   "skills.detail.globalEnabled": "Доступен агентам",
   "skills.detail.globalEnabledHint": "Если выключить, навык скроется у всех агентов без изменения их настроек.",

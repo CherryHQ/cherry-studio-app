@@ -1895,7 +1895,6 @@
   "skills.detail.author": "Author",
   "skills.detail.bindHint": "Turn the Skill on for an Agent in that Agent's settings.",
   "skills.detail.checkUpdates": "Check for updates",
-  "skills.detail.compatibilityNote": "Compatibility note from the author",
   "skills.detail.files": "Files",
   "skills.detail.globalEnabled": "Available to Agents",
   "skills.detail.globalEnabledHint": "Turning this off hides the Skill from every Agent without changing their settings.",

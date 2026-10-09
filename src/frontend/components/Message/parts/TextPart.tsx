@@ -8,7 +8,7 @@ import { getPluginInlineIcon } from '@/frontend/utils/pluginIcons';
 import { splitPluginReferences } from '@/frontend/utils/pluginReferences';
 import { type MentionSegment, splitToolMentions } from '@/frontend/utils/toolMentions';
 import type { CherryMessagePart } from '@/shared/data/types/message';
-import { SkillActivationSchema } from '@/shared/data/types/skill';
+import { SkillActivationSchema, skillContentHashHex } from '@/shared/data/types/skill';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import type { ResolvedCitationText } from './citations';
@@ -120,7 +120,7 @@ export function TextPart({
         {skillSelections.map((selection) => (
           <Text key={selection.skillId} className="text-xs text-muted-foreground">
             {t('skills.activity.selected', { name: selection.name })} ·{' '}
-            {selection.packageDigest.slice(0, 12)}
+            {skillContentHashHex(selection.contentHash).slice(0, 12)}
           </Text>
         ))}
       </View>

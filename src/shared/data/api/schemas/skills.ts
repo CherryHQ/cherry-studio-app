@@ -45,7 +45,7 @@ export const ListSkillsResponseSchema = z.strictObject({
 export type ListSkillsResponse = z.infer<typeof ListSkillsResponseSchema>;
 
 export const UpdateSkillSchema = z.strictObject({
-  isGlobalEnabled: z.boolean(),
+  isEnabled: z.boolean(),
 });
 export type UpdateSkillDto = z.infer<typeof UpdateSkillSchema>;
 

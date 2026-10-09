@@ -2,8 +2,7 @@
  * The curated recommendation list bundled with this build.
  *
  * Each entry is a complete package expressed as TypeScript data plus a
- * reviewed compatibility profile bound to the package digest computed at
- * install time. Bundled packages go through the same validation, admission,
+ * reviewed compatibility profile. Bundled packages go through the same validation, admission,
  * staging, and publication path as remote packages; bundling only decides the
  * source, never the outcome.
  */

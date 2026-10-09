@@ -102,7 +102,7 @@ function InstalledSkillRow({ onPress, skill }: { onPress: () => void; skill: Ski
             {skill.description}
           </Text>
           <Text className={`text-xs ${STATUS_TEXT_CLASS[tone]}`}>
-            {skill.isGlobalEnabled ? t(`skills.status.${status}`) : t('skills.status.disabled')}
+            {skill.isEnabled ? t(`skills.status.${status}`) : t('skills.status.disabled')}
           </Text>
         </View>
       }

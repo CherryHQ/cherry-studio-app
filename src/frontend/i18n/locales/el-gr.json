@@ -1895,7 +1895,6 @@
   "skills.detail.author": "Δημιουργός",
   "skills.detail.bindHint": "Ενεργοποιήστε τη δεξιότητα για έναν πράκτορα από τις ρυθμίσεις αυτού του πράκτορα.",
   "skills.detail.checkUpdates": "Έλεγχος για ενημερώσεις",
-  "skills.detail.compatibilityNote": "Σημείωση συμβατότητας από τον δημιουργό",
   "skills.detail.files": "Αρχεία",
   "skills.detail.globalEnabled": "Διαθέσιμη στους πράκτορες",
   "skills.detail.globalEnabledHint": "Αν απενεργοποιηθεί, κανένας πράκτορας δεν βλέπει αυτήν τη δεξιότητα, χωρίς να αλλάξουν οι ρυθμίσεις τους.",

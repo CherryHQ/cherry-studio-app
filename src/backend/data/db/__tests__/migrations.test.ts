@@ -645,8 +645,8 @@ describe('bundled SQLite migrations', () => {
         ]),
       );
       expect(getForeignKeys(database, 'agent_global_skill')).toEqual([]);
-      expect(getSchemaSql(database, 'index', 'agent_global_skill_source_locator_uniq')).toContain(
-        'deleted_at" IS NULL',
+      expect(getSchemaSql(database, 'index', 'agent_global_skill_folder_name_unique')).toContain(
+        '(`folder_name`)',
       );
       // Invariant 1 (agent-protocol.md) is a database constraint: at most one
       // unsettled assistant message per session.
@@ -898,27 +898,24 @@ function readMigrationJournal(): MigrationJournal {
 }
 
 describe('Skill tables', () => {
-  test('keep one live installation per source and drop bindings with either side', () => {
+  test('match desktop defaults, keep one installation per folder, and drop bindings with either side', () => {
     const database = new DatabaseSync(':memory:');
     try {
       database.exec('PRAGMA foreign_keys = ON');
       applyMigrations(database);
-      const insertSkill = (id: string, folder: string, locator: string, deletedAt: string) =>
+      const insertSkill = (id: string, folder: string) =>
         database.exec(`
           INSERT INTO agent_global_skill (
-            id, name, description, folder_name, source_registry, source_locator, source_revision,
-            entry_digest, package_digest, manifest, profile, created_at, updated_at, deleted_at
-          ) VALUES ('${id}', 'brief', 'Write a brief', '${folder}', 'github', '${locator}', 'abc',
-            'e', 'p', '[]', '{}', 1, 1, ${deletedAt});
+            id, name, folder_name, source, content_hash, manifest, profile, created_at, updated_at
+          ) VALUES ('${id}', 'brief', '${folder}', 'marketplace', 'directory-sha256:a', '[]', '{}', 1, 1);
         `);
-      insertSkill('skill-a', 'brief', 'github:a/b/brief', 'NULL');
-      // A tombstoned installation releases both its alias and its locator.
-      insertSkill('skill-old', 'brief-2', 'github:c/d/brief', '5');
-      insertSkill('skill-new', 'brief-2', 'github:c/d/brief', 'NULL');
-      expect(() => insertSkill('skill-dup', 'brief-3', 'github:a/b/brief', 'NULL')).toThrow(
-        /UNIQUE/,
-      );
-      expect(() => insertSkill('skill-dup', 'brief', 'github:x/y/brief', 'NULL')).toThrow(/UNIQUE/);
+      insertSkill('skill-a', 'brief');
+      insertSkill('skill-new', 'notes');
+      expect(() => insertSkill('skill-dup', 'brief')).toThrow(/UNIQUE/);
+      // Desktop defaults: new rows and bindings start disabled unless the writer enables them.
+      expect(
+        database.prepare('SELECT DISTINCT is_enabled, tags FROM agent_global_skill').all(),
+      ).toEqual([{ is_enabled: 0, tags: '[]' }]);
 
       database.exec(`
         INSERT INTO agent (id, name, order_key, created_at, updated_at)
@@ -927,8 +924,8 @@ describe('Skill tables', () => {
         VALUES ('agent', 'skill-a', 1, 1), ('agent', 'skill-new', 1, 1);
       `);
       expect(database.prepare('SELECT is_enabled FROM agent_skill').all()).toEqual([
-        { is_enabled: 1 },
-        { is_enabled: 1 },
+        { is_enabled: 0 },
+        { is_enabled: 0 },
       ]);
       expect(() =>
         database.exec(

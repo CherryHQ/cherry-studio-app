@@ -10,25 +10,18 @@ import { createTestDb, type TestDb } from './_testDb';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
-function record(
-  name: string,
-  locator: string,
-  description = 'Draft a short brief',
-): SkillInstallRecord {
+function record(name: string, description = 'Draft a short brief'): SkillInstallRecord {
   return {
     name,
     description,
-    source: { registry: 'github', locator, url: null, revision: 'abc' },
+    source: 'marketplace',
+    sourceUrl: `https://github.com/x/y/blob/main/${name}/SKILL.md`,
     author: null,
     version: null,
-    license: null,
-    compatibility: null,
     tags: [],
-    entryDigest: `entry-${name}`,
-    packageDigest: `package-${name}`,
+    contentHash: `directory-sha256:${name}`,
     manifest: [{ path: 'SKILL.md', size: 10, digest: 'd' }],
     profile: {
-      packageDigest: `package-${name}`,
       provenance: 'analyzed',
       requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
       workflowScope: null,
@@ -58,20 +51,14 @@ describe('AgentGlobalSkillService', () => {
   });
 
   async function install(input: SkillInstallRecord, agentIds: string[] = []) {
-    return testDb.dbService.withWriteTx(async (tx) => {
-      const folderName = await service.allocateFolderNameTx(tx, input.name);
-      return service.createTx(tx, input, folderName, agentIds);
-    });
+    return testDb.dbService.withWriteTx((tx) => service.createTx(tx, input, agentIds));
   }
 
-  it('keeps same-named packages from different publishers distinct and searchable', async () => {
-    const first = await install(record('brief', 'github:a/b/brief'));
-    const second = await install(record('brief', 'github:c/d/brief', 'Weekly status summary'));
-    expect(first.folderName).toBe('brief');
-    expect(second.folderName).toBe('brief-2');
-    await expect(install(record('brief', 'github:a/b/brief'))).rejects.toMatchObject({
-      code: 'CONFLICT',
-    });
+  it('stores one installation per folder name, enabled, and searches literally', async () => {
+    const first = await install(record('brief'));
+    const second = await install(record('status', 'Weekly status summary'));
+    expect(first).toMatchObject({ folderName: 'brief', source: 'marketplace', isEnabled: true });
+    await expect(install(record('brief'))).rejects.toMatchObject({ code: 'CONFLICT' });
 
     const page = await service.list({ search: 'status', scope: 'library' });
     expect(page.items.map((item) => item.skill.id)).toEqual([second.id]);
@@ -81,7 +68,7 @@ describe('AgentGlobalSkillService', () => {
 
   it('paginates deterministically by name then id', async () => {
     for (const name of ['c-skill', 'a-skill', 'b-skill']) {
-      await install(record(name, `github:x/y/${name}`));
+      await install(record(name));
     }
     const first = await service.list({ scope: 'library', limit: 2 });
     expect(first.items.map((item) => item.skill.name)).toEqual(['a-skill', 'b-skill']);
@@ -94,16 +81,16 @@ describe('AgentGlobalSkillService', () => {
   it('scopes Agent and composer reads by binding, global enablement, and invocation policy', async () => {
     const agent = await agentService.create({ name: 'Writer' });
     const other = await agentService.create({ name: 'Other' });
-    const bound = await install(record('bound', 'github:x/y/bound'), [agent.id]);
+    const bound = await install(record('bound'), [agent.id]);
     const manual = await install(
       {
-        ...record('manual', 'github:x/y/manual'),
+        ...record('manual'),
         invocation: { modelInvocable: true, userInvocable: false },
       },
       [agent.id],
     );
-    const unbound = await install(record('unbound', 'github:x/y/unbound'));
-    const disabled = await install(record('disabled', 'github:x/y/disabled'), [agent.id]);
+    const unbound = await install(record('unbound'));
+    const disabled = await install(record('disabled'), [agent.id]);
     await service.replaceBindings(agent.id, {
       updates: [{ skillId: disabled.id, isEnabled: false }],
     });
@@ -127,7 +114,7 @@ describe('AgentGlobalSkillService', () => {
     expect(await service.listUsableForAgent(other.id)).toEqual([]);
 
     // Global disable hides the Skill without rewriting the Agent's preference.
-    await service.update(bound.id, { isGlobalEnabled: false });
+    await service.update(bound.id, { isEnabled: false });
     expect(await service.listUsableForAgent(agent.id)).toMatchObject([
       { skill: { id: manual.id } },
     ]);
@@ -145,8 +132,8 @@ describe('AgentGlobalSkillService', () => {
 
   it('applies binding updates in place, rejects missing Skills, and clears bindings on uninstall', async () => {
     const agent = await agentService.create({ name: 'Writer' });
-    const first = await install(record('first', 'github:x/y/first'), [agent.id]);
-    const second = await install(record('second', 'github:x/y/second'));
+    const first = await install(record('first'), [agent.id]);
+    const second = await install(record('second'));
     const result = await service.replaceBindings(agent.id, {
       updates: [{ skillId: second.id, isEnabled: true }],
     });
@@ -161,34 +148,34 @@ describe('AgentGlobalSkillService', () => {
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
-    await testDb.dbService.withWriteTx((tx) => service.tombstoneTx(tx, second.id));
+    await testDb.dbService.withWriteTx((tx) => service.deleteTx(tx, second.id));
     expect((await service.listBindings(agent.id)).items).toEqual([]);
     await expect(service.getById(second.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    expect(await service.findByLocator('github:x/y/second')).toBeNull();
-    // The locator is free again after the tombstone.
-    const reinstalled = await install(record('second', 'github:x/y/second'));
+    expect(await service.findByFolderName('second')).toBeNull();
+    // The folder is free again after uninstall.
+    const reinstalled = await install(record('second'));
     expect(reinstalled.id).not.toBe(second.id);
     expect(reinstalled.folderName).toBe('second');
   });
 
   it('switches the accepted revision without changing identity or bindings', async () => {
     const agent = await agentService.create({ name: 'Writer' });
-    const skill = await install(record('first', 'github:x/y/first'), [agent.id]);
+    const skill = await install(record('first'), [agent.id]);
     const updated = await testDb.dbService.withWriteTx((tx) =>
       service.updateRevisionTx(tx, skill.id, {
-        ...record('first', 'github:x/y/first', 'Revised'),
-        packageDigest: 'package-v2',
+        ...record('first', 'Revised'),
+        contentHash: 'directory-sha256:v2',
       }),
     );
     expect(updated).toMatchObject({
       id: skill.id,
       folderName: 'first',
       description: 'Revised',
-      packageDigest: 'package-v2',
+      contentHash: 'directory-sha256:v2',
     });
     expect(await service.listUsableForAgent(agent.id)).toMatchObject([{ skill: { id: skill.id } }]);
     expect(await service.listStorageReferences()).toEqual([
-      { folderName: 'first', packageDigest: 'package-v2' },
+      { folderName: 'first', contentHash: 'directory-sha256:v2' },
     ]);
   });
 });

@@ -14,6 +14,7 @@ import { decodeUtf8 } from '@/backend/services/skill';
 import {
   SKILL_ACTIVE_MAX_CHARACTERS,
   SKILL_INSTRUCTIONS_MAX_CHARACTERS,
+  skillContentHashHex,
 } from '@/shared/data/types/skill';
 
 import type { SkillTurnEntry, SkillTurnScope } from '../../host/skillScope';
@@ -147,11 +148,11 @@ export function createSkillTools(
         const receipt = {
           status: 'ok',
           ...summarize(entry),
-          revision: entry.packageDigest.slice(0, 12),
+          revision: skillContentHashHex(entry.contentHash).slice(0, 12),
           activation: {
             skillId: entry.id,
             name: entry.name,
-            packageDigest: entry.packageDigest,
+            contentHash: entry.contentHash,
             origin: explicit.has(entry.id) ? 'explicit' : 'automatic',
           },
         };

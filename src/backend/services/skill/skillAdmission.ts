@@ -170,7 +170,7 @@ const SCRIPT_PATH = /^scripts\/|\.(?:py|sh|bash|zsh|js|mjs|ts|rb|ps1)$/i;
  * unavailable command simply cannot be followed, and loading grants nothing.
  */
 export function analyzeSkillRequirements(
-  pkg: Pick<ValidatedSkillPackage, 'instructions' | 'manifest' | 'packageDigest'>,
+  pkg: Pick<ValidatedSkillPackage, 'instructions' | 'manifest'>,
   pluginToolCatalog: ReadonlyMap<string, ReadonlySet<string>>,
 ): SkillProfile {
   const text = pkg.instructions;
@@ -208,7 +208,6 @@ export function analyzeSkillRequirements(
     pluginTools,
   };
   return {
-    packageDigest: pkg.packageDigest,
     provenance: 'analyzed',
     requirements,
     workflowScope: null,

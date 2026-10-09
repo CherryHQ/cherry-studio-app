@@ -103,8 +103,7 @@ export function createSkillManagementTools(options: {
         try {
           const scope = await options.source.resolve({ ...options.context, signal });
           available =
-            options.include(scope, skill.id, skill.packageDigest) &&
-            skill.invocation.modelInvocable;
+            options.include(scope, skill.id, skill.contentHash) && skill.invocation.modelInvocable;
         } catch {
           /* The committed installation remains valid even if turn refresh fails. */
         }
@@ -113,7 +112,7 @@ export function createSkillManagementTools(options: {
             status: 'installed',
             skill_id: skill.id,
             name: skill.name,
-            source: skill.source.url,
+            source: skill.sourceUrl,
             availableThisTurn: available,
             next: available
               ? 'Call load_skill to continue the user task.'

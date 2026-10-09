@@ -27,14 +27,12 @@ function skill(
     name: id,
     description: `${id} description`,
     folderName: id,
-    source: { registry: 'bundled', locator: `bundled:${id}`, url: null, revision: '1' },
+    source: 'builtin',
+    sourceUrl: null,
     author: null,
     version: null,
-    license: null,
-    compatibility: null,
     tags: [],
-    entryDigest: 'e',
-    packageDigest: `digest-${id}`,
+    contentHash: `digest-${id}`,
     manifest: [
       {
         path: 'SKILL.md',
@@ -43,7 +41,6 @@ function skill(
       },
     ],
     profile: {
-      packageDigest: `digest-${id}`,
       provenance,
       requirements: {
         platforms: null,
@@ -55,7 +52,7 @@ function skill(
       workflowScope: null,
     },
     invocation: { modelInvocable: true, userInvocable: true },
-    isGlobalEnabled: true,
+    isEnabled: true,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
@@ -87,10 +84,10 @@ describe('createSkillScopeSource', () => {
       },
       storage: {
         hasRevision: ({ folderName }) => folderName !== 'missing',
-        readFile: async ({ folderName, packageDigest }, path) =>
+        readFile: async ({ folderName, contentHash }, path) =>
           path === 'SKILL.md'
             ? encoder.encode(
-                `---\nname: ${folderName}\ndescription: d\n---\nBody of ${packageDigest}`,
+                `---\nname: ${folderName}\ndescription: d\n---\nBody of ${contentHash}`,
               )
             : null,
       },
