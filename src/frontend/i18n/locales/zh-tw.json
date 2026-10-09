@@ -222,6 +222,7 @@
   "chat.builtinTool.calendar.listCalendars": "獲取日曆列表",
   "chat.builtinTool.calendar.listEvents": "查詢日程",
   "chat.builtinTool.calendar.updateEvent": "修改日程",
+  "chat.builtinTool.code.runJs": "執行 JavaScript",
   "chat.builtinTool.file.characters": "字元",
   "chat.builtinTool.file.created": "檔案已創建",
   "chat.builtinTool.file.edit": "編輯檔案",

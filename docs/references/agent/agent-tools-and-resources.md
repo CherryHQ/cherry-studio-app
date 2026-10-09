@@ -2,13 +2,14 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-The system catalog ships device calendar and reminders, location, web search and fetch,
-image generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
-`{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
-permission, app configuration, and the Agent's capability-group deny-list, then combines it with
+The system catalog ships device calendar and reminders, location, web search and fetch, image
+generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+`run_js`, all using the settled `ToolRef` and `{ value, artifacts }` contracts. For each turn the
+Host resolves that catalog against model tool support, platform, OS permission, app
+configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-location, agents) are enabled per Agent in the editor; the three file tools belong to every
-turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
+location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+belong to every turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -228,7 +229,8 @@ Configuration changes therefore still affect the next turn only.
 
 Mobile does not expose the desktop `tool_exec` JavaScript executor, a shell, workspace, dynamic
 extension, or unrestricted filesystem tool. The TypeScript signatures are model guidance only and
-are never compiled or executed.
+are never compiled or executed. `run_js` is not a substitute for `tool_exec`: its sandbox cannot
+call tools, MCP, or any application capability.
 
 ## Controlled File Ledger
 
@@ -485,6 +487,48 @@ Both tools run without approval because they have no destructive form, and the H
 to models that support function calling. Handing tools to a model that cannot call them fails the
 whole turn. Implementation: `src/backend/ai/agent/tools/`.
 
+### JavaScript Sandbox
+
+`run_js` lets the model compute exactly instead of estimating: arithmetic, statistics, dates,
+counting, sorting, parsing, and data transformation. It takes a `code` string, run as the body of an
+async function, plus optional `timeout_ms` and `max_output_tokens`, and returns
+`{ status: 'ok', result?, logs? }` or `{ status: 'error', kind, message, logs? }`, where `kind` is
+`syntax`, `exception`, `timeout`, `memory`, `unsettled`, `cancelled`, or `internal`. The result is
+the returned value's JSON; Map and Set become object and array and BigInt becomes a string. The output
+budget follows Pi's codemode tool; mobile execution has a bounded deadline and shared concurrency
+limit.
+
+Isolation is structural rather than a permission check. [`modules/js-sandbox`](../../../modules/js-sandbox/README.md)
+creates a fresh QuickJS runtime for every call, on its own native thread, and destroys it when the
+script ends. Its global object holds the standard ECMAScript built-ins, `atob`/`btoa`,
+`queueMicrotask`, `performance.now()`, and a captured `console`; there is no `Intl`,
+so locale arguments are ignored. Timers, modules, network, files, and every application binding are
+absent, and `eval` or `Function` only produce more code inside the same runtime. The tool runs as
+`auto` without an Agent capability group and requires only that the model supports function calling
+and the client includes the native module; older clients omit the tool. Every call starts fresh;
+inputs must be included in the code and results are retained through tool-result messages.
+
+- **Output.** Output within `max_output_tokens` (default 10,000, estimated at four characters per
+  token) keeps the structured form above. Longer output becomes one `output` text that keeps its
+  start and end around a count of the removed tokens, and the full text — the returned value's JSON,
+  then the console output — is saved as a generated `run_js-output.txt` managed file. The result
+  carries its `fullOutputFileEntryId`, and the file is granted to the turn so `read_file` can page
+  through it. The native side captures at most 500 KiB of each, which keeps a saved output within
+  `read_file`'s source limit.
+- **Limits.** Execution defaults to 5 seconds; `timeout_ms` can request at most 30 seconds.
+  Across all turns, the sandbox service runs at most two scripts concurrently and queues the rest
+  in arrival order. Queue waiting does not consume the execution deadline. Cancelling a queued call
+  removes it; cancelling a running call releases the caller immediately but holds its slot until
+  native cleanup finishes. QuickJS interrupts bytecode and regular expressions, and JavaScript
+  cannot catch the interruption. Each runtime's heap is limited to 64 MiB; an allocation past it
+  fails inside the script. Native stacks and output copies consume additional memory, and the
+  sandbox shares the app process, so these limits do not provide process-level crash isolation.
+  Recursion stops with a catchable `RangeError` about 7,000 calls deep.
+
+The Host adds a prompt section asking the model to use the tool for exact computation, to copy the
+data it needs into the code because the sandbox cannot read files or tool results itself, and to page
+through a saved output instead of rerunning the script.
+
 ### Skill Boundary
 
 - General Mobile Skill persistence and binding resolution are not implemented. Bundled plugin
@@ -517,9 +561,9 @@ limits are application constants rather than user settings in Version 1.
 Cherry Desktop proves the useful semantics: Pi owns its tool loop, MCP tools are adapted into Pi,
 tools are disabled and approved by application policy, and skills are injected explicitly. Mobile
 ports those semantics but not the Electron/Node execution surface. Desktop workspaces, shell tools,
-JavaScript tool execution, arbitrary filesystem paths, local MCP processes, and executable Skill
-trees are explicit mobile exclusions. Streamable HTTP MCP and device/application capability
-adapters are semantic ports.
+tool-calling JavaScript execution, arbitrary filesystem paths, local MCP processes, and executable
+Skill trees are explicit mobile exclusions; `run_js` computes in isolation and calls nothing.
+Streamable HTTP MCP and device/application capability adapters are semantic ports.
 
 The PC Agent Controller reuses the normalized application presentation of a tool or
 approval, but PC tools remain owned and executed by the PC Agent Runtime. The mobile adapter maps

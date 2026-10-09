@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "JsSandbox.podspec",
+    "modules": ["JsSandboxModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.jssandbox.JsSandboxModule"]
+  }
+}

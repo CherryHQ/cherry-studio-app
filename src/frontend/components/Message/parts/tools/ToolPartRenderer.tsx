@@ -9,6 +9,7 @@ import { GenericToolPart } from './GenericToolPart';
 import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import { isMetaToolPart, MetaToolPartRenderer } from './metaTool/MetaToolPartRenderer';
 import { isReadFileToolPart, ReadFileToolPart } from './ReadFileToolPart';
+import { isRunJsToolPart, RunJsToolPart } from './RunJsToolPart';
 import {
   isAgentMutationToolPart,
   isProviderWebSearchToolPart,
@@ -67,6 +68,10 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
 
   if (isReadFileToolPart(part)) {
     return <ReadFileToolPart part={part} />;
+  }
+
+  if (isRunJsToolPart(part)) {
+    return <RunJsToolPart part={part} />;
   }
 
   if (isUserQuestionToolPart(part)) {
