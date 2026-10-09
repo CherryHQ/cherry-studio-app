@@ -1,5 +1,14 @@
 # Cherry Agent Protocol
 
+The experimental [Pi Durable migration](./pi-durable-migration.md) adopts native forks, queued
+input, and archive. Existing local sessions retain their business identity when their history is
+handed to Pi. In the experimental branch, regenerating a completed answer returns a new Session for
+navigation, while retrying a failed answer stays in place; deleting a turn hides it and omits it from
+later model context; session removal archives after explicit stop. Ordinary submissions can queue
+while an answer streams; retries, deletion, and forks still require idle. The per-turn local
+behavior descriptions below are historical where they conflict with the migration document. The PC
+adapter keeps its existing operations and transport.
+
 > Status: Version 1 is as-built for device-local execution. A PC Agent Controller extension is
 > implemented as the separate application-facing version 2 contract; device verification is pending.
 

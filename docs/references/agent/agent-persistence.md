@@ -1,6 +1,14 @@
 # Agent Persistence
 
-> Status: as-built. Mobile Agent execution is device-local only.
+The experimental [Pi Durable migration](./pi-durable-migration.md) is wired into the local production
+entry on this branch. Pi owns new model history and execution state in `pi-agent.db`. Cherry keeps
+business metadata in `cherry.db`; the legacy message table is a fixed display prefix after one-time
+handoff, and it also holds text-only full-text index rows for settled native messages.
+`AgentTranscriptReader` supplies native history pagination and selection. Backup format v2 captures
+both databases in one storage generation.
+
+> Status: legacy schema and per-turn behavior reference below. The migration document takes
+> precedence for current experimental authority, recovery, archive, and backup behavior.
 
 This document defines the durable SQLite schema and production adapter behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agent/sessionStore/AgentSessionStore.ts) port. It

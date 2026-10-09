@@ -1,6 +1,12 @@
 # Cherry Agent Runtime
 
-> Status: as-built. Mobile Agent execution is device-local only.
+> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.1.0.
+
+The experimental branch has replaced this per-turn production contract with upstream-owned durable
+history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describes the active
+persistent contract, storage, tools, presentation, and backup. The baseline below explains the
+legacy history that the one-time reader hands to Pi; it does not govern new conversation execution.
+Model probes retain a short-lived, isolated request interface and use the same native loop in memory.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation

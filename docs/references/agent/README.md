@@ -1,11 +1,12 @@
 # Agent Architecture
 
-> Status: local Version 1 is as-built. The separate PC Agent Controller version 2 is implemented;
-> PC/mobile interoperability verification is pending.
+> Status: the local experimental branch uses Pi Durable 1.1.0; authorized runtime and device
+> acceptance is pending. The separate PC Agent Controller version 2 keeps its existing behavior.
 
 This directory documents Cherry Mobile's conversation execution boundary. For mobile-originated
-local execution, Cherry Mobile owns Agents, Sessions, persistence, application capabilities, and
-the frontend protocol. Pi is the sole local conversation engine.
+local execution, Cherry Mobile owns Agents, business Sessions, application capabilities, and the
+frontend protocol. Pi is the sole local conversation engine and owns execution/history persistence.
+[Pi Durable Migration](./pi-durable-migration.md) is the current experimental specification.
 
 ## Boundaries
 
@@ -13,19 +14,20 @@ the frontend protocol. Pi is the sole local conversation engine.
 Agent Client
     ↕ Agent Protocol
 Mobile Agent Host
-    ↕ Agent Runtime contract
-Pi Runtime
-    ↕ immutable RuntimeTool snapshot
+    ↕ DurableAgentRuntime contract
+Pi Harness → pi-agent.db
+    ↕ current RuntimeTool callbacks
 Application capability adapters
 ```
 
 - **Agent Protocol** is the frontend/backend application contract for Sessions, turns, messages,
   commands, snapshots, events, approvals, and errors.
-- **Mobile Agent Host** owns Agent lookup, Session persistence, turn admission, attachment
-  resolution, immutable tool snapshots, live projection, terminal persistence, and restart
-  reconciliation.
-- **Agent Runtime** receives prepared model, history, input, and tools, then emits normalized events.
-  It does not know application rows, SQLite, Data API, React, Expo, or navigation.
+- **Mobile Agent Host** owns Agent lookup, business metadata repair, admission policy, attachment
+  resolution, current tool authorization, and live projection. It does not persist another transcript
+  or rebuild context for ordinary submissions.
+- **Durable Agent Runtime** owns upstream admission, observation, history, configuration, forks,
+  abort, reset, and recovery. Portable SQL capabilities are injected; it does not import application
+  rows, Data API, React, Expo, or navigation. Pi types stay private to its implementation.
 - **Pi Runtime** is the only local Runtime implementation. Runtime independence is a dependency
   boundary, not an implementation-selection feature.
 - **Capability adapters** own built-in device tools, HTTP MCP, web access, image generation, managed
@@ -72,8 +74,9 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 - Execution target is always `local`; there is no local engine registry or persisted Runtime
   choice. The PC Agent Controller is not a second local Runtime or a current execution
   target.
-- One Session permits at most one active turn, while different Sessions may run concurrently.
-- Mobile SQLite is the complete record for mobile-originated Sessions. The retired
+- One Session permits at most one active turn and a native follow-up queue; different Sessions may
+  run concurrently. Busy submissions must retain the active model/options/tools configuration.
+- The paired Cherry and Pi SQLite databases are the complete local record. The retired
   Assistant/Topic/Message tables and Chat Runtime are not compatibility paths.
 - The Host combines the shared system capability catalog, the Agent's capability-group deny-list,
   and the current Agent's persisted MCP bindings into a frozen tool snapshot before each turn. An
@@ -92,17 +95,19 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
   managed-file, and approval authority.
 - Managed image and bounded text input are resolved by the Host before execution. Arbitrary paths
   and tool JSON cannot expand the turn's controlled resource ledger.
-- Pi produces and consumes opaque, versioned context checkpoints; the Host validates, persists, and
-  replays them without interpreting their payload.
-- Route unmount removes frontend observation but does not cancel a Host-owned turn. Process death
-  cannot resume a local turn; startup reconciliation marks unfinished work interrupted.
+- Pi manages context, compaction, and durable task recovery. Cherry checkpoint/replay readers are
+  used only for one-time legacy handoff.
+- Route unmount removes frontend observation. Ordinary close and OS expiry preserve native work;
+  startup/foreground reconstruct current dependencies before resume. Explicit stop is terminal.
+  Unsafe interrupted tools retain an interruption outcome instead of repeating their effects.
 
 ## Current Boundaries
 
 - Mobile Skill persistence, Agent-to-Skill bindings, loading, and prompt projection are not
   implemented.
 - Office generation, inspection, and patching tools are not implemented.
-- Local turns have no durable resume after process death.
+- Native recovery is implemented in source and both platforms bundle; provider, on-device Hermes,
+  lifecycle, and backup acceptance remain unverified.
 - Provider coverage and model capability remain explicit; unsupported combinations fail before
   execution rather than selecting a second conversation runtime.
 
@@ -110,9 +115,10 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 
 | Document | Source of truth for |
 | --- | --- |
+| [Pi Durable Migration](./pi-durable-migration.md) | Active experimental runtime, history authority, lifecycle, legacy handoff, operations, and backup |
 | [Agent Protocol](./agent-protocol.md) | Application values, operations, events, snapshots, errors, and invariants |
-| [Agent Runtime](./agent-runtime.md) | Host-private execution input/output, Pi binding, lifetime, and conformance |
-| [Agent Persistence](./agent-persistence.md) | SQLite schema, store adapter, deletion semantics, and current limitations |
+| [Agent Runtime](./agent-runtime.md) | Historical per-turn contract |
+| [Agent Persistence](./agent-persistence.md) | Cherry business/legacy schema and historical store behavior |
 | [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | System capabilities, MCP bindings, approvals, managed files, and artifacts |
 | [Built-In MCP Integrations](./built-in-mcp-design.md) | Current GitHub, Amap and Feishu cloud MCP connectors, Feishu browser authorization and the six-platform scope |
 | [Built-In MCP Roadmap](./built-in-mcp-roadmap.md) | Implemented authorization and bundled guides; future multi-account, HTTP reuse and Skill designs |
