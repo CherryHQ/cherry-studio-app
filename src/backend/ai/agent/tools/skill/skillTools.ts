@@ -29,12 +29,6 @@ export const SEARCH_LOCAL_SKILLS_TOOL_NAME = 'search_local_skills';
 export const LOAD_SKILL_TOOL_NAME = 'load_skill';
 export const LIST_SKILL_FILES_TOOL_NAME = 'list_skill_files';
 export const READ_SKILL_FILE_TOOL_NAME = 'read_skill_file';
-export const SKILL_TOOL_NAMES: readonly string[] = [
-  SEARCH_LOCAL_SKILLS_TOOL_NAME,
-  LOAD_SKILL_TOOL_NAME,
-  LIST_SKILL_FILES_TOOL_NAME,
-  READ_SKILL_FILE_TOOL_NAME,
-];
 
 export const SKILL_SEARCH_PAGE_SIZE = 20;
 const SKILL_FILE_MAX_BYTES = 1_048_576;
@@ -270,7 +264,7 @@ export function createSkillTools(
             lineCount: window.lineCount,
             totalLines: window.totalLines,
             truncated: window.truncated,
-            ...(window.lineTruncated ? { lineTruncated: true } : {}),
+            ...(window.nextOffset !== undefined ? { lineTruncated: true } : {}),
             text: window.text,
           },
           artifacts: [],

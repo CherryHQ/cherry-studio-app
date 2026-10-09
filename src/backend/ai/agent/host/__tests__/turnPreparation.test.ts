@@ -562,14 +562,11 @@ describe('Skill turn preparation', () => {
         textInput(),
         new AbortController().signal,
       );
-      if (isCurrent) {
-        expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
-        expect(plan.runtimeContextCheckpoint).toEqual(checkpoint);
-      } else {
-        expect(plan.skills.active?.size).toBe(0);
-        expect(plan.runtimeContextCheckpoint).toBeNull();
-        expect(harness.loadRuntimeTurnContext).toHaveBeenCalledWith(SESSION_ID, null);
-      }
+      // A Skill that is no longer usable simply stops contributing; compaction is kept.
+      expect(plan.skills.active?.get(skillId)?.instructions).toBe(
+        isCurrent ? 'Use a concise outline.' : undefined,
+      );
+      expect(plan.runtimeContextCheckpoint).toEqual(checkpoint);
     },
   );
 });

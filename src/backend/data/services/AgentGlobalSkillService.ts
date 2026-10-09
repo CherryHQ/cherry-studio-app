@@ -79,7 +79,6 @@ export function rowToSkill(row: AgentGlobalSkillRow): Skill {
       locator: row.sourceLocator,
       url: row.sourceUrl,
       revision: row.sourceRevision,
-      ...(row.profile.discovery ? { discovery: row.profile.discovery } : {}),
     },
     author: row.author,
     version: row.version,
@@ -429,31 +428,27 @@ export class AgentGlobalSkillService {
 
   /** Aliases and digests in use by live rows, for storage reconciliation. */
   async listStorageReferences(): Promise<{ folderName: string; packageDigest: string }[]> {
-    const rows = await this.db
+    return this.db
       .select({
         folderName: agentGlobalSkillTable.folderName,
         packageDigest: agentGlobalSkillTable.packageDigest,
-        profile: agentGlobalSkillTable.profile,
       })
       .from(agentGlobalSkillTable)
       .where(isNull(agentGlobalSkillTable.deletedAt));
-    return rows.flatMap(({ folderName, packageDigest, profile }) => [
-      { folderName, packageDigest },
-      ...(profile.adaptation
-        ? [{ folderName, packageDigest: profile.adaptation.upstreamDigest }]
-        : []),
-    ]);
   }
 
-  /** Never reuse a tombstoned alias while a previous turn can still hold its revision. */
+  /** Live aliases only: revisions are digest-named, so a reinstall never overwrites a pinned one. */
   async allocateFolderNameTx(tx: Database, name: string): Promise<string> {
     const rows = await tx
       .select({ folderName: agentGlobalSkillTable.folderName })
       .from(agentGlobalSkillTable)
       .where(
-        or(
-          eq(agentGlobalSkillTable.folderName, name),
-          sql`${agentGlobalSkillTable.folderName} LIKE ${`${name}-%`} ESCAPE '\\'`,
+        and(
+          isNull(agentGlobalSkillTable.deletedAt),
+          or(
+            eq(agentGlobalSkillTable.folderName, name),
+            sql`${agentGlobalSkillTable.folderName} LIKE ${`${name}-%`} ESCAPE '\\'`,
+          ),
         ),
       );
     const taken = new Set(rows.map((row) => row.folderName));
@@ -512,10 +507,7 @@ function toInsertRow(
     entryDigest: record.entryDigest,
     packageDigest: record.packageDigest,
     manifest: record.manifest,
-    profile: {
-      ...record.profile,
-      ...(record.source.discovery ? { discovery: record.source.discovery } : {}),
-    },
+    profile: record.profile,
     invocation: record.invocation,
   };
 }

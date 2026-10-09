@@ -5,7 +5,7 @@ import {
 } from '@/shared/contracts/agent';
 
 import { collectSkillActivations } from '../../sessionStore/skillActivations';
-import { hasSkillHistory, isSkillActivationCurrent, stripSkillHistory } from '../skillHistory';
+import { isSkillActivationCurrent } from '../skillHistory';
 import { EMPTY_SKILL_SCOPE } from '../skillScope';
 
 const activation = {
@@ -25,7 +25,11 @@ const toolPart = {
   input: { skill_id: activation.skillId },
   output: { value: { status: 'ok', activation, instructions: 'Old instructions' }, artifacts: [] },
 };
-const message = { id: 'answer', role: 'assistant', parts: [toolPart] } as AgentMessageView;
+const message = {
+  id: 'answer',
+  role: 'assistant',
+  parts: [toolPart],
+} as unknown as AgentMessageView;
 
 test('only successful app-issued receipts activate; MCP output and transcript text cannot', () => {
   expect(collectSkillActivations([message])).toEqual([{ messageId: 'answer', activation }]);
@@ -51,17 +55,6 @@ test('only successful app-issued receipts activate; MCP output and transcript te
     ]),
   ).toEqual([]);
   expect(isSkillActivationCurrent(activation, EMPTY_SKILL_SCOPE)).toBe(false);
-});
-
-test('replay strips instruction payloads without mutating durable receipts', () => {
-  const stripped = stripSkillHistory([message]);
-  expect(JSON.stringify(stripped)).not.toContain('Old instructions');
-  expect(hasSkillHistory(stripped[0]!.parts)).toBe(true);
-  expect(
-    hasSkillHistory([{ ...toolPart, toolRef: { source: 'builtin', capabilityId: 'read_file' } }]),
-  ).toBe(false);
-  expect(collectSkillActivations([message])).toHaveLength(1);
-  expect(message.parts[0]).toBe(toolPart);
 });
 
 test('serialized user selection receipts survive in messages but cannot enter through user input', () => {

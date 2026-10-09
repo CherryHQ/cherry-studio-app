@@ -1,7 +1,7 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { Button, ContentState, Input, Section, useToast } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
@@ -10,8 +10,24 @@ import { useRecommendedSkills } from '@/frontend/hooks/skill';
 import { isSkillsError } from '@/shared/contracts/skills';
 import type { SkillCandidate } from '@/shared/data/types/skill';
 
-import { SkillAiDiscovery } from './SkillAiDiscovery';
 import { SkillPage } from './SkillPage';
+
+/** A search listing has only a URL; a resolved candidate can open directly. */
+type DiscoveryResult = {
+  key: string;
+  name: string;
+  description: string;
+  url: string | null;
+  candidate: SkillCandidate | null;
+};
+
+const fromCandidate = (candidate: SkillCandidate): DiscoveryResult => ({
+  key: candidate.candidateId,
+  name: candidate.name,
+  description: candidate.description,
+  url: null,
+  candidate,
+});
 
 export function SkillDiscoveryScreen() {
   const { t } = useTranslation();
@@ -28,8 +44,11 @@ function DiscoverSkills() {
   const { toast } = useToast();
   const skillsModule = useBackendModule('skills');
   const recommended = useRecommendedSkills();
-  const [url, setUrl] = useState('');
-  const [isResolving, setIsResolving] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<DiscoveryResult[]>();
+  const [isBusy, setIsBusy] = useState(false);
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
 
   const openCandidate = useCallback(
     (candidate: SkillCandidate) => {
@@ -40,41 +59,99 @@ function DiscoverSkills() {
     },
     [router],
   );
-  const resolveUrl = useCallback(async () => {
+
+  async function run(task: (signal: AbortSignal) => Promise<void>) {
     Keyboard.dismiss();
-    setIsResolving(true);
+    const request = new AbortController();
+    controller.current?.abort();
+    controller.current = request;
+    setIsBusy(true);
     try {
-      openCandidate(await skillsModule.resolveGithub(url.trim()));
+      await task(request.signal);
     } catch (error) {
-      const code = isSkillsError(error) ? error.code : 'source-unreachable';
-      toast.show({ label: t(`skills.error.${code}`), variant: 'danger' });
+      if (!request.signal.aborted)
+        toast.show({
+          label: t(`skills.error.${isSkillsError(error) ? error.code : 'source-unreachable'}`),
+          variant: 'danger',
+        });
     } finally {
-      setIsResolving(false);
+      if (controller.current === request) {
+        controller.current = null;
+        setIsBusy(false);
+      }
     }
-  }, [openCandidate, skillsModule, t, toast, url]);
+  }
+
+  /** A link with one Skill opens it; several Skills are listed to choose from. */
+  async function resolve(url: string, signal: AbortSignal) {
+    const candidates = await skillsModule.resolve(url, signal);
+    if (signal.aborted) return;
+    if (candidates.length === 1) openCandidate(candidates[0]!);
+    else setResults(candidates.map(fromCandidate));
+  }
+
+  function submit() {
+    const text = query.trim();
+    if (!text || isBusy) return;
+    void run(async (signal) => {
+      setResults(undefined);
+      if (/^https:\/\//i.test(text)) return resolve(text, signal);
+      const listings = await skillsModule.search(text, signal);
+      if (!signal.aborted)
+        setResults(
+          listings.map((listing) => ({
+            key: listing.url,
+            name: listing.name,
+            description: listing.source,
+            url: listing.url,
+            candidate: null,
+          })),
+        );
+    });
+  }
+
+  function open(result: DiscoveryResult) {
+    if (result.candidate) openCandidate(result.candidate);
+    else if (result.url && !isBusy) void run((signal) => resolve(result.url!, signal));
+  }
 
   return (
     <View className="gap-6">
-      <SkillAiDiscovery onSelect={openCandidate} />
       <View className="gap-2">
-        <Text className="px-1 font-medium text-muted-foreground text-sm">
-          {t('skills.github.title')}
-        </Text>
         <Input
-          accessibilityLabel={t('skills.github.placeholder')}
+          accessibilityLabel={t('skills.discover.query')}
           autoCapitalize="none"
           autoCorrect={false}
-          keyboardType="url"
-          onChangeText={setUrl}
-          onSubmitEditing={() => void resolveUrl()}
-          placeholder={t('skills.github.placeholder')}
-          returnKeyType="go"
-          value={url}
+          maxLength={500}
+          onChangeText={setQuery}
+          onSubmitEditing={submit}
+          placeholder={t('skills.discover.query')}
+          returnKeyType="search"
+          value={query}
         />
-        <Text className="px-1 text-muted-foreground text-xs">{t('skills.github.hint')}</Text>
-        <Button disabled={!url.trim() || isResolving} onPress={() => void resolveUrl()} size="sm">
-          {isResolving ? t('skills.github.resolving') : t('skills.github.resolve')}
+        <Text className="px-1 text-muted-foreground text-xs">{t('skills.discover.hint')}</Text>
+        <Button disabled={!query.trim() || isBusy} onPress={submit} size="sm">
+          {t(isBusy ? 'skills.discover.searching' : 'skills.discover.search')}
         </Button>
+        {isBusy ? (
+          <Button variant="ghost" onPress={() => controller.current?.abort()}>
+            {t('common.cancel')}
+          </Button>
+        ) : null}
+        {results?.length === 0 ? <ContentState.Empty title={t('skills.discover.empty')} /> : null}
+        {results?.length ? (
+          <Section>
+            {results.map((result) => (
+              <Section.Item
+                description={result.description}
+                key={result.key}
+                label={result.name}
+                onPress={() => open(result)}
+                trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
+              />
+            ))}
+          </Section>
+        ) : null}
       </View>
       <View className="gap-2">
         <Text className="px-1 font-medium text-muted-foreground text-sm">

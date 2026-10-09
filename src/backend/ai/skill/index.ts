@@ -1,1 +1,0 @@
-export { createSkillAi } from './skillAi';

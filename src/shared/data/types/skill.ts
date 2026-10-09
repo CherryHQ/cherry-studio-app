@@ -42,13 +42,12 @@ export const SkillNameSchema = z
   .max(SKILL_NAME_MAX_LENGTH)
   .regex(SKILL_NAME_PATTERN);
 
-export const SkillSourceRegistrySchema = z.enum(['bundled', 'github', 'clawhub']);
+export const SkillSourceRegistrySchema = z.enum(['bundled', 'github']);
 export type SkillSourceRegistry = z.infer<typeof SkillSourceRegistrySchema>;
 
 /**
  * Where an installed package came from. `locator` is the stable origin
- * identity (`bundled:<name>`, `github:<owner>/<repo>/<skill root>`, or
- * `clawhub:<owner>/<slug>`); two
+ * identity (`bundled:<name>` or `github:<owner>/<repo>/<skill root>`); two
  * packages with the same display name but different locators are different
  * Skills and never retarget each other.
  */
@@ -58,12 +57,6 @@ export const SkillSourceSchema = z.strictObject({
   url: z.string().nullable(),
   /** The exact upstream revision the accepted package was taken from. */
   revision: z.string().min(1),
-  discovery: z
-    .object({
-      registry: z.enum(['skills.sh', 'claude-plugins.dev', 'clawhub.ai']),
-      url: z.url(),
-    })
-    .optional(),
 });
 export type SkillSource = z.infer<typeof SkillSourceSchema>;
 
@@ -98,34 +91,11 @@ export const SkillRequirementsSchema = z.strictObject({
 export type SkillRequirements = z.infer<typeof SkillRequirementsSchema>;
 
 /**
- * `reviewed` profiles ship with the curated catalog. `ai-assessed` profiles record
- * explicit model evaluation, separate from human review. `analyzed` profiles are
- * derived from the package text and count as evidence only for what they
- * exclude (a detected script requirement), never as proof of support.
+ * `reviewed` profiles ship with the curated catalog. `analyzed` profiles are
+ * derived from the package text by deterministic rules.
  */
-export const SkillProfileProvenanceSchema = z.enum(['reviewed', 'ai-assessed', 'analyzed']);
+export const SkillProfileProvenanceSchema = z.enum(['reviewed', 'analyzed']);
 export type SkillProfileProvenance = z.infer<typeof SkillProfileProvenanceSchema>;
-
-/** Persisted evidence from an explicit, tool-free model assessment of one complete package. */
-export const SkillAssessmentSchema = z.strictObject({
-  version: z.literal(1),
-  modelId: z.string().min(1),
-  assessedAt: z.iso.datetime(),
-  decision: z.enum(['supported', 'unsupported', 'unknown']),
-  summary: z.string().min(1).max(2000),
-  evidence: z
-    .array(
-      z.strictObject({
-        path: z.string().min(1).max(512),
-        quote: z.string().min(1).max(500),
-        explanation: z.string().min(1).max(1000),
-      }),
-    )
-    .min(1)
-    .max(100),
-  uncertainties: z.array(z.string().min(1).max(500)).max(20),
-});
-export type SkillAssessment = z.infer<typeof SkillAssessmentSchema>;
 
 export const SkillProfileSchema = z.strictObject({
   packageDigest: z.string().min(1),
@@ -133,43 +103,15 @@ export const SkillProfileSchema = z.strictObject({
   requirements: SkillRequirementsSchema,
   /** Human summary of the reviewed workflow scope; null for analyzed profiles. */
   workflowScope: z.string().nullable(),
-  assessment: SkillAssessmentSchema.optional(),
-  discovery: SkillSourceSchema.shape.discovery,
-  adaptation: z
-    .strictObject({
-      version: z.literal(1),
-      upstreamDigest: z.string().regex(/^[0-9a-f]{64}$/),
-      modelId: z.string().min(1),
-      adaptedAt: z.iso.datetime(),
-      summary: z.string().min(1).max(2000),
-      changes: z
-        .array(
-          z.strictObject({
-            path: z.string().min(1).max(512),
-            before: z.string().min(1).max(24_000),
-            after: z.string().min(1).max(24_000),
-            reason: z.string().min(1).max(1000),
-          }),
-        )
-        .min(1)
-        .max(20),
-    })
-    .optional(),
 });
 export type SkillProfile = z.infer<typeof SkillProfileSchema>;
 
-export const SkillAdmissionStatusSchema = z.enum([
-  'ready',
-  'setup-required',
-  'unsupported',
-  'unknown',
-]);
+export const SkillAdmissionStatusSchema = z.enum(['ready', 'setup-required', 'unsupported']);
 export type SkillAdmissionStatus = z.infer<typeof SkillAdmissionStatusSchema>;
 
 export const SkillAdmissionReasonCodeSchema = z.enum([
   'platform-unsupported',
   'execution-unsupported',
-  'resource-unsupported',
   'package-unavailable',
   'capability-unavailable',
   'capability-disabled',
@@ -179,10 +121,6 @@ export const SkillAdmissionReasonCodeSchema = z.enum([
   'plugin-not-connected',
   'plugin-tool-unavailable',
   'model-tool-calling-unsupported',
-  'profile-digest-mismatch',
-  'unverified',
-  'ai-unsupported',
-  'ai-uncertain',
 ]);
 export type SkillAdmissionReasonCode = z.infer<typeof SkillAdmissionReasonCodeSchema>;
 

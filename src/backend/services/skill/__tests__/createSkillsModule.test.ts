@@ -111,7 +111,6 @@ function createFakes() {
       [...rows.values()].map((s) => ({ folderName: s.folderName, packageDigest: s.packageDigest })),
   } as unknown as AgentGlobalSkillService;
   const storage: SkillStorage = {
-    isAvailable: () => true,
     stage: async () => {
       const handle = `stage-${staged.size + 1}`;
       staged.add(handle);
@@ -147,8 +146,11 @@ function createFakes() {
   return fakes;
 }
 
+const marketplace = { resolveUrl: async () => [], search: async () => [] };
+
 function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
   return createSkillsModule({
+    marketplace,
     db: fakes.db,
     skills: fakes.skills,
     storage: fakes.storage,
@@ -180,28 +182,6 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
 }
 
 describe('createSkillsModule', () => {
-  it('refuses changed preparation fingerprints before publishing or binding', async () => {
-    const fakes = createFakes();
-    const module = createModule(fakes, [reviewed]);
-    const [candidate] = await module.listRecommended();
-    for (const expected of [
-      { expectedPackageDigest: 'stale-package' },
-      { expectedProfileDigest: 'stale-profile' },
-    ]) {
-      await expect(
-        module.install({
-          candidateId: candidate!.candidateId,
-          agentIds: ['agent'],
-          ...expected,
-        }),
-      ).rejects.toMatchObject({ code: 'admission-unverified' });
-    }
-    expect(fakes.rows.size).toBe(0);
-    expect(fakes.staged.size).toBe(0);
-    expect(fakes.published).toEqual([]);
-    expect(fakes.bound).toEqual([]);
-  });
-
   it('reuses the same accepted package for a new Agent without republishing it', async () => {
     const fakes = createFakes();
     const module = createModule(fakes, [reviewed]);
@@ -327,50 +307,12 @@ describe('createSkillsModule', () => {
     expect(fakes.storage.reconcile).toHaveBeenCalledWith([]);
   });
 
-  it('keeps unreviewed packages as candidates without an install bypass', async () => {
+  it('admits analyzed packages and rejects an update that starts calling bundled scripts', async () => {
     const fakes = createFakes();
-    const analyzed = createBundledSkillSource([reviewed]);
-    const unreviewedCandidate: SkillSourceCandidate = {
-      ...analyzed.list()[0]!,
-      candidateId: 'x',
-      reviewed: null,
+    let files: Record<string, string> = {
+      'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nUse references/outline.md.',
+      'references/outline.md': 'Use headings.',
     };
-    const module = createSkillsModule({
-      db: fakes.db,
-      skills: fakes.skills,
-      storage: fakes.storage,
-      environment: { read: async () => environment, pluginToolCatalog: () => new Map() },
-      sources: {
-        bundled: { ...analyzed, list: () => [unreviewedCandidate] },
-        github: {
-          registry: 'github',
-          resolve: async () => {
-            throw new Error('unused');
-          },
-          acquire: async () => {
-            throw new Error('unused');
-          },
-          resolveUrl: async () => {
-            throw new Error('unused');
-          },
-        },
-      },
-      agentFacts: async () => null,
-    });
-    const [candidate] = await module.listRecommended();
-    expect(await module.inspect(candidate!.candidateId)).toMatchObject({
-      profile: { provenance: 'analyzed' },
-      admission: { status: 'unknown', reasons: [{ code: 'unverified' }] },
-    });
-    await expect(module.install({ candidateId: candidate!.candidateId })).rejects.toMatchObject({
-      code: 'admission-unverified',
-    });
-    expect(fakes.rows.size).toBe(0);
-    expect(fakes.published).toEqual([]);
-  });
-  it('requires explicit AI assessment, persists its exact digest and rejects a changed reference on update', async () => {
-    const fakes = createFakes();
-    let reference = 'Use headings.';
     const candidate: SkillSourceCandidate = {
       candidateId: 'github:notes',
       name: 'notes',
@@ -386,71 +328,48 @@ describe('createSkillsModule', () => {
         revision: 'commit',
       },
     };
-    const acquire = async () => ({
-      expectedName: 'notes',
-      files: new Map([
-        [
-          'SKILL.md',
-          new TextEncoder().encode(
-            '---\nname: notes\ndescription: Take notes\n---\nUse references/outline.md.',
-          ),
-        ],
-        ['references/outline.md', new TextEncoder().encode(reference)],
-      ]),
-    });
-    const assess = jest.fn(async () => ({
-      requirements: {
-        platforms: null,
-        execution: 'none' as const,
-        builtInTools: [],
-        pluginTools: [],
-      },
-      assessment: {
-        version: 1 as const,
-        modelId: 'provider::model',
-        assessedAt: '2026-09-22T00:00:00.000Z',
-        decision: 'supported' as const,
-        summary: 'Notes',
-        uncertainties: [],
-        evidence: [
-          { path: 'SKILL.md', quote: 'Take notes', explanation: 'Text workflow' },
-          { path: 'references/outline.md', quote: 'Use headings.', explanation: 'Outline' },
-        ],
-      },
-    }));
     const module = createSkillsModule({
+      marketplace: { ...marketplace, resolveUrl: async () => [candidate] },
       db: fakes.db,
       skills: fakes.skills,
       storage: fakes.storage,
-      ai: { assess, planSearch: async () => [], rankResults: async () => [] },
       environment: { read: async () => environment, pluginToolCatalog: () => new Map() },
       sources: {
         bundled: createBundledSkillSource([]),
         github: {
           registry: 'github',
-          acquire,
+          acquire: async () => ({
+            expectedName: 'notes',
+            files: new Map(
+              Object.entries(files).map(([path, text]) => [path, new TextEncoder().encode(text)]),
+            ),
+          }),
           resolve: async () => candidate,
           resolveUrl: async () => candidate,
         },
       },
       agentFacts: async () => null,
     });
-    await module.resolveGithub(candidate.source.url!);
-    await expect(module.install({ candidateId: candidate.candidateId })).rejects.toMatchObject({
-      code: 'admission-unverified',
+    const [resolved] = await module.resolve(candidate.source.url!);
+    expect(await module.inspect(resolved!.candidateId)).toMatchObject({
+      profile: { provenance: 'analyzed' },
+      admission: { status: 'ready', reasons: [] },
     });
-    expect(assess).not.toHaveBeenCalled();
-    expect((await module.assess(candidate.candidateId)).admission?.status).toBe('ready');
-    const installed = await module.install({ candidateId: candidate.candidateId });
-    expect(installed.profile.provenance).toBe('ai-assessed');
+    const installed = await module.install({ candidateId: resolved!.candidateId });
     expect((await module.update(installed.id)).outcome).toBe('unchanged');
-    reference = 'Run a different workflow.';
-    const result = await module.update(installed.id);
-    expect(result).toMatchObject({
+    files = {
+      'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nRun `python scripts/fill.py`.',
+      'scripts/fill.py': 'print(1)',
+    };
+    expect(await module.update(installed.id)).toMatchObject({
       outcome: 'rejected',
-      inspection: { admission: { status: 'unknown' } },
+      inspection: {
+        admission: {
+          status: 'unsupported',
+          reasons: [{ code: 'execution-unsupported', subject: 'python' }],
+        },
+      },
     });
     expect((await fakes.skills.getById(installed.id)).packageDigest).toBe(installed.packageDigest);
-    expect(assess).toHaveBeenCalledTimes(1);
   });
 });

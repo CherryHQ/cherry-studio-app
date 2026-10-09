@@ -1,6 +1,7 @@
 export { createSkillsModule, type SkillsBackend } from './createSkillsModule';
 export { evaluateSkillAdmission, type SkillAgentFacts } from './skillAdmission';
 export { createSkillEnvironmentReader, type SkillEnvironmentReader } from './skillEnvironment';
+export { createSkillMarketplace } from './skillMarketplace';
 export { decodeUtf8, parseSkillEntry } from './skillPackage';
 export {
   createBundledSkillSource,
@@ -8,8 +9,3 @@ export {
   createGithubSkillSource,
 } from './skillSources';
 export { skillStorage, type SkillStorage } from './skillStorage';
-
-export type { SkillAi } from './skillAi';
-
-export { createClawhubSkillSource } from './clawhubSkillSource';
-export { createSkillMarketplace } from './skillMarketplace';

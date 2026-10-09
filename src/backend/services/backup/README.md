@@ -8,8 +8,7 @@ Tracks [issue #1060](https://github.com/CherryHQ/cherry-studio-app/issues/1060).
 
 A streaming ZIP contains `manifest.json`, `database/cherry.db`, `files/<id>.<ext>` and
 `avatars/{user,agents,providers}/<name>`, plus
-`skills/<folder>/revisions/<digest>/<package path>` for every live Skill package. Accepted and original
-mobile-adaptation revisions are both required. The manifest records product/version, migration SQL hashes,
+`skills/<folder>/revisions/<digest>/<package path>` for every live Skill package. The manifest records product/version, migration SQL hashes,
 counts, relative paths, byte sizes and SHA-256 hashes. Every referenced resource is present. The whole database preserves
 chats, agents, settings, provider keys, tool bindings, paintings and file metadata.
 

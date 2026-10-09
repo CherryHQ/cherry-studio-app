@@ -162,9 +162,6 @@ export async function prepareRetryTurn(
       retryable: false,
     });
   }
-  const skillSelections = source.user.parts.flatMap((part) =>
-    part.type === 'text' ? (part.skillSelections ?? []) : [],
-  );
   const plan = await prepareResolvedTurn(
     dependencies,
     {
@@ -172,7 +169,9 @@ export async function prepareRetryTurn(
       userMessageId: source.user.id,
       assistantMessageId: source.assistant.id,
       parts,
-      skillIds: skillSelections.map((selection) => selection.skillId),
+      skillIds: source.user.parts.flatMap((part) =>
+        part.type === 'text' ? (part.skillSelections ?? []).map(({ skillId }) => skillId) : [],
+      ),
       ...(source.user.parts.some(
         (part) => part.type === 'text' && part.skillAction === 'find-and-install',
       )
@@ -195,7 +194,6 @@ export async function prepareRetryTurn(
     runtimeContextCheckpoint,
     documentParserMode,
     signal,
-    skillSelections,
   );
   return { plan, source, assistantParts };
 }

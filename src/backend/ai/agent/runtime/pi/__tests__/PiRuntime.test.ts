@@ -555,7 +555,10 @@ describe('Pi invocation capture', () => {
       const initial = normalizeContext({
         systemPrompt: context.options.initialState?.systemPrompt,
         tools: context.options.initialState?.tools,
-        messages: [...(context.options.initialState?.messages ?? []), context.prompt],
+        messages: [
+          ...((context.options.initialState?.messages ?? []) as PiMessage[]),
+          context.prompt as PiMessage,
+        ],
       });
       expect(getCurrentSystemPrompt(initial.messages)).toContain('Initial active instructions.');
       const piTool = context.options.initialState!.tools![0]!;

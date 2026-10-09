@@ -4,7 +4,6 @@ import type { BackupManifest } from '../backupFormat';
 import { describeDatabase, validateResourceReferences } from '../backupResources';
 
 const digest = 'a'.repeat(64);
-const upstream = 'b'.repeat(64);
 let mockHasSkills = true;
 const mockDb = {
   getFirstAsync: jest.fn(async (sql: string) => {
@@ -22,22 +21,6 @@ const mockDb = {
           { path: 'SKILL.md', size: 20, digest },
           { path: 'references/format.md', size: 30, digest },
         ]),
-        profile: JSON.stringify({
-          packageDigest: digest,
-          provenance: 'ai-assessed',
-          requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
-          workflowScope: null,
-          adaptation: {
-            version: 1,
-            upstreamDigest: upstream,
-            modelId: 'model',
-            adaptedAt: '2026-10-08T00:00:00.000Z',
-            summary: 'Use mobile file tools',
-            changes: [
-              { path: 'SKILL.md', before: 'original', after: 'mobile', reason: 'Equivalent tools' },
-            ],
-          },
-        }),
       },
     ];
   }),
@@ -46,20 +29,15 @@ const mockDb = {
 jest.mock('@/backend/data/db/backupDatabase', () => ({
   withBackupDatabase: (_file: unknown, run: (db: typeof mockDb) => unknown) => run(mockDb),
 }));
-jest.mock('@/backend/data/storage/storagePaths', () => ({ skillStorageRootDirectory: jest.fn() }));
 
 beforeEach(() => {
   mockHasSkills = true;
 });
 
-test('requires complete accepted and original packages, including nested resources', async () => {
+test('requires complete installed packages, including nested resources', async () => {
   const description = await describeDatabase(new File('file:///backup/database/cherry.db'));
   expect(description.requiredPaths).toEqual(
-    [digest, upstream].flatMap((revision) =>
-      ['SKILL.md', 'references/format.md'].map(
-        (path) => `skills/brief/revisions/${revision}/${path}`,
-      ),
-    ),
+    ['SKILL.md', 'references/format.md'].map((path) => `skills/brief/revisions/${digest}/${path}`),
   );
   const manifest = {
     counts: description.counts,

@@ -10,7 +10,6 @@ describe('skill status helpers', () => {
     expect(skillStatusTone('ready')).toBe('success');
     expect(skillStatusTone('unsupported')).toBe('danger');
     expect(skillStatusTone('setup-required')).toBe('default');
-    expect(skillStatusTone('unknown')).toBe('default');
     expect(effectiveSkillStatus({ status: 'ready', reasons: [] })).toBe('ready');
     expect(
       effectiveSkillStatus(

@@ -3,11 +3,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import {
-  SkillActivationSchema,
-  SkillIdSchema,
-  SkillAdmissionStatusSchema,
-} from '@/shared/data/types/skill';
+import { SkillActivationSchema, SkillIdSchema } from '@/shared/data/types/skill';
 
 import { GenericToolPart } from './GenericToolPart';
 import { getToolName, isRecord, type ToolMessagePart } from './toolPartState';
@@ -48,7 +44,6 @@ function SkillManagementPart({
   if (!output) return <GenericToolPart part={part} />;
   const skillId = SkillIdSchema.safeParse(output.skill_id);
   if (output.status === 'installed' && skillId.success) {
-    const source = isRecord(output.source) ? output.source : null;
     return (
       <MessagePart.Tool
         title={t('skills.candidate.install')}
@@ -59,19 +54,9 @@ function SkillManagementPart({
           <Text className="text-sm text-foreground" selectable>
             {typeof output.name === 'string' ? output.name : ''}
           </Text>
-          <Text className="text-xs text-muted-foreground">
-            {output.assessmentProvenance === 'reviewed'
-              ? t('skills.provenance.reviewed')
-              : t('skills.provenance.ai-assessed')}
-          </Text>
-          {typeof source?.url === 'string' ? (
+          {typeof output.source === 'string' ? (
             <Text className="text-xs text-muted-foreground" selectable>
-              {source.url}
-            </Text>
-          ) : null}
-          {typeof output.adaptation === 'string' ? (
-            <Text className="text-sm text-muted-foreground" selectable>
-              {t('skills.find.adapted')} · {output.adaptation}
+              {output.source}
             </Text>
           ) : null}
           {output.availableThisTurn === false ? (
@@ -89,30 +74,6 @@ function SkillManagementPart({
           >
             {t('skills.find.manage')}
           </Button>
-        </View>
-      </MessagePart.Tool>
-    );
-  }
-  const status = SkillAdmissionStatusSchema.safeParse(output.status);
-  if (getToolName(part) === 'prepare_skill' && status.success) {
-    return (
-      <MessagePart.Tool
-        title={t('skills.find.prepare')}
-        state="complete"
-        statusText={t(`skills.status.${status.data}`)}
-      >
-        <View className="gap-2">
-          {typeof output.assessment === 'string' ? (
-            <Text className="text-sm text-foreground" selectable>
-              {output.assessment}
-            </Text>
-          ) : null}
-          {typeof output.adaptation === 'string' ? (
-            <Text className="text-sm text-muted-foreground" selectable>
-              {t('skills.find.adapted')} · {output.adaptation}
-            </Text>
-          ) : null}
-          <Text className="text-xs text-muted-foreground">{t('skills.ai.assessmentHint')}</Text>
         </View>
       </MessagePart.Tool>
     );

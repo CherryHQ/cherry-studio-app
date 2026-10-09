@@ -16,7 +16,6 @@ type BuiltInToolDefinition = {
 
 export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   find_skills: { iconName: 'fileText', titleKey: 'skills.find.name' },
-  prepare_skill: { iconName: 'fileText', titleKey: 'skills.find.prepare' },
   install_skill: { iconName: 'fileText', titleKey: 'skills.candidate.install' },
   search_local_skills: { iconName: 'fileText', titleKey: 'skills.search' },
   load_skill: { iconName: 'fileText', titleKey: 'skills.activity.load' },

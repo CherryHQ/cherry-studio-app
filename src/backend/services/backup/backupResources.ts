@@ -1,10 +1,9 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { withBackupDatabase } from '@/backend/data/db/backupDatabase';
-import { skillStorageRootDirectory } from '@/backend/data/storage/storagePaths';
 import { BackupError } from '@/shared/contracts/backup';
 import { FileEntryIdSchema, filenameExtension } from '@/shared/data/types/file';
-import { SkillManifestEntrySchema, SkillProfileSchema } from '@/shared/data/types/skill';
+import { SkillManifestEntrySchema } from '@/shared/data/types/skill';
 
 import { archiveFile } from './backupArchive';
 import { assertBackupPath, BACKUP_LIMITS, type BackupManifest } from './backupFormat';
@@ -77,22 +76,17 @@ export async function describeDatabase(database: File): Promise<{
         folderName: string;
         packageDigest: string;
         manifest: string;
-        profile: string;
       }>(
-        'SELECT folder_name AS folderName, package_digest AS packageDigest, manifest, profile FROM agent_global_skill WHERE deleted_at IS NULL LIMIT ?',
+        'SELECT folder_name AS folderName, package_digest AS packageDigest, manifest FROM agent_global_skill WHERE deleted_at IS NULL LIMIT ?',
         BACKUP_LIMITS.entries + 1,
       );
       if (skills.length > BACKUP_LIMITS.entries) throw new BackupError('too-large');
       for (const skill of skills) {
         const files = SkillManifestEntrySchema.array().parse(JSON.parse(skill.manifest));
-        const profile = SkillProfileSchema.parse(JSON.parse(skill.profile));
-        const revisions = new Set([skill.packageDigest]);
-        // Adaptation only replaces text in existing files, so both revisions have the same paths.
-        if (profile.adaptation) revisions.add(profile.adaptation.upstreamDigest);
-        for (const digest of revisions) {
-          for (const file of files)
-            requiredPaths.push(`skills/${skill.folderName}/revisions/${digest}/${file.path}`);
-        }
+        for (const file of files)
+          requiredPaths.push(
+            `skills/${skill.folderName}/revisions/${skill.packageDigest}/${file.path}`,
+          );
         if (requiredPaths.length + 1 > BACKUP_LIMITS.entries) throw new BackupError('too-large');
       }
     }
@@ -127,9 +121,7 @@ export async function captureResources(
   let totalBytes = archiveFile(target, 'database/cherry.db').size;
   for (const path of [...paths].sort()) {
     signal.throwIfAborted();
-    const resourceRoot = path.startsWith('skills/') ? skillStorageRootDirectory() : source;
-    if (!resourceRoot) throw new BackupError('missing-files');
-    const input = restoredFile(resourceRoot, path);
+    const input = restoredFile(source, path);
     // A full backup never silently omits referenced content.
     if (!input.exists) throw new BackupError('missing-files');
     totalBytes += input.size;

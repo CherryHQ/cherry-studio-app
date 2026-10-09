@@ -56,19 +56,13 @@ const DESCRIPTORS_BY_ID = new Map(
 /**
  * Evaluates one profile against the current environment. Application-scope
  * checks run first; Agent-scope checks are added when `agent` is supplied.
- * `analyzed` profiles can only be `unsupported` or `unknown`: derived evidence
- * excludes a package, it never proves support.
  */
 export function evaluateSkillAdmission(
   profile: SkillProfile,
-  packageDigest: string,
   environment: SkillEnvironmentFacts,
   agent?: SkillAgentFacts,
 ): SkillAdmission {
   const reasons: SkillAdmissionReason[] = [];
-  if (profile.packageDigest !== packageDigest) {
-    return { status: 'unknown', reasons: [{ code: 'profile-digest-mismatch', subject: null }] };
-  }
   const { requirements } = profile;
   let unsupported = false;
   let setupRequired = false;
@@ -110,7 +104,6 @@ export function evaluateSkillAdmission(
     }
     const blockedScope = findBlockedPermission(
       descriptor.permissionScopes,
-      descriptor.permissionMatch,
       environment.permissions,
     );
     if (blockedScope) {
@@ -151,80 +144,50 @@ export function evaluateSkillAdmission(
   }
 
   if (unsupported) return { status: 'unsupported', reasons };
-  if (profile.provenance === 'ai-assessed') {
-    const assessment = profile.assessment;
-    if (assessment?.decision === 'unsupported')
-      return {
-        status: 'unsupported',
-        reasons: [{ code: 'ai-unsupported', subject: null }, ...reasons],
-      };
-    if (!assessment || assessment.decision !== 'supported' || assessment.uncertainties.length > 0)
-      return { status: 'unknown', reasons: [{ code: 'ai-uncertain', subject: null }, ...reasons] };
-  } else if (profile.provenance !== 'reviewed') {
-    return { status: 'unknown', reasons: [{ code: 'unverified', subject: null }, ...reasons] };
-  }
   return { status: setupRequired ? 'setup-required' : 'ready', reasons };
 }
 
 /** A permission the OS can still request is supported with permission on use, not a blocker. */
 function findBlockedPermission(
   scopes: readonly DevicePermissionScope[],
-  match: 'any' | undefined,
   permissions: PermissionStatuses,
 ): DevicePermissionScope | null {
-  if (scopes.length === 0) return null;
-  const usable = scopes.map(
-    (scope) =>
-      canUseDevicePermission(scope, permissions[scope]) ||
-      canRequestDevicePermission(permissions[scope]),
+  return (
+    scopes.find(
+      (scope) =>
+        !canUseDevicePermission(scope, permissions[scope]) &&
+        !canRequestDevicePermission(permissions[scope]),
+    ) ?? null
   );
-  if (match === 'any') {
-    return usable.some(Boolean) ? null : scopes[0]!;
-  }
-  const blocked = usable.findIndex((value) => !value);
-  return blocked === -1 ? null : scopes[blocked]!;
 }
 
-const EXECUTION_PATTERNS: readonly [RegExp, SkillExecutionRequirement][] = [
-  [/\b(?:python3?|pip3?|uv run|pipx|jupyter)\b/i, 'python'],
-  [/\b(?:npx|node|npm|pnpm|yarn|bun)\s+\S/i, 'node'],
-  [/\b(?:bash|sh|zsh)\s+\S|^\s*\$ |\bchmod\b|\bcurl\b|\bgit clone\b/im, 'shell'],
-  [/\b(?:libreoffice|soffice|ffmpeg|imagemagick|pandoc|pdftotext|tesseract)\b/i, 'binary'],
-];
+const SCRIPT_PATH = /^scripts\/|\.(?:py|sh|bash|zsh|js|mjs|ts|rb|ps1)$/i;
 
 /**
- * Derives an `analyzed` profile from the package text. It detects the
- * evidence that excludes a mobile workflow (scripts, interpreters, CLI tools)
- * and the Cherry tool ids a package names explicitly. Finding nothing means
- * "nothing detected", which admission reports as unverified, not as ready.
+ * Derives an `analyzed` profile from the package text. A package whose
+ * instructions call its own bundled scripts needs an interpreter Cherry Mobile
+ * does not provide. Other workflows are admitted; instructions that name an
+ * unavailable command simply cannot be followed, and loading grants nothing.
  */
 export function analyzeSkillRequirements(
-  pkg: Pick<ValidatedSkillPackage, 'instructions' | 'manifest' | 'packageDigest' | 'frontmatter'>,
+  pkg: Pick<ValidatedSkillPackage, 'instructions' | 'manifest' | 'packageDigest'>,
   pluginToolCatalog: ReadonlyMap<string, ReadonlySet<string>>,
 ): SkillProfile {
   const text = pkg.instructions;
-  const scriptPaths = pkg.manifest
+  const scripts = pkg.manifest
     .map((entry) => entry.path)
-    .filter((path) => /^scripts\/|\.(?:py|sh|bash|zsh|js|mjs|ts|rb|ps1)$/i.test(path));
-  let execution: SkillExecutionRequirement = 'none';
-  const referencesScript = scriptPaths.some(
-    (path) => text.includes(path) || text.includes(path.split('/').pop()!),
-  );
-  if (referencesScript) {
-    execution = scriptPaths.some((path) => /\.py$/i.test(path))
-      ? 'python'
-      : scriptPaths.some((path) => /\.(?:js|mjs|ts)$/i.test(path))
-        ? 'node'
-        : 'shell';
-  } else {
-    const codeText = extractCode(text);
-    for (const [pattern, requirement] of EXECUTION_PATTERNS) {
-      if (pattern.test(codeText)) {
-        execution = requirement;
-        break;
-      }
-    }
-  }
+    .filter(
+      (path) =>
+        SCRIPT_PATH.test(path) && (text.includes(path) || text.includes(path.split('/').pop()!)),
+    );
+  const execution: SkillExecutionRequirement =
+    scripts.length === 0
+      ? 'none'
+      : scripts.some((path) => /\.py$/i.test(path))
+        ? 'python'
+        : scripts.some((path) => /\.(?:js|mjs|ts)$/i.test(path))
+          ? 'node'
+          : 'shell';
 
   const builtInTools = [...BUILT_IN_TOOL_IDS]
     .filter((id) => new RegExp(`\\b${id}\\b`).test(text))
@@ -250,11 +213,4 @@ export function analyzeSkillRequirements(
     requirements,
     workflowScope: null,
   };
-}
-
-/** Fenced and inline code is where commands live; prose mentions of "python" are not requirements. */
-function extractCode(markdown: string): string {
-  const fenced = [...markdown.matchAll(/```[^\n]*\n([\s\S]*?)```/g)].map((match) => match[1]!);
-  const inline = [...markdown.matchAll(/`([^`\n]+)`/g)].map((match) => match[1]!);
-  return [...fenced, ...inline].join('\n');
 }

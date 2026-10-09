@@ -23,8 +23,7 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import { createUniqueModelId } from '@/shared/data/types/model';
-import type { SkillAdmission, SkillInvocation, SkillProfile } from '@/shared/data/types/skill';
-import { sha256Hex } from '@/shared/utils/sha256';
+import type { SkillAdmission, SkillInvocation } from '@/shared/data/types/skill';
 
 import type { RuntimeModel, RuntimeTool } from '../runtime';
 
@@ -58,10 +57,6 @@ export const EMPTY_SKILL_SCOPE: SkillTurnScope = Object.freeze({
 });
 
 export interface SkillScopeSource {
-  check?(
-    profile: SkillProfile,
-    input: Parameters<SkillScopeSource['resolve']>[0],
-  ): Promise<SkillAdmission>;
   resolve(input: {
     agentId: string;
     disabledCapabilities: readonly AgentCapability[];
@@ -85,51 +80,6 @@ export function isSkillUsable(admission: SkillAdmission): boolean {
 
 export function createSkillScopeSource(deps: SkillScopeSourceDependencies): SkillScopeSource {
   return {
-    async check(profile, { disabledCapabilities, model, tools, signal }) {
-      const [environment, configuredModel] = await Promise.all([
-        deps.environment.read(),
-        deps.models.getById(createUniqueModelId(model.providerId, model.modelId)),
-      ]);
-      signal.throwIfAborted();
-      const admission = evaluateSkillAdmission(profile, profile.packageDigest, environment, {
-        disabledCapabilities,
-        supportsToolCalling:
-          configuredModel?.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL) ?? false,
-      });
-      if (admission.status !== 'ready') return admission;
-      const builtIn = profile.requirements.builtInTools.find(
-        (id) =>
-          !tools.some(
-            (tool) =>
-              tool.approval !== 'deny' &&
-              tool.ref.source === 'builtin' &&
-              tool.ref.capabilityId === id,
-          ),
-      );
-      if (builtIn)
-        return {
-          status: 'setup-required',
-          reasons: [{ code: 'capability-unavailable', subject: builtIn }],
-        };
-      for (const { pluginId, tools: names } of profile.requirements.pluginTools) {
-        const missing = names.find(
-          (name) =>
-            !tools.some(
-              (tool) =>
-                tool.approval !== 'deny' &&
-                tool.ref.source === 'mcp' &&
-                tool.ref.rawToolName === name &&
-                environment.pluginServerIds?.get(pluginId)?.has(tool.ref.serverId),
-            ),
-        );
-        if (missing)
-          return {
-            status: 'setup-required',
-            reasons: [{ code: 'plugin-tool-unavailable', subject: `${pluginId}:${missing}` }],
-          };
-      }
-      return admission;
-    },
     async resolve({ agentId, disabledCapabilities, model, tools, signal }) {
       const projections = await deps.skills.listUsableForAgent(agentId);
       signal.throwIfAborted();
@@ -146,12 +96,7 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
       };
       const entries: SkillTurnEntry[] = [];
       for (const { skill } of projections) {
-        const admission = evaluateSkillAdmission(
-          skill.profile,
-          skill.packageDigest,
-          environment,
-          agent,
-        );
+        const admission = evaluateSkillAdmission(skill.profile, environment, agent);
         if (!isSkillUsable(admission)) continue;
         const { builtInTools, pluginTools } = skill.profile.requirements;
         if (
@@ -200,23 +145,11 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
         });
       }
       const byId = new Map(entries.map((entry) => [entry.id, entry] as const));
-      const manifests = new Map(
-        projections.map(({ skill }) => [
-          skill.id,
-          new Map(skill.manifest.map((file) => [file.path, file.digest])),
-        ]),
-      );
-      const refOf = (skillId: string) => {
+      async function readPackageFile(skillId: string, path: string) {
         const entry = byId.get(skillId);
-        return entry ? { folderName: entry.folderName, packageDigest: entry.packageDigest } : null;
-      };
-      async function readVerified(skillId: string, path: string) {
-        const ref = refOf(skillId);
-        const digest = manifests.get(skillId)?.get(path);
-        if (!ref || !digest) return null;
+        if (!entry || !entry.files.includes(path)) return null;
         try {
-          const bytes = await deps.storage.readFile(ref, path);
-          return bytes && sha256Hex(bytes) === digest ? bytes : null;
+          return await deps.storage.readFile(entry, path);
         } catch {
           return null;
         }
@@ -224,16 +157,14 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
       return {
         entries: Object.freeze(entries),
         async readInstructions(skillId) {
-          const ref = refOf(skillId);
-          if (!ref) return null;
-          const bytes = await readVerified(skillId, 'SKILL.md');
+          const bytes = await readPackageFile(skillId, 'SKILL.md');
           const text = bytes ? decodeUtf8(bytes) : null;
           if (text === null) return null;
           const parsed = parseSkillEntry(text);
           return parsed && 'body' in parsed ? parsed.body.trim() : null;
         },
         async readFile(skillId, path) {
-          return readVerified(skillId, path);
+          return readPackageFile(skillId, path);
         },
       };
     },

@@ -1,5 +1,4 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
 
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
@@ -8,7 +7,6 @@ import {
   createSystemModelSupport,
   type LanguageServingSupport,
 } from '@/backend/ai/provider/systemModelSupport';
-import { createSkillAi } from '@/backend/ai/skill';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import {
   createMcpServerMutations,
@@ -64,7 +62,6 @@ import { providerRegistryUpdates } from '@/backend/services/providers/providerRe
 import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
 import {
   createBundledSkillSource,
-  createClawhubSkillSource,
   createSkillMarketplace,
   createGithubSkillClients,
   createGithubSkillSource,
@@ -78,7 +75,6 @@ import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
-import { resolveAppLanguage } from '@/shared/utils/languages';
 
 export type BackendComposition = {
   backend: Backend;
@@ -266,21 +262,9 @@ export function createBackend(
     importFiles: createSystemShareImporter(exportFiles),
   });
   const githubSkills = createGithubSkillSource(createGithubSkillClients());
-  const clawhubSkills = createClawhubSkillSource();
   let skillStorageWrites = 0;
   const skills = createSkillsModule({
-    marketplace: createSkillMarketplace(githubSkills, clawhubSkills),
-    ai: createSkillAi({
-      ai: services.ai,
-      models: services.model,
-      preference: services.preference,
-      language: async () =>
-        resolveAppLanguage(
-          await services.preference.get('app.language'),
-          getLocales().map((locale) => locale.languageTag),
-        ),
-    }),
-    search: (keywords, signal) => services.webSearch.searchKeywords({ keywords }, { signal }),
+    marketplace: createSkillMarketplace(githubSkills),
     db: {
       async withWriteTx(fn) {
         storageMutationGate.assertWritable();
@@ -303,12 +287,11 @@ export function createBackend(
     sources: {
       bundled: createBundledSkillSource(),
       github: githubSkills,
-      clawhub: clawhubSkills,
     },
     agentFacts: async (agentId) => {
       const agent = await services.agentData.getById(agentId).catch(() => null);
       if (!agent) return null;
-      const model = agent.modelId ? await services.model.getById(agent.modelId) : null;
+      const model = agent.model ? await services.model.getById(agent.model) : null;
       return {
         disabledCapabilities: agent.disabledCapabilities,
         supportsToolCalling: model?.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL) ?? false,

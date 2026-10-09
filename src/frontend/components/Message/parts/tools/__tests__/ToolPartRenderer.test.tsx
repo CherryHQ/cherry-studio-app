@@ -28,6 +28,7 @@ jest.mock('../RunJsToolPart', () => ({
   ...mockCreateToolPart('RunJsToolPart'),
   isRunJsToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'run_js',
 }));
+jest.mock('../SkillToolPart', () => mockCreateToolPart('SkillToolPart'));
 jest.mock('../UserQuestionPart', () => mockCreateToolPart('UserQuestionPart'));
 jest.mock('../WebSearchToolPart', () => mockCreateToolPart('WebSearchToolPart'));
 jest.mock('../WriteFileToolPart', () => ({
@@ -48,6 +49,9 @@ describe('ToolPartRenderer', () => {
     ['ask_user_question', 'UserQuestionPart'],
     ['agent_create', 'AgentManagementToolPart'],
     ['agent_update', 'AgentManagementToolPart'],
+    ['load_skill', 'SkillToolPart'],
+    ['find_skills', 'SkillToolPart'],
+    ['install_skill', 'SkillToolPart'],
     ['other', 'GenericToolPart'],
   ])('routes %s tools to %s', (toolName, expectedType) => {
     const part = makeToolPart(toolName);

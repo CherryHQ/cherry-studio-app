@@ -1,6 +1,5 @@
-import type { SkillInspection } from '@/shared/contracts/skills';
-import type { Skill, SkillAdmission } from '@/shared/data/types/skill';
-import { sha256HexOfText } from '@/shared/utils/sha256';
+import { SkillsError } from '@/shared/contracts/skills';
+import type { Skill, SkillCandidate } from '@/shared/data/types/skill';
 
 import {
   createExpandingSkillScope,
@@ -39,25 +38,16 @@ const installed: Skill = {
   createdAt: '2026-09-23T00:00:00.000Z',
   updatedAt: '2026-09-23T00:00:00.000Z',
 };
-const inspection: SkillInspection = {
-  candidate: {
-    candidateId: 'issued',
-    name: installed.name,
-    description: installed.description,
-    source: installed.source,
-    author: null,
-    version: null,
-    tags: [],
-    installedSkillId: null,
-    profileProvenance: 'reviewed',
-  },
-  package: {
-    ...installed,
-    instructionsPreview: 'Write notes.',
-  },
-  issues: [],
-  profile: installed.profile,
-  admission: { status: 'ready', reasons: [] },
+const candidate: SkillCandidate = {
+  candidateId: 'issued',
+  name: installed.name,
+  description: installed.description,
+  source: { ...installed.source, url: 'https://github.com/o/r/blob/main/notes/SKILL.md' },
+  author: null,
+  version: null,
+  tags: [],
+  installedSkillId: null,
+  profileProvenance: 'reviewed',
 };
 const checked: SkillTurnScope = {
   entries: [
@@ -81,20 +71,15 @@ const run = async (tools: RuntimeTool[], name: string, input: Record<string, str
   return (await tool.execute({ input, signal, toolCallId: name, turnId: 'turn-1' })).value;
 };
 
-function fixture(installIntent = true) {
-  let admission: SkillAdmission = { status: 'ready', reasons: [] };
+function fixture(installIntent = true, candidates: SkillCandidate[] = [candidate]) {
   const workflow = {
-    discover: jest.fn(async () => ({
-      items: [{ candidate: inspection.candidate, reason: 'Notes' }],
-      partial: false,
-    })),
-    prepare: jest.fn(async () => inspection),
+    search: jest.fn(async () => [
+      { name: 'notes', source: 'o/r', url: 'https://skills.sh/o/r/notes' },
+    ]),
+    resolve: jest.fn(async () => candidates),
     install: jest.fn(async () => installed),
   };
-  const source: SkillScopeSource = {
-    check: async () => admission,
-    resolve: async () => checked,
-  };
+  const source: SkillScopeSource = { resolve: async () => checked };
   const expanding = createExpandingSkillScope(EMPTY_SKILL_SCOPE);
   const loaded = jest.fn();
   // Readers are created before installation; later installation must become visible to them.
@@ -113,64 +98,55 @@ function fixture(installIntent = true) {
       },
     }),
   ];
-  return {
-    tools,
-    workflow,
-    loaded,
-    expanding,
-    setAdmission: (value: SkillAdmission) => {
-      admission = value;
-    },
-  };
+  return { tools, workflow, loaded };
 }
 
 describe('conversation Skill installation', () => {
-  it('requires a discovered and ready candidate and rechecks actual tools before committing', async () => {
+  it('searches by keywords and lists the Skills behind a URL without installing', async () => {
     const f = fixture();
-    expect(await run(f.tools, 'install_skill', { candidate_id: 'guessed' })).toMatchObject({
-      code: 'candidate-expired',
+    expect(await run(f.tools, 'find_skills', { query: 'notes' })).toMatchObject({
+      skills: [{ url: 'https://skills.sh/o/r/notes' }],
     });
-    await run(f.tools, 'find_skills', { query: 'notes' });
-    expect(await run(f.tools, 'install_skill', { candidate_id: 'issued' })).toMatchObject({
-      code: 'admission-unverified',
-    });
-    await run(f.tools, 'prepare_skill', { candidate_id: 'issued' });
-    f.setAdmission({
-      status: 'setup-required',
-      reasons: [{ code: 'capability-unavailable', subject: 'web_search' }],
-    });
-    expect(await run(f.tools, 'install_skill', { candidate_id: 'issued' })).toMatchObject({
-      code: 'admission-setup-required',
+    expect(await run(f.tools, 'find_skills', { query: 'https://github.com/o/r' })).toMatchObject({
+      skills: [{ name: 'notes', url: candidate.source.url, installed: false }],
     });
     expect(f.workflow.install).not.toHaveBeenCalled();
   });
 
-  it('commits duplicate calls once, binds the current Agent and activates the accepted revision immediately', async () => {
+  it('installs for the current Agent and activates the accepted revision immediately', async () => {
     const f = fixture();
-    await run(f.tools, 'find_skills', { query: 'notes' });
-    await run(f.tools, 'prepare_skill', { candidate_id: 'issued' });
-    const results = await Promise.all([
-      run(f.tools, 'install_skill', { candidate_id: 'issued' }),
-      run(f.tools, 'install_skill', { candidate_id: 'issued' }),
-    ]);
-    expect(results[0]).toMatchObject({ status: 'installed', availableThisTurn: true });
-    expect(results[1]).toEqual(results[0]);
-    expect(f.workflow.install).toHaveBeenCalledTimes(1);
+    expect(await run(f.tools, 'install_skill', { url: candidate.source.url! })).toMatchObject({
+      status: 'installed',
+      availableThisTurn: true,
+    });
     expect(f.workflow.install).toHaveBeenCalledWith(
-      {
-        candidateId: 'issued',
-        agentIds: ['agent'],
-        expectedPackageDigest: installed.packageDigest,
-        expectedProfileDigest: sha256HexOfText(JSON.stringify(installed.profile)),
-      },
+      { candidateId: 'issued', agentIds: ['agent'] },
       signal,
     );
     expect(await run(f.tools, 'load_skill', { skill_id: installed.id })).toMatchObject({
       status: 'ok',
     });
     expect(f.loaded).toHaveBeenCalledWith(checked.entries[0], 'Write notes.');
-    await run(f.tools, 'install_skill', { candidate_id: 'issued' });
-    expect(f.workflow.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the model to choose when a URL holds several Skills', async () => {
+    const f = fixture(true, [candidate, { ...candidate, candidateId: 'other', name: 'other' }]);
+    expect(await run(f.tools, 'install_skill', { url: 'https://github.com/o/r' })).toMatchObject({
+      status: 'choose',
+      skills: [{ name: 'notes' }, { name: 'other' }],
+    });
+    expect(f.workflow.install).not.toHaveBeenCalled();
+  });
+
+  it('returns admission failures as tool results', async () => {
+    const f = fixture();
+    f.workflow.install.mockRejectedValueOnce(
+      new SkillsError('admission-unsupported', 'needs execution-unsupported (python)'),
+    );
+    expect(await run(f.tools, 'install_skill', { url: candidate.source.url! })).toMatchObject({
+      status: 'error',
+      code: 'admission-unsupported',
+    });
   });
 
   it('preserves pinned revisions and refuses unrelated or unready additions', () => {
@@ -184,7 +160,11 @@ describe('conversation Skill installation', () => {
     const blocked: SkillTurnScope = {
       ...checked,
       entries: [
-        { ...checked.entries[0]!, id: 'blocked', admission: { status: 'unknown', reasons: [] } },
+        {
+          ...checked.entries[0]!,
+          id: 'blocked',
+          admission: { status: 'unsupported', reasons: [] },
+        },
       ],
     };
     expect(expanding.include(blocked, 'blocked', installed.packageDigest)).toBe(false);

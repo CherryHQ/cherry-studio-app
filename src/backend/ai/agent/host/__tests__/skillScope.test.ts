@@ -73,13 +73,13 @@ const projection = (s: Skill): AgentSkillProjection => ({
 });
 
 describe('createSkillScopeSource', () => {
-  it('keeps only reviewed ready Skills, drops blocked or missing packages, and pins revisions', async () => {
+  it('keeps ready Skills, drops blocked or missing packages, and pins revisions', async () => {
     const source = createSkillScopeSource({
       skills: {
         listUsableForAgent: async () =>
           [
             skill('ready'),
-            skill('unverified', {}, 'analyzed'),
+            skill('analyzed', {}, 'analyzed'),
             skill('needs-image', { builtInTools: ['generate_image'] }),
             skill('needs-python', { execution: 'python' }),
             skill('missing'),
@@ -95,7 +95,7 @@ describe('createSkillScopeSource', () => {
             : null,
       },
       environment: { read: async () => environment },
-      models: { getById: async () => ({ capabilities: ['function_call'] }) as never },
+      models: { getById: async () => ({ capabilities: ['function-call'] }) as never },
     });
     const scope = await source.resolve({
       agentId: 'agent',
@@ -106,6 +106,7 @@ describe('createSkillScopeSource', () => {
     });
     expect(scope.entries.map((entry) => [entry.id, entry.admission.status])).toEqual([
       ['ready', 'ready'],
+      ['analyzed', 'ready'],
     ]);
     expect(await scope.readInstructions('ready')).toBe('Body of digest-ready');
     expect(await scope.readInstructions('needs-python')).toBeNull();
@@ -123,7 +124,7 @@ describe('createSkillScopeSource', () => {
       },
       storage: { hasRevision: () => true, readFile: async () => null },
       environment: { read: async () => environment },
-      models: { getById: async () => ({ capabilities: ['function_call'] }) as never },
+      models: { getById: async () => ({ capabilities: ['function-call'] }) as never },
     });
     const base = {
       agentId: 'agent',
@@ -132,16 +133,6 @@ describe('createSkillScopeSource', () => {
       signal: new AbortController().signal,
     };
     expect((await source.resolve({ ...base, disabledCapabilities: [] })).entries).toHaveLength(1);
-    expect(
-      await source.check!(skill('web', { builtInTools: ['web_search'] }).profile, {
-        ...base,
-        disabledCapabilities: [],
-        tools: [],
-      }),
-    ).toMatchObject({
-      status: 'setup-required',
-      reasons: [{ code: 'capability-unavailable', subject: 'web_search' }],
-    });
     expect(
       (await source.resolve({ ...base, disabledCapabilities: [], tools: [] })).entries,
     ).toHaveLength(0);

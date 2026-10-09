@@ -1,7 +1,7 @@
 import { Button, ContentState, Section, useToast } from '@cherrystudio/ui/components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -10,7 +10,6 @@ import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { skillStatusTone } from '@/frontend/utils/skillStatus';
 import { isSkillsError, type SkillInspection } from '@/shared/contracts/skills';
 
-import { SkillAssessmentDetails } from './SkillAssessmentDetails';
 import { SkillPage } from './SkillPage';
 import { SkillReasonList } from './SkillReasonList';
 
@@ -60,40 +59,8 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
   const { toast } = useToast();
   const skillsModule = useBackendModule('skills');
   const [isInstalling, setIsInstalling] = useState(false);
-  const [isAssessing, setIsAssessing] = useState(false);
   const queryClient = useQueryClient();
-  const assessmentController = useRef<AbortController | null>(null);
-  useEffect(
-    () => () => {
-      assessmentController.current?.abort();
-      assessmentController.current = null;
-    },
-    [],
-  );
 
-  async function assess() {
-    if (isAssessing) return;
-    const controller = new AbortController();
-    assessmentController.current = controller;
-    setIsAssessing(true);
-    const queryKey = ['skills', 'inspect', inspection.candidate.candidateId];
-    try {
-      await queryClient.cancelQueries({ queryKey });
-      const result = await skillsModule.assess(inspection.candidate.candidateId, controller.signal);
-      if (!controller.signal.aborted) queryClient.setQueryData(queryKey, result);
-    } catch (error) {
-      if (!controller.signal.aborted)
-        toast.show({
-          label: t(`skills.error.${isSkillsError(error) ? error.code : 'ai-unavailable'}`),
-          variant: 'danger',
-        });
-    } finally {
-      if (assessmentController.current === controller) {
-        assessmentController.current = null;
-        setIsAssessing(false);
-      }
-    }
-  }
   const { admission, candidate, issues, package: pkg } = inspection;
   const status = admission?.status ?? null;
   const tone = status ? skillStatusTone(status) : 'danger';
@@ -172,8 +139,7 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
           label={t('skills.detail.source')}
           trailing={
             <Text className="text-sm text-muted-foreground">
-              {candidate.source.discovery?.registry ??
-                t(`skills.source.${candidate.source.registry}`)}
+              {t(`skills.source.${candidate.source.registry}`)}
             </Text>
           }
         />
@@ -217,32 +183,9 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
           </Section.Item>
         </Section>
       ) : null}
-      {pkg && candidate.source.registry !== 'bundled' ? (
-        <View className="gap-2">
-          <Text className="text-xs text-muted-foreground">{t('skills.ai.assessHint')}</Text>
-          <Button
-            disabled={isAssessing || isInstalling}
-            onPress={() => void assess()}
-            variant="secondary"
-          >
-            {t(isAssessing ? 'skills.ai.assessing' : 'skills.ai.assess')}
-          </Button>
-          {isAssessing ? (
-            <Button variant="ghost" onPress={() => assessmentController.current?.abort()}>
-              {t('common.cancel')}
-            </Button>
-          ) : null}
-        </View>
-      ) : null}
-      {inspection.profile?.assessment ? (
-        <SkillAssessmentDetails
-          assessment={inspection.profile.assessment}
-          adaptation={inspection.profile.adaptation}
-        />
-      ) : null}
       {isInstalled && status === 'ready' ? (
-        <Button disabled={isInstalling || isAssessing} onPress={() => void install()}>
-          {t('skills.ai.applyUpdate')}
+        <Button disabled={isInstalling} onPress={() => void install()}>
+          {t('skills.candidate.applyUpdate')}
         </Button>
       ) : null}
       {isInstalled ? (
@@ -259,19 +202,10 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
           {t('skills.candidate.openInstalled')}
         </Button>
       ) : (
-        <Button
-          disabled={!canInstall || isInstalling || isAssessing}
-          onPress={() => void install()}
-          size="lg"
-        >
+        <Button disabled={!canInstall || isInstalling} onPress={() => void install()} size="lg">
           {isInstalling ? t('skills.candidate.installing') : t('skills.candidate.install')}
         </Button>
       )}
-      {status === 'unknown' ? (
-        <Text className="px-1 text-muted-foreground text-xs">
-          {t('skills.candidate.unverifiedMessage')}
-        </Text>
-      ) : null}
       {status === 'unsupported' ? (
         <Text className="px-1 text-muted-foreground text-xs">
           {t('skills.candidate.unsupportedHint')}

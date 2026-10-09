@@ -29,8 +29,10 @@ export function ChatInputSkillPicker({
   });
   return (
     <BottomSheet
+      avoidKeyboard
       open
       onClose={onClose}
+      size="large"
       title={t('skills.title')}
       closeAction={{ accessibilityLabel: t('common.close') }}
     >

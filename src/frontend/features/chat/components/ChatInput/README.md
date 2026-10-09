@@ -64,7 +64,7 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   and sends explicitly. The structured
   `find-and-install` intent travels with that message and its retries; it supplies installation
   intent to the conversation workflow. Rejected sends retain it, successful sends clear the
-  submitted selection, and switching Agents clears it. The Host owns discovery, preparation,
+  submitted selection, and switching Agents clears it. The Host owns discovery,
   admission, installation and enabling for the current Agent.
 - The plus menu does not add or discover Skills; it only selects installed Skills for use.
 - The menu's Skills row opens a searchable picker of globally enabled, ready bindings for the

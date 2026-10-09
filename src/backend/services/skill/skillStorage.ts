@@ -1,11 +1,11 @@
 /**
  * The managed Skill package store.
  *
- * Layout below the persistent root:
+ * Layout below the selected storage generation, beside its database:
  *
  *   Data/Skills/<folderName>/revisions/<packageDigest>/<package files>
  *
- * Roots are resolved through platform APIs at access time and never persisted.
+ * Roots are resolved at access time and never persisted.
  * Staging lives under the cache directory and is disposable; publication moves
  * a complete staged tree into place, so an interrupted install leaves nothing
  * an accepted record could point at. Installed packages are never under the
@@ -14,7 +14,7 @@
 
 import { Directory, File, Paths } from 'expo-file-system';
 
-import { skillStorageRootDirectory } from '@/backend/data/storage/storagePaths';
+import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import { SkillsError } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -39,16 +39,13 @@ export interface SkillFileSystem {
 }
 
 export type SkillStorageRoots = {
-  /** Persistent application-support root, or null when the native module is unavailable. */
-  persistent: () => readonly string[] | null;
+  persistent: () => readonly string[];
   cache: () => readonly string[];
 };
 
 export type SkillRevisionRef = { folderName: string; packageDigest: string };
 
 export interface SkillStorage {
-  /** Whether the persistent root can be resolved on this client. */
-  isAvailable(): boolean;
   /** Writes a complete package into a fresh staging directory and returns its handle. */
   stage(files: SkillPackageFiles): Promise<string>;
   discardStaging(handle: string): void;
@@ -64,16 +61,7 @@ export interface SkillStorage {
 }
 
 export function createSkillStorage(fs: SkillFileSystem, roots: SkillStorageRoots): SkillStorage {
-  const skillsRoot = (): readonly string[] => {
-    const root = roots.persistent();
-    if (!root) {
-      throw new SkillsError(
-        'storage-unavailable',
-        'Managed Skill storage is unavailable on this client.',
-      );
-    }
-    return [...root, ...SKILL_DIRECTORY];
-  };
+  const skillsRoot = (): readonly string[] => [...roots.persistent(), ...SKILL_DIRECTORY];
   const stagingRoot = () => [...roots.cache(), STAGING_DIRECTORY];
   const revisionPath = (ref: SkillRevisionRef) => {
     assertSegment(ref.folderName);
@@ -82,8 +70,6 @@ export function createSkillStorage(fs: SkillFileSystem, roots: SkillStorageRoots
   };
 
   return {
-    isAvailable: () => roots.persistent() !== null,
-
     async stage(files) {
       const handle = `stage-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
       const base = [...stagingRoot(), handle];
@@ -160,27 +146,24 @@ export function createSkillStorage(fs: SkillFileSystem, roots: SkillStorageRoots
     },
 
     reconcile(live) {
-      const root = roots.persistent();
-      if (root) {
-        const skills = [...root, ...SKILL_DIRECTORY];
-        const liveByFolder = new Map<string, Set<string>>();
-        for (const ref of live) {
-          const digests = liveByFolder.get(ref.folderName) ?? new Set<string>();
-          digests.add(ref.packageDigest);
-          liveByFolder.set(ref.folderName, digests);
-        }
-        if (fs.isDirectory(skills)) {
-          for (const folder of fs.list(skills)) {
-            const digests = liveByFolder.get(folder);
-            if (!digests) {
-              safeRemove(fs, [...skills, folder]);
-              continue;
-            }
-            const revisions = [...skills, folder, REVISIONS_DIRECTORY];
-            if (!fs.isDirectory(revisions)) continue;
-            for (const digest of fs.list(revisions)) {
-              if (!digests.has(digest)) safeRemove(fs, [...revisions, digest]);
-            }
+      const skills = skillsRoot();
+      const liveByFolder = new Map<string, Set<string>>();
+      for (const ref of live) {
+        const digests = liveByFolder.get(ref.folderName) ?? new Set<string>();
+        digests.add(ref.packageDigest);
+        liveByFolder.set(ref.folderName, digests);
+      }
+      if (fs.isDirectory(skills)) {
+        for (const folder of fs.list(skills)) {
+          const digests = liveByFolder.get(folder);
+          if (!digests) {
+            safeRemove(fs, [...skills, folder]);
+            continue;
+          }
+          const revisions = [...skills, folder, REVISIONS_DIRECTORY];
+          if (!fs.isDirectory(revisions)) continue;
+          for (const digest of fs.list(revisions)) {
+            if (!digests.has(digest)) safeRemove(fs, [...revisions, digest]);
           }
         }
       }
@@ -223,10 +206,7 @@ export const expoSkillFileSystem: SkillFileSystem = {
 };
 
 export const expoSkillStorageRoots: SkillStorageRoots = {
-  persistent: () => {
-    const uri = skillStorageRootDirectory()?.uri;
-    return uri ? [uri] : null;
-  },
+  persistent: () => [storageDirectory().uri],
   cache: () => [Paths.cache.uri],
 };
 

@@ -15,7 +15,7 @@ import type { SkillListItem } from '@/shared/data/types/skill';
 const EMPTY_SKILLS: readonly SkillListItem[] = Object.freeze([]);
 
 export function useSkillsApi(
-  query: ListSkillsQueryParams = {},
+  query: Omit<ListSkillsQueryParams, 'limit'> & { limit?: number } = {},
   options: { enabled?: boolean } = {},
 ) {
   const { limit, ...filters } = query;

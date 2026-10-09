@@ -34,13 +34,9 @@ function profile(
 }
 
 describe('evaluateSkillAdmission', () => {
-  it('distinguishes ready, setup required, unsupported, and unknown', () => {
+  it('distinguishes ready, setup required, and unsupported', () => {
     expect(
-      evaluateSkillAdmission(
-        profile({ builtInTools: ['calendar_list_events'] }),
-        'digest',
-        environment,
-      ),
+      evaluateSkillAdmission(profile({ builtInTools: ['calendar_list_events'] }), environment),
     ).toEqual({
       status: 'ready',
       reasons: [],
@@ -48,7 +44,6 @@ describe('evaluateSkillAdmission', () => {
     expect(
       evaluateSkillAdmission(
         profile({ builtInTools: ['web_search', 'generate_image'] }),
-        'digest',
         environment,
       ),
     ).toEqual({
@@ -58,25 +53,19 @@ describe('evaluateSkillAdmission', () => {
         { code: 'drawing-model-unconfigured', subject: 'generate_image' },
       ],
     });
-    expect(evaluateSkillAdmission(profile({ execution: 'python' }), 'digest', environment)).toEqual(
-      {
-        status: 'unsupported',
-        reasons: [{ code: 'execution-unsupported', subject: 'python' }],
-      },
-    );
+    expect(evaluateSkillAdmission(profile({ execution: 'python' }), environment)).toEqual({
+      status: 'unsupported',
+      reasons: [{ code: 'execution-unsupported', subject: 'python' }],
+    });
     expect(
-      evaluateSkillAdmission(profile({ builtInTools: ['reminder_list_items'] }), 'digest', {
+      evaluateSkillAdmission(profile({ builtInTools: ['reminder_list_items'] }), {
         ...environment,
         platform: 'android',
       }),
     ).toMatchObject({ status: 'unsupported', reasons: [{ code: 'capability-unavailable' }] });
-    expect(evaluateSkillAdmission(profile({}, 'analyzed'), 'digest', environment)).toEqual({
-      status: 'unknown',
-      reasons: [{ code: 'unverified', subject: null }],
-    });
-    expect(evaluateSkillAdmission(profile({}), 'other-digest', environment)).toMatchObject({
-      status: 'unknown',
-      reasons: [{ code: 'profile-digest-mismatch' }],
+    expect(evaluateSkillAdmission(profile({}, 'analyzed'), environment)).toEqual({
+      status: 'ready',
+      reasons: [],
     });
   });
 
@@ -84,7 +73,6 @@ describe('evaluateSkillAdmission', () => {
     expect(
       evaluateSkillAdmission(
         profile({ pluginTools: [{ pluginId: 'feishu', tools: ['search'] }] }),
-        'digest',
         environment,
       ),
     ).toEqual({
@@ -94,7 +82,6 @@ describe('evaluateSkillAdmission', () => {
     expect(
       evaluateSkillAdmission(
         profile({ pluginTools: [{ pluginId: 'github', tools: ['issue_write'] }] }),
-        'digest',
         environment,
       ),
     ).toMatchObject({
@@ -106,7 +93,7 @@ describe('evaluateSkillAdmission', () => {
       permissions: { 'calendar.read': { state: 'denied', canAskAgain: false } },
     };
     expect(
-      evaluateSkillAdmission(profile({ builtInTools: ['calendar_list_events'] }), 'digest', denied),
+      evaluateSkillAdmission(profile({ builtInTools: ['calendar_list_events'] }), denied),
     ).toEqual({
       status: 'setup-required',
       reasons: [{ code: 'permission-denied', subject: 'calendar.read' }],
@@ -116,7 +103,6 @@ describe('evaluateSkillAdmission', () => {
   it('adds Agent-scope reasons without changing application-scope results', () => {
     const result = evaluateSkillAdmission(
       profile({ builtInTools: ['calendar_list_events'] }),
-      'digest',
       environment,
       {
         disabledCapabilities: ['calendar'],
@@ -148,19 +134,16 @@ describe('analyzeSkillRequirements', () => {
     );
   };
 
-  it('detects referenced scripts and interpreter commands as execution requirements', () => {
+  it('requires execution only when instructions call bundled scripts', () => {
     expect(
       analyze('---\nname: x\ndescription: d\n---\nRun `python scripts/fill.py` first.', {
         'scripts/fill.py': 'print(1)',
       }).requirements,
     ).toMatchObject({ execution: 'python' });
+    // A command example without a bundled script is not treated as a dependency.
     expect(
       analyze('---\nname: x\ndescription: d\n---\n```bash\nnpx prettier --write .\n```')
         .requirements,
-    ).toMatchObject({ execution: 'node' });
-    // Prose mentioning Python is not a command.
-    expect(
-      analyze('---\nname: x\ndescription: d\n---\nThis was written by a python fan.').requirements,
     ).toMatchObject({ execution: 'none' });
     // An unreferenced helper script does not make the workflow depend on it.
     expect(

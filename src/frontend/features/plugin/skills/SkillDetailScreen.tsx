@@ -14,7 +14,6 @@ import { skillStatusTone } from '@/frontend/utils/skillStatus';
 import { isSkillsError } from '@/shared/contracts/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-import { SkillAssessmentDetails } from './SkillAssessmentDetails';
 import { SkillPage } from './SkillPage';
 import { SkillReasonList } from './SkillReasonList';
 
@@ -181,7 +180,7 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           label={t('skills.detail.source')}
           trailing={
             <Text className="text-sm text-muted-foreground">
-              {skill.source.discovery?.registry ?? t(`skills.source.${skill.source.registry}`)}
+              {t(`skills.source.${skill.source.registry}`)}
             </Text>
           }
         />
@@ -220,12 +219,6 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           }
         />
       </Section>
-      {skill.profile.assessment ? (
-        <SkillAssessmentDetails
-          assessment={skill.profile.assessment}
-          adaptation={skill.profile.adaptation}
-        />
-      ) : null}
       {skill.compatibility ? (
         <Section title={t('skills.detail.compatibilityNote')}>
           <Section.Item>

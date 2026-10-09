@@ -1,8 +1,6 @@
-import type { AgentMessagePart, AgentMessageView } from '@/shared/contracts/agent';
 import type { SkillActivation } from '@/shared/data/types/skill';
 
 import type { StoredSkillActivation } from '../sessionStore/skillActivations';
-import { SKILL_TOOL_NAMES } from '../tools/skill';
 import type { SkillTurnScope } from './skillScope';
 
 /** Most recent receipt per Skill; retry excludes the answer it is replacing. */
@@ -20,6 +18,7 @@ export function latestSkillActivations(
   return [...byId.values()];
 }
 
+/** An activation stays current while its Skill remains usable under the same invocation policy. */
 export function isSkillActivationCurrent(
   activation: SkillActivation,
   scope: SkillTurnScope,
@@ -27,45 +26,8 @@ export function isSkillActivationCurrent(
   return scope.entries.some(
     (entry) =>
       entry.id === activation.skillId &&
-      entry.packageDigest === activation.packageDigest &&
       (activation.origin === 'automatic'
         ? entry.invocation.modelInvocable
         : entry.invocation.userInvocable),
-  );
-}
-
-/** Historical instructions and resource bodies are receipts, never current policy. */
-export function stripSkillHistoryParts(parts: readonly AgentMessagePart[]): AgentMessagePart[] {
-  return parts.map((part) =>
-    part.type === 'dynamic-tool' &&
-    part.toolRef.source === 'builtin' &&
-    SKILL_TOOL_NAMES.includes(part.toolRef.capabilityId) &&
-    part.state === 'output-available'
-      ? {
-          ...part,
-          output: {
-            value: {
-              status: 'historical',
-              message:
-                'Historical Skill activity. Use only the current Skills catalog and active instructions; reload resources when needed.',
-            },
-            artifacts: [],
-          },
-        }
-      : part,
-  );
-}
-
-export function stripSkillHistory(messages: readonly AgentMessageView[]): AgentMessageView[] {
-  return messages.map((message) => ({ ...message, parts: stripSkillHistoryParts(message.parts) }));
-}
-
-/** Native replay carries original tool bodies, so these turns must use the stripped transcript. */
-export function hasSkillHistory(parts: readonly AgentMessagePart[]): boolean {
-  return parts.some(
-    (part) =>
-      part.type === 'dynamic-tool' &&
-      part.toolRef.source === 'builtin' &&
-      SKILL_TOOL_NAMES.includes(part.toolRef.capabilityId),
   );
 }

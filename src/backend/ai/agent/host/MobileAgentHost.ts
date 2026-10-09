@@ -129,7 +129,6 @@ import {
   toAgentMessagePart,
   toCompactionAnchorPart,
 } from './runtimeProjection';
-import { hasSkillHistory, stripSkillHistoryParts } from './skillHistory';
 import type { SkillScopeSource } from './skillScope';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
@@ -1097,9 +1096,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       // artifact is never replayed to the model, so a retained prefix can be
       // model-visible or empty regardless of how many parts it kept.
       const resume = plan.retry
-        ? toRuntimeHistory([
-            { ...state.assistantMessage, parts: stripSkillHistoryParts(plan.retry.resumeParts) },
-          ]).flatMap((turn) => turn.messages.flatMap((message) => message.parts))
+        ? toRuntimeHistory([{ ...state.assistantMessage, parts: plan.retry.resumeParts }]).flatMap(
+            (turn) => turn.messages.flatMap((message) => message.parts),
+          )
         : [];
       const events = state.runtimeSession.execute({
         turnId: state.turn.id,
@@ -1119,10 +1118,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           plan.history,
           runtimeAttachments,
           plan.inferenceSnapshot.model.uniqueModelId,
-          this.ports.replayCache?.readHistory(
-            sessionId,
-            plan.history.filter((message) => !hasSkillHistory(message.parts)),
-          ),
+          this.ports.replayCache?.readHistory(sessionId, plan.history),
         ),
         contextCheckpoint: plan.runtimeContextCheckpoint,
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),

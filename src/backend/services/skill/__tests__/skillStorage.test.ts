@@ -5,7 +5,7 @@ jest.mock('expo-file-system', () => ({
   File: jest.fn(),
   Paths: { cache: { uri: 'file:///cache/' } },
 }));
-jest.mock('@/backend/data/storage/storagePaths', () => ({ skillStorageRootDirectory: () => null }));
+jest.mock('@/backend/data/storage/storagePaths', () => ({ storageDirectory: () => null }));
 
 type Node = { kind: 'dir'; children: Map<string, Node> } | { kind: 'file'; bytes: Uint8Array };
 
@@ -91,10 +91,10 @@ const files = new Map([
 describe('createSkillStorage', () => {
   it('stages under cache, publishes into the persistent root, and reads only package paths', async () => {
     const { fs, snapshot } = createFakeFileSystem();
-    fs.createDirectory(['app-support']);
+    fs.createDirectory(['store']);
     fs.createDirectory(['cache']);
     const storage = createSkillStorage(fs, {
-      persistent: () => ['app-support'],
+      persistent: () => ['store'],
       cache: () => ['cache'],
     });
     const handle = await storage.stage(files);
@@ -104,8 +104,8 @@ describe('createSkillStorage', () => {
     expect(storage.hasRevision(ref)).toBe(false);
     await storage.publish(handle, ref);
     expect(snapshot()).toEqual([
-      'app-support/Data/Skills/brief/revisions/abc/SKILL.md',
-      'app-support/Data/Skills/brief/revisions/abc/references/format.md',
+      'store/Data/Skills/brief/revisions/abc/SKILL.md',
+      'store/Data/Skills/brief/revisions/abc/references/format.md',
     ]);
     expect(storage.hasRevision(ref)).toBe(true);
     expect(storage.listFiles(ref)).toEqual(['SKILL.md', 'references/format.md']);
@@ -121,10 +121,10 @@ describe('createSkillStorage', () => {
 
   it('keeps accepted revisions through reconciliation and removes orphans and staging', async () => {
     const { fs, snapshot } = createFakeFileSystem();
-    fs.createDirectory(['app-support']);
+    fs.createDirectory(['store']);
     fs.createDirectory(['cache']);
     const storage = createSkillStorage(fs, {
-      persistent: () => ['app-support'],
+      persistent: () => ['store'],
       cache: () => ['cache'],
     });
     await storage.publish(await storage.stage(files), { folderName: 'brief', packageDigest: 'v1' });
@@ -137,22 +137,10 @@ describe('createSkillStorage', () => {
 
     storage.reconcile([{ folderName: 'brief', packageDigest: 'v2' }]);
     expect(snapshot()).toEqual([
-      'app-support/Data/Skills/brief/revisions/v2/SKILL.md',
-      'app-support/Data/Skills/brief/revisions/v2/references/format.md',
+      'store/Data/Skills/brief/revisions/v2/SKILL.md',
+      'store/Data/Skills/brief/revisions/v2/references/format.md',
     ]);
     storage.removeSkill('brief');
     expect(snapshot()).toEqual([]);
-  });
-
-  it('fails closed without the native root instead of using another directory', async () => {
-    const { fs } = createFakeFileSystem();
-    fs.createDirectory(['cache']);
-    const storage = createSkillStorage(fs, { persistent: () => null, cache: () => ['cache'] });
-    expect(storage.isAvailable()).toBe(false);
-    const handle = await storage.stage(files);
-    await expect(
-      storage.publish(handle, { folderName: 'brief', packageDigest: 'v1' }),
-    ).rejects.toMatchObject({ code: 'storage-unavailable' });
-    expect(() => storage.reconcile([])).not.toThrow();
   });
 });

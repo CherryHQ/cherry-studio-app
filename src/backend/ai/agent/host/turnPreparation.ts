@@ -1,3 +1,13 @@
+/**
+ * Turn preparation for the Mobile Agent Host: everything between admission
+ * and the first durable write. `prepareTurn` is a standalone planning stage
+ * over explicit ports — it loads the Session, Agent definition, checkpoint,
+ * and history, admits attachments, freezes the tool snapshot, preflights the
+ * model, and returns one immutable `TurnPlan`. It performs no writes and
+ * publishes no events, so every gate can fail here with zero side effects
+ * and the stage is testable without a Host instance.
+ */
+
 import type { AiUsageAttribution, AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import {
@@ -11,15 +21,6 @@ import {
   type AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
-/**
- * Turn preparation for the Mobile Agent Host: everything between admission
- * and the first durable write. `prepareTurn` is a standalone planning stage
- * over explicit ports — it loads the Session, Agent definition, checkpoint,
- * and history, admits attachments, freezes the tool snapshot, preflights the
- * model, and returns one immutable `TurnPlan`. It performs no writes and
- * publishes no events, so every gate can fail here with zero side effects
- * and the stage is testable without a Host instance.
- */
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { parseUniqueModelId } from '@/shared/data/types/model';
@@ -54,11 +55,7 @@ import {
   createAgentInferenceSnapshot,
   type AgentInferenceModelResolver,
 } from './inferenceSnapshot';
-import {
-  latestSkillActivations,
-  isSkillActivationCurrent,
-  stripSkillHistory,
-} from './skillHistory';
+import { isSkillActivationCurrent, latestSkillActivations } from './skillHistory';
 import {
   EMPTY_SKILL_SCOPE,
   createExpandingSkillScope,
@@ -142,7 +139,6 @@ export type TurnSkillPlan = {
   selected: readonly { entry: SkillTurnEntry; instructions: string }[];
   /** Host-owned active instructions, updated by successful read-only loading tools. */
   active?: Map<string, { entry: SkillTurnEntry; instructions: string }>;
-  hasStaleActivations?: boolean;
 };
 
 export const EMPTY_TURN_SKILL_PLAN: TurnSkillPlan = Object.freeze({
@@ -301,7 +297,6 @@ export async function prepareResolvedTurn(
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
   documentParserMode: DocumentParserMode,
   signal: AbortSignal,
-  expectedSelections: readonly SkillActivation[] = [],
 ): Promise<TurnPlan> {
   const agent = applyTurnOverrides(configuredAgent, parsed);
   const usageAttribution = createTurnUsageAttribution({
@@ -397,7 +392,7 @@ export async function prepareResolvedTurn(
     fail('CAPABILITY_UNSUPPORTED', 'Skills are not supported for this Agent.');
   }
 
-  if (parsed.skillAction && (!dependencies.skillWorkflow || !dependencies.skills?.check))
+  if (parsed.skillAction && (!dependencies.skillWorkflow || !dependencies.skills))
     fail('CAPABILITY_UNSUPPORTED', 'Skill discovery is unavailable in this environment.');
 
   // Freeze system capabilities, configured MCP tools, and connected plugins so
@@ -410,12 +405,9 @@ export async function prepareResolvedTurn(
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
   const toolDiscoveryWarnings: string[] = [];
-  const recordedActivations =
-    storedTurnContext.skillActivations ?? collectSkillActivations(storedTurnContext.history);
-  const receipts = latestSkillActivations(recordedActivations);
-  if (!runtime.descriptor.capabilities.tools && receipts.length > 0) {
-    skills = { ...EMPTY_TURN_SKILL_PLAN, hasStaleActivations: true };
-  }
+  const receipts = latestSkillActivations(
+    storedTurnContext.skillActivations ?? collectSkillActivations(storedTurnContext.history),
+  );
   if (runtime.descriptor.capabilities.tools) {
     try {
       systemTools = await raceAbort(
@@ -459,11 +451,7 @@ export async function prepareResolvedTurn(
       parsed.skillIds ?? [],
       [...systemTools, ...configuredTools],
       receipts,
-      expectedSelections,
       signal,
-    );
-    skills.hasStaleActivations ||= recordedActivations.some(
-      ({ activation }) => !isSkillActivationCurrent(activation, skills.scope),
     );
     const expanding = createExpandingSkillScope(skills.scope);
     skills = {
@@ -492,7 +480,7 @@ export async function prepareResolvedTurn(
         onLoad: (entry, instructions) => skills.active?.set(entry.id, { entry, instructions }),
       });
     }
-    if (dependencies.skillWorkflow && dependencies.skills?.check) {
+    if (dependencies.skillWorkflow && dependencies.skills) {
       skillTools = [
         ...skillTools,
         ...createSkillManagementTools({
@@ -509,32 +497,6 @@ export async function prepareResolvedTurn(
         }),
       ];
     }
-  }
-  if (runtimeContextCheckpoint && skills.hasStaleActivations) {
-    // A compacted summary can contain instructions from a now-disabled or
-    // superseded Skill. Rebuild from the transcript, with Skill payloads stripped.
-    const full = await raceAbort(
-      dependencies.store.loadRuntimeTurnContext(parsed.sessionId, null),
-      signal,
-    );
-    const retryIndex = full.history.findIndex((message) => message.id === parsed.userMessageId);
-    return prepareResolvedTurn(
-      dependencies,
-      parsed,
-      session,
-      configuredAgent,
-      {
-        ...full,
-        history: retryIndex < 0 ? full.history : full.history.slice(0, retryIndex),
-        // Retry has already removed receipts from the answer it replaces.
-        skillActivations:
-          storedTurnContext.skillActivations ?? collectSkillActivations(storedTurnContext.history),
-      },
-      null,
-      documentParserMode,
-      signal,
-      expectedSelections,
-    );
   }
   const tools = applyAgentToolApprovalMode(
     [...systemTools, ...configuredTools, ...skillTools],
@@ -623,7 +585,7 @@ export async function prepareResolvedTurn(
     agent,
     documentParserMode,
     hasMessages: storedTurnContext.hasMessages,
-    history: stripSkillHistory(storedTurnContext.history),
+    history: storedTurnContext.history,
     inferenceSnapshot,
     inputParts: parts,
     modelPreflight,
@@ -653,14 +615,13 @@ async function resolveTurnSkills(
   skillIds: readonly string[],
   tools: readonly RuntimeTool[],
   activations: readonly SkillActivation[],
-  expectedSelections: readonly SkillActivation[],
   signal: AbortSignal,
 ): Promise<TurnSkillPlan> {
   if (!dependencies.skills) {
     if (skillIds.length > 0) {
       fail('CAPABILITY_UNSUPPORTED', 'Skills are not available in this environment.');
     }
-    return { ...EMPTY_TURN_SKILL_PLAN, hasStaleActivations: activations.length > 0 };
+    return EMPTY_TURN_SKILL_PLAN;
   }
   let scope: SkillTurnScope;
   try {
@@ -680,17 +641,10 @@ async function resolveTurnSkills(
       fail('EXECUTION_UNAVAILABLE', 'The selected Skills are unavailable.');
     }
     logger.warn('Failed to resolve Agent Skills; continuing without them', error as Error);
-    return { ...EMPTY_TURN_SKILL_PLAN, hasStaleActivations: activations.length > 0 };
+    return EMPTY_TURN_SKILL_PLAN;
   }
   const selected: { entry: SkillTurnEntry; instructions: string }[] = [];
   let instructionCharacters = 0;
-  for (const activation of expectedSelections) {
-    if (!isSkillActivationCurrent(activation, scope))
-      fail(
-        'CAPABILITY_UNSUPPORTED',
-        'A previously selected Skill has changed or is no longer available.',
-      );
-  }
   for (const skillId of new Set(skillIds)) {
     const entry = scope.entries.find((candidate) => candidate.id === skillId);
     if (!entry || !entry.invocation.userInvocable) {
@@ -708,10 +662,9 @@ async function resolveTurnSkills(
       );
     selected.push({ entry, instructions });
   }
+  // Earlier activations stay active while their Skill remains usable; a
+  // removed or disabled Skill simply stops contributing instructions.
   const active = new Map<string, { entry: SkillTurnEntry; instructions: string }>();
-  let hasStaleActivations = activations.some(
-    (activation) => !isSkillActivationCurrent(activation, scope),
-  );
   for (const activation of activations.toReversed()) {
     if (
       !isSkillActivationCurrent(activation, scope) ||
@@ -720,19 +673,13 @@ async function resolveTurnSkills(
       continue;
     const entry = scope.entries.find((candidate) => candidate.id === activation.skillId)!;
     const instructions = await raceAbort(scope.readInstructions(entry.id), signal);
-    if (instructions === null) {
-      hasStaleActivations = true;
-      continue;
-    }
+    if (instructions === null) continue;
     const length = [...instructions].length;
-    if (instructionCharacters + length > SKILL_ACTIVE_MAX_CHARACTERS) {
-      hasStaleActivations = true;
-      continue;
-    }
+    if (instructionCharacters + length > SKILL_ACTIVE_MAX_CHARACTERS) continue;
     instructionCharacters += length;
     active.set(entry.id, { entry, instructions });
   }
-  return { scope, selected, active, hasStaleActivations };
+  return { scope, selected, active };
 }
 
 function applyTurnOverrides(

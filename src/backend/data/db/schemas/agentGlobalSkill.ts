@@ -33,7 +33,7 @@ export const agentGlobalSkillTable = sqliteTable(
     // Generated storage alias; unique among live rows so two publishers can
     // share a display name without sharing a directory.
     folderName: text().notNull(),
-    sourceRegistry: text({ enum: ['bundled', 'github', 'clawhub'] })
+    sourceRegistry: text({ enum: ['bundled', 'github'] })
       .$type<SkillSource['registry']>()
       .notNull(),
     // Stable origin identity; updates preserve it and uninstall retires the row.

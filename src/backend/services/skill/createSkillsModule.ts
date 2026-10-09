@@ -25,18 +25,13 @@ import type {
   SkillCandidate,
   SkillProfile,
 } from '@/shared/data/types/skill';
-import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import type { BundledSkillDefinition } from './bundled';
-import { adaptSkillPackage, applySkillAdaptation } from './skillAdaptation';
 import {
   analyzeSkillRequirements,
   evaluateSkillAdmission,
   type SkillAgentFacts,
 } from './skillAdmission';
-import type { SkillAi } from './skillAi';
-import { assessSkillPackage } from './skillAssessment';
-import { discoverSkillUrls, type SkillWebSearch } from './skillDiscovery';
 import type { SkillEnvironmentReader } from './skillEnvironment';
 import type { SkillMarketplace } from './skillMarketplace';
 import {
@@ -50,16 +45,13 @@ import type { SkillStorage } from './skillStorage';
 const CANDIDATE_TTL_MS = 30 * 60 * 1000;
 
 export type SkillsModuleDependencies = {
-  ai?: SkillAi;
-  search?: SkillWebSearch;
-  marketplace?: SkillMarketplace;
+  marketplace: SkillMarketplace;
   db: { withWriteTx<T>(fn: (tx: Database) => Promise<T>): Promise<T> };
   skills: AgentGlobalSkillService;
   storage: SkillStorage;
   environment: SkillEnvironmentReader;
   sources: {
     bundled: SkillSourceAdapter & { list(): SkillSourceCandidate[] };
-    clawhub?: SkillSourceAdapter;
     github: SkillSourceAdapter & {
       resolveUrl(url: string, signal?: AbortSignal): Promise<SkillSourceCandidate>;
     };
@@ -77,23 +69,12 @@ export type SkillsBackend = SkillsModule & {
 };
 
 export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBackend {
-  const assessments = new Map<string, SkillProfile>();
   const candidates = new Map<string, ResolvedCandidate>();
-  const adaptations = new Map<string, NonNullable<Awaited<ReturnType<typeof adaptSkillPackage>>>>();
   const changes = new Emitter<void>();
 
-  function rememberAssessment(profile: SkillProfile) {
-    if (assessments.size >= 32 && !assessments.has(profile.packageDigest))
-      assessments.delete(assessments.keys().next().value!);
-    assessments.set(profile.packageDigest, profile);
-  }
-
   function remember(candidate: SkillSourceCandidate): SkillSourceCandidate {
-    if (candidates.size >= 64 && !candidates.has(candidate.candidateId)) {
-      const oldest = candidates.keys().next().value!;
-      candidates.delete(oldest);
-      adaptations.delete(oldest);
-    }
+    if (candidates.size >= 64 && !candidates.has(candidate.candidateId))
+      candidates.delete(candidates.keys().next().value!);
     candidates.set(candidate.candidateId, { candidate, resolvedAt: Date.now() });
     return candidate;
   }
@@ -102,7 +83,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     const entry = candidates.get(candidateId);
     if (!entry || Date.now() - entry.resolvedAt > CANDIDATE_TTL_MS) {
       candidates.delete(candidateId);
-      adaptations.delete(candidateId);
       throw new SkillsError('candidate-expired', 'Resolve the Skill again before installing it.');
     }
     return entry.candidate;
@@ -148,12 +128,10 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
   async function acquireAndInspect(
     candidate: SkillSourceCandidate,
     signal?: AbortSignal,
-    acceptedProfile?: SkillProfile,
   ): Promise<{
     inspection: SkillInspection;
     package: ValidatedSkillPackage | null;
     files: Awaited<ReturnType<SkillSourceAdapter['acquire']>>['files'] | null;
-    originalFiles?: Awaited<ReturnType<SkillSourceAdapter['acquire']>>['files'];
   }> {
     const acquisition = await sourceFor(candidate).acquire(candidate, signal);
     signal?.throwIfAborted();
@@ -174,36 +152,9 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         files: null,
       };
     }
-    let pkg = validation.package;
-    let files = acquisition.files;
-    let originalFiles: typeof files | undefined;
-    const installedProfile =
-      acceptedProfile ?? (await deps.skills.findByLocator(candidate.source.locator))?.profile;
-    const cached = adaptations.get(candidate.candidateId);
-    const adaptedProfile = cached?.profile ?? installedProfile;
-    if (adaptedProfile?.adaptation?.upstreamDigest === pkg.packageDigest) {
-      const adapted = applySkillAdaptation(files, pkg, adaptedProfile.adaptation);
-      if (adapted.package.packageDigest !== adaptedProfile.packageDigest)
-        throw new SkillsError(
-          'package-invalid',
-          'The adapted package does not match its assessment.',
-        );
-      originalFiles = files;
-      files = adapted.files;
-      pkg = adapted.package;
-    }
-    const profile = candidate.reviewed
-      ? buildProfile(pkg, candidate.reviewed)
-      : (assessments.get(pkg.packageDigest) ??
-        (adaptedProfile?.packageDigest === pkg.packageDigest ? adaptedProfile : undefined) ??
-        (installedProfile?.packageDigest === pkg.packageDigest
-          ? installedProfile
-          : buildProfile(pkg, null)));
-    const admission = evaluateSkillAdmission(
-      profile,
-      pkg.packageDigest,
-      await deps.environment.read(),
-    );
+    const pkg = validation.package;
+    const profile = buildProfile(pkg, candidate.reviewed);
+    const admission = evaluateSkillAdmission(profile, await deps.environment.read());
     return {
       inspection: {
         candidate: { ...publicCandidate, profileProvenance: profile.provenance },
@@ -225,8 +176,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         admission,
       },
       package: pkg,
-      files,
-      ...(originalFiles ? { originalFiles } : {}),
+      files: acquisition.files,
     };
   }
 
@@ -253,24 +203,20 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
   }
 
   function assertInstallable(admission: SkillAdmission): void {
-    if (admission.status === 'unsupported') {
+    if (admission.status === 'ready') return;
+    // Reason codes let the conversation explain the blocker without another inspection.
+    const reasons = admission.reasons
+      .map(({ code, subject }) => (subject ? `${code} (${subject})` : code))
+      .join(', ');
+    if (admission.status === 'unsupported')
       throw new SkillsError(
         'admission-unsupported',
-        'This Skill needs capabilities this device does not provide.',
+        `This Skill needs capabilities this device does not provide: ${reasons}.`,
       );
-    }
-    if (admission.status === 'unknown') {
-      throw new SkillsError(
-        'admission-unverified',
-        'This Skill has not been verified for this device.',
-      );
-    }
-    if (admission.status === 'setup-required') {
-      throw new SkillsError(
-        'admission-setup-required',
-        'Configure the required capabilities first.',
-      );
-    }
+    throw new SkillsError(
+      'admission-setup-required',
+      `Configure the required capabilities first: ${reasons}.`,
+    );
   }
 
   const admissions: SkillAdmissionReader = {
@@ -278,16 +224,16 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       const environment = await deps.environment.read();
       const agent = agentId ? await deps.agentFacts(agentId) : null;
       return skills.map((skill) => {
-        const hasPackage = deps.storage.isAvailable() && deps.storage.hasRevision(skill);
+        const hasPackage = deps.storage.hasRevision(skill);
         const admission: SkillAdmission = hasPackage
-          ? evaluateSkillAdmission(skill.profile, skill.packageDigest, environment)
+          ? evaluateSkillAdmission(skill.profile, environment)
           : { status: 'setup-required', reasons: [{ code: 'package-unavailable', subject: null }] };
         return agent
           ? {
               admission,
               agentAdmission: !hasPackage
                 ? admission
-                : evaluateSkillAdmission(skill.profile, skill.packageDigest, environment, agent),
+                : evaluateSkillAdmission(skill.profile, environment, agent),
             }
           : { admission };
       });
@@ -297,143 +243,22 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
   const module: SkillsBackend = {
     admissions,
 
-    async discover(query, signal) {
-      if (!query.trim() || query.length > 2000)
-        throw new SkillsError('source-invalid', 'Provide a concise Skill request or URL.');
-      if (deps.marketplace && /^https:\/\//i.test(query.trim())) {
-        const resolved = await deps.marketplace.resolveUrl(query.trim(), signal);
-        return {
-          items: await Promise.all(
-            resolved.map(async (candidate) => ({
-              candidate: await toPublicCandidate(remember(candidate)),
-              reason: '',
-            })),
-          ),
-          partial: false,
-        };
-      }
-      if (!deps.ai) throw new SkillsError('ai-unavailable', 'Skill AI is unavailable.');
-      let marketplacePartial = false;
-      const webSearchAvailable = async () =>
-        Boolean(
-          deps.search && (await deps.environment.read()).webSearchAvailability.searchKeywords,
-        );
-      if (deps.marketplace) {
-        try {
-          const result = await deps.marketplace.search(query, deps.ai, signal);
-          marketplacePartial = result.partial;
-          if (result.items.length || !(await webSearchAvailable()))
-            return {
-              ...result,
-              items: await Promise.all(
-                result.items.map(async ({ candidate, reason }) => ({
-                  candidate: await toPublicCandidate(remember(candidate)),
-                  reason,
-                })),
-              ),
-            };
-        } catch (error) {
-          signal?.throwIfAborted();
-          if (!(await webSearchAvailable())) throw error;
-          marketplacePartial = true;
-        }
-      }
-      if (!deps.search) throw new SkillsError('search-unavailable', 'Skill search is unavailable.');
-      const found = await discoverSkillUrls(deps.ai, deps.search, query, signal);
-      const items: Awaited<ReturnType<SkillsModule['discover']>>['items'] = [];
-      let partial = found.partial || marketplacePartial;
-      const resolved = new Set<string>();
-      // Bound acquisition concurrency and preserve the model's relevance order.
-      for (const match of found.matches) {
-        try {
-          const candidate = await deps.sources.github.resolveUrl(match.url, signal);
-          if (resolved.has(candidate.candidateId)) continue;
-          resolved.add(candidate.candidateId);
-          items.push({
-            candidate: await toPublicCandidate(remember(candidate)),
-            reason: match.reason,
-          });
-        } catch {
-          signal?.throwIfAborted();
-          partial = true;
-        }
-      }
-      return { items, partial };
+    async search(query, signal) {
+      const trimmed = query.trim();
+      if (!trimmed || trimmed.length > 200)
+        throw new SkillsError('source-invalid', 'Provide concise Skill search keywords.');
+      return deps.marketplace.search(trimmed, signal);
     },
 
-    async assess(candidateId, signal) {
-      if (!deps.ai) throw new SkillsError('ai-unavailable', 'Skill AI is unavailable.');
-      const candidate = requireCandidate(candidateId);
-      const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
-      if (!pkg || !files || candidate.reviewed) return inspection;
-      const assessedProfile = await assessSkillPackage(
-        deps.ai,
-        pkg,
-        files,
-        deps.environment.pluginToolCatalog(),
-        signal,
-      );
-      const profile = {
-        ...assessedProfile,
-        ...(inspection.profile?.adaptation ? { adaptation: inspection.profile.adaptation } : {}),
-      };
-      // Small process-local cache; only explicit assessments or accepted installation facts grant admission.
-      rememberAssessment(profile);
-      return {
-        ...inspection,
-        profile,
-        candidate: { ...inspection.candidate, profileProvenance: profile.provenance },
-        admission: evaluateSkillAdmission(
-          profile,
-          pkg.packageDigest,
-          await deps.environment.read(),
-        ),
-      };
-    },
-
-    async prepare({ candidateId, adapt }, signal) {
-      const inspection = await module.assess(candidateId, signal);
-      if (
-        !adapt ||
-        !deps.ai ||
-        !inspection.package ||
-        inspection.admission?.status === 'ready' ||
-        inspection.admission?.status === 'setup-required'
-      )
-        return inspection;
-      const candidate = requireCandidate(candidateId);
-      const acquired = await acquireAndInspect(candidate, signal);
-      if (!acquired.package || !acquired.files || acquired.originalFiles) return inspection;
-      const adapted = await adaptSkillPackage(
-        deps.ai,
-        acquired.package,
-        acquired.files,
-        deps.environment.pluginToolCatalog(),
-        signal,
-      );
-      if (
-        !adapted ||
-        evaluateSkillAdmission(
-          adapted.profile,
-          adapted.package.packageDigest,
-          await deps.environment.read(),
-        ).status !== 'ready'
-      )
-        return inspection;
-      if (adaptations.size >= 4) adaptations.delete(adaptations.keys().next().value!);
-      adaptations.set(candidateId, adapted);
-      rememberAssessment(adapted.profile);
-      return (await acquireAndInspect(candidate, signal)).inspection;
+    async resolve(url, signal) {
+      const resolved = await deps.marketplace.resolveUrl(url, signal);
+      return Promise.all(resolved.map((candidate) => toPublicCandidate(remember(candidate))));
     },
 
     async listRecommended() {
       return Promise.all(
         deps.sources.bundled.list().map((candidate) => toPublicCandidate(remember(candidate))),
       );
-    },
-
-    async resolveGithub(url, signal) {
-      return toPublicCandidate(remember(await deps.sources.github.resolveUrl(url, signal)));
     },
 
     async inspect(candidateId, signal) {
@@ -443,45 +268,19 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
 
     async install(input: InstallSkillInput, signal) {
       const candidate = requireCandidate(input.candidateId);
-      if (!deps.storage.isAvailable()) {
-        throw new SkillsError(
-          'storage-unavailable',
-          'Managed Skill storage is unavailable on this client.',
-        );
-      }
       const existing = await deps.skills.findByLocator(candidate.source.locator);
       if (existing && !input.agentIds?.length)
         throw new SkillsError('already-installed', 'This Skill is already installed.');
-      const {
-        inspection,
-        package: pkg,
-        files,
-        originalFiles,
-      } = await acquireAndInspect(candidate, signal);
+      const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
       if (!pkg || !files || !inspection.profile || !inspection.admission) {
         throw new SkillsError('package-invalid', 'The Skill package failed validation.');
       }
       assertInstallable(inspection.admission);
-      if (
-        (input.expectedPackageDigest && input.expectedPackageDigest !== pkg.packageDigest) ||
-        (input.expectedProfileDigest &&
-          input.expectedProfileDigest !== sha256HexOfText(JSON.stringify(inspection.profile)))
-      ) {
-        throw new SkillsError(
-          'admission-unverified',
-          'The prepared package or assessment changed. Prepare it again before installing.',
-        );
-      }
       for (const agentId of input.agentIds ?? []) {
         const facts = await deps.agentFacts(agentId);
         if (!facts) throw new SkillsError('not-found', 'The target Agent no longer exists.');
         assertInstallable(
-          evaluateSkillAdmission(
-            inspection.profile,
-            pkg.packageDigest,
-            await deps.environment.read(),
-            facts,
-          ),
+          evaluateSkillAdmission(inspection.profile, await deps.environment.read(), facts),
         );
       }
       signal?.throwIfAborted();
@@ -511,18 +310,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       try {
         const skill = await deps.db.withWriteTx(async (tx) => {
           folderName = await deps.skills.allocateFolderNameTx(tx, pkg.name);
-          if (originalFiles && inspection.profile!.adaptation) {
-            const originalHandle = await deps.storage.stage(originalFiles);
-            try {
-              await deps.storage.publish(originalHandle, {
-                folderName,
-                packageDigest: inspection.profile!.adaptation.upstreamDigest,
-              });
-            } catch (error) {
-              deps.storage.discardStaging(originalHandle);
-              throw error;
-            }
-          }
           signal?.throwIfAborted();
           // Publish before the row commits: a failed commit leaves an orphan
           // directory that reconciliation reclaims, never a row without bytes.
@@ -535,7 +322,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           );
         });
         candidates.delete(input.candidateId);
-        adaptations.delete(input.candidateId);
         changes.fire();
         return skill;
       } catch (error) {
@@ -554,19 +340,8 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         current.source.registry === 'github' && current.source.url
           ? await deps.sources.github.resolveUrl(current.source.url, signal)
           : await source.resolve(current.source.locator, signal);
-      const candidate = remember({
-        ...resolved,
-        source: {
-          ...resolved.source,
-          ...(current.source.discovery ? { discovery: current.source.discovery } : {}),
-        },
-      });
-      const {
-        inspection,
-        package: pkg,
-        files,
-        originalFiles,
-      } = await acquireAndInspect(candidate, signal, current.profile);
+      const candidate = remember(resolved);
+      const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
       if (!pkg || !files || !inspection.profile || !inspection.admission) {
         return { outcome: 'rejected', skill: current, inspection };
       }
@@ -583,18 +358,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       const handle = await deps.storage.stage(files);
       try {
         const skill = await deps.db.withWriteTx(async (tx) => {
-          if (originalFiles && inspection.profile!.adaptation) {
-            const originalHandle = await deps.storage.stage(originalFiles);
-            try {
-              await deps.storage.publish(originalHandle, {
-                folderName: current.folderName,
-                packageDigest: inspection.profile!.adaptation.upstreamDigest,
-              });
-            } catch (error) {
-              deps.storage.discardStaging(originalHandle);
-              throw error;
-            }
-          }
           signal?.throwIfAborted();
           await deps.storage.publish(handle, {
             folderName: current.folderName,
@@ -628,7 +391,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     },
 
     async reconcileStorage() {
-      if (!deps.storage.isAvailable()) return;
       const live = await deps.skills.listStorageReferences();
       deps.storage.reconcile(live);
     },

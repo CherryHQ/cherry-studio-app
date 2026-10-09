@@ -4,7 +4,6 @@ import { defaultDatabaseDirectory } from 'expo-sqlite';
 import { BackupError, type RestoreOutcome } from '@/shared/contracts/backup';
 
 import { getBackupStorage } from '../../../../modules/backup-storage';
-import { getManagedStorage } from '../../../../modules/managed-storage';
 import {
   selectBootStorage,
   StorageControlSchema,
@@ -65,13 +64,6 @@ export function getStorageBoot() {
 export function storageDirectory(id = getStorageBoot().storageId): Directory {
   StorageIdSchema.parse(id);
   return id === 'legacy' ? Paths.document : new Directory(Paths.document, 'stores', id);
-}
-
-/** Legacy Skills live in application support; restored packages follow the selected generation. */
-export function skillStorageRootDirectory(id = getStorageBoot().storageId): Directory | null {
-  if (id !== 'legacy') return storageDirectory(id);
-  const uri = getManagedStorage()?.getApplicationSupportDirectory();
-  return uri ? new Directory(uri) : null;
 }
 
 export function databaseDirectory(id = getStorageBoot().storageId): string {
@@ -173,11 +165,6 @@ export function cleanupStorageAfterBoot(): void {
     }
   }
   if (control.current !== 'legacy') {
-    const skillRoot = skillStorageRootDirectory('legacy');
-    if (skillRoot) {
-      const skills = new Directory(skillRoot, 'Data', 'Skills');
-      if (skills.exists) skills.delete();
-    }
     // Never delete Documents or the shared SQLite directory themselves.
     for (const name of ['cherry.db', 'cherry.db-wal', 'cherry.db-shm']) {
       const file = new File(defaultDatabaseDirectory, name);
@@ -185,6 +172,7 @@ export function cleanupStorageAfterBoot(): void {
     }
     for (const parts of [
       ['Data', 'Files'],
+      ['Data', 'Skills'],
       ['user-avatar'],
       ['agent-avatars'],
       ['provider-avatars'],
