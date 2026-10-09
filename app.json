@@ -163,6 +163,7 @@
           "barcodeScannerEnabled": true
         }
       ],
+      "./scripts/withEmbeddedBarcodeScanner.js",
       [
         "expo-calendar",
         {
@@ -216,6 +217,7 @@
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
             "buildToolsVersion": "36.0.0",
+            "buildReactNativeFromSource": true,
             "usesCleartextTraffic": true
           },
           "ios": {

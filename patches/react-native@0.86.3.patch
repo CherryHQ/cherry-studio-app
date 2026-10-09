@@ -213,3 +213,110 @@ diff --git a/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp b/React
 +}
 +
  } // namespace facebook::react
+diff --git a/ReactAndroid/src/main/java/com/facebook/react/modules/statusbar/StatusBarModule.kt b/ReactAndroid/src/main/java/com/facebook/react/modules/statusbar/StatusBarModule.kt
+--- a/ReactAndroid/src/main/java/com/facebook/react/modules/statusbar/StatusBarModule.kt
++++ b/ReactAndroid/src/main/java/com/facebook/react/modules/statusbar/StatusBarModule.kt
+@@ -9,6 +9,7 @@
+
+ import android.animation.ArgbEvaluator
+ import android.animation.ValueAnimator
++import android.os.Build
+ import android.view.Window
+ import android.view.WindowManager
+ import androidx.core.view.ViewCompat
+@@ -25,6 +26,7 @@
+ import com.facebook.react.module.annotations.ReactModule
+ import com.facebook.react.uimanager.DisplayMetricsHolder.getStatusBarHeightPx
+ import com.facebook.react.uimanager.PixelUtil
++import com.facebook.react.util.AndroidVersion
+ import com.facebook.react.views.view.isEdgeToEdgeFeatureFlagOn
+ import com.facebook.react.views.view.setStatusBarStyle
+ import com.facebook.react.views.view.setStatusBarTranslucency
+@@ -68,9 +70,14 @@
+   override fun getTypedExportedConstants(): Map<String, Any> {
+     val currentActivity = reactApplicationContext.currentActivity
+     val statusBarColor =
+-        currentActivity?.window?.statusBarColor?.let { color ->
+-          String.format("#%06X", 0xFFFFFF and color)
+-        } ?: "black"
++        if (Build.VERSION.SDK_INT >= AndroidVersion.VERSION_CODE_VANILLA_ICE_CREAM) {
++          // Android 15+ owns the transparent status-bar background.
++          "transparent"
++        } else {
++          currentActivity?.window?.statusBarColor?.let { color ->
++            String.format("#%06X", 0xFFFFFF and color)
++          } ?: "black"
++        }
+     return mapOf(
+         HEIGHT_KEY to PixelUtil.toDIPFromPixel(getStatusBarHeightPx(currentActivity).toFloat()),
+         DEFAULT_BACKGROUND_COLOR_KEY to statusBarColor,
+@@ -88,7 +95,10 @@
+       )
+       return
+     }
+-    if (isEdgeToEdgeFeatureFlagOn) {
++    if (
++        Build.VERSION.SDK_INT >= AndroidVersion.VERSION_CODE_VANILLA_ICE_CREAM ||
++            isEdgeToEdgeFeatureFlagOn
++    ) {
+       FLog.w(
+           ReactConstants.TAG,
+           "StatusBarModule: Ignored status bar change, current activity is edge-to-edge.",
+@@ -125,7 +135,10 @@
+       )
+       return
+     }
+-    if (isEdgeToEdgeFeatureFlagOn) {
++    if (
++        Build.VERSION.SDK_INT >= AndroidVersion.VERSION_CODE_VANILLA_ICE_CREAM ||
++            isEdgeToEdgeFeatureFlagOn
++    ) {
+       FLog.w(
+           ReactConstants.TAG,
+           "StatusBarModule: Ignored status bar change, current activity is edge-to-edge.",
+diff --git a/ReactAndroid/src/main/java/com/facebook/react/views/view/WindowUtil.kt b/ReactAndroid/src/main/java/com/facebook/react/views/view/WindowUtil.kt
+--- a/ReactAndroid/src/main/java/com/facebook/react/views/view/WindowUtil.kt
++++ b/ReactAndroid/src/main/java/com/facebook/react/views/view/WindowUtil.kt
+@@ -125,7 +125,10 @@
+
+ @Suppress("DEPRECATION")
+ private fun Window.statusBarHide() {
+-  if (isEdgeToEdgeFeatureFlagOn) {
++  if (
++      Build.VERSION.SDK_INT >= AndroidVersion.VERSION_CODE_VANILLA_ICE_CREAM ||
++          isEdgeToEdgeFeatureFlagOn
++  ) {
+     WindowInsetsControllerCompat(this, decorView).run {
+       systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+       hide(WindowInsetsCompat.Type.statusBars())
+@@ -144,7 +147,10 @@
+
+ @Suppress("DEPRECATION")
+ private fun Window.statusBarShow() {
+-  if (isEdgeToEdgeFeatureFlagOn) {
++  if (
++      Build.VERSION.SDK_INT >= AndroidVersion.VERSION_CODE_VANILLA_ICE_CREAM ||
++          isEdgeToEdgeFeatureFlagOn
++  ) {
+     WindowInsetsControllerCompat(this, decorView).run {
+       systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+       show(WindowInsetsCompat.Type.statusBars())
+@@ -167,10 +173,16 @@
+   val insetsController = WindowInsetsControllerCompat(this, decorView)
+   val isDarkMode = UiModeUtils.isDarkMode(context)
+
+-  statusBarColor = Color.TRANSPARENT
++  // Android 15+ supplies the system-bar backgrounds. Keep color setters only
++  // for older releases; navigation contrast below still protects three-button UI.
++  if (Build.VERSION.SDK_INT < AndroidVersion.VERSION_CODE_VANILLA_ICE_CREAM) {
++    statusBarColor = Color.TRANSPARENT
++  }
+
+   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+-    navigationBarColor = Color.TRANSPARENT
++    if (Build.VERSION.SDK_INT < AndroidVersion.VERSION_CODE_VANILLA_ICE_CREAM) {
++      navigationBarColor = Color.TRANSPARENT
++    }
+
+     val attributes = intArrayOf(android.R.attr.enforceNavigationBarContrast)
+     val typedArray = context.theme.obtainStyledAttributes(attributes)

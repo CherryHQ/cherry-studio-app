@@ -116,8 +116,9 @@ link checks for non-draft PRs targeting `main`.
 - Root Jest includes `provider-registry` suites through `vitestJestShim.ts`. There is no root
   `test:provider-registry` script; use the owning package filter for a focused local run.
 - With `PRCI` set, Jest includes `scripts/__tests__/architectureBoundaries.test.ts` to protect
-  dependency rules on every PR, and `scripts/__tests__/reactNativeTextCache.test.ts` to guard the
-  React Native patch, which has no feature owner. Other `scripts/__tests__/` suites, including
+  dependency rules on every PR, `scripts/__tests__/reactNativeTextCache.test.ts` to guard the
+  React Native text cache patch, and `scripts/__tests__/androidWindowCompatibility.test.ts` to guard
+  Android window compatibility patches and their native build wiring. Other `scripts/__tests__/` suites, including
   instruction-tooling regressions, remain excluded. Run the affected tooling suites locally without
   `PRCI` when changing those tools; remote success does not cover them.
 - `skills:check` checks public skill entry points, whitelist files, and Claude symlinks.
