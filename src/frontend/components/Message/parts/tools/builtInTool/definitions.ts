@@ -1,5 +1,6 @@
 export type BuiltInToolIconName =
   | 'calendar'
+  | 'code'
   | 'fileEdit'
   | 'fileText'
   | 'health'
@@ -98,6 +99,10 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   web_search: {
     iconName: 'web',
     titleKey: 'chat.builtinTool.web.search',
+  },
+  run_js: {
+    iconName: 'code',
+    titleKey: 'chat.builtinTool.code.runJs',
   },
   web_fetch: {
     iconName: 'web',

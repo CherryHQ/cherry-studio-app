@@ -51,14 +51,14 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
       if (!agent) {
         return null;
       }
-      if (!agent.modelId) {
+      if (!agent.model) {
         throw new AgentProtocolError({
           code: 'AGENT_MODEL_NOT_CONFIGURED',
           message: `Agent has no configured model: ${agentId}`,
           retryable: false,
         });
       }
-      const { providerId, modelId } = parseUniqueModelId(agent.modelId as UniqueModelId);
+      const { providerId, modelId } = parseUniqueModelId(agent.model as UniqueModelId);
       return {
         id: agent.id,
         name: agent.name,

@@ -24,7 +24,7 @@ const modelIdSchema = z
 const fields = UpdateAgentSchema.extend({
   name: z.string().trim().min(1).max(255).optional(),
   instructions: z.string().max(64_000).optional(),
-  modelId: modelIdSchema.nullable().optional(),
+  model: modelIdSchema.nullable().optional(),
 });
 const createSchema = fields.required({ name: true, instructions: true });
 const getSchema = z.strictObject({ agent_id: targetSchema });
@@ -41,7 +41,7 @@ const updateSchema = z.strictObject({
       'Copy updatedAt from a fresh agent_get. A stale version is rejected; read again and reconcile before retrying.',
     ),
   changes: fields.describe(
-    'Only fields explicitly being changed. Omitted fields are preserved; instructions replace the full prompt, so preserve unrelated instructions. modelId: null clears the model.',
+    'Only fields explicitly being changed. Omitted fields are preserved; instructions replace the full prompt, so preserve unrelated instructions. model: null clears the model.',
   ),
 });
 
@@ -107,10 +107,10 @@ export function createAgentManagementTools(
         return {
           value: {
             ...page,
-            items: page.items.map(({ id, name, modelId, modelName, updatedAt }) => ({
+            items: page.items.map(({ id, name, model, modelName, updatedAt }) => ({
               id,
               name,
-              modelId,
+              model,
               modelName,
               updatedAt,
             })),
@@ -131,7 +131,7 @@ export function createAgentManagementTools(
     ),
     tool(
       'agent_create',
-      'Create and save a Cherry Agent with a concise name and practical role, goals, workflow and output instructions derived from the conversation. Omit modelId to inherit the global default model unless the user requests another registered model; never invent IDs. Omitted capabilities match the manual create form’s defaults. Only customize capability or approval settings when requested. Do not create for prompt-only drafts or repeat a successful create. After an uncertain result, inspect agent_list/agent_get before retrying. If the saved Agent has no model, explain that one must be configured before chatting.',
+      'Create and save a Cherry Agent with a concise name and practical role, goals, workflow and output instructions derived from the conversation. Omit model to inherit the global default model unless the user requests another registered model; never invent IDs. Omitted capabilities match the manual create form’s defaults. Only customize capability or approval settings when requested. Do not create for prompt-only drafts or repeat a successful create. After an uncertain result, inspect agent_list/agent_get before retrying. If the saved Agent has no model, explain that one must be configured before chatting.',
       createSchema,
       'ask',
       async (input, signal) => {

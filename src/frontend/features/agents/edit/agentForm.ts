@@ -20,13 +20,13 @@ export type AgentFormState = {
   /** Capability-group deny-list; a group absent from the list is enabled. */
   disabledCapabilities: AgentCapability[];
   instructions: string;
-  modelId: UniqueModelId | null;
+  model: UniqueModelId | null;
   name: string;
   toolApprovalMode: AgentToolApprovalMode;
 };
 
 type BuildAgentDtoOptions = {
-  /** Omit modelId on create so AgentService resolves the current default model. */
+  /** Omit model on create so AgentService resolves the current default model. */
   inheritDefaultModel?: boolean;
 };
 
@@ -39,7 +39,7 @@ export function createAgentFormState(agent?: Agent): AgentFormState {
       ? [...agent.disabledCapabilities]
       : [...DEFAULT_DISABLED_AGENT_CAPABILITIES],
     instructions: agent?.instructions ?? '',
-    modelId: agent?.modelId ?? null,
+    model: agent?.model ?? null,
     name: agent?.name ?? '',
     toolApprovalMode: agent?.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   };
@@ -70,7 +70,7 @@ export function buildAgentDto(
     value: {
       disabledCapabilities: form.disabledCapabilities,
       instructions: form.instructions,
-      ...(options.inheritDefaultModel ? {} : { modelId: form.modelId }),
+      ...(options.inheritDefaultModel ? {} : { model: form.model }),
       name,
       toolApprovalMode: form.toolApprovalMode,
     },

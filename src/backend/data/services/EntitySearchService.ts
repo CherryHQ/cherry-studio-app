@@ -123,7 +123,7 @@ export class EntitySearchService {
 
   private async searchSessions(q: string, limit: number, updatedAtFrom?: number, agentId?: string) {
     const pattern = likePattern(q);
-    const conditions: SQL[] = [sql`${agentSessionTable.title} LIKE ${pattern} ESCAPE '\\'`];
+    const conditions: SQL[] = [sql`${agentSessionTable.name} LIKE ${pattern} ESCAPE '\\'`];
     if (agentId) conditions.push(eq(agentSessionTable.agentId, agentId));
     if (updatedAtFrom !== undefined) {
       conditions.push(gte(agentSessionTable.updatedAt, updatedAtFrom));
@@ -136,7 +136,7 @@ export class EntitySearchService {
         agentName: sql<null | string>`${agentTable.name}`.as('agent_name'),
         id: agentSessionTable.id,
         lastActivityAt: agentSessionTable.lastActivityAt,
-        title: agentSessionTable.title,
+        title: agentSessionTable.name,
         updatedAt: agentSessionTable.updatedAt,
       })
       .from(agentSessionTable)

@@ -115,7 +115,10 @@ export async function resolveManagedInput(
         code: 'unavailable',
       });
     }
-    if (part.mediaType !== fact.mediaType || (part.name !== undefined && part.name !== fact.name)) {
+    if (
+      part.mediaType !== fact.mediaType ||
+      (part.filename !== undefined && part.filename !== fact.name)
+    ) {
       fail('ATTACHMENT_METADATA_MISMATCH', 'Attached file metadata could not be verified.', {
         code: 'metadata-mismatch',
         fileEntryId: fact.fileEntryId,
@@ -126,7 +129,7 @@ export async function resolveManagedInput(
       type: 'file',
       fileEntryId: fact.fileEntryId,
       mediaType: fact.mediaType,
-      name: fact.name,
+      filename: fact.name,
     };
   });
 

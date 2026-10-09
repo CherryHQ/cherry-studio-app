@@ -29,12 +29,11 @@ function snapshot(): AgentSessionSnapshot {
     session: {
       agentId: 'agent-1',
       createdAt: '2026-08-25T00:00:00.000Z',
-      executionTarget: { kind: 'local' },
       forkBoundaryMessageId: null,
       forkedFromSessionId: null,
       id: 'session-1',
-      title: '',
-      titleIsManual: false,
+      name: '',
+      isNameManuallyEdited: false,
       updatedAt: '2026-08-25T00:00:00.000Z',
     },
     streamingMessage: null,
@@ -51,7 +50,6 @@ function userMessage(): AgentMessageView {
     status: 'success',
     turnId: 'turn-1',
     updatedAt: '2026-08-25T00:00:00.000Z',
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,
@@ -68,7 +66,6 @@ function assistantMessage(): AgentMessageView {
     status: 'streaming',
     turnId: 'turn-1',
     updatedAt: '2026-08-25T00:00:00.000Z',
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,
@@ -277,7 +274,6 @@ describe('AgentSessionChatClient', () => {
 
     await client.startSession({
       agentId: 'agent-1',
-      executionTarget: { kind: 'local' },
       sessionId: 'session-1',
       userMessageId: 'user-1',
       assistantMessageId: 'assistant-1',
@@ -286,7 +282,6 @@ describe('AgentSessionChatClient', () => {
 
     expect(protocol.startSession).toHaveBeenCalledWith({
       agentId: 'agent-1',
-      executionTarget: { kind: 'local' },
       sessionId: 'session-1',
       userMessageId: 'user-1',
       assistantMessageId: 'assistant-1',
@@ -305,7 +300,6 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol);
     const input = {
       agentId: 'agent-1',
-      executionTarget: { kind: 'local' as const },
       sessionId: 'session-1',
       userMessageId: 'user-1',
       assistantMessageId: 'assistant-1',
@@ -343,7 +337,6 @@ describe('AgentSessionChatClient', () => {
     await expect(
       client.startSession({
         agentId: 'agent-1',
-        executionTarget: { kind: 'local' },
         sessionId: 'session-1',
         userMessageId: 'user-1',
         assistantMessageId: 'assistant-1',
@@ -704,11 +697,11 @@ describe('AgentSessionChatClient', () => {
       parts: [
         {
           id: 'tool-1',
-          type: 'tool',
+          type: 'dynamic-tool',
           toolCallId: 'call-1',
           toolRef: { source: 'builtin', capabilityId: 'write_file' },
-          providerName: 'write_file',
-          displayName: 'Write file',
+          toolName: 'write_file',
+          title: 'Write file',
           state: 'input-streaming',
         },
       ],
@@ -798,11 +791,11 @@ describe('AgentSessionChatClient', () => {
           parts: [
             {
               id: 'tool-1',
-              type: 'tool',
+              type: 'dynamic-tool',
               toolCallId: 'call-1',
               toolRef: { source: 'builtin', capabilityId: 'write_file' },
-              providerName: 'write_file',
-              displayName: 'Write file',
+              toolName: 'write_file',
+              title: 'Write file',
               state: 'input-streaming',
               inputPreview: preview,
             },
@@ -972,10 +965,10 @@ describe('AgentSessionChatClient', () => {
 
     listener?.({
       type: 'session.updated',
-      session: { ...snapshot().session, title: 'Lunar eclipses' },
+      session: { ...snapshot().session, name: 'Lunar eclipses' },
     });
 
-    expect(client.getState('session-1').snapshot?.session.title).toBe('Lunar eclipses');
+    expect(client.getState('session-1').snapshot?.session.name).toBe('Lunar eclipses');
     expect(onSessionChanged).toHaveBeenCalledWith('session-1');
   });
 

@@ -10,7 +10,6 @@ import {
   type AgentApprovalView,
   type AgentErrorView,
   type AgentMessagePart,
-  type AgentUsageView,
 } from '@/shared/contracts/agent';
 import { createAiFailure } from '@/shared/utils/createAiFailure';
 
@@ -19,7 +18,6 @@ import type {
   RuntimeContextCompaction,
   RuntimeError,
   RuntimeOutputPart,
-  RuntimeUsage,
 } from '../runtime';
 
 export function toCompactionAnchorPart(
@@ -69,7 +67,7 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
       type: 'file',
       fileEntryId: part.ref.fileEntryId,
       mediaType: part.mediaType,
-      name: part.name,
+      filename: part.name,
       purpose: part.purpose,
     });
   }
@@ -91,11 +89,11 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
       : runtimeOutput;
     return AgentMessagePartSchema.parse({
       id: part.id,
-      type: 'tool',
+      type: 'dynamic-tool',
       toolCallId: part.toolCallId,
       toolRef: part.toolRef,
-      providerName: part.providerName,
-      displayName: part.displayName,
+      toolName: part.providerName,
+      title: part.displayName,
       state: part.state,
       ...(part.input !== undefined ? { input: part.input } : {}),
       ...(part.inputPreview !== undefined ? { inputPreview: part.inputPreview } : {}),
@@ -126,12 +124,4 @@ export function toAgentApprovalView(
     input: approval.input,
     status: approval.status,
   });
-}
-
-export function toAgentUsageView(usage: RuntimeUsage): AgentUsageView {
-  return {
-    ...(usage.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
-    ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
-    ...(usage.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : {}),
-  };
 }

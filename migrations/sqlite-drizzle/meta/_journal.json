@@ -26,8 +26,15 @@
     {
       "idx": 3,
       "version": "6",
-      "when": 1791462770616,
-      "tag": "0003_agent_skills",
+      "when": 1791466514296,
+      "tag": "0003_align_agent_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791527731727,
+      "tag": "0004_agent_skills",
       "breakpoints": true
     }
   ]

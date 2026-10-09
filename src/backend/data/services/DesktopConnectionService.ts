@@ -9,6 +9,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
 import {
   desktopConnectionTable,
@@ -319,7 +320,7 @@ export class DesktopConnectionService {
     replace: boolean,
     signal: AbortSignal,
   ): Promise<DesktopConnection> {
-    return this.dbService.withWriteTx(async (tx) => {
+    const connection = await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
       const values = { ...input, learnedEndpoints: [], status: 'paired' as const };
       const [row] = await (replace
@@ -333,11 +334,13 @@ export class DesktopConnectionService {
       signal.throwIfAborted();
       return rowToConnection(row);
     });
+    publishDataApiChanges(['/desktop-connections', `/desktop-connections/${input.id}`]);
+    return connection;
   }
 
   async updateEndpoints(id: string, input: DirectEndpoint[]): Promise<DesktopConnection> {
     const configuredEndpoints = configuredEndpointsSchema.parse(input);
-    return this.dbService.withWriteTx(async (tx) => {
+    const connection = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(desktopConnectionTable)
         .set({ configuredEndpoints })
@@ -346,6 +349,8 @@ export class DesktopConnectionService {
       if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
       return rowToConnection(row);
     });
+    publishDataApiChanges(['/desktop-connections', `/desktop-connections/${id}`]);
+    return connection;
   }
 
   async updateLearnedEndpoints(
@@ -364,7 +369,7 @@ export class DesktopConnectionService {
     ].filter(
       (endpoint) => !/^fe[89ab][0-9a-f]:/i.test(endpoint.host) && !endpoint.host.includes('%'),
     );
-    return this.dbService.withWriteTx(async (tx) => {
+    const changed = await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
       const [row] = await tx
         .select()
@@ -379,14 +384,17 @@ export class DesktopConnectionService {
         JSON.stringify(row.grants) !== JSON.stringify(expected.grants)
       )
         throw desktopError('auth-revoked', 'Pairing changed while syncing addresses');
-      if (JSON.stringify(row.learnedEndpoints) !== JSON.stringify(learnedEndpoints))
+      const changed = JSON.stringify(row.learnedEndpoints) !== JSON.stringify(learnedEndpoints);
+      if (changed)
         await tx
           .update(desktopConnectionTable)
           .set({ learnedEndpoints })
           .where(eq(desktopConnectionTable.id, id));
       signal.throwIfAborted();
-      return learnedEndpoints;
+      return changed;
     });
+    if (changed) publishDataApiChanges(['/desktop-connections', `/desktop-connections/${id}`]);
+    return learnedEndpoints;
   }
 
   async addEndpoint(
@@ -395,7 +403,7 @@ export class DesktopConnectionService {
     expected: Pick<DesktopConnectionRow, 'deviceId' | 'desktopIdentity' | 'grants'>,
     signal: AbortSignal,
   ): Promise<void> {
-    await this.dbService.withWriteTx(async (tx) => {
+    const changed = await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
       const [row] = await tx
         .select()
@@ -415,7 +423,7 @@ export class DesktopConnectionService {
           (item) => directEndpointUrl(item) === directEndpointUrl(endpoint),
         )
       )
-        return;
+        return false;
       if (row.configuredEndpoints.length >= 8)
         throw desktopError('endpoint-limit', 'Remove an address before adding another');
       const configuredEndpoints = configuredEndpointsSchema.parse([
@@ -427,13 +435,20 @@ export class DesktopConnectionService {
         .set({ configuredEndpoints })
         .where(eq(desktopConnectionTable.id, id));
       signal.throwIfAborted();
+      return true;
     });
+    if (changed) publishDataApiChanges(['/desktop-connections', `/desktop-connections/${id}`]);
   }
 
   async remove(id: string): Promise<void> {
-    await this.dbService.withWriteTx((tx) =>
-      tx.delete(desktopConnectionTable).where(eq(desktopConnectionTable.id, id)),
+    const removed = await this.dbService.withWriteTx((tx) =>
+      tx
+        .delete(desktopConnectionTable)
+        .where(eq(desktopConnectionTable.id, id))
+        .returning({ id: desktopConnectionTable.id }),
     );
+    if (removed.length > 0)
+      publishDataApiChanges(['/desktop-connections', `/desktop-connections/${id}`]);
   }
 
   async updateStatus(
@@ -463,6 +478,7 @@ export class DesktopConnectionService {
       if (!row) throw DataApiErrorFactory.notFound('DesktopConnection', id);
       signal.throwIfAborted();
     });
+    publishDataApiChanges(['/desktop-connections', `/desktop-connections/${id}`]);
   }
 
   async preview(snapshot: DesktopProvidersSnapshot): Promise<DesktopImportPreview> {
@@ -531,7 +547,7 @@ export class DesktopConnectionService {
       }
     }
 
-    return this.dbService.withWriteTx(async (tx) => {
+    const result = await this.dbService.withWriteTx(async (tx) => {
       signal.throwIfAborted();
       const result: DesktopImportResult = {
         modelsAdded: 0,
@@ -635,6 +651,8 @@ export class DesktopConnectionService {
       signal.throwIfAborted();
       return result;
     });
+    publishDataApiChanges(['/desktop-connections', `/desktop-connections/${id}`]);
+    return result;
   }
 }
 

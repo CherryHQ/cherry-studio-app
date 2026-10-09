@@ -770,7 +770,7 @@ export class ProviderService {
       await tx
         .update(agentTable)
         .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
-        .where(inArray(agentTable.modelId, providerModelIds));
+        .where(inArray(agentTable.model, providerModelIds));
 
       const deletedProviders = await tx
         .delete(userProviderTable)

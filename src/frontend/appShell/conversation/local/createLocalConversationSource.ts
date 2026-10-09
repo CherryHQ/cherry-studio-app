@@ -81,7 +81,7 @@ export function createLocalConversationSource(input: {
         return {
           ref: address,
           agentId: session.agentId,
-          title: session.title,
+          title: session.name,
           updatedAt: session.lastActivityAt,
         };
       },
@@ -109,7 +109,7 @@ export function createLocalConversationSource(input: {
             id: agent.id,
             ref: refs.issue<AgentRef>('agent', agent.id),
             name: agent.name,
-            configuration: agent.modelId ? ('available' as const) : ('unavailable' as const),
+            configuration: agent.model ? ('available' as const) : ('unavailable' as const),
             modelName: agent.modelName,
             avatar: agent.avatar,
             avatarUri: agent.avatarUri,
@@ -136,7 +136,7 @@ export function createLocalConversationSource(input: {
           items: result.items.map((session) => ({
             ref: { source: ref, sessionId: session.id },
             agentId: session.agentId,
-            title: session.title,
+            title: session.name,
             updatedAt: session.lastActivityAt,
           })),
           ...(result.nextCursor

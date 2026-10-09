@@ -37,7 +37,7 @@ export function isSkillActivationCurrent(
 /** Historical instructions and resource bodies are receipts, never current policy. */
 export function stripSkillHistoryParts(parts: readonly AgentMessagePart[]): AgentMessagePart[] {
   return parts.map((part) =>
-    part.type === 'tool' &&
+    part.type === 'dynamic-tool' &&
     part.toolRef.source === 'builtin' &&
     SKILL_TOOL_NAMES.includes(part.toolRef.capabilityId) &&
     part.state === 'output-available'
@@ -64,7 +64,7 @@ export function stripSkillHistory(messages: readonly AgentMessageView[]): AgentM
 export function hasSkillHistory(parts: readonly AgentMessagePart[]): boolean {
   return parts.some(
     (part) =>
-      part.type === 'tool' &&
+      part.type === 'dynamic-tool' &&
       part.toolRef.source === 'builtin' &&
       SKILL_TOOL_NAMES.includes(part.toolRef.capabilityId),
   );

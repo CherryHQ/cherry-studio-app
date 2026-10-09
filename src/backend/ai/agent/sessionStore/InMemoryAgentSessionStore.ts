@@ -24,6 +24,7 @@ import type {
   UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
 import {
+  finalizeMessageStats,
   interruptNonTerminalToolParts,
   settleInterruptedAssistantParts,
 } from './messageSettlement';
@@ -50,18 +51,16 @@ type StoredMessage = {
 function createSessionView(input: {
   id?: string;
   agentId: string;
-  executionTarget?: AgentSessionView['executionTarget'];
   forkedFromSessionId?: string;
-  title?: string;
-  titleIsManual?: boolean;
+  name?: string;
+  isNameManuallyEdited?: boolean;
 }): AgentSessionView {
   const timestamp = nowIso();
   return {
     id: input.id ?? uuidv7(),
     agentId: input.agentId,
-    executionTarget: input.executionTarget ?? { kind: 'local' },
-    title: input.title ?? '',
-    titleIsManual: input.titleIsManual ?? input.title !== undefined,
+    name: input.name ?? '',
+    isNameManuallyEdited: input.isNameManuallyEdited ?? input.name !== undefined,
     forkBoundaryMessageId: null,
     forkedFromSessionId: input.forkedFromSessionId ?? null,
     createdAt: timestamp,
@@ -111,7 +110,6 @@ function reserveInTranscript(
     role: 'user',
     status: 'success',
     parts: cloneJson(input.userParts),
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,
@@ -125,7 +123,6 @@ function reserveInTranscript(
     role: 'assistant',
     status: 'pending',
     parts: [],
-    usage: null,
     stats: null,
     modelId: input.modelId,
     inferenceSnapshot: {
@@ -166,7 +163,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
-  async createEmptySession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
+  async createEmptySession(input: { agentId: string; name?: string }): Promise<AgentSessionView> {
     const session = createSessionView(input);
     this.sessions.set(session.id, session);
     this.messages.set(session.id, []);
@@ -178,15 +175,15 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return session ? cloneJson(session) : null;
   }
 
-  async renameSession(sessionId: string, title: string): Promise<AgentSessionView | null> {
+  async renameSession(sessionId: string, name: string): Promise<AgentSessionView | null> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       return null;
     }
     const renamed: AgentSessionView = {
       ...session,
-      title,
-      titleIsManual: true,
+      name,
+      isNameManuallyEdited: true,
       updatedAt: nowIso(),
     };
     this.sessions.set(sessionId, renamed);
@@ -195,17 +192,17 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
 
   async autoRenameSession(
     sessionId: string,
-    expectedTitle: string,
-    title: string,
+    expectedName: string,
+    name: string,
   ): Promise<AgentSessionView | null> {
     const session = this.sessions.get(sessionId);
-    if (!session || session.titleIsManual || session.title !== expectedTitle) {
+    if (!session || session.isNameManuallyEdited || session.name !== expectedName) {
       return null;
     }
     const renamed: AgentSessionView = {
       ...session,
-      title,
-      titleIsManual: false,
+      name,
+      isNameManuallyEdited: false,
       updatedAt: nowIso(),
     };
     this.sessions.set(sessionId, renamed);
@@ -251,10 +248,9 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     // together or not at all.
     const session = createSessionView({
       agentId: source.agentId,
-      executionTarget: source.executionTarget,
       forkedFromSessionId: source.id,
-      title: input.title ?? source.title,
-      titleIsManual: source.titleIsManual,
+      name: input.name ?? source.name,
+      isNameManuallyEdited: source.isNameManuallyEdited,
     });
     const reissuedTurnIds = new Map<string, string>();
     const copied = transcript
@@ -356,7 +352,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     const session = createSessionView({
       id: input.sessionId,
       agentId: input.agentId,
-      executionTarget: input.executionTarget,
     });
     const transcript: StoredMessage[] = [];
     const reserved = reserveInTranscript(transcript, {
@@ -537,8 +532,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         ...stored.view,
         status: input.status,
         parts: cloneJson(input.parts),
-        usage: input.usage === null ? null : cloneJson(input.usage),
-        stats: { ...stored.view.stats, ...cloneJson(input.runtimeStats) },
+        stats: cloneJson(finalizeMessageStats(stored.view.stats, input)),
         updatedAt,
       };
       stored.error = input.error === null ? null : cloneJson(input.error);

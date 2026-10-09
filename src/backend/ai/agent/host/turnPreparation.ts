@@ -3,7 +3,6 @@ import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import {
   AgentProtocolError,
   type AgentErrorView,
-  type AgentExecutionTarget,
   type AgentInputPart,
   type AgentMessagePart,
   type AgentMessageView,
@@ -88,8 +87,8 @@ export type TurnPreparationDependencies = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
-  /** The Host keeps the engine binding; preparation only consumes the routed Runtime. */
-  routeExecutionTarget(target: AgentExecutionTarget): AgentRuntime;
+  /** The Host keeps the engine binding; preparation consumes that local Runtime. */
+  runtime: AgentRuntime;
   runtimeTools: AgentRuntimeToolResolver;
   /** Optional so tests and hosts without a Skill library prepare turns unchanged. */
   skills?: SkillScopeSource;
@@ -271,8 +270,7 @@ export async function prepareInitialTurn(
   }
   const session = {
     agentId: parsed.agentId,
-    executionTarget: parsed.executionTarget,
-    title: '',
+    name: '',
   };
   const emptyContext: StoredRuntimeTurnContext = {
     anchorFound: true,
@@ -297,7 +295,7 @@ export async function prepareInitialTurn(
 export async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput | AgentStartSessionInput,
-  session: Pick<AgentSessionView, 'agentId' | 'executionTarget' | 'title'>,
+  session: Pick<AgentSessionView, 'agentId' | 'name'>,
   configuredAgent: AgentDefinition,
   storedTurnContext: StoredRuntimeTurnContext,
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
@@ -312,7 +310,7 @@ export async function prepareResolvedTurn(
     name: agent.name,
     icon: null,
   });
-  const runtime = dependencies.routeExecutionTarget(session.executionTarget);
+  const runtime = dependencies.runtime;
   if (
     !runtime.descriptor.capabilities.attachments &&
     parsed.parts.some((part) => part.type === 'file')
@@ -368,7 +366,7 @@ export async function prepareResolvedTurn(
       runtime,
       runtimeContextCheckpoint: null,
       runtimeContentAttachments: new Map(),
-      sessionTitle: session.title,
+      sessionTitle: session.name,
       sessionTurnIds: storedTurnContext.sessionTurnIds,
       tools: [],
       pluginGuides: [],
@@ -587,7 +585,7 @@ export async function prepareResolvedTurn(
       type: 'file',
       fileEntryId: part.fileEntryId,
       mediaType: part.mediaType,
-      ...(part.name !== undefined ? { name: part.name } : {}),
+      ...(part.filename !== undefined ? { filename: part.filename } : {}),
       purpose: 'input-attachment',
       attachmentReport:
         content?.type === 'text-attachment' || content?.type === 'document-attachment'
@@ -633,7 +631,7 @@ export async function prepareResolvedTurn(
     runtime,
     runtimeContextCheckpoint,
     runtimeContentAttachments,
-    sessionTitle: session.title,
+    sessionTitle: session.name,
     sessionTurnIds: storedTurnContext.sessionTurnIds,
     tools,
     toolDiscoveryWarnings,

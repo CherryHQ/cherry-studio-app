@@ -15,7 +15,7 @@ export function localImageResult(message: AgentMessageView): ConversationImageRe
           {
             fileEntryId: part.fileEntryId,
             mediaType: part.mediaType,
-            name: part.name ?? part.fileEntryId,
+            name: part.filename ?? part.fileEntryId,
           },
         ]
       : [],

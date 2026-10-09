@@ -6,6 +6,244 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('consolidates usage and changes only new Agent approval defaults with foreign keys enabled', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const migrationIndex = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0003_align_agent_fields',
+      );
+      expect(migrationIndex).toBeGreaterThan(0);
+      for (const sql of files.slice(0, migrationIndex)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
+        VALUES ('session', 'agent', 'History', 1, 1, 1);
+      `);
+      const cancellation = JSON.stringify({
+        code: 'CANCELLED',
+        message: 'User stopped this turn',
+        retryable: false,
+      });
+      const insert = database.prepare(`
+        INSERT INTO agent_session_message
+          (id, session_id, role, data, status, usage, stats, error, created_at, updated_at)
+        VALUES (?, 'session', 'assistant', '{"parts":[]}', 'cancelled', ?, ?, ?, 1, 2)
+      `);
+      const usage = { inputTokens: 3, outputTokens: 2, totalTokens: 5 };
+      insert.run('legacy', JSON.stringify(usage), null, cancellation);
+      insert.run(
+        'projected',
+        JSON.stringify(usage),
+        JSON.stringify({ inputTokens: 0, requestCount: 1, contextTokens: 42 }),
+        null,
+      );
+      insert.run('zero', JSON.stringify({ inputTokens: 0 }), '{}', null);
+      insert.run('no-usage', null, null, null);
+
+      // Match the app's transaction: PRAGMA foreign_keys=OFF inside it would be a no-op.
+      database.exec('BEGIN');
+      for (const sql of files.slice(migrationIndex)) applyMigrationSql(database, sql);
+      database.exec('COMMIT');
+
+      const rows = database
+        .prepare('SELECT id, stats, error FROM agent_session_message ORDER BY id')
+        .all();
+      expect(
+        rows.map((row) => ({
+          ...row,
+          stats: row.stats === null ? null : JSON.parse(row.stats as string),
+        })),
+      ).toEqual([
+        { id: 'legacy', stats: usage, error: cancellation },
+        { id: 'no-usage', stats: null, error: null },
+        {
+          id: 'projected',
+          stats: {
+            inputTokens: 0,
+            outputTokens: 2,
+            totalTokens: 5,
+            requestCount: 1,
+            contextTokens: 42,
+          },
+          error: null,
+        },
+        { id: 'zero', stats: { inputTokens: 0 }, error: null },
+      ]);
+      expect(columnNames(database, 'agent_session_message')).not.toContain('usage');
+      expect(columnNames(database, 'agent_session')).not.toContain('execution_target');
+      expect(database.prepare('SELECT agent_id, name FROM agent_session').all()).toEqual([
+        { agent_id: 'agent', name: 'History' },
+      ]);
+      expect(database.prepare('SELECT tool_approval_mode FROM agent').get()).toEqual({
+        tool_approval_mode: 'default',
+      });
+      database.exec(
+        `INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('new', 'New', 'a1', 1, 1)`,
+      );
+      expect(
+        database.prepare("SELECT tool_approval_mode FROM agent WHERE id = 'new'").get(),
+      ).toEqual({ tool_approval_mode: 'auto' });
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(database.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
+    } finally {
+      database.close();
+    }
+  });
+
+  test('aligns Agent message fields while preserving history and opaque payloads', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const alignmentIndex = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0003_align_agent_fields',
+      );
+      expect(alignmentIndex).toBeGreaterThan(0);
+      for (const sql of files.slice(0, alignmentIndex)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, name, is_name_manually_edited, last_activity_at, created_at, updated_at)
+        VALUES ('session', 'agent', 'My conversation', 1, 1, 1, 1);
+      `);
+      const error = { code: 'INTERRUPTED', message: 'App restarted', retryable: true };
+      const output = {
+        value: { type: 'tool', providerName: 'nested', displayName: 'Keep', name: 'Keep too' },
+        artifacts: [
+          {
+            ref: { kind: 'managed-file', fileEntryId: 'file' },
+            mediaType: 'text/plain',
+            name: 'result.txt',
+            kind: 'created',
+          },
+        ],
+      };
+      const tool = {
+        id: 'tool-part',
+        type: 'tool',
+        toolCallId: 'call',
+        toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'search' },
+        providerName: 'mcp_search',
+        displayName: 'Search',
+        state: 'output-available',
+        input: { name: 'query.txt' },
+        output,
+      };
+      const parts = [
+        { id: 'text', type: 'text', text: 'Keep the order', state: 'done' },
+        tool,
+        { ...tool, id: 'running', state: 'running', output: undefined },
+        {
+          ...tool,
+          id: 'interrupted',
+          state: 'interrupted',
+          output: { value: { status: 'interrupted', reason: 'App restarted' }, artifacts: [] },
+        },
+        {
+          id: 'file',
+          type: 'file',
+          fileEntryId: 'file',
+          mediaType: 'text/plain',
+          name: 'result.txt',
+          purpose: 'artifact',
+        },
+        {
+          id: 'unnamed-file',
+          type: 'file',
+          fileEntryId: 'file-2',
+          mediaType: 'image/png',
+          purpose: 'input-attachment',
+        },
+        { id: 'error', type: 'error', error },
+      ];
+      const inferenceSnapshot = JSON.stringify({ version: 99, model: { name: 'Historical' } });
+      const contextCheckpoint = JSON.stringify({ version: 1, payload: { parts: [tool] } });
+      const unversionedData = JSON.stringify({ parts: [parts[0]], extension: true });
+      const unreadableData = [
+        '{broken',
+        JSON.stringify({ version: 1, parts: [null, 'not a part'] }),
+      ];
+      const insert = database.prepare(`
+        INSERT INTO agent_session_message
+          (id, session_id, role, data, status, message_snapshot, context_checkpoint, searchable_text, created_at, updated_at)
+        VALUES (?, 'session', 'assistant', ?, 'cancelled', ?, ?, 'Keep the order', 1, 2)
+      `);
+      insert.run(
+        'message',
+        JSON.stringify({ version: 1, parts }),
+        inferenceSnapshot,
+        contextCheckpoint,
+      );
+      insert.run('empty', JSON.stringify({ version: 1, parts: [] }), null, null);
+      insert.run('unversioned', unversionedData, inferenceSnapshot, contextCheckpoint);
+      unreadableData.forEach((data, index) => insert.run(`unreadable-${index}`, data, null, null));
+
+      for (const sql of files.slice(alignmentIndex)) applyMigrationSql(database, sql);
+
+      const row = database
+        .prepare("SELECT * FROM agent_session_message WHERE id = 'message'")
+        .get()!;
+      const data = JSON.parse(row.data as string);
+      expect(data).toEqual({
+        parts: [
+          parts[0],
+          ...parts.slice(1, 4).map((part) => {
+            const { providerName, displayName, ...rest } = part as typeof tool;
+            return { ...rest, type: 'dynamic-tool', toolName: providerName, title: displayName };
+          }),
+          {
+            id: 'file',
+            type: 'file',
+            fileEntryId: 'file',
+            mediaType: 'text/plain',
+            filename: 'result.txt',
+            purpose: 'artifact',
+          },
+          parts[5],
+          { id: 'error', type: 'data-error', data: error },
+        ],
+      });
+      expect(row).toMatchObject({
+        status: 'cancelled',
+        inference_snapshot: inferenceSnapshot,
+        context_checkpoint: contextCheckpoint,
+        searchable_text: 'Keep the order',
+        created_at: 1,
+        updated_at: 2,
+      });
+      expect(row).not.toHaveProperty('message_snapshot');
+      expect(
+        database
+          .prepare("SELECT data, inference_snapshot FROM agent_session_message WHERE id = 'empty'")
+          .get(),
+      ).toEqual({ data: '{"parts":[]}', inference_snapshot: null });
+      expect(
+        database.prepare("SELECT data FROM agent_session_message WHERE id = 'unversioned'").get(),
+      ).toEqual({
+        data: unversionedData,
+      });
+      unreadableData.forEach((data, index) => {
+        expect(
+          database
+            .prepare('SELECT data FROM agent_session_message WHERE id = ?')
+            .get(`unreadable-${index}`),
+        ).toEqual({ data });
+      });
+      expect(
+        database.prepare('SELECT name, is_name_manually_edited FROM agent_session').get(),
+      ).toEqual({
+        name: 'My conversation',
+        is_name_manually_edited: 1,
+      });
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds automatic routes without losing existing pairing or manual addresses', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -87,7 +325,7 @@ describe('bundled SQLite migrations', () => {
         INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
         VALUES ('session', 'agent', 1, 1, 1);
         INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
-        VALUES ('message', 'session', 'user', '{"version":1,"parts":[]}', 'success', 1, 1);
+        VALUES ('message', 'session', 'user', '{"parts":[]}', 'success', 1, 1);
         INSERT INTO mcp_server (id, name, base_url, created_at, updated_at)
         VALUES ('remote', 'Remote', 'https://example.com/mcp', 1, 1);
         INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at)
@@ -110,7 +348,7 @@ describe('bundled SQLite migrations', () => {
       expect(
         database.prepare('SELECT tool_approval_mode, disabled_capabilities FROM agent').get(),
       ).toEqual({
-        tool_approval_mode: 'default',
+        tool_approval_mode: 'auto',
         disabled_capabilities: '[]',
       });
       expect(
@@ -282,19 +520,18 @@ describe('bundled SQLite migrations', () => {
         'instructions',
         'avatar',
         'model',
-        'tool_approval_mode',
         'disabled_capabilities',
         'order_key',
         'created_at',
         'updated_at',
         'deleted_at',
+        'tool_approval_mode',
       ]);
       expect(columnNames(database, 'agent_session')).toEqual([
         'id',
         'agent_id',
         'name',
         'is_name_manually_edited',
-        'execution_target',
         'last_activity_at',
         'created_at',
         'updated_at',
@@ -308,12 +545,11 @@ describe('bundled SQLite migrations', () => {
         'role',
         'data',
         'status',
-        'usage',
         'stats',
         'error',
         'context_checkpoint',
         'model_id',
-        'message_snapshot',
+        'inference_snapshot',
         'searchable_text',
         'fts_rowid',
         'created_at',
@@ -435,13 +671,13 @@ describe('bundled SQLite migrations', () => {
         INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
         VALUES ('session-1', 'agent-1', 1, 1, 1);
         INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
-        VALUES ('m-user', 'session-1', 'turn-1', 'user', '{"version":1,"parts":[]}', 'success', 1, 1);
+        VALUES ('m-user', 'session-1', 'turn-1', 'user', '{"parts":[]}', 'success', 1, 1);
         INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
-        VALUES ('m-assistant', 'session-1', 'turn-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1);
+        VALUES ('m-assistant', 'session-1', 'turn-1', 'assistant', '{"parts":[]}', 'pending', 1, 1);
       `);
       expect(
         database.prepare("SELECT tool_approval_mode FROM agent WHERE id = 'agent-1'").get(),
-      ).toEqual({ tool_approval_mode: 'default' });
+      ).toEqual({ tool_approval_mode: 'auto' });
       expect(() =>
         database.exec(`
           INSERT INTO agent_tool_binding (
@@ -496,14 +732,14 @@ describe('bundled SQLite migrations', () => {
       expect(() =>
         database.exec(`
           INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
-          VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'pending', 2, 2);
+          VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"parts":[]}', 'pending', 2, 2);
         `),
       ).toThrow(/UNIQUE/);
       // Settling the first frees the slot for the next reservation.
       database.exec(`
         UPDATE agent_session_message SET status = 'success' WHERE id = 'm-assistant';
         INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
-        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'streaming', 2, 2);
+        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"parts":[]}', 'streaming', 2, 2);
       `);
       expect(() =>
         database.exec(

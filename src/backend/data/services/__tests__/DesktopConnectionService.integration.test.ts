@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { eq } from 'drizzle-orm';
 
+import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import {
   desktopConnectionTable,
   userModelTable,
@@ -75,6 +76,101 @@ describe('DesktopConnectionService provider synchronization', () => {
     jest.restoreAllMocks();
     testDb.sqlite.close();
   });
+
+  it('notifies connection observers after each committed write', async () => {
+    const changed = jest.fn((_paths: readonly string[]) => testDb.sqlite.isTransaction);
+    const unsubscribe = subscribeDataApiChanges(changed);
+    const original = await service.getRow(connectionId);
+    const endpoint = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    try {
+      const operations = [
+        () => service.savePair(original, true, signal()),
+        () => service.updateEndpoints(connectionId, [endpoint]),
+        () => service.updateLearnedEndpoints(connectionId, [endpoint], original, signal()),
+        () =>
+          service.addEndpoint(
+            connectionId,
+            { ...endpoint, host: '100.64.0.3' },
+            original,
+            signal(),
+          ),
+        () => service.updateStatus(connectionId, { lastFetchedAt: 123 }, signal()),
+        () => importSnapshot(snapshot(provider())),
+        () => service.remove(connectionId),
+      ];
+      for (const operation of operations) {
+        changed.mockClear();
+        await operation();
+        expect(changed).toHaveBeenCalledTimes(1);
+        expect(changed).toHaveBeenCalledWith([
+          '/desktop-connections',
+          `/desktop-connections/${connectionId}`,
+        ]);
+        expect(changed.mock.results[0]?.value).toBe(false);
+      }
+      changed.mockClear();
+      await service.remove(connectionId);
+      expect(changed).not.toHaveBeenCalled();
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('does not notify for duplicate addresses, stale pairing, or cancellation', async () => {
+    const original = await service.getRow(connectionId);
+    const endpoint = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+    await service.updateEndpoints(connectionId, [endpoint]);
+    await service.updateLearnedEndpoints(connectionId, [endpoint], original, signal());
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      await service.addEndpoint(connectionId, endpoint, original, signal());
+      await service.updateLearnedEndpoints(connectionId, [endpoint], original, signal());
+      await expect(
+        service.updateLearnedEndpoints(
+          connectionId,
+          [],
+          { ...original, deviceId: 'stale' },
+          signal(),
+        ),
+      ).rejects.toBeDefined();
+      const cancelled = new AbortController();
+      cancelled.abort();
+      await expect(
+        service.updateStatus(connectionId, { status: 'paired' }, cancelled.signal),
+      ).rejects.toBeDefined();
+      expect(changed).not.toHaveBeenCalled();
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it.each(['pair', 'endpoints', 'learned', 'add', 'status', 'import', 'remove'] as const)(
+    'does not publish a %s write that fails at commit',
+    async (operation) => {
+      const original = await service.getRow(connectionId);
+      const endpoint = { host: '100.64.0.2', port: 23333, security: 'ws' as const };
+      const operations = {
+        pair: () => service.savePair({ ...original, name: 'New name' }, true, signal()),
+        endpoints: () => service.updateEndpoints(connectionId, [endpoint]),
+        learned: () => service.updateLearnedEndpoints(connectionId, [endpoint], original, signal()),
+        add: () => service.addEndpoint(connectionId, endpoint, original, signal()),
+        status: () => service.updateStatus(connectionId, { lastFetchedAt: 123 }, signal()),
+        import: () => importSnapshot(snapshot(provider())),
+        remove: () => service.remove(connectionId),
+      };
+      const changed = jest.fn();
+      const unsubscribe = subscribeDataApiChanges(changed);
+      testDb.failWriteTxCommit(new Error('Commit failed'));
+      try {
+        await expect(operations[operation]()).rejects.toThrow('Commit failed');
+        expect(changed).not.toHaveBeenCalled();
+        expect(await service.getRow(connectionId)).toEqual(original);
+      } finally {
+        unsubscribe();
+      }
+    },
+  );
 
   it('persists all 32 addresses in a desktop snapshot', async () => {
     const endpoints = Array.from({ length: 32 }, (_, i) => ({

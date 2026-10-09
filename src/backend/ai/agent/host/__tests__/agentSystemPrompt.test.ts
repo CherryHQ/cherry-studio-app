@@ -156,6 +156,19 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('<agent_instructions>\nKeep the answer brief.\n</agent_instructions>');
   });
 
+  test('asks for sandboxed computation only when run_js is in the turn', () => {
+    const prompt = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('run_js')],
+    });
+    expect(prompt).toContain('## JavaScript Sandbox');
+    expect(prompt).toContain('copy the data it needs into the code');
+    expect(
+      buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools: [] }),
+    ).not.toContain('## JavaScript Sandbox');
+  });
+
   test('offers parser-specific continuation only with the controlled reader, without requiring a file write', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',

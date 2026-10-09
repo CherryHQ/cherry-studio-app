@@ -17,7 +17,7 @@ export function collectSkillActivations(
       }
       if (
         message.role !== 'assistant' ||
-        part.type !== 'tool' ||
+        part.type !== 'dynamic-tool' ||
         part.state !== 'output-available' ||
         part.toolRef.source !== 'builtin' ||
         part.toolRef.capabilityId !== 'load_skill'

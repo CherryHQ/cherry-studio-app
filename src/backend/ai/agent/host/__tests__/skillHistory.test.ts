@@ -16,11 +16,11 @@ const activation = {
 };
 const toolPart = {
   id: 'load',
-  type: 'tool' as const,
+  type: 'dynamic-tool' as const,
   toolCallId: 'call',
   toolRef: { source: 'builtin' as const, capabilityId: 'load_skill' },
-  providerName: 'load_skill',
-  displayName: 'Load Skill',
+  toolName: 'load_skill',
+  title: 'Load Skill',
   state: 'output-available' as const,
   input: { skill_id: activation.skillId },
   output: { value: { status: 'ok', activation, instructions: 'Old instructions' }, artifacts: [] },

@@ -38,7 +38,7 @@ describe('toAgentInputParts', () => {
         type: 'file',
         fileEntryId,
         mediaType: 'image/png',
-        name: 'image.png',
+        filename: 'image.png',
       },
     ]);
     expect(JSON.stringify(parts)).not.toContain('file:///');

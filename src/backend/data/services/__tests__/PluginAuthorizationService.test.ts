@@ -137,7 +137,7 @@ it('rolls back both the grant and server when committing a credential change fai
 
 it('disables existing assistant bindings when disconnecting, and does not revive them on reconnect', async () => {
   const connection = await service.connect(input);
-  const agent = await new AgentService().create({ name: 'Plugin test', modelId: null });
+  const agent = await new AgentService().create({ name: 'Plugin test', model: null });
   const bindings = new AgentToolBindingService();
   await bindings.upsert(agent.id, {
     source: 'mcp',

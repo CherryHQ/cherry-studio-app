@@ -13,6 +13,7 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { isDataCollectionConsented } from '@/shared/utils/privacyConsent';
 
 import { localDateKey } from './analyticsActivity';
@@ -65,6 +66,20 @@ export class AnalyticsService extends BaseService implements Activatable {
   private activityReport: Promise<void> | null = null;
 
   protected onInit(): void {
+    this.registerDisposable(
+      aiUsageRecordService.onInvocationsCommitted((rows) => {
+        for (const row of rows) {
+          if (!row.providerId || !row.modelId) continue;
+          this.trackTokenUsage({
+            input_tokens: row.inputTokens ?? 0,
+            model: row.modelId,
+            output_tokens: row.outputTokens ?? 0,
+            provider: row.providerId,
+            source: row.sourceType === 'agent' ? 'agent' : 'chat',
+          });
+        }
+      }),
+    );
     const preference = application.get('PreferenceService');
     const refresh = () => {
       void this.refreshDesiredEnabled().catch((error) =>

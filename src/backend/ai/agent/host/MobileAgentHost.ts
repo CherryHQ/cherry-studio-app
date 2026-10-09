@@ -32,7 +32,7 @@
  *     section, so no event falls into a gap;
  * 9.  operation inputs are schema-parsed, snapshots re-validate, and every
  *     published event is JSON-cloned (a non-JSON-safe value cannot survive);
- * 10. clients supply an execution target and Agent id; the local Pi binding
+ * 10. clients supply an Agent id; the local Pi binding
  *     stays private to the Host.
  * 14. a Draft Session becomes durable in the same transaction as its first
  *     user/assistant message reservation.
@@ -72,11 +72,9 @@ import {
   AgentProtocolError,
   AgentToolInputPreviewSchema,
   type AgentApprovalView,
-  type AgentCapabilities,
   type AgentDeleteTurnInput,
   type AgentErrorView,
   type AgentEvent,
-  type AgentExecutionTarget,
   type AgentForkSessionInput,
   type AgentRetryMessageInput,
   type AgentInputPart,
@@ -129,7 +127,6 @@ import {
   toAgentApprovalView,
   toAgentErrorView,
   toAgentMessagePart,
-  toAgentUsageView,
   toCompactionAnchorPart,
 } from './runtimeProjection';
 import { hasSkillHistory, stripSkillHistoryParts } from './skillHistory';
@@ -368,7 +365,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
       imageGeneration: this.ports.imageGeneration,
-      routeExecutionTarget: (target) => this.routeExecutionTarget(target),
+      runtime: this.runtime,
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
       systemCapabilities: this.ports.tools,
@@ -492,7 +489,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         sessionId: parsed.sessionId,
         userMessageId: parsed.userMessageId,
         assistantMessageId: parsed.assistantMessageId,
-        executionTarget: parsed.executionTarget,
         userParts: plan.userParts,
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot: plan.inferenceSnapshot,
@@ -507,7 +503,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }
       this.startReservedTurn(
         session.id,
-        session.title,
+        session.name,
         plan,
         reserved,
         openedRuntimeSession,
@@ -607,13 +603,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
-  async renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView> {
+  async renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView> {
     const parsed = AgentRenameSessionInputSchema.parse(input);
-    const session = await this.store.renameSession(parsed.sessionId, parsed.title);
+    const session = await this.store.renameSession(parsed.sessionId, parsed.name);
     if (!session) {
       fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
     }
-    this.updateBackgroundReplyTitle(session.id, session.title);
+    this.updateBackgroundReplyTitle(session.id, session.name);
     this.publish(parsed.sessionId, { type: 'session.updated', session });
     return session;
   }
@@ -900,7 +896,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
       const agent = await this.requireAgent(session.agentId);
-      const capabilities = this.projectCapabilities(session.executionTarget);
+      const capabilities = { ...this.runtime.descriptor.capabilities };
       if (this.deletingSessions.has(sessionId)) {
         fail('SESSION_BUSY', 'The session is being deleted.');
       }
@@ -1069,7 +1065,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
             type: 'file',
             fileEntryId: entry.id,
             mediaType: entry.mediaType,
-            name: entry.filename,
+            filename: entry.filename,
             purpose: 'artifact',
           };
         });
@@ -1294,7 +1290,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }
       case 'tool.input.preview': {
         const part = state.assistantMessage.parts.find((entry) => entry.id === event.partId);
-        if (part?.type === 'tool' && part.state === 'input-streaming') {
+        if (part?.type === 'dynamic-tool' && part.state === 'input-streaming') {
           const preview = AgentToolInputPreviewSchema.parse(event.preview);
           part.inputPreview = preview;
           this.publish(sessionId, {
@@ -1430,7 +1426,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       'The turn ended before this tool call completed.',
     );
     if (outcome === 'failed' && error) {
-      parts.push({ id: `error-${state.turn.id}`, type: 'error', error });
+      parts.push({ id: `error-${state.turn.id}`, type: 'data-error', data: error });
     }
     const messageStatus =
       outcome === 'completed' ? 'success' : outcome === 'failed' ? 'error' : 'cancelled';
@@ -1447,7 +1443,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       assistantMessageId: state.assistantMessage.id,
       status: messageStatus,
       parts,
-      usage: state.usage ? toAgentUsageView(state.usage) : null,
+      usage: state.usage,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
       runtimeStats: {
@@ -1643,18 +1639,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return agent;
   }
 
-  private routeExecutionTarget(target: AgentExecutionTarget): AgentRuntime {
-    if (target.kind !== 'local') {
-      fail('EXECUTION_UNAVAILABLE', 'No runtime can execute this Agent configuration.');
-    }
-    return this.runtime;
-  }
-
-  private projectCapabilities(target: AgentExecutionTarget): AgentCapabilities {
-    const runtime = this.routeExecutionTarget(target);
-    return { ...runtime.descriptor.capabilities };
-  }
-
   private startBackgroundReply(input: {
     agentId: string;
     agentName: string;
@@ -1774,7 +1758,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     void promise
       .then((session) => {
         if (session) {
-          this.updateBackgroundReplyTitle(session.id, session.title);
+          this.updateBackgroundReplyTitle(session.id, session.name);
           this.publish(session.id, { type: 'session.updated', session });
         }
       })

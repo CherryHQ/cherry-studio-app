@@ -37,7 +37,7 @@ describe('agent-table definition source', () => {
     const agent = await agentService.create({
       disabledCapabilities: ['location'],
       instructions: 'Be terse.',
-      modelId: 'openai::gpt-4',
+      model: 'openai::gpt-4',
       name: 'Researcher',
       toolApprovalMode: 'auto',
     });
@@ -60,7 +60,7 @@ describe('agent-table definition source', () => {
 
   test('reports an unconfigured model separately from a missing agent', async () => {
     const source = createAgentTableDefinitionSource();
-    const agent = await agentService.create({ modelId: null, name: 'No Model' });
+    const agent = await agentService.create({ model: null, name: 'No Model' });
 
     await expect(source.getAgent(agent.id)).rejects.toMatchObject({
       name: 'AgentProtocolError',

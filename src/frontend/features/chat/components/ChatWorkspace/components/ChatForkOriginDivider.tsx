@@ -14,7 +14,7 @@ export function ChatForkOriginDivider({ sourceSessionId }: ChatForkOriginDivider
   const { t } = useTranslation();
   const router = useRouter();
   const source = useAgentSession(sourceSessionId);
-  const title = source.data?.title?.trim();
+  const title = source.data?.name?.trim();
 
   const openSource = useCallback(() => {
     // The chat screen's pathname is always '/', so returning to the source is a
