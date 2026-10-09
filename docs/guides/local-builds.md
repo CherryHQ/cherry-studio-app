@@ -180,13 +180,41 @@ EAS_LOCAL_BUILD_SKIP_CLEANUP=1 EAS_LOCAL_BUILD_WORKINGDIR=/absolute/path/to/work
 SENTRY_ALLOW_FAILURE=true pnpm build:local --platform android --profile production --output /absolute/path/to/app.apk
 ```
 
-Before distributing that package, check the build log for upload warnings. If any upload failed,
-re-run the same Gradle command in `<workdir>/build/android` through
-`eas env:exec production --non-interactive "PROFILE=production NODE_ENV=production EAS_BUILD=true EAS_BUILD_WORKINGDIR=<workdir>/build ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a"`
-(`:app:bundleRelease` for the AAB), without `SENTRY_ALLOW_FAILURE`, until it succeeds. The R8
-mapping ID is derived from the mapping contents and the JavaScript debug ID from the bundle, so the
-retry uploads artifacts that match the package already produced. Cloud builds keep no working
-directory: do not set `SENTRY_ALLOW_FAILURE` for them.
+Before distributing that package, check the build log for upload warnings. An allowed failure exits
+successfully, so Gradle can mark the mapping and source-bundle upload tasks `UP-TO-DATE` even when
+the upload failed. Removing `SENTRY_ALLOW_FAILURE` and rerunning `assembleRelease` or `bundleRelease`
+alone does not force those uploads to retry.
+
+Keep the original sources, dependencies, and generated artifacts in the retained working directory.
+Restore the original build environment, including local credentials and the selected profile's
+`eas.json` environment overrides (`APK_UPDATES_ENABLED=true` for the APK;
+`APK_UPDATES_ENABLED=false` and `ANDROID_COMPRESS_NATIVE_LIBS=false` for Google Play). From
+`<workdir>/build/android`, force the upload tasks to run with task-specific `--rerun` options:
+
+```bash
+eas env:exec production --non-interactive \
+  "env PROFILE=production NODE_ENV=production EAS_BUILD=true EAS_BUILD_WORKINGDIR=/absolute/path/to/workdir/build \
+  SENTRY_ALLOW_FAILURE=false SENTRY_DISABLE_AUTO_UPLOAD=false SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD=false \
+  ./gradlew :app:uploadSentryProguardMappingsRelease --rerun \
+  :app:sentryUploadSourceBundleRelease --rerun \
+  :app:uploadSentryNativeSymbolsForRelease --rerun \
+  -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m"
+```
+
+These native upload task names apply to both APK and AAB Release builds. If the JavaScript upload
+failed, also append its exact task path from the original build log,
+`:app:createBundleReleaseJsAndAssets_SentryUpload_<release>_<dist>`, followed by `--rerun`, to the
+same invocation. Replace placeholders with that build's values; do not use another build's version
+or distribution number.
+
+Use the task-specific [`--rerun` option](https://docs.gradle.org/current/userguide/command_line_interface.html#sec:builtin_task_options),
+not the global `--rerun-tasks`, and do not clean or regenerate the native project. Dependencies must
+reuse the retained build outputs. If those outputs are missing or must be regenerated, recover the
+original artifacts before claiming the existing package's uploads are complete. Confirm that the
+upload tasks actually execute without warnings, then match the original package's debug IDs to the
+mapping, source bundle, native symbols, and JavaScript source map on Sentry. A successful Gradle exit
+alone is not upload confirmation. Cloud builds keep no working directory: do not set
+`SENTRY_ALLOW_FAILURE` for them.
 
 Android production APKs and Google Play AABs enable R8 code optimization, obfuscation, and resource
 shrinking. Development and preview keep R8 disabled. The production-only

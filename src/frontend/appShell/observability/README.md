@@ -149,8 +149,10 @@ when APK and AAB builds share a marketing version. Source snippets are added by 
 uploaded build-time sources, rather than collected from the user's runtime payload.
 
 Do not override the native release/dist in JS or disable build uploads for a distributable
-production build. A local build may let failed uploads warn only if it keeps its working directory
-and re-runs the uploads before distribution; see
+production build. A local build may let failed uploads warn only if it keeps its working directory,
+forces the failed upload tasks to rerun, and verifies the original package's debug IDs on Sentry
+before distribution. An allowed failure can leave an upload task marked `UP-TO-DATE`; rerunning
+the build alone does not retry it. See
 [Local EAS Builds](../../../../docs/guides/local-builds.md). `SENTRY_AUTH_TOKEN` stays in the build environment; it is never embedded
 in the app. See Sentry's [R8 mapping guide](https://docs.sentry.io/platforms/android/enhance-errors/proguard/)
 and [source context guide](https://docs.sentry.io/platforms/android/enhance-errors/source-context/).
