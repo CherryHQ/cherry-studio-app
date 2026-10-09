@@ -294,6 +294,8 @@
   "chat.errorPart.reason.unknown": "Ausführung fehlgeschlagen",
   "chat.errorPart.retryable": "Die Antwort konnte nicht abgeschlossen werden. Sie können es noch einmal versuchen.",
   "chat.errorPart.title": "Fehler",
+  "chat.errorPart.unreadable.message": "Diese Nachricht enthält unlesbare oder nicht unterstützte Inhalte. Die Originaldaten wurden beibehalten.",
+  "chat.errorPart.unreadable.title": "Einige Inhalte können nicht angezeigt werden",
   "chat.filePicker.add": "Hinzufügen",
   "chat.filePicker.addSelected_one": "{{count}} Datei hinzufügen",
   "chat.filePicker.addSelected_other": "{{count}} Dateien hinzufügen",

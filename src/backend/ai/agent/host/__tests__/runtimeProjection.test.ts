@@ -56,7 +56,7 @@ describe('Runtime output projection', () => {
     });
     const output = { value: { status: 'error', error, details }, artifacts: [] };
     expect(part).toMatchObject({ state: 'error', output });
-    if (part.type !== 'tool') throw new Error('Expected a tool part');
+    if (part.type !== 'dynamic-tool') throw new Error('Expected a tool part');
     expect(part.output).not.toHaveProperty('failure');
 
     const message: AgentMessageView = {
@@ -66,7 +66,6 @@ describe('Runtime output projection', () => {
       role: 'assistant',
       status: 'success',
       parts: [part],
-      usage: null,
       stats: null,
       modelId: null,
       inferenceSnapshot: null,
@@ -94,7 +93,12 @@ describe('Runtime output projection', () => {
         toolRef: { source: 'builtin', capabilityId: 'write_file' },
         type: 'tool',
       }),
-    ).toMatchObject({ state: 'input-streaming', type: 'tool' });
+    ).toMatchObject({
+      state: 'input-streaming',
+      type: 'dynamic-tool',
+      toolName: 'write_file',
+      title: 'Write file',
+    });
   });
 
   test('preserves provider identity behind the closed protocol error code', () => {

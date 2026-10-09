@@ -251,7 +251,6 @@ function createMessage(
     status,
     turnId: 'turn-1',
     updatedAt: '2026-08-09T00:00:00.000Z',
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,

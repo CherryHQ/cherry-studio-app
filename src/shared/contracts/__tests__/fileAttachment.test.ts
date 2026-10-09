@@ -6,7 +6,7 @@ const filePart = {
   fileEntryId: '00000000-0000-7000-8000-000000000001',
   mediaType: 'application/pdf',
   purpose: 'input-attachment',
-  name: 'report.pdf',
+  filename: 'report.pdf',
 };
 
 describe('persisted attachment feedback', () => {

@@ -22,7 +22,7 @@ It does not know Cherry Agent or Session entities, application commands or snaps
 Data API, React, Expo, navigation, or UI state.
 
 The Host is the only adapter between the [Agent Protocol](./agent-protocol.md) and the Runtime. It
-loads application data, validates the local execution target, constructs the request, maps events,
+loads application data, constructs the local Runtime request, maps events,
 and persists the result.
 
 Runtime independence is enforced by imports and conformance, not by checking the directory name.
@@ -30,8 +30,7 @@ Promotion to a workspace package happens only when a real independent consumer e
 
 ## Local execution binding
 
-Mobile Agent accepts only the `local` execution target. Application composition injects one Pi
-Runtime directly into the Host. There is no Runtime registry, no implementation-selection Router,
+Mobile Agent runs locally. Application composition injects one Pi Runtime directly into the Host. There is no Runtime registry, no implementation-selection Router,
 and no persisted Runtime binding. Agent configuration, Session configuration, model selection, and
 tool availability never select another engine or execution device. The PC Agent Controller
 does not change this local Runtime seam.
@@ -434,7 +433,7 @@ reported its input, the Host stores that request's total as the message's `stats
 everything sent plus the answer. The newest replayed assistant message carries it when the turn uses
 the same model, and `pi-agent-core`'s estimator counts only the content replayed after it. A failed,
 cancelled, or retried answer, a model switch, or a provider that omits input counts leaves no
-anchor, and the whole history is estimated by content. Persisted assistant `usage` sums every
+anchor, and the whole history is estimated by content. Persisted assistant token counts in `stats` sum every
 request of a turn for analytics and is never a context-size measurement. The adapter adds system
 instructions, current input, tool schemas, per-image dialect estimates (replacing Pi's flat image
 charge), and a fixed safety margin before calling Pi's `shouldCompact`; content already covered by
@@ -753,7 +752,7 @@ The Host adds the admitted Agent source and reserved Session message reference, 
 and starts an analytical write per invocation. Like snapshot writes, that write never blocks the
 event loop; the terminal write waits for the Host's tracked Runtime usage writes, so the finalized
 row carries those persisted calls. `AiUsageRecordService` inserts the fact and rebuilds message
-`stats` and protocol `usage` in the same transaction. The Host retains an aggregate for its in-memory
+`stats` in the same transaction. The Host retains an aggregate for its in-memory
 message view and uses it at finalization only when no analytical projection was persisted. If some writes fail,
 an existing projection continues to reflect only persisted records. Tools that call providers on
 the Host's behalf (image generation) read the attribution when they run, because the tool catalog

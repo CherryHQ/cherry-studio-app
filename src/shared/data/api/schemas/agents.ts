@@ -12,7 +12,7 @@ import { type OrderEndpoints } from './endpointHelpers';
 const AGENT_MUTABLE_FIELDS = {
   disabledCapabilities: true,
   instructions: true,
-  modelId: true,
+  model: true,
   name: true,
   toolApprovalMode: true,
 } as const;

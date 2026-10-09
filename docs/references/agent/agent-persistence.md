@@ -76,8 +76,8 @@ cache before startup. Missing or invalid entries use normalized message history;
 
 **No workspace; controlled resources come from managed references.** A desktop workspace encodes a
 working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
-no workspace reference. `execution_target` records the mobile boundary (`{"kind":"local"}`). Every
-file is imported into `file_entry` before submission or tool use. The Host
+no workspace reference or execution-target column. Every file is imported into `file_entry` before
+submission or tool use. The Host
 initializes a turn resource ledger from managed file ids in the current input and Session transcript,
 then may add only validated entries created by application capabilities during that turn. Those
 durable references already live on messages, while the monotonic same-turn ledger is process-local,
@@ -162,7 +162,7 @@ lives on the Agent row's group-level deny-list, never in this per-tool relation.
 
 Skill configuration remains deferred. Pi reads neither tool nor Skill persistence directly.
 
-**Naming and types.** DB columns use the protocol vocabulary (`title`, `titleIsManual`), not a
+**Naming and types.** DB columns use the protocol vocabulary (`name`, `isNameManuallyEdited`), not a
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the
 store maps to the protocol's ISO strings at the boundary. `agent` uses UUID v4 (like `assistant`);
 `agent_session` and `agent_session_message` use time-ordered UUID v7 (`uuidPrimaryKeyOrdered`).
@@ -179,7 +179,7 @@ model selection with Agent definition edits and inactive query caches.
 `agent → agent_session → agent_session_message` shape but owns its columns, per the #568
 authority split and the schema README's alignment rule: columns that presume a resumable
 external runtime (workspace, delivery, resume tokens) are deliberately absent, while
-`turnId`/`error`, `executionTarget`, and Agent soft delete are mobile-owned.
+`turnId`/`error` and Agent soft delete are mobile-owned.
 
 ## Tables
 
@@ -191,8 +191,8 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `name` | text | NOT NULL | |
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
 | `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
-| `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
-| `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` and withholds `ask_user_question` |
+| `model` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
+| `toolApprovalMode` | text | NOT NULL DEFAULT `auto` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` and withholds `ask_user_question` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |
 | `createdAt` / `updatedAt` / `deletedAt` | integer | helper defaults | Soft delete via `deletedAt` |
 
@@ -222,9 +222,8 @@ listing/cascade and MCP server delete-time disabling.
 | --- | --- | --- | --- |
 | `id` | text | PK, UUID v7 | |
 | `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE RESTRICT | Agent soft-deletes first |
-| `title` | text | NOT NULL DEFAULT `''` | |
-| `titleIsManual` | integer (bool) | NOT NULL DEFAULT `false` | |
-| `executionTarget` | text (json) | NOT NULL DEFAULT `{"kind":"local"}` | Mobile app execution boundary, never a Runtime id or remote-control target |
+| `name` | text | NOT NULL DEFAULT `''` | |
+| `isNameManuallyEdited` | integer (bool) | NOT NULL DEFAULT `false` | |
 | `lastActivityAt` | integer | NOT NULL | Monotonic Session recency: reservation time or terminal `stats.runtimeTiming.completedAt` |
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
 | `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is deleted |
@@ -241,14 +240,13 @@ recency; no `orderKey`).
 | `sessionId` | text | NOT NULL, FK → `agent_session.id` ON DELETE CASCADE | |
 | `turnId` | text | NULL, indexed | Correlation id shared by a submission's user/assistant pair; nullable per protocol |
 | `role` | text | NOT NULL, CHECK `user`/`assistant`/`system` | No `root`: transcript is linear |
-| `data` | text (json) | NOT NULL | `{ version: 1, parts: AgentMessagePart[] }` |
+| `data` | text (json) | NOT NULL | `{ parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
-| `usage` | text (json) | NULL | Assistant messages only |
 | `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
-| `error` | text (json) | NULL | Turn-level `AgentErrorView`, including the versioned failure snapshot when available; projected into `AgentTurnView.error`, not part of the message view |
+| `error` | text (json) | NULL | Terminal `AgentErrorView` diagnostics, including cancellation reasons with no inline error part; historical Turn views are not reconstructed from this column |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
-| `messageSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
+| `inferenceSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
 | `searchableText` | text | NOT NULL DEFAULT `''` | Visible plain text of `text` parts, written by the store |
 | `ftsRowid` | integer | NULL, UNIQUE | Stable FTS5 `content_rowid`, trigger-assigned |
 | `createdAt` / `updatedAt` | integer | helper defaults | Physical row timestamps; hard delete via session cascade |
@@ -266,8 +264,17 @@ enforcement here; the plain `status` index exists because Drizzle's bound `statu
 cannot match a partial index — see `message.ts`.)
 
 `data.parts` is exactly the protocol's `AgentMessagePart` union
-([contract](../../../src/shared/contracts/agent/views.ts)); the version field guards future part-shape
-migrations. FTS mirrors the chat `message` architecture (external-content FTS5 table keyed on
+([contract](../../../src/shared/contracts/agent/views.ts)). The database migration journal owns
+format upgrades; individual messages store no format version. Migration `0003_align_agent_fields`
+removes the old `data.version` and aligns part fields: `tool` becomes `dynamic-tool`, with
+`toolName` and `title`; file parts use `filename`; and error parts become
+`{ type: 'data-error', data }`. It preserves part order, tool states and result envelopes.
+The same migration renames the inference column to `inference_snapshot` without changing its JSON,
+removes the constant local execution target and consolidates message `usage` into `stats`, filling
+missing counters without overwriting existing statistics. It also aligns the database approval
+default with new Agent creation (`auto`) while retaining saved modes.
+
+FTS mirrors the chat `message` architecture (external-content FTS5 table keyed on
 `ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) and indexes
 `text` parts only. `reasoning` is model-internal and deliberately not searchable; tool payloads are
 structured data, not prose. The store writes `searchableText` as the parts' visible plain text,
@@ -303,10 +310,11 @@ projection:
 
 - *Reserve* inserts the user message and assistant placeholder (shared fresh `turnId`) in one
   `DbService.withWriteTx()` transaction (invariant 2). *Finalize* settles the assistant message —
-  status, parts, usage, `stats.runtimeTiming`, turn-level error, and an optional validated context
+  status, parts, token counts in `stats`, `stats.runtimeTiming`, turn-level error, and an optional validated context
   checkpoint — in one write (invariant 5). Failed, cancelled, and interrupted terminal rows force
-  the checkpoint to `NULL`. The error part and turn-level error column receive the same
-  `AgentErrorView`; historical rows without a failure snapshot remain valid. Reservation advances
+  the checkpoint to `NULL`. Failed turns write the same `AgentErrorView` to the inline part and
+  diagnostic column. Cancellation retains its reason only in the column; historical rows without
+  a failure snapshot remain valid. Reservation advances
   Session `lastActivityAt` to the assistant placeholder's `createdAt`; normal finalization advances
   it to `stats.runtimeTiming.completedAt`. Message and Session `updatedAt` remain physical row
   modification timestamps.
@@ -331,7 +339,7 @@ projection:
   unfinished tools. This preserves recorded artifacts for later turns without resuming execution
   or persisting a draft-file state.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
-  It copies `titleIsManual` and `executionTarget` from the source, takes `title` from the caller
+  It copies `isNameManuallyEdited` from the source, takes `name` from the caller
   or else from the source, sets
   `forkedFromSessionId`, records the reissued copied anchor as `forkBoundaryMessageId`, and copies
   `lastActivityAt` from the source assistant's `stats.runtimeTiming.completedAt` at the inclusive
@@ -339,8 +347,8 @@ projection:
   the fork is an administrative row mutation, not conversation
   activity, so it does not move the fork to "now" in the recency list. Startup recovery preserves
   the original reservation activity because it is not new conversation activity. Copied rows keep
-  `createdAt`, `role`, `data`, `status`, `usage`, `stats`, `error`,
-  `modelId`, and `messageSnapshot` verbatim; `turnId` is reissued through a per-fork map so pairing
+  `createdAt`, `role`, `data`, `status`, `stats`, `error`,
+  `modelId`, and `inferenceSnapshot` verbatim; `turnId` is reissued through a per-fork map so pairing
   survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
   checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the
   "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already

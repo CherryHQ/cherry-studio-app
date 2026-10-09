@@ -297,6 +297,8 @@
   "chat.errorPart.reason.unknown": "Execuția a eșuat",
   "chat.errorPart.retryable": "Răspunsul nu a putut fi completat. Puteți încerca din nou.",
   "chat.errorPart.title": "Eroare",
+  "chat.errorPart.unreadable.message": "Acest mesaj conține conținut care nu poate fi citit sau nu este acceptat. Datele originale au fost păstrate.",
+  "chat.errorPart.unreadable.title": "O parte din conținut nu poate fi afișată",
   "chat.filePicker.add": "Adăugați",
   "chat.filePicker.addSelected_few": "Adăugați {{count}} fișiere",
   "chat.filePicker.addSelected_one": "Adăugați {{count}} fișier",

@@ -80,7 +80,7 @@ describe('AI usage analytics', () => {
       INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent-1', 'Agent', 'a', 1, 1);
       INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session-1', 'agent-1', 1, 1, 1);
       INSERT INTO agent_session_message (id, session_id, role, data, status, stats, created_at, updated_at)
-      VALUES ('message-1', 'session-1', 'assistant', '{"version":1,"parts":[]}', 'success', '{"runtimeTiming":{"startedAt":1,"completedAt":1000,"spans":[]},"contextTokens":42}', 1, 1);
+      VALUES ('message-1', 'session-1', 'assistant', '{"parts":[]}', 'success', '{"runtimeTiming":{"startedAt":1,"completedAt":1000,"spans":[]},"contextTokens":42}', 1, 1);
     `);
     const ref = { kind: 'agent-session' as const, id: 'message-1' };
     const first = invocation(
@@ -157,17 +157,12 @@ describe('AI usage analytics', () => {
         ],
       });
       const row = sqlite
-        .prepare('SELECT stats, usage FROM agent_session_message WHERE id = ?')
-        .get('message-1') as { stats: string; usage: string };
+        .prepare('SELECT stats FROM agent_session_message WHERE id = ?')
+        .get('message-1') as { stats: string };
       expect(JSON.parse(row.stats)).toEqual({
         ...projection,
         contextTokens: 42,
         runtimeTiming: { startedAt: 1, completedAt: 1000, spans: [] },
-      });
-      expect(JSON.parse(row.usage)).toEqual({
-        inputTokens: 110,
-        outputTokens: 22,
-        totalTokens: 132,
       });
       await service.recordInvocations([first, second, image]);
       expect(listener).toHaveBeenCalledTimes(1);
@@ -185,18 +180,17 @@ describe('AI usage analytics', () => {
         INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent-1', 'Agent', 'a', 1, 1);
         INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session-1', 'agent-1', 1, 1, 1);
         INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
-        VALUES ('message-1', 'session-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1);
+        VALUES ('message-1', 'session-1', 'assistant', '{"parts":[]}', 'pending', 1, 1);
       `);
       const ref = { kind: 'agent-session' as const, id: 'message-1' };
       const listener = jest.fn((paths: readonly string[]) => {
         const row = sqlite
-          .prepare('SELECT stats, usage, status FROM agent_session_message WHERE id = ?')
-          .get(ref.id) as { stats: string; usage: string; status: string };
+          .prepare('SELECT stats, status FROM agent_session_message WHERE id = ?')
+          .get(ref.id) as { stats: string; status: string };
         return {
           paths,
           inTransaction: sqlite.isTransaction,
           stats: JSON.parse(row.stats),
-          usage: JSON.parse(row.usage),
           status: row.status,
         };
       });
@@ -257,6 +251,9 @@ describe('AI usage analytics', () => {
           inTransaction: false,
           status,
           stats: {
+            inputTokens: 110,
+            outputTokens: 22,
+            totalTokens: 132,
             requestCount: 3,
             costs: expect.arrayContaining([
               {
@@ -267,7 +264,6 @@ describe('AI usage analytics', () => {
               },
             ]),
           },
-          usage: { inputTokens: 110, outputTokens: 22, totalTokens: 132 },
         });
         await service.recordInvocation(image);
         expect(listener).toHaveBeenCalledTimes(1);

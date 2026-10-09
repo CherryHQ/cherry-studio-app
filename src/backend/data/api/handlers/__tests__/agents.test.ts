@@ -47,15 +47,15 @@ describe('agent handlers', () => {
     const handlers = createAgentHandlers(service as unknown as AgentService, createAvatars());
 
     await handlers['/agents/:id'].PATCH({
-      body: { modelId: null },
+      body: { model: null },
       params: { id: AGENT_ID },
     });
 
-    expect(service.update).toHaveBeenCalledWith(AGENT_ID, { modelId: null });
+    expect(service.update).toHaveBeenCalledWith(AGENT_ID, { model: null });
 
     await expect(
       handlers['/agents/:id'].PATCH({
-        body: { modelId: 'not-a-unique-model-id' } as never,
+        body: { model: 'not-a-unique-model-id' } as never,
         params: { id: AGENT_ID },
       }),
     ).rejects.toThrow();

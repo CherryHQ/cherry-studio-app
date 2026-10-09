@@ -13,7 +13,6 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
     role: 'assistant',
     status: 'success',
     parts: [],
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,

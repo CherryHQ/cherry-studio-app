@@ -11,7 +11,7 @@ describe('createAgentFormState', () => {
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
       disabledCapabilities: ['calendar'],
       instructions: 'sys',
-      modelId: 'openai::gpt-5',
+      model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'default',
     } as unknown as Agent);
@@ -23,7 +23,7 @@ describe('createAgentFormState', () => {
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
       disabledCapabilities: ['calendar'],
       instructions: 'sys',
-      modelId: 'openai::gpt-5',
+      model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'default',
     });
@@ -42,7 +42,7 @@ describe('createAgentFormState', () => {
       avatarUri: null,
       disabledCapabilities: [],
       instructions: '',
-      modelId: null,
+      model: null,
       name: 'Assistant',
       toolApprovalMode: 'default',
     } as unknown as Agent);
@@ -59,9 +59,9 @@ describe('buildAgentDto', () => {
     });
   });
 
-  it('omits modelId when creation delegates default-model resolution to the backend', () => {
+  it('omits model when creation delegates default-model resolution to the backend', () => {
     const dto = buildAgentDto(
-      { ...baseForm, modelId: 'openai::gpt-5', name: 'A' },
+      { ...baseForm, model: 'openai::gpt-5', name: 'A' },
       { inheritDefaultModel: true },
     );
 
@@ -69,7 +69,7 @@ describe('buildAgentDto', () => {
       throw new Error('expected ok');
     }
 
-    expect(dto.value).not.toHaveProperty('modelId');
+    expect(dto.value).not.toHaveProperty('model');
   });
 
   it('builds only the editable agent definition fields', () => {
@@ -80,7 +80,7 @@ describe('buildAgentDto', () => {
       avatarUri: 'file:///picker/avatar.jpg',
       disabledCapabilities: ['web'],
       instructions: 'system prompt',
-      modelId: 'openai::gpt-5',
+      model: 'openai::gpt-5',
       name: '  Researcher  ',
     });
 
@@ -91,7 +91,7 @@ describe('buildAgentDto', () => {
     expect(dto.value).toEqual({
       disabledCapabilities: ['web'],
       instructions: 'system prompt',
-      modelId: 'openai::gpt-5',
+      model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'auto',
     });

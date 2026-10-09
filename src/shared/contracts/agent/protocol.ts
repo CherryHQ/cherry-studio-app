@@ -31,7 +31,7 @@ export interface AgentProtocol {
   /** Status-only observation: does not load or subscribe to the transcript. */
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void;
 
-  renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>;
+  renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView>;
   deleteSession(input: { sessionId: string }): Promise<void>;
 
   /** Creates the durable Session only when its first submission is admitted. */

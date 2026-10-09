@@ -73,7 +73,7 @@ export function ChatInput({
       : '/';
   const persistModel = useCallback(
     (targetAgentId: string, modelId: ModelPickerModelItem['modelId']) =>
-      updateAgent(targetAgentId, { modelId }),
+      updateAgent(targetAgentId, { model: modelId }),
     [updateAgent],
   );
   const handleModelPersistenceError = useCallback(

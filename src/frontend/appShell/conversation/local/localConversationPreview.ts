@@ -66,8 +66,7 @@ export function createLocalConversationPreview(input: {
     },
     rename: {
       availability: { state: 'enabled' },
-      execute: ({ title }) =>
-        execute(() => agent.renameSession({ sessionId, title: title.trim() })),
+      execute: ({ title }) => execute(() => agent.renameSession({ sessionId, name: title.trim() })),
     },
     remove: {
       availability: { state: 'enabled' },

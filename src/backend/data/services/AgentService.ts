@@ -45,7 +45,7 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     disabledCapabilities: sanitizeDisabledAgentCapabilities(row.disabledCapabilities),
     id: row.id,
     instructions: row.instructions,
-    modelId: row.modelId as UniqueModelId | null,
+    model: row.model as UniqueModelId | null,
     modelName,
     name: row.name,
     orderKey: row.orderKey,
@@ -88,7 +88,7 @@ export class AgentService {
       throw DataApiErrorFactory.notFound('Agent', id);
     }
 
-    return rowToAgent(row, await this.getModelName(row.modelId));
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
   get(id: string): Promise<Agent> {
@@ -138,11 +138,11 @@ export class AgentService {
         .where(whereClause),
     ]);
 
-    const modelNames = await modelService.getNamesByUniqueIds(rows.map((row) => row.modelId));
+    const modelNames = await modelService.getNamesByUniqueIds(rows.map((row) => row.model));
 
     return {
       items: rows.map((row) =>
-        rowToAgent(row, row.modelId ? (modelNames.get(row.modelId) ?? null) : null),
+        rowToAgent(row, row.model ? (modelNames.get(row.model) ?? null) : null),
       ),
       page: query.page,
       total: Number(countRows[0]?.count ?? 0),
@@ -155,7 +155,7 @@ export class AgentService {
     const row = await this.dbService.withWriteTx((tx) => this.insertTx(tx, dto));
     publishDataApiChanges(['/agents', `/agents/${row.id}`]);
 
-    return rowToAgent(row, await this.getModelName(row.modelId));
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
   /** Seeds a fresh installation without recreating an Agent the user deleted. */
@@ -169,7 +169,7 @@ export class AgentService {
 
     if (!row) return null;
     publishDataApiChanges(['/agents', `/agents/${row.id}`]);
-    return rowToAgent(row, await this.getModelName(row.modelId));
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
   async update(
@@ -205,10 +205,10 @@ export class AgentService {
     }
 
     const row = await this.dbService.withWriteTx(async (tx) => {
-      if (dto.modelId && !(await this.modelExistsTx(tx, dto.modelId))) {
+      if (dto.model && !(await this.modelExistsTx(tx, dto.model))) {
         throw DataApiErrorFactory.validation(
-          { modelId: [`Model '${dto.modelId}' is not registered in user_model`] },
-          `Agent modelId '${dto.modelId}' is not registered - add the model first or pass null`,
+          { model: [`Model '${dto.model}' is not registered in user_model`] },
+          `Agent model '${dto.model}' is not registered - add the model first or pass null`,
         );
       }
 
@@ -241,8 +241,8 @@ export class AgentService {
 
     publishDataApiChanges(['/agents', `/agents/${id}`]);
     const modelName =
-      dto.modelId !== undefined && dto.modelId !== current.modelId
-        ? await this.getModelName(dto.modelId)
+      dto.model !== undefined && dto.model !== current.model
+        ? await this.getModelName(dto.model)
         : current.modelName;
 
     return rowToAgent(row, modelName);
@@ -272,7 +272,7 @@ export class AgentService {
     });
 
     publishDataApiChanges(['/agents', `/agents/${id}`]);
-    return rowToAgent(row, await this.getModelName(row.modelId));
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
   /**
@@ -356,8 +356,8 @@ export class AgentService {
     if (dtoModelId !== undefined) {
       if (dtoModelId && !(await this.modelExistsTx(tx, dtoModelId))) {
         throw DataApiErrorFactory.validation(
-          { modelId: [`Model '${dtoModelId}' is not registered in user_model`] },
-          `Agent modelId '${dtoModelId}' is not registered - add the model first or pass null`,
+          { model: [`Model '${dtoModelId}' is not registered in user_model`] },
+          `Agent model '${dtoModelId}' is not registered - add the model first or pass null`,
         );
       }
       return dtoModelId;
@@ -378,13 +378,13 @@ export class AgentService {
   }
 
   private async insertTx(tx: TxLike, dto: CreateAgentDto): Promise<AgentRow> {
-    const modelId = await this.resolveCreateModelId(tx, dto.modelId);
+    const modelId = await this.resolveCreateModelId(tx, dto.model);
     return (await insertWithOrderKey(
       tx,
       agentTable,
       {
         ...dto,
-        modelId,
+        model: modelId,
         toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
       },
       { pkColumn: agentTable.id, scope: isNull(agentTable.deletedAt) },

@@ -42,7 +42,6 @@ function message(id: string, role: 'user' | 'assistant'): AgentMessageView {
     parts: [{ id: `${id}-text`, type: 'text', text: id, state: 'done' }],
     createdAt: '2026-09-14T00:00:00.000Z',
     updatedAt: '2026-09-14T00:00:00.000Z',
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,

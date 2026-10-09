@@ -297,6 +297,8 @@
   "chat.errorPart.reason.unknown": "L'exécution a échoué",
   "chat.errorPart.retryable": "La réponse n'a pas pu être complétée. Vous pouvez réessayer.",
   "chat.errorPart.title": "Erreur",
+  "chat.errorPart.unreadable.message": "Ce message contient du contenu illisible ou non pris en charge. Les données d’origine ont été conservées.",
+  "chat.errorPart.unreadable.title": "Une partie du contenu ne peut pas être affichée",
   "chat.filePicker.add": "Ajouter",
   "chat.filePicker.addSelected_many": "Ajouter {{count}} fichiers",
   "chat.filePicker.addSelected_one": "Ajouter {{count}} fichier",

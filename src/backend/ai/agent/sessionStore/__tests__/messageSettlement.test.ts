@@ -14,7 +14,7 @@ describe('message settlement', () => {
     }));
     expect(settleInterruptedAssistantParts(parts, INTERRUPTED, 'error-turn-1')).toEqual([
       parts[1],
-      { id: 'error-turn-1', type: 'error', error: INTERRUPTED },
+      { id: 'error-turn-1', type: 'data-error', data: INTERRUPTED },
     ]);
   });
 
@@ -25,11 +25,11 @@ describe('message settlement', () => {
         [
           {
             id: 'tool-call-1',
-            type: 'tool',
+            type: 'dynamic-tool',
             toolCallId: 'call-1',
             toolRef: TOOL_REF,
-            providerName: 'mcp_server_1_delete_file_a1b2',
-            displayName: 'Delete file',
+            toolName: 'mcp_server_1_delete_file_a1b2',
+            title: 'Delete file',
             state,
             ...(state === 'input-streaming' ? {} : { input: { fileEntryId: 'file-1' } }),
             ...(state === 'awaiting-approval' ? { approvalId: 'approval-1' } : {}),
@@ -51,7 +51,7 @@ describe('message settlement', () => {
 
   test('appends a renderable error part when recovery interrupts an assistant message', () => {
     expect(settleInterruptedAssistantParts([], INTERRUPTED, 'error-turn-1')).toEqual([
-      { id: 'error-turn-1', type: 'error', error: INTERRUPTED },
+      { id: 'error-turn-1', type: 'data-error', data: INTERRUPTED },
     ]);
   });
 });

@@ -300,6 +300,8 @@
   "chat.errorPart.reason.unknown": "Не удалось выполнить",
   "chat.errorPart.retryable": "Не удалось завершить ответ. Вы можете попробовать еще раз.",
   "chat.errorPart.title": "Ошибка",
+  "chat.errorPart.unreadable.message": "Это сообщение содержит нечитаемые или неподдерживаемые данные. Исходные данные сохранены.",
+  "chat.errorPart.unreadable.title": "Часть содержимого не отображается",
   "chat.filePicker.add": "Добавить",
   "chat.filePicker.addSelected_few": "Добавить {{count}} файла",
   "chat.filePicker.addSelected_many": "Добавить {{count}} файлов",

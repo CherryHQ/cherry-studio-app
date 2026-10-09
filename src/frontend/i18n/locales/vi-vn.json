@@ -291,6 +291,8 @@
   "chat.errorPart.reason.unknown": "Thực thi không thành công",
   "chat.errorPart.retryable": "Không thể hoàn thành câu trả lời. Bạn có thể thử lại.",
   "chat.errorPart.title": "Lỗi",
+  "chat.errorPart.unreadable.message": "Tin nhắn này chứa nội dung không thể đọc hoặc chưa được hỗ trợ. Dữ liệu gốc vẫn được giữ nguyên.",
+  "chat.errorPart.unreadable.title": "Không thể hiển thị một phần nội dung",
   "chat.filePicker.add": "Thêm",
   "chat.filePicker.addSelected_other": "Thêm {{count}} tệp",
   "chat.filePicker.alreadyAdded": "Đã thêm",

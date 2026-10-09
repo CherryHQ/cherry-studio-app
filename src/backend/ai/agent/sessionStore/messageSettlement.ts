@@ -1,6 +1,26 @@
 import type { AgentErrorView, AgentMessagePart } from '@/shared/contracts/agent';
+import type { MessageStats } from '@/shared/data/types/message';
 
 import { createInterruptedToolResult } from '../runtime';
+import type { FinalizeAssistantMessageInput } from './AgentSessionStore';
+
+/** Runtime token counts fill in only until the invocation ledger has projected statistics. */
+export function finalizeMessageStats(
+  existing: MessageStats | null,
+  { usage, runtimeStats }: Pick<FinalizeAssistantMessageInput, 'usage' | 'runtimeStats'>,
+): MessageStats {
+  return {
+    ...existing,
+    ...(existing?.requestCount === undefined
+      ? {
+          inputTokens: usage?.inputTokens,
+          outputTokens: usage?.outputTokens,
+          totalTokens: usage?.totalTokens,
+        }
+      : {}),
+    ...runtimeStats,
+  };
+}
 
 /** Only completed folds belong to persisted history, including interrupted turns. */
 export function omitTransientCompactionParts(parts: AgentMessagePart[]): AgentMessagePart[] {
@@ -15,7 +35,7 @@ export function interruptNonTerminalToolParts(
 ): AgentMessagePart[] {
   return parts.map((part) => {
     if (
-      part.type !== 'tool' ||
+      part.type !== 'dynamic-tool' ||
       (part.state !== 'input-streaming' &&
         part.state !== 'input-available' &&
         part.state !== 'awaiting-approval' &&
@@ -56,6 +76,6 @@ export function settleInterruptedAssistantParts(
       settleStreamingTextParts(omitTransientCompactionParts(parts)),
       error.message,
     ),
-    { id: errorPartId, type: 'error', error },
+    { id: errorPartId, type: 'data-error', data: error },
   ];
 }

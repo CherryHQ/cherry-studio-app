@@ -7,16 +7,12 @@ import * as z from 'zod';
 
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
-import {
-  AgentExecutionTargetSchema,
-  AgentImageGenerationSchema,
-  AgentInputPartSchema,
-} from './views';
+import { AgentImageGenerationSchema, AgentInputPartSchema } from './views';
 
 /** Operation inputs, validated by the Host at the protocol boundary. */
 export const AgentRenameSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
-  title: z.string().min(1),
+  name: z.string().min(1),
 });
 export const AgentDeleteSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
@@ -39,7 +35,6 @@ export const AgentStartSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
-  executionTarget: AgentExecutionTargetSchema,
   parts: z.array(AgentInputPartSchema).min(1),
   /** Snapshots the draft composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
@@ -57,7 +52,7 @@ export const AgentForkSessionInputSchema = z.strictObject({
    * it because any derived wording is localized copy, and the Host has no
    * locale: it never composes user-visible text.
    */
-  title: z.string().min(1).max(255).optional(),
+  name: z.string().min(1).max(255).optional(),
 });
 export type AgentForkSessionInput = z.infer<typeof AgentForkSessionInputSchema>;
 /**

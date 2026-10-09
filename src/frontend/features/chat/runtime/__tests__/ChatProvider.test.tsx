@@ -175,7 +175,7 @@ describe('ChatProvider Draft handoff', () => {
               type: 'file',
               fileEntryId: 'file-1',
               mediaType: 'application/pdf',
-              name: 'notes.pdf',
+              filename: 'notes.pdf',
             },
           ],
         });
@@ -404,7 +404,6 @@ function imageMessage(id: string): AgentMessageView {
     status: 'success',
     turnId: `turn-${id}`,
     updatedAt: '2026-09-01T00:00:00.000Z',
-    usage: null,
   };
 }
 

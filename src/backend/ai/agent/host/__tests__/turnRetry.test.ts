@@ -15,17 +15,16 @@ function answer(status: AgentMessageView['status'], parts: AgentMessagePart[]): 
     status,
     turnId: 'turn-1',
     updatedAt: '2026-09-20T00:00:00.000Z',
-    usage: null,
   };
 }
 
 const completedTool: AgentMessagePart = {
   id: 'tool-search',
-  type: 'tool',
+  type: 'dynamic-tool',
   toolCallId: 'search-call',
   toolRef: { source: 'builtin', capabilityId: 'search' },
-  providerName: 'search',
-  displayName: 'Search',
+  toolName: 'search',
+  title: 'Search',
   state: 'output-available',
   input: { q: 'question' },
   output: { value: { result: 'Found' }, artifacts: [] },
@@ -47,8 +46,8 @@ describe('retryAssistantParts', () => {
         },
         {
           id: 'error-1',
-          type: 'error',
-          error: { code: 'EXECUTION_FAILED', message: 'boom', retryable: true },
+          type: 'data-error',
+          data: { code: 'EXECUTION_FAILED', message: 'boom', retryable: true },
         },
       ]),
     );

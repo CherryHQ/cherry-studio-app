@@ -67,7 +67,7 @@ export function toChatExportDocument(
     const resultIndex = finalTextIndex(parts);
     parts.forEach((part, index) => {
       if (part.type === 'file') {
-        const name = part.name || options.labels.file;
+        const name = part.filename || options.labels.file;
         if (part.mediaType.toLowerCase().startsWith('image/')) {
           const assetId = `${message.id}:${part.id}`;
           assets[assetId] = {
@@ -94,9 +94,16 @@ export function toChatExportDocument(
           presentation: 'reasoning',
           blocks: [{ kind: 'markdown', source: part.text }],
         });
-      } else if ((part.type === 'tool' || part.type === 'tool-summary') && options.includeProcess) {
+      } else if (
+        (part.type === 'dynamic-tool' || part.type === 'tool-summary') &&
+        options.includeProcess
+      ) {
         // Only the readable tool name is shared. Inputs, credentials and raw result envelopes stay private.
-        process.push({ kind: 'details', summary: part.displayName, blocks: [] });
+        process.push({
+          kind: 'details',
+          summary: part.type === 'tool-summary' ? part.displayName : part.title,
+          blocks: [],
+        });
       }
     });
     if (process.length) {
@@ -150,7 +157,7 @@ function finalTextIndex(parts: Readonly<TranscriptMessage['parts']>): number | u
     const part = parts[index];
     if (
       part.type === 'file' ||
-      part.type === 'error' ||
+      part.type === 'data-error' ||
       part.type === 'data-compaction-anchor' ||
       ((part.type === 'text' || part.type === 'reasoning') && !part.text.trim())
     )
@@ -165,7 +172,7 @@ function collectSources(parts: Readonly<TranscriptMessage['parts']>): Map<string
   const sources = new Map<string, CitationSource>();
   for (const part of parts) {
     if (
-      part.type !== 'tool' ||
+      part.type !== 'dynamic-tool' ||
       part.toolRef.source !== 'builtin' ||
       !['web_search', 'web_fetch'].includes(part.toolRef.capabilityId)
     )

@@ -291,6 +291,8 @@
   "chat.errorPart.reason.unknown": "執行失敗",
   "chat.errorPart.retryable": "本次回復未能完成，可以重試。",
   "chat.errorPart.title": "錯誤",
+  "chat.errorPart.unreadable.message": "這則訊息包含無法讀取或尚未支援的內容，原始資料已保留。",
+  "chat.errorPart.unreadable.title": "部分內容無法顯示",
   "chat.filePicker.add": "新增",
   "chat.filePicker.addSelected_other": "新增 {{count}} 個檔案",
   "chat.filePicker.alreadyAdded": "已添加",

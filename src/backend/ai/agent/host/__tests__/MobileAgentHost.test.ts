@@ -75,6 +75,16 @@ const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_fil
 const TOOL_PROVIDER_NAME = 'mcp_server_1_delete_file_a1b2';
 const TOOL_DISPLAY_NAME = 'Delete file';
 
+/** Projects a Runtime tool part into its persisted protocol shape. */
+function storedToolPart<T extends { type: 'tool'; providerName: string; displayName: string }>({
+  type: _type,
+  providerName,
+  displayName,
+  ...part
+}: T) {
+  return { ...part, type: 'dynamic-tool' as const, toolName: providerName, title: displayName };
+}
+
 const USAGE_CONTEXT: RuntimeUsageContext = {
   credentialReceipt: { attribution: 'unknown' },
   modelId: 'mock-model',
@@ -452,11 +462,11 @@ describe('MobileAgentHost', () => {
       { id: 'text-1', type: 'text', state: 'done', text: 'Searching' },
       {
         id: 'tool-search',
-        type: 'tool',
+        type: 'dynamic-tool',
         toolCallId: 'search-call',
         toolRef: { source: 'builtin', capabilityId: 'search' },
-        providerName: 'search',
-        displayName: 'Search',
+        toolName: 'search',
+        title: 'Search',
         state: 'output-available',
         input: { q: 'question' },
         output: { value: { result: 'Found' }, artifacts: [] },
@@ -473,7 +483,7 @@ describe('MobileAgentHost', () => {
     expect(messages).toHaveLength(2);
     expect(messages[1].parts).toMatchObject([
       { type: 'text', text: 'Searching' },
-      { type: 'tool', toolCallId: 'search-call' },
+      { type: 'dynamic-tool', toolCallId: 'search-call' },
       { type: 'text', text: 'Recovered answer' },
     ]);
     expect(new Set(messages[1].parts.map((part) => part.id)).size).toBe(3);
@@ -552,7 +562,6 @@ describe('MobileAgentHost', () => {
       sessionId: uuidv7(),
       ...ids,
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       modelId: createUniqueModelId('mock-provider', 'image-model'),
       parts: [{ type: 'text', text: 'Draw an orchard' }],
       imageGeneration: settings,
@@ -653,7 +662,6 @@ describe('MobileAgentHost', () => {
       sessionId: uuidv7(),
       ...messageIds(),
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'Draw a cherry' }],
       imageGeneration: settings,
     });
@@ -695,7 +703,6 @@ describe('MobileAgentHost', () => {
       sessionId: uuidv7(),
       ...messageIds(),
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'Draw a cherry' }],
     });
     await waitForAsync(
@@ -704,8 +711,8 @@ describe('MobileAgentHost', () => {
     );
     expect((await store.listMessages(session.id))[1].parts).toEqual([
       expect.objectContaining({
-        type: 'error',
-        error: { code: 'EXECUTION_FAILED', ...error.detail },
+        type: 'data-error',
+        data: { code: 'EXECUTION_FAILED', ...error.detail },
       }),
     ]);
     await host._doStop();
@@ -730,7 +737,7 @@ describe('MobileAgentHost', () => {
       };
       const submitting =
         kind === 'new'
-          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
+          ? host.startSession({ ...input, agentId: AGENT_ID })
           : host.submitMessage(input);
       const lease = backgroundReply.acquirePreparation.mock.results[0]!.value;
       // The Session's surface can only be opened before the turn exists.
@@ -773,7 +780,7 @@ describe('MobileAgentHost', () => {
       };
       const submitting =
         kind === 'new'
-          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
+          ? host.startSession({ ...input, agentId: AGENT_ID })
           : host.submitMessage(input);
       const rejected = expect(submitting).rejects.toMatchObject({
         view: { code: 'INTERRUPTED', retryable: true },
@@ -811,7 +818,6 @@ describe('MobileAgentHost', () => {
       sessionId: uuidv7(),
       ...messageIds(),
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'private input' }],
     });
     await waitFor(
@@ -900,7 +906,6 @@ describe('MobileAgentHost', () => {
     const session = await host.startSession({
       ...ids,
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'Hello.' }],
     });
     await waitForAsync(
@@ -941,7 +946,6 @@ describe('MobileAgentHost', () => {
       sessionId: uuidv7(),
       ...messageIds(),
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'Hello.' }],
     });
     await executionStarted.promise;
@@ -979,7 +983,6 @@ describe('MobileAgentHost', () => {
         sessionId: uuidv7(),
         ...messageIds(),
         agentId: AGENT_ID,
-        executionTarget: { kind: 'local' },
         parts: [{ type: 'text', text: 'Hello.' }],
       }),
     ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
@@ -1015,7 +1018,6 @@ describe('MobileAgentHost', () => {
         sessionId: uuidv7(),
         ...messageIds(),
         agentId: AGENT_ID,
-        executionTarget: { kind: 'local' },
         parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
       }),
     ).rejects.toMatchObject({
@@ -1098,7 +1100,11 @@ describe('MobileAgentHost', () => {
     expect(finalized.message.parts).toEqual([
       { id: 'text-1', type: 'text', text: 'Hi', state: 'done' },
     ]);
-    expect(finalized.message.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
+    expect(finalized.message.stats).toMatchObject({
+      inputTokens: 3,
+      outputTokens: 2,
+      totalTokens: 5,
+    });
     expect(backgroundReply.startTurn).toHaveBeenCalledWith({
       agentId: AGENT_ID,
       agentName: 'Test Agent',
@@ -1147,7 +1153,7 @@ describe('MobileAgentHost', () => {
       ['assistant', 'success'],
     ]);
     expect(transcript[1]?.parts).toEqual(finalized.message.parts);
-    expect(transcript[1]?.usage).toEqual(finalized.message.usage);
+    expect(transcript[1]?.stats).toEqual(finalized.message.stats);
 
     // The Runtime saw the current Agent definition and the turn input.
     expect(requests[0]).toMatchObject({
@@ -1224,7 +1230,7 @@ describe('MobileAgentHost', () => {
     ]);
     const finalized = events.find((event) => event.type === 'message.finalized');
     expect(finalized).toMatchObject({
-      message: { status: 'error', usage: { inputTokens: 13, outputTokens: 3, totalTokens: 16 } },
+      message: { status: 'error', stats: { inputTokens: 13, outputTokens: 3, totalTokens: 16 } },
     });
   });
 
@@ -1804,7 +1810,7 @@ describe('MobileAgentHost', () => {
       );
       const resumed = await host.observeSession(session.id, () => {});
       expect(resumed.snapshot.streamingMessage?.parts).toEqual([
-        { ...toolPart, inputPreview: preview },
+        storedToolPart({ ...toolPart, inputPreview: preview }),
       ]);
       resumed.unsubscribe();
       expect(saveSnapshot).not.toHaveBeenCalled();
@@ -1925,7 +1931,7 @@ describe('MobileAgentHost', () => {
               (event) =>
                 event.type === 'message.delta' &&
                 event.delta.op === 'part.replace' &&
-                event.delta.part.type === 'tool' &&
+                event.delta.part.type === 'dynamic-tool' &&
                 event.delta.part.state === 'running',
             ),
           'the intermediate tool states to be processed',
@@ -1949,7 +1955,7 @@ describe('MobileAgentHost', () => {
         expect(saveSnapshot).toHaveBeenCalledTimes(1);
         expect((await store.listMessages(session.id))[1]).toMatchObject({
           status: 'streaming',
-          parts: [{ id: 'text-1', text: 'Deleting.', state: 'done' }, toolResult],
+          parts: [{ id: 'text-1', text: 'Deleting.', state: 'done' }, storedToolPart(toolResult)],
         });
       } finally {
         releaseTool.resolve();
@@ -1961,7 +1967,7 @@ describe('MobileAgentHost', () => {
         status: 'success',
         parts: [
           { id: 'text-1', text: 'Deleting.', state: 'done' },
-          toolResult,
+          storedToolPart(toolResult),
           { id: 'text-2', text: 'Finished.', state: 'done' },
         ],
       });
@@ -2114,14 +2120,14 @@ describe('MobileAgentHost', () => {
         (event) =>
           event.type === 'message.delta' &&
           event.delta.op === 'part.replace' &&
-          event.delta.part.type === 'tool' &&
+          event.delta.part.type === 'dynamic-tool' &&
           event.delta.part.state === 'interrupted',
       ),
     ).toBe(true);
     expect(saveSnapshot).not.toHaveBeenCalled();
     expect((await store.listMessages(session.id))[1]).toMatchObject({
       status: 'cancelled',
-      parts: [{ id: 'tool-1', type: 'tool', state: 'interrupted' }],
+      parts: [{ id: 'tool-1', type: 'dynamic-tool', state: 'interrupted' }],
     });
   });
 
@@ -2202,7 +2208,7 @@ describe('MobileAgentHost', () => {
       );
       // Three durable-value events, one blocked write: the loop kept going.
       expect(saveSnapshot).toHaveBeenCalledTimes(1);
-      expect(writtenParts[0]).toEqual([firstResult]);
+      expect(writtenParts[0]).toEqual([storedToolPart(firstResult)]);
 
       releaseTerminal.resolve();
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -2215,16 +2221,16 @@ describe('MobileAgentHost', () => {
 
     expect(saveSnapshot).toHaveBeenCalledTimes(2);
     expect(writtenParts[1]).toEqual([
-      firstResult,
+      storedToolPart(firstResult),
       {
         id: artifact.id,
         type: 'file',
         fileEntryId: SECOND_FILE_ENTRY_ID,
         mediaType: artifact.mediaType,
-        name: artifact.name,
+        filename: artifact.name,
         purpose: artifact.purpose,
       },
-      secondResult,
+      storedToolPart(secondResult),
     ]);
     expect(finalizeMessage).toHaveBeenCalledTimes(1);
     expect(Math.max(...saveSnapshot.mock.invocationCallOrder)).toBeLessThan(
@@ -2232,7 +2238,11 @@ describe('MobileAgentHost', () => {
     );
     expect((await store.listMessages(session.id))[1]).toMatchObject({
       status: 'success',
-      parts: [firstResult, { type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID }, secondResult],
+      parts: [
+        storedToolPart(firstResult),
+        { type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID },
+        storedToolPart(secondResult),
+      ],
     });
   });
 
@@ -2287,7 +2297,7 @@ describe('MobileAgentHost', () => {
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
     expect(finalizeMessage).toHaveBeenCalledTimes(1);
     expect(events.find((event) => event.type === 'message.finalized')).toMatchObject({
-      message: { status: 'success', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+      message: { status: 'success', stats: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
     });
   });
 
@@ -2859,7 +2869,7 @@ describe('MobileAgentHost', () => {
       status: 'error',
       parts: [
         { id: 'text-1', type: 'text', text: 'Partial reply', state: 'done' },
-        { type: 'error', error: { code: 'INTERRUPTED', retryable: true } },
+        { type: 'data-error', data: { code: 'INTERRUPTED', retryable: true } },
       ],
     });
     expect(host.getSessionStatus(session.id)?.status).toBe('failed');
@@ -3029,7 +3039,6 @@ describe('MobileAgentHost', () => {
       sessionId,
       ...messageIds(),
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'Stop the first send.' }],
     });
     await admissionStarted.promise;
@@ -3057,7 +3066,7 @@ describe('MobileAgentHost', () => {
     });
     await started.promise;
 
-    await host.renameSession({ sessionId: session.id, title: 'Renamed Session' });
+    await host.renameSession({ sessionId: session.id, name: 'Renamed Session' });
 
     expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Renamed Session');
     await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
@@ -3117,7 +3126,7 @@ describe('MobileAgentHost', () => {
     });
     await waitFor(() => backgroundReplyTurn.finish.mock.calls.length > 0, 'the turn to finish');
 
-    await host.renameSession({ sessionId: session.id, title: 'Manual title' });
+    await host.renameSession({ sessionId: session.id, name: 'Manual title' });
 
     expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Manual title');
     resolveSummary(null);
@@ -3501,7 +3510,7 @@ describe('MobileAgentHost', () => {
 
     const transcript = await store.listMessages(session.id);
     const toolPart = transcript[1]?.parts[0];
-    expect(toolPart).toMatchObject({ type: 'tool', state: 'output-available' });
+    expect(toolPart).toMatchObject({ type: 'dynamic-tool', state: 'output-available' });
   });
 
   test('validates managed files before reservation and persists authoritative references', async () => {
@@ -3555,7 +3564,7 @@ describe('MobileAgentHost', () => {
         type: 'file',
         fileEntryId: FILE_ENTRY_ID,
         mediaType: 'image/png',
-        name: 'managed.png',
+        filename: 'managed.png',
         purpose: 'input-attachment',
         attachmentReport: { mode: 'image', sourceTruncated: false, requestTruncated: false },
       },
@@ -4003,13 +4012,13 @@ describe('MobileAgentHost', () => {
           type: 'file',
           fileEntryId: FILE_ENTRY_ID,
           mediaType: 'text/markdown',
-          name: 'notes.md',
+          filename: 'notes.md',
         },
         {
           type: 'file',
           fileEntryId: SECOND_FILE_ENTRY_ID,
           mediaType: 'application/json',
-          name: 'config.json',
+          filename: 'config.json',
         },
       ],
     });
@@ -4051,7 +4060,7 @@ describe('MobileAgentHost', () => {
         type: 'file',
         fileEntryId: FILE_ENTRY_ID,
         mediaType: 'text/markdown',
-        name: 'notes.md',
+        filename: 'notes.md',
         purpose: 'input-attachment',
         attachmentReport: {
           mode: 'text',
@@ -4065,7 +4074,7 @@ describe('MobileAgentHost', () => {
         type: 'file',
         fileEntryId: SECOND_FILE_ENTRY_ID,
         mediaType: 'application/json',
-        name: 'config.json',
+        filename: 'config.json',
         purpose: 'input-attachment',
         attachmentReport: {
           mode: 'text',
@@ -4111,7 +4120,7 @@ describe('MobileAgentHost', () => {
             type: 'file',
             fileEntryId: FILE_ENTRY_ID,
             mediaType: 'application/zip',
-            name: 'archive.zip',
+            filename: 'archive.zip',
           },
         ],
       }),
@@ -4138,7 +4147,7 @@ describe('MobileAgentHost', () => {
             type: 'file',
             fileEntryId: FILE_ENTRY_ID,
             mediaType: 'text/plain',
-            name: 'spoofed.txt',
+            filename: 'spoofed.txt',
           },
         ],
       }),
@@ -4180,7 +4189,7 @@ describe('MobileAgentHost', () => {
             type: 'file',
             fileEntryId: FILE_ENTRY_ID,
             mediaType: 'image/jpeg',
-            name: 'forged.jpg',
+            filename: 'forged.jpg',
           },
         ],
       }),
@@ -4430,7 +4439,6 @@ describe('MobileAgentHost', () => {
         sessionId: uuidv7(),
         ...messageIds(),
         agentId: 'missing',
-        executionTarget: { kind: 'local' },
         parts: [{ type: 'text', text: 'x' }],
       }),
     ).rejects.toMatchObject({ view: { code: 'AGENT_NOT_FOUND' } });
@@ -4457,9 +4465,9 @@ describe('MobileAgentHost', () => {
     expect(await store.listMessages(session.id)).toEqual([]);
 
     // Rename and delete round out the session lifecycle.
-    const renamed = await host.renameSession({ sessionId: session.id, title: 'My Chat' });
-    expect(renamed.title).toBe('My Chat');
-    expect(renamed.titleIsManual).toBe(true);
+    const renamed = await host.renameSession({ sessionId: session.id, name: 'My Chat' });
+    expect(renamed.name).toBe('My Chat');
+    expect(renamed.isNameManuallyEdited).toBe(true);
     await host.deleteSession({ sessionId: session.id });
     await expect(host.observeSession(session.id, () => {})).rejects.toMatchObject({
       view: { code: 'SESSION_NOT_FOUND' },
