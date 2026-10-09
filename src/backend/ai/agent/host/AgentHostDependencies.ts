@@ -10,7 +10,6 @@
  */
 
 import { getLocales } from 'expo-localization';
-import { createMMKV } from 'react-native-mmkv';
 
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
@@ -42,7 +41,6 @@ import {
 import { createAgentRuntimeToolResolver } from '../tools/runtimeTools';
 import { type AgentDefinitionSource, createAgentTableDefinitionSource } from './agentDefinitions';
 import { createAgentImageGeneration } from './agentImageGeneration';
-import { AgentReplayCache } from './AgentReplayCache';
 import { AgentSessionNaming } from './AgentSessionNaming';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { createAgentInferenceModelResolver } from './inferenceSnapshot';
@@ -67,16 +65,14 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly usage = new AgentSessionUsageRecorder();
   readonly executionLease = (onInterrupt: (reason: Error) => void | Promise<void>) =>
     this.keepAlive.acquire('agent.durable', onInterrupt);
-  private agentDatabase: AgentSqlDatabase | undefined;
   readonly durableStorage = {
     open: async () => {
       const database = await AgentSqlDatabase.open();
-      this.agentDatabase = database;
       return database;
     },
-    capture: (uri: string) => {
-      if (!this.agentDatabase) throw new Error('The Pi database is not open.');
-      return this.agentDatabase.capture(uri);
+    reset: async () => {
+      const database = await AgentSqlDatabase.reset();
+      return database;
     },
     notifyTranscript: (sessionId: string) =>
       publishDataApiChanges([
@@ -105,12 +101,6 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       usage: report.usage,
     });
   };
-  readonly replayCache = new AgentReplayCache(() =>
-    createMMKV({ id: 'cherry-agent-replay-cache' }),
-  );
-  readonly messageStats = (id: string) =>
-    aiUsageRecordService.getMessageUsageProjection({ kind: 'agent-session', id });
-
   constructor(
     private readonly store: AgentSessionStore,
     private readonly aiService: AiService,

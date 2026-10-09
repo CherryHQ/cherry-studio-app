@@ -16,6 +16,8 @@ import type {
   RuntimeToolRef,
   RuntimeUsage,
   RuntimeUsageReport,
+  RuntimeTurnReplay,
+  RuntimeMessagePart,
 } from './types';
 
 /** Portable storage capability supplied by composition; no Expo, data service, or Pi types. */
@@ -35,17 +37,6 @@ export type RuntimeExecutionIdentity = { sessionId: string; turnId: string; requ
 export type RuntimeUsageOwner =
   | RuntimeExecutionIdentity
   | { sessionId: string; turnId: null; requestId: null };
-
-export type RuntimeStorageDescription = {
-  messages: number;
-  sessions: readonly {
-    sessionId: string;
-    metadata: { [key: string]: RuntimeJsonValue };
-    committed: boolean;
-    legacy: { sourceSessionId: string; throughMessageId: string } | null;
-    fileEntryIds: readonly string[];
-  }[];
-};
 
 /** Callbacks are reconstructed for the current process; never serialized with a conversation. */
 export type RuntimeExecutionPorts = {
@@ -81,12 +72,10 @@ export type RuntimeConversationConfiguration = {
 
 export type RuntimeConversationSeed = {
   sessionId: string;
-  /** Immutable creation seed used to repair an interrupted business-row projection. */
-  metadata: { [key: string]: RuntimeJsonValue };
+  /** Cherry-owned history revision. A different revision must never resume this working copy. */
+  revision: number;
   configuration: RuntimeConversationConfiguration;
-  legacy?: {
-    sourceSessionId: string;
-    throughMessageId: string;
+  history?: {
     history: RuntimeHistoryTurn[];
     contextCheckpoint: RuntimeContextCheckpoint | null;
     referencedFileEntryIds: readonly string[];
@@ -120,6 +109,8 @@ export type RuntimeDurableSubmission = {
   assistantMessageId: string;
   createdAt: number;
   input: RuntimeInputPart[];
+  /** Completed tool prefix imported into a replacement working copy; never execute it again. */
+  resume?: RuntimeMessagePart[];
   /** Original display parts and inference facts. Assistant/model/tool bodies belong to the engine. */
   metadata: { [key: string]: RuntimeJsonValue };
 };
@@ -149,7 +140,6 @@ export type RuntimeDurableTurn = {
 export type RuntimeConversationSnapshot = {
   activeTurn: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
-  legacy: { sourceSessionId: string; throughMessageId: string } | null;
 };
 
 export type RuntimeConversationEvent =
@@ -157,15 +147,8 @@ export type RuntimeConversationEvent =
   | { type: 'turn.updated'; turn: RuntimeDurableTurn }
   | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] };
 
-/** Persistent execution and history authority. Disposing an observer never stops a run. */
+/** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */
 export interface DurableAgentRuntime {
-  readonly storageSchema: { runtimeVersion: string; schemaVersion: number; migrations: string };
-  /** Candidate validation never resumes tasks. The caller supplies an isolated schema reference. */
-  validateStorage(
-    database: RuntimeSqlDatabase,
-    reference: RuntimeSqlDatabase,
-    validateInputMetadata?: (metadata: { [key: string]: RuntimeJsonValue }) => void,
-  ): Promise<RuntimeStorageDescription>;
   drainUsage(): Promise<void>;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
@@ -178,17 +161,9 @@ export interface DurableAgentRuntime {
     unsubscribe(): Promise<void>;
   }>;
   close(): Promise<void>;
-  creationSeeds(): Promise<
-    readonly { sessionId: string; metadata: { [key: string]: RuntimeJsonValue } }[]
-  >;
+  sessions(): Promise<readonly { sessionId: string; revision: number }[]>;
   hasConversation(sessionId: string): Promise<boolean>;
-  conversationInfo(sessionId: string): Promise<
-    | {
-        metadata: { [key: string]: RuntimeJsonValue };
-        legacy: { sourceSessionId: string; throughMessageId: string } | null;
-      }
-    | undefined
-  >;
+  revision(sessionId: string): Promise<number | undefined>;
   unfinishedSessions(): Promise<readonly string[]>;
   configuration(sessionId: string): Promise<RuntimeConversationConfiguration>;
   resourceFileEntryIds(sessionId: string): Promise<readonly string[]>;
@@ -213,24 +188,17 @@ export interface DurableAgentRuntime {
     sessionId: string,
     messageId: string,
   ): Promise<{ turn: RuntimeDurableTurn; role: 'user' | 'assistant' } | undefined>;
-  fork(
-    seed: Omit<RuntimeConversationSeed, 'legacy'>,
-    sourceSessionId: string,
-    boundary: string,
-  ): Promise<void>;
-  forkBeforeInput(
-    seed: Omit<RuntimeConversationSeed, 'legacy'>,
-    sourceSessionId: string,
+  exportTurn(
+    sessionId: string,
     requestId: string,
-  ): Promise<void>;
-  reset(sessionId: string, handoff?: string): Promise<void>;
-  /**
-   * Remove a settled turn from the visible transcript. `turn` omits its messages from later model
-   * context, `input` omits only its question, and `none` keeps the context as it is. Content
-   * already folded into a compaction summary stays in that summary.
-   */
-  hideTurn(sessionId: string, requestId: string, omit: 'turn' | 'input' | 'none'): Promise<void>;
+    options?: { currentContext?: boolean },
+  ): Promise<{
+    replay: RuntimeTurnReplay | null;
+    contextCheckpoint: RuntimeContextCheckpoint | null;
+  }>;
   abort(sessionId: string): Promise<void>;
+  /** Abort and retire the application binding through public APIs. File reclamation is separate. */
+  discardConversation(sessionId: string): Promise<void>;
   withdraw(
     sessionId: string,
     requestId: string,

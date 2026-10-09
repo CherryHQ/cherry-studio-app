@@ -8,10 +8,9 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
-import type { MessageRuntimeTiming } from '@/shared/data/types/message';
 
+import type { RuntimeContextCheckpoint, RuntimeTurnReplay } from '../runtime';
 import type {
-  AgentSessionProjection,
   AgentSessionStore,
   DeleteTurnInput,
   DeleteTurnResult,
@@ -25,7 +24,6 @@ import type {
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
-import { toDurableIndexMessage } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
   settleInterruptedAssistantParts,
@@ -47,6 +45,7 @@ type StoredMessage = {
   view: AgentMessageView;
   error: AgentErrorView | null;
   contextCheckpoint: unknown | null;
+  replay?: RuntimeTurnReplay | null;
 };
 
 function createSessionView(input: {
@@ -159,101 +158,45 @@ function reserveInTranscript(
 @AppStatePolicy('not-applicable')
 export class InMemoryAgentSessionStore extends BaseService implements AgentSessionStore {
   private readonly sessions = new Map<string, AgentSessionView>();
+  private readonly runtimeRevisions = new Map<string, number>();
   /** Insertion-ordered per Session, which is the transcript order. */
   private readonly messages = new Map<string, StoredMessage[]>();
-  private readonly activity = new Map<string, number>();
-  private readonly archived = new Set<string>();
 
-  async archiveSession(sessionId: string): Promise<boolean> {
-    if (!this.sessions.has(sessionId)) return false;
-    this.archived.add(sessionId);
-    return true;
-  }
-
-  async isSessionArchived(sessionId: string): Promise<boolean> {
-    return this.archived.has(sessionId);
-  }
-
-  async indexDurableMessages(messages: readonly AgentMessageView[]): Promise<void> {
-    for (const message of messages) {
-      const view = cloneJson(toDurableIndexMessage(message));
-      const list = this.messages.get(view.sessionId) ?? [];
-      const index = list.findIndex((stored) => stored.view.id === view.id);
-      if (index >= 0) {
-        const previous = list[index]!;
-        // Analytics may have materialized token statistics; keep them beside the new timing.
-        const stats =
-          previous.view.stats || view.stats ? { ...previous.view.stats, ...view.stats } : null;
-        list[index] = { ...previous, view: { ...view, stats } };
-      } else list.push({ view, error: null, contextCheckpoint: null });
-      list.sort(
-        (a, b) =>
-          a.view.createdAt.localeCompare(b.view.createdAt) || a.view.id.localeCompare(b.view.id),
-      );
-      this.messages.set(view.sessionId, list);
-    }
-  }
-
-  async getDurableRuntimeTimings(messageIds: readonly string[]) {
+  async existingMessageIds(messageIds: readonly string[]): Promise<Set<string>> {
     const ids = new Set(messageIds);
-    const timings = new Map<string, MessageRuntimeTiming>();
+    const existing = new Set<string>();
     for (const list of this.messages.values())
-      for (const { view } of list)
-        if (ids.has(view.id) && view.stats?.runtimeTiming)
-          timings.set(view.id, cloneJson(view.stats.runtimeTiming));
-    return timings;
+      for (const { view } of list) if (ids.has(view.id)) existing.add(view.id);
+    return existing;
   }
 
-  async unindexDurableMessages(sessionId: string, messageIds: readonly string[]): Promise<void> {
-    const ids = new Set(messageIds);
-    const list = this.messages.get(sessionId);
-    if (list)
-      this.messages.set(
-        sessionId,
-        list.filter((stored) => !ids.has(stored.view.id)),
-      );
-  }
-
-  async projectSession(input: AgentSessionProjection): Promise<AgentSessionView> {
-    const existing = this.sessions.get(input.id);
-    if (existing) {
+  async readReplays(sessionId: string, assistantMessageIds: readonly string[]) {
+    const ids = new Set(assistantMessageIds);
+    const replays: Record<string, RuntimeTurnReplay> = {};
+    for (const stored of this.messages.get(sessionId) ?? [])
       if (
-        existing.agentId !== input.agentId ||
-        existing.executionTarget.kind !== input.executionTarget.kind
+        ids.has(stored.view.id) &&
+        stored.view.role === 'assistant' &&
+        stored.view.status === 'success' &&
+        stored.replay
       )
-        throw new Error('A durable session identity belongs to a different business owner.');
-      return cloneJson(existing);
-    }
-    const session: AgentSessionView = {
-      ...createSessionView({
-        id: input.id,
-        agentId: input.agentId,
-        executionTarget: input.executionTarget,
-        title: input.title,
-        titleIsManual: input.titleIsManual,
-      }),
-      forkedFromSessionId: input.forkedFromSessionId,
-      forkBoundaryMessageId: input.forkBoundaryMessageId,
-      createdAt: new Date(input.createdAt).toISOString(),
-      updatedAt: new Date(input.createdAt).toISOString(),
-    };
-    this.sessions.set(input.id, session);
-    this.messages.set(input.id, []);
-    this.activity.set(input.id, input.lastActivityAt);
-    return cloneJson(session);
+        replays[stored.view.id] = cloneJson(stored.replay);
+    return replays;
   }
 
-  async touchSession(sessionId: string, activityAt: number): Promise<void> {
-    if (!Number.isFinite(activityAt)) throw new Error('Invalid session activity timestamp.');
-    if (!this.sessions.has(sessionId)) return;
-    this.activity.set(sessionId, Math.max(this.activity.get(sessionId) ?? 0, activityAt));
+  async listUnsettledAssistantMessages() {
+    const rows: { sessionId: string; assistantMessageId: string; turnId: string | null }[] = [];
+    for (const [sessionId, list] of this.messages)
+      for (const { view } of list)
+        if (view.role === 'assistant' && UNSETTLED_MESSAGE_STATUSES.has(view.status))
+          rows.push({ sessionId, assistantMessageId: view.id, turnId: view.turnId });
+    return rows;
   }
 
   protected override onDestroy(): void {
     this.sessions.clear();
+    this.runtimeRevisions.clear();
     this.messages.clear();
-    this.activity.clear();
-    this.archived.clear();
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
@@ -267,6 +210,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   async getSession(sessionId: string): Promise<AgentSessionView | null> {
     const session = this.sessions.get(sessionId);
     return session ? cloneJson(session) : null;
+  }
+
+  async getRuntimeRevision(sessionId: string): Promise<number | null> {
+    return this.sessions.has(sessionId) ? (this.runtimeRevisions.get(sessionId) ?? 0) : null;
   }
 
   async renameSession(sessionId: string, title: string): Promise<AgentSessionView | null> {
@@ -308,6 +255,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return false;
     }
     this.messages.delete(sessionId);
+    this.runtimeRevisions.delete(sessionId);
     // Mirrors the durable adapter's ON DELETE SET NULL: a fork outlives its
     // source and only loses the lineage claim.
     for (const [forkId, session] of this.sessions) {
@@ -355,6 +303,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       // Runtime-private and anchored to a turn id this copy no longer
       // carries, so the fork replays full history instead.
       contextCheckpoint: null,
+      replay: stored.replay ? cloneJson(stored.replay) : null,
       error: stored.error === null ? null : cloneJson(stored.error),
       view: cloneJson({
         ...stored.view,
@@ -420,6 +369,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     }
 
     const deletedMessageIds = deleted.map((stored) => stored.view.id);
+    this.runtimeRevisions.set(
+      input.sessionId,
+      (this.runtimeRevisions.get(input.sessionId) ?? 0) + 1,
+    );
     this.messages.set(
       input.sessionId,
       transcript.filter((stored) => stored.view.turnId !== input.turnId),
@@ -499,6 +452,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       throw new Error('The retry source is not the settled latest answer of this session.');
     }
     const session = this.sessions.get(input.sessionId)!;
+    this.runtimeRevisions.set(
+      input.sessionId,
+      (this.runtimeRevisions.get(input.sessionId) ?? 0) + 1,
+    );
     const turnId = uuidv7();
     const updatedAt = nowIso();
     user.view = { ...user.view, turnId, parts: cloneJson(input.userParts), updatedAt };
@@ -521,6 +478,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     };
     assistant.error = null;
     assistant.contextCheckpoint = null;
+    assistant.replay = null;
     this.sessions.set(session.id, { ...session, updatedAt });
     return cloneJson({
       turnId,
@@ -614,6 +572,23 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     }
   }
 
+  async saveContextCheckpoint(
+    assistantMessageId: string,
+    turnId: string,
+    checkpoint: RuntimeContextCheckpoint,
+  ) {
+    for (const transcript of this.messages.values()) {
+      const stored = transcript.find(
+        ({ view }) =>
+          view.id === assistantMessageId && view.turnId === turnId && view.status === 'success',
+      );
+      if (stored) {
+        stored.contextCheckpoint = cloneJson(checkpoint);
+        return;
+      }
+    }
+  }
+
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
     for (const [sessionId, transcript] of this.messages) {
       const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
@@ -622,6 +597,8 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       }
       // Synchronous section: message terminal state settles atomically
       // (invariant 5).
+      if (input.turnId !== undefined && stored.view.turnId !== input.turnId)
+        throw new Error('Cannot finalize a replaced execution.');
       const updatedAt = nowIso();
       stored.view = {
         ...stored.view,
@@ -636,6 +613,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         input.status === 'success' && input.contextCheckpoint !== null
           ? cloneJson(input.contextCheckpoint)
           : null;
+      stored.replay = input.status === 'success' && input.replay ? cloneJson(input.replay) : null;
       const session = this.sessions.get(sessionId);
       if (session) {
         this.sessions.set(sessionId, { ...session, updatedAt });
@@ -645,9 +623,14 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
   }
 
-  async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
+  async reconcileInterrupted(
+    error: AgentErrorView,
+    options: { excludeSessionIds?: readonly string[] } = {},
+  ): Promise<AgentMessageView[]> {
+    const excluded = new Set(options.excludeSessionIds ?? []);
     const reconciled: AgentMessageView[] = [];
-    for (const transcript of this.messages.values()) {
+    for (const [sessionId, transcript] of this.messages) {
+      if (excluded.has(sessionId)) continue;
       for (const stored of transcript) {
         if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
           continue;

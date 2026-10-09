@@ -1,6 +1,14 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { createModels } from '@earendil-works/pi-ai/models';
-import { createRegistry, MemoryStorage, ProviderDoc, UserEntry } from '@earendil-works/pi-durable';
+import {
+  createRegistry,
+  defineDocFamily,
+  Harness,
+  MemoryStorage,
+  ProviderDoc,
+  UserEntry,
+  type ConversationId,
+} from '@earendil-works/pi-durable';
 
 import { PiDurableRuntime } from '../PiDurableRuntime';
 
@@ -15,21 +23,53 @@ function options() {
 
 const seed = {
   sessionId: 'business-session',
-  metadata: { agentId: 'agent', title: 'Existing conversation' },
+  revision: 0,
   agent: { instructions: 'Continue the conversation.' },
-  legacy: {
-    sourceSessionId: 'business-session',
-    throughMessageId: 'legacy-message',
-    entries: [
-      {
-        kind: UserEntry.kind,
-        model: [{ role: 'user' as const, content: 'Remember the blue theme.', timestamp: 1 }],
-      },
-    ],
-  },
+  entries: [
+    {
+      kind: UserEntry.kind,
+      model: [{ role: 'user' as const, content: 'Remember the blue theme.', timestamp: 1 }],
+    },
+  ],
 };
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('refuses the earlier authoritative binding and preserves its history for explicit migration', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    const oldBinding = defineDocFamily<{ conversationId: ConversationId | null }, null>({
+      kind: 'cherry.session',
+      version: 1,
+      scope: 'session',
+      family: true,
+      initial: () => ({ conversationId: null }),
+    });
+    const old = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
+    const id = await old.commit(async (tx) => {
+      const binding = await tx.doc(oldBinding, seed.sessionId, null);
+      const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
+      await tx.appendEntry(conversation.id, seed.entries[0]!);
+      binding.conversationId = conversation.id;
+      return conversation.id;
+    }, BACKGROUND_CONTEXT);
+    await old.close(BACKGROUND_CONTEXT);
+    const runtime = await PiDurableRuntime.open(storage, options());
+    try {
+      await expect(runtime.sessions()).rejects.toThrow('predates Cherry-owned transcripts');
+      const history = await storage.scanEntries(
+        { conversationId: id },
+        10,
+        undefined,
+        BACKGROUND_CONTEXT,
+      );
+      expect(history.items[0]?.model).toEqual(seed.entries[0]?.model);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('history correlation scans each source once and follows later native submission commits', async () => {
     const storage = new MemoryStorage();
     const runtime = await PiDurableRuntime.open(storage, options());
@@ -60,7 +100,7 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
-  test('native admission deduplicates retries and keeps immutable display identities on forks', async () => {
+  test('native admission deduplicates retries and keeps immutable display identities', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     const metadata = { userMessageId: 'user', assistantMessageId: 'assistant', version: 1 };
     const draft = { type: 'input' as const, requestId: 'request', content: 'Continue' };
@@ -86,12 +126,6 @@ describe('PiDurableRuntime identity and handoff', () => {
       expect(sourceHistory.entries.filter((entry) => entry.kind === UserEntry.kind)).toHaveLength(
         2,
       );
-      const forkSeed = { sessionId: 'fork', metadata: {}, agent: seed.agent };
-      await runtime.fork(forkSeed, seed.sessionId, record.entry);
-      const forkHistory = await runtime.history(forkSeed.sessionId, 256);
-      expect(forkHistory.submissions).toContainEqual({ record, metadata });
-      // No submission or historical tool execution is manufactured by a fork.
-      expect((await runtime.inspect()).tasks).toEqual([]);
     } finally {
       await runtime.close();
     }
@@ -109,7 +143,7 @@ describe('PiDurableRuntime identity and handoff', () => {
       expect(first.next).toBeDefined();
       const second = await runtime.history(seed.sessionId, 1, first.next);
       expect(second.entries).toEqual([
-        expect.objectContaining({ kind: UserEntry.kind, model: seed.legacy.entries[0]?.model }),
+        expect.objectContaining({ kind: UserEntry.kind, model: seed.entries[0]?.model }),
       ]);
       expect(second.next).toBeUndefined();
     } finally {
@@ -117,7 +151,7 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
-  test('request options survive reconfiguration and forks get a fresh provider identity with copied choices', async () => {
+  test('request options survive reconfiguration without persisting credentials', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     try {
       const source = await runtime.ensureConversation(seed);
@@ -131,21 +165,6 @@ describe('PiDurableRuntime identity and handoff', () => {
         maxOutputTokens: 512,
         temperature: 0.3,
       });
-      const at = (await source.context(BACKGROUND_CONTEXT)).entries[0];
-      if (!at) throw new Error('Expected legacy entry');
-      const fork = await runtime.fork(
-        { sessionId: 'fork', metadata: {}, agent: seed.agent },
-        seed.sessionId,
-        at.id,
-      );
-      const forkAffinity = await fork.commit(
-        async (tx) => (await tx.doc(ProviderDoc, fork.id)).sessionId,
-        BACKGROUND_CONTEXT,
-      );
-      expect(forkAffinity).not.toBe(affinity);
-      expect(await runtime.requestOptions(forkAffinity)).toEqual(
-        await runtime.requestOptions(affinity),
-      );
       await expect(runtime.requestOptions('unknown-affinity')).rejects.toThrow(
         'no application configuration',
       );
@@ -163,11 +182,10 @@ describe('PiDurableRuntime identity and handoff', () => {
       ]);
       expect(first.id).toBe(second.id);
       const history = await first.context(BACKGROUND_CONTEXT);
-      expect(history.messages).toEqual(seed.legacy.entries[0]?.model);
+      expect(history.messages).toEqual(seed.entries[0]?.model);
       expect(await runtime.binding(seed.sessionId)).toMatchObject({
         conversationId: first.id,
-        metadata: seed.metadata,
-        legacy: { throughMessageId: 'legacy-message', version: 1 },
+        revision: seed.revision,
       });
       expect(await runtime.inspect()).toMatchObject({
         scheduling: 'paused',
@@ -193,34 +211,23 @@ describe('PiDurableRuntime identity and handoff', () => {
       fail = false;
       const conversation = await runtime.ensureConversation(seed);
       const history = await conversation.context(BACKGROUND_CONTEXT);
-      expect(history.messages).toEqual(seed.legacy.entries[0]?.model);
+      expect(history.messages).toEqual(seed.entries[0]?.model);
     } finally {
       await runtime.close();
     }
   });
 
-  test('forks use a fresh business identity and inherit the original legacy display boundary', async () => {
+  test('retiring a working copy allows a fresh revision without inheriting deleted history', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     try {
-      const source = await runtime.ensureConversation(seed);
-      const history = await source.context(BACKGROUND_CONTEXT);
-      const at = history.entries[0];
-      if (!at) throw new Error('Expected imported history');
-      const forkSeed = {
-        sessionId: 'fork-session',
-        metadata: { agentId: 'agent', title: 'Forked conversation' },
-        agent: seed.agent,
-      };
-      const fork = await runtime.fork(forkSeed, seed.sessionId, at.id);
-      expect(fork.id).not.toBe(source.id);
-      expect((await fork.context(BACKGROUND_CONTEXT)).messages).toEqual(history.messages);
-      expect(await runtime.binding(forkSeed.sessionId)).toMatchObject({
-        conversationId: fork.id,
-        metadata: forkSeed.metadata,
-        legacy: { sourceSessionId: seed.sessionId, throughMessageId: 'legacy-message' },
-      });
-      const repeated = await runtime.fork(forkSeed, seed.sessionId, at.id);
-      expect(repeated.id).toBe(fork.id);
+      const first = await runtime.ensureConversation(seed);
+      await runtime.retireSession(seed.sessionId);
+      expect(await runtime.conversation(seed.sessionId)).toBeUndefined();
+      const rebuilt = await runtime.ensureConversation({ ...seed, revision: 1, entries: [] });
+      expect(rebuilt.id).not.toBe(first.id);
+      expect((await rebuilt.context(BACKGROUND_CONTEXT)).messages).toEqual([]);
+      expect(await runtime.binding(seed.sessionId)).toMatchObject({ revision: 1 });
+      await expect(runtime.ensureConversation(seed)).rejects.toThrow('obsolete');
     } finally {
       await runtime.close();
     }

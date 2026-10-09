@@ -155,7 +155,7 @@ export function createAppBootstrapRuntime(
     () => {
       void jobRuntime.pump({ reason: 'timer' });
     },
-    agent.agentBackupPort,
+    () => agent.quiesce(),
   );
   const { backend, dataApiDependencies, disposeSystemEntry } = createBackend(services, {
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
@@ -231,7 +231,7 @@ export function createAppBootstrapRuntime(
       try {
         if (restoring) {
           try {
-            await validateRestoringStorage(agent.agentBackupPort);
+            await validateRestoringStorage();
           } catch (error) {
             // Validation only opens its own connections, so nothing holds the candidate yet
             // and this process can continue on the current generation.
@@ -242,7 +242,6 @@ export function createAppBootstrapRuntime(
         }
         if (getStorageBoot().resetCaches) {
           cache.resetForRestore();
-          agent.resetReplayCacheForRestore();
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
         }

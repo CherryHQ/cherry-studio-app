@@ -39,10 +39,8 @@ jest.mock('@/backend/services/permissions', () => ({
 
 describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
-    const reader = { kind: 'persistent-transcript' };
     const agent = {
       kind: 'agent',
-      createTranscriptReader: () => reader,
     } as unknown as MobileAgentHost;
     const ai = { kind: 'ai' } as unknown as AiService;
     const cache = { kind: 'cache' } as unknown as CacheService;
@@ -66,7 +64,6 @@ describe('createBackendServices', () => {
     // dependencies now, so the bundle must carry those exact instances.
     expect(services).toEqual({
       ...mockDataServices,
-      agentSessionMessage: reader,
       agent,
       ai,
       devicePermissions,

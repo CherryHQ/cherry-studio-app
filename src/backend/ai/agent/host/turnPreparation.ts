@@ -148,6 +148,7 @@ export async function prepareTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput,
   signal: AbortSignal,
+  excludeCheckpointMessageId?: string,
 ): Promise<TurnPlan> {
   const documentParserMode = dependencies.documentParserMode();
   const { sessionId } = parsed;
@@ -164,6 +165,7 @@ export async function prepareTurn(
     dependencies,
     sessionId,
     signal,
+    excludeCheckpointMessageId,
   );
 
   return prepareResolvedTurn(

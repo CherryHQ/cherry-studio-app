@@ -54,6 +54,30 @@ function call(content: string, timestamp: number, durationMs?: number): Assistan
 }
 
 describe('Pi turn projection', () => {
+  test('recovered terminal inputs settle tool calls that have no result entry', () => {
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata,
+      record: {
+        id: 1,
+        type: 'input',
+        status: 'unanswered',
+        entry: 1,
+        reason: 'interrupted',
+      } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2_000)] },
+      ] as unknown as EntryRecord[],
+    });
+    expect(turn.status).toBe('interrupted');
+    expect(turn.parts[0]).toMatchObject({
+      type: 'tool',
+      state: 'interrupted',
+      input: { filename: 'notes.md', content: 'body' },
+      output: { value: { status: 'interrupted' }, artifacts: [] },
+    });
+  });
+
   test('streams a bounded file preview instead of the growing tool input', () => {
     const record = {
       id: 1,

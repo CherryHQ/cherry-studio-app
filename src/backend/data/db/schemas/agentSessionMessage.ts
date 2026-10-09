@@ -65,6 +65,11 @@ export const agentSessionMessageTable = sqliteTable(
     // Versioned Agent inference snapshot. Keep raw JSON so unknown future
     // versions can be projected as unsupported without losing the message.
     messageSnapshot: text({ mode: 'json' }).$type<AgentInferenceSnapshotV1 | JsonValue>(),
+    /**
+     * Runtime-private model-side messages of a successful turn (signed thinking, raw tool
+     * calls/results). Lets the Host rebuild the engine's working copy exactly; never displayed.
+     */
+    replay: text({ mode: 'json' }).$type<JsonValue>(),
     // Visible plain text of data.parts' text parts, written by the store and
     // mirrored into FTS5 by triggers; mid-stream snapshots leave it unchanged.
     searchableText: text().notNull().default(''),
@@ -81,11 +86,7 @@ export const agentSessionMessageTable = sqliteTable(
     // Backs boot reconciliation of unsettled messages. Plain, not partial —
     // Drizzle binds `status = ?`, which SQLite can't match to a partial index.
     index('agent_session_message_status_idx').on(t.status),
-    // Invariant 1 (agent-protocol.md): at most one active turn per Session is
-    // a database constraint — a concurrent second reservation fails to insert.
-    uniqueIndex('agent_session_message_active_turn_uniq')
-      .on(t.sessionId)
-      .where(sql`${t.role} = 'assistant' and ${t.status} in ('pending', 'streaming')`),
+    // Pending rows include queued follow-ups; Pi serializes execution within each working copy.
     // FTS5 content_rowid key — UNIQUE so its index keeps the per-row
     // MAX(fts_rowid)+1 assignment O(log N) (see ftsRowid and FTS SQL below).
     uniqueIndex('agent_session_message_fts_rowid_uniq').on(t.ftsRowid),

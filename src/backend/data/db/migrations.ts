@@ -1,7 +1,7 @@
 import m0000 from '../../../../migrations/sqlite-drizzle/0000_initial.sql';
 import m0001 from '../../../../migrations/sqlite-drizzle/0001_hot_cammi.sql';
 import m0002 from '../../../../migrations/sqlite-drizzle/0002_orange_thunderbolt_ross.sql';
-import m0003 from '../../../../migrations/sqlite-drizzle/0003_agent_session_archive.sql';
+import m0003 from '../../../../migrations/sqlite-drizzle/0003_agent_message_replay.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main

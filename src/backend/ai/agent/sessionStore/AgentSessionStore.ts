@@ -9,43 +9,12 @@ import type {
 } from '@/shared/contracts/agent';
 import type { MessageRuntimeStatsInput, MessageRuntimeTiming } from '@/shared/data/types/message';
 
-import type { RuntimeContextCheckpoint } from '../runtime';
+import type { RuntimeContextCheckpoint, RuntimeTurnReplay } from '../runtime';
 
 export type StoredRuntimeContextCheckpoint = {
   assistantMessageId: string;
   checkpoint: unknown;
 };
-
-/** A business row repaired from Pi's committed creation seed; contains no transcript. */
-export type AgentSessionProjection = {
-  id: string;
-  agentId: string;
-  executionTarget: AgentExecutionTarget;
-  title: string;
-  titleIsManual: boolean;
-  createdAt: number;
-  lastActivityAt: number;
-  forkedFromSessionId: string | null;
-  forkBoundaryMessageId: string | null;
-};
-
-/**
- * Native index rows keep searchable text and the app-observed run timing; tools, files and
- * reasoning stay in Pi, and token statistics come from the analytics ledger.
- */
-export function toDurableIndexMessage(message: AgentMessageView): AgentMessageView {
-  if (message.status === 'pending' || message.status === 'streaming')
-    throw new Error('Only settled native messages are indexed.');
-  const runtimeTiming = message.stats?.runtimeTiming;
-  return {
-    ...message,
-    parts: message.parts.filter((part) => part.type === 'text'),
-    usage: null,
-    stats: runtimeTiming ? { runtimeTiming } : null,
-    modelId: null,
-    inferenceSnapshot: null,
-  };
-}
 
 export type StoredRuntimeTurnContext = {
   /** False only when an `afterTurnId` was requested but is not in this Session. */
@@ -142,6 +111,8 @@ export type UpdateStreamingAssistantMessageInput = {
 
 export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
+  /** Refuse a late completion from an execution that a retry has replaced. */
+  turnId?: string;
   status: 'success' | 'error' | 'cancelled' | 'interrupted';
   parts: AgentMessagePart[];
   usage: AgentUsageView | null;
@@ -152,6 +123,8 @@ export type FinalizeAssistantMessageInput = {
   error: AgentErrorView | null;
   /** Saved only on a successfully completed assistant row. */
   contextCheckpoint: RuntimeContextCheckpoint | null;
+  /** Model-side messages of the turn; saved only on a successfully completed assistant row. */
+  replay?: RuntimeTurnReplay | null;
   /** Runtime-owned message statistics; terminal timing is required at this persistence boundary. */
   runtimeStats: MessageRuntimeStatsInput & {
     runtimeTiming: MessageRuntimeTiming & { completedAt: number };
@@ -169,22 +142,8 @@ export type FinalizeAssistantMessageInput = {
  * and the only Session creation operation reserves the first message pair with it.
  */
 export interface AgentSessionStore {
-  projectSession(input: AgentSessionProjection): Promise<AgentSessionView>;
-  touchSession(sessionId: string, activityAt: number): Promise<void>;
-  archiveSession(sessionId: string): Promise<boolean>;
-  isSessionArchived(sessionId: string): Promise<boolean>;
-  /**
-   * Upsert the visible text of settled native messages into the full-text index rows. Pi keeps
-   * the transcript; these rows carry only text parts and never feed model history.
-   */
-  indexDurableMessages(messages: readonly AgentMessageView[]): Promise<void>;
-  /** Run timing settled into native index rows, which includes approval waits Pi does not keep. */
-  getDurableRuntimeTimings(
-    messageIds: readonly string[],
-  ): Promise<Map<string, NonNullable<NonNullable<AgentMessageView['stats']>['runtimeTiming']>>>;
-  /** Remove native index rows, for example when their turn leaves the visible transcript. */
-  unindexDurableMessages(sessionId: string, messageIds: readonly string[]): Promise<void>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
+  getRuntimeRevision(sessionId: string): Promise<number | null>;
   renameSession(sessionId: string, title: string): Promise<AgentSessionView | null>;
   /** Renames only when the current title still matches the caller's auto-title snapshot. */
   autoRenameSession(
@@ -194,6 +153,17 @@ export interface AgentSessionStore {
   ): Promise<AgentSessionView | null>;
   /** Deletes the Session's messages with it. */
   deleteSession(sessionId: string): Promise<boolean>;
+  /** Which of these message ids have a row; lets the Host reserve a turn exactly once. */
+  existingMessageIds(messageIds: readonly string[]): Promise<Set<string>>;
+  /** Stored replays of successful assistant rows, keyed by assistant message id. */
+  readReplays(
+    sessionId: string,
+    assistantMessageIds: readonly string[],
+  ): Promise<Record<string, RuntimeTurnReplay>>;
+  /** Assistant rows still `pending`/`streaming`; the Host matches them against engine state. */
+  listUnsettledAssistantMessages(): Promise<
+    { sessionId: string; assistantMessageId: string; turnId: string | null }[]
+  >;
 
   /** Atomically creates a Session and reserves its first user/assistant message pair. */
   reserveInitialSubmission(
@@ -257,6 +227,12 @@ export interface AgentSessionStore {
     sessionId: string,
     excludeAssistantMessageId?: string,
   ): Promise<StoredRuntimeContextCheckpoint | null>;
+  /** Save idle background compaction without replacing the already committed answer or timing. */
+  saveContextCheckpoint(
+    assistantMessageId: string,
+    turnId: string,
+    checkpoint: RuntimeContextCheckpoint,
+  ): Promise<void>;
 
   /**
    * Durably records the parts an active turn has produced so far and marks the
@@ -276,5 +252,8 @@ export interface AgentSessionStore {
    * Returns the reconciled assistant placeholders so the Host can publish
    * their settled state to observers attached before recovery ran.
    */
-  reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]>;
+  reconcileInterrupted(
+    error: AgentErrorView,
+    options?: { excludeSessionIds?: readonly string[] },
+  ): Promise<AgentMessageView[]>;
 }

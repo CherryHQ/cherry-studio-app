@@ -29,7 +29,6 @@ import {
 } from '@/shared/contracts/backup';
 
 import { getBackupStorage } from '../../../../modules/backup-storage';
-import { agentBackupVersion, validateAgentBackup, type AgentBackupPort } from './agentBackup';
 import { archiveFile, packBackup, unpackBackup } from './backupArchive';
 import { BACKUP_LIMITS, type BackupManifest, validateManifest } from './backupFormat';
 import {
@@ -52,16 +51,20 @@ export class BackupRuntime extends BaseService implements BackupModule {
   private hasActiveWork: () => boolean = () => true;
   private resumeWork: () => void = () => {};
   private stopped = false;
-  private agent: AgentBackupPort | undefined;
+  private quiesceAgent: () => Promise<void> = async () => {};
 
   constructor(private readonly dbService: DbService) {
     super();
   }
 
-  configure(hasActiveWork: () => boolean, resumeWork: () => void, agent?: AgentBackupPort): void {
+  configure(
+    hasActiveWork: () => boolean,
+    resumeWork: () => void,
+    quiesceAgent: () => Promise<void> = async () => {},
+  ): void {
     this.hasActiveWork = hasActiveWork;
     this.resumeWork = resumeWork;
-    this.agent = agent;
+    this.quiesceAgent = quiesceAgent;
   }
   isAvailable = (): boolean => getBackupStorage() !== null;
   getState = (): BackupState => this.backupState;
@@ -90,36 +93,18 @@ export class BackupRuntime extends BaseService implements BackupModule {
       let completed = false;
       try {
         const version = await bundledBackupVersion();
-        requireDiskSpace(
-          (new File(databaseDirectory(), 'cherry.db').size +
-            (this.agent ? new File(databaseDirectory(), 'pi-agent.db').size : 0)) *
-            2,
-        );
+        requireDiskSpace(new File(databaseDirectory(), 'cherry.db').size * 2);
         const release = this.freeze();
         let resources: Awaited<ReturnType<typeof captureResources>>;
         try {
-          await this.agent?.quiesce();
+          await this.quiesceAgent();
           const database = archiveFile(work, 'database/cherry.db');
           await captureDatabase(this.dbService.getSqlite(), database);
-          if (this.agent) await this.agent.capture(archiveFile(work, 'database/pi-agent.db').uri);
           resources = await captureResources(storageDirectory(), work, signal);
         } finally {
           release();
         }
         await validateBackupDatabase(archiveFile(work, 'database/cherry.db'), version);
-        const agentVersion = this.agent ? await agentBackupVersion(this.agent) : undefined;
-        const native =
-          agentVersion && this.agent
-            ? await validateAgentBackup(
-                archiveFile(work, 'database/pi-agent.db'),
-                agentVersion,
-                this.agent,
-              )
-            : undefined;
-        if (native) {
-          resources.paths.push('database/pi-agent.db');
-          resources.counts.messages += native.messages;
-        }
         const entries: BackupManifest['entries'] = [];
         for (const [index, path] of resources.paths.entries()) {
           signal.throwIfAborted();
@@ -135,10 +120,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           throw new BackupError('unavailable');
         const manifest = validateManifest({
           product: 'cherry-mobile',
-          formatVersion: this.agent ? 2 : 1,
-          ...(agentVersion && native
-            ? { agent: { ...agentVersion, messages: native.messages } }
-            : {}),
+          formatVersion: 1,
           id: randomUUID(),
           createdAt: new Date().toISOString(),
           appVersion: Constants.expoConfig?.version ?? 'unknown',
@@ -203,15 +185,6 @@ export class BackupRuntime extends BaseService implements BackupModule {
         );
         signal.throwIfAborted();
         await validateBackupDatabase(archiveFile(extracted, 'database/cherry.db'), manifest);
-        if (manifest.agent) {
-          if (!this.agent) throw new BackupError('incompatible');
-          const native = await validateAgentBackup(
-            archiveFile(extracted, 'database/pi-agent.db'),
-            manifest.agent,
-            this.agent,
-          );
-          if (native.messages !== manifest.agent.messages) throw new BackupError('invalid');
-        }
         await validateResourceReferences(extracted, manifest);
         signal.throwIfAborted();
         this.candidate = { directory: work, manifest };
@@ -250,6 +223,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
       try {
         // Freeze before moving anything, so a busy app fails before the candidate is consumed.
         release = this.freeze();
+        await this.quiesceAgent();
         for (const [index, entry] of manifest.entries.entries()) {
           signal.throwIfAborted();
           const output = restoredFile(target, entry.path);

@@ -64,6 +64,7 @@ const PiSubmissionSchema = z.object({
   assistantMessageId: z.string().min(1),
   createdAt: z.number().finite().nonnegative(),
   metadata: z.record(z.string(), RuntimeJsonValueSchema),
+  replayPrefix: z.array(RuntimeJsonValueSchema).optional(),
   tools: z.array(PiToolBlueprintSchema),
 });
 export type PiStoredSubmission = z.infer<typeof PiSubmissionSchema>;
@@ -168,7 +169,7 @@ export function piDurableUsage(usage: Usage): RuntimeUsage {
   };
 }
 
-/** Native entries remain authoritative; this detached view is never persisted as a transcript. */
+/** Bound previews of growing tool inputs; completed results settle into the Cherry transcript. */
 function toolInputPreview(
   fields: { textField: string; nameField?: string },
   input: unknown,
@@ -381,7 +382,16 @@ export function projectPiTurn(options: {
       origin: 'runtime',
     };
   } else status = hasAssistant ? 'interrupted' : 'completed';
-  // The source submission may finish after a fork cut. Only the answer visible in this fork counts.
+  // Recovery can read a terminal input whose last tool never produced a result entry. Persist a
+  // terminal pair, never a tool that appears to keep running in the Cherry transcript forever.
+  if (status !== 'running' && status !== 'queued')
+    for (const part of parts)
+      if (part.type === 'tool' && !part.output) {
+        part.state = 'interrupted';
+        part.output = createInterruptedToolResult(
+          error?.message ?? 'The tool ended without a confirmed result.',
+        );
+      }
   return {
     identity: { sessionId: options.sessionId, turnId: stored.turnId, requestId: stored.requestId },
     userMessageId: stored.userMessageId,

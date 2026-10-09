@@ -26,10 +26,13 @@ import {
   type AgentMessageView,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
-import type { MessageRuntimeTiming } from '@/shared/data/types/message';
 
+import {
+  parseRuntimeTurnReplay,
+  type RuntimeContextCheckpoint,
+  type RuntimeTurnReplay,
+} from '../runtime';
 import type {
-  AgentSessionProjection,
   AgentSessionStore,
   DeleteTurnInput,
   DeleteTurnResult,
@@ -44,7 +47,6 @@ import type {
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
-import { toDurableIndexMessage } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
   settleInterruptedAssistantParts,
@@ -58,10 +60,8 @@ const FORK_INSERT_CHUNK_SIZE = 50;
  * Durable SQLite adapter for {@link AgentSessionStore}
  * (docs/references/agent/agent-persistence.md).
  *
- * Multi-record operations run inside `DbService.withWriteTx()`. The
- * invariant-1 partial unique index turns a concurrent second reservation into
- * a constraint violation, which the Host's admission guard normally prevents
- * from ever reaching the database.
+ * Multi-record operations run inside `DbService.withWriteTx()`. Pending rows include queued
+ * follow-ups; the Host serializes admission and Pi owns one-at-a-time execution.
  */
 @Injectable('AgentSessionStore')
 @ServicePhase(Phase.PostReady)
@@ -72,148 +72,54 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     super();
   }
 
-  async archiveSession(sessionId: string): Promise<boolean> {
-    const rows = await this.dbService.withWriteTx(async (tx) =>
-      tx
-        .update(agentSessionTable)
-        .set({ archivedAt: sql`COALESCE(${agentSessionTable.archivedAt}, ${Date.now()})` })
-        .where(eq(agentSessionTable.id, sessionId))
-        .returning({ id: agentSessionTable.id }),
-    );
-    if (rows.length) publishDataApiChanges(['/agent-sessions', `/agent-sessions/${sessionId}`]);
-    return rows.length > 0;
-  }
-
-  async isSessionArchived(sessionId: string): Promise<boolean> {
-    const [row] = await this.dbService
-      .getDb()
-      .select({ archivedAt: agentSessionTable.archivedAt })
-      .from(agentSessionTable)
-      .where(eq(agentSessionTable.id, sessionId))
-      .limit(1);
-    return row?.archivedAt !== undefined && row.archivedAt !== null;
-  }
-
-  async indexDurableMessages(messages: readonly AgentMessageView[]): Promise<void> {
-    if (!messages.length) return;
-    const rows = messages.map((message) => {
-      const view = toDurableIndexMessage(message);
-      return {
-        id: view.id,
-        sessionId: view.sessionId,
-        turnId: view.turnId,
-        role: view.role,
-        data: { version: 1 as const, parts: view.parts },
-        status: view.status,
-        stats: view.stats,
-        searchableText: toSearchableText(view.parts),
-        createdAt: Date.parse(view.createdAt),
-        updatedAt: Date.parse(view.updatedAt),
-      };
-    });
-    await this.dbService.withWriteTx(async (tx) => {
-      for (const row of rows)
-        // Usage and stats are written by the analytics ledger; an upsert keeps them.
-        await tx
-          .insert(agentSessionMessageTable)
-          .values(row)
-          .onConflictDoUpdate({
-            target: agentSessionMessageTable.id,
-            set: {
-              data: row.data,
-              status: row.status,
-              ...(row.stats?.runtimeTiming
-                ? {
-                    stats: sql`json_set(
-                      COALESCE(${agentSessionMessageTable.stats}, '{}'),
-                      '$.runtimeTiming',
-                      json(${JSON.stringify(row.stats.runtimeTiming)})
-                    )`,
-                  }
-                : {}),
-              searchableText: row.searchableText,
-              updatedAt: row.updatedAt,
-            },
-            setWhere: eq(agentSessionMessageTable.sessionId, row.sessionId),
-          });
-    });
-  }
-
-  async getDurableRuntimeTimings(messageIds: readonly string[]) {
-    const timings = new Map<string, MessageRuntimeTiming>();
-    if (!messageIds.length) return timings;
+  async existingMessageIds(messageIds: readonly string[]): Promise<Set<string>> {
+    if (!messageIds.length) return new Set();
     const rows = await this.dbService
       .getDb()
-      .select({ id: agentSessionMessageTable.id, stats: agentSessionMessageTable.stats })
+      .select({ id: agentSessionMessageTable.id })
       .from(agentSessionMessageTable)
       .where(inArray(agentSessionMessageTable.id, [...messageIds]));
-    for (const row of rows)
-      if (row.stats?.runtimeTiming) timings.set(row.id, row.stats.runtimeTiming);
-    return timings;
+    return new Set(rows.map((row) => row.id));
   }
 
-  async unindexDurableMessages(sessionId: string, messageIds: readonly string[]): Promise<void> {
-    if (!messageIds.length) return;
-    await this.dbService.withWriteTx((tx) =>
-      tx
-        .delete(agentSessionMessageTable)
-        .where(
-          and(
-            eq(agentSessionMessageTable.sessionId, sessionId),
-            inArray(agentSessionMessageTable.id, [...messageIds]),
-          ),
+  async readReplays(sessionId: string, assistantMessageIds: readonly string[]) {
+    const replays: Record<string, RuntimeTurnReplay> = {};
+    if (!assistantMessageIds.length) return replays;
+    const rows = await this.dbService
+      .getDb()
+      .select({ id: agentSessionMessageTable.id, replay: agentSessionMessageTable.replay })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.sessionId, sessionId),
+          eq(agentSessionMessageTable.role, 'assistant'),
+          eq(agentSessionMessageTable.status, 'success'),
+          inArray(agentSessionMessageTable.id, [...assistantMessageIds]),
         ),
-    );
+      );
+    for (const row of rows) {
+      const replay = parseRuntimeTurnReplay(row.replay);
+      if (replay) replays[row.id] = replay;
+    }
+    return replays;
   }
 
-  async projectSession(input: AgentSessionProjection): Promise<AgentSessionView> {
-    let created = false;
-    const session = await this.dbService.withWriteTx(async (tx) => {
-      const [inserted] = await tx
-        .insert(agentSessionTable)
-        .values({
-          ...input,
-          updatedAt: input.createdAt,
-        })
-        .onConflictDoNothing({ target: agentSessionTable.id })
-        .returning();
-      created = inserted !== undefined;
-      const row =
-        inserted ??
-        (
-          await tx
-            .select()
-            .from(agentSessionTable)
-            .where(eq(agentSessionTable.id, input.id))
-            .limit(1)
-        )[0];
-      if (
-        !row ||
-        row.agentId !== input.agentId ||
-        row.executionTarget.kind !== input.executionTarget.kind
+  async listUnsettledAssistantMessages() {
+    return this.dbService
+      .getDb()
+      .select({
+        sessionId: agentSessionMessageTable.sessionId,
+        assistantMessageId: agentSessionMessageTable.id,
+        turnId: agentSessionMessageTable.turnId,
+      })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.role, 'assistant'),
+          inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+        ),
       )
-        throw new Error('A durable session identity belongs to a different business owner.');
-      return toAgentSessionView(row);
-    });
-    if (created) publishDataApiChanges(['/agent-sessions', `/agent-sessions/${input.id}`]);
-    return session;
-  }
-
-  async touchSession(sessionId: string, activityAt: number): Promise<void> {
-    if (!Number.isFinite(activityAt)) throw new Error('Invalid session activity timestamp.');
-    const changed = await this.dbService.withWriteTx(async (tx) => {
-      return tx
-        .update(agentSessionTable)
-        .set({ lastActivityAt: activityAt })
-        .where(
-          and(
-            eq(agentSessionTable.id, sessionId),
-            lt(agentSessionTable.lastActivityAt, activityAt),
-          ),
-        )
-        .returning({ id: agentSessionTable.id });
-    });
-    if (changed.length) publishDataApiChanges(['/agent-sessions', `/agent-sessions/${sessionId}`]);
+      .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
@@ -239,6 +145,16 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .where(eq(agentSessionTable.id, sessionId))
       .limit(1);
     return row ? toAgentSessionView(row) : null;
+  }
+
+  async getRuntimeRevision(sessionId: string): Promise<number | null> {
+    const [row] = await this.dbService
+      .getDb()
+      .select({ revision: agentSessionTable.runtimeRevision })
+      .from(agentSessionTable)
+      .where(eq(agentSessionTable.id, sessionId))
+      .limit(1);
+    return row?.revision ?? null;
   }
 
   async renameSession(sessionId: string, title: string): Promise<AgentSessionView | null> {
@@ -407,6 +323,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           id: agentSessionMessageTable.id,
           messageSnapshot: agentSessionMessageTable.messageSnapshot,
           modelId: agentSessionMessageTable.modelId,
+          replay: agentSessionMessageTable.replay,
           role: agentSessionMessageTable.role,
           searchableText: agentSessionMessageTable.searchableText,
           stats: agentSessionMessageTable.stats,
@@ -460,6 +377,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           id: copiedMessageId,
           messageSnapshot: row.messageSnapshot,
           modelId: row.modelId,
+          replay: row.replay,
           role: row.role,
           searchableText: row.searchableText,
           sessionId: forked.id,
@@ -550,6 +468,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         );
 
       const deletedMessageIds = turnRows.map((row) => row.id);
+      await tx
+        .update(agentSessionTable)
+        .set({ runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1` })
+        .where(eq(agentSessionTable.id, input.sessionId));
       // The boundary column is application-owned, so the delete below would
       // otherwise leave this Session pointing at a row that no longer exists.
       await tx
@@ -651,6 +573,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         // The only summary that could cover the replaced answer is its own:
         // it is the last message, so earlier checkpoints stay valid.
         contextCheckpoint: null,
+        replay: null,
         modelId: input.modelId,
         messageSnapshot: input.inferenceSnapshot,
         // Provider totals belong to the immutable invocation ledger. Only runtime timing resets.
@@ -665,7 +588,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .returning(agentMessageViewColumns);
       await tx
         .update(agentSessionTable)
-        .set({ lastActivityAt: Date.now() })
+        .set({
+          lastActivityAt: Date.now(),
+          runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
+        })
         .where(eq(agentSessionTable.id, input.sessionId));
       return {
         turnId,
@@ -797,6 +723,25 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
+  async saveContextCheckpoint(
+    assistantMessageId: string,
+    turnId: string,
+    checkpoint: RuntimeContextCheckpoint,
+  ) {
+    await this.dbService.withWriteTx((tx) =>
+      tx
+        .update(agentSessionMessageTable)
+        .set({ contextCheckpoint: checkpoint })
+        .where(
+          and(
+            eq(agentSessionMessageTable.id, assistantMessageId),
+            eq(agentSessionMessageTable.turnId, turnId),
+            eq(agentSessionMessageTable.status, 'success'),
+          ),
+        ),
+    );
+  }
+
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
     const message = await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
@@ -804,6 +749,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           sessionId: agentSessionMessageTable.sessionId,
           stats: agentSessionMessageTable.stats,
           usage: agentSessionMessageTable.usage,
+          turnId: agentSessionMessageTable.turnId,
         })
         .from(agentSessionMessageTable)
         .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
@@ -811,6 +757,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (!existing) {
         throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
       }
+      if (input.turnId !== undefined && existing.turnId !== input.turnId)
+        throw new Error('Cannot finalize a replaced execution.');
       const [row] = await tx
         .update(agentSessionMessageTable)
         .set({
@@ -821,6 +769,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           stats: { ...existing.stats, ...input.runtimeStats },
           error: input.error,
           contextCheckpoint: input.status === 'success' ? input.contextCheckpoint : null,
+          replay: input.status === 'success' ? (input.replay ?? null) : null,
         })
         .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
         .returning(agentMessageViewColumns);
@@ -842,12 +791,23 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return message;
   }
 
-  async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
+  async reconcileInterrupted(
+    error: AgentErrorView,
+    options: { excludeSessionIds?: readonly string[] } = {},
+  ): Promise<AgentMessageView[]> {
+    const excluded = options.excludeSessionIds ?? [];
     return this.dbService.withWriteTx(async (tx) => {
       const rows = await tx
         .select(agentMessageViewColumns)
         .from(agentSessionMessageTable)
-        .where(inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]));
+        .where(
+          and(
+            inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+            ...(excluded.length
+              ? [notInArray(agentSessionMessageTable.sessionId, [...excluded])]
+              : []),
+          ),
+        );
       const assistantIds: string[] = [];
 
       for (const row of rows) {

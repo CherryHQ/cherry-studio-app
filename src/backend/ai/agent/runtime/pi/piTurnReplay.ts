@@ -9,11 +9,7 @@ import { z } from 'zod';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import {
-  MAX_RUNTIME_TURN_REPLAY_BYTES,
-  parseRuntimeTurnReplay,
-  utf8ByteLength,
-} from '../runtimeTurnReplay';
+import { parseRuntimeTurnReplay } from '../runtimeTurnReplay';
 import type { RuntimeTurnReplay } from '../types';
 
 const logger = loggerService.withContext('PiTurnReplay');
@@ -155,14 +151,6 @@ export function createPiTurnReplay(messages: readonly Message[]): RuntimeTurnRep
     });
   } catch (error) {
     logger.warn('Turn replay dropped: the batch is not serializable', error as Error);
-    return undefined;
-  }
-  const bytes = utf8ByteLength(serialized);
-  if (bytes > MAX_RUNTIME_TURN_REPLAY_BYTES) {
-    logger.warn('Turn replay dropped: the batch exceeds the size limit', {
-      bytes,
-      limit: MAX_RUNTIME_TURN_REPLAY_BYTES,
-    });
     return undefined;
   }
   const decoded = decodePayload(JSON.parse(serialized));

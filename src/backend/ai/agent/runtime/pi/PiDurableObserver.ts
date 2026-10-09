@@ -30,7 +30,6 @@ export class PiDurableObserver {
   constructor(
     private readonly runtime: PiDurableRuntime,
     private readonly sessionId: string,
-    private readonly legacy: RuntimeConversationSnapshot['legacy'],
     private readonly listener: (event: RuntimeConversationEvent) => void,
   ) {}
 
@@ -199,7 +198,6 @@ export class PiDurableObserver {
       queue: [...this.inputs.values()]
         .filter((input) => input.record.status === 'queued')
         .map((input) => this.project(input)),
-      legacy: this.legacy,
     };
   }
 

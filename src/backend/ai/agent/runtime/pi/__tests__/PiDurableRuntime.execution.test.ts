@@ -126,7 +126,7 @@ describe('Pi durable execution integration', () => {
     try {
       await runtime.ensureConversation({
         sessionId: 'business-session',
-        metadata: { agentId: 'agent' },
+        revision: 0,
         options: { maxOutputTokens: 512 },
         agent: {
           model: { provider: reference.providerId, modelId: reference.modelId },

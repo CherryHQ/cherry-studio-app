@@ -1,6 +1,6 @@
 import type { Context } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import type { Api, Model } from '@earendil-works/pi-ai';
+import type { Api, Model, Message } from '@earendil-works/pi-ai';
 import {
   createRegistry,
   GenerationTask,
@@ -8,6 +8,8 @@ import {
   type AgentChange,
   type Cursor,
   type EntryId,
+  CompactionEntry,
+  ResetEntry,
   type HookApi,
   type JsonObject,
   type Registry,
@@ -43,16 +45,15 @@ import {
   type PiStoredConfiguration,
 } from './piDurableProjection';
 import { PiDurableRuntime } from './PiDurableRuntime';
-import { PI_STORAGE_SCHEMA, validatePiStorage } from './piDurableStorage';
 import { createPiDurableToolExtension } from './piDurableTools';
-import { createLegacyPiEntries } from './piLegacyHistory';
-import { prepareLegacyPiEntries } from './piLegacyPreparation';
 import type { PiRuntimeDependencies } from './piModelTypes';
 import {
   PI_TOOL_BUDGET_FINAL_RESPONSE,
   PiToolBudgetExceededError,
   piToolBudgetState,
 } from './piToolBudget';
+import { createPiTurnReplay } from './piTurnReplay';
+import { createPiContextCheckpoint, createWorkingPiEntries } from './piWorkingHistory';
 
 const DESCRIPTOR: RuntimeDescriptor = {
   id: 'pi-durable',
@@ -60,12 +61,11 @@ const DESCRIPTOR: RuntimeDescriptor = {
   capabilities: { reasoning: true, tools: true, approvals: true, attachments: true },
 };
 
-/** Persistent, runtime-neutral facade. Pi owns execution, context, queue, history and recovery. */
+/** Persistent, runtime-neutral facade. Pi owns execution, its working context, queue and recovery. */
 export class PiDurableAgentRuntime implements DurableAgentRuntime {
-  readonly storageSchema = PI_STORAGE_SCHEMA;
-  validateStorage = validatePiStorage;
   async drainUsage() {
     await this.delivery;
+    await this.deliverUsage();
   }
   readonly descriptor = DESCRIPTOR;
   private runtime: PiDurableRuntime | undefined;
@@ -197,36 +197,19 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     }
   }
 
-  async creationSeeds() {
-    const runtime = this.requireRuntime();
-    const result: { sessionId: string; metadata: JsonObject }[] = [];
-    for (const { sessionId, binding } of await runtime.sessions()) {
-      const conversation = await runtime.conversation(sessionId);
-      if (!conversation) continue;
-      // Empty creation/handoff is not a committed first submission and must not create a ghost UI row.
-      if (!(await runtime.hasInputs(sessionId))) continue;
-      const metadata = detachedJson(binding.metadata);
-      result.push({ sessionId, metadata });
-    }
-    return result;
+  async sessions() {
+    return (await this.requireRuntime().sessions()).map(({ sessionId, binding }) => ({
+      sessionId,
+      revision: binding.revision,
+    }));
   }
 
   async hasConversation(sessionId: string) {
     return (await this.requireRuntime().conversation(sessionId)) !== undefined;
   }
 
-  async conversationInfo(sessionId: string) {
-    const binding = await this.requireRuntime().binding(sessionId);
-    if (!binding) return undefined;
-    return {
-      metadata: detachedJson(binding.metadata),
-      legacy: binding.legacy
-        ? {
-            sourceSessionId: binding.legacy.sourceSessionId,
-            throughMessageId: binding.legacy.throughMessageId,
-          }
-        : null,
-    };
+  async revision(sessionId: string) {
+    return (await this.requireRuntime().binding(sessionId))?.revision;
   }
 
   async unfinishedSessions() {
@@ -263,62 +246,39 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   async ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal): Promise<void> {
     const runtime = this.requireRuntime();
-    if (await runtime.conversation(seed.sessionId)) return;
+    if (await runtime.conversation(seed.sessionId)) {
+      if ((await runtime.binding(seed.sessionId))?.revision !== seed.revision)
+        throw new Error('The working copy is obsolete.');
+      return;
+    }
     const configuration = configurationBlueprint(seed.configuration);
     const agent = await this.installConfiguration(seed.sessionId, configuration);
     const model = this.requireModel(configuration);
-    const originalEntries = seed.legacy
-      ? createLegacyPiEntries(
+    const originalEntries = seed.history
+      ? createWorkingPiEntries(
           {
-            turnId: 'legacy-import',
+            turnId: 'history-import',
             sessionId: seed.sessionId,
             instructions: configuration.instructions,
             model: configuration.model,
             options: configuration.options,
             tools: [],
             input: [],
-            history: seed.legacy.history,
-            contextCheckpoint: seed.legacy.contextCheckpoint,
+            history: seed.history.history,
+            contextCheckpoint: seed.history.contextCheckpoint,
           },
           model,
         )
       : undefined;
-    const entries = originalEntries
-      ? configuration.kind === 'image'
-        ? originalEntries
-        : await prepareLegacyPiEntries({
-            entries: originalEntries,
-            model: configuration.model,
-            dependencies: this.dependencies,
-            signal,
-            onUsage: async (report) => {
-              const owner: RuntimeUsageOwner = {
-                sessionId: seed.sessionId,
-                turnId: null,
-                requestId: null,
-              };
-              await runtime.saveUsage(report.requestId, detachedJson({ owner, report }));
-              this.delivery = this.delivery.then(() => this.deliverUsage()).catch(() => undefined);
-            },
-          })
-      : undefined;
     signal?.throwIfAborted();
     await runtime.ensureConversation({
       sessionId: seed.sessionId,
-      metadata: seed.metadata,
+      revision: seed.revision,
       agent,
       options: configuration.options,
       configuration: detachedJson(configuration),
-      resourceFileEntryIds: seed.legacy?.referencedFileEntryIds ?? [],
-      ...(seed.legacy
-        ? {
-            legacy: {
-              sourceSessionId: seed.legacy.sourceSessionId,
-              throughMessageId: seed.legacy.throughMessageId,
-              entries: entries!,
-            },
-          }
-        : {}),
+      resourceFileEntryIds: seed.history?.referencedFileEntryIds ?? [],
+      entries: originalEntries,
     });
     await this.bindProvider(seed.sessionId);
   }
@@ -347,7 +307,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const configuration = this.requireConfiguration(sessionId);
     const model = this.requireModel(configuration);
     const tools = configuration.tools.map((blueprint) => this.toolTemplate(blueprint));
-    const prompt = toPiConversation(
+    const assembled = toPiConversation(
       {
         turnId: input.turnId,
         sessionId,
@@ -358,13 +318,26 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         contextCheckpoint: null,
         tools: [],
         input: input.input,
+        resume: input.resume,
       },
       model,
-    ).prompt;
+    );
+    const prompt = assembled.resume?.length
+      ? {
+          ...assembled.prompt,
+          content:
+            'Continue the interrupted answer to the preceding user question. Use the completed tool results already in the conversation; do not repeat completed actions.',
+        }
+      : assembled.prompt;
     const submission = await runtime.submit(
       sessionId,
       { type: 'input', requestId: input.requestId, content: prompt.content, whenBusy: 'followUp' },
-      piSubmissionMetadata(input, tools),
+      {
+        ...piSubmissionMetadata(input, tools),
+        ...(assembled.resume?.length
+          ? { replayPrefix: detachedJson({ messages: assembled.resume }).messages! }
+          : {}),
+      },
       { userMessageId: input.userMessageId, assistantMessageId: input.assistantMessageId },
     );
     const record = await submission.status(BACKGROUND_CONTEXT);
@@ -373,8 +346,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   async observe(sessionId: string, listener: (event: RuntimeConversationEvent) => void) {
     const runtime = this.requireRuntime();
-    const binding = await runtime.binding(sessionId);
-    const observer = new PiDurableObserver(runtime, sessionId, binding?.legacy ?? null, listener);
+    const observer = new PiDurableObserver(runtime, sessionId, listener);
     const snapshot = await observer.start();
     this.observers.add(observer);
     return {
@@ -393,8 +365,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 128)
       throw new Error('A history page must contain between 1 and 128 turns.');
     const runtime = this.requireRuntime();
-    const binding = await runtime.binding(sessionId);
-    const hidden = await runtime.hiddenSubmissions(sessionId);
     let maxEntryId = query.cursor !== undefined ? parseBoundary(query.cursor) : undefined;
     const turns: RuntimeDurableTurn[] = [];
     let nextCursor: string | undefined;
@@ -411,18 +381,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       for (const { record, metadata } of [...page.submissions].sort(
         (a, b) => b.record.id - a.record.id,
       )) {
-        if (
-          record.type !== 'input' ||
-          record.entry === undefined ||
-          !visible.has(record.entry) ||
-          hidden.has(record.id)
-        )
-          continue;
-        if (
-          binding?.legacy?.lastImportedEntryId !== null &&
-          binding?.legacy?.lastImportedEntryId !== undefined &&
-          record.entry <= binding.legacy.lastImportedEntryId
-        )
+        if (record.type !== 'input' || record.entry === undefined || !visible.has(record.entry))
           continue;
         if (query.requestIds && (!record.requestId || !query.requestIds.includes(record.requestId)))
           continue;
@@ -442,95 +401,58 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async message(sessionId: string, messageId: string) {
     const runtime = this.requireRuntime();
     const selected = await runtime.submissionForMessage(sessionId, messageId);
-    if (!selected || (await runtime.hiddenSubmissions(sessionId)).has(selected.record.id))
-      return undefined;
+    if (!selected) return undefined;
     const turn = await this.project(sessionId, selected.record, selected.metadata);
     if (selected.role === 'assistant' && !turn.hasAssistant) return undefined;
     return { turn, role: selected.role };
   }
 
-  async fork(
-    seed: Omit<RuntimeConversationSeed, 'legacy'>,
-    sourceSessionId: string,
-    boundary: string,
-  ): Promise<void> {
-    const at = parseBoundary(boundary);
-    const page = await this.requireRuntime().history(
-      sourceSessionId,
-      1,
-      undefined,
-      BACKGROUND_CONTEXT,
-      { minEntryId: at, maxEntryId: at },
-    );
-    const input = page.submissions.find(
-      ({ record }) => record.type === 'input' && record.entry === at,
-    );
-    const originalFiles = input
-      ? readPiSubmission(input.metadata).metadata.referencedFileEntryIds
-      : undefined;
-    const configuration = configurationBlueprint(seed.configuration);
-    const agent = await this.installConfiguration(seed.sessionId, configuration);
-    await this.requireRuntime().fork(
-      {
-        sessionId: seed.sessionId,
-        metadata: seed.metadata,
-        agent,
-        options: configuration.options,
-        configuration: detachedJson(configuration),
-        resourceFileEntryIds: Array.isArray(originalFiles)
-          ? originalFiles.filter((id) => typeof id === 'string')
-          : [],
-      },
-      sourceSessionId,
-      at,
-    );
-    await this.bindProvider(seed.sessionId);
-  }
-
-  async reset(sessionId: string, handoff?: string) {
-    await this.requireRuntime().reset(sessionId, handoff);
-  }
-
-  async hideTurn(sessionId: string, requestId: string, omit: 'turn' | 'input' | 'none') {
-    const runtime = this.requireRuntime();
-    const record = await this.findInput(sessionId, requestId);
-    if (!record) throw new Error('The turn is not in this conversation history.');
-    if (record.type !== 'input' || record.status === 'queued' || record.status === 'placed')
-      throw new Error('Only a settled turn can be hidden.');
-    const entries = omit === 'none' ? [] : await runtime.turnEntries(sessionId, record);
-    // System baselines rendered during the run belong to later context and stay.
-    const targets = entries
-      .filter(
-        (entry) =>
-          (omit === 'turn' || entry.id === record.entry) &&
-          entry.model?.length &&
-          entry.model.every((message) => message.role !== 'system'),
-      )
-      .map((entry) => entry.id);
-    await runtime.hideTurn(sessionId, record, targets);
-  }
-
-  async forkBeforeInput(
-    seed: Omit<RuntimeConversationSeed, 'legacy'>,
-    sourceSessionId: string,
+  async exportTurn(
+    sessionId: string,
     requestId: string,
+    options: { currentContext?: boolean } = {},
   ) {
-    const selected = await this.history(sourceSessionId, { limit: 1, requestIds: [requestId] });
-    const input = selected.turns[0]?.inputBoundary;
-    if (!input) throw new Error('The original input has no settled history boundary.');
-    const page = await this.requireRuntime().history(
-      sourceSessionId,
-      1,
-      undefined,
+    const runtime = this.requireRuntime();
+    const record = await runtime.inputRecord(sessionId, requestId);
+    if (!record || record.type !== 'input' || record.status !== 'done')
+      return { replay: null, contextCheckpoint: null };
+    const stored = readPiSubmission(await runtime.submissionMetadata(record));
+    const entries = await runtime.turnEntries(sessionId, record);
+    const messages = entries
+      .flatMap((entry) => entry.model ?? [])
+      .filter((message) => message.role === 'assistant' || message.role === 'toolResult');
+    const replay =
+      createPiTurnReplay([...((stored.replayPrefix as unknown as Message[]) ?? []), ...messages]) ??
+      null;
+    const conversation = await runtime.conversation(sessionId);
+    if (!conversation) throw new Error('The working copy is missing.');
+    const view = await conversation.context(
       BACKGROUND_CONTEXT,
-      { maxEntryId: (Number(parseBoundary(input)) - 1) as EntryId },
+      options.currentContext ? {} : { at: record.answer },
     );
-    const previous = page.entries[0];
-    if (previous) await this.fork(seed, sourceSessionId, `pi:${previous.id}`);
-    else await this.ensureConversation(seed);
+    const contextCheckpoint =
+      view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
+        ? createPiContextCheckpoint(stored.turnId, view.messages)
+        : null;
+    return { replay, contextCheckpoint };
   }
+
   async abort(sessionId: string) {
     await this.requireRuntime().stop(sessionId);
+  }
+
+  async discardConversation(sessionId: string) {
+    const runtime = this.requireRuntime();
+    if (!(await runtime.conversation(sessionId))) return;
+    await runtime.stop(sessionId);
+    await this.drainUsage();
+    await runtime.retireSession(sessionId);
+    this.configurations.delete(sessionId);
+    for (const [providerId, owner] of this.providerOwners)
+      if (owner === sessionId) this.providerOwners.delete(providerId);
+    const name = `cherry.capabilities:${sessionId}`;
+    for (const extension of this.registry.snapshot().installed())
+      if (extension.name === name) this.registry.uninstall(extension);
   }
   async withdraw(sessionId: string, requestId: string) {
     const result = await this.requireRuntime().withdrawInput(sessionId, requestId);
@@ -543,21 +465,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async hasUnfinishedWork() {
     const state = await this.requireRuntime().inspect();
     return state.tasks.length > 0 || state.submissions.length > 0;
-  }
-
-  /** Inherited inputs belong to an ancestor conversation, so search the fork-aware history. */
-  private async findInput(sessionId: string, requestId: string) {
-    const runtime = this.requireRuntime();
-    let cursor: Cursor | undefined;
-    do {
-      const page = await runtime.history(sessionId, 256, cursor);
-      const match = page.submissions.find(
-        ({ record }) => record.type === 'input' && record.requestId === requestId,
-      );
-      if (match) return match.record;
-      cursor = page.next;
-    } while (cursor !== undefined);
-    return undefined;
   }
 
   private async project(

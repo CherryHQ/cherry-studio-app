@@ -2,11 +2,7 @@ import type { AssistantMessage, Message, Model, ToolResultMessage } from '@earen
 import { stream } from '@earendil-works/pi-ai/api/anthropic-messages';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
-import {
-  MAX_RUNTIME_TURN_REPLAY_BYTES,
-  parseRuntimeTurnReplay,
-  serializeRuntimeTurnReplay,
-} from '../../runtimeTurnReplay';
+import { parseRuntimeTurnReplay } from '../../runtimeTurnReplay';
 import type { RuntimeExecutionRequest } from '../../types';
 import { toPiConversation } from '../modelMessages';
 import { createPiTurnReplay, readPiTurnReplay } from '../piTurnReplay';
@@ -194,18 +190,18 @@ test('rejects incomplete, orphaned, duplicate and unsupported message batches as
   ).toBeUndefined();
 });
 
-test('bounds artifacts without truncating signed content and omits provider diagnostics', () => {
+test('keeps durable replay beyond the former cache budget and omits provider diagnostics', () => {
   expect(
     createPiTurnReplay([
-      { ...answer, content: [{ type: 'text', text: 'x'.repeat(MAX_RUNTIME_TURN_REPLAY_BYTES) }] },
+      { ...answer, content: [{ type: 'text', text: 'x'.repeat(4 * 1024 * 1024) }] },
     ]),
-  ).toBeUndefined();
+  ).toBeDefined();
   const replay = createPiTurnReplay([
     { ...answer, errorMessage: 'connection-secret', responseId: 'response-id' },
   ]);
   expect(JSON.stringify(replay)).not.toContain('connection-secret');
   expect(readPiTurnReplay(replay)?.[0]).toMatchObject({ responseId: 'response-id' });
-  const cyclic: Record<string, unknown> = { version: 1 };
-  cyclic.payload = cyclic;
-  expect(serializeRuntimeTurnReplay(cyclic)).toBeUndefined();
+  const cyclic: AssistantMessage = { ...answer, content: [] };
+  cyclic.content.push({ type: 'toolCall', id: 'cyclic', name: 'tool', arguments: cyclic as never });
+  expect(createPiTurnReplay([cyclic])).toBeUndefined();
 });

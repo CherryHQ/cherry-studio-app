@@ -29,22 +29,16 @@ import type { RuntimeOptions } from '../types';
 
 type PiSessionBinding = {
   conversationId: ConversationId | null;
-  metadata: JsonValue;
-  legacy: {
-    sourceSessionId: string;
-    throughMessageId: string;
-    lastImportedEntryId: EntryId | null;
-    version: 1;
-  } | null;
+  revision: number;
 };
 
-/** Session scope makes the business UUID discoverable without knowing a Pi conversation ID. */
-const SessionBinding = defineDocFamily<PiSessionBinding, JsonValue>({
+/** The binding identifies a disposable copy of a Cherry transcript revision. */
+const SessionBinding = defineDocFamily<PiSessionBinding, number>({
   kind: 'cherry.session',
   version: 1,
   scope: 'session',
   family: true,
-  initial: (metadata) => ({ conversationId: null, metadata, legacy: null }),
+  initial: (revision) => ({ conversationId: null, revision }),
 });
 
 /** Display identities and original managed-file references, not an assistant transcript mirror. */
@@ -103,48 +97,13 @@ const UsagePending = defineDocFamily<{ ids: string[] }, null>({
   initial: () => ({ ids: [] }),
 });
 
-/** Managed-file authorization follows history forks, including their original boundary. */
+/** Managed-file authorization is rebuilt from Cherry and extended by admitted inputs/tools. */
 const ResourceScope = defineDoc<{ fileEntryIds: string[] }>({
   kind: 'cherry.resources',
   version: 1,
   scope: 'conversation',
-  history: 'rewindable',
-  fork: 'asOf',
   initial: () => ({ fileEntryIds: [] }),
 });
-
-/**
- * Turns removed from the visible transcript, with the entries omitted from model context. A fork
- * re-applies hides of the turns it inherits, including hides committed after its fork point.
- */
-type HiddenTurn = { submissionId: number; entry: number; omit: number[] };
-const HiddenTurns = defineDoc<{ turns: HiddenTurn[] }>({
-  kind: 'cherry.hidden-turns',
-  version: 1,
-  scope: 'conversation',
-  history: 'rewindable',
-  fork: 'asOf',
-  initial: () => ({ turns: [] }),
-});
-
-async function hideTurns(
-  tx: Parameters<Parameters<Harness['commit']>[0]>[0],
-  conversationId: ConversationId,
-  turns: readonly HiddenTurn[],
-) {
-  const hidden = await tx.doc(HiddenTurns, conversationId);
-  const added = turns.filter(
-    (turn) => !hidden.turns.some((existing) => existing.submissionId === turn.submissionId),
-  );
-  const omit = added.flatMap((turn) => turn.omit);
-  if (omit.length)
-    await tx.appendEntry(conversationId, {
-      kind: 'cherry.turn-hidden',
-      data: { submissionIds: added.map((turn) => turn.submissionId) },
-      edits: omit.map((target) => ({ target: target as EntryId, action: 'omit' as const })),
-    });
-  for (const turn of added) hidden.turns.push({ ...turn, omit: [...turn.omit] });
-}
 
 type PiHistoryPage = {
   entries: readonly EntryRecord[];
@@ -159,16 +118,12 @@ type SubmissionIndex = {
 
 type PiConversationSeed = {
   sessionId: string;
-  metadata: JsonObject;
+  revision: number;
   agent: AgentChange;
   options?: RuntimeOptions;
   configuration?: JsonObject;
   resourceFileEntryIds?: readonly string[];
-  legacy?: {
-    sourceSessionId: string;
-    throughMessageId: string;
-    entries: readonly EntryDraft[];
-  };
+  entries?: readonly EntryDraft[];
 };
 
 /** One application-owned Harness. All Pi types stay inside this implementation directory. */
@@ -199,15 +154,19 @@ export class PiDurableRuntime {
     return new PiDurableRuntime(await Harness.open(storage, options, context), storage);
   }
 
-  /** Atomic, idempotent creation and legacy handoff; app linking can be retried after a crash. */
+  /** Atomic working-copy creation; importing entries creates no tasks or model requests. */
   async ensureConversation(
     seed: PiConversationSeed,
     context: Context = BACKGROUND_CONTEXT,
   ): Promise<Conversation> {
     const id = await this.harness.commit(async (tx) => {
       // Acquire the existing binding before table writes: Pi forbids read-after-write.
-      const binding = await tx.doc(SessionBinding, seed.sessionId, seed.metadata);
-      if (binding.conversationId !== null) return binding.conversationId;
+      const binding = await tx.doc(SessionBinding, seed.sessionId, seed.revision);
+      assertWorkingCopy(binding);
+      if (binding.conversationId !== null) {
+        if (binding.revision !== seed.revision) throw new Error('The working copy is obsolete.');
+        return binding.conversationId;
+      }
       if (seed.configuration) await tx.doc(Configuration, seed.sessionId, seed.configuration);
       const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
       await configure(tx, conversation.id, seed.agent);
@@ -215,18 +174,7 @@ export class PiDurableRuntime {
       await tx.doc(RequestOptions, provider.sessionId, jsonOptions(seed.options ?? {}));
       const resources = await tx.doc(ResourceScope, conversation.id);
       resources.fileEntryIds = [...new Set(seed.resourceFileEntryIds ?? [])];
-      let lastImportedEntryId: EntryId | null = null;
-      if (seed.legacy) {
-        for (const entry of seed.legacy.entries) {
-          lastImportedEntryId = (await tx.appendEntry(conversation.id, entry)).id;
-        }
-        binding.legacy = {
-          sourceSessionId: seed.legacy.sourceSessionId,
-          throughMessageId: seed.legacy.throughMessageId,
-          lastImportedEntryId,
-          version: 1,
-        };
-      }
+      for (const entry of seed.entries ?? []) await tx.appendEntry(conversation.id, entry);
       binding.conversationId = conversation.id;
       return conversation.id;
     }, context);
@@ -243,8 +191,10 @@ export class PiDurableRuntime {
       : this.requireConversation(binding.conversationId, context);
   }
 
-  binding(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
-    return this.harness.snapshot(SessionBinding, sessionId, context);
+  async binding(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
+    const binding = await this.harness.snapshot(SessionBinding, sessionId, context);
+    if (binding) assertWorkingCopy(binding);
+    return binding;
   }
 
   configuration(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
@@ -480,7 +430,7 @@ export class PiDurableRuntime {
           record &&
           ((record.entry !== undefined &&
             (await this.storage.entry(target.id, record.entry, context))) ||
-            (origin === target.id && record.status === 'queued'))
+            (origin === target.id && record.entry === undefined))
         ) {
           return {
             record,
@@ -524,7 +474,7 @@ export class PiDurableRuntime {
       : ('not_found' as const);
   }
 
-  /** Creation seeds allow business-row projection to recover after a cross-database crash gap. */
+  /** Discover working copies so the Host can compare their revisions with Cherry before recovery. */
   async sessions(context: Context = BACKGROUND_CONTEXT) {
     const sessions: { sessionId: string; binding: Readonly<PiSessionBinding> }[] = [];
     let next: Cursor | undefined;
@@ -544,23 +494,6 @@ export class PiDurableRuntime {
       next = page.next;
     } while (next);
     return sessions;
-  }
-
-  async hasInputs(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
-    const conversation = await this.requireSession(sessionId, context);
-    let next: Cursor | undefined;
-    do {
-      const page = await this.storage.scanSubmissions(
-        { conversationId: conversation.id },
-        256,
-        next,
-        context,
-      );
-      if (page.items.some((item) => item.type === 'input')) return true;
-      next = page.next;
-    } while (next);
-    // A fork has no new native submissions until the first continuation, but has committed history.
-    return (await this.storage.conversation(conversation.id, context))?.parent !== undefined;
   }
 
   /**
@@ -607,25 +540,6 @@ export class PiDurableRuntime {
     return { entries: page.items, ...(page.next ? { next: page.next } : {}), submissions };
   }
 
-  /** Hide a settled turn and omit the given entries from later model context in one commit. */
-  async hideTurn(
-    sessionId: string,
-    record: SubmissionRecord,
-    omit: readonly EntryId[],
-    context: Context = BACKGROUND_CONTEXT,
-  ) {
-    if (record.entry === undefined) throw new Error('A hidden turn needs its input entry.');
-    const turn: HiddenTurn = { submissionId: record.id, entry: record.entry, omit: [...omit] };
-    const conversation = await this.requireSession(sessionId, context);
-    await this.harness.commit((tx) => hideTurns(tx, conversation.id, [turn]), context);
-  }
-
-  async hiddenSubmissions(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
-    const conversation = await this.requireSession(sessionId, context);
-    const hidden = await this.harness.snapshot(HiddenTurns, conversation.id, context);
-    return new Set<number>(hidden?.turns.map((turn) => turn.submissionId) ?? []);
-  }
-
   async watch(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
     return watchEvents(this.harness, conversation.id, context);
@@ -645,56 +559,6 @@ export class PiDurableRuntime {
   async stop(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
     await conversation.abort(context, { background: true });
-  }
-
-  /** Fork and new business identity are committed together; no historical tool runs are created. */
-  async fork(
-    seed: Omit<PiConversationSeed, 'legacy'>,
-    sourceSessionId: string,
-    at: EntryId,
-    context: Context = BACKGROUND_CONTEXT,
-  ): Promise<Conversation> {
-    const source = await this.binding(sourceSessionId, context);
-    const sourceId = source?.conversationId;
-    if (sourceId === undefined || sourceId === null)
-      throw new Error('The source Pi conversation does not exist.');
-    const importedTail = source?.legacy?.lastImportedEntryId;
-    if (importedTail !== undefined && importedTail !== null && at < importedTail)
-      throw new Error('This fork point requires an earlier legacy history handoff.');
-    const sourceProvider = await this.harness.snapshot(ProviderDoc, sourceId, context);
-    const sourceOptions = sourceProvider
-      ? await this.requestOptions(sourceProvider.sessionId, context)
-      : {};
-    const id = await this.harness.commit(async (tx) => {
-      const binding = await tx.doc(SessionBinding, seed.sessionId, seed.metadata);
-      if (binding.conversationId !== null) return binding.conversationId;
-      if (seed.configuration) await tx.doc(Configuration, seed.sessionId, seed.configuration);
-      const conversation = await tx.forkConversation(sourceId, at, {
-        ownership: { kind: 'ownerless' },
-      });
-      await configure(tx, conversation.id, seed.agent);
-      const provider = await tx.doc(ProviderDoc, conversation.id);
-      await tx.doc(RequestOptions, provider.sessionId, jsonOptions(seed.options ?? sourceOptions));
-      if (seed.resourceFileEntryIds?.length) {
-        const scope = await tx.doc(ResourceScope, conversation.id);
-        for (const id of seed.resourceFileEntryIds)
-          if (!scope.fileEntryIds.includes(id)) scope.fileEntryIds.push(id);
-      }
-      // Hides of inherited turns follow the fork even when they were committed after its point.
-      const sourceHidden = await tx.doc(HiddenTurns, sourceId);
-      await hideTurns(
-        tx,
-        conversation.id,
-        sourceHidden.turns
-          .filter((turn) => turn.entry <= at)
-          .map((turn) => ({ ...turn, omit: turn.omit.filter((target) => target <= at) })),
-      );
-      binding.conversationId = conversation.id;
-      // Legacy display history belongs to the original source, including on a later fork.
-      if (source?.legacy) binding.legacy = source.legacy;
-      return conversation.id;
-    }, context);
-    return this.requireConversation(id, context);
   }
 
   inspect(context: Context = BACKGROUND_CONTEXT) {
@@ -752,6 +616,43 @@ export class PiDurableRuntime {
     return index;
   }
 
+  /**
+   * Retire app bindings through the public kernel API. The now-unreachable log is reclaimed when
+   * the idle runtime file is discarded; no code depends on upstream SQL tables.
+   */
+  async retireSession(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
+    const binding = await this.binding(sessionId, context);
+    const conversationId = binding?.conversationId;
+    if (conversationId === undefined || conversationId === null) return;
+    const provider = await this.harness.snapshot(ProviderDoc, conversationId, context);
+    const requestIds: string[] = [];
+    const messageIds: string[] = [];
+    let next: Cursor | undefined;
+    do {
+      const page = await this.storage.scanSubmissions({ conversationId }, 256, next, context);
+      for (const record of page.items) {
+        if (record.requestId === undefined) continue;
+        requestIds.push(record.requestId);
+        const value = await this.submissionMetadata(record, context);
+        for (const field of ['userMessageId', 'assistantMessageId'] as const) {
+          const id = value?.[field];
+          if (typeof id === 'string') messageIds.push(id);
+        }
+      }
+      next = page.next;
+    } while (next);
+    await this.harness.commit(async (tx) => {
+      await tx.retireDoc(SessionBinding, sessionId);
+      await tx.retireDoc(Configuration, sessionId);
+      if (provider) await tx.retireDoc(RequestOptions, provider.sessionId);
+      for (const requestId of requestIds)
+        await tx.retireDoc(SubmissionMetadata, metadataKey(conversationId, requestId));
+      for (const messageId of messageIds)
+        await tx.retireDoc(MessageBinding, metadataKey(conversationId, messageId));
+    }, context);
+    this.submissionIndexes.delete(conversationId);
+  }
+
   private async requireConversation(id: ConversationId, context: Context): Promise<Conversation> {
     const conversation = await this.harness.conversation(id, context);
     if (!conversation) throw new Error('A Pi session binding references missing history.');
@@ -763,6 +664,13 @@ export class PiDurableRuntime {
     if (!conversation) throw new Error('The Pi conversation has not been created.');
     return conversation;
   }
+}
+
+function assertWorkingCopy(binding: Readonly<PiSessionBinding>) {
+  if (!Number.isSafeInteger(binding.revision) || binding.revision < 0)
+    throw new Error(
+      'This Pi database predates Cherry-owned transcripts. Preserve it for migration; it cannot be discarded as a working copy.',
+    );
 }
 
 function metadataKey(conversationId: ConversationId, requestId: string): string {

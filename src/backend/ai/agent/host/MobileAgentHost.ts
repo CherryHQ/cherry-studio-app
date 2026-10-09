@@ -13,9 +13,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { AgentRuntime } from '../runtime';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
 import type { MobileAgentHostPorts } from './agentHostTypes';
-import { AgentTranscriptReader } from './AgentTranscriptReader';
-import { DurableAgentHost, DurableCreationSeedSchema } from './DurableAgentHost';
-import { DurableTurnMetadataSchema } from './durableHostProjection';
+import { DurableAgentHost } from './DurableAgentHost';
 
 export type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTypes';
 
@@ -30,10 +28,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly host: DurableAgentHost;
 
   constructor(
-    private readonly store: AgentSessionStore,
-    private readonly ports: MobileAgentHostPorts,
+    store: AgentSessionStore,
+    ports: MobileAgentHostPorts,
     background: BackgroundReplyLifecycle,
-    private readonly runtime: AgentRuntime,
+    runtime: AgentRuntime,
   ) {
     super();
     if (!runtime.conversations) throw new Error('The local Agent requires a persistent runtime.');
@@ -56,57 +54,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     await this.host.close();
   }
 
-  get transcriptRuntime() {
-    return this.host.isReady ? this.host.conversations : undefined;
-  }
-  pendingTranscriptTurns(sessionId: string) {
-    return this.host.pendingTurns(sessionId);
-  }
-  createTranscriptReader(legacy: ConstructorParameters<typeof AgentTranscriptReader>[4]) {
-    return new AgentTranscriptReader(
-      () => this.transcriptRuntime,
-      (sessionId) => this.pendingTranscriptTurns(sessionId),
-      this.store,
-      this.ports.agents,
-      legacy,
-      this.ports.messageStats,
-    );
-  }
-
-  resetReplayCacheForRestore() {
-    this.ports.replayCache?.resetForRestore();
-  }
-  /** Native startup performs legacy placeholder reconciliation before reopening current work. */
-  async reconcileInterruptedTurns() {
-    return 0;
-  }
   hasPendingStorageWork() {
     return this.host.hasPendingStorageWork();
   }
 
-  get agentBackupPort(): import('@/backend/services/backup').AgentBackupPort | undefined {
-    const native = this.runtime.conversations;
-    const storage = this.ports.durableStorage;
-    if (!native || !storage) return undefined;
-    return {
-      schema: native.storageSchema,
-      quiesce: () => this.host.quiesce(),
-      capture: (uri) => storage.capture(uri),
-      validate: async (database, reference) => {
-        const result = await native.validateStorage(database, reference, (metadata) => {
-          DurableTurnMetadataSchema.parse(metadata);
-        });
-        return {
-          messages: result.messages,
-          sessions: result.sessions.map(({ metadata, ...facts }) => {
-            const seed = DurableCreationSeedSchema.parse(metadata);
-            if (seed.id !== facts.sessionId)
-              throw new Error('The Pi creation seed has a different business identity.');
-            return { ...facts, agentId: seed.agentId };
-          }),
-        };
-      },
-    };
+  quiesce() {
+    return this.host.quiesce();
   }
 
   getSessionStatus = (sessionId: string) => this.host.getSessionStatus(sessionId);

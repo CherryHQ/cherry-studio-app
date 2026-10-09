@@ -1,9 +1,10 @@
-import type { Api, Model } from '@earendil-works/pi-ai';
-import { CompactionEntry, UserEntry } from '@earendil-works/pi-durable';
+import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
+import { CompactionEntry, ResetEntry, UserEntry } from '@earendil-works/pi-durable';
 
 import type { RuntimeExecutionRequest } from '../../types';
 import { PI_CONTEXT_CHECKPOINT_KIND } from '../piLegacyCheckpoint';
-import { createLegacyPiEntries } from '../piLegacyHistory';
+import { emptyAssistantMessage } from '../piStreamEvents';
+import { createPiContextCheckpoint, createWorkingPiEntries } from '../piWorkingHistory';
 
 const model: Model<Api> = {
   id: 'model',
@@ -48,9 +49,51 @@ function request(): RuntimeExecutionRequest {
   };
 }
 
-describe('legacy Pi history handoff', () => {
+describe('Cherry history working-copy import', () => {
+  test('round-trips signed active context and imports only the following Cherry tail', () => {
+    const signed: AssistantMessage = {
+      ...emptyAssistantMessage(model),
+      content: [{ type: 'thinking', thinking: 'Retained thought', thinkingSignature: 'signature' }],
+    };
+    const input = request();
+    input.contextCheckpoint = createPiContextCheckpoint('summarized', [signed]);
+    const entries = createWorkingPiEntries(input, model);
+    expect(entries[0]).toEqual({ kind: ResetEntry.kind, head: 'self' });
+    expect(entries[1]?.model).toEqual([signed]);
+    expect(entries[2]?.model?.[0]).toMatchObject({ content: 'Keep the blue theme.' });
+    expect(entries).toHaveLength(4);
+    signed.content.length = 0;
+    expect(entries[1]?.model?.[0]).toMatchObject({
+      content: [{ thinkingSignature: 'signature' }],
+    });
+  });
+
+  test('persists an empty reset context and rejects oversized checkpoints without trimming history', () => {
+    const input = request();
+    input.contextCheckpoint = createPiContextCheckpoint('summarized', []);
+    expect(createWorkingPiEntries(input, model)[0]).toEqual({
+      kind: ResetEntry.kind,
+      head: 'self',
+    });
+    expect(
+      createPiContextCheckpoint('summarized', [
+        { role: 'user', content: 'x'.repeat(256 * 1024), timestamp: 0 },
+      ]),
+    ).toBeNull();
+    input.contextCheckpoint = null;
+    input.history[0].messages[0].parts = [{ type: 'text', text: 'x'.repeat(300_000) }];
+    expect(createWorkingPiEntries(input, model)[0]?.model?.[0]).toMatchObject({
+      content: 'x'.repeat(300_000),
+    });
+  });
+
+  test('rejects malformed new context payloads instead of importing a truncated transcript', () => {
+    const input = request();
+    input.contextCheckpoint!.payload = { kind: 'pi-durable-context-v1', messages: [null] };
+    expect(() => createWorkingPiEntries(input, model)).toThrow('invalid message');
+  });
   test('reuses a saved summary and preserves the original recent tail without admitting new input', () => {
-    const entries = createLegacyPiEntries(request(), model);
+    const entries = createWorkingPiEntries(request(), model);
     expect(entries[0]).toMatchObject({ kind: CompactionEntry.kind, head: 'self' });
     expect(entries[0]?.model?.[0]).toMatchObject({
       content: expect.stringContaining('Earlier preferences.'),
@@ -71,7 +114,7 @@ describe('legacy Pi history handoff', () => {
       tokensBefore: 8000,
       resume: { turnId: 'recent', messageOffset: 1, replayKind: 'pi-turn-replay-v1' },
     };
-    const entries = createLegacyPiEntries(input, model);
+    const entries = createWorkingPiEntries(input, model);
     expect(entries[1]?.model?.[0]).toMatchObject({ content: 'Keep the blue theme.' });
     expect(entries).toHaveLength(3);
   });
@@ -79,13 +122,13 @@ describe('legacy Pi history handoff', () => {
   test('refuses a corrupt summary or a missing split point instead of losing a trimmed prefix', () => {
     const input = request();
     input.contextCheckpoint!.payload = { kind: PI_CONTEXT_CHECKPOINT_KIND, summary: '' };
-    expect(() => createLegacyPiEntries(input, model)).toThrow('valid Pi summary');
+    expect(() => createWorkingPiEntries(input, model)).toThrow('valid saved context checkpoint');
     input.contextCheckpoint!.payload = {
       kind: PI_CONTEXT_CHECKPOINT_KIND,
       summary: 'Earlier preferences.',
       tokensBefore: 8000,
       resume: { turnId: 'missing-turn', messageOffset: 1 },
     };
-    expect(() => createLegacyPiEntries(input, model)).toThrow('split point is missing');
+    expect(() => createWorkingPiEntries(input, model)).toThrow('split point is missing');
   });
 });

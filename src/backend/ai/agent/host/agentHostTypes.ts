@@ -8,7 +8,6 @@ import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPort } from './agentImageGeneration';
-import type { AgentReplayCache } from './AgentReplayCache';
 import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import type { AgentInferenceModelResolver } from './inferenceSnapshot';
@@ -24,12 +23,12 @@ export type MobileAgentHostNaming = Pick<
  * never constructs a collaborator itself.
  */
 export type MobileAgentHostPorts = {
-  messageStats?(id: string): Promise<import('@/shared/data/types/messageStats').MessageStats>;
   executionLease?(onInterrupt: (reason: Error) => void | Promise<void>): { release(): void };
   /** Supplied by data composition; the Host never imports SQLite or Pi storage. */
   durableStorage?: {
     open(): Promise<RuntimeSqlDatabase>;
-    capture(destinationUri: string): Promise<void>;
+    /** Called only after closing an idle, fully reconciled runtime. */
+    reset(): Promise<RuntimeSqlDatabase>;
     notifyTranscript(sessionId: string): void;
   };
   /** Throwing, idempotent delivery. Pi retains a receipt until this writer succeeds. */
@@ -48,7 +47,6 @@ export type MobileAgentHostPorts = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
-  replayCache?: AgentReplayCache;
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;

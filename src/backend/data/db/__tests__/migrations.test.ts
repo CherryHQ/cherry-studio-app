@@ -6,6 +6,35 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds durable replay and revision without rewriting existing transcript data', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      for (const sql of files.slice(0, 3)) database.exec(sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+        VALUES ('session', 'agent', 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+        VALUES ('answer', 'session', 'assistant', '{"version":1,"parts":[]}', 'success', 1, 1);
+      `);
+      for (const sql of files.slice(3)) database.exec(sql);
+      expect(database.prepare('SELECT runtime_revision FROM agent_session').get()).toEqual({
+        runtime_revision: 0,
+      });
+      expect(
+        database.prepare('SELECT data, status, replay FROM agent_session_message').get(),
+      ).toEqual({
+        data: '{"version":1,"parts":[]}',
+        status: 'success',
+        replay: null,
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds automatic routes without losing existing pairing or manual addresses', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -298,7 +327,7 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'forked_from_session_id',
         'fork_boundary_message_id',
-        'archived_at',
+        'runtime_revision',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',
@@ -317,6 +346,7 @@ describe('bundled SQLite migrations', () => {
         'fts_rowid',
         'created_at',
         'updated_at',
+        'replay',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',
@@ -395,16 +425,11 @@ describe('bundled SQLite migrations', () => {
       const agentToolBindingTableSql = getSchemaSql(database, 'table', 'agent_tool_binding');
       expect(agentToolBindingTableSql).toContain('agent_tool_binding_identity_check');
       expect(agentToolBindingTableSql).toContain('agent_tool_binding_approval_check');
-      // Invariant 1 (agent-protocol.md) is a database constraint: at most one
-      // unsettled assistant message per session.
-      expect(indexList(database, 'agent_session_message')).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ name: 'agent_session_message_active_turn_uniq', unique: 1 }),
-        ]),
+      expect(indexNames(database, 'agent_session_message')).not.toContain(
+        'agent_session_message_active_turn_uniq',
       );
-      expect(getSchemaSql(database, 'index', 'agent_session_message_active_turn_uniq')).toContain(
-        "'pending', 'streaming'",
-      );
+      expect(getSchemaSql(database, 'table', 'agent_session')).toContain('runtime_revision');
+      expect(getSchemaSql(database, 'table', 'agent_session_message')).toContain('replay');
 
       database.exec(`
         INSERT INTO agent (id, name, order_key, created_at, updated_at)
@@ -476,17 +501,10 @@ describe('bundled SQLite migrations', () => {
       ).toThrow(/agent_tool_binding_approval_check/);
       // A second unsettled assistant row in the same session is the reservation
       // race the partial unique index exists to reject.
-      expect(() =>
-        database.exec(`
-          INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
-          VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'pending', 2, 2);
-        `),
-      ).toThrow(/UNIQUE/);
-      // Settling the first frees the slot for the next reservation.
+      // Queued inputs have their own durable pending rows; Pi owns execution serialization.
       database.exec(`
-        UPDATE agent_session_message SET status = 'success' WHERE id = 'm-assistant';
         INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
-        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'streaming', 2, 2);
+        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'pending', 2, 2);
       `);
       expect(() =>
         database.exec(

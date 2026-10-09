@@ -30,7 +30,7 @@ const wire: Model<Api> = {
 };
 const seed = {
   sessionId: 'session',
-  metadata: { agentId: 'agent' },
+  revision: 0,
   configuration: { model: reference, instructions: 'Help.', options: {}, tools: [] },
 };
 
@@ -184,49 +184,15 @@ describe('Persistent Agent facade', () => {
       preflight.mockRestore();
     }
   });
-  test('file authorization rewinds with a fork and excludes files from later inputs', async () => {
-    const state = fixture();
-    const runtime = state.create();
-    await runtime.initialize(state.database, state.ports);
-    try {
-      await runtime.ensureConversation(seed);
-      await submitAndWait(runtime, {
-        ...input('first'),
-        metadata: { referencedFileEntryIds: ['first-file'] },
-      });
-      const first = await runtime.message('session', 'answer-first');
-      if (!first?.turn.answerBoundary) throw new Error('Expected native answer boundary.');
-      await submitAndWait(runtime, {
-        ...input('second'),
-        metadata: { referencedFileEntryIds: ['second-file'] },
-      });
-      await runtime.fork({ ...seed, sessionId: 'fork' }, 'session', first.turn.answerBoundary);
-      expect(await runtime.resourceFileEntryIds('session')).toEqual(['first-file', 'second-file']);
-      expect(await runtime.resourceFileEntryIds('fork')).toEqual(['first-file']);
-      const firstInput = await runtime.message('session', 'user-first');
-      if (!firstInput?.turn.inputBoundary) throw new Error('Expected input boundary.');
-      await runtime.fork(
-        { ...seed, sessionId: 'input-fork' },
-        'session',
-        firstInput.turn.inputBoundary,
-      );
-      expect(await runtime.resourceFileEntryIds('input-fork')).toEqual(['first-file']);
-    } finally {
-      await runtime.close();
-    }
-  });
-
-  test('reconstructs a new owner before recovery and continues native history without caller replay', async () => {
+  test('reopens an existing working copy and continues without replaying tools', async () => {
     const fixtureState = fixture();
     let runtime = fixtureState.create();
     await runtime.initialize(fixtureState.database, fixtureState.ports);
     try {
       await runtime.ensureConversation(seed);
-      expect(await runtime.creationSeeds()).toEqual([]);
+      expect(await runtime.sessions()).toEqual([{ sessionId: 'session', revision: 0 }]);
       await submitAndWait(runtime, input('first'));
-      expect(await runtime.creationSeeds()).toEqual([
-        { sessionId: 'session', metadata: { agentId: 'agent' } },
-      ]);
+      expect(await runtime.sessions()).toEqual([{ sessionId: 'session', revision: 0 }]);
       await runtime.close();
       runtime = fixtureState.create();
       await runtime.initialize(fixtureState.database, fixtureState.ports);
@@ -261,89 +227,51 @@ describe('Persistent Agent facade', () => {
     }
   });
 
-  test('a fork at the input cannot expose the later source answer through history or selected ID', async () => {
+  test('exports exact replay, then rebuilds independent history without model requests', async () => {
     const state = fixture();
     const runtime = state.create();
     await runtime.initialize(state.database, state.ports);
     try {
       await runtime.ensureConversation(seed);
       await submitAndWait(runtime, input('first'));
-      const selected = await runtime.message('session', 'user-first');
-      if (!selected?.turn.inputBoundary) throw new Error('Expected native input boundary.');
-      await runtime.fork({ ...seed, sessionId: 'fork' }, 'session', selected.turn.inputBoundary);
-      expect(await runtime.message('fork', 'answer-first')).toBeUndefined();
-      expect((await runtime.history('fork', { limit: 10 })).turns).toEqual([
-        expect.objectContaining({
-          userMessageId: 'user-first',
-          hasAssistant: false,
-          parts: [],
-          answerBoundary: null,
-        }),
-      ]);
-      expect(await runtime.message('session', 'answer-first')).toMatchObject({
-        role: 'assistant',
-        turn: { parts: [{ text: 'Response 1' }] },
+      const { replay } = await runtime.exportTurn('session', 'first');
+      expect(replay).toMatchObject({
+        version: 1,
+        payload: {
+          messages: [
+            expect.objectContaining({
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Response 1' }],
+            }),
+          ],
+        },
       });
-    } finally {
-      await runtime.close();
-    }
-  });
-
-  test('a deleted turn leaves history, later model context, and forks made afterwards', async () => {
-    const state = fixture();
-    const runtime = state.create();
-    await runtime.initialize(state.database, state.ports);
-    const userTurns = (request: TranscriptContext | undefined) =>
-      request?.messages
-        .filter((message) => message.role === 'user' || message.role === 'assistant')
-        .map((message) =>
-          message.role === 'user'
-            ? message.content
-            : message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])),
-        );
-    try {
-      await runtime.ensureConversation(seed);
-      await submitAndWait(runtime, input('first'));
-      await submitAndWait(runtime, input('second'));
-      await runtime.hideTurn('session', 'first', 'turn');
-      expect((await runtime.history('session', { limit: 10 })).turns).toEqual([
-        expect.objectContaining({ userMessageId: 'user-second' }),
-      ]);
-      expect(await runtime.message('session', 'answer-first')).toBeUndefined();
-
-      await submitAndWait(runtime, input('third'));
-      expect(userTurns(state.requests.at(-1))).toEqual([
-        'Question second',
-        ['Response 2'],
-        'Question third',
-      ]);
-
-      const selected = await runtime.message('session', 'answer-second');
-      if (!selected?.turn.answerBoundary) throw new Error('Expected a native answer boundary.');
-      await runtime.fork({ ...seed, sessionId: 'fork' }, 'session', selected.turn.answerBoundary);
-      expect(
-        (await runtime.history('fork', { limit: 10 })).turns.map((turn) => turn.userMessageId),
-      ).toEqual(['user-second']);
-    } finally {
-      await runtime.close();
-    }
-  });
-
-  test('retrying a failed answer can omit only its question from later context', async () => {
-    const state = fixture();
-    const runtime = state.create();
-    await runtime.initialize(state.database, state.ports);
-    try {
-      await runtime.ensureConversation(seed);
-      await submitAndWait(runtime, input('first'));
-      await runtime.hideTurn('session', 'first', 'input');
-      await submitAndWait(runtime, input('retry'));
-      expect(
-        state.requests
-          .at(-1)
-          ?.messages.filter((message) => message.role === 'user')
-          .map((message) => message.content),
-      ).toEqual(['Question retry']);
+      await runtime.discardConversation('session');
+      expect(await runtime.hasConversation('session')).toBe(false);
+      await runtime.ensureConversation({
+        ...seed,
+        revision: 1,
+        history: {
+          history: [
+            {
+              turnId: 'first',
+              messages: [{ role: 'user', parts: [{ type: 'text', text: 'Question first' }] }],
+              replay: replay!,
+            },
+          ],
+          contextCheckpoint: null,
+          referencedFileEntryIds: ['retained-file'],
+        },
+      });
+      expect(state.requests).toHaveLength(1);
+      expect(await runtime.resourceFileEntryIds('session')).toEqual(['retained-file']);
+      await submitAndWait(runtime, input('next'));
+      expect(state.requests[1]?.messages).toContainEqual(
+        expect.objectContaining({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Response 1' }],
+        }),
+      );
     } finally {
       await runtime.close();
     }

@@ -14,9 +14,10 @@ import type { MessageRuntimeSpan, MessageRuntimeTiming } from '@/shared/data/typ
 import type { RuntimeDurableTurn } from '../runtime';
 import { toAgentErrorView, toAgentMessagePart, toAgentUsageView } from './runtimeProjection';
 
-/** Display facts belong to the app; provider messages and assistant/tool bodies remain in Pi. */
+/** Display identities accompany execution; terminal content and replay settle into Cherry. */
 export const DurableTurnMetadataSchema = z.object({
   userParts: z.array(AgentMessagePartSchema),
+  retainedParts: z.array(AgentMessagePartSchema).optional(),
   inferenceSnapshot: AgentInferenceSnapshotV1Schema,
   referencedFileEntryIds: z.array(z.string()),
   hasHistoryBeforeActiveTurn: z.boolean(),
@@ -79,9 +80,12 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     parts: metadata.userParts,
     usage: null,
   });
-  const parts = turn.parts
-    .filter((part) => !metadata.inferenceSnapshot.imageGeneration || part.type !== 'tool')
-    .map(toAgentMessagePart);
+  const parts = [
+    ...(metadata.retainedParts ?? []),
+    ...turn.parts
+      .filter((part) => !metadata.inferenceSnapshot.imageGeneration || part.type !== 'tool')
+      .map(toAgentMessagePart),
+  ];
   if (error) parts.push({ id: `durable-error:${turn.identity.requestId}`, type: 'error', error });
   const assistant = turn.hasAssistant
     ? AgentMessageViewSchema.parse({

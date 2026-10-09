@@ -44,25 +44,15 @@ test('rejects another product or a future format instead of attempting replaceme
   expect(() => validateManifest({ ...manifest(), formatVersion: 3 })).toThrow('incompatible');
 });
 
-test('v2 requires both authoritative databases and Pi storage metadata while v1 remains importable', () => {
+test('rejects experimental paired backups and never accepts a Pi cache as user backup data', () => {
   const base = manifest();
-  const agent = {
-    runtime: 'pi-durable' as const,
-    runtimeVersion: '1.0.4',
-    schemaVersion: 1,
-    migrationsSha256: sha256,
-    messages: 4,
-  };
-  const paired = {
-    ...base,
-    formatVersion: 2,
-    agent,
-    entries: [...base.entries, { path: 'database/pi-agent.db', size: 2048, sha256 }],
-  };
-  expect(validateManifest(paired)).toEqual(paired);
-  expect(() => validateManifest({ ...paired, agent: undefined })).toThrow('invalid');
-  expect(() => validateManifest({ ...paired, entries: base.entries })).toThrow('invalid');
-  expect(() => validateManifest({ ...paired, formatVersion: 1 })).toThrow('invalid');
+  expect(() => validateManifest({ ...base, formatVersion: 2 })).toThrow('incompatible');
+  expect(() =>
+    validateManifest({
+      ...base,
+      entries: [...base.entries, { path: 'database/pi-agent.db', size: 2048, sha256 }],
+    }),
+  ).toThrow('invalid');
 });
 
 test('rejects case collisions, missing database, forged hashes and undeclared fields', () => {

@@ -388,27 +388,18 @@ type RuntimeContextCheckpoint = {
 ```
 
 The Host converts persisted Cherry messages into normalized history grouped by their durable Turn.
-Successful turns may additionally carry a bounded, versioned `RuntimeTurnReplay`. The Runtime
-decodes this private artifact to recover its original assistant/tool-result sequence, including
-thinking signatures, concurrent tool-call grouping, and model-visible discovery results. It contains
-only the turn's assistant and tool messages, never user attachments, connection credentials, or
-Host session/turn ids. Pi types and decoding stay inside `runtime/pi`; public message views, search,
-and traces do not expose the artifact. Missing, oversized, or unsupported artifacts use normalized
-history, and the Runtime logs why an artifact was dropped or ignored. Original provider/model provenance is retained for cross-model conversion. Usage is rebuilt
-from the Host's current context anchor rather than stale per-request measurements.
-After live tool-loop compaction, the final request's context measurement is not persisted as an
-anchor: the next execution restores the full turn and estimates it before deciding to compact again.
-The optional `replay` field on `completed` carries the artifact to the Host's private MMKV cache,
-written only after the terminal message commits. It survives app restarts without adding a database
-column or entering backups. Each record is limited to 4 MiB; the cache evicts least recently used
-records above 128 entries or 32 MiB of payloads. Only its small index is retained in memory; payloads
-are read on demand for successful assistant rows matching Session, message, and Turn ids. Storage
-failures and eviction fall back to normalized history. Failed, cancelled, and interrupted executions
-do not cache replay. A resumed retry includes its retained prefix.
-Retries and deletions remove obsolete entries. Forks copy available artifacts to the new message/Turn
-ids using the store's committed identity mapping; restored application storage clears the cache.
-Compaction offsets record the replay representation; a mismatched representation retains the summary
-but replays the entire retained turn rather than slicing at an incompatible offset.
+Successful turns carry a versioned `RuntimeTurnReplay` when their assistant/tool sequence is
+supported by the Pi adapter. It preserves signed thinking and tool grouping while excluding user
+attachments, transport diagnostics and billing. Pi types and decoding stay private to `runtime/pi`;
+public message views, search and traces do not expose the artifact. Old or unsupported artifacts
+fall back to normalized parts.
+
+The durable integration commits replay in the Cherry assistant row with the terminal result. It is
+included in backups, copied with forked messages and cleared on replacement/deletion. It has no
+MMKV cache eviction or former 4 MiB cache ceiling. Current compaction/reset context is exported to
+a bounded Cherry checkpoint at a completed-turn anchor; missing working copies import that context
+and the following replay tail without a model call. See [Pi Durable Migration](./pi-durable-migration.md)
+for the active execution/recovery contract; the older per-turn interface below is historical.
 
 The Pi transport honors the provider's `cacheControl.enabled` setting (`none` when disabled,
 otherwise `short`) and receives the stable Host session id. Pi owns cache breakpoint placement;
